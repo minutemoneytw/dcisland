@@ -92,4 +92,4 @@ npx wrangler deploy             # 更新正式版
 ## 資料
 
 - 島的地形存在 Durable Object 儲存（免費層 SQLite 後端），不會因重啟而重置
-- 之後的家具擺設會進 D1（免費層），目前仍在瀏覽器 localStorage
+- 家具擺設也存在 Durable Object 儲存（每個地形各一份），同島的人共用；個人島之後再考慮進 D1（免費層）

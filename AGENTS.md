@@ -42,7 +42,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 2. **素材先改 `gen_assets.py` 再重跑**，不要手改 PNG（會被下次產生蓋掉）。
 3. **引入外部素材必須在 `docs/assets-license.md` 補記錄**；不得使用 SE/FFXIV 的素材、圖示、字體或商標（HUD 僅風格參考）。
 4. **機密**：`tools/dev_config.json`（含 `client_secret`）絕不 commit；任何 secret 不貼進對話、日誌或程式。
-5. **同步協定有兩份實作**：`worker/src/index.js`（正式）與 `tools/dev_server.py`（本機）。改訊息格式或房間行為時兩邊與 `net.js` 要一起改。
+5. **同步協定有兩份實作**：`worker/src/index.js`（正式）與 `tools/dev_server.py`（本機）。改訊息格式、房間行為或限制常數（`COLS/ROWS`、`MAX_*`）時兩邊與 `net.js` 要一起改。
 6. **房間地形是伺服器端狀態**：預設 `grass`，只由明確的 `terrain` 訊息改變，不從 `state` 封包推斷；客戶端 `state` 不再帶 `terrain`。
 7. Discord 授權 scope 目前**只有 `identify`**。多加 scope 會讓每次啟動都跳授權畫面，要加先問使用者。
 8. 前端為純 ES module、單一全域狀態物件 `S`（`main.js`）；沿用現有風格，不要為小改動重構整檔。
@@ -55,8 +55,11 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 - 不要把無關檔案、log、暫存輸出、本機工具狀態（如 `worker/.wrangler/`，已在 `.gitignore`）放進 repo。`.gitignore` 已列出幾個留在磁碟但不進版控的無關檔案（`LOG_FORMAT.md` 等），不要刪也不要加回來。
 
 ## 已知待辦 / 地雷
-- 動物在各客戶端各自隨機生成，**尚未同步**；家具擺設只存 `localStorage`，**尚未同步**（計畫進 D1）。
-- Worker 的 `/ws` 沒有訊息大小/頻率/房間人數限制，也不驗證 Discord 身分；房間鍵來自 URL 參數可被偽造。對外開放前必須補。
+- 動物在各客戶端各自隨機生成，**尚未同步**（方向：伺服器管存在/HP/重生時間戳，走路改成種子＋共同時間可重現）。
+- 家具擺設已同步：伺服器（DO storage，每個地形各一份）是唯一權威，客戶端只送 `place`/`remove`/`clear`，結果以廣播的 `furn` 清單為準；斷線時才退回 `localStorage`。舊的本機擺設不會自動上傳。伺服器**不判斷水邊**（只有客戶端知道島形）。
+- 公共島家具**開放所有人編輯**（使用者決定，因為只對小群體開放）；服裝類之後另有權限設計，尚未做。
+- `/ws` 已有基本防護（訊息 ≤2KB、每連線 ≤40 則/秒、一島 ≤64 人、擺設 ≤500 件、地形名白名單），但仍不驗證 Discord 身分，房間鍵來自 URL 參數可被偽造。
+- 本機若 `python` 指向 Windows 商店空殼，請用 `python3`（或實際安裝路徑）；本機 Node 版本若 <22 則跑不了 `wrangler dev`，Worker 改動需另找環境驗證。
 - Worker 的 `Island` 在連線關閉時只廣播 `leave`；進場計數 `seq` 每次連線都寫儲存，之後若量大要留意。
 - `docs/cloudflare-deploy.md` 內含 Cloudflare Account ID；它不是 secret，但新增文件時別再放 token/secret。
 - Discord 活動沙盒有 CSP：外部資源要走 Portal 的 URL Mapping，不可直接引用外部網址；SDK 已自託管於 `client/vendor/`，`/sdk`→esm.sh 只是後備。

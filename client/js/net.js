@@ -64,11 +64,13 @@ export function connectNet(S, opts = {}) {
         for (const [id, st] of Object.entries(msg.players || {})) upsert(Number(id), st);
         // 島的地形以房間為準（第一位進場者決定）
         if (msg.terrain && msg.terrain !== S.terrain && opts.onTerrain) opts.onTerrain(msg.terrain);
+        if (msg.furn && opts.onFurn) opts.onFurn(msg.furn);
         break;
       case 'join': upsert(msg.id, null); break;
       case 'p': upsert(msg.id, msg.s); break;
       case 'leave': S.remotes.delete(msg.id); break;
       case 'terrain': if (msg.v && msg.v !== S.terrain && opts.onTerrain) opts.onTerrain(msg.v); break;
+      case 'furn': if (opts.onFurn) opts.onFurn(msg.items || []); break;
       case 'event': {
         const r = S.remotes.get(msg.id);
         if (r && msg.kind === 'attack') r.swing = 0.22;
@@ -107,6 +109,10 @@ export function connectNet(S, opts = {}) {
   net.notifyAttack = () => net.connected && send({ t: 'event', kind: 'attack' });
   // 切地形時同步給同島的人
   net.setTerrain = v => net.connected && send({ t: 'terrain', v });
+  // 家具編輯：只送意圖，結果以伺服器廣播的 furn 清單為準
+  net.placeFurn = (type, x, y) => net.connected && send({ t: 'place', type, cell: [x, y] });
+  net.removeFurn = (x, y) => net.connected && send({ t: 'remove', cell: [x, y] });
+  net.clearFurn = () => net.connected && send({ t: 'clear' });
 
   return net;
 }

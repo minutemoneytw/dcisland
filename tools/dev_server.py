@@ -5,7 +5,7 @@
 # 2) /api/config   -> 從 dev_config.json 讀 client_id
 # 3) /api/token    -> 用 code+secret 向 Discord 兌換 access_token（secret 只在本機/伺服器端）
 # 用法: python tools/dev_server.py  (先填 tools/dev_config.json)
-import json, os, sys, base64, hashlib, struct, threading, time
+import json, os, re, sys, base64, hashlib, struct, threading, time
 import urllib.request, urllib.parse, urllib.error, http.server, socketserver
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -52,6 +52,23 @@ def exchange_code(code, cfg):
 # ============ M2：WebSocket 多人同步（同語音頻道＝同一座島）============
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
+# 以下限制與 worker/src/index.js 一致（改一邊要改另一邊）
+COLS, ROWS = 88, 56
+MAX_FURN = 500
+MAX_MSG = 2048
+MAX_PLAYERS = 64
+RATE_MAX = 40
+TERRAIN_RE = re.compile(r"^[a-z0-9_-]{1,24}$")
+
+_FURN_DEFS = None
+def furn_defs():
+    """id -> (w, h)，取自前端 furniture.json，用來驗證擺放。"""
+    global _FURN_DEFS
+    if _FURN_DEFS is None:
+        with open(os.path.join(CLIENT, "assets", "furniture", "furniture.json"), encoding="utf-8") as f:
+            _FURN_DEFS = {it["id"]: (it["w"], it["h"]) for it in json.load(f)["items"]}
+    return _FURN_DEFS
+
 class Room:
     """一座島＝一個房間（鍵：guild:channel）。"""
     def __init__(self):
@@ -59,14 +76,52 @@ class Room:
         self.clients = {}   # cid -> {"sock":socket, "send":Lock, "state":dict}
         self.order = 0
         self.terrain = "grass"  # 島的固定地形（之後可由島主/管理切換），不隨進場順序改變
+        self.furn = {}          # 地形 -> [{"type","cell":[x,y]}]，擺設依地形各自一份
+
+    def furn_list(self, terrain=None):
+        return self.furn.setdefault(terrain or self.terrain, [])
+
+    def edit_furn(self, msg):
+        """家具編輯（伺服器為唯一權威）。回傳 True 表示有變動。呼叫時需持有 self.lock。"""
+        defs, items, t = furn_defs(), self.furn_list(), msg.get("t")
+        cell = msg.get("cell")
+        valid = isinstance(cell, list) and len(cell) == 2 and all(isinstance(v, int) and not isinstance(v, bool) for v in cell)
+        if t == "place":
+            d = defs.get(str(msg.get("type")))
+            if not d or not valid or len(items) >= MAX_FURN:
+                return False
+            x, y = cell
+            if x < 0 or y < 0 or x + d[0] > COLS or y + d[1] > ROWS:
+                return False
+            for it in items:
+                w, h = defs.get(it["type"], (1, 1))
+                if x < it["cell"][0] + w and it["cell"][0] < x + d[0] and y < it["cell"][1] + h and it["cell"][1] < y + d[1]:
+                    return False
+            items.append({"type": str(msg["type"]), "cell": [x, y]})
+            return True
+        if t == "remove":
+            if not valid:
+                return False
+            for i, it in enumerate(items):
+                w, h = defs.get(it["type"], (1, 1))
+                if it["cell"][0] <= cell[0] < it["cell"][0] + w and it["cell"][1] <= cell[1] < it["cell"][1] + h:
+                    del items[i]
+                    return True
+            return False
+        if t == "clear":
+            items.clear()
+            return True
+        return False
 
     def add(self, sock):
         with self.lock:
+            if len(self.clients) >= MAX_PLAYERS:
+                return None
             self.order += 1
             cid = self.order
             self.clients[cid] = {"sock": sock, "send": threading.Lock(), "state": {}}
             snapshot = {c: dict(v["state"]) for c, v in self.clients.items() if v["state"]}
-            return cid, snapshot, self.terrain
+            return cid, snapshot, self.terrain, list(self.furn_list())
 
     def remove(self, cid):
         with self.lock:
@@ -142,6 +197,9 @@ def ws_send(sock, payload):
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"   # cloudflared 隧道需要 1.1 keep-alive 對接
+    # Windows 上 Python 會從登錄檔讀 MIME，.js 可能變成 text/plain 而被 ES module 拒載，這裡明確指定
+    extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map,
+                      ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json"}
 
     def __init__(self, *a, **kw):
         super().__init__(*a, directory=CLIENT, **kw)
@@ -187,10 +245,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         room_name = urllib.parse.parse_qs(qs).get("room", ["local"])[0][:120]
         room = get_room(room_name)
         sock = self.connection
-        cid, snapshot, terrain = room.add(sock)
+        added = room.add(sock)
+        if added is None:   # 島滿了：直接關閉連線，客戶端會自動退讓重連
+            self.close_connection = True
+            return
+        cid, snapshot, terrain, furn = added
         print(f"[ws] +{cid} @{room_name}（{len(room.clients)} 人在線）", file=sys.stderr, flush=True)
+        win_sec, win_n = 0, 0
         try:
-            ws_send(sock, json.dumps({"t": "init", "id": cid, "players": snapshot, "terrain": terrain}))
+            ws_send(sock, json.dumps({"t": "init", "id": cid, "players": snapshot, "terrain": terrain, "furn": furn}))
             room.broadcast({"t": "join", "id": cid}, skip=cid)
             while True:
                 fr = ws_read(sock)
@@ -203,11 +266,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     with room.clients.get(cid, {}).get("send", threading.Lock()):
                         sock.sendall(b"\x8a" + bytes([len(data)]) + data)
                     continue
-                if op not in (0x1, 0x2):
+                if op not in (0x1, 0x2) or len(data) > MAX_MSG:
+                    continue
+                sec = int(time.time())     # 簡易限流：超過就丟棄
+                win_n = win_n + 1 if sec == win_sec else 1
+                win_sec = sec
+                if win_n > RATE_MAX:
                     continue
                 try:
                     msg = json.loads(data.decode())
                 except Exception:
+                    continue
+                if not isinstance(msg, dict):
                     continue
                 t = msg.get("t")
                 if t == "state":
@@ -217,9 +287,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     # 地形只由明確的 terrain 訊息改變，不從狀態封包推斷
                     room.broadcast({"t": "p", "id": cid, "s": msg.get("s")}, skip=cid)
                 elif t == "terrain":
-                    v = str(msg.get("v"))[:40]
+                    v = str(msg.get("v"))
+                    if not TERRAIN_RE.match(v):
+                        continue
                     room.terrain = v
                     room.broadcast({"t": "terrain", "v": v}, skip=cid)
+                    # 擺設依地形各自一份：切地形後讓所有人換成該地形的擺設
+                    room.broadcast({"t": "furn", "items": list(room.furn_list())})
+                elif t in ("place", "remove", "clear"):
+                    with room.lock:
+                        changed = room.edit_furn(msg)
+                    if changed:
+                        room.broadcast({"t": "furn", "items": list(room.furn_list())})
                 elif t == "event":   # 揮擊等瞬時事件
                     room.broadcast({"t": "event", "id": cid, "kind": msg.get("kind")}, skip=cid)
         except Exception as e:

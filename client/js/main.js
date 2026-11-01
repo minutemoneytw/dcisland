@@ -52,6 +52,7 @@ const S = {
   weaponImgs: {},
   remotes: new Map(),           // M2：同島的其他玩家（id -> player-like）
   net: null,                    // M2：連線物件（net.js）
+  netFurn: [],                  // 伺服器端目前地形的擺設（連線時以此為準）
 };
 
 // ---------------- 世界生成 ----------------
@@ -544,13 +545,27 @@ function canPlace(typeId, x, y) {
 }
 
 // ---------------- 裝飾資料存取 ----------------
+// 連線時擺設由伺服器管（同島共用）；沒連線才退回瀏覽器本機存檔
+function netOn() { return !!S.net?.connected; }
 function saveLayout() {
+  if (netOn()) return;
   localStorage.setItem('dcisland.m0.layout.' + S.terrain, JSON.stringify(S.furnItems));
 }
 function loadLayout() {
+  if (netOn()) { applyFurn(S.netFurn); return; }
   try { S.furnItems = JSON.parse(localStorage.getItem('dcisland.m0.layout.' + S.terrain)) || []; }
   catch { S.furnItems = []; }
   rebuildOcc();
+}
+
+// 套用伺服器送來的擺設清單（略過 manifest 沒有的種類，避免壞資料讓繪圖當掉）
+function applyFurn(items) {
+  S.furnItems = items.filter(it => it && furnitureDef(it.type) && Array.isArray(it.cell));
+  rebuildOcc();
+}
+function onNetFurn(items) {
+  S.netFurn = items;
+  if (S.furn) applyFurn(items);
 }
 
 // ---------------- UI ----------------
@@ -584,6 +599,7 @@ async function switchTerrain(id, fromNet) {
     if (S.mode === 'decor') S.mode = 'walk';
     await ensureTerrain(id);      // 先載好圖，再切地形
     S.terrain = id; localStorage.setItem('dcisland.m0.terrain', id);
+    if (!fromNet && netOn()) S.netFurn = [];   // 等伺服器送該地形的擺設
     genWorld(id); loadLayout();
     // 留在原地（多人時被別人切地形／進島沿用房間地形，都不該把人吸到出生點）
     const me = S.players[0];
@@ -702,8 +718,9 @@ canvas.addEventListener('mousedown', e => {
   if (S.mode !== 'decor' || !S.mouseCell || !S.sel) return;
   const [x, y] = S.mouseCell;
   if (canPlace(S.sel, x, y)) {
-    S.furnItems.push({ type: S.sel, cell: [x, y] });
-    rebuildOcc(); saveLayout(); toast('放置');
+    if (netOn()) S.net.placeFurn(S.sel, x, y);
+    else { S.furnItems.push({ type: S.sel, cell: [x, y] }); rebuildOcc(); saveLayout(); }
+    toast('放置');
   } else toast('這裡放不下（水邊／已占用）');
 });
 canvas.addEventListener('contextmenu', e => {
@@ -712,13 +729,19 @@ canvas.addEventListener('contextmenu', e => {
   const [x, y] = S.mouseCell;
   const idx = S.occ.get(key(x, y));
   if (idx !== undefined) {
-    S.furnItems.splice(idx, 1); rebuildOcc(); saveLayout(); toast('收起擺設');
+    if (netOn()) S.net.removeFurn(x, y);
+    else { S.furnItems.splice(idx, 1); rebuildOcc(); saveLayout(); }
+    toast('收起擺設');
   }
 });
 
 $('btnDecor').onclick = () => setDecor(S.mode === 'walk');
 $('furnClose').onclick = () => setDecor(false);
-$('furnClear').onclick = () => { S.furnItems = []; rebuildOcc(); saveLayout(); toast('已清空'); };
+$('furnClear').onclick = () => {
+  if (netOn()) S.net.clearFurn();
+  else { S.furnItems = []; rebuildOcc(); saveLayout(); }
+  toast('已清空');
+};
 
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => $('avatarPanel').classList.add('hidden');
@@ -824,6 +847,7 @@ async function boot() {
   // M2：多人同步（同語音頻道＝同島；本機則 ?room= 或預設 local:local）
   import('./net.js').then(m => m.connectNet(S, {
     onTerrain: id => switchTerrain(id, true),
+    onFurn: onNetFurn,
     onOpen: net => toast(`已連上島（${net.room}）`, 2000),
   })).catch(err => console.warn('net:', err));
 }
