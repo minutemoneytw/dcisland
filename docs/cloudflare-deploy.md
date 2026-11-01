@@ -19,7 +19,11 @@ npx wrangler login
 # 2) 放 secret（貼 tools/dev_config.json 裡的 client_secret）
 npx wrangler secret put DISCORD_CLIENT_SECRET
 
-# 3) 部署
+# 3) 身分憑證密鑰（任意一串夠長的隨機字串；沒設也能跑，但所有人都視為訪客）
+#    例：node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+npx wrangler secret put SESSION_SECRET
+
+# 4) 部署
 npx wrangler deploy
 ```
 
@@ -59,7 +63,8 @@ https://dcisland.<你的子域>.workers.dev
 
 設好之後，任何 `git push` 到 main 都會自動上線。也可以在 GitHub 的 **Actions** 頁按 **Run workflow** 手動觸發。
 
-> Worker 的 `DISCORD_CLIENT_SECRET` 存在 Cloudflare 上，部署不會覆蓋它，CI 不需要知道這個值。
+> Worker 的 `DISCORD_CLIENT_SECRET`、`SESSION_SECRET` 存在 Cloudflare 上，部署不會覆蓋它們，CI 不需要知道這些值。
+> `SESSION_SECRET` 只需由有 Cloudflare 權限的維護者設定一次；換掉它會讓所有人現有的憑證失效（重新開啟活動即可）。
 
 ## 維護者日常流程
 

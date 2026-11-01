@@ -57,8 +57,15 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 ## 已知待辦 / 地雷
 - 動物在各客戶端各自隨機生成，**尚未同步**（方向：伺服器管存在/HP/重生時間戳，走路改成種子＋共同時間可重現）。
 - 家具擺設已同步：伺服器（DO storage，每個地形各一份）是唯一權威，客戶端只送 `place`/`remove`/`clear`，結果以廣播的 `furn` 清單為準；斷線時才退回 `localStorage`。舊的本機擺設不會自動上傳。伺服器**不判斷水邊**（只有客戶端知道島形）。
-- 公共島家具**開放所有人編輯**（使用者決定，因為只對小群體開放）；服裝類之後另有權限設計，尚未做。
-- `/ws` 已有基本防護（訊息 ≤2KB、每連線 ≤40 則/秒、一島 ≤64 人、擺設 ≤500 件、地形名白名單），但仍不驗證 Discord 身分，房間鍵來自 URL 參數可被偽造。
+- 公共島家具**開放所有人編輯**（使用者決定，因為只對小群體開放）。
+- **服裝/裝飾品權限（已定案，部分已做）**：
+  - 絕大多數服裝免費；部分裝飾品需人工審核後配發。角色三層：一般成員／配發者／擁有者（擁有者先以 Worker 環境變數寫死 Discord ID）。
+  - **配發者只能發「被指派給他的那幾件」受限裝飾品**（不是全部）；擁有者負責指派與撤銷。配發紀錄要留稽核（誰發給誰、哪一件、何時）。
+  - `avatar.json` 之後加 `accessories` 類別與 `access: "free" | "granted"`；伺服器要檢查玩家送來的造型，沒擁有的受限品要剝除，不可只靠前端。
+  - 儲存計畫：全域 Registry Durable Object（SQLite），不用 D1（現有 CI 即可部署）。配發者面板放遊戲內；審核 bot 留到 M3。
+  - 進度：**步驟 1「身分驗證」已完成**（見下）；Registry、裝飾品類別、造型檢查、配發面板**尚未做**。
+- **身分驗證**：`/api/token` 成功後簽發 12 小時的 HMAC 憑證（`session`，密鑰為 Worker secret `SESSION_SECRET`；本機為 `dev_config.json` 的 `session_secret`，沒填則每次啟動隨機）。客戶端連 `/ws` 後送 `hello` 出示；驗證成功的連線，`state` 裡的 `name`/`uid` 由伺服器覆寫，訪客的 `uid` 會被拿掉。**沒設 `SESSION_SECRET` 時不簽發、全員視為訪客，行為與以前相同。** 房間鍵（guild:channel）仍來自 URL 參數，尚無法驗證。
+- `/ws` 已有基本防護（訊息 ≤2KB、每連線 ≤40 則/秒、一島 ≤64 人、擺設 ≤500 件、地形名白名單）。家具編輯目前不看身分（刻意開放）。
 - 本機若 `python` 指向 Windows 商店空殼，請用 `python3`（或實際安裝路徑）；本機 Node 版本若 <22 則跑不了 `wrangler dev`，Worker 改動需另找環境驗證。
 - Worker 的 `Island` 在連線關閉時只廣播 `leave`；進場計數 `seq` 每次連線都寫儲存，之後若量大要留意。
 - `docs/cloudflare-deploy.md` 內含 Cloudflare Account ID；它不是 secret，但新增文件時別再放 token/secret。

@@ -63,7 +63,7 @@ export async function hookDiscord() {
     // 名字由 /api/token 一併回傳（伺服器端已用 token 問過 Discord），
     // 沙盒內不用再打外部網址，免 URL Mapping
     if (!tok.user) throw new Error('伺服器未回傳使用者資料');
-    applyUser({ name: tok.user.name, id: tok.user.id, discord: true, sdk });
+    applyUser({ name: tok.user.name, id: tok.user.id, discord: true, sdk, session: tok.session });
     return 'discord';
   } catch (e) {
     beacon('dc-fail', String(e && e.stack || e.message || e));
@@ -77,6 +77,8 @@ function applyUser(u) {
   const S = window.S;
   if (!S) return;
   S.discordUser = u;
+  S.session = u.session || null;      // 伺服器簽發的身分憑證，連線時用 hello 出示
+  S.net?.hello?.();                   // 連線比 Discord 授權早完成時，補送一次
   const me = S.players && S.players[0];
   if (me) me.name = u.name || '未命名';
   window.toast?.(`🏠 ${u.name} 上島囉（Discord 身分）`, 3200);

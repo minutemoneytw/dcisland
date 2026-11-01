@@ -18,6 +18,35 @@ const MAX_MSG = 2048;        // 單則訊息長度上限（字元）
 const MAX_PLAYERS = 64;      // 一座島同時在線上限
 const RATE_MAX = 40;         // 每條連線每秒最多處理幾則訊息（state 約 12 則/秒）
 const TERRAIN_RE = /^[a-z0-9_-]{1,24}$/;
+const SESSION_TTL_MS = 12 * 3600 * 1000;   // 簽章憑證有效期
+
+// ---- 身分憑證：/api/token 兌換成功後簽發，/ws 的 hello 訊息驗證 ----
+// 格式：base64url(JSON{id,name,exp}) + "." + base64url(HMAC-SHA256)；密鑰為 env.SESSION_SECRET
+// 沒設密鑰時不簽發（維持訪客模式），不影響既有功能。
+const b64u = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const unb64u = str => Uint8Array.from(atob(str.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+const hmacKey = secret => crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+
+async function signSession(env, user) {
+  if (!env.SESSION_SECRET || !user) return null;
+  const body = b64u(new TextEncoder().encode(JSON.stringify({ id: String(user.id), name: String(user.name), exp: Date.now() + SESSION_TTL_MS })));
+  const sig = await crypto.subtle.sign("HMAC", await hmacKey(env.SESSION_SECRET), new TextEncoder().encode(body));
+  return body + "." + b64u(sig);
+}
+
+// 驗證成功回 {id,name}，否則 null
+async function verifySession(env, token) {
+  if (!env.SESSION_SECRET || typeof token !== "string" || token.length > 1024) return null;
+  const [body, sig] = token.split(".");
+  if (!body || !sig) return null;
+  try {
+    const ok = await crypto.subtle.verify("HMAC", await hmacKey(env.SESSION_SECRET), unb64u(sig), new TextEncoder().encode(body));
+    if (!ok) return null;
+    const u = JSON.parse(new TextDecoder().decode(unb64u(body)));
+    if (!u.id || !u.name || !(u.exp > Date.now())) return null;
+    return { id: u.id, name: u.name };
+  } catch { return null; }
+}
 
 export default {
   async fetch(request, env) {
@@ -84,7 +113,7 @@ async function exchangeToken(request, env) {
       }
     } catch { /* 名字拿不到不影響上島 */ }
   }
-  return json({ access_token: tok.access_token, scope: tok.scope, user });
+  return json({ access_token: tok.access_token, scope: tok.scope, user, session: await signSession(env, user) });
 }
 
 // ============ 一座島 ============
@@ -173,10 +202,17 @@ export class Island {
     if (!msg || typeof msg !== "object") return;
     const att = ws.deserializeAttachment() || {};
 
-    if (msg.t === "state") {
-      att.state = msg.s || {};
+    if (msg.t === "hello") {
+      // 帶簽章憑證表明身分；驗證失敗就維持訪客
+      att.user = await verifySession(this.env, msg.s);
       ws.serializeAttachment(att);
-      this.broadcast({ t: "p", id: att.id, s: msg.s }, ws);
+    } else if (msg.t === "state") {
+      const s = msg.s && typeof msg.s === "object" ? msg.s : {};
+      // 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）
+      if (att.user) { s.name = att.user.name; s.uid = att.user.id; } else delete s.uid;
+      att.state = s;
+      ws.serializeAttachment(att);
+      this.broadcast({ t: "p", id: att.id, s }, ws);
     } else if (msg.t === "terrain") {
       const v = String(msg.v);
       if (!TERRAIN_RE.test(v)) return;

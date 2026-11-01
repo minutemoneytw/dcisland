@@ -5,7 +5,7 @@
 # 2) /api/config   -> 從 dev_config.json 讀 client_id
 # 3) /api/token    -> 用 code+secret 向 Discord 兌換 access_token（secret 只在本機/伺服器端）
 # 用法: python tools/dev_server.py  (先填 tools/dev_config.json)
-import json, os, re, sys, base64, hashlib, struct, threading, time
+import json, os, re, sys, base64, hashlib, hmac, struct, threading, time
 import urllib.request, urllib.parse, urllib.error, http.server, socketserver
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -18,6 +18,47 @@ def config():
         return {}
     with open(CONFIG, encoding="utf-8") as f:
         return json.load(f)
+
+# ---- 身分憑證（與 worker/src/index.js 相同格式）----
+# 密鑰：dev_config.json 的 session_secret；沒填就每次啟動隨機產生（重啟後舊憑證失效，開發用夠了）
+SESSION_TTL = 12 * 3600
+_SESSION_SECRET = None
+
+def session_secret():
+    global _SESSION_SECRET
+    if _SESSION_SECRET is None:
+        _SESSION_SECRET = (config().get("session_secret") or os.urandom(16).hex()).encode()
+    return _SESSION_SECRET
+
+def _b64u(b):
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+def _unb64u(s):
+    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+
+def sign_session(user):
+    if not user:
+        return None
+    body = _b64u(json.dumps({"id": str(user["id"]), "name": str(user["name"]), "exp": int((time.time() + SESSION_TTL) * 1000)},
+                            ensure_ascii=False, separators=(",", ":")).encode())
+    sig = hmac.new(session_secret(), body.encode(), hashlib.sha256).digest()
+    return body + "." + _b64u(sig)
+
+def verify_session(token):
+    """成功回 {"id","name"}，否則 None。"""
+    if not isinstance(token, str) or len(token) > 1024 or token.count(".") != 1:
+        return None
+    body, sig = token.split(".")
+    try:
+        want = hmac.new(session_secret(), body.encode(), hashlib.sha256).digest()
+        if not hmac.compare_digest(want, _unb64u(sig)):
+            return None
+        u = json.loads(_unb64u(body).decode())
+        if not u.get("id") or not u.get("name") or u.get("exp", 0) <= time.time() * 1000:
+            return None
+        return {"id": u["id"], "name": u["name"]}
+    except Exception:
+        return None
 
 def discord_me(access_token):
     """用 access_token 問 Discord 這是誰。失敗回 None（名字可之後再補）。"""
@@ -280,12 +321,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if not isinstance(msg, dict):
                     continue
                 t = msg.get("t")
-                if t == "state":
-                    s = room.clients.get(cid)
-                    if s:
-                        s["state"] = msg.get("s") or {}
+                if t == "hello":
+                    # 帶簽章憑證表明身分；驗證失敗就維持訪客
+                    c = room.clients.get(cid)
+                    if c is not None:
+                        c["user"] = verify_session(msg.get("s"))
+                elif t == "state":
+                    c = room.clients.get(cid)
+                    st = msg.get("s") if isinstance(msg.get("s"), dict) else {}
+                    # 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）
+                    user = c.get("user") if c else None
+                    if user:
+                        st["name"], st["uid"] = user["name"], user["id"]
+                    else:
+                        st.pop("uid", None)
+                    if c:
+                        c["state"] = st
                     # 地形只由明確的 terrain 訊息改變，不從狀態封包推斷
-                    room.broadcast({"t": "p", "id": cid, "s": msg.get("s")}, skip=cid)
+                    room.broadcast({"t": "p", "id": cid, "s": st}, skip=cid)
                 elif t == "terrain":
                     v = str(msg.get("v"))
                     if not TERRAIN_RE.match(v):
@@ -325,10 +378,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             try:
                 tok = exchange_code(body.get("code", ""), cfg)
                 me = discord_me(tok.get("access_token", "")) if tok.get("access_token") else None
+                user = {"id": me["id"], "name": me.get("global_name") or me.get("username")} if me else None
                 return self._json({
                     "access_token": tok.get("access_token"),
                     "scope": tok.get("scope"),
-                    "user": ({"id": me["id"], "name": me.get("global_name") or me.get("username")} if me else None),
+                    "user": user,
+                    "session": sign_session(user),
                 })
             except urllib.error.HTTPError as e:
                 # 透傳 Discord 的錯誤內容（勿用 502：trycloudflare 會把 502 蓋成自家錯誤頁）

@@ -83,7 +83,7 @@ export function connectNet(S, opts = {}) {
     ws = new WebSocket(url);
     ws.onopen = () => {
       net.connected = true; backoff = 600;
-      // 只送狀態（含 terrain）；地形由「第一位進場者」定案，後進者沿用
+      net.hello();                          // 先表明身分（有憑證才送），再送狀態
       send({ t: 'state', s: myState() });
       opts.onOpen && opts.onOpen(net);
     };
@@ -105,6 +105,8 @@ export function connectNet(S, opts = {}) {
     for (const [id, r] of S.remotes) if (now - r.seen > STALE_MS) S.remotes.delete(id);
   }, 1000 / SEND_HZ);
 
+  // 出示伺服器簽發的身分憑證（Discord 授權完成後才有）；伺服器驗證成功後，名字與 uid 以它為準
+  net.hello = () => { if (S.session) send({ t: 'hello', s: S.session }); };
   // 攻擊等瞬時事件（doAttack 會呼叫）
   net.notifyAttack = () => net.connected && send({ t: 'event', kind: 'attack' });
   // 切地形時同步給同島的人

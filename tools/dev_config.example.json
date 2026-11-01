@@ -1,5 +1,6 @@
 {
   "_comment": "複製此檔為 dev_config.json 後填入自己的 Discord App 憑證（步驟見 docs/m1-discord-setup.md）。dev_config.json 已被 .gitignore 排除，不會進版控。",
   "client_id": "",
-  "client_secret": ""
+  "client_secret": "",
+  "session_secret": ""
 }
