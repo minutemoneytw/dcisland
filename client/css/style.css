@@ -51,7 +51,7 @@ body {
 }
 .chip:hover { color: var(--text); border-color: var(--gold-dim); }
 .chip.active {
-  color: #16192!important; background: var(--gold);
+  color: #161922; background: var(--gold);
   border-color: var(--gold); font-weight: bold;
 }
 
@@ -64,7 +64,7 @@ body {
 }
 .ff-btn:hover { border-color: var(--gold); color: #fff; }
 .ff-btn.active {
-  background: var(--gold); color: #16192; border-color: var(--gold); font-weight: bold;
+  background: var(--gold); color: #161922; border-color: var(--gold); font-weight: bold;
 }
 .ff-btn.small { padding: 3px 10px; font-size: 11px; }
 .ff-btn.warn { border-color: #8a3a3a; color: #d88; }
@@ -114,7 +114,7 @@ body {
 .opt:hover { border-color: var(--accent); }
 .opt.sel { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
 .opt.name { width: auto; padding: 0 10px; height: 24px; }
-.opt.name.sel { color: #16192; background: var(--gold); font-weight: bold; color: #16192!important; }
+.opt.name.sel { background: var(--gold); color: #161922; font-weight: bold; }
 
 /* ---------- Toast ---------- */
 #toast {

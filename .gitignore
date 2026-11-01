@@ -10,6 +10,12 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
+# ---- 與 DC島 無關的殘留檔案（保留在磁碟，不進版控）----
+LOG_FORMAT.md
+rendertime_report.py
+test_rendertime_report.py
+run1.txt
+
 # ---- 編輯器 / 系統 ----
 .vscode/
 .idea/
