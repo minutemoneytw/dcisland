@@ -66,7 +66,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 |---|---|
 | 地形 | `client/assets/terrain/<id>/` 加資料夾 + `terrain.json`，並在 `main.js` 的 `TERRAIN_IDS` 登記 |
 | 家具 | `client/assets/furniture/furniture.json` 加條目 + png |
-| 動物 | `client/assets/animals/animals.json` 加條目 + png，並在各地形 `terrain.json` 的 `animals` 指定 |
+| 動物 | `client/assets/animals/animals.json` 加條目 + png，並在各地形 `terrain.json` 的 `animals` 指定；會游泳/兩棲/會飛的加 `"swim": true`（才能逃到海上） |
 | 造型 | `client/assets/avatar/avatar.json`（＋對應 png） |
 | 可破壞物件／採集工具／掉落物 | `client/assets/tools/tools.json`（key＝地形 deco 的圖檔名；掉落物目前為空） |
 

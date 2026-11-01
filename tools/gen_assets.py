@@ -510,11 +510,11 @@ FURN_MANIFEST = dict(
 ANIMAL_MANIFEST = dict(
     scale=2, respawn=30,
     animals=[
-        dict(id="bird",  name="圓喙鳥", sprite="bird.png",  speed=42, flee=95, hp=3,
+        dict(id="bird",  name="圓喙鳥", sprite="bird.png",  swim=True, speed=42, flee=95, hp=3,
              line="「圓喙鳥」用圓圓的眼神看著你。"),
         dict(id="sheep", name="波波羊", sprite="sheep.png", speed=30, flee=80, hp=4,
              line="「波波羊」慢悠悠地嚼著草。"),
-        dict(id="frog",  name="大肚蛙", sprite="frog.png",  speed=26, flee=70, hp=3,
+        dict(id="frog",  name="大肚蛙", sprite="frog.png",  swim=True, speed=26, flee=70, hp=3,
              line="「大肚蛙」的眼神飄向遠方。"),
     ],
 )

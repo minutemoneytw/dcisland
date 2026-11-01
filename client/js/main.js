@@ -247,14 +247,45 @@ function doAttack(auto) {
     const dmg = crit ? 2 : 1;
     a.hp -= dmg; a.startle = 1; a.startleT = 3; a.target = null; a.idle = 0;
     S.floaters.push({ x: a.x + (Math.random() * 24 - 12), y: a.y - 42, v: String(dmg), life: .8, crit });
-    const ax = a.x - p.x, ay = a.y - p.y, l = Math.hypot(ax, ay) || 1;
-    a.target = { x: clamp(a.x + ax / l * 220, CELL, (COLS - 1) * CELL), y: clamp(a.y + ay / l * 220, CELL, (ROWS - 1) * CELL), flee: true };
+    a.target = fleeTarget(a, animalDef(a.id), p.x, p.y, 220);
     if (a.hp <= 0) {
       a.dead = true; a.dieT = .6;
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
       toast(`${animalDef(a.id).name} 被打倒了！${S.animalsDB.respawn || 30} 秒後重生`, 2200);
     }
   }
+}
+
+// ---- 動物的可站位置：只有會游泳的（animals.json 的 swim:true，例如蛙）能進海，其餘只在陸地/岸邊 ----
+function animalCanStand(def, x, y) {
+  const gx = Math.floor(x / CELL), gy = Math.floor(y / CELL);
+  if (gx < 1 || gy < 1 || gx > COLS - 1 || gy > ROWS - 1) return false;
+  return !!def.swim || S.world.types[gy * COLS + gx] !== 0;
+}
+// 逃跑目標：朝「遠離來源」的方向跑，但不會游泳的不能越過水邊；被海擋住就往旁邊繞，挑跑得最遠的方向
+function fleeTarget(a, def, srcX, srcY, dist) {
+  const base = Math.atan2(a.y - srcY, a.x - srcX);
+  let best = null, bestR = -9;
+  for (const off of [0, .6, -.6, 1.2, -1.2, 1.8, -1.8]) {
+    const cx = Math.cos(base + off), cy = Math.sin(base + off);
+    let r = 0;
+    while (r < dist && animalCanStand(def, a.x + cx * (r + 8), a.y + cy * (r + 8))) r += 8;
+    if (r > bestR + 8) { best = { x: a.x + cx * r, y: a.y + cy * r }; bestR = r; }   // 偏好正前方，別的方向要明顯更遠才換
+  }
+  return { x: best.x, y: best.y, flee: true };
+}
+// 站在水裡/岸邊時，找最近的陸地（游泳的逃到海上後要游回來）；已在陸地回 null
+function nearestLand(a) {
+  const gx = Math.floor(a.x / CELL), gy = Math.floor(a.y / CELL);
+  const land = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS && S.world.types[y * COLS + x] === 2;
+  if (land(gx, gy)) return null;
+  for (let r = 1; r <= 14; r++) {
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      if (land(gx + dx, gy + dy)) return { x: (gx + dx) * CELL + CELL / 2, y: (gy + dy) * CELL + CELL / 2 };
+    }
+  }
+  return null;
 }
 
 function stepAnimal(a, dt) {
@@ -265,8 +296,7 @@ function stepAnimal(a, dt) {
       .find(q => q.swing > 0 && Math.hypot(q.x - a.x, q.y - a.y) < def.flee);
     if (src) {
       a.startle = 1; a.startleT = 3; a.scaredAt = S.t;
-      const ax = a.x - src.x, ay = a.y - src.y, l = Math.hypot(ax, ay) || 1;
-      a.target = { x: clamp(a.x + ax / l * 190, CELL, (COLS - 1) * CELL), y: clamp(a.y + ay / l * 190, CELL, (ROWS - 1) * CELL), flee: true };
+      a.target = fleeTarget(a, def, src.x, src.y, 190);
       a.idle = 0;
     }
   }
@@ -274,7 +304,9 @@ function stepAnimal(a, dt) {
   if (a.idle > 0) { a.idle -= dt; a.z = 0; return; }
   if (!a.target || Math.hypot(a.target.x - a.x, a.target.y - a.y) < 5) {
     if (a.target?.flee) { a.idle = 1 + Math.random() * 2; a.target = null; return; }
-    for (let t = 0; t < 20; t++) { // 漫一步（限制活動半徑 6 格）
+    const home = nearestLand(a);
+    if (home) a.target = home;
+    else for (let t = 0; t < 20; t++) { // 漫一步（限制活動半徑 6 格）
       const nx = a.x + (Math.random() * 2 - 1) * 6, ny = a.y + (Math.random() * 2 - 1) * 6;
       const gx = Math.floor(nx / CELL), gy = Math.floor(ny / CELL);
       if (gx < 0 || gy < 0 || gx >= COLS || gy >= ROWS) continue;
@@ -288,8 +320,11 @@ function stepAnimal(a, dt) {
   const sp = (a.startle ? def.speed * 2.6 : def.speed) * dt;
   const dx = a.target.x - a.x, dy = a.target.y - a.y, len = Math.hypot(dx, dy) || 1;
   if (dx) a.dir = Math.sign(dx);
-  a.x = clamp(a.x + dx / len * sp, CELL, (COLS - 1) * CELL);
-  a.y = clamp(a.y + dy / len * sp, CELL, (ROWS - 1) * CELL);
+  const nx = clamp(a.x + dx / len * sp, CELL, (COLS - 1) * CELL), ny = clamp(a.y + dy / len * sp, CELL, (ROWS - 1) * CELL);
+  const ox = a.x, oy = a.y;
+  if (animalCanStand(def, nx, a.y)) a.x = nx;
+  if (animalCanStand(def, a.x, ny)) a.y = ny;
+  if (Math.hypot(a.x - ox, a.y - oy) < sp * .2) { a.target = null; a.idle = .5; a.z = 0; return; }   // 被海擋住：停下，不要一直頂
   // 贊跳感：走動時上下彈
   const rate = a.startle ? 16 : 8;
   a.bounce += dt * rate;
