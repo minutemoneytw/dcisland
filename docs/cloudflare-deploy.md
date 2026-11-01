@@ -39,6 +39,39 @@ https://dcisland.<你的子域>.workers.dev
 
 改完**儲存**，重啟 DC 客戶端，活動就會從雲端載入。
 
+## CI/CD：推版自動部署
+
+正式站：**https://dcisland.less78518.workers.dev**
+
+`.github/workflows/deploy.yml` 已設定好：只要有人推版到 `main`，且改動到 `client/**`、`worker/**`，GitHub 就會自動部署。
+三個維護者都不需要手動更新伺服器。
+
+需要 repo 的兩把鑰匙（**只設一次**）：
+
+1. Cloudflare → https://dash.cloudflare.com/profile/api-tokens → **Create Token** → 範本 **Edit Cloudflare Workers**
+   - Account Resources：選自己的帳號
+   - Zone Resources：**All zones**（沒有自己的網域，不能用 Specific zone）
+   - Token expiration：No expiration
+   - **Continue to summary → Create Token** → 複製（只顯示一次）
+2. GitHub → https://github.com/minutemoneytw/dcisland/settings/secrets/actions → 新增兩個 Secret
+   - `CLOUDFLARE_API_TOKEN` = 剛剛複製的 token
+   - `CLOUDFLARE_ACCOUNT_ID` = `ed19a554b0df8ae63c70585a2bebc6f4`
+
+設好之後，任何 `git push` 到 main 都會自動上線。也可以在 GitHub 的 **Actions** 頁按 **Run workflow** 手動觸發。
+
+> Worker 的 `DISCORD_CLIENT_SECRET` 存在 Cloudflare 上，部署不會覆蓋它，CI 不需要知道這個值。
+
+## 維護者日常流程
+
+```bash
+git pull                     # 先同步
+# 改 client/ 或 worker/ 的程式
+git add -A && git commit -m "說明改了什麼"
+git push                     # → GitHub Actions 自動部署（約 1 分鐘）
+```
+
+看部署結果：https://github.com/minutemoneytw/dcisland/actions
+
 ## 開發期指令
 
 ```bash

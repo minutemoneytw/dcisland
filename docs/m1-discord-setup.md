@@ -1,80 +1,79 @@
-# M1 — Discord Activity 串接指南（你手上要點的， only）
+# Discord Activity 串接指南（雲端版）
 
-> 目標：在 DC 語音頻道點開「DC島」，遊戲認得你的 DC 身分。
-> 你負責：Developer Portal 上的操作（需要你的帳號）。我負責：其餘程式。
+> 現況：**正式站在 Cloudflare**，`https://dcisland.less78518.workers.dev`。
+> URL 對應填的就是這條，不需要開隧道、不需要自己的電腦開著。
+> 本文件給「新加入的維護者」或「要重建一份自己的 App」時照著做。
 
-## 步驟 1：建立 Application
+## 前置：一組 Discord App
 
-1. 開 https://discord.com/developers/applications → 右上 **New Application** → 名稱填 `DC島`。
-2. 左側 **General Information** 頁，把 **Application ID**（一串數字）複製起來。
-3. 打開 `tools/dev_config.json`，把那串數字填到 `client_id`。
+1. https://discord.com/developers/applications → **New Application** → 名稱 `DC島`
+2. **General Information** → 複製 **Application ID**（一串數字）
+3. **OAuth2** → **Reset Secret** → 複製 **Client Secret**
+4. 把兩個值填進 `tools/dev_config.json`：
+   ```json
+   { "client_id": "你的ApplicationID", "client_secret": "你的Secret" }
+   ```
+   （`tools/dev_config.example.json` 是範本；這個檔已被 `.gitignore` 排除，**不會進版控**）
 
-## 步驟 2：拿 Secret（給本機 token 兌換用）
+## Cloudflare 這邊
 
-1. 左側 **OAuth2** 頁 → **Client Secret** 旁的 **Reset Secret** → 複製。
-2. 填到 `dev_config.json` 的 `client_secret`。（這個像密碼一樣，別貼去群組。）
-3. 同頁下方 **Redirects**：新增兩個：
-   - 開發用你稍後的隧道網址（例 `https://xxxx.trycloudflare.com/`）
-   - 若已有正式網址也加上
-   > 沒有 Redirects 的話 SDK 授權 iframe 會靜默失敗。
+- `worker/wrangler.toml` 的 `DISCORD_CLIENT_ID` 要換成你的 Application ID
+- 推版後由 CI 自動部署（見 `docs/cloudflare-deploy.md`），或本機 `cd worker && npx wrangler deploy`
+- Secret（client secret）只存在 Cloudflare：
+  ```bash
+  cd worker
+  npx wrangler secret put DISCORD_CLIENT_SECRET
+  ```
 
-## 步驟 3：開啟 Activity 功能
+## Portal 要設定的三處
 
-1. 左側（特定版面可能在 General 或單獨頁籤）**Activities**：
-   - 打開 **Enable Activities**
-2. **URL Mappings**：
-   - Root Path `/` → 你的網址（本機測試填隧道網址）
-   - 就這一條就夠（之後再加 path 隨意）
+| 位置 | 內容 |
+|---|---|
+| **活動 → URL 對應 → 根對應** | 前綴 `/`、目標 `dcisland.less78518.workers.dev`（**不要**加 `https://`） |
+| **活動 → 設定** | 打開 **Enable Activities** |
+| **OAuth2 → 重新導向** | 加一條 `https://dcisland.less78518.workers.dev/` |
 
-## 步驟 3.5：讓測試員也能進來（重要）
+> **Proxy 路徑對應不需要任何條目**。SDK 是自家託管的單檔（`client/vendor/`），不用把外部 CDN 對應進來。
+> （舊文件寫的 `/sdk → esm.sh` 是早期做法，現在留著無害，但可以刪。）
 
-官方限制：**只有 App 擁有者與「開發團隊」成員能在活動架上看到並啟動未發布的 Activity**。所以測試員不是「加進群就好」，必須加進團隊：
+## 讓測試員／維護者進來
 
-1. Portal 左側 **團隊（Teams）** → **新建團隊**（建立團隊要求你的 Discord 帳號已開 **2FA**）
-2. 團隊頁 → 邀請成員：輸入測試員的 **Discord 使用者名稱**，他們要在 DC 裡接受邀請
-3. 團隊頁 → **應用程式 → 移轉**：把 `DC島` 移轉給這個團隊（不移轉的話團員看不到）
-   - 之後新開的 App 直接就建在團隊底下最省事
-4. 測試員端的前置：
-   - DC 桌面版 → 使用者設定 → 進階 → **開發者模式 ON**（活動架需要它）
-   - 要在 App 已安裝的那個群裡（見步驟 4 的群安裝）
-   - 進語音頻道 → 火箭 → 架上找 `DC島` → 點開 → 首次授權（選群 + 同意）→ 名牌變成他的 DC 名稱
-5. **你的電腦＋dev_server＋隧道必須開著**（試作期大家連的是你這台）；你關機＝島關門，這就是之後要搬上 Cloudflare 的理由
+官方限制：**只有 App 擁有者與「開發團隊」成員能啟動未發布的 Activity**。
 
-> 想開放給「非團隊成員」的一般群友：那是另一階段的 **App 認證（Verification）**，要到處都是公開測試時再申請，非試作期的事。
+1. Portal 左側 **團隊（Teams）** → 新增團隊（需帳號已開 **2FA**）
+2. 邀請成員（輸入對方 Discord 使用者名稱，對方要在 DC 裡接受）
+3. 團隊頁 → **應用程式 → 移轉**：把 `DC島` 移轉給團隊（不移轉，成員看不到）
+4. 成員端：DC 桌面版 → 使用者設定 → 進階 → **開發者模式 ON** → 進語音頻道 → 火箭 → 找 `DC島`
 
-## 步驟 4：把 App 加進你的伺服器 & 測試
-
-1. OAuth2 → URL Generator：勾 `activities` + `applications.commands`（視版本顯示為 `guilds.activities` 等），下方.sessions先給 **Install to Guild**
-2. 產生授權連結 → 你開瀏覽器貼上 → 選你的群 → 授權（Bot 權限可全不勾）。
-3. DC 客戶端（**桌面版**）：
-   - 使用者設定 → 進階 → 打開 **開發者模式**
-   - 進任何語音頻道 → 左下**火箭**圖示 → 活動列表應該出現 `DC島`（開發中的）
-   - 點它：Discord 會載入 URL Mappings 的網址，分個框，島就出現
-4. 首次應該會跳「授權 Access」。同意後島上你的小人就可改為 DC display 名称。
-
-## 開發測試流程（上線會跑程式的流程）
+## 本機開發（要改程式的人）
 
 ```bash
-# 我這邊的本地伺服器（Python，處理 /api/token 兌換）
-python tools/dev_server.py
-
-# 開一條 HTTPS 隧道（Cloudflare 免費、免帳號）
-cloudflared tunnel --url http://localhost:8787
-# 把印出的 https://xxx.trycloudflare.com 填進 Portal 的 URL Mappings + Redirects
+python tools/dev_server.py            # 本機伺服器 + 多人同步（不需要 Node）
+# 開 http://localhost:8787
+# 多人測試：開兩個分頁，同一 ?room=xxx 就會看到彼此
 ```
 
-- **mock 測試（不經 Discord）**：`http://localhost:8787/index.html?mock=1`
-- 在 Activity 裡：程式會偵測 `frame_id` → 啟動 SDK → 授權 → 你的 DC 名字變成小人名牌
+要測試真正的 Discord 串接時，才需要臨時隧道把本機服務對外：
 
-## 常見卡點（照樣除雷）
+```bash
+tools\cloudflared.exe tunnel --url http://localhost:8787
+# 把印出的 https 網址填進 Portal 的根對應與重新導向，測完記得改回 workers.dev
+```
+
+> ⚠️ 隧道網址每次重開都會變，所以**測試完務必改回正式站**，否則大家會白屏。
+
+## 常見卡點
 
 | 症狀 | 原因 |
 |---|---|
-| Activity 載入後空白卡死 | URL Mappings 網址與隧道不一致；或 https 憑證失敗 |
-| 授權 iframe 沒彈即頁面錯誤 | Redirects 沒填 |
-| 活動列表找不到 App | 步驟 4-2 授權連結還沒加進群；或活動還未開啟 |
-| 讀到名字但 token 失敗 | `dev_config.json` 的 secret 舊了（Portal 重置過） |
+| 一片白 | 根對應的目標掛了（隧道關了／網址變了）；改回 `dcisland.less78518.workers.dev` |
+| 每次啟動都跳授權 | 授權 scope 含有 guilds / applications.commands；只留 `identify` 就不會再跳 |
+| 授權 iframe 沒彈就失敗 | OAuth2 的重新導向沒填 |
+| 活動列表找不到 App | 還沒加進團隊；或開發者模式沒開 |
+| 讀到名字但 token 失敗 | Cloudflare 的 `DISCORD_CLIENT_SECRET` 舊了（Portal 重置過 secret 的話要重設） |
+| 看不到其他人 | 不在同一個語音頻道（房間鍵＝guild:channel） |
 
 ## 安全備忘
 
-- `dev_config.json`：「**never** push 到公開 repo」（正式部署一樣把 secret 放 Cloudflare Worker 的 secrets，不放前端）。
+- `tools/dev_config.json`（含 secret）**永不進版控**
+- 雲端的 secret 存在 Cloudflare Worker secrets，前端拿不到
