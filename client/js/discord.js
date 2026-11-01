@@ -35,11 +35,13 @@ export async function hookDiscord() {
     beacon('sdk-ready');
 
     // PKCE 授權（SDK 在隱藏 iframe 中完成，需 portal 設 Redirects）
+    // 只請求 identify：我們只用它讀顯示名稱（伺服器端拿 token 問 /users/@me）。
+    // 多加 guilds / applications.commands 會讓每次啟動都跳「新增至伺服器」的授權畫面。
     const { code } = await sdk.commands.authorize({
       client_id: clientId,
       response_type: 'code',
       prompt: 'none',
-      scope: ['identify', 'guilds', 'applications.commands'],
+      scope: ['identify'],
     });
     if (!code) throw new Error('authorize 未回 code');
     beacon('authorize-ok', 'code=' + code.slice(0, 8) + '…');
