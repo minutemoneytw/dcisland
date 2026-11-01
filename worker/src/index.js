@@ -159,29 +159,38 @@ export class Island {
 
     this.state.acceptWebSocket(server);
 
-    // 島的地形：固定存在 DO 儲存，不隨進場順序改變
-    const terrain = (await this.state.storage.get("terrain")) || "grass";
-
-    // 現有玩家快照
-    const players = {};
-    for (const ws of this.state.getWebSockets()) {
-      if (ws === server) continue;
-      const att = ws.deserializeAttachment();
-      if (att && att.state) players[att.id] = att.state;
-    }
-
-    const furn = await this.getFurn(terrain);
-    server.send(JSON.stringify({ t: "init", id: seq, players, terrain, furn }));
-    this.broadcast({ t: "join", id: seq }, server);
+    // 剛連上時還沒進任何地形（terrain 為空）：看不到也不被看到，等客戶端送 enter
+    server.send(JSON.stringify({ t: "init", id: seq }));
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  broadcast(msg, skip) {
+  // terrain 有給時只送給「目前在該地形」的連線；沒給就是全部
+  broadcast(msg, skip, terrain) {
     const data = JSON.stringify(msg);
     for (const ws of this.state.getWebSockets()) {
       if (ws === skip) continue;
+      if (terrain !== undefined && (ws.deserializeAttachment() || {}).terrain !== terrain) continue;
       try { ws.send(data); } catch { /* 對方已斷線 */ }
     }
+  }
+
+  // 玩家進入某地形：每個人各自在自己的地形，只有同地形的人看得到彼此
+  async enter(ws, att, v) {
+    if (!TERRAIN_RE.test(v) || att.terrain === v) return;
+    const old = att.terrain;
+    if (old) this.broadcast({ t: "leave", id: att.id }, ws, old);
+    att.terrain = v;
+    ws.serializeAttachment(att);
+
+    const players = {};
+    for (const o of this.state.getWebSockets()) {
+      if (o === ws) continue;
+      const oa = o.deserializeAttachment() || {};
+      if (oa.terrain === v && oa.state) players[oa.id] = oa.state;
+    }
+    ws.send(JSON.stringify({ t: "enter", terrain: v, players, furn: await this.getFurn(v) }));
+    this.broadcast({ t: "join", id: att.id }, ws, v);
+    if (att.state) this.broadcast({ t: "p", id: att.id, s: att.state }, ws, v);
   }
 
   // 簡易限流：超過就丟棄，不回應
@@ -212,24 +221,19 @@ export class Island {
       if (att.user) { s.name = att.user.name; s.uid = att.user.id; } else delete s.uid;
       att.state = s;
       ws.serializeAttachment(att);
-      this.broadcast({ t: "p", id: att.id, s }, ws);
-    } else if (msg.t === "terrain") {
-      const v = String(msg.v);
-      if (!TERRAIN_RE.test(v)) return;
-      await this.state.storage.put("terrain", v);
-      this.broadcast({ t: "terrain", v }, ws);
-      // 擺設依地形各自一份：切地形後讓所有人換成該地形的擺設
-      this.broadcast({ t: "furn", items: await this.getFurn(v) }, null);
+      if (att.terrain) this.broadcast({ t: "p", id: att.id, s }, ws, att.terrain);
+    } else if (msg.t === "enter" || msg.t === "terrain") {
+      // "terrain" 是舊客戶端的訊息名，當作 enter 處理
+      await this.enter(ws, att, String(msg.v));
     } else if (msg.t === "place" || msg.t === "remove" || msg.t === "clear") {
-      await this.editFurn(msg);
+      if (att.terrain) await this.editFurn(msg, att.terrain);
     } else if (msg.t === "event") {
-      this.broadcast({ t: "event", id: att.id, kind: msg.kind }, ws);
+      if (att.terrain) this.broadcast({ t: "event", id: att.id, kind: msg.kind }, ws, att.terrain);
     }
   }
 
-  // 家具編輯：伺服器是唯一權威，改完把整份清單廣播給所有人（含發送者）
-  async editFurn(msg) {
-    const terrain = (await this.state.storage.get("terrain")) || "grass";
+  // 家具編輯：伺服器是唯一權威，改完把整份清單廣播給同地形的所有人（含發送者）
+  async editFurn(msg, terrain) {
     let items = await this.getFurn(terrain);
     const cell = msg.cell;
     const validCell = Array.isArray(cell) && cell.length === 2 && Number.isInteger(cell[0]) && Number.isInteger(cell[1]);
@@ -258,7 +262,7 @@ export class Island {
       items = [];
     }
     await this.state.storage.put("furn:" + terrain, items);
-    this.broadcast({ t: "furn", items }, null);
+    this.broadcast({ t: "furn", items }, null, terrain);
   }
 
   async webSocketClose(ws) { this.leave(ws); }
@@ -267,6 +271,6 @@ export class Island {
   leave(ws) {
     this.rate.delete(ws);
     const att = ws.deserializeAttachment() || {};
-    this.broadcast({ t: "leave", id: att.id });
+    if (att.terrain) this.broadcast({ t: "leave", id: att.id }, ws, att.terrain);
   }
 }

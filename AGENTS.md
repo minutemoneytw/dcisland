@@ -43,7 +43,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 3. **引入外部素材必須在 `docs/assets-license.md` 補記錄**；不得使用 SE/FFXIV 的素材、圖示、字體或商標（HUD 僅風格參考）。
 4. **機密**：`tools/dev_config.json`（含 `client_secret`）絕不 commit；任何 secret 不貼進對話、日誌或程式。
 5. **同步協定有兩份實作**：`worker/src/index.js`（正式）與 `tools/dev_server.py`（本機）。改訊息格式、房間行為或限制常數（`COLS/ROWS`、`MAX_*`）時兩邊與 `net.js` 要一起改。
-6. **房間地形是伺服器端狀態**：預設 `grass`，只由明確的 `terrain` 訊息改變，不從 `state` 封包推斷；客戶端 `state` 不再帶 `terrain`。
+6. **地形是「每位玩家各自在哪」**，不是房間共用狀態：客戶端送 `enter {v}` 宣告自己進入某地形，伺服器回 `enter {terrain, players, furn}`（同地形其他人的快照與該地形擺設）。`p`/`join`/`leave`/`event`/`furn` 都只廣播給**同地形**的連線；剛連上、尚未 `enter` 的連線看不到也不被看到。切地形只有自己過去。`state` 封包不帶 `terrain`。舊的 `terrain` 訊息名仍當作 `enter` 處理。
 7. Discord 授權 scope 目前**只有 `identify`**。多加 scope 會讓每次啟動都跳授權畫面，要加先問使用者。
 8. 前端為純 ES module、單一全域狀態物件 `S`（`main.js`）；沿用現有風格，不要為小改動重構整檔。
 9. **語言**：註解、commit 訊息、文件、UI 文字用繁體中文，風格與周邊程式一致。
@@ -56,7 +56,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 
 ## 已知待辦 / 地雷
 - 動物在各客戶端各自隨機生成，**尚未同步**（方向：伺服器管存在/HP/重生時間戳，走路改成種子＋共同時間可重現）。
-- 家具擺設已同步：伺服器（DO storage，每個地形各一份）是唯一權威，客戶端只送 `place`/`remove`/`clear`，結果以廣播的 `furn` 清單為準；斷線時才退回 `localStorage`。舊的本機擺設不會自動上傳。伺服器**不判斷水邊**（只有客戶端知道島形）。
+- 家具擺設已同步：伺服器（DO storage，每個地形各一份，編輯者所在地形決定改哪一份）是唯一權威，客戶端只送 `place`/`remove`/`clear`，結果以廣播的 `furn` 清單為準；斷線時才退回 `localStorage`。舊的本機擺設不會自動上傳。伺服器**不判斷水邊**（只有客戶端知道島形）。
 - 公共島家具**開放所有人編輯**（使用者決定，因為只對小群體開放）。
 - **服裝/裝飾品權限（已定案，部分已做）**：
   - 絕大多數服裝免費；部分裝飾品需人工審核後配發。角色三層：一般成員／配發者／擁有者（擁有者先以 Worker 環境變數寫死 Discord ID）。

@@ -593,22 +593,23 @@ function landNear(px, py) {
   return [(COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL];
 }
 
-async function switchTerrain(id, fromNet) {
+async function switchTerrain(id) {
   if (id === S.terrain) return;
   try {
     if (S.mode === 'decor') S.mode = 'walk';
     await ensureTerrain(id);      // 先載好圖，再切地形
     S.terrain = id; localStorage.setItem('dcisland.m0.terrain', id);
-    if (!fromNet && netOn()) S.netFurn = [];   // 等伺服器送該地形的擺設
+    S.remotes.clear();                          // 換了地形，原地形的人都看不到了
+    if (netOn()) S.netFurn = [];                // 等伺服器送該地形的擺設
     genWorld(id); loadLayout();
-    // 留在原地（多人時被別人切地形／進島沿用房間地形，都不該把人吸到出生點）
+    // 留在原地（切地形不該把人吸到出生點）
     const me = S.players[0];
     const [nx, ny] = landNear(me.x, me.y);
     me.x = nx; me.y = ny;
     buildTerrainChips();
     toast(`${S.terrains[id].name} 島上線`);
-    // M2：讓同島的人也切過去（如果是別人切的就不必回送）
-    if (!fromNet) S.net?.setTerrain?.(id);
+    // M2：只有自己過去；告訴伺服器，讓新地形的人看到你、舊地形的人看不到你
+    S.net?.enter?.(id);
   } catch (e) {
     // 不要靜默失敗：讓玩家看得到，也回報到伺服器日誌
     toast(`切換${id}失敗：${e.message || e}`, 4000);
@@ -846,7 +847,6 @@ async function boot() {
   import('./discord.js').then(m => m.hookDiscord()).catch(err => console.warn('hookDiscord:', err));
   // M2：多人同步（同語音頻道＝同島；本機則 ?room= 或預設 local:local）
   import('./net.js').then(m => m.connectNet(S, {
-    onTerrain: id => switchTerrain(id, true),
     onFurn: onNetFurn,
     onOpen: net => toast(`已連上島（${net.room}）`, 2000),
   })).catch(err => console.warn('net:', err));

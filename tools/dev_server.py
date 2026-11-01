@@ -116,15 +116,15 @@ class Room:
         self.lock = threading.Lock()
         self.clients = {}   # cid -> {"sock":socket, "send":Lock, "state":dict}
         self.order = 0
-        self.terrain = "grass"  # 島的固定地形（之後可由島主/管理切換），不隨進場順序改變
         self.furn = {}          # 地形 -> [{"type","cell":[x,y]}]，擺設依地形各自一份
+        # 每位玩家各自在某個地形（client["terrain"]）；剛連上時為 None，等 enter
 
-    def furn_list(self, terrain=None):
-        return self.furn.setdefault(terrain or self.terrain, [])
+    def furn_list(self, terrain):
+        return self.furn.setdefault(terrain, [])
 
-    def edit_furn(self, msg):
+    def edit_furn(self, msg, terrain):
         """家具編輯（伺服器為唯一權威）。回傳 True 表示有變動。呼叫時需持有 self.lock。"""
-        defs, items, t = furn_defs(), self.furn_list(), msg.get("t")
+        defs, items, t = furn_defs(), self.furn_list(terrain), msg.get("t")
         cell = msg.get("cell")
         valid = isinstance(cell, list) and len(cell) == 2 and all(isinstance(v, int) and not isinstance(v, bool) for v in cell)
         if t == "place":
@@ -160,22 +160,35 @@ class Room:
                 return None
             self.order += 1
             cid = self.order
-            self.clients[cid] = {"sock": sock, "send": threading.Lock(), "state": {}}
-            snapshot = {c: dict(v["state"]) for c, v in self.clients.items() if v["state"]}
-            return cid, snapshot, self.terrain, list(self.furn_list())
+            self.clients[cid] = {"sock": sock, "send": threading.Lock(), "state": {}, "terrain": None}
+            return cid
 
     def remove(self, cid):
         with self.lock:
             self.clients.pop(cid, None)
 
-    def snapshot_except(self, cid):
+    def terrain_of(self, cid):
         with self.lock:
-            return {c: dict(v["state"]) for c, v in self.clients.items() if c != cid and v["state"]}
+            c = self.clients.get(cid)
+            return c["terrain"] if c else None
 
-    def broadcast(self, msg, skip=None):
+    def enter(self, cid, v):
+        """玩家進入地形 v。回傳 (舊地形, 同地形其他玩家快照, 該地形擺設)；無變動回 None。"""
+        with self.lock:
+            c = self.clients.get(cid)
+            if c is None or c["terrain"] == v:
+                return None
+            old, c["terrain"] = c["terrain"], v
+            players = {k: dict(o["state"]) for k, o in self.clients.items()
+                       if k != cid and o["terrain"] == v and o["state"]}
+            return old, players, list(self.furn_list(v))
+
+    # terrain 有給時只送給「目前在該地形」的連線；沒給就是全部
+    def broadcast(self, msg, skip=None, terrain=None):
         data = json.dumps(msg)
         with self.lock:
-            targets = [(c, v["sock"], v["send"]) for c, v in self.clients.items() if c != skip]
+            targets = [(c, v["sock"], v["send"]) for c, v in self.clients.items()
+                       if c != skip and (terrain is None or v["terrain"] == terrain)]
         dead = []
         for cid, sock, lk in targets:
             try:
@@ -286,16 +299,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         room_name = urllib.parse.parse_qs(qs).get("room", ["local"])[0][:120]
         room = get_room(room_name)
         sock = self.connection
-        added = room.add(sock)
-        if added is None:   # 島滿了：直接關閉連線，客戶端會自動退讓重連
+        cid = room.add(sock)
+        if cid is None:   # 島滿了：直接關閉連線，客戶端會自動退讓重連
             self.close_connection = True
             return
-        cid, snapshot, terrain, furn = added
         print(f"[ws] +{cid} @{room_name}（{len(room.clients)} 人在線）", file=sys.stderr, flush=True)
         win_sec, win_n = 0, 0
         try:
-            ws_send(sock, json.dumps({"t": "init", "id": cid, "players": snapshot, "terrain": terrain, "furn": furn}))
-            room.broadcast({"t": "join", "id": cid}, skip=cid)
+            # 剛連上時還沒進任何地形：看不到也不被看到，等客戶端送 enter
+            ws_send(sock, json.dumps({"t": "init", "id": cid}))
             while True:
                 fr = ws_read(sock)
                 if fr is None:
@@ -337,28 +349,44 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         st.pop("uid", None)
                     if c:
                         c["state"] = st
-                    # 地形只由明確的 terrain 訊息改變，不從狀態封包推斷
-                    room.broadcast({"t": "p", "id": cid, "s": st}, skip=cid)
-                elif t == "terrain":
+                    cur = room.terrain_of(cid)
+                    if cur:
+                        room.broadcast({"t": "p", "id": cid, "s": st}, skip=cid, terrain=cur)
+                elif t in ("enter", "terrain"):   # "terrain" 是舊客戶端的訊息名
+                    # 每位玩家各自在自己的地形，只有同地形的人看得到彼此
                     v = str(msg.get("v"))
                     if not TERRAIN_RE.match(v):
                         continue
-                    room.terrain = v
-                    room.broadcast({"t": "terrain", "v": v}, skip=cid)
-                    # 擺設依地形各自一份：切地形後讓所有人換成該地形的擺設
-                    room.broadcast({"t": "furn", "items": list(room.furn_list())})
+                    res = room.enter(cid, v)
+                    if res is None:
+                        continue
+                    old, players, furn = res
+                    if old:
+                        room.broadcast({"t": "leave", "id": cid}, skip=cid, terrain=old)
+                    with room.clients[cid]["send"]:
+                        ws_send(sock, json.dumps({"t": "enter", "terrain": v, "players": players, "furn": furn}))
+                    room.broadcast({"t": "join", "id": cid}, skip=cid, terrain=v)
+                    st = room.clients[cid]["state"]
+                    if st:
+                        room.broadcast({"t": "p", "id": cid, "s": st}, skip=cid, terrain=v)
                 elif t in ("place", "remove", "clear"):
-                    with room.lock:
-                        changed = room.edit_furn(msg)
-                    if changed:
-                        room.broadcast({"t": "furn", "items": list(room.furn_list())})
+                    cur = room.terrain_of(cid)
+                    if cur:
+                        with room.lock:
+                            changed = room.edit_furn(msg, cur)
+                        if changed:
+                            room.broadcast({"t": "furn", "items": list(room.furn_list(cur))}, terrain=cur)
                 elif t == "event":   # 揮擊等瞬時事件
-                    room.broadcast({"t": "event", "id": cid, "kind": msg.get("kind")}, skip=cid)
+                    cur = room.terrain_of(cid)
+                    if cur:
+                        room.broadcast({"t": "event", "id": cid, "kind": msg.get("kind")}, skip=cid, terrain=cur)
         except Exception as e:
             print(f"[ws] !{cid} {e}", file=sys.stderr, flush=True)
         finally:
+            last = room.terrain_of(cid)
             room.remove(cid)
-            room.broadcast({"t": "leave", "id": cid})
+            if last:
+                room.broadcast({"t": "leave", "id": cid}, terrain=last)
             print(f"[ws] -{cid} @{room_name}（剩 {len(room.clients)} 人）", file=sys.stderr, flush=True)
             self.close_connection = True
 

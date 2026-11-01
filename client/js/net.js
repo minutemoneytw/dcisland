@@ -61,15 +61,20 @@ export function connectNet(S, opts = {}) {
       case 'init':
         net.id = msg.id;
         S.remotes.clear();
-        for (const [id, st] of Object.entries(msg.players || {})) upsert(Number(id), st);
-        // 島的地形以房間為準（第一位進場者決定）
-        if (msg.terrain && msg.terrain !== S.terrain && opts.onTerrain) opts.onTerrain(msg.terrain);
-        if (msg.furn && opts.onFurn) opts.onFurn(msg.furn);
         break;
+      case 'enter': {
+        // 進入（或切換到）某地形：每個人各自在自己的地形，只看得到同地形的人
+        S.remotes.clear();
+        for (const [id, st] of Object.entries(msg.players || {})) {
+          const r = upsert(Number(id), st);
+          r.x = r.tx; r.y = r.ty;               // 一進場就在對方位置，不用滑過來
+        }
+        if (opts.onFurn) opts.onFurn(msg.furn || []);
+        break;
+      }
       case 'join': upsert(msg.id, null); break;
       case 'p': upsert(msg.id, msg.s); break;
       case 'leave': S.remotes.delete(msg.id); break;
-      case 'terrain': if (msg.v && msg.v !== S.terrain && opts.onTerrain) opts.onTerrain(msg.v); break;
       case 'furn': if (opts.onFurn) opts.onFurn(msg.items || []); break;
       case 'event': {
         const r = S.remotes.get(msg.id);
@@ -83,7 +88,8 @@ export function connectNet(S, opts = {}) {
     ws = new WebSocket(url);
     ws.onopen = () => {
       net.connected = true; backoff = 600;
-      net.hello();                          // 先表明身分（有憑證才送），再送狀態
+      net.hello();                          // 先表明身分（有憑證才送）
+      net.enter(S.terrain);                 // 再宣告自己在哪個地形（斷線重連也會重進）
       send({ t: 'state', s: myState() });
       opts.onOpen && opts.onOpen(net);
     };
@@ -109,8 +115,8 @@ export function connectNet(S, opts = {}) {
   net.hello = () => { if (S.session) send({ t: 'hello', s: S.session }); };
   // 攻擊等瞬時事件（doAttack 會呼叫）
   net.notifyAttack = () => net.connected && send({ t: 'event', kind: 'attack' });
-  // 切地形時同步給同島的人
-  net.setTerrain = v => net.connected && send({ t: 'terrain', v });
+  // 宣告自己進入某地形：只有自己過去，同地形的人才看得到你
+  net.enter = v => net.connected && send({ t: 'enter', v });
   // 家具編輯：只送意圖，結果以伺服器廣播的 furn 清單為準
   net.placeFurn = (type, x, y) => net.connected && send({ t: 'place', type, cell: [x, y] });
   net.removeFurn = (x, y) => net.connected && send({ t: 'remove', cell: [x, y] });
