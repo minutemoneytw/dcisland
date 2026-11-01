@@ -39,7 +39,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 
 ## 慣例（請遵守）
 1. **加內容走 manifest，不改程式**：新家具/動物/造型＝manifest 加條目＋圖檔。新地形＝`assets/terrain/<id>/` 資料夾＋在 `main.js` 的 `TERRAIN_IDS` 登記（見 README「內容擴充」）。
-2. **素材先改 `gen_assets.py` 再重跑**，不要手改 PNG（會被下次產生蓋掉）。
+2. **素材先改 `gen_assets.py` 再重跑**，不要手改 PNG（會被下次產生蓋掉）。⚠️ 目前整支重跑會連帶改到三十幾個不相干的既有素材（產生器與已 commit 的素材有落差）；只想更新單一素材時，重跑後用 `git checkout` 還原其他檔案，只留要改的那幾個。`assets/tools/tools.json` 是手寫資料，不由產生器產生。
 3. **引入外部素材必須在 `docs/assets-license.md` 補記錄**；不得使用 SE/FFXIV 的素材、圖示、字體或商標（HUD 僅風格參考）。
 4. **機密**：`tools/dev_config.json`（含 `client_secret`）絕不 commit；任何 secret 不貼進對話、日誌或程式。
 5. **同步協定有兩份實作**：`worker/src/index.js`（正式）與 `tools/dev_server.py`（本機）。改訊息格式、房間行為或限制常數（`COLS/ROWS`、`MAX_*`）時兩邊與 `net.js` 要一起改。
@@ -55,6 +55,8 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 - 不要把無關檔案、log、暫存輸出、本機工具狀態（如 `worker/.wrangler/`，已在 `.gitignore`）放進 repo。`.gitignore` 已列出幾個留在磁碟但不進版控的無關檔案（`LOG_FORMAT.md` 等），不要刪也不要加回來。
 
 ## 已知待辦 / 地雷
+- **採集工具（已做）**：`client/assets/tools/tools.json` 決定哪些地形物件可破壞（key＝地形 deco 的圖檔名）、用什麼工具（`pickaxe`/`axe`）、血量、重生秒數、掉落物。點到可破壞物件（且點的位置沒有動物）就自動換工具打它，離太遠（`range` 72px）只提示；F 鍵會自動打前方最近的可破壞物件；其餘情況仍用劍。工具圖放進 `S.weaponImgs`，與武器共用同一套繪製（圖方向：工具頭在上、握柄在下，轉軸在離圖底 3 格處）；手上拿的工具會隨 `state.weapon` 同步給同地形的人。**掉落物目前刻意為空**（`drops: []`、`items: {}`）：機制已就緒——在 `items` 定義物品、在目標的 `drops` 加 `{item,min,max,chance}` 即會掉落、走過去自動撿進背包（`S.inv`，存 `localStorage`）。
+- **可破壞物件的狀態（血量/已破壞）只存在各客戶端本機，未同步**（與動物相同）；破壞後固定秒數重生，切地形/重新載入也會重置。
 - 動物在各客戶端各自隨機生成，**尚未同步**（方向：伺服器管存在/HP/重生時間戳，走路改成種子＋共同時間可重現）。
 - 家具擺設已同步：伺服器（DO storage，每個地形各一份，編輯者所在地形決定改哪一份）是唯一權威，客戶端只送 `place`/`remove`/`clear`，結果以廣播的 `furn` 清單為準；斷線時才退回 `localStorage`。舊的本機擺設不會自動上傳。伺服器**不判斷水邊**（只有客戶端知道島形）。
 - 公共島家具**開放所有人編輯**（使用者決定，因為只對小群體開放）。

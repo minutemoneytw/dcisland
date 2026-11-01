@@ -29,7 +29,7 @@ export function connectNet(S, opts = {}) {
       z: Math.round(p.z),
       name: p.name,
       look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt },
-      weapon: S.me.weapon,
+      weapon: p.tool || S.me.weapon,       // 手上拿的（打石頭/樹木時是工具）
     };
   }
 

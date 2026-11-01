@@ -53,6 +53,9 @@ const S = {
   remotes: new Map(),           // M2：同島的其他玩家（id -> player-like）
   net: null,                    // M2：連線物件（net.js）
   netFurn: [],                  // 伺服器端目前地形的擺設（連線時以此為準）
+  toolsDB: null,                // 採集工具與可破壞物件（assets/tools/tools.json）
+  drops: [],                    // 地上的掉落物 {item,x,y,born}
+  inv: JSON.parse(localStorage.getItem('dcisland.m0.inv') || '{}'),   // 背包：物品id -> 數量
 };
 
 // ---------------- 世界生成 ----------------
@@ -78,6 +81,7 @@ function genWorld(id) {
     if (rng() < .045) decos.push({ sprite: pool[Math.floor(rng() * pool.length)], cell: [x, y], flip: rng() < .5 });
   }
   S.world = { types, decos };
+  S.drops = [];
   spawnAnimals();
 }
 
@@ -120,14 +124,97 @@ function respawnAnimal(id) {
 
 // ---- 攻擊（武器） ----
 const ATK_CD = 0.45, ATK_T = 0.22, ATK_RANGE = 58;
-function doAttack() {
+
+// ---- 採集工具：點到石頭自動換鎬子、點到樹木/蘑菇自動換斧頭，其餘維持用劍 ----
+// 哪些東西可破壞、用什麼工具、血量、掉落物，全在 assets/tools/tools.json（key＝地形 deco 的圖檔名）
+function decoTarget(d) { return S.toolsDB?.targets[d.sprite]; }
+function decoRect(d) {
+  const img = S.tImages[S.terrain]?.[d.sprite]; if (!img) return null;
+  const sc = S.terrains[S.terrain].scale, w = img.width * sc, h = img.height * sc;
+  return { x: d.cell[0] * CELL, y: (d.cell[1] + 1) * CELL - h, w, h };
+}
+function decoBase(d) { return [d.cell[0] * CELL + CELL / 2, (d.cell[1] + .5) * CELL]; }
+// 滑鼠點到哪個可破壞物件（多個重疊時取底部最近的）
+function decoAt(wx, wy) {
+  let best = null, bd = 1e9;
+  for (const d of S.world.decos) {
+    if (d.dead || !decoTarget(d)) continue;
+    const r = decoRect(d); if (!r) continue;
+    if (wx < r.x || wx > r.x + r.w || wy < r.y || wy > r.y + r.h) continue;
+    const dist = Math.hypot(wx - (r.x + r.w / 2), wy - (r.y + r.h));
+    if (dist < bd) { bd = dist; best = d; }
+  }
+  return best;
+}
+// F 鍵（沒有滑鼠位置）：自己前方、範圍內最近的可破壞物件
+function decoNear(p) {
+  let best = null, bd = S.toolsDB.range + 1;
+  for (const d of S.world.decos) {
+    if (d.dead || !decoTarget(d)) continue;
+    const [bx, by] = decoBase(d), dx = bx - p.x, dist = Math.hypot(dx, by - p.y);
+    if (dist >= bd || dx * p.dir < -8) continue;
+    bd = dist; best = d;
+  }
+  return best;
+}
+function useTool(d) {
+  const p = S.players[0], tgt = decoTarget(d), [bx, by] = decoBase(d);
+  if (Math.hypot(bx - p.x, by - p.y) > S.toolsDB.range) { toast(`離${tgt.name}太遠了，靠近一點`); return; }
+  if (Math.abs(bx - p.x) > 6) p.dir = Math.sign(bx - p.x);
+  if (S.t - p.lastAtk < ATK_CD) return;
+  p.lastAtk = S.t; p.swing = ATK_T;
+  p.tool = tgt.tool; p.toolUntil = S.t + S.toolsDB.hold;     // 自動換工具，一陣子沒用就換回劍
+  S.net?.notifyAttack?.();
+  d.hp ??= tgt.hp; d.hp -= 1; d.shake = .25;
+  const r = decoRect(d);
+  S.floaters.push({ x: bx + (Math.random() * 16 - 8), y: r.y + r.h * .4, v: '1', life: .8, crit: false });
+  if (d.hp <= 0) breakDeco(d, tgt);
+}
+function breakDeco(d, tgt) {
+  d.dead = true; d.respawnAt = S.t + (tgt.respawn || 60);
+  const [bx, by] = decoBase(d), r = decoRect(d);
+  S.floaters.push({ x: bx, y: r.y + r.h * .5, poof: true, life: .55 });
+  spawnDrops(tgt, bx, by);
+  toast(`${tgt.name}被破壞了`, 1600);
+}
+// 掉落物：tools.json 的 drops 為空就什麼都不會掉；格式見該檔 _drops_format
+function spawnDrops(tgt, x, y) {
+  for (const e of tgt.drops || []) {
+    if (!S.toolsDB.items[e.item] || Math.random() >= (e.chance ?? 1)) continue;
+    const lo = e.min ?? 1, n = lo + Math.floor(Math.random() * ((e.max ?? lo) - lo + 1));
+    for (let i = 0; i < n; i++) S.drops.push({ item: e.item, x: x + Math.random() * 30 - 15, y: y + Math.random() * 16 - 4, born: S.t });
+  }
+}
+function stepDecos(dt) {
+  for (const d of S.world.decos) {
+    if (d.shake > 0) d.shake -= dt;
+    if (d.dead && S.t >= d.respawnAt) { d.dead = false; d.hp = undefined; d.shake = 0; }   // 重生
+  }
+}
+function stepDrops(dt) {
+  const p = S.players[0];
+  for (let i = S.drops.length - 1; i >= 0; i--) {
+    const dr = S.drops[i];
+    if (S.t - dr.born < .5 || Math.hypot(dr.x - p.x, dr.y - p.y) > 24) continue;
+    S.drops.splice(i, 1);
+    S.inv[dr.item] = (S.inv[dr.item] || 0) + 1;
+    localStorage.setItem('dcisland.m0.inv', JSON.stringify(S.inv));
+    toast(`獲得 ${S.toolsDB.items[dr.item].name} ×1（共 ${S.inv[dr.item]}）`, 1600);
+  }
+}
+
+function doAttack(auto) {
   const p = S.players[0];
   S._hits = 0;
   if (S.mode !== 'walk') return;
+  if (auto) {   // F 鍵：前方有可破壞物件就自動用對應工具
+    const d = decoNear(p);
+    if (d) { S._hits = 1; useTool(d); return; }
+  }
   if (S.me.weapon === 'hands') { toast('先在「造型」裡裝備武器！'); return; }
   if (!S.weaponImgs[S.me.weapon]) return;
   if (S.t - p.lastAtk < ATK_CD) return;
-  p.lastAtk = S.t; p.swing = ATK_T;
+  p.lastAtk = S.t; p.swing = ATK_T; p.tool = null;
   S.net?.notifyAttack?.();          // M2：讓同島的人看到你的揮擊
   for (const a of S.animals) {
     if (a.dead) continue;
@@ -300,6 +387,7 @@ function stepPlayer(p, dt) {
     if (p.z <= 0) { p.z = 0; p.vz = 0; }
   }
   if (p.swing > 0) p.swing -= dt;
+  if (p.tool && S.t > p.toolUntil && !(p.swing > 0)) p.tool = null;
   if (p.moving) { p.animT += dt; if (p.animT > .16) { p.animT = 0; p.frame ^= 1; } }
   else p.frame = 0;
 }
@@ -334,13 +422,13 @@ function stepNPC(p, dt) {
 // 沒揮擊：背在肩後（畫在身體之前，被身體擋住一部分）
 function drawWeaponBack(wi) {
   ctx.save(); ctx.translate(-11, -26); ctx.rotate(-.55);
-  ctx.drawImage(wi, -6, -9, 12, 36); ctx.restore();
+  ctx.drawImage(wi, -wi.width, -wi.height / 2, wi.width * 2, wi.height * 2); ctx.restore();
 }
 // 揮擊：握住劍柄（以握把為轉軸）、刀刃朝外，由後上方往前下方揮，畫在身體之後（身前）
 function drawWeaponSwing(wi, swing) {
   const q = 1 - swing / ATK_T;
   ctx.save(); ctx.translate(3, -26); ctx.rotate(-.9 + q * 2.8);
-  ctx.drawImage(wi, -6, -30, 12, 36); ctx.restore();
+  ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();   // 轉軸＝離圖底 3 格的握把
 }
 
 function draw() {
@@ -373,15 +461,30 @@ function draw() {
   // 收集繪製項目（y 排序）
   const list = [];
   for (const d of S.world.decos) {
+    if (d.dead) continue;
     const img = ims[d.sprite]; if (!img) continue;
     list.push({
       y: (d.cell[1] + 1) * CELL,
       draw: () => {
         const w = img.width * SC, h = img.height * SC;
+        const sx = d.shake > 0 ? Math.sin(S.t * 70) * 2 * (d.shake / .25) : 0;   // 受擊抖動
         if (d.flip) {
-          ctx.save(); ctx.translate(d.cell[0] * CELL, (d.cell[1] + 1) * CELL); ctx.scale(-1, 1);
+          ctx.save(); ctx.translate(d.cell[0] * CELL + w + sx, (d.cell[1] + 1) * CELL - h); ctx.scale(-1, 1);
           ctx.drawImage(img, 0, 0, w, h); ctx.restore();
-        } else ctx.drawImage(img, d.cell[0] * CELL, (d.cell[1] + 1) * CELL - h, w, h);
+        } else ctx.drawImage(img, d.cell[0] * CELL + sx, (d.cell[1] + 1) * CELL - h, w, h);
+      }
+    });
+  }
+  // 掉落物
+  for (const dr of S.drops) {
+    const def = S.toolsDB.items[dr.item];
+    list.push({
+      y: dr.y, draw: () => {
+        const bob = Math.sin(S.t * 5 + dr.x) * 2;
+        ctx.fillStyle = 'rgba(10,14,20,.3)';
+        ctx.beginPath(); ctx.ellipse(dr.x, dr.y, 5, 2, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = def?.color || '#fff'; ctx.strokeStyle = 'rgba(20,16,12,.9)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(dr.x, dr.y - 7 - bob, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
     });
   }
@@ -449,7 +552,8 @@ function draw() {
         ctx.save(); ctx.translate(p.x, p.y - p.z);
         if (p.dir < 0) ctx.scale(-1, 1);
         // 武器（背在肩上 / 揮擊時畫在身前）
-        const wi = !p.npc && S.me.weapon !== 'hands' ? S.weaponImgs[S.me.weapon] : null;
+        const wid = p.tool || S.me.weapon;      // 打石頭/樹木時暫時換成鎬子/斧頭
+        const wi = !p.npc && wid !== 'hands' ? S.weaponImgs[wid] : null;
         if (wi && !(p.swing > 0)) drawWeaponBack(wi);
         ctx.drawImage(img, -16, -48, 32, 48);
         if (wi && p.swing > 0) drawWeaponSwing(wi, p.swing);
@@ -685,7 +789,7 @@ addEventListener('keydown', e => {
   keys[k] = true;
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   if (k === 'e' && !e.repeat) setDecor(S.mode === 'walk');
-  if (k === 'f' && !e.repeat) doAttack();
+  if (k === 'f' && !e.repeat) doAttack(true);
 });
 addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
@@ -700,6 +804,11 @@ canvas.addEventListener('mousedown', e => {
     // 左鍵攻擊：先面向點擊方向再揮
     const r = canvas.getBoundingClientRect();
     const wx = e.clientX - r.left + S.cam.x, wy = e.clientY - r.top + S.cam.y;
+    // 點到可破壞物件（且那裡沒有動物）→ 自動換工具去打它
+    if (!S.animals.some(a => !a.dead && Math.hypot(a.x - wx, a.y - wy) < 30)) {
+      const d = decoAt(wx, wy);
+      if (d) { useTool(d); return; }
+    }
     if (Math.abs(wx - S.players[0].x) > 6) S.players[0].dir = Math.sign(wx - S.players[0].x);
     doAttack();
     // 沒命中但點到了一隻動物 → 牠的致公告告（FF14 點動物 FU）
@@ -777,6 +886,9 @@ async function boot() {
   // 小動物（FF14 致敬）
   S.animalsDB = await loadJSON('assets/animals/animals.json');
   await Promise.all(S.animalsDB.animals.map(async a => S.anImgs[a.id] = await loadImg(`assets/animals/${a.sprite}`)));
+  // 採集工具（鎬子/斧頭）：圖放進 weaponImgs，讓繪製與遠端玩家共用同一套武器繪製
+  S.toolsDB = await loadJSON('assets/tools/tools.json');
+  await Promise.all(S.toolsDB.tools.map(async t => S.weaponImgs[t.id] = await loadImg(`assets/tools/${t.sprite}`)));
   S.avatar = await loadJSON('assets/avatar/avatar.json');
   if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';
   // 家具圖
@@ -828,6 +940,7 @@ async function boot() {
         const r = S.respawn[i];
         if (S.t >= r.at) { S.respawn.splice(i, 1); respawnAnimal(r.id); }
       }
+      stepDecos(dt); stepDrops(dt);
       for (let i = S.floaters.length - 1; i >= 0; i--) {
         const f = S.floaters[i];
         f.life -= dt; f.y -= 34 * dt;

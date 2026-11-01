@@ -58,7 +58,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 
 ## 操作
 
-`WASD/方向鍵` 走 · `Shift` 跑 · `Space` 跳 · **左鍵（或 `F`）攻擊** · `E` 裝飾模式（左鍵放置、右鍵拿取、即時存檔）· 頂部 chip 切地形 · `造型` 換膚色/髮型/上衣/武器。
+`WASD/方向鍵` 走 · `Shift` 跑 · `Space` 跳 · **左鍵（或 `F`）攻擊**（點石頭自動用鎬子、點樹木/蘑菇自動用斧頭） · `E` 裝飾模式（左鍵放置、右鍵拿取、即時存檔）· 頂部 chip 切地形 · `造型` 換膚色/髮型/上衣/武器。
 
 ## 內容擴充（都不用改程式）
 
@@ -68,6 +68,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 | 家具 | `client/assets/furniture/furniture.json` 加條目 + png |
 | 動物 | `client/assets/animals/animals.json` 加條目 + png，並在各地形 `terrain.json` 的 `animals` 指定 |
 | 造型 | `client/assets/avatar/avatar.json`（＋對應 png） |
+| 可破壞物件／採集工具／掉落物 | `client/assets/tools/tools.json`（key＝地形 deco 的圖檔名；掉落物目前為空） |
 
 ## 機密與安全
 

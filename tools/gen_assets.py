@@ -404,6 +404,37 @@ def weapon_sword():  # 木劍（M0 武器 1 號）
     cv.outline((30, 24, 22, 255))
     return cv
 
+# 採集工具（與 weapon_sword 同方向：工具頭在上、握柄在下；握把在左右正中，轉軸在離底 3 格處）
+def tool_pickaxe():  # 鎬子
+    cv = Canvas(12, 18)
+    wood = hx("#8a6238"); wood_d = hx("#5a4028")
+    st = hx("#9aa4ad"); st_hi = hx("#c9d2d9")
+    cv.rect(5, 3, 6, 17, wood)            # 握柄
+    cv.rect(5, 15, 6, 17, wood_d)         # 握柄尾端
+    cv.rect(4, 1, 7, 1, st_hi)            # 鎬頭（兩端下垂的弧形）
+    cv.rect(2, 2, 9, 2, st)
+    cv.rect(1, 3, 3, 3, st); cv.rect(8, 3, 10, 3, st)
+    cv.rect(5, 3, 6, 3, st)               # 與握柄相接處
+    cv.set(1, 3, st_hi); cv.set(10, 3, st_hi)   # 兩端尖角反光
+    cv.outline((30, 24, 22, 255))
+    return cv
+
+def tool_axe():  # 斧頭（斧刃在右側＝揮向前方時朝外）
+    cv = Canvas(12, 18)
+    wood = hx("#8a6238"); wood_d = hx("#5a4028")
+    st = hx("#9aa4ad"); st_hi = hx("#dfe6ec"); st_d = hx("#6c7680")
+    cv.rect(5, 1, 6, 17, wood)            # 握柄
+    cv.rect(5, 15, 6, 17, wood_d)
+    cv.rect(5, 1, 8, 1, st)               # 斧頭
+    cv.rect(4, 2, 9, 2, st)
+    cv.rect(4, 3, 10, 5, st)
+    cv.rect(4, 6, 9, 6, st)
+    cv.rect(5, 7, 7, 7, st)
+    cv.rect(4, 2, 4, 6, st_d)             # 背面（斧背）較暗
+    cv.rect(10, 3, 10, 5, st_hi)          # 刃口反光
+    cv.outline((30, 24, 22, 255))
+    return cv
+
 def bed():
     cv = Canvas(32, 24)
     cf = hx("#4a6ab0"); cfd = shade(cf, 0.8)
@@ -553,6 +584,9 @@ def main():
 
     print("== 武器 ==")
     save(weapon_sword(), "weapon_sword.png", "avatar")
+    print("== 採集工具（tools.json 為手寫資料，這裡只畫圖）==")
+    save(tool_pickaxe(), "tool_pickaxe.png", "tools")
+    save(tool_axe(), "tool_axe.png", "tools")
 
     print("== 角色 ==")
     sub = "avatar"
