@@ -58,7 +58,7 @@ class Room:
         self.lock = threading.Lock()
         self.clients = {}   # cid -> {"sock":socket, "send":Lock, "state":dict}
         self.order = 0
-        self.terrain = None  # 島的地形由第一位進場者決定
+        self.terrain = "grass"  # 島的固定地形（之後可由島主/管理切換），不隨進場順序改變
 
     def add(self, sock):
         with self.lock:
@@ -214,12 +214,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     s = room.clients.get(cid)
                     if s:
                         s["state"] = msg.get("s") or {}
-                    st = msg.get("s") or {}
-                    # 島的地形＝第一位進場者決定，之後的人沿用
-                    if room.terrain is None and st.get("terrain"):
-                        room.terrain = st["terrain"]
-                        print(f"[ws] {room_name} 地形定案：{room.terrain}", file=sys.stderr, flush=True)
-                    room.broadcast({"t": "p", "id": cid, "s": st}, skip=cid)
+                    # 地形只由明確的 terrain 訊息改變，不從狀態封包推斷
+                    room.broadcast({"t": "p", "id": cid, "s": msg.get("s")}, skip=cid)
                 elif t == "terrain":
                     v = str(msg.get("v"))[:40]
                     room.terrain = v

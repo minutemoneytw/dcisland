@@ -565,17 +565,40 @@ function buildTerrainChips() {
   }
 }
 
+// 站在水裡／家具上時，往最近的可行走位置挪（找不到才回出生點）
+function landNear(px, py) {
+  if (!blocked(px, py)) return [px, py];
+  for (let r = 1; r <= 14; r++) {
+    for (let a = 0; a < 20; a++) {
+      const ang = a / 20 * Math.PI * 2;
+      const nx = px + Math.cos(ang) * r * CELL, ny = py + Math.sin(ang) * r * CELL;
+      if (!blocked(nx, ny)) return [nx, ny];
+    }
+  }
+  return [(COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL];
+}
+
 async function switchTerrain(id, fromNet) {
   if (id === S.terrain) return;
-  if (S.mode === 'decor') S.mode = 'walk';
-  await ensureTerrain(id);      // 先載好圖，再切地形
-  S.terrain = id; localStorage.setItem('dcisland.m0.terrain', id);
-  genWorld(id); loadLayout();
-  S.players[0].x = (COLS / 2 - .5) * CELL; S.players[0].y = (ROWS / 2 - .5) * CELL + 20;
-  buildTerrainChips();
-  toast(`${S.terrains[id].name} 島上線`);
-  // M2：讓同島的人也切過去（如果是別人切的就不必回送）
-  if (!fromNet) S.net?.setTerrain?.(id);
+  try {
+    if (S.mode === 'decor') S.mode = 'walk';
+    await ensureTerrain(id);      // 先載好圖，再切地形
+    S.terrain = id; localStorage.setItem('dcisland.m0.terrain', id);
+    genWorld(id); loadLayout();
+    // 留在原地（多人時被別人切地形／進島沿用房間地形，都不該把人吸到出生點）
+    const me = S.players[0];
+    const [nx, ny] = landNear(me.x, me.y);
+    me.x = nx; me.y = ny;
+    buildTerrainChips();
+    toast(`${S.terrains[id].name} 島上線`);
+    // M2：讓同島的人也切過去（如果是別人切的就不必回送）
+    if (!fromNet) S.net?.setTerrain?.(id);
+  } catch (e) {
+    // 不要靜默失敗：讓玩家看得到，也回報到伺服器日誌
+    toast(`切換${id}失敗：${e.message || e}`, 4000);
+    reportError('terrain-switch', id + ' | ' + (e.stack || e.message || e));
+    console.error('switchTerrain', id, e);
+  }
 }
 
 function buildFurnPanel() {
@@ -711,6 +734,18 @@ async function ensureTerrain(id) {
   for (const f of [...files]) if (!ims[f]) console.warn('缺地形圖:', id, f);
   S.tImages[id] = ims;
 }
+
+// 前端錯誤回報（開發期）：打到伺服器 /api/log，這樣「沒反應」不會變成懸案
+function reportError(tag, detail) {
+  try {
+    fetch('/api/log', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag, extra: String(detail).slice(0, 500) }),
+    });
+  } catch { /* 回報失敗不影響遊戲 */ }
+}
+window.addEventListener('error', e => reportError('client-error', `${e.message} @${e.filename || '?'}:${e.lineno}`));
+window.addEventListener('unhandledrejection', e => reportError('client-reject', (e.reason && (e.reason.stack || e.reason.message)) || e.reason));
 
 async function boot() {
   $('btnDecor').disabled = false;

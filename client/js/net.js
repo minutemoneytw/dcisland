@@ -30,7 +30,6 @@ export function connectNet(S, opts = {}) {
       name: p.name,
       look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt },
       weapon: S.me.weapon,
-      terrain: S.terrain,
     };
   }
 
