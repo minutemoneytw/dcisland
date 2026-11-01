@@ -5,7 +5,7 @@
 # 2) /api/config   -> 從 dev_config.json 讀 client_id
 # 3) /api/token    -> 用 code+secret 向 Discord 兌換 access_token（secret 只在本機/伺服器端）
 # 用法: python tools/dev_server.py  (先填 tools/dev_config.json)
-import json, os, re, sys, base64, hashlib, hmac, struct, threading, time
+import json, math, os, re, sys, base64, hashlib, hmac, struct, threading, time
 import urllib.request, urllib.parse, urllib.error, http.server, socketserver
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -101,6 +101,28 @@ MAX_PLAYERS = 64
 RATE_MAX = 40
 TERRAIN_RE = re.compile(r"^[a-z0-9_-]{1,24}$")
 
+CELL = 32                # 與 client/js/main.js 一致
+HIT_RANGE = 140          # 打可破壞物件時，玩家離目標最遠幾 px（客戶端範圍 72，留給延遲）
+HIT_CD = 0.3             # 同一條連線兩次打擊最短間隔（秒）
+
+_TARGETS = None
+def deco_targets():
+    """可破壞物件定義（前端 tools.json 的 targets），血量/重生秒數據此判斷。"""
+    global _TARGETS
+    if _TARGETS is None:
+        with open(os.path.join(CLIENT, "assets", "tools", "tools.json"), encoding="utf-8") as f:
+            _TARGETS = json.load(f).get("targets", {})
+    return _TARGETS
+
+def cell_has_furn(items, cell):
+    """該格有沒有家具（家具佔 w×h 格）。"""
+    defs = furn_defs()
+    for it in items:
+        w, h = defs.get(it["type"], (1, 1))
+        if it["cell"][0] <= cell[0] < it["cell"][0] + w and it["cell"][1] <= cell[1] < it["cell"][1] + h:
+            return True
+    return False
+
 _FURN_DEFS = None
 def furn_defs():
     """id -> (w, h)，取自前端 furniture.json，用來驗證擺放。"""
@@ -117,10 +139,60 @@ class Room:
         self.clients = {}   # cid -> {"sock":socket, "send":Lock, "state":dict}
         self.order = 0
         self.furn = {}          # 地形 -> [{"type","cell":[x,y]}]，擺設依地形各自一份
+        self.decos = {}         # 地形 -> {物件編號: {"hp","cell","until"(ms)}}，只存受損/已破壞的
         # 每位玩家各自在某個地形（client["terrain"]）；剛連上時為 None，等 enter
 
     def furn_list(self, terrain):
         return self.furn.setdefault(terrain, [])
+
+    def prune_decos(self, terrain):
+        """已破壞、到了重生時間、且該格沒有家具的 → 回到滿血（移除紀錄）。呼叫時需持有 self.lock。"""
+        m, items, now = self.decos.setdefault(terrain, {}), self.furn_list(terrain), time.time() * 1000
+        for i in [i for i, e in m.items() if e["hp"] <= 0 and e["until"] <= now and not cell_has_furn(items, e["cell"])]:
+            del m[i]
+        return m
+
+    def deco_list(self, terrain):
+        now = time.time() * 1000
+        return [{"i": i, "hp": e["hp"], "ttl": max(0, int(e["until"] - now)) if e["hp"] <= 0 else 0}
+                for i, e in self.prune_decos(terrain).items()]
+
+    def hit_deco(self, cid, msg):
+        """打可破壞物件：血量由伺服器扣。回傳要廣播的 (地形, 訊息)；無效回 None。
+        物件編號 i 是客戶端依地形種子確定性產生的順序；伺服器不重建世界，只驗證格式、距離與目標種類。"""
+        i, cell = msg.get("i"), msg.get("cell")
+        isint = lambda v: isinstance(v, int) and not isinstance(v, bool)
+        if not isint(i) or not 0 <= i < 5000:
+            return None
+        if not (isinstance(cell, list) and len(cell) == 2 and all(isint(v) for v in cell)
+                and 0 <= cell[0] < COLS and 0 <= cell[1] < ROWS):
+            return None
+        tgt = deco_targets().get(str(msg.get("sprite")))
+        if not tgt:
+            return None
+        with self.lock:
+            c = self.clients.get(cid)
+            if c is None or not c["terrain"] or not c["state"]:
+                return None
+            st = c["state"]
+            try:
+                d = math.hypot(cell[0] * CELL + CELL / 2 - float(st["x"]), (cell[1] + .5) * CELL - float(st["y"]))
+            except Exception:
+                return None
+            if not d <= HIT_RANGE:
+                return None
+            terrain = c["terrain"]
+            m = self.prune_decos(terrain)
+            e = m.get(i) or {"hp": tgt["hp"], "cell": cell}
+            if e["hp"] <= 0:
+                return None
+            e["hp"] -= 1
+            e["cell"] = cell
+            ttl = int((tgt.get("respawn") or 60) * 1000)
+            if e["hp"] <= 0:
+                e["until"] = time.time() * 1000 + ttl
+            m[i] = e
+            return terrain, {"t": "deco", "i": i, "hp": e["hp"], "ttl": ttl if e["hp"] <= 0 else 0, "by": cid}
 
     def edit_furn(self, msg, terrain):
         """家具編輯（伺服器為唯一權威）。回傳 True 表示有變動。呼叫時需持有 self.lock。"""
@@ -181,7 +253,7 @@ class Room:
             old, c["terrain"] = c["terrain"], v
             players = {k: dict(o["state"]) for k, o in self.clients.items()
                        if k != cid and o["terrain"] == v and o["state"]}
-            return old, players, list(self.furn_list(v))
+            return old, players, list(self.furn_list(v)), self.deco_list(v)
 
     # terrain 有給時只送給「目前在該地形」的連線；沒給就是全部
     def broadcast(self, msg, skip=None, terrain=None):
@@ -305,6 +377,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
         print(f"[ws] +{cid} @{room_name}（{len(room.clients)} 人在線）", file=sys.stderr, flush=True)
         win_sec, win_n = 0, 0
+        last_hit = 0.0
         try:
             # 剛連上時還沒進任何地形：看不到也不被看到，等客戶端送 enter
             ws_send(sock, json.dumps({"t": "init", "id": cid}))
@@ -360,15 +433,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     res = room.enter(cid, v)
                     if res is None:
                         continue
-                    old, players, furn = res
+                    old, players, furn, decos = res
                     if old:   # leave 帶 to＝去了哪個地形（讓留下的人顯示「XXX 移動到了OO區域」）；斷線的 leave 不帶
                         room.broadcast({"t": "leave", "id": cid, "to": v}, skip=cid, terrain=old)
                     with room.clients[cid]["send"]:
-                        ws_send(sock, json.dumps({"t": "enter", "terrain": v, "players": players, "furn": furn}))
+                        ws_send(sock, json.dumps({"t": "enter", "terrain": v, "players": players, "furn": furn, "decos": decos}))
                     st = room.clients[cid]["state"]
                     room.broadcast({"t": "join", "id": cid, "name": st.get("name")}, skip=cid, terrain=v)
                     if st:
                         room.broadcast({"t": "p", "id": cid, "s": st}, skip=cid, terrain=v)
+                elif t == "hit":
+                    now = time.time()
+                    if now - last_hit < HIT_CD:
+                        continue
+                    res = room.hit_deco(cid, msg)
+                    if res:
+                        last_hit = now
+                        room.broadcast(res[1], terrain=res[0])
                 elif t in ("place", "remove", "clear"):
                     cur = room.terrain_of(cid)
                     if cur:

@@ -73,8 +73,10 @@ export function connectNet(S, opts = {}) {
           r.x = r.tx; r.y = r.ty;               // 一進場就在對方位置，不用滑過來
         }
         if (opts.onFurn) opts.onFurn(msg.furn || []);
+        if (opts.onDecos) opts.onDecos(msg.terrain, msg.decos || []);   // 在擺設之後（重生判斷要看家具）
         break;
       }
+      case 'deco': if (opts.onDeco) opts.onDeco(msg); break;
       case 'join': {
         const r = upsert(msg.id, null);
         if (msg.name) r.name = msg.name;
@@ -133,6 +135,8 @@ export function connectNet(S, opts = {}) {
   net.enter = v => net.connected && send({ t: 'enter', v });
   // 家具編輯：只送意圖，結果以伺服器廣播的 furn 清單為準
   net.placeFurn = (type, x, y) => net.connected && send({ t: 'place', type, cell: [x, y] });
+  // 打可破壞物件：只送意圖（物件編號、圖檔名、所在格），血量由伺服器扣
+  net.hitDeco = (i, sprite, cell) => net.connected && send({ t: 'hit', i, sprite, cell });
   net.removeFurn = (x, y) => net.connected && send({ t: 'remove', cell: [x, y] });
   net.clearFurn = () => net.connected && send({ t: 'clear' });
 

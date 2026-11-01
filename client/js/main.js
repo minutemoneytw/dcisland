@@ -78,7 +78,7 @@ function genWorld(id) {
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
     if (types[y * COLS + x] !== 2) continue;
     if (Math.abs(x - cx) < 2.5 && Math.abs(y - cy) < 2) continue; // 出生區淨空
-    if (rng() < .045) decos.push({ sprite: pool[Math.floor(rng() * pool.length)], cell: [x, y], flip: rng() < .5 });
+    if (rng() < .045) decos.push({ i: decos.length, sprite: pool[Math.floor(rng() * pool.length)], cell: [x, y], flip: rng() < .5 });
   }
   S.world = { types, decos };
   S.drops = [];
@@ -165,17 +165,34 @@ function useTool(d) {
   p.lastAtk = S.t; p.swing = ATK_T;
   p.tool = tgt.tool; p.toolUntil = S.t + S.toolsDB.hold;     // 自動換工具，一陣子沒用就換回劍
   S.net?.notifyAttack?.();
-  d.hp ??= tgt.hp; d.hp -= 1; d.shake = .25;
-  const r = decoRect(d);
-  S.floaters.push({ x: bx + (Math.random() * 16 - 8), y: r.y + r.h * .4, v: '1', life: .8, crit: false });
-  if (d.hp <= 0) breakDeco(d, tgt);
+  // 連線時血量由伺服器扣，結果以伺服器廣播的 deco 訊息為準（同地形的人都會看到）；沒連線才在本機算
+  if (netOn()) { S.net.hitDeco(d.i, d.sprite, d.cell); return; }
+  d.hp ??= tgt.hp; d.hp -= 1;
+  applyDecoHit(d, d.hp, d.hp <= 0, (tgt.respawn || 60) * 1000, true);
 }
-function breakDeco(d, tgt) {
-  d.dead = true; d.respawnAt = S.t + (tgt.respawn || 60);
-  const [bx, by] = decoBase(d), r = decoRect(d);
+// 套用一次打擊的結果（本機算的或伺服器廣播的）。mine＝自己打的：只有打壞的人拿掉落物、看到訊息
+function applyDecoHit(d, hp, dead, ttl, mine) {
+  const tgt = decoTarget(d), [bx, by] = decoBase(d), r = decoRect(d);
+  d.hp = hp; d.shake = .25;
+  S.floaters.push({ x: bx + (Math.random() * 16 - 8), y: r.y + r.h * .4, v: '1', life: .8, crit: false });
+  if (!dead) return;
+  d.dead = true; d.respawnAt = S.t + ttl / 1000;
   S.floaters.push({ x: bx, y: r.y + r.h * .5, poof: true, life: .55 });
-  spawnDrops(tgt, bx, by);
-  toast(`${tgt.name}被破壞了`, 1600);
+  if (mine) { spawnDrops(tgt, bx, by); toast(`${tgt.name}被破壞了`, 1600); }
+}
+// 進入地形時伺服器給的完整狀態：先全部還原，再套用受損/已破壞的
+function onNetDecos(terrain, list) {
+  if (terrain !== S.terrain) return;
+  for (const d of S.world.decos) { d.dead = false; d.hp = undefined; d.shake = 0; }
+  for (const e of list) {
+    const d = S.world.decos[e.i]; if (!d) continue;
+    d.hp = e.hp;
+    if (e.hp <= 0) { d.dead = true; d.respawnAt = S.t + e.ttl / 1000; }
+  }
+}
+function onNetDeco(m) {
+  const d = S.world.decos[m.i];
+  if (d && decoTarget(d)) applyDecoHit(d, m.hp, m.hp <= 0, m.ttl, m.by === S.net?.id);
 }
 // 掉落物：tools.json 的 drops 為空就什麼都不會掉；格式見該檔 _drops_format
 function spawnDrops(tgt, x, y) {
@@ -188,7 +205,8 @@ function spawnDrops(tgt, x, y) {
 function stepDecos(dt) {
   for (const d of S.world.decos) {
     if (d.shake > 0) d.shake -= dt;
-    if (d.dead && S.t >= d.respawnAt) { d.dead = false; d.hp = undefined; d.shake = 0; }   // 重生
+    // 重生：時間到，且該格沒有家具（有家具就一直等到家具被拿走）
+    if (d.dead && S.t >= d.respawnAt && !S.occ.has(key(d.cell[0], d.cell[1]))) { d.dead = false; d.hp = undefined; d.shake = 0; }
   }
 }
 function stepDrops(dt) {
@@ -958,6 +976,8 @@ async function boot() {
   // M2：多人同步（同語音頻道＝同島；本機則 ?room= 或預設 local:local）
   import('./net.js').then(m => m.connectNet(S, {
     onFurn: onNetFurn,
+    onDecos: onNetDecos,
+    onDeco: onNetDeco,
     onOpen: net => toast(`已連上島（${net.room}）`, 2000),
   })).catch(err => console.warn('net:', err));
 }

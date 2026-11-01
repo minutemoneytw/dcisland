@@ -18,6 +18,17 @@ const MAX_MSG = 2048;        // 單則訊息長度上限（字元）
 const MAX_PLAYERS = 64;      // 一座島同時在線上限
 const RATE_MAX = 40;         // 每條連線每秒最多處理幾則訊息（state 約 12 則/秒）
 const TERRAIN_RE = /^[a-z0-9_-]{1,24}$/;
+const CELL = 32;             // 與 client/js/main.js 一致
+const HIT_RANGE = 140;       // 打可破壞物件時，玩家離目標最遠幾 px（客戶端範圍 72，留給延遲）
+const HIT_CD_MS = 300;       // 同一條連線兩次打擊最短間隔
+
+// 該格有沒有家具（家具佔 w×h 格）
+function cellHasFurn(items, defs, cell) {
+  return items.some(it => {
+    const d = defs.get(it.type) || { w: 1, h: 1 };
+    return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
+  });
+}
 const SESSION_TTL_MS = 12 * 3600 * 1000;   // 簽章憑證有效期
 
 // ---- 身分憑證：/api/token 兌換成功後簽發，/ws 的 hello 訊息驗證 ----
@@ -124,6 +135,41 @@ export class Island {
     this.env = env;
     this.rate = new Map();       // ws -> {sec, n}；休眠醒來會重置，無妨
     this.furnDefs = null;        // id -> {w,h}，由 furniture.json 載入
+    this.targets = null;         // 可破壞物件定義（tools.json 的 targets）
+    this.lastHit = new Map();    // ws -> 上次打擊的時間
+  }
+
+  // 可破壞物件的血量/重生秒數取自前端 tools.json
+  async getTargets() {
+    if (this.targets) return this.targets;
+    try {
+      const res = await this.env.ASSETS.fetch(new Request("https://assets.local/assets/tools/tools.json"));
+      this.targets = (await res.json()).targets || {};
+    } catch (e) {
+      console.log("[deco] tools.json 載入失敗", String(e));
+      return {};
+    }
+    return this.targets;
+  }
+
+  // 每個地形一份「受損/已破壞」的可破壞物件：{ 物件編號: {hp, cell, until} }（沒受損的不存）
+  async getDecos(terrain) {
+    return (await this.state.storage.get("deco:" + terrain)) || {};
+  }
+
+  // 已破壞、到了重生時間、且該格沒有家具的 → 回到滿血（移除紀錄）
+  async pruneDecos(terrain, map) {
+    const items = await this.getFurn(terrain), defs = await this.getFurnDefs();
+    let changed = false;
+    for (const [i, e] of Object.entries(map)) {
+      if (e.hp <= 0 && e.until <= Date.now() && !cellHasFurn(items, defs, e.cell)) { delete map[i]; changed = true; }
+    }
+    if (changed) await this.state.storage.put("deco:" + terrain, map);
+    return map;
+  }
+
+  decoList(map) {
+    return Object.entries(map).map(([i, e]) => ({ i: Number(i), hp: e.hp, ttl: e.hp <= 0 ? Math.max(0, e.until - Date.now()) : 0 }));
   }
 
   // 家具尺寸取自前端 manifest，伺服器據此驗證擺放
@@ -189,7 +235,9 @@ export class Island {
       const oa = o.deserializeAttachment() || {};
       if (oa.terrain === v && oa.state) players[oa.id] = oa.state;
     }
-    ws.send(JSON.stringify({ t: "enter", terrain: v, players, furn: await this.getFurn(v) }));
+    await this.getFurnDefs();     // 先載入（pruneDecos 會用到）
+    const decos = this.decoList(await this.pruneDecos(v, await this.getDecos(v)));
+    ws.send(JSON.stringify({ t: "enter", terrain: v, players, furn: await this.getFurn(v), decos }));
     this.broadcast({ t: "join", id: att.id, name: att.state && att.state.name }, ws, v);
     if (att.state) this.broadcast({ t: "p", id: att.id, s: att.state }, ws, v);
   }
@@ -226,11 +274,40 @@ export class Island {
     } else if (msg.t === "enter" || msg.t === "terrain") {
       // "terrain" 是舊客戶端的訊息名，當作 enter 處理
       await this.enter(ws, att, String(msg.v));
+    } else if (msg.t === "hit") {
+      await this.hitDeco(ws, att, msg);
     } else if (msg.t === "place" || msg.t === "remove" || msg.t === "clear") {
       if (att.terrain) await this.editFurn(msg, att.terrain);
     } else if (msg.t === "event") {
       if (att.terrain) this.broadcast({ t: "event", id: att.id, kind: msg.kind }, ws, att.terrain);
     }
+  }
+
+  // 打可破壞物件：血量由伺服器扣，改完廣播給同地形的所有人（含打的人）
+  // 物件編號（i）是客戶端依地形種子確定性產生的順序；伺服器不重建世界，只驗證格式、距離與目標種類
+  async hitDeco(ws, att, msg) {
+    const terrain = att.terrain, cell = msg.cell, i = msg.i;
+    if (!terrain || !att.state) return;
+    if (!Number.isInteger(i) || i < 0 || i >= 5000) return;
+    if (!Array.isArray(cell) || cell.length !== 2 || !cell.every(Number.isInteger) || cell[0] < 0 || cell[1] < 0 || cell[0] >= COLS || cell[1] >= ROWS) return;
+    const now = Date.now();
+    if (now - (this.lastHit.get(ws) || 0) < HIT_CD_MS) return;
+    const tgt = (await this.getTargets())[String(msg.sprite)];
+    if (!tgt) return;
+    const dx = cell[0] * CELL + CELL / 2 - att.state.x, dy = (cell[1] + .5) * CELL - att.state.y;
+    if (!(Math.hypot(dx, dy) <= HIT_RANGE)) return;     // 也擋掉 NaN／缺座標
+    this.lastHit.set(ws, now);
+
+    await this.getFurnDefs();
+    const map = await this.pruneDecos(terrain, await this.getDecos(terrain));
+    const e = map[i] || { hp: tgt.hp, cell };
+    if (e.hp <= 0) return;                               // 已經壞了
+    e.hp -= 1; e.cell = cell;
+    const ttl = (tgt.respawn || 60) * 1000;
+    if (e.hp <= 0) e.until = now + ttl;
+    map[i] = e;
+    await this.state.storage.put("deco:" + terrain, map);
+    this.broadcast({ t: "deco", i, hp: e.hp, ttl: e.hp <= 0 ? ttl : 0, by: att.id }, null, terrain);
   }
 
   // 家具編輯：伺服器是唯一權威，改完把整份清單廣播給同地形的所有人（含發送者）
@@ -271,6 +348,7 @@ export class Island {
 
   leave(ws) {
     this.rate.delete(ws);
+    this.lastHit.delete(ws);
     const att = ws.deserializeAttachment() || {};
     if (att.terrain) this.broadcast({ t: "leave", id: att.id }, ws, att.terrain);
   }
