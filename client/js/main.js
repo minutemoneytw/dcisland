@@ -343,11 +343,12 @@ function rebuildOcc() {
 function furnitureDef(id) { return S.furn.items.find(f => f.id ===id); }
 
 // ---------------- 遮擋 / 碰撞 ----------------
-function blocked(px, py) { // 像素座標（腳底）
+function blocked(px, py, ignoreFurn) { // 像素座標（腳底）；ignoreFurn＝只看地形（水邊），不管家具
   const x = Math.floor(px / CELL), y = Math.floor(py / CELL);
   if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return true;
   const type = S.world.types[y * COLS + x];
   if (type === 0) return true;
+  if (ignoreFurn) return false;
   const fi = S.occ.get(key(x, y));
   if (fi !== undefined) {
     const def = S.furn.items.find(f => f.id === S.furnItems[fi].type);
@@ -424,20 +425,21 @@ function stepRemote(r, dt) {
 function stepPlayer(p, dt) {
   if (p.npc) { stepNPC(p, dt); return; }
   let dx = 0, dy = 0;
-  if (S.mode === 'walk') {
-    if (keys['a'] || keys['arrowleft']) dx -= 1;
-    if (keys['d'] || keys['arrowright']) dx += 1;
-    if (keys['w'] || keys['arrowup']) dy -= 1;
-    if (keys['s'] || keys['arrowdown']) dy += 1;
-  }
+  // 走路與裝飾模式都能移動（裝飾模式要邊走邊擺）
+  if (keys['a'] || keys['arrowleft']) dx -= 1;
+  if (keys['d'] || keys['arrowright']) dx += 1;
+  if (keys['w'] || keys['arrowup']) dy -= 1;
+  if (keys['s'] || keys['arrowdown']) dy += 1;
   p.moving = dx !== 0 || dy !== 0;
   if (p.moving) {
     if (dx !== 0) p.dir = dx;
     const len = Math.hypot(dx, dy) || 1, sp = (keys['shift'] ? 200 : 120) * dt;
     const nx = clamp(p.x + dx / len * sp, 8, COLS * CELL - 8);
     const ny = clamp(p.y + dy / len * sp, 8, ROWS * CELL - 8);
-    if (!blocked(nx, p.y)) p.x = nx;
-    if (!blocked(p.x, ny)) p.y = ny;
+    // 裝飾模式可穿過擺飾（避免被卡住）；已經被家具圍住/壓在家具上時（例如別人把家具擺在你腳下）也一樣可以走出來。水邊照樣擋
+    const ig = S.mode === 'decor' || (blocked(p.x, p.y) && !blocked(p.x, p.y, true));
+    if (!blocked(nx, p.y, ig)) p.x = nx;
+    if (!blocked(p.x, ny, ig)) p.y = ny;
   }
   // 跳躍（裝飾模式不跳）
   if (S.mode === 'walk' && keys[' '] && p.z === 0 && p.vz === 0) p.vz = 240;
@@ -1005,6 +1007,10 @@ async function boot() {
       S.t += dt;
       autoAttack();
       for (const p of S.players) stepPlayer(p, dt);
+      if (S.mouseCell && S.mouseClient) {      // 裝飾模式邊走邊擺：鏡頭在動，滑鼠指的格子要跟著重算
+        const r = canvas.getBoundingClientRect();
+        S.mouseCell = [Math.floor((S.mouseClient[0] - r.left + S.cam.x) / CELL), Math.floor((S.mouseClient[1] - r.top + S.cam.y) / CELL)];
+      }
       for (const r of S.remotes.values()) stepRemote(r, dt);
       for (let i = S.animals.length - 1; i >= 0; i--) {
         const a = S.animals[i];
