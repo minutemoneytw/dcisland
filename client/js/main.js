@@ -124,6 +124,9 @@ function respawnAnimal(id) {
 
 // ---- 攻擊（武器） ----
 const ATK_CD = 0.45, ATK_T = 0.22, ATK_RANGE = 58;
+// 長按自動連擊時，「太遠了」「沒裝備武器」這類提示只在第一下顯示，不要每幀洗版
+let quiet = false;
+const say = (msg, ms) => { if (!quiet) toast(msg, ms); };
 
 // ---- 採集工具：點到石頭自動換鎬子、點到樹木/蘑菇自動換斧頭，其餘維持用劍 ----
 // 哪些東西可破壞、用什麼工具、血量、掉落物，全在 assets/tools/tools.json（key＝地形 deco 的圖檔名）
@@ -159,7 +162,7 @@ function decoNear(p) {
 }
 function useTool(d) {
   const p = S.players[0], tgt = decoTarget(d), [bx, by] = decoBase(d);
-  if (Math.hypot(bx - p.x, by - p.y) > S.toolsDB.range) { toast(`離${tgt.name}太遠了，靠近一點`); return; }
+  if (Math.hypot(bx - p.x, by - p.y) > S.toolsDB.range) { say(`離${tgt.name}太遠了，靠近一點`); return; }
   if (Math.abs(bx - p.x) > 6) p.dir = Math.sign(bx - p.x);
   if (S.t - p.lastAtk < ATK_CD) return;
   p.lastAtk = S.t; p.swing = ATK_T;
@@ -229,7 +232,7 @@ function doAttack(auto) {
     const d = decoNear(p);
     if (d) { S._hits = 1; useTool(d); return; }
   }
-  if (S.me.weapon === 'hands') { toast('先在「造型」裡裝備武器！'); return; }
+  if (S.me.weapon === 'hands') { say('先在「造型」裡裝備武器！'); return; }
   if (!S.weaponImgs[S.me.weapon]) return;
   if (S.t - p.lastAtk < ATK_CD) return;
   p.lastAtk = S.t; p.swing = ATK_T; p.tool = null;
@@ -810,34 +813,52 @@ addEventListener('keydown', e => {
   if (k === 'f' && !e.repeat) doAttack(true);
 });
 addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+// 切走視窗時放開所有按住的鍵，避免卡住一直揮擊/走路
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; S.mouseHeld = false; });
+addEventListener('mouseup', e => { if (e.button === 0) S.mouseHeld = false; });
 
 canvas.addEventListener('mousemove', e => {
+  S.mouseClient = [e.clientX, e.clientY];     // 長按左鍵時，鏡頭/角色移動後仍要用最新的游標位置
   const r = canvas.getBoundingClientRect();
   S.mouseCell = [Math.floor((e.clientX - r.left + S.cam.x) / CELL), Math.floor((e.clientY - r.top + S.cam.y) / CELL)];
 });
 canvas.addEventListener('mouseleave', () => S.mouseCell = null);
+// 左鍵攻擊（世界座標 wx,wy 是游標指的位置）：先面向游標方向再揮
+function clickAttack(wx, wy) {
+  // 點到可破壞物件（且那裡沒有動物）→ 自動換工具去打它
+  if (!S.animals.some(a => !a.dead && Math.hypot(a.x - wx, a.y - wy) < 30)) {
+    const d = decoAt(wx, wy);
+    if (d) { useTool(d); return; }
+  }
+  if (Math.abs(wx - S.players[0].x) > 6) S.players[0].dir = Math.sign(wx - S.players[0].x);
+  doAttack();
+  // 沒命中但點到了一隻動物 → 牠的致公告告（FF14 點動物 FU）
+  if (!S._hits) {
+    for (const a of S.animals) {
+      if (!a.dead && Math.hypot(a.x - wx, a.y - wy) < 30) {
+        say(animalDef(a.id).line, 2200);
+        break;
+      }
+    }
+  }
+}
+// 長按 F 或左鍵：冷卻一到就自動再揮（每幀呼叫；第一下由按下事件負責，之後這裡接手）
+function autoAttack() {
+  if (S.mode !== 'walk' || S.t - S.players[0].lastAtk < ATK_CD) return;
+  quiet = true;
+  try {
+    if (S.mouseHeld && S.mouseClient) {
+      const r = canvas.getBoundingClientRect();
+      clickAttack(S.mouseClient[0] - r.left + S.cam.x, S.mouseClient[1] - r.top + S.cam.y);
+    } else if (keys['f']) doAttack(true);
+  } finally { quiet = false; }
+}
 canvas.addEventListener('mousedown', e => {
   if (e.button !== 0) return;
   if (S.mode === 'walk') {
-    // 左鍵攻擊：先面向點擊方向再揮
     const r = canvas.getBoundingClientRect();
-    const wx = e.clientX - r.left + S.cam.x, wy = e.clientY - r.top + S.cam.y;
-    // 點到可破壞物件（且那裡沒有動物）→ 自動換工具去打它
-    if (!S.animals.some(a => !a.dead && Math.hypot(a.x - wx, a.y - wy) < 30)) {
-      const d = decoAt(wx, wy);
-      if (d) { useTool(d); return; }
-    }
-    if (Math.abs(wx - S.players[0].x) > 6) S.players[0].dir = Math.sign(wx - S.players[0].x);
-    doAttack();
-    // 沒命中但點到了一隻動物 → 牠的致公告告（FF14 點動物 FU）
-    if (!S._hits) {
-      for (const a of S.animals) {
-        if (!a.dead && Math.hypot(a.x - wx, a.y - wy) < 30) {
-          toast(animalDef(a.id).line, 2200);
-          break;
-        }
-      }
-    }
+    S.mouseHeld = true; S.mouseClient = [e.clientX, e.clientY];
+    clickAttack(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y);
     return;
   }
   if (S.mode !== 'decor' || !S.mouseCell || !S.sel) return;
@@ -943,6 +964,7 @@ async function boot() {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     try {
       S.t += dt;
+      autoAttack();
       for (const p of S.players) stepPlayer(p, dt);
       for (const r of S.remotes.values()) stepRemote(r, dt);
       for (let i = S.animals.length - 1; i >= 0; i--) {
