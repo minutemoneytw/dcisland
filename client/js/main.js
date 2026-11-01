@@ -839,7 +839,7 @@ function setDecor(on) {
   S.mode = on ? 'decor' : 'walk';
   $('btnDecor').classList.toggle('active', on);
   $('furnPanel').classList.toggle('hidden', !on);
-  if (on) { S.sel = S.sel || S.furn.items[0].id; buildFurnPanel(); toast('裝飾模式：左鍵放置・右鍵拿取'); }
+  if (on) { S.sel = S.sel || S.furn.items[0].id; buildFurnPanel(); toast('裝飾模式：左鍵放置／右鍵移除'); }
   else { saveLayout(); toast('擺設已保存'); }
 }
 
@@ -957,6 +957,7 @@ function reportError(tag, detail) {
 window.addEventListener('error', e => reportError('client-error', `${e.message} @${e.filename || '?'}:${e.lineno}`));
 window.addEventListener('unhandledrejection', e => reportError('client-reject', (e.reason && (e.reason.stack || e.reason.message)) || e.reason));
 
+let welcomeUntil = 0;
 async function boot() {
   $('btnDecor').disabled = false;
   // manifest
@@ -1038,14 +1039,20 @@ async function boot() {
   requestAnimationFrame(loop);
   window.S = S; // debug / discord.js 接線用
   window.toast = toast;
-  toast('歡迎來到 DC島！WASD 走動・Shift 跑・Space 跳・左鍵/F 攻擊・E 裝飾', 3000);
+  // 第一次來（這個瀏覽器沒看過）：多提示一次怎麼互動；之後只顯示簡短歡迎
+  let first = true;
+  try { first = !localStorage.getItem('dcisland.m0.seen'); localStorage.setItem('dcisland.m0.seen', '1'); } catch { /* 無痕等：當作第一次 */ }
+  const welcomeMs = first ? 7000 : 3000;
+  welcomeUntil = performance.now() + welcomeMs;           // 歡迎訊息顯示期間，不讓「已連上島」把它蓋掉
+  if (first) toast('歡迎來到 DC島！左鍵／F 鍵互動（攻擊、採集）・WASD 走動・Shift 跑・Space 跳・E 裝飾', welcomeMs);
+  else toast('歡迎來到 DC島！WASD 走動・Shift 跑・Space 跳・左鍵/F 攻擊・E 裝飾', welcomeMs);
   import('./discord.js').then(m => m.hookDiscord()).catch(err => console.warn('hookDiscord:', err));
   // M2：多人同步（同語音頻道＝同島；本機則 ?room= 或預設 local:local）
   import('./net.js').then(m => m.connectNet(S, {
     onFurn: onNetFurn,
     onDecos: onNetDecos,
     onDeco: onNetDeco,
-    onOpen: net => toast(`已連上島（${net.room}）`, 2000),
+    onOpen: net => { if (performance.now() >= welcomeUntil) toast(`已連上島（${net.room}）`, 2000); },
   })).catch(err => console.warn('net:', err));
 }
 
