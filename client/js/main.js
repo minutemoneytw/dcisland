@@ -245,7 +245,7 @@ function doAttack(auto) {
     S._hits++;
     const crit = Math.random() < .18;
     const dmg = crit ? 2 : 1;
-    a.hp -= dmg; a.startle = 1; a.target = null; a.idle = 0;
+    a.hp -= dmg; a.startle = 1; a.startleT = 3; a.target = null; a.idle = 0;
     S.floaters.push({ x: a.x + (Math.random() * 24 - 12), y: a.y - 42, v: String(dmg), life: .8, crit });
     const ax = a.x - p.x, ay = a.y - p.y, l = Math.hypot(ax, ay) || 1;
     a.target = { x: clamp(a.x + ax / l * 220, CELL, (COLS - 1) * CELL), y: clamp(a.y + ay / l * 220, CELL, (ROWS - 1) * CELL), flee: true };
@@ -259,15 +259,18 @@ function doAttack(auto) {
 
 function stepAnimal(a, dt) {
   const def = animalDef(a.id);
-  const me = S.players[0];
-  const d = Math.hypot(me.x - a.x, me.y - a.y);
-  if (d < def.flee && !a.startle) { // 被嚇到
-    a.startle = 1;
-    const ax = a.x - me.x, ay = a.y - me.y, l = Math.hypot(ax, ay) || 1;
-    a.target = { x: clamp(a.x + ax / l * 190, CELL, (COLS - 1) * CELL), y: clamp(a.y + ay / l * 190, CELL, (ROWS - 1) * CELL), flee: true };
-    a.idle = 0;
+  // 只有「附近有人揮擊」才會被嚇到（自己或同島的人）；單純走過去、站在旁邊不會嚇跑牠
+  if (S.t - (a.scaredAt ?? -9) > .4) {
+    const src = [S.players[0], ...S.remotes.values()]
+      .find(q => q.swing > 0 && Math.hypot(q.x - a.x, q.y - a.y) < def.flee);
+    if (src) {
+      a.startle = 1; a.startleT = 3; a.scaredAt = S.t;
+      const ax = a.x - src.x, ay = a.y - src.y, l = Math.hypot(ax, ay) || 1;
+      a.target = { x: clamp(a.x + ax / l * 190, CELL, (COLS - 1) * CELL), y: clamp(a.y + ay / l * 190, CELL, (ROWS - 1) * CELL), flee: true };
+      a.idle = 0;
+    }
   }
-  if (a.startle && d > def.flee * 1.7) a.startle = 0;
+  if (a.startleT > 0 && (a.startleT -= dt) <= 0) a.startle = 0;      // 驚嚇一陣子後恢復平靜
   if (a.idle > 0) { a.idle -= dt; a.z = 0; return; }
   if (!a.target || Math.hypot(a.target.x - a.x, a.target.y - a.y) < 5) {
     if (a.target?.flee) { a.idle = 1 + Math.random() * 2; a.target = null; return; }
