@@ -396,8 +396,9 @@ def frog():  # 大肚蛙（眼神無辜）
 def weapon_sword():  # 木劍（M0 武器 1 號）
     cv = Canvas(6, 18)
     sv = hx("#c9b98a"); hi = hx("#e8d8a8")
-    cv.rect(2, 0, 3, 11, sv)          # 劍刃
-    cv.rect(2, 0, 2, 11, hi)          # 刃光
+    cv.rect(2, 2, 3, 11, sv)          # 劍刃（第 0 列留給輪廓，第 1 列是劍尖）
+    cv.rect(2, 2, 2, 11, hi)          # 刃光
+    cv.set(2, 1, hi)                  # 劍尖：單點收尖，不是平頭
     cv.rect(0, 12, 5, 12, hx("#8a6238"))   # 護手
     cv.rect(2, 13, 3, 17, hx("#5a4028"))   # 握柄
     cv.outline((30, 24, 22, 255))

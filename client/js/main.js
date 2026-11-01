@@ -330,6 +330,19 @@ function stepNPC(p, dt) {
 }
 
 // ---------------- 繪製 ----------------
+// 武器（ctx 已 translate 到角色腳底並依 dir 翻轉）。素材：刀刃在上、握柄在下。
+// 沒揮擊：背在肩後（畫在身體之前，被身體擋住一部分）
+function drawWeaponBack(wi) {
+  ctx.save(); ctx.translate(-11, -26); ctx.rotate(-.55);
+  ctx.drawImage(wi, -6, -9, 12, 36); ctx.restore();
+}
+// 揮擊：握住劍柄（以握把為轉軸）、刀刃朝外，由後上方往前下方揮，畫在身體之後（身前）
+function drawWeaponSwing(wi, swing) {
+  const q = 1 - swing / ATK_T;
+  ctx.save(); ctx.translate(3, -26); ctx.rotate(-.9 + q * 2.8);
+  ctx.drawImage(wi, -6, -30, 12, 36); ctx.restore();
+}
+
 function draw() {
   const T = S.terrain, tMan = S.terrains[T], ims = S.tImages[T];
   const SC = tMan.scale;
@@ -436,18 +449,10 @@ function draw() {
         ctx.save(); ctx.translate(p.x, p.y - p.z);
         if (p.dir < 0) ctx.scale(-1, 1);
         // 武器（背在肩上 / 揮擊時畫在身前）
-        if (!p.npc && S.me.weapon !== 'hands') {
-          const wi = S.weaponImgs[S.me.weapon];
-          if (p.swing > 0) {
-            const q = 1 - p.swing / ATK_T;
-            ctx.save(); ctx.translate(3, -26); ctx.rotate(-2.3 + q * 2.5);
-            ctx.drawImage(wi, -6, -9, 12, 36); ctx.restore();
-          } else {
-            ctx.save(); ctx.translate(-11, -26); ctx.rotate(-.55);
-            ctx.drawImage(wi, -6, -9, 12, 36); ctx.restore();
-          }
-        }
+        const wi = !p.npc && S.me.weapon !== 'hands' ? S.weaponImgs[S.me.weapon] : null;
+        if (wi && !(p.swing > 0)) drawWeaponBack(wi);
         ctx.drawImage(img, -16, -48, 32, 48);
+        if (wi && p.swing > 0) drawWeaponSwing(wi, p.swing);
         ctx.restore();
         // 名牌（FFXIV 感：白字黑邊）
         ctx.font = '10px "Microsoft JhengHei"';
@@ -469,18 +474,10 @@ function draw() {
         const img = playerSpriteDiv(r, r.frame === 1 ? 1 : 0);
         ctx.save(); ctx.translate(r.x, r.y - r.z);
         if (r.dir < 0) ctx.scale(-1, 1);
-        if (r.weapon && r.weapon !== 'hands' && S.weaponImgs[r.weapon]) {
-          const wi = S.weaponImgs[r.weapon];
-          if (r.swing > 0) {
-            const q = 1 - r.swing / ATK_T;
-            ctx.save(); ctx.translate(3, -26); ctx.rotate(-2.3 + q * 2.5);
-            ctx.drawImage(wi, -6, -9, 12, 36); ctx.restore();
-          } else {
-            ctx.save(); ctx.translate(-11, -26); ctx.rotate(-.55);
-            ctx.drawImage(wi, -6, -9, 12, 36); ctx.restore();
-          }
-        }
+        const wi = r.weapon && r.weapon !== 'hands' ? S.weaponImgs[r.weapon] : null;
+        if (wi && !(r.swing > 0)) drawWeaponBack(wi);
         ctx.drawImage(img, -16, -48, 32, 48);
+        if (wi && r.swing > 0) drawWeaponSwing(wi, r.swing);
         ctx.restore();
         ctx.font = '10px "Microsoft JhengHei"';
         ctx.textAlign = 'center';
