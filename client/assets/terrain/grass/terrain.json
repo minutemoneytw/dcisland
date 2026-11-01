@@ -1,0 +1,38 @@
+{
+ "id": "grass",
+ "name": "草島",
+ "scale": 2,
+ "tile": 16,
+ "ground": "ground.png",
+ "edge": "edge.png",
+ "water": "water.png",
+ "deco": [
+  {
+   "sprite": "tree.png",
+   "weight": 3
+  },
+  {
+   "sprite": "flower.png",
+   "weight": 2
+  },
+  {
+   "sprite": "rock.png",
+   "weight": 1
+  }
+ ],
+ "animals": [
+  {
+   "id": "sheep",
+   "weight": 2
+  },
+  {
+   "id": "bird",
+   "weight": 1
+  },
+  {
+   "id": "frog",
+   "weight": 1
+  }
+ ],
+ "uiColor": "#6aaa5a"
+}

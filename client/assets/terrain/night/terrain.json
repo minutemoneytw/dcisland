@@ -1,0 +1,34 @@
+{
+ "id": "night",
+ "name": "夜光島",
+ "scale": 2,
+ "tile": 16,
+ "ground": "ground.png",
+ "edge": "edge.png",
+ "water": "water.png",
+ "deco": [
+  {
+   "sprite": "glowshroom.png",
+   "weight": 3
+  },
+  {
+   "sprite": "lantern.png",
+   "weight": 2
+  },
+  {
+   "sprite": "rock.png",
+   "weight": 1
+  }
+ ],
+ "animals": [
+  {
+   "id": "frog",
+   "weight": 2
+  },
+  {
+   "id": "sheep",
+   "weight": 1
+  }
+ ],
+ "uiColor": "#6b74b8"
+}

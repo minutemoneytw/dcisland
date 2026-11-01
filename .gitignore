@@ -1,0 +1,17 @@
+# ---- 機密：Discord App 憑證（含 client_secret），絕不進版控 ----
+tools/dev_config.json
+
+# ---- 免安裝工具（55MB 執行檔，各自下載即可）----
+tools/cloudflared.exe
+cloudflared.exe
+
+# ---- Python ----
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# ---- 編輯器 / 系統 ----
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

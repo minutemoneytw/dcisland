@@ -1,0 +1,94 @@
+{
+ "scale": 2,
+ "tile": 16,
+ "items": [
+  {
+   "id": "sofa",
+   "name": "沙發",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "sofa.png"
+  },
+  {
+   "id": "table",
+   "name": "桌子",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "table.png"
+  },
+  {
+   "id": "chair",
+   "name": "椅子",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "chair.png"
+  },
+  {
+   "id": "plant",
+   "name": "植栽",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "plant.png"
+  },
+  {
+   "id": "rug",
+   "name": "地毯",
+   "w": 2,
+   "h": 2,
+   "solid": false,
+   "sprite": "rug.png"
+  },
+  {
+   "id": "lamp",
+   "name": "電燈",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "lamp.png"
+  },
+  {
+   "id": "tv",
+   "name": "電視",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "tv.png"
+  },
+  {
+   "id": "cat",
+   "name": "貓",
+   "w": 1,
+   "h": 1,
+   "solid": false,
+   "sprite": "cat.png"
+  },
+  {
+   "id": "bed",
+   "name": "床",
+   "w": 2,
+   "h": 1,
+   "solid": true,
+   "sprite": "bed.png"
+  },
+  {
+   "id": "shelf",
+   "name": "書架",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "shelf.png"
+  },
+  {
+   "id": "sign",
+   "name": "看板",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "sign.png"
+  }
+ ]
+}

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DC島 M0</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- 頂部 HUD（FFXIV 風） -->
+  <div id="topbar">
+    <div class="tb-left">
+      <span class="tb-title">DC島</span>
+      <span class="tb-sub">M0 本地測試</span>
+    </div>
+    <div class="tb-center" id="terrainChips"></div>
+    <div class="tb-right">
+      <button id="btnAvatar" class="ff-btn">造型</button>
+      <button id="btnDecor" class="ff-btn">裝飾模式</button>
+    </div>
+  </div>
+
+  <canvas id="game" width="928" height="544"></canvas>
+
+  <!-- 裝飾面板：左下，FFXIV housing 感 -->
+  <div id="furnPanel" class="ff-panel hidden">
+    <div class="ff-panel-title">擺設一覽</div>
+    <div class="ff-panel-hint">左鍵放置／右鍵拿取 · E 離開模式</div>
+    <div id="furnList"></div>
+    <div class="ff-panel-foot">
+      <button id="furnClose" class="ff-btn small">完成</button>
+      <button id="furnClear" class="ff-btn small warn">清空</button>
+    </div>
+  </div>
+
+  <!-- 造型面板 -->
+  <div id="avatarPanel" class="ff-panel hidden">
+    <div class="ff-panel-title">造型設定</div>
+    <div class="grp"><label>膚色</label><div id="skinOpts"></div></div>
+    <div class="grp"><label>髮型</label><div id="hairOpts"></div></div>
+    <div class="grp"><label>上衣</label><div id="shirtOpts"></div></div>
+    <div class="grp"><label>武器</label><div id="weaponOpts"></div></div>
+    <div class="ff-panel-foot"><button id="avatarClose" class="ff-btn small">完成</button></div>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

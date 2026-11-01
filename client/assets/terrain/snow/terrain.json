@@ -1,0 +1,34 @@
+{
+ "id": "snow",
+ "name": "雪島",
+ "scale": 2,
+ "tile": 16,
+ "ground": "ground.png",
+ "edge": "edge.png",
+ "water": "water.png",
+ "deco": [
+  {
+   "sprite": "pine.png",
+   "weight": 3
+  },
+  {
+   "sprite": "rock.png",
+   "weight": 2
+  },
+  {
+   "sprite": "stump.png",
+   "weight": 1
+  }
+ ],
+ "animals": [
+  {
+   "id": "sheep",
+   "weight": 2
+  },
+  {
+   "id": "bird",
+   "weight": 1
+  }
+ ],
+ "uiColor": "#ecf2f8"
+}

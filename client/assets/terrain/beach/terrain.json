@@ -1,0 +1,34 @@
+{
+ "id": "beach",
+ "name": "沙灘島",
+ "scale": 2,
+ "tile": 16,
+ "ground": "ground.png",
+ "edge": "edge.png",
+ "water": "water.png",
+ "deco": [
+  {
+   "sprite": "palm.png",
+   "weight": 3
+  },
+  {
+   "sprite": "shell.png",
+   "weight": 2
+  },
+  {
+   "sprite": "rock.png",
+   "weight": 1
+  }
+ ],
+ "animals": [
+  {
+   "id": "bird",
+   "weight": 2
+  },
+  {
+   "id": "frog",
+   "weight": 1
+  }
+ ],
+ "uiColor": "#e6cf96"
+}

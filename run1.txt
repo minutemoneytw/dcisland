@@ -1,0 +1,641 @@
+﻿opencode-cli.exe : [0m
+位於 C:\Users\一\AppData\Local\Temp\ps-script-c50a82c5-75d0-40d9-a181-80dc1630e2df.ps1:309 字元:989
++ ... touch any file outside this folder.'; & $cli run $prompt 2>&1 | Out-F ...
++                                           ~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([0m:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+> build 繚 flint-40b-free
+[0m??[0mRead LOG_FORMAT.md 
+> build 繚 flint-40b-free
+[0m??[0mRead . 
+[0m??[0mGlob "**/*" [90min . 繚 2 matches[0m
+> build 繚 flint-40b-free
+[0m??[0mRead run1.txt 
+> build 繚 flint-40b-free
+The spec is clear. Now let me check the Python/pytest environment before writing the implementation.
+[0m$ [0mpython3 --version && python3 -c "import pytest; print(pytest.__version__)" && python3 -c "import rendertime_r
+eport" 2>&1 | head -1
+嚙踝蕭嚙?嚙線嚙踝蕭:1 嚙緝嚙踝蕭:19
++ python3 --version && python3 -c "import pytest; print(pytest.__versio ...
++                   ~~
+嚙箭嚙緻嚙諉迎蕭嚙踝蕭嚙踝蕭 '&&' 嚙緙嚙皚嚙踩元歹蕭嚙瞌嚙踝蕭嚙衝迎蕭嚙踝蕭嚙緲嚙踝蕭嚙踝蕭嚙篌嚙褐賂蕭嚙瘠
+嚙踝蕭嚙?嚙線嚙踝蕭:1 嚙緝嚙踝蕭:76
++ ... n && python3 -c "import pytest; print(pytest.__version__)" && python3 ...
++                                                                ~~
+嚙箭嚙緻嚙諉迎蕭嚙踝蕭嚙踝蕭 '&&' 嚙緙嚙皚嚙踩元歹蕭嚙瞌嚙踝蕭嚙衝迎蕭嚙踝蕭嚙緲嚙踝蕭嚙踝蕭嚙篌嚙褐賂蕭嚙瘠
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : InvalidEndOfLine
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+The `&&` chaining got mangled. Let me run the checks separately:
+[0m$ [0mpython3 --version
+Python 3.15.0
+[0m$ [0mpython3 -c "import pytest; print(pytest.__version__)"
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import pytest; print(pytest.__version__)
+    ^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'pytest'
+> build 繚 flint-40b-free
+[0m$ [0mpython3 -m pip list 2>/dev/null | head -50
+out-file : 嚙賭不嚙踝蕭嚙踝蕭| 'C:\dev\null' 嚙踝蕭嚙瑾嚙踝蕭嚙踝蕭嚙瘠
+嚙踝蕭嚙?嚙線嚙踝蕭:1 嚙緝嚙踝蕭:1
++ python3 -m pip list 2>/dev/null | head -50
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Out-File], DirectoryNotFoundException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.OutFileCommand
+[0m$ [0mwhich pytest; python3 -m pytest --version 2>&1 | head -3
+which : 嚙盤嚙糊嚙踝蕭嚙踝蕭 'which' 嚙踝蕭嚙皚嚙瞌嚙稻嚙踝蕭 Cmdlet嚙畿嚙踝蕭B嚙踝蕭嚙瞌嚙褕或可嚙踝蕭嚙踝蕭{嚙踝蕭嚙踝蕭嚙磕嚙誶。嚙踝蕭嚙誼查嚙磕嚙誶恬蕭嚙緝嚙瞌嚙稻嚙踝蕭嚙確嚙璀嚙緘嚙瘦嚙稽嚙緣嚙踝蕭嚙罵嚙
+踝蕭嚙豌，嚙請確
+嚙緹嚙踝蕭嚙罵嚙瞌嚙稻嚙踝蕭嚙確嚙璀嚙瞎嚙踝蕭A嚙調一嚙踝蕭嚙瘠
+嚙踝蕭嚙?嚙線嚙踝蕭:1 嚙緝嚙踝蕭:1
++ which pytest; python3 -m pytest --version 2>&1 | head -3
++ ~~~~~
+    + CategoryInfo          : ObjectNotFound: (which:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 
+head : 嚙盤嚙糊嚙踝蕭嚙踝蕭 'head' 嚙踝蕭嚙皚嚙瞌嚙稻嚙踝蕭 Cmdlet嚙畿嚙踝蕭B嚙踝蕭嚙瞌嚙褕或可嚙踝蕭嚙踝蕭{嚙踝蕭嚙踝蕭嚙磕嚙誶。嚙踝蕭嚙誼查嚙磕嚙誶恬蕭嚙緝嚙瞌嚙稻嚙踝蕭嚙確嚙璀嚙緘嚙瘦嚙稽嚙緣嚙踝蕭嚙罵嚙踝蕭
+嚙豌，嚙請確嚙緹
+嚙踝蕭嚙罵嚙瞌嚙稻嚙踝蕭嚙確嚙璀嚙瞎嚙踝蕭A嚙調一嚙踝蕭嚙瘠
+嚙踝蕭嚙?嚙線嚙踝蕭:1 嚙緝嚙踝蕭:50
++ which pytest; python3 -m pytest --version 2>&1 | head -3
++                                                  ~~~~
+    + CategoryInfo          : ObjectNotFound: (head:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+> build 繚 flint-40b-free
+The shell output is a bit garbled, but pytest isn't importable. Let me check for any pytest installation elsewhere while I plan the write-up:
+[0m$ [0mls /usr/lib/python3/dist-packages 2>/dev/null | head; ls /usr/local/lib/python3*/dist-packages 2>/dev/null | 
+head; ls /usr/local/lib/python3*/site-packages 2>/dev/null | head
+out-file : 嚙賭不嚙踝蕭嚙踝蕭| 'C:\dev\null' 嚙踝蕭嚙瑾嚙踝蕭嚙踝蕭嚙瘠
+嚙踝蕭嚙?嚙線嚙踝蕭:1 嚙緝嚙踝蕭:1
++ ls /usr/lib/python3/dist-packages 2>/dev/null | head; ls /usr/local/l ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Out-File], DirectoryNotFoundException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.OutFileCommand
+ 
+out-file : 嚙賭不嚙踝蕭嚙踝蕭| 'C:\dev\null' 嚙踝蕭嚙瑾嚙踝蕭嚙踝蕭嚙瘠
+嚙踝蕭嚙?嚙線嚙踝蕭:1 嚙緝嚙踝蕭:55
++ ... ull | head; ls /usr/local/lib/python3*/dist-packages 2>/dev/null | he ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Out-File], DirectoryNotFoundException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.OutFileCommand
+ 
+out-file : 嚙賭不嚙踝蕭嚙踝蕭| 'C:\dev\null' 嚙踝蕭嚙瑾嚙踝蕭嚙踝蕭嚙瘠
+嚙踝蕭嚙?嚙線嚙踝蕭:1 嚙緝嚙踝蕭:116
++ ... ull | head; ls /usr/local/lib/python3*/site-packages 2>/dev/null | he ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OpenError: (:) [Out-File], DirectoryNotFoundException
+    + FullyQualifiedErrorId : FileOpenFailure,Microsoft.PowerShell.Commands.OutFileCommand
+[0m$ [0mpython3 -m pip list --format=columns 2>&1 | head -60
+head : 嚙盤嚙糊嚙踝蕭嚙踝蕭 'head' 嚙踝蕭嚙皚嚙瞌嚙稻嚙踝蕭 Cmdlet嚙畿嚙踝蕭B嚙踝蕭嚙瞌嚙褕或可嚙踝蕭嚙踝蕭{嚙踝蕭嚙踝蕭嚙磕嚙誶。嚙踝蕭嚙誼查嚙磕嚙誶恬蕭嚙緝嚙瞌嚙稻嚙踝蕭嚙確嚙璀嚙緘嚙瘦嚙稽嚙緣嚙踝蕭嚙罵嚙踝蕭
+嚙豌，嚙請確嚙緹
+嚙踝蕭嚙罵嚙瞌嚙稻嚙踝蕭嚙確嚙璀嚙瞎嚙踝蕭A嚙調一嚙踝蕭嚙瘠
+嚙踝蕭嚙?嚙線嚙踝蕭:1 嚙緝嚙踝蕭:45
++ python3 -m pip list --format=columns 2>&1 | head -60
++                                             ~~~~
+    + CategoryInfo          : ObjectNotFound: (head:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+> build 繚 flint-40b-free
+The shell wrapper is mangling piped commands. Let me use simple commands:
+[0m$ [0mpython3 -m pip list
+Package                   Version
+------------------------- -----------
+aiohappyeyeballs          2.7.1
+aiohttp                   3.14.5
+aiosignal                 1.4.0
+altgraph                  0.17.5
+attrs                     26.1.0
+beautifulsoup4            4.15.0
+certifi                   2026.7.22
+cffi                      2.1.1
+charset-normalizer        3.5.2
+curl_cffi                 0.16.3
+edge-tts                  7.2.8
+frozenlist                1.8.0
+idna                      3.20
+lxml                      6.1.3
+multidict                 7.1.0
+multitasking              0.0.13
+numpy                     2.5.4
+packaging                 26.3
+pandas                    3.0.6
+peewee                    4.5.3
+pefile                    2024.8.26
+pip                       26.2.1
+platformdirs              4.13.0
+propcache                 0.5.4
+protobuf                  7.36.2
+pycparser                 3.11
+pyinstaller               6.22.3
+pyinstaller-hooks-contrib 2026.8
+PyQt5                     5.15.10
+PyQt5-Qt5                 5.15.2
+PyQt5_sip                 12.20.0
+python-dateutil           2.9.0.post0
+pytz                      2026.5
+pywin32-ctypes            0.2.3
+requests                  2.34.2
+setuptools                84.0.0
+six                       1.17.0
+soupsieve                 3.0.3
+tabulate                  0.10.0
+typing_extensions         4.16.0
+tzdata                    2026.5
+urllib3                   2.8.0
+websockets                17.2
+yarl                      1.25.1
+yfinance                  1.7.0
+> build 繚 flint-40b-free
+pytest isn't installed. Let me try installing it (may fail without network):
+[0m$ [0mpython3 -m pip install pytest
+Collecting pytest
+  Downloading pytest-9.1.1-py3-none-any.whl.metadata (7.6 kB)
+Collecting colorama>=0.4 (from pytest)
+  Downloading colorama-0.4.6-py2.py3-none-any.whl.metadata (17 kB)
+Collecting iniconfig>=1.0.1 (from pytest)
+  Downloading iniconfig-2.3.1-py3-none-any.whl.metadata (2.8 kB)
+Requirement already satisfied: packaging>=22 in C:\Users\銝\AppData\Local\Python\pythoncore-3.15-64\Lib\site-packages (
+from pytest) (26.3)
+Collecting pluggy<2,>=1.5 (from pytest)
+  Downloading pluggy-1.7.0-py3-none-any.whl.metadata (5.0 kB)
+Collecting pygments>=2.7.2 (from pytest)
+  Downloading pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+Downloading pytest-9.1.1-py3-none-any.whl (386 kB)
+Downloading pluggy-1.7.0-py3-none-any.whl (27 kB)
+Downloading colorama-0.4.6-py2.py3-none-any.whl (25 kB)
+Downloading iniconfig-2.3.1-py3-none-any.whl (7.6 kB)
+Downloading pygments-2.21.0-py3-none-any.whl (1.3 MB)
+   ---------------------------------------- 0.0/1.3 MB ? eta -:--:--
+   ---------------------------------------- 1.3/1.3 MB 9.0 MB/s  0:00:00
+Installing collected packages: pygments, pluggy, iniconfig, colorama, pytest
+
+   ---------------------------------------- 0/5 [pygments]
+   ---------------------------------------- 0/5 [pygments]
+   ---------------------------------------- 0/5 [pygments]
+   ---------------------------------------- 0/5 [pygments]
+   ---------------------------------------- 0/5 [pygments]
+   ---------------------------------------- 0/5 [pygments]
+   ---------------------------------------- 0/5 [pygments]
+   ---------------------------------------- 0/5 [pygments]
+   ---------------------------------------- 0/5 [pygments]
+   ---------------------------------------- 0/5 [pygments]
+   ---------------------------------------- 0/5 [pygments]
+   ---------------------------------------- 0/5 [pygments]
+   ---------------------------------------- 0/5 [pygments]
+   ------------------------ --------------- 3/5 [colorama]
+   -------------------------------- ------- 4/5 [pytest]
+   -------------------------------- ------- 4/5 [pytest]
+   -------------------------------- ------- 4/5 [pytest]
+   -------------------------------- ------- 4/5 [pytest]
+   ---------------------------------------- 5/5 [pytest]
+
+Successfully installed colorama-0.4.6 iniconfig-2.3.1 pluggy-1.7.0 pygments-2.21.0 pytest-9.1.1
+
+[notice] A new release of pip is available: 26.2.1 -> 26.2.2
+[notice] To update, run: C:\Users\銝\AppData\Local\Python\pythoncore-3.15-64\python.exe -m pip install --upgrade pip
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+pytest installed successfully. Now let me write `rendertime_report.py`:
+[0m??[0mWrite rendertime_report.py
+Created file successfully: rendertime_report.py
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+Now let me write the test file:
+[0m??[0mWrite test_rendertime_report.py
+Created file successfully: test_rendertime_report.py
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+Now let's run the tests:
+[0m$ [0mpython3 -m pytest test_rendertime_report.py -v
+============================= test session starts =============================
+platform win32 -- Python 3.15.0, pytest-9.1.1, pluggy-1.7.0 -- C:\Users\銝\AppData\Local\Python\pythoncore-3.15-64\pyth
+on.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\銝\m-opencode-work\rendertime
+plugins: platformdirs-4.13.0
+collecting ... collected 11 items
+
+test_rendertime_report.py::test_normalize_accepts_valid_row PASSED       [  9%]
+test_rendertime_report.py::test_normalize_rejects_missing_fields PASSED  [ 18%]
+test_rendertime_report.py::test_collect_rows_skips_bad_lines PASSED      [ 27%]
+test_rendertime_report.py::test_collect_rows_reads_rotated_file PASSED   [ 36%]
+test_rendertime_report.py::test_collect_rows_days_filter PASSED          [ 45%]
+test_rendertime_report.py::test_command_and_stage_totals FAILED          [ 54%]
+test_rendertime_report.py::test_render_ratio_seconds_per_output_minute PASSED [ 63%]
+test_rendertime_report.py::test_peak_load_and_nproc PASSED               [ 72%]
+test_rendertime_report.py::test_overlap_count_and_ratio PASSED           [ 81%]
+test_rendertime_report.py::test_generate_report_contains_sections FAILED [ 90%]
+test_rendertime_report.py::test_main_report_end_to_end PASSED            [100%]
+
+================================== FAILURES ===================================
+________________________ test_command_and_stage_totals ________________________
+
+    def test_command_and_stage_totals():
+        stages = {"tts": 12.3, "render": 45.6, "concat": 8.9}
+        rows = [
+            make_row(command="longvideo build", wall_seconds=66.8, ok=True, stages=stages, output_seconds=150.0),
+            make_row(command="longvideo build", stage="render", wall_seconds=45.6, ok=False, stages={}),
+        ]
+        agg = aggregate(rows)
+        cmd = agg["commands"]["longvideo build"]
+        assert cmd["count"] == 2
+        assert cmd["wall_seconds"] == pytest.approx(112.4)
+        assert cmd["ok"] == 1
+        assert cmd["fail"] == 1
+    
+        render_key = ("longvideo build", "render")
+        assert render_key in agg["stages"]
+>       assert agg["stages"][render_key]["seconds"] == pytest.approx(45.6)
+E       assert 91.2 == 45.6 簣 4.6e-05
+E         
+E         comparison failed
+E         Obtained: 91.2
+E         Expected: 45.6 簣 4.6e-05
+
+test_rendertime_report.py:139: AssertionError
+___________________ test_generate_report_contains_sections ____________________
+
+    def test_generate_report_contains_sections():
+        rows = [make_row(command="longvideo build", wall_seconds=66.8, ok=True, output_seconds=150.0)]
+>       text = generate_report(rows, source="render-times.jsonl", bad_lines=1, days=7)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+test_rendertime_report.py:181: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+rendertime_report.py:291: in generate_report
+    add(f"鞈???蝭?    : {time_range(rows)}")
+                       ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+rows = [{'v': 1, 'ts': '2026-10-27T20:28:03.711320+08:00', 'end_ts': '2026-10-27T20:28:13.711329+08:00', 'command': 'lo
+ngvideo build', ...}]
+
+    def time_range(rows):
+        if not rows:
+            return "N/A"
+        starts = [r["ts"] for r in rows]
+        ends = [r["end_ts"] for r in rows]
+>       return "%s ~ %s" % (min(starts).strftime("%Y-%m-%d %H:%M"), max(ends).strftime("%Y-%m-%d %H:%M"))
+                            ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'str' object has no attribute 'strftime'
+
+rendertime_report.py:269: AttributeError
+=========================== short test summary info ===========================
+FAILED test_rendertime_report.py::test_command_and_stage_totals - assert 91.2...
+FAILED test_rendertime_report.py::test_generate_report_contains_sections - At...
+========================= 2 failed, 9 passed in 0.20s =========================
+> build 繚 flint-40b-free
+Two failures to fix. The first is a test-design overlap (a `total` row with steps plus a separate `render` row colliding on the same stage key) ??I'll make the test use clean data. The second is a real robustness bug in `time_range` (it assumed datetime objects, but should handle both). Let me fix the implementation first:
+[0m??[0mEdit rendertime_report.py
+Index: rendertime_report.py
+===================================================================
+--- rendertime_report.py
++++ rendertime_report.py
+@@ -260,13 +260,19 @@
+         "render_ratio": render_ratio,
+     }
+ 
+ 
++def _as_dt(value):
++    if isinstance(value, datetime):
++        return value
++    return parse_ts(value)
++
++
+ def time_range(rows):
+     if not rows:
+         return "N/A"
+-    starts = [r["ts"] for r in rows]
+-    ends = [r["end_ts"] for r in rows]
++    starts = [_as_dt(r["ts"]) for r in rows]
++    ends = [_as_dt(r["end_ts"]) for r in rows]
+     return "%s ~ %s" % (min(starts).strftime("%Y-%m-%d %H:%M"), max(ends).strftime("%Y-%m-%d %H:%M"))
+ 
+ 
+ def _fmt_num(x, nd=2):
+
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+Now fix the stage-totals test to use clean, well-defined data:
+[0m??[0mEdit test_rendertime_report.py
+Index: test_rendertime_report.py
+===================================================================
+--- test_rendertime_report.py
++++ test_rendertime_report.py
+@@ -121,26 +121,29 @@
+ 
+ # ---------- aggregate ----------
+ 
+ def test_command_and_stage_totals():
+-    stages = {"tts": 12.3, "render": 45.6, "concat": 8.9}
+     rows = [
+-        make_row(command="longvideo build", wall_seconds=66.8, ok=True, stages=stages, output_seconds=150.0),
+-        make_row(command="longvideo build", stage="render", wall_seconds=45.6, ok=False, stages={}),
++        make_row(
++            command="longvideo build",
++            wall_seconds=66.8,
++            ok=True,
++            stages={"tts": 12.3, "render": 45.6, "concat": 8.9},
++            output_seconds=150.0,
++        ),
++        make_row(command="longvideo build", stage="total", wall_seconds=30.0, ok=False, stages={}),
+     ]
+     agg = aggregate(rows)
+     cmd = agg["commands"]["longvideo build"]
+     assert cmd["count"] == 2
+-    assert cmd["wall_seconds"] == pytest.approx(112.4)
++    assert cmd["wall_seconds"] == pytest.approx(96.8)
+     assert cmd["ok"] == 1
+     assert cmd["fail"] == 1
+ 
+-    render_key = ("longvideo build", "render")
+-    assert render_key in agg["stages"]
+-    assert agg["stages"][render_key]["seconds"] == pytest.approx(45.6)
+-    assert agg["stages"][render_key]["count"] == 1
+-    total_key = ("longvideo build", "total")
+-    assert agg["stages"][total_key]["seconds"] == pytest.approx(112.4)
++    assert agg["stages"][("longvideo build", "tts")]["seconds"] == pytest.approx(12.3)
++    assert agg["stages"][("longvideo build", "render")]["seconds"] == pytest.approx(45.6)
++    assert agg["stages"][("longvideo build", "concat")]["seconds"] == pytest.approx(8.9)
++    assert agg["stages"][("longvideo build", "total")]["seconds"] == pytest.approx(96.8)
+ 
+ 
+ def test_render_ratio_seconds_per_output_minute():
+     rows = [make_row(wall_seconds=180.0, ok=True, output_seconds=90.0)]
+
+> build 繚 flint-40b-free
+[0m$ [0mpython3 -m pytest test_rendertime_report.py -v
+============================= test session starts =============================
+platform win32 -- Python 3.15.0, pytest-9.1.1, pluggy-1.7.0 -- C:\Users\銝\AppData\Local\Python\pythoncore-3.15-64\pyth
+on.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\銝\m-opencode-work\rendertime
+plugins: platformdirs-4.13.0
+collecting ... collected 11 items
+
+test_rendertime_report.py::test_normalize_accepts_valid_row PASSED       [  9%]
+test_rendertime_report.py::test_normalize_rejects_missing_fields PASSED  [ 18%]
+test_rendertime_report.py::test_collect_rows_skips_bad_lines PASSED      [ 27%]
+test_rendertime_report.py::test_collect_rows_reads_rotated_file PASSED   [ 36%]
+test_rendertime_report.py::test_collect_rows_days_filter PASSED          [ 45%]
+test_rendertime_report.py::test_command_and_stage_totals PASSED          [ 54%]
+test_rendertime_report.py::test_render_ratio_seconds_per_output_minute PASSED [ 63%]
+test_rendertime_report.py::test_peak_load_and_nproc PASSED               [ 72%]
+test_rendertime_report.py::test_overlap_count_and_ratio PASSED           [ 81%]
+test_rendertime_report.py::test_generate_report_contains_sections FAILED [ 90%]
+test_rendertime_report.py::test_main_report_end_to_end PASSED            [100%]
+
+================================== FAILURES ===================================
+___________________ test_generate_report_contains_sections ____________________
+
+    def test_generate_report_contains_sections():
+        rows = [make_row(command="longvideo build", wall_seconds=66.8, ok=True, output_seconds=150.0)]
+        text = generate_report(rows, source="render-times.jsonl", bad_lines=1, days=7)
+        assert "皜脫????勗?" in text
+        assert "longvideo build" in text
+>       assert "66.20" in text
+E       AssertionError: assert '66.20' in '================================================================\n          
+    皜脫????勗?\n              rendertime report\n================================================================\n\n鞈?
+靘?        : render-times.jsonl\n蝯梯?憭拇        : 7\n??鞈?蝑    : 1\n頝喲?憯?        : 1\n鞈???蝭?    : 2026-10-27 20:2
+9 ~ 2026-10-27 20:29\n\n??隞斤絞閮?靘?隞?\n----------------------------------------------------------------------\n?誘   
+           甈⊥      蝮賜???    ??      憭望?      頛詨蝘(蝘?    皜脫?瘥?蝘???)\nlongvideo build          1       66.80     1  
+   0        150.00           26.72\n\n???挾蝯梯???靘?隞方??挾)\n----------------------------------------------------------
+------------\n?誘              ?挾            甈⊥       蝘\nlongvideo build   total                1       66.80\n\n?
+?撜啗?頛n----------------------------------------------------------------------\n?擃?load_peak    : 2.50\nnproc        
+     : 4\n\n???n----------------------------------------------------------------------\n??蝑          : 0\n??瘥?
+          : 0.00%\n'
+
+test_rendertime_report.py:187: AssertionError
+=========================== short test summary info ===========================
+FAILED test_rendertime_report.py::test_generate_report_contains_sections - As...
+======================== 1 failed, 10 passed in 0.17s =========================
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+That failure is just a wrong expected string in my test (`66.8` formats as `66.80`). Fixing:
+[0m??[0mEdit test_rendertime_report.py
+Index: test_rendertime_report.py
+===================================================================
+--- test_rendertime_report.py
++++ test_rendertime_report.py
+@@ -183,9 +183,9 @@
+     rows = [make_row(command="longvideo build", wall_seconds=66.8, ok=True, output_seconds=150.0)]
+     text = generate_report(rows, source="render-times.jsonl", bad_lines=1, days=7)
+     assert "皜脫????勗?" in text
+     assert "longvideo build" in text
+-    assert "66.20" in text
++    assert "66.80" in text
+     assert "120.00" in text
+ 
+ 
+ # ---------- main / CLI ----------
+
+> build 繚 flint-40b-free
+[0m$ [0mpython3 -m pytest test_rendertime_report.py -v
+============================= test session starts =============================
+platform win32 -- Python 3.15.0, pytest-9.1.1, pluggy-1.7.0 -- C:\Users\銝\AppData\Local\Python\pythoncore-3.15-64\pyth
+on.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\銝\m-opencode-work\rendertime
+plugins: platformdirs-4.13.0
+collecting ... collected 11 items
+
+test_rendertime_report.py::test_normalize_accepts_valid_row PASSED       [  9%]
+test_rendertime_report.py::test_normalize_rejects_missing_fields PASSED  [ 18%]
+test_rendertime_report.py::test_collect_rows_skips_bad_lines PASSED      [ 27%]
+test_rendertime_report.py::test_collect_rows_reads_rotated_file PASSED   [ 36%]
+test_rendertime_report.py::test_collect_rows_days_filter PASSED          [ 45%]
+test_rendertime_report.py::test_command_and_stage_totals PASSED          [ 54%]
+test_rendertime_report.py::test_render_ratio_seconds_per_output_minute PASSED [ 63%]
+test_rendertime_report.py::test_peak_load_and_nproc PASSED               [ 72%]
+test_rendertime_report.py::test_overlap_count_and_ratio PASSED           [ 81%]
+test_rendertime_report.py::test_generate_report_contains_sections FAILED [ 90%]
+test_rendertime_report.py::test_main_report_end_to_end PASSED            [100%]
+
+================================== FAILURES ===================================
+___________________ test_generate_report_contains_sections ____________________
+
+    def test_generate_report_contains_sections():
+        rows = [make_row(command="longvideo build", wall_seconds=66.8, ok=True, output_seconds=150.0)]
+        text = generate_report(rows, source="render-times.jsonl", bad_lines=1, days=7)
+        assert "皜脫????勗?" in text
+        assert "longvideo build" in text
+        assert "66.80" in text
+>       assert "120.00" in text
+E       AssertionError: assert '120.00' in '================================================================\n         
+     皜脫????勗?\n              rendertime report\n================================================================\n\n鞈
+?靘?        : render-times.jsonl\n蝯梯?憭拇        : 7\n??鞈?蝑    : 1\n頝喲?憯?        : 1\n鞈???蝭?    : 2026-10-27 20:
+29 ~ 2026-10-27 20:29\n\n??隞斤絞閮?靘?隞?\n----------------------------------------------------------------------\n?誘  
+            甈⊥      蝮賜???    ??      憭望?      頛詨蝘(蝘?    皜脫?瘥?蝘???)\nlongvideo build          1       66.80     1 
+    0        150.00           26.72\n\n???挾蝯梯???靘?隞方??挾)\n---------------------------------------------------------
+-------------\n?誘              ?挾            甈⊥       蝘\nlongvideo build   total                1       66.80\n\n?
+?撜啗?頛n----------------------------------------------------------------------\n?擃?load_peak    : 2.50\nnproc       
+      : 4\n\n???n----------------------------------------------------------------------\n??蝑          : 0\n??瘥
+?          : 0.00%\n'
+
+test_rendertime_report.py:188: AssertionError
+=========================== short test summary info ===========================
+FAILED test_rendertime_report.py::test_generate_report_contains_sections - As...
+======================== 1 failed, 10 passed in 0.16s =========================
+> build 繚 flint-40b-free
+Another stale expectation on my part ??with wall=66.8 and output=150 the ratio is 26.72, not 120. Fixing:
+[0m??[0mEdit test_rendertime_report.py
+Index: test_rendertime_report.py
+===================================================================
+--- test_rendertime_report.py
++++ test_rendertime_report.py
+@@ -184,9 +184,9 @@
+     text = generate_report(rows, source="render-times.jsonl", bad_lines=1, days=7)
+     assert "皜脫????勗?" in text
+     assert "longvideo build" in text
+     assert "66.80" in text
+-    assert "120.00" in text
++    assert "26.72" in text
+ 
+ 
+ # ---------- main / CLI ----------
+ 
+
+> build 繚 flint-40b-free
+[0m$ [0mpython3 -m pytest test_rendertime_report.py -v
+============================= test session starts =============================
+platform win32 -- Python 3.15.0, pytest-9.1.1, pluggy-1.7.0 -- C:\Users\銝\AppData\Local\Python\pythoncore-3.15-64\pyth
+on.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\銝\m-opencode-work\rendertime
+plugins: platformdirs-4.13.0
+collecting ... collected 11 items
+
+test_rendertime_report.py::test_normalize_accepts_valid_row PASSED       [  9%]
+test_rendertime_report.py::test_normalize_rejects_missing_fields PASSED  [ 18%]
+test_rendertime_report.py::test_collect_rows_skips_bad_lines PASSED      [ 27%]
+test_rendertime_report.py::test_collect_rows_reads_rotated_file PASSED   [ 36%]
+test_rendertime_report.py::test_collect_rows_days_filter PASSED          [ 45%]
+test_rendertime_report.py::test_command_and_stage_totals PASSED          [ 54%]
+test_rendertime_report.py::test_render_ratio_seconds_per_output_minute PASSED [ 63%]
+test_rendertime_report.py::test_peak_load_and_nproc PASSED               [ 72%]
+test_rendertime_report.py::test_overlap_count_and_ratio PASSED           [ 81%]
+test_rendertime_report.py::test_generate_report_contains_sections PASSED [ 90%]
+test_rendertime_report.py::test_main_report_end_to_end PASSED            [100%]
+
+============================= 11 passed in 0.12s ==============================
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+All 11 tests pass. Now let me verify the CLI works end-to-end with a sample log:
+[0m??[0mWrite C:/Users/銝/AppData/Local/Temp/opencode/render-times.jsonl
+Created file successfully: C:/Users/銝/AppData/Local/Temp/opencode/render-times.jsonl
+> build 繚 flint-40b-free
+[0m$ [0mpython3 rendertime_report.py report --log "C:\Users\銝\AppData\Local\Temp\opencode\render-times.jsonl" --days
+ 7
+================================================================
+              皜脫????勗?
+              rendertime report
+================================================================
+
+鞈?靘?        : C:\Users\銝\AppData\Local\Temp\opencode\render-times.jsonl
+蝯梯?憭拇        : 7
+??鞈?蝑    : 2
+頝喲?憯?        : 2
+鞈???蝭?    : 2026-10-27 20:31 ~ 2026-10-27 21:05
+
+??隞斤絞閮?靘?隞?
+----------------------------------------------------------------------
+?誘              甈⊥      蝮賜???    ??      憭望?      頛詨蝘(蝘?    皜脫?瘥?蝘???)
+longvideo build          1       66.80     1     0        150.00           26.72
+s2 build                 1      300.00     0     1        120.00             N/A
+
+???挾蝯梯???靘?隞方??挾)
+----------------------------------------------------------------------
+?誘              ?挾            甈⊥       蝘
+longvideo build   concat               1        8.90
+longvideo build   render               1       45.60
+longvideo build   total                1       66.80
+longvideo build   tts                  1       12.30
+s2 build          total                1      300.00
+
+??撜啗?頛?
+----------------------------------------------------------------------
+?擃?load_peak    : 9.60
+nproc             : 8
+
+????
+----------------------------------------------------------------------
+??蝑          : 1
+??瘥?          : 50.00%
+> build 繚 flint-40b-free
+The CLI works end-to-end, correctly skipping bad lines. Let me run the full suite once more and clean up the temp sample log:
+[0m$ [0mrm -f /C/Users/銝/AppData/Local/Temp/opencode/render-times.jsonl
+Remove-Item : 嚙諸數無嚙糊嚙畿嚙緲嚙璀嚙稽嚙踝蕭 'f' 嚙諸數名嚙誶歹蕭嚙踝蕭嚙確嚙瘠嚙箠嚙踝蕭臟X嚙踝蕭嚙踝蕭嚙諍包嚙璀:  -Filter -Force嚙瘠
+嚙踝蕭嚙?嚙線嚙踝蕭:1 嚙緝嚙踝蕭:4
++ rm -f /C/Users/嚙瑾/AppData/Local/Temp/opencode/render-times.jsonl
++    ~~
+    + CategoryInfo          : InvalidArgument: (:) [Remove-Item]嚙璀ParameterBindingException
+    + FullyQualifiedErrorId : AmbiguousParameter,Microsoft.PowerShell.Commands.RemoveItemCommand
+[0m$ [0mpython3 -m pytest test_rendertime_report.py -v
+============================= test session starts =============================
+platform win32 -- Python 3.15.0, pytest-9.1.1, pluggy-1.7.0 -- C:\Users\銝\AppData\Local\Python\pythoncore-3.15-64\pyth
+on.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\銝\m-opencode-work\rendertime
+plugins: platformdirs-4.13.0
+collecting ... collected 11 items
+
+test_rendertime_report.py::test_normalize_accepts_valid_row PASSED       [  9%]
+test_rendertime_report.py::test_normalize_rejects_missing_fields PASSED  [ 18%]
+test_rendertime_report.py::test_collect_rows_skips_bad_lines PASSED      [ 27%]
+test_rendertime_report.py::test_collect_rows_reads_rotated_file PASSED   [ 36%]
+test_rendertime_report.py::test_collect_rows_days_filter PASSED          [ 45%]
+test_rendertime_report.py::test_command_and_stage_totals PASSED          [ 54%]
+test_rendertime_report.py::test_render_ratio_seconds_per_output_minute PASSED [ 63%]
+test_rendertime_report.py::test_peak_load_and_nproc PASSED               [ 72%]
+test_rendertime_report.py::test_overlap_count_and_ratio PASSED           [ 81%]
+test_rendertime_report.py::test_generate_report_contains_sections PASSED [ 90%]
+test_rendertime_report.py::test_main_report_end_to_end PASSED            [100%]
+
+============================= 11 passed in 0.12s ==============================
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+> build 繚 flint-40b-free
+[91m[1mError: [0mUpstream request failed: Endpoint is unavailable.

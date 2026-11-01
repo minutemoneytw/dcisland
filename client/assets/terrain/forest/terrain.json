@@ -1,0 +1,34 @@
+{
+ "id": "forest",
+ "name": "森林島",
+ "scale": 2,
+ "tile": 16,
+ "ground": "ground.png",
+ "edge": "edge.png",
+ "water": "water.png",
+ "deco": [
+  {
+   "sprite": "tree.png",
+   "weight": 4
+  },
+  {
+   "sprite": "mushroom.png",
+   "weight": 2
+  },
+  {
+   "sprite": "stump.png",
+   "weight": 1
+  }
+ ],
+ "animals": [
+  {
+   "id": "sheep",
+   "weight": 2
+  },
+  {
+   "id": "bird",
+   "weight": 2
+  }
+ ],
+ "uiColor": "#5b8f46"
+}

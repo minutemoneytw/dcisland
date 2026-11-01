@@ -1,0 +1,7 @@
+# 跨平台換行一致（避免 Windows/Linux 協作者互相覆蓋）
+* text=auto eol=lf
+
+# 二進位素材
+*.png binary
+*.jpg binary
+*.exe binary

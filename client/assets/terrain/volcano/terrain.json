@@ -1,0 +1,34 @@
+{
+ "id": "volcano",
+ "name": "熔岩島",
+ "scale": 2,
+ "tile": 16,
+ "ground": "ground.png",
+ "edge": "edge.png",
+ "water": "water.png",
+ "deco": [
+  {
+   "sprite": "rock.png",
+   "weight": 3
+  },
+  {
+   "sprite": "volcanic.png",
+   "weight": 3
+  },
+  {
+   "sprite": "stump.png",
+   "weight": 1
+  }
+ ],
+ "animals": [
+  {
+   "id": "frog",
+   "weight": 1
+  },
+  {
+   "id": "bird",
+   "weight": 1
+  }
+ ],
+ "uiColor": "#6c5a58"
+}

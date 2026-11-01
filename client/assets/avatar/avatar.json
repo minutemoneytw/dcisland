@@ -1,0 +1,75 @@
+{
+ "scale": 2,
+ "px": 16,
+ "py": 24,
+ "skins": [
+  {
+   "id": "pale",
+   "name": "白皙",
+   "base": "#f7ddbf",
+   "shade": "#dcb992"
+  },
+  {
+   "id": "light",
+   "name": "自然",
+   "base": "#f0c8a0",
+   "shade": "#d4a37c"
+  },
+  {
+   "id": "tan",
+   "name": "小麥",
+   "base": "#d9a06a",
+   "shade": "#b27e4f"
+  },
+  {
+   "id": "deep",
+   "name": "深膚",
+   "base": "#9c6238",
+   "shade": "#7a4a2a"
+  }
+ ],
+ "hair": [
+  {
+   "id": "hair1",
+   "name": "短髮",
+   "sprite": "hair1.png"
+  },
+  {
+   "id": "hair2",
+   "name": "披髮",
+   "sprite": "hair2.png"
+  },
+  {
+   "id": "hair3",
+   "name": "蓬鬆",
+   "sprite": "hair3.png"
+  }
+ ],
+ "hairColor": "#4a3428",
+ "shirtColors": [
+  "#d95c68",
+  "#4a90d9",
+  "#4aa564",
+  "#c9a227",
+  "#8a5cc9",
+  "#e0e0e0",
+  "#4a4a52",
+  "#d97a3a"
+ ],
+ "recolor": {
+  "shirtBase": "#d95c68",
+  "shirtShadeBase": "#aa474f"
+ },
+ "weapons": [
+  {
+   "id": "hands",
+   "name": "空手",
+   "sprite": null
+  },
+  {
+   "id": "sword",
+   "name": "木劍",
+   "sprite": "weapon_sword.png"
+  }
+ ]
+}
