@@ -1,0 +1,25 @@
+# DC島 — Cloudflare Worker 部署設定
+# 部署：npx wrangler deploy    （首次需先 npx wrangler login）
+# secret：npx wrangler secret put DISCORD_CLIENT_SECRET
+
+name = "dcisland"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# 前端靜態檔（client/ 整個目錄）；非靜態路徑才進 Worker，所以 /api、/ws 會被攔到
+[assets]
+directory = "../client"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[vars]
+DISCORD_CLIENT_ID = "1566360574743416872"
+
+# 一座島＝一個 Durable Object 實例（鍵：guild:channel）
+[[durable_objects.bindings]]
+name = "ISLANDS"
+class_name = "Island"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Island"]

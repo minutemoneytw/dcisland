@@ -7,7 +7,7 @@ FF14 玩家群用的 DC 小島：**同一個語音頻道 = 同一座公共島，
 
 - ✅ **M0 本地可玩 demo**：6 地形（manifest 制）、走路/跑/跳、裝飾模式、造型系統、FF14 致敬小動物（波波羊/圓喙鳥/大肚蛙）、武器攻擊＋動物 HP/死亡/CD 重生
 - ✅ **M1 Discord Activity 串接**：真 DC 身分授權（名牌顯示 DC 名稱）、隧道 → Portal 設定流程、測試員可啟動
-- 🚧 **M2 多人同步**：本機 WebSocket 版進行中（同語音頻道＝同房間，玩家互相可見）→ 之後搬上 Cloudflare Durable Objects
+- 🚧 **M2 多人同步**：本機 WebSocket 版可用（同語音頻道＝同房間，玩家/造型/動作同步）；Cloudflare 版寫好待部署（`worker/`，見 `docs/cloudflare-deploy.md`）
 - ⬜ M3 個人島列表/參觀、鎖島、家具/造型申請審核 bot
 - ⬜ M4 公測
 

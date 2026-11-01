@@ -23,11 +23,17 @@ export async function hookDiscord() {
   if (!q.has('frame_id')) return 'local';
   beacon('dc-enter', '有 frame_id');
   try {
-    // SDK 走 Portal 的 URL Mapping（/sdk -> esm.sh）載「單檔 bundle 版」，
-    // 避開活動沙盒對外部資源的 CSP 封鎖（blocked:csp）
-    const SDK_BODY = '/@discord/embedded-app-sdk@2.5.0/es2022/embedded-app-sdk.bundle.mjs';
-    const { DiscordSDK } = await import('/sdk' + SDK_BODY);
-    beacon('sdk-imported');
+    // 載入 SDK：優先自家託管的單檔 bundle（免外部 CDN、免 URL Mapping），
+    // 失敗才退回 esm.sh（需要 Portal 的 /sdk -> esm.sh 對應）
+    let DiscordSDK;
+    try {
+      ({ DiscordSDK } = await import('/vendor/embedded-app-sdk-2.5.0.bundle.mjs'));
+      beacon('sdk-imported', 'vendor');
+    } catch (e1) {
+      beacon('sdk-vendor-failed', String(e1 && e1.message || e1));
+      ({ DiscordSDK } = await import('/sdk/@discord/embedded-app-sdk@2.5.0/es2022/embedded-app-sdk.bundle.mjs'));
+      beacon('sdk-imported', 'esm.sh');
+    }
     const clientId = q.get('client_id') || (await (await fetch('/api/config')).json()).client_id;
     if (!clientId) throw new Error('缺少 client_id');
     const sdk = new DiscordSDK(clientId);
