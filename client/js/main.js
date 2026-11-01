@@ -813,6 +813,7 @@ addEventListener('keydown', e => {
   keys[k] = true;
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   if (k === 'e' && !e.repeat) setDecor(S.mode === 'walk');
+  if (k === 'escape' && S.mode === 'decor') setDecor(false);     // Esc 也能離開裝飾模式
   if (k === 'f' && !e.repeat) doAttack(true);
 });
 addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
