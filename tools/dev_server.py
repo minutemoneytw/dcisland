@@ -361,12 +361,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if res is None:
                         continue
                     old, players, furn = res
-                    if old:
-                        room.broadcast({"t": "leave", "id": cid}, skip=cid, terrain=old)
+                    if old:   # leave 帶 to＝去了哪個地形（讓留下的人顯示「XXX 移動到了OO區域」）；斷線的 leave 不帶
+                        room.broadcast({"t": "leave", "id": cid, "to": v}, skip=cid, terrain=old)
                     with room.clients[cid]["send"]:
                         ws_send(sock, json.dumps({"t": "enter", "terrain": v, "players": players, "furn": furn}))
-                    room.broadcast({"t": "join", "id": cid}, skip=cid, terrain=v)
                     st = room.clients[cid]["state"]
+                    room.broadcast({"t": "join", "id": cid, "name": st.get("name")}, skip=cid, terrain=v)
                     if st:
                         room.broadcast({"t": "p", "id": cid, "s": st}, skip=cid, terrain=v)
                 elif t in ("place", "remove", "clear"):

@@ -178,7 +178,8 @@ export class Island {
   async enter(ws, att, v) {
     if (!TERRAIN_RE.test(v) || att.terrain === v) return;
     const old = att.terrain;
-    if (old) this.broadcast({ t: "leave", id: att.id }, ws, old);
+    // leave 帶 to＝去了哪個地形（讓留下的人顯示「XXX 移動到了OO區域」）；斷線的 leave 不帶
+    if (old) this.broadcast({ t: "leave", id: att.id, to: v }, ws, old);
     att.terrain = v;
     ws.serializeAttachment(att);
 
@@ -189,7 +190,7 @@ export class Island {
       if (oa.terrain === v && oa.state) players[oa.id] = oa.state;
     }
     ws.send(JSON.stringify({ t: "enter", terrain: v, players, furn: await this.getFurn(v) }));
-    this.broadcast({ t: "join", id: att.id }, ws, v);
+    this.broadcast({ t: "join", id: att.id, name: att.state && att.state.name }, ws, v);
     if (att.state) this.broadcast({ t: "p", id: att.id, s: att.state }, ws, v);
   }
 

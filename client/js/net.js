@@ -56,6 +56,9 @@ export function connectNet(S, opts = {}) {
     return r;
   }
 
+  const areaName = id => S.terrains?.[id]?.name || id;
+  const notice = text => window.toast?.(text, 2500);
+
   function handle(msg) {
     switch (msg.t) {
       case 'init':
@@ -72,9 +75,20 @@ export function connectNet(S, opts = {}) {
         if (opts.onFurn) opts.onFurn(msg.furn || []);
         break;
       }
-      case 'join': upsert(msg.id, null); break;
+      case 'join': {
+        const r = upsert(msg.id, null);
+        if (msg.name) r.name = msg.name;
+        notice(`${r.name} 進入${areaName(S.terrain)}區域`);
+        break;
+      }
       case 'p': upsert(msg.id, msg.s); break;
-      case 'leave': S.remotes.delete(msg.id); break;
+      case 'leave': {
+        const r = S.remotes.get(msg.id);
+        // 帶 to 才是「換地形」；斷線的 leave 不提示
+        if (r && msg.to) notice(`${r.name} 移動到了${areaName(msg.to)}區域`);
+        S.remotes.delete(msg.id);
+        break;
+      }
       case 'furn': if (opts.onFurn) opts.onFurn(msg.items || []); break;
       case 'event': {
         const r = S.remotes.get(msg.id);
@@ -89,8 +103,8 @@ export function connectNet(S, opts = {}) {
     ws.onopen = () => {
       net.connected = true; backoff = 600;
       net.hello();                          // 先表明身分（有憑證才送）
+      send({ t: 'state', s: myState() });   // 先送狀態，別人收到 join 時才知道名字
       net.enter(S.terrain);                 // 再宣告自己在哪個地形（斷線重連也會重進）
-      send({ t: 'state', s: myState() });
       opts.onOpen && opts.onOpen(net);
     };
     ws.onmessage = ev => { try { handle(JSON.parse(ev.data)); } catch (e) { console.warn('net msg', e); } };

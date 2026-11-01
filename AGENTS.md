@@ -43,7 +43,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 3. **引入外部素材必須在 `docs/assets-license.md` 補記錄**；不得使用 SE/FFXIV 的素材、圖示、字體或商標（HUD 僅風格參考）。
 4. **機密**：`tools/dev_config.json`（含 `client_secret`）絕不 commit；任何 secret 不貼進對話、日誌或程式。
 5. **同步協定有兩份實作**：`worker/src/index.js`（正式）與 `tools/dev_server.py`（本機）。改訊息格式、房間行為或限制常數（`COLS/ROWS`、`MAX_*`）時兩邊與 `net.js` 要一起改。
-6. **地形是「每位玩家各自在哪」**，不是房間共用狀態：客戶端送 `enter {v}` 宣告自己進入某地形，伺服器回 `enter {terrain, players, furn}`（同地形其他人的快照與該地形擺設）。`p`/`join`/`leave`/`event`/`furn` 都只廣播給**同地形**的連線；剛連上、尚未 `enter` 的連線看不到也不被看到。切地形只有自己過去。`state` 封包不帶 `terrain`。舊的 `terrain` 訊息名仍當作 `enter` 處理。
+6. **地形是「每位玩家各自在哪」**，不是房間共用狀態：客戶端送 `enter {v}` 宣告自己進入某地形，伺服器回 `enter {terrain, players, furn}`（同地形其他人的快照與該地形擺設）。`p`/`join`/`leave`/`event`/`furn` 都只廣播給**同地形**的連線；剛連上、尚未 `enter` 的連線看不到也不被看到。切地形只有自己過去。`state` 封包不帶 `terrain`。舊的 `terrain` 訊息名仍當作 `enter` 處理。換地形時，舊地形的人收到帶 `to` 的 `leave`、新地形的人收到帶 `name` 的 `join`，客戶端據此顯示「XXX 移動到了OO區域」／「XXX 進入OO區域」；斷線的 `leave` 不帶 `to`，不提示。客戶端連線時要先送 `state` 再送 `enter`（join 才有名字）。
 7. Discord 授權 scope 目前**只有 `identify`**。多加 scope 會讓每次啟動都跳授權畫面，要加先問使用者。
 8. 前端為純 ES module、單一全域狀態物件 `S`（`main.js`）；沿用現有風格，不要為小改動重構整檔。
 9. **語言**：註解、commit 訊息、文件、UI 文字用繁體中文，風格與周邊程式一致。
