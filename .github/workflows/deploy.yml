@@ -1,0 +1,30 @@
+name: 部署到 Cloudflare
+
+# 有人推版到 main → 自動部署（三個維護者都不用手動更新伺服器）
+on:
+  push:
+    branches: [main]
+    paths:                      # 只有會影響線上內容的改動才部署（改文件不部署）
+      - "client/**"
+      - "worker/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:            # 也可以在 GitHub 網頁上按按鈕手動觸發
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Wrangler 部署
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 部署 Worker 與前端
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy
