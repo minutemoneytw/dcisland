@@ -50,6 +50,8 @@ const S = {
   respawn: [],                  // 動物重生佇列 [{id, at}]
   floaters: [],                 // 傷害飄字 {x,y,v,life,poof}
   weaponImgs: {},
+  remotes: new Map(),           // M2：同島的其他玩家（id -> player-like）
+  net: null,                    // M2：連線物件（net.js）
 };
 
 // ---------------- 世界生成 ----------------
@@ -125,6 +127,7 @@ function doAttack() {
   if (!S.weaponImgs[S.me.weapon]) return;
   if (S.t - p.lastAtk < ATK_CD) return;
   p.lastAtk = S.t; p.swing = ATK_T;
+  S.net?.notifyAttack?.();          // M2：讓同島的人看到你的揮擊
   for (const a of S.animals) {
     if (a.dead) continue;
     const dx = a.x - p.x, dy = a.y - p.y, dist = Math.hypot(dx, dy);
@@ -254,8 +257,21 @@ function makePlayer(name, opts) {
 }
 
 function playerSpriteDiv(p, frame) {
-  if (p.npc) return charSprite(p.look.skin, p.look.hair, p.look.shirt, frame);
+  // NPC 與遠端玩家都有自己的 look；自己（players[0]）則用當前造型
+  if (p.look) return charSprite(p.look.skin, p.look.hair, p.look.shirt, frame);
   return charSprite(S.me.skin, S.me.hair, S.me.shirt, frame);
+}
+
+// ---- M2：遠端玩家（位置用內插，避免網路抖動造成瞬移）----
+function stepRemote(r, dt) {
+  const k = Math.min(1, dt * 14);
+  const dx = r.tx - r.x, dy = r.ty - r.y;
+  r.x += dx * k; r.y += dy * k;
+  r.moving = Math.hypot(dx, dy) > 1.5;
+  if (r.moving) { r.animT += dt; if (r.animT > .16) { r.animT = 0; r.frame ^= 1; } }
+  else r.frame = 0;
+  if (r.swing > 0) r.swing -= dt;
+  r.z += ((r.tz ?? r.z) - r.z) * Math.min(1, dt * 12);
 }
 
 function stepPlayer(p, dt) {
@@ -442,6 +458,38 @@ function draw() {
       }
     });
   }
+  // M2：同島的其他玩家
+  for (const r of S.remotes.values()) {
+    list.push({
+      y: r.y, draw: () => {
+        const shs = 1 - Math.min(.55, r.z / 80);
+        ctx.fillStyle = `rgba(10,14,20,${.32 * shs + .04})`;
+        ctx.beginPath(); ctx.ellipse(r.x, r.y + 1, 11 * shs, 4 * shs, 0, 0, Math.PI * 2); ctx.fill();
+        const img = playerSpriteDiv(r, r.frame === 1 ? 1 : 0);
+        ctx.save(); ctx.translate(r.x, r.y - r.z);
+        if (r.dir < 0) ctx.scale(-1, 1);
+        if (r.weapon && r.weapon !== 'hands' && S.weaponImgs[r.weapon]) {
+          const wi = S.weaponImgs[r.weapon];
+          if (r.swing > 0) {
+            const q = 1 - r.swing / ATK_T;
+            ctx.save(); ctx.translate(3, -26); ctx.rotate(-2.3 + q * 2.5);
+            ctx.drawImage(wi, -6, -9, 12, 36); ctx.restore();
+          } else {
+            ctx.save(); ctx.translate(-11, -26); ctx.rotate(-.55);
+            ctx.drawImage(wi, -6, -9, 12, 36); ctx.restore();
+          }
+        }
+        ctx.drawImage(img, -16, -48, 32, 48);
+        ctx.restore();
+        ctx.font = '10px "Microsoft JhengHei"';
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.8)';
+        ctx.strokeText(r.name, r.x, r.y - r.z - 52);
+        ctx.fillStyle = '#ffe9a8';          // 同島的人用暖金色名牌區分
+        ctx.fillText(r.name, r.x, r.y - r.z - 52);
+      }
+    });
+  }
   list.sort((a, b) => a.y - b.y).forEach(o => o.draw());
 
   // 裝飾模式 ghost
@@ -517,7 +565,7 @@ function buildTerrainChips() {
   }
 }
 
-async function switchTerrain(id) {
+async function switchTerrain(id, fromNet) {
   if (id === S.terrain) return;
   if (S.mode === 'decor') S.mode = 'walk';
   await ensureTerrain(id);      // 先載好圖，再切地形
@@ -526,6 +574,8 @@ async function switchTerrain(id) {
   S.players[0].x = (COLS / 2 - .5) * CELL; S.players[0].y = (ROWS / 2 - .5) * CELL + 20;
   buildTerrainChips();
   toast(`${S.terrains[id].name} 島上線`);
+  // M2：讓同島的人也切過去（如果是別人切的就不必回送）
+  if (!fromNet) S.net?.setTerrain?.(id);
 }
 
 function buildFurnPanel() {
@@ -708,6 +758,7 @@ async function boot() {
     try {
       S.t += dt;
       for (const p of S.players) stepPlayer(p, dt);
+      for (const r of S.remotes.values()) stepRemote(r, dt);
       for (let i = S.animals.length - 1; i >= 0; i--) {
         const a = S.animals[i];
         if (a.dead) {
@@ -735,6 +786,11 @@ async function boot() {
   window.toast = toast;
   toast('歡迎來到 DC島！WASD 走動・Shift 跑・Space 跳・左鍵/F 攻擊・E 裝飾', 3000);
   import('./discord.js').then(m => m.hookDiscord()).catch(err => console.warn('hookDiscord:', err));
+  // M2：多人同步（同語音頻道＝同島；本機則 ?room= 或預設 local:local）
+  import('./net.js').then(m => m.connectNet(S, {
+    onTerrain: id => switchTerrain(id, true),
+    onOpen: net => toast(`已連上島（${net.room}）`, 2000),
+  })).catch(err => console.warn('net:', err));
 }
 
 boot().catch(err => {

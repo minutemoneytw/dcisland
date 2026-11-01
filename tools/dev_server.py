@@ -214,7 +214,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     s = room.clients.get(cid)
                     if s:
                         s["state"] = msg.get("s") or {}
-                    room.broadcast({"t": "p", "id": cid, "s": msg.get("s")}, skip=cid)
+                    st = msg.get("s") or {}
+                    # 島的地形＝第一位進場者決定，之後的人沿用
+                    if room.terrain is None and st.get("terrain"):
+                        room.terrain = st["terrain"]
+                        print(f"[ws] {room_name} 地形定案：{room.terrain}", file=sys.stderr, flush=True)
+                    room.broadcast({"t": "p", "id": cid, "s": st}, skip=cid)
                 elif t == "terrain":
                     v = str(msg.get("v"))[:40]
                     room.terrain = v
@@ -262,6 +267,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 class Server(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        # 客戶端（瀏覽器/Discord）中途關閉連線很正常，不要洗版 traceback
+        import traceback
+        et = sys.exc_info()[0]
+        if et in (ConnectionResetError, ConnectionAbortedError, BrokenPipeError, TimeoutError):
+            return
+        traceback.print_exc()
 
 if __name__ == "__main__":
     with Server(("0.0.0.0", PORT), Handler) as httpd:
