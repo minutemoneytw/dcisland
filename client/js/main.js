@@ -120,8 +120,8 @@ function spawnAnimals() {
       break;
     }
   }
-  // 島主：terrain.json 的 owner 指定的動物，每座地形固定一隻（不會被嚇跑、被打倒會重生、會龍衝反擊）
-  // 連線時島主由伺服器同步（進草島的快照與事件），只在單機時本地生成
+  // 島主：terrain.json 的 owner 指定的動物，每座地形固定一隻（不會被嚇跑、被打倒會重生；攻擊方式照 animals.json 的 atk）
+  // 連線時島主由伺服器同步（進場快照與事件），只在單機時本地生成
   const odef = td.owner && animalDef(td.owner);
   if (odef && !netOn()) for (let tries = 0; tries < 40; tries++) {
     const x = Math.floor(Math.random() * COLS), y = Math.floor(Math.random() * ROWS);
@@ -297,7 +297,7 @@ function doAttack(auto) {
       a.startle = 1; a.startleT = 3; a.target = null; a.idle = 0;
     }
     S.floaters.push({ x: a.x + (Math.random() * 24 - 12), y: a.y - 42, v: String(dmg), life: .8, crit });
-    if (od.owner) {   // 打到島主：不逃跑，瞬移到島緣鎖定攻擊者準備龍衝（飛行/預警/歇腳或冷卻中不重觸發；連線時反擊由伺服器觸發）
+    if (od.owner) {   // 打到島主：不逃跑，觸發反擊（龍衝＝瞬移島緣、蛇女＝原地開眼；飛行/預警/歇腳或冷卻中不重觸發；連線時反擊由伺服器觸發）
       if (!a.proxy) {
         // 單機：記住攻擊者（仇恨換人用）與最後被打時刻；龍衝 CD 中被打是進仇恨追殺
         a.hitBook = a.hitBook || new Map(); a.hitBook.set(p, S.t);
@@ -356,17 +356,27 @@ function nearestLand(a) {
 // ---- 島主的龍衝反擊（沿用野外動物「刻意不同步」規則）：被打後瞬間消失、在島隨機邊緣現蹤瞄準攻擊者 ----
 // 預警範圍提示 1 秒後，以龍本體直線飛衝過島（攻擊範圍＝龍的大小，被撞到＝KO），衝到對岸落地後飛回地圖中心
 const OWNER_FLY_SPEED = 240, OWNER_DASH_SPEED = 560, OWNER_CAST = 1, OWNER_CD = 12;
+const OWNER_GAZE_CAST = 2;      // 石化之瞳的開眼預警秒數（與兩份伺服器的 D_GAZE_CAST_MS 一致）
+const OWNER_BEAM_HALF = 104;    // 石化光束半寬 px（受害者自判用；各客戶端同一常數，伺服器不判定）
+const OWNER_PETRIFY_MS = 10000; // 石化時長：不能移動＋每秒扣 1 HP（判定在各人自己的畫面，不進同步協定）
 const OWNER_WALK_SPEED = 34, OWNER_LEG_MIN = 1500, OWNER_PAUSE = [1.5, 4];   // 閒晃：路點間散步速度／每腿最短時長／休息範圍（秒）
 const OWNER_REGEN = 18;   // 島主每秒回血（單機本地模擬；連線時血量由伺服器權威，與兩份伺服器的 D_REGEN 一致）
 const OWNER_CHASE_SPEED = 180, OWNER_CLAW_RANGE = 36, OWNER_CLAW_CD = 1, OWNER_CLAW_DMG = 2;   // 仇恨追殺：速度（比玩家走路快、比跑步慢）／爪擊範圍／間隔／傷害（與伺服器 D_* 一致）
 const OWNER_AGGRO_MS = 5, OWNER_DROPOUT = 30;                              // 仇恨換人週期／多久沒被打就脫離仇恨（秒）
-const PLAYER_HP = 10;     // 玩家血量上限：爪擊扣 2（5 下倒地）、龍衝直接倒地、殺一隻動物回 1、復活即滿血
-// 島主被激怒的經典台詞：發動反擊前隨機說一句（不連續重複）
-const OWNER_LINES = ['紅月啊，用你的熾熱燒盡敵人！', '紅月啊，照亮我征服的道路！', '熾熱的通路啊，引導我走向征服！',
-                     '皎潔的紅月啊，傾注你的光芒！', '我自高空降臨，將敵人全部擊碎！', '我自高空降臨，重塑這個世界！'];
+const PLAYER_HP = 10;     // 玩家血量上限：爪擊扣 2（5 下倒地）、龍衝直接倒地、石化每秒扣 1、殺一隻動物回 1、復活即滿血
+// 島主攻擊樣式（animals.json 的 atk 欄位）：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女）
+const ownerAtk = def => def.atk || 'dash';
+// 島主被激怒的台詞（per 島主 id）：發動反擊前隨機說一句（不連續重複）
+const OWNER_LINES = {
+  gold_dragon: ['紅月啊，用你的熾熱燒盡敵人！', '紅月啊，照亮我征服的道路！', '熾熱的通路啊，引導我走向征服！',
+                '皎潔的紅月啊，傾注你的光芒！', '我自高空降臨，將敵人全部擊碎！', '我自高空降臨，重塑這個世界！'],
+  snake_queen: ['石化之瞳啊，睜開吧！', '蠢貨們，在我的面前化為石像吧！', '美，就該凝固在最完美的一刻！',
+                '蛇髮的詛咒啊，貫穿眼前的一切！', '別亂動喔……一動就變石頭了。', '乖乖站好，這可是你最後一次能動了。'],
+};
 function ownerSay(a) {
+  const lines = OWNER_LINES[a.id] || OWNER_LINES.gold_dragon;
   let line;
-  do { line = OWNER_LINES[Math.floor(Math.random() * OWNER_LINES.length)]; } while (OWNER_LINES.length > 1 && line === a.lastLine);
+  do { line = lines[Math.floor(Math.random() * lines.length)]; } while (lines.length > 1 && line === a.lastLine);
   a.lastLine = line;
   a.say = { text: line, until: S.t + 3 };
 }
@@ -390,7 +400,7 @@ function ownerTakeoff(a, src) {
   a.sayPhase = S.t + 3; a.saySrc = { x: src.x, y: src.y };
   a.target = null; a.idle = 0; a.wleg = null;
   a.aggro = { target: src, rotateAt: S.t + OWNER_AGGRO_MS, clawAt: 0 };
-  a.rageCd = S.t + 4;   // 說台詞＋預警期間被打不重觸發（龍衝時會再重設為 9 秒）
+  a.rageCd = S.t + 4;   // 說台詞＋開眼/預警期間被打不重觸發（發射時會再設為 OWNER_CD）
 }
 function ownerWarp(a, src) {   // 說完台詞：瞬移到島緣鎖定攻擊者，準備龍衝
   const def = animalDef(a.id);
@@ -404,16 +414,21 @@ function ownerWarp(a, src) {   // 說完台詞：瞬移到島緣鎖定攻擊者�
   toast(`${def.name} 瞬間消失，在島緣現出蹤影鎖定了你！`, 2400);
 }
 function ownerStep(a, dt, def) {
-  if (a.sayPhase) {   // 說台詞：原地不動（泡泡顯示中），說完瞬移
+  if (a.sayPhase) {   // 說台詞：原地不動（泡泡顯示中），說完照攻擊樣式接手（龍衝＝瞬移島緣；蛇女＝原地開眼）
     if (S.t < a.sayPhase) { a.z = 0; return; }
     const src = a.saySrc;
     a.sayPhase = 0; a.saySrc = null;
-    ownerWarp(a, src);
+    if (ownerAtk(def) === 'gaze') ownerGazeCast(a, src);
+    else ownerWarp(a, src);
     return;
   }
   if (a.cast) {
-    a.cast -= dt;   // 預警 1 秒：畫面顯示金色虛線鎖定的攻擊範圍
-    if (a.cast <= 0) { a.cast = 0; ownerDive(a, def); }
+    a.cast -= dt;   // 預警：龍衝＝金色虛線鎖定攻擊範圍；石化之瞳＝大眼睛＋綠色虛線
+    if (a.cast <= 0) {
+      a.cast = 0;
+      if (ownerAtk(def) === 'gaze') gazeFire(a, def);
+      else ownerDive(a, def);
+    }
     return;
   }
   if (a.rest) {   // 龍衝結束在邊緣歇腳：停一下，然後就在當地繼續閒晃（不回中心）
@@ -471,6 +486,61 @@ function ownerDive(a, def) {
   a.flyTo = dest;
   a.dir = u.x < 0 ? -1 : 1;
   toast(`${def.name} 發動龍衝！`, 2000);
+}
+
+// ---- 石化之瞳（笨蛋蛇女的攻擊，atk: "gaze"）：不瞬移，原地開眼 2 秒 → 面前直線石化 ----
+// 直線在開眼瞬間就鎖定攻擊者位置（走位就能躲）；石化由各客戶端自判（跟龍衝的受害者自判同源），伺服器只廣播光束幾何
+function ownerGazeCast(a, src) {   // 說完台詞：原地開眼（大眼睛預警），鎖定攻擊者方向
+  const def = animalDef(a.id);
+  a.cast = OWNER_GAZE_CAST; a.castFrom = { x: src.x, y: src.y };
+  a.wleg = null; a.z = 0; a.fly = false;
+  a.dir = src.x < a.x ? -1 : 1;
+  toast(`${def.name} 睜開了石化之瞳——快離開她面前的直線！`, 2600);
+}
+function gazeBeamDest(fx, fy, ux, uy) {   // 光束終點：沿方向找最後一格陸地（單機自算；連線時用伺服器帶的，演算法同兩份伺服器）
+  const gx = Math.floor(fx / CELL), gy = Math.floor(fy / CELL);
+  let last = [gx, gy];
+  for (let r = 1; r <= 50; r++) {
+    const x = Math.round(gx + ux * r), y = Math.round(gy + uy * r);
+    if (x < 0 || y < 0 || x >= COLS || y >= ROWS) break;
+    if (S.world.types[y * COLS + x] === 0) break;
+    last = [x, y];
+  }
+  return { x: last[0] * CELL + CELL / 2, y: last[1] * CELL + CELL / 2 };
+}
+function distToSeg(px, py, x1, y1, x2, y2) {   // 點到線段距離（石化判定用）
+  const dx = x2 - x1, dy = y2 - y1;
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy || 1)));
+  return Math.hypot(px - (x1 + dx * t), py - (y1 + dy * t));
+}
+function gazeFire(a, def, destOverride) {   // 開眼結束：射出石化光束（destOverride＝伺服器帶的終點）
+  const cf = a.castFrom || { x: a.x + (a.dir || 1), y: a.y };
+  const u = { x: cf.x - a.x, y: cf.y - a.y };
+  const len = Math.hypot(u.x, u.y) || 1;
+  u.x /= len; u.y /= len;
+  a.castFrom = null;
+  a.rageCd = S.t + OWNER_CD;
+  const dest = destOverride || gazeBeamDest(a.x, a.y, u.x, u.y);
+  S.floaters.push({ beam: true, x1: a.x, y1: a.y - 24 * (def.big || 1), x2: dest.x, y2: dest.y, life: .5 });
+  gazePetrify(a, def, dest.x, dest.y);
+  toast(`${def.name} 的石化之瞳發射了！`, 2000);
+}
+function gazePetrify(a, def, tx, ty) {   // 光束線上的玩家石化：自己不能動＋每秒扣 1 HP；別人只做灰階演出（由對方畫面自判）
+  const hit = q => !q.dead && distToSeg(q.x, q.y, a.x, a.y, tx, ty) <= OWNER_BEAM_HALF;
+  const me = S.players[0];
+  if (hit(me)) petrifyPlayer(me, def.name);
+  for (const r of S.remotes.values()) {
+    if (hit(r)) r.petUntil = S.t + OWNER_PETRIFY_MS / 1000;
+  }
+}
+function petrifyPlayer(p, cause) {   // 石化：10 秒不能移動／跳躍（揮擊仍可用），每秒扣 1 HP；扣死照既有墓碑機制
+  if (p.dead) return;
+  if (p.pose) standUp(p);
+  p.petUntil = S.t + OWNER_PETRIFY_MS / 1000;
+  p.petTick = S.t + 1; p.petCause = cause;
+  p.moving = false;
+  S.floaters.push({ x: p.x, y: p.y - 46, v: '石化', life: 1.1, crit: true });
+  toast(`被 ${cause} 石化了！${OWNER_PETRIFY_MS / 1000} 秒動彈不得（每秒扣 1 HP）`, 3000);
 }
 
 // ---- 玩家血量＋島主仇恨（龍衝冷卻中的追殺）----
@@ -586,6 +656,16 @@ function stepOwnerWalk(a, dt) {
 // 連線的島主：整個反擊循環（預警→龍衝→歇腳）用牆鐘插值，與伺服器的 dragonPhase 同軸——
 // webview 的 rAF 被節流也不會慢動作或只瞬移，每一幀都畫在伺服器時序的正確位置
 function stepOwnerProxy(a, dt, def) {
+  if (a.gaze) {   // 石化之瞳：原地開眼（牆鐘與伺服器同軸），castMs 到就本地發射（光束＋石化判定，受害者自判）
+    const g = a.gaze, el = Date.now() - g.t0ms;
+    a.x = g.x; a.y = g.y; a.z = 0; a.fly = false;
+    a.cast = Math.max(0, (g.castMs - el) / 1000); a.castFrom = g.from;
+    if (el >= g.castMs) {
+      a.gaze = null; a.cast = 0; a.castFrom = null;
+      gazeFire(a, def, g.bx != null ? { x: g.bx, y: g.by } : null);
+    }
+    return;
+  }
   const c = a.cycle;
   if (!c) {   // 沒有進行中的反擊循環：散步或站著等伺服器
     if (a.wleg) { stepOwnerWalk(a, dt); return; }
@@ -620,9 +700,9 @@ function stepOwnerProxy(a, dt, def) {
   if (el > c.castMs + c.dashMs + c.restMs) a.cycle = null;
 }
 
-// ---- 島主的伺服器同步：連線時龍的本體與流程由伺服器權威，客戶端只負責演出和自己有沒有被撞到 ----
-// 事件：aim（被打→瞬移島緣鎖定攻擊者）/ hp（扣血）/ dead（被打倒）/ spawn（重生）/ state（進草島時的快照）
-// 陸地位圖：世界由前端種子生成，伺服器不知道島形；進草島時上傳（RLE，1＝陸地，與 ownerEdgeAt 的判定一致：types!==0）
+// ---- 島主的伺服器同步：連線時島主本體與流程由伺服器權威，客戶端只負責演出和自己有沒有被打到 ----
+// 事件：aim（龍衝：瞬移島緣鎖定攻擊者）/ gaze（石化之瞳：原地開眼鎖定直線）/ hp（扣血）/ dead（被打倒）/ spawn（重生）/ state（進有島主的地形時的快照）
+// 陸地位圖：世界由前端種子生成，伺服器不知道島形；進有島主的地形時上傳（RLE，1＝陸地，與 ownerEdgeAt 的判定一致：types!==0）
 function landRLE() {
   const t = S.world.types, n = COLS * ROWS;
   const runs = [t[0] !== 0 ? 1 : 0];   // 第一個值是起始值，之後交替
@@ -654,7 +734,7 @@ function applyDragonSnap(o) {
   if (o.ph === 'dead') return;   // 死了就先不生成，等 spawn 事件
   const a = dragonEnsure(o.x, o.y, o.hp);
   if (!a) return;
-  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.aggro = false;
+  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null; a.aggro = false;
   if (o.ph === 'aim') {   // 島緣鎖定中：還原成循環（扣掉已過的預警時間）
     const total = 1000;
     a.cycle = {
@@ -675,10 +755,17 @@ function applyDragonSnap(o) {
     a.cycle = { t0ms: Date.now(), castMs: 0, dashMs: 1, restMs: o.restMs || 700,
                 warp: { x: o.x, y: o.y }, from: null, dest: { x: o.x, y: o.y } };
     a.x = o.x; a.y = o.y; a.z = 0;
-  } else if (o.ph === 'say') {   // 說台詞中：站在原地（說完才會收到 aim 事件）
+  } else if (o.ph === 'say') {   // 說台詞中：站在原地（說完才會收到 aim/gaze 事件）
     a.cycle = null; a.wleg = null;
     a.x = o.x; a.y = o.y; a.z = 0; a.fly = false;
     ownerSay(a);
+  } else if (o.ph === 'cast') {   // 石化之瞳開眼中：原地站定，接續剩餘的開眼時間後本地發射
+    a.cycle = null; a.wleg = null;
+    const total = 2000, remain = Math.max(0, Math.min(total, o.castMs || total));
+    a.gaze = { t0ms: Date.now() - (total - remain), castMs: total,
+               from: { x: o.tx, y: o.ty }, x: o.x, y: o.y, bx: o.bx, by: o.by };
+    a.x = o.x; a.y = o.y; a.z = 0; a.fly = false;
+    a.dir = o.tx < a.x ? -1 : 1;
   } else if (o.ph === 'gohome') {   // 舊伺服器相容：當作在當地站著
     a.cycle = null;
     a.x = o.x; a.y = o.y; a.z = 0; a.fly = false;
@@ -689,7 +776,7 @@ function applyDragonSnap(o) {
   }
 }
 function onNetDragon(m) {
-  if (!S.terrains[S.terrain]?.owner) return;   // 島主事件只跟草島有關
+  if (!S.terrains[S.terrain]?.owner) return;   // 島主事件只跟有島主的地形有關（伺服器只會廣播給同地形的人）
   if (m.ev === 'state') {
     applyDragonSnap(m);
     // 保險：伺服器端的島形若因部署/重啟消失，進草島時補傳（各人島形相同，重複上傳無妨）
@@ -703,7 +790,7 @@ function onNetDragon(m) {
   }
   if (m.ev === 'dead') {   // 被打倒了：原地死亡；重生等伺服器的 spawn 事件，不排本地重生
     if (a && !a.dead) {
-      a.dead = true; a.dieT = .6; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0; a.wleg = null; a.cycle = null; a.aggro = false;
+      a.dead = true; a.dieT = .6; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0; a.wleg = null; a.cycle = null; a.gaze = null; a.aggro = false;
       if (m.x !== undefined) { a.x = m.x; a.y = m.y; }
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
       toast(`${animalDef(a.id).name} 被打倒了！30 秒後重生`, 2200);
@@ -714,23 +801,38 @@ function onNetDragon(m) {
     const na = dragonEnsure(m.x, m.y, m.hp);
     if (na) {
       na.dead = false; na.dieT = 0; na.x = m.x; na.y = m.y; na.hp = m.hp; na.z = 0;
-      na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.idle = 1.2; na.wleg = null; na.cycle = null; na.aggro = false;
+      na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.idle = 1.2; na.wleg = null; na.cycle = null; na.gaze = null; na.aggro = false;
     }
     toast(`${animalDef(S.terrains[S.terrain].owner).name} 回來了！`, 1600);
     return;
   }
-  if (m.ev === 'say') {   // 島主被激怒：先在原地說台詞（泡泡 3 秒），說完才瞬移反擊
+  if (m.ev === 'say') {   // 島主被激怒：先在原地說台詞（泡泡 3 秒），說完才反擊（龍衝＝瞬移島緣；蛇女＝原地開眼）
     const na = a || dragonEnsure(m.x, m.y);
     if (!na) return;
-    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.wleg = null;
+    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.wleg = null;
     na.x = m.x; na.y = m.y;
     ownerSay(na);
+    return;
+  }
+  if (m.ev === 'gaze') {   // 蛇女開眼：原地石化預警（直線已鎖定，castMs 後本地射出；線上的人快走開）
+    const na = a || dragonEnsure(m.x, m.y);
+    if (!na) return;
+    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.rest = 0; na.retHome = false; na.cycle = null; na.wleg = null;
+    na.x = m.x; na.y = m.y; na.z = 0;
+    if (m.hp != null) na.hp = m.hp;
+    na.dir = m.tx < na.x ? -1 : 1;
+    na.gaze = { t0ms: Date.now(), castMs: m.castMs || OWNER_GAZE_CAST * 1000,
+                from: { x: m.tx, y: m.ty }, x: m.x, y: m.y, bx: m.bx, by: m.by };
+    const me = S.players[0];
+    const inLine = !me.dead && distToSeg(me.x, me.y, m.x, m.y, m.bx, m.by) <= OWNER_BEAM_HALF;
+    toast(inLine ? `${animalDef(na.id).name} 對你這條線睜開了石化之瞳——快走開！`
+                 : `${animalDef(na.id).name} 睜開了石化之瞳！`, 2600);
     return;
   }
   if (m.ev === 'wander') {   // 島主往新路點散步（伺服器帶路；插值與伺服器一致，凍結恢復也正確）
     const na = a || dragonEnsure(m.fx, m.fy);
     if (!na) return;
-    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null;
+    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null;
     na.wleg = { fx: m.fx, fy: m.fy, tx: m.tx, ty: m.ty, tms: m.tms, t0ms: Date.now() };
     na.legEndedAt = 0;
     na.x = m.fx; na.y = m.fy; na.dir = m.tx < m.fx ? -1 : 1;
@@ -759,7 +861,7 @@ function onNetDragon(m) {
     const r = S.remotes.get(m.id);
     if (a) {
       a.aggro = true; a.wleg = null; a.cast = 0; a.castFrom = null;
-      a.fly = false; a.dashU = null; a.cycle = null; a.rest = 0; a.retHome = false;
+      a.fly = false; a.dashU = null; a.cycle = null; a.gaze = null; a.rest = 0; a.retHome = false;
     }
     if (m.id === S.net?.id) toast(`${ownerName()} 火冒三丈地追殺你！快跑！`, 2600);
     else if (r) toast(`${ownerName()} 追殺 ${r.name}！`, 2200);
@@ -994,6 +1096,7 @@ function revivePlayer(p) {
   p.dead = false; p.deadAt = 0;
   p.pose = null; p.seat = null; p.seatType = null;                 // 復活後一定是站著的
   p.hp = PLAYER_HP;   // 復活即滿血
+  p.petUntil = 0; p.petTick = 0;   // 復活順便清石化（石化時長比死亡短，正常輪不到）
   const [nx, ny] = landNear((COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL);
   p.x = nx; p.y = ny; p.z = 0; p.vz = 0; p.dir = 1;
   S.floaters.push({ x: p.x, y: p.y - 46, v: '復活！', life: 1.2, crit: true });
@@ -1013,11 +1116,14 @@ function stepPlayer(p, dt) {
     else { p.moving = false; p.frame = 0; p.z = 0; p.vz = 0; return; }
   }
   let dx = 0, dy = 0;
-  // 走路與裝飾模式都能移動（裝飾模式要邊走邊擺）
-  if (keys['a'] || keys['arrowleft']) dx -= 1;
-  if (keys['d'] || keys['arrowright']) dx += 1;
-  if (keys['w'] || keys['arrowup']) dy -= 1;
-  if (keys['s'] || keys['arrowdown']) dy += 1;
+  // 走路與裝飾模式都能移動（裝飾模式要邊走邊擺）；被石化時不能移動（揮擊仍可用）
+  const pet = S.t < (p.petUntil ?? 0);
+  if (!pet) {
+    if (keys['a'] || keys['arrowleft']) dx -= 1;
+    if (keys['d'] || keys['arrowright']) dx += 1;
+    if (keys['w'] || keys['arrowup']) dy -= 1;
+    if (keys['s'] || keys['arrowdown']) dy += 1;
+  }
   p.moving = dx !== 0 || dy !== 0;
   if (p.moving) {
     if (dx !== 0) p.dir = dx;
@@ -1029,8 +1135,8 @@ function stepPlayer(p, dt) {
     if (!blocked(nx, p.y, ig)) p.x = nx;
     if (!blocked(p.x, ny, ig)) p.y = ny;
   }
-  // 跳躍（裝飾模式不跳）
-  if (S.mode === 'walk' && keys[' '] && p.z === 0 && p.vz === 0) p.vz = 240;
+  // 跳躍（裝飾模式不跳；石化中不能跳）
+  if (S.mode === 'walk' && !pet && keys[' '] && p.z === 0 && p.vz === 0) p.vz = 240;
   if (p.z > 0 || p.vz > 0) {
     p.z += p.vz * dt; p.vz -= 780 * dt;
     if (p.z <= 0) { p.z = 0; p.vz = 0; }
@@ -1039,6 +1145,10 @@ function stepPlayer(p, dt) {
   if (p.tool && S.t > p.toolUntil && !(p.swing > 0)) p.tool = null;
   if (p.moving) { p.animT += dt; if (p.animT > .16) { p.animT = 0; p.frame ^= 1; } }
   else p.frame = 0;
+  if (pet && S.t >= (p.petTick ?? 0)) {   // 石化每秒扣 1 HP（死者走既有墓碑機制）
+    p.petTick = S.t + 1;
+    playerDamage(p, 1, p.petCause || '石化');
+  }
 }
 
 function stepNPC(p, dt) {
@@ -1082,6 +1192,8 @@ function drawPerson(p, wi, nameColor) {
       ctx.beginPath(); ctx.ellipse(p.x, p.y + 1, 11 * shs, 4 * shs, 0, 0, Math.PI * 2); ctx.fill();
     }
     const img = playerSpriteDiv(p, pose ? 2 : (p.frame === 1 ? 1 : 0));
+    const pet = S.t < (p.petUntil ?? 0);   // 石化：身體灰階（自己的石化即時同步；遠端玩家的石化由光束事件就地推斷，純演出）
+    if (pet) { ctx.save(); ctx.filter = 'grayscale(1) brightness(.92)'; }
     ctx.save(); ctx.translate(p.x, p.y - p.z);
     if (p.dir < 0) ctx.scale(-1, 1);
     // 武器（背在肩上 / 揮擊時畫在身前）；坐著時不拿
@@ -1089,6 +1201,7 @@ function drawPerson(p, wi, nameColor) {
     ctx.drawImage(img, -16, -48, 32, 48);
     if (wi && !pose && p.swing > 0) drawWeaponSwing(wi, p.swing);
     ctx.restore();
+    if (pet) ctx.restore();
     if (pose) nameY = p.y - 46;
   }
   // 名牌（FFXIV 感：白字黑邊）
@@ -1111,6 +1224,18 @@ function drawPerson(p, wi, nameColor) {
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#ffd86b';
     ctx.strokeText('?', p.x, yy); ctx.fillText('?', p.x, yy);
   }
+}
+// 石化之瞳的預警大眼睛：暗紫眼眶＋金虹膜＋直瞳，疊在蛇女身上；pul＝脈動（越接近發射越亮）
+function drawGazeEye(x, y, r, pul) {
+  ctx.save(); ctx.translate(x, y);
+  ctx.fillStyle = `rgba(44,28,60,${.72 + .2 * pul})`;
+  ctx.strokeStyle = `rgba(196,150,255,${.45 + .4 * pul})`; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(0, 0, r * 1.28, r, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#e8c23a';
+  ctx.beginPath(); ctx.ellipse(0, 0, r * .55, r * .66, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#241a30';
+  ctx.beginPath(); ctx.ellipse(0, 0, r * .16, r * .58, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
 }
 // 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）
 function drawSleeper(p) {
@@ -1386,17 +1511,19 @@ function draw() {
         ctx.restore();
         if (a.dead) return;
         const top = a.y - a.z - H - 2;   // 圖的頂端（名牌/驚嘆號/血條貼這條線往下排）
-        // 龍衝集氣：金色預警虛線＝龍的衝刺路徑（走位離開這條線就不會被撞到）
+        // 島主預警：龍衝＝金色虛線＝衝刺路徑；石化之瞳＝綠色虛線＝石化直線（走位離開這條線就不會被石化）
         if (a.cast > 0 && a.castFrom) {
           const cf = a.castFrom, L = 1700;
           const ux = cf.x - a.x, uy = cf.y - a.y, ul = Math.hypot(ux, uy) || 1;
           const pul = Math.sin(S.t * 12) * .5 + .5;
+          const gaze = ownerAtk(def) === 'gaze';
           ctx.save();
-          ctx.strokeStyle = `rgba(255,214,90,${.28 + .34 * pul})`;
+          ctx.strokeStyle = gaze ? `rgba(150,240,150,${.28 + .34 * pul})` : `rgba(255,214,90,${.28 + .34 * pul})`;
           ctx.lineWidth = 2 + 2 * pul; ctx.setLineDash([10, 12]);
           ctx.beginPath(); ctx.moveTo(a.x, a.y - H * .5);
           ctx.lineTo(a.x + ux / ul * L, a.y - H * .5 + uy / ul * L);
           ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+          if (gaze) drawGazeEye(a.x, a.y - H * .62, 9 * bs + 6 * (1 - a.cast / OWNER_GAZE_CAST), pul);
         }
         // HP 小條（受過傷才顯示；島主加寬）
         if (a.hp < a.maxHp) {
@@ -1492,7 +1619,19 @@ function draw() {
   }
   // 傷害飄字 / 消失特效
   for (const f of S.floaters) {
-    ctx.save(); ctx.translate(f.x, f.y);
+    ctx.save();
+    if (f.beam) {   // 石化光束：從蛇女身上射到對岸的綠白光柱（先粗後細，0.5 秒淡出）
+      const q = 1 - f.life / .5, w = 48 * (1 - q) + 12;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = `rgba(160,255,180,${.85 * (1 - q)})`;
+      ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(f.x1, f.y1); ctx.lineTo(f.x2, f.y2); ctx.stroke();
+      ctx.strokeStyle = `rgba(255,255,240,${.7 * (1 - q)})`;
+      ctx.lineWidth = Math.max(1, w * .4);
+      ctx.beginPath(); ctx.moveTo(f.x1, f.y1); ctx.lineTo(f.x2, f.y2); ctx.stroke();
+      ctx.restore(); continue;
+    }
+    ctx.translate(f.x, f.y);
     if (f.ring) {   // 被爪擊打中的衝擊圈：紅圈快速擴散淡出
       const q = 1 - f.life / .35;
       ctx.strokeStyle = `rgba(255,110,80,${1 - q})`;
@@ -1738,6 +1877,7 @@ async function switchTerrain(id) {
     const me = S.players[0];
     const [nx, ny] = landNear(me.x, me.y);
     me.x = nx; me.y = ny;
+    me.petUntil = 0; me.petTick = 0;   // 石化判定只在畫面本地，換地形就解除
     buildTerrainChips();
     toast(`${S.terrains[id].name} 島上線`);
     // M2：只有自己過去；告訴伺服器，讓新地形的人看到你、舊地形的人看不到你
@@ -2097,7 +2237,7 @@ async function boot() {
       for (let i = S.floaters.length - 1; i >= 0; i--) {
         const f = S.floaters[i];
         f.life -= dt;
-        if (!f.slash) f.y -= 34 * dt;   // 爪擊特效固定在龍的位置，不隨飄字上浮
+        if (!f.slash && !f.beam) f.y -= 34 * dt;   // 爪擊/光束特效固定在原座標，不隨飄字上浮
         if (f.life <= 0) S.floaters.splice(i, 1);
       }
       draw();

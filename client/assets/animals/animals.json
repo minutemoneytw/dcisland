@@ -37,10 +37,23 @@
    "sprite": "golden_dragon.png",
    "owner": true,
    "big": 5,
+   "atk": "dash",
    "speed": 16,
    "flee": 110,
    "hp": 200,
    "line": "「黃金肥龍」抖了抖金色的肚皮，打了一個不容小覷的呵欠。"
+  },
+  {
+   "id": "snake_queen",
+   "name": "笨蛋蛇女",
+   "sprite": "snake_queen.png",
+   "owner": true,
+   "big": 4,
+   "atk": "gaze",
+   "speed": 16,
+   "flee": 110,
+   "hp": 200,
+   "line": "「笨蛋蛇女」半閉著眼，慢半拍地捲了一下蛇尾。"
   }
  ]
 }

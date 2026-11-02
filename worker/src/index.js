@@ -25,12 +25,14 @@ const HIT_RANGE = 140;       // 打可破壞物件時，玩家離目標最遠幾
 const HIT_CD_MS = 300;       // 同一條連線兩次打擊最短間隔
 
 // ---- 島主（伺服器端同步）----
-// 野外動物維持刻意不同步；島主會撞死人，流程必須全島一致，由伺服器權威模擬：
-// 被打 → 瞬移島緣 → 鎖定攻擊者 → 預警 1 秒 → 龍本體直線衝過島到對岸 → 停一下 → 飛回中心。
-// 客戶端只負責演出（移動插值、預警虛線）和自己有沒有被撞到的判定（受害者自己死，死亡照既有 state.dead 同步）。
+// 野外動物維持刻意不同步；島主會打死人，流程必須全島一致，由伺服器權威模擬：
+// 被打 → 說台詞 → 反擊（樣式照 OWNER_TERRAINS：dash＝瞬移島緣＋龍衝；gaze＝原地開眼＋石化直線）→ 仇恨追殺 → 冷靜回閒晃。
+// 客戶端只負責演出（移動插值、預警虛線）和自己有沒有被打到的判定（受害者自己死／自己石化，走既有 state.dead 同步）。
 // 伺服器本來不知道島的形狀（世界由前端種子生成），由玩家上傳陸地位圖（RLE）；各客戶端的島相同，誰上傳都一樣。
-const OWNER_TERRAIN = "grass";
-const D_CAST_MS = 1000;      // 島緣鎖定（預警）持續時間
+// 每座地形各自的島主（地形 → 攻擊樣式；要與 client assets 的 terrain.json owner／animals.json atk 一致）：
+const OWNER_TERRAINS = { grass: "dash", night: "gaze" };
+const D_CAST_MS = 1000;      // 龍衝的島緣鎖定（預警）持續時間
+const D_GAZE_CAST_MS = 2000; // 石化之瞳的開眼預警持續時間（與 client 的 OWNER_GAZE_CAST 一致）
 const D_DASH = 560;          // 龍衝速度 px/s（比仇恨追殺的 180 更快：高速掠過才有威嚇感）
 const D_REST_MS = 700;       // 衝到底落地的停留時間
 const D_WALK = 34;           // 閒晃散步速度 px/s（與 client 的 OWNER_WALK_SPEED 一致）
@@ -256,11 +258,11 @@ export class Island {
     this.floorIds = null;        // 地板 id 集合，由 floors.json 載入
     this.targets = null;         // 可破壞物件定義（tools.json 的 targets）
     this.lastHit = new Map();    // ws -> 上次打擊的時間
-    this.dragonLoaded = false;   // 島主狀態只在第一次用到時從 storage 拉回（休眠後記憶體會清空）
-    this.dragon = null;
-    this.dragonMapLoaded = false;   // 島形位圖存在 storage（懒載入）——只放記憶體的話 DO 休眠後就沒了，打島主不會反擊
-    this.dragonMap = null;
-    this.dragonHits = new Map(); // ws -> 上次打島主的時間
+    this.dragons = new Map();        // 地形 → 島主狀態（每座有島主的地形各一隻，懒載入 storage）
+    this.dragonLoaded = new Set();   // 已嘗試從 storage 載過的地形
+    this.dragonMaps = new Map();     // 地形 → 陸地位圖（懒載入）——只放記憶體的話 DO 休眠後就沒了，打島主不會反擊
+    this.dragonMapLoaded = new Set();
+    this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
   }
 
   // 可破壞物件的血量/重生秒數取自前端 tools.json
@@ -379,10 +381,10 @@ export class Island {
     await this.getFurnDefs();     // 先載入（pruneDecos 會用到）
     const decos = this.decoList(await this.pruneDecos(v, await this.getDecos(v)));
     let dragon;
-    if (v === OWNER_TERRAIN) {    // 島主同步：進草島時給一份當下的島主快照（重算現在的階段）
-      await this.getDragon();
-      dragon = this.dragonSnapshot();
-      await this.state.storage.setAlarm(Date.now() + 1000);   // 有人進草島了：1 秒後醒來恢復散步（alarm 會照 phase 自行安排）
+    if (OWNER_TERRAINS[v]) {    // 島主同步：進有島主的地形時給一份當下的快照（重算現在的階段）
+      await this.getDragon(v);
+      dragon = this.dragonSnapshot(v);
+      await this.armOwnerAlarm();   // 有人進來了：醒來恢復散步（統一匯總，不會蓋掉別座島更早的排程）
     }
     ws.send(JSON.stringify({ t: "enter", terrain: v, players, furn: await this.getFurn(v), floor: floorToList(await this.getFloor(v)), decos, dragon }));
     this.broadcast({ t: "join", id: att.id, name: att.state && att.state.name }, ws, v);
@@ -425,17 +427,19 @@ export class Island {
       await this.enter(ws, att, String(msg.v));
     } else if (msg.t === "hit") {
       await this.hitDeco(ws, att, msg);
-    } else if (msg.t === "dragonMap") {   // 島主：陸地位圖（各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）
-      const land = dragonLand(msg.v);
-      if (land) {
-        this.dragonMap = land;
-        this.dragonMapLoaded = true;
-        await this.state.storage.put("dragonMap", msg.v);   // 一定要存：DO 休眠會清空記憶體，沒存的話之後打島主不會反擊
+    } else if (msg.t === "dragonMap") {   // 島主：陸地位圖（各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）。上傳者所在地形決定是哪座島的
+      if (att.terrain && OWNER_TERRAINS[att.terrain]) {
+        const land = dragonLand(msg.v);
+        if (land) {
+          this.dragonMaps.set(att.terrain, land);
+          this.dragonMapLoaded.add(att.terrain);
+          await this.state.storage.put("dragonMap:" + att.terrain, msg.v);   // 一定要存：DO 休眠會清空記憶體，沒存的話之後打島主不會反擊
+        }
       }
     } else if (msg.t === "dragonSnap") {   // 客戶端凍結恢復：回一份島主即時快照（只給這條連線，走 dragon 事件的 state）
-      if (att.terrain === OWNER_TERRAIN) {
-        await this.getDragon();
-        ws.send(JSON.stringify({ t: "dragon", ev: "state", ...this.dragonSnapshot() }));
+      if (att.terrain && OWNER_TERRAINS[att.terrain]) {
+        await this.getDragon(att.terrain);
+        ws.send(JSON.stringify({ t: "dragon", ev: "state", ...this.dragonSnapshot(att.terrain) }));
       }
     } else if (msg.t === "dragonHit") {
       await this.dragonHit(ws, att, msg);
@@ -477,55 +481,64 @@ export class Island {
   }
 
   // ---- 島主（伺服器端同步）----
-  async getDragon() {
-    if (!this.dragonLoaded) {
-      this.dragonLoaded = true;
-      this.dragon = await this.state.storage.get("dragon") || null;
-      if (this.dragon && this.dragon.st === "dead") await this.scheduleDragonRespawn(this.dragon);   // 休眠醒來仍在死，把鬧鐘補回來
+  async getDragon(terrain) {
+    if (!this.dragonLoaded.has(terrain)) {
+      this.dragonLoaded.add(terrain);
+      let d = await this.state.storage.get("dragon:" + terrain);
+      if (d === undefined && terrain === "grass") {   // 舊版存在沒有地形後綴的 key：搬一份到新 key（之後都讀新 key）
+        d = await this.state.storage.get("dragon");
+        if (d) await this.state.storage.put("dragon:" + terrain, d);
+      }
+      this.dragons.set(terrain, d || null);
+      if (d && d.st === "dead") await this.scheduleDragonRespawn(terrain);   // 休眠醒來仍在死，把鬧鐘補回來
     }
-    if (!this.dragon) this.dragon = { hp: D_HP, st: "idle", pos: [...D_CENTER], aimTms: 0, deadAt: 0, wander: null, cooldownUntil: 0, sayUntil: 0, regenT: 0, aggro: null, lastHitAt: 0 };
-    if (this.dragon.wander === undefined) this.dragon.wander = null;   // 舊存檔沒有這個欄位
-    if (this.dragon.cooldownUntil === undefined) this.dragon.cooldownUntil = 0;
-    if (this.dragon.sayUntil === undefined) this.dragon.sayUntil = 0;
-    if (this.dragon.regenT === undefined) this.dragon.regenT = Date.now();   // 舊存檔從現在起算（不憑空補血）
-    if (this.dragon.aggro === undefined) this.dragon.aggro = null;
-    if (this.dragon.lastHitAt === undefined) this.dragon.lastHitAt = 0;
-    return this.dragon;
+    let d = this.dragons.get(terrain);
+    if (!d) {
+      d = { hp: D_HP, st: "idle", pos: [...D_CENTER], aimTms: 0, deadAt: 0, wander: null, cooldownUntil: 0, sayUntil: 0, regenT: 0, aggro: null, lastHitAt: 0 };
+      this.dragons.set(terrain, d);
+    }
+    if (d.wander === undefined) d.wander = null;   // 舊存檔沒有這個欄位
+    if (d.cooldownUntil === undefined) d.cooldownUntil = 0;
+    if (d.sayUntil === undefined) d.sayUntil = 0;
+    if (d.regenT === undefined) d.regenT = Date.now();   // 舊存檔從現在起算（不憑空補血）
+    if (d.aggro === undefined) d.aggro = null;
+    if (d.lastHitAt === undefined) d.lastHitAt = 0;
+    return d;
   }
-  saveDragon() { return this.state.storage.put("dragon", this.dragon); }
-  // ---- 島主仇恨（龍衝冷卻期間的追殺行為；client 的演出在 ownerAggro 系列）----
-  // D_DROPOUT（20 秒）內在草島打過島主、還在線上沒死的連線名單（仇恨換人從這裡隨機挑）
-  aggroCandidates(now, win = D_DROPOUT) {
+  saveDragon(terrain) { return this.state.storage.put("dragon:" + terrain, this.dragons.get(terrain)); }
+  // ---- 島主仇恨（反擊冷卻期間的追殺行為；client 的演出在 ownerAggro 系列）----
+  // D_DROPOUT（30 秒）內在該地形打過島主、還在線上沒死的連線名單（仇恨換人從這裡隨機挑）
+  aggroCandidates(now, terrain, win = D_DROPOUT) {
     const out = [];
-    for (const [ws, t] of this.dragonHits) {
-      if (now - t > win) continue;
+    for (const [ws, h] of this.dragonHits) {
+      if (h.terrain !== terrain || now - h.t > win) continue;
       const att = ws.deserializeAttachment?.() || {};
-      if (att.terrain === OWNER_TERRAIN && att.state && !att.state.dead) out.push(att);
+      if (att.terrain === terrain && att.state && !att.state.dead) out.push(att);
     }
     return out;
   }
-  // 依連線編號找仇恨目標（斷線／離開草島／死了就找不到）
-  aggroTarget(id) {
+  // 依連線編號找仇恨目標（斷線／離開該地形／死了就找不到）
+  aggroTarget(id, terrain) {
     for (const ws of this.state.getWebSockets()) {
       const att = ws.deserializeAttachment() || {};
-      if (att.id === id && att.terrain === OWNER_TERRAIN && att.state && !att.state.dead) return att;
+      if (att.id === id && att.terrain === terrain && att.state && !att.state.dead) return att;
     }
     return null;
   }
   // 開始/切換追殺目標：廣播 aggro 事件（id＝被鎖定的連線編號，客戶端用來鎖定自己）；存檔由呼叫端負責
-  startAggro(now, att) {
-    const d = this.dragon;
+  startAggro(now, att, terrain) {
+    const d = this.dragons.get(terrain);
     d.aggro = { id: att.id, rotateAt: now + D_AGGRO_MS, clawAt: now + D_CLAW_MS };
     d.wander = null;
-    this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name: (att.state && att.state.name) || "玩家" }, null, OWNER_TERRAIN);
+    this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name: (att.state && att.state.name) || "玩家" }, null, terrain);
   }
-  dropAggro(chill = true) {
-    this.dragon.aggro = null;
-    if (chill) this.broadcast({ t: "dragon", ev: "chill" }, null, OWNER_TERRAIN);
+  dropAggro(terrain, chill = true) {
+    this.dragons.get(terrain).aggro = null;
+    if (chill) this.broadcast({ t: "dragon", ev: "chill" }, null, terrain);
   }
   // 回血：每秒回 D_REGEN 點（用牆鐘 lazy 計算，不需要計時器；滿血或死亡時把錨點重置為現在，扣血後才重新開始累積）
-  regenDragon(now) {
-    const d = this.dragon;
+  regenDragon(terrain, now) {
+    const d = this.dragons.get(terrain);
     if (d.st === "dead" || d.hp >= D_HP) { d.regenT = now; return; }
     const n = Math.floor((now - d.regenT) / 1000);
     if (n > 0) {
@@ -534,23 +547,29 @@ export class Island {
     }
   }
   // 島形位圖：玩家上傳後存 storage（懒載入）。各客戶端的島相同，誰上傳都一樣
-  async getDragonMap() {
-    if (!this.dragonMapLoaded) {
-      this.dragonMapLoaded = true;
-      const v = await this.state.storage.get("dragonMap");
-      this.dragonMap = typeof v === "string" ? dragonLand(v) : null;
+  async getDragonMap(terrain) {
+    if (!this.dragonMapLoaded.has(terrain)) {
+      this.dragonMapLoaded.add(terrain);
+      let v = await this.state.storage.get("dragonMap:" + terrain);
+      if (v === undefined && terrain === "grass") v = await this.state.storage.get("dragonMap");   // 舊版 key
+      this.dragonMaps.set(terrain, typeof v === "string" ? dragonLand(v) : null);
     }
-    return this.dragonMap;
+    return this.dragonMaps.get(terrain) || null;
   }
-  // 由 aimTms 推導現在的階段（閒置/瞬移鎖定/龍衝/停留/回中心），不需要每幀醒著跑
-  dragonPhase(now) {
-    const d = this.dragon;
+  // 由 aimTms 推導現在的階段（閒置/說台詞/開眼/瞬移鎖定/龍衝/停留），不需要每幀醒著跑
+  dragonPhase(terrain, now) {
+    const d = this.dragons.get(terrain);
     if (d.st === "dead") return ["dead", d.pos, 0];
     if (!d.aimTms) {
       if (d.sayUntil && now < d.sayUntil) return ["say", d.pos, d.sayUntil - now];   // 說台詞中：原地不動
       if (!d.wander) return ["idle", d.pos, 0];
       const t = Math.min(1, Math.max(0, (now - d.wander.t0) / d.wander.tms));
       return ["idle", [d.wander.fx + (d.wander.tx - d.wander.fx) * t, d.wander.fy + (d.wander.ty - d.wander.fy) * t], 0];
+    }
+    if (OWNER_TERRAINS[terrain] === "gaze") {   // 石化之瞳：原地開眼（不瞬移不移動），開完就地回 idle
+      const dt = now - d.aimTms;
+      if (dt < D_GAZE_CAST_MS) return ["cast", d.pos, D_GAZE_CAST_MS - dt];
+      return ["idle", d.pos, 0];
     }
     let dt = now - d.aimTms;
     if (dt < D_CAST_MS) return ["aim", d.warp, D_CAST_MS - dt];
@@ -562,18 +581,20 @@ export class Island {
     return ["idle", d.dest, 0];   // 衝完在對岸就地閒晃（不回中心）
   }
   // idle 開始的時間（沒被觸發過就是 0）；用於 D_RAGE_MS 冷卻
-  dragonIdleAt() {
-    const d = this.dragon;
+  dragonIdleAt(terrain) {
+    const d = this.dragons.get(terrain);
     if (!d.aimTms) return 0;
+    if (OWNER_TERRAINS[terrain] === "gaze") return d.aimTms + D_GAZE_CAST_MS;
     return d.aimTms + D_CAST_MS + d.dashLen / D_DASH * 1000 + D_REST_MS;
   }
-  dragonSnapshot() {
+  dragonSnapshot(terrain) {
     const now = Date.now();
-    this.regenDragon(now);   // 讀快照前先把該補的血補上（快照帶 hp）
-    const [ph, pos, ms] = this.dragonPhase(now);
-    const d = this.dragon;
+    this.regenDragon(terrain, now);   // 讀快照前先把該補的血補上（快照帶 hp）
+    const [ph, pos, ms] = this.dragonPhase(terrain, now);
+    const d = this.dragons.get(terrain);
     const o = { ph, x: pos[0], y: pos[1], hp: d.hp };
     if (ph === "aim") { o.castMs = Math.round(ms); o.tx = d.atk[0]; o.ty = d.atk[1]; o.dx = d.dest[0]; o.dy = d.dest[1]; }
+    if (ph === "cast") { o.castMs = Math.round(ms); o.tx = d.atk[0]; o.ty = d.atk[1]; o.bx = d.beam[0]; o.by = d.beam[1]; }   // 石化之瞳：開眼中（直線已鎖定）
     if (ph === "dash") { o.ux = d.unit[0]; o.uy = d.unit[1]; o.dx = d.dest[0]; o.dy = d.dest[1]; }
     if (ph === "rest") o.restMs = Math.round(ms);
     if (ph === "say") o.sayMs = Math.round(ms);   // 說台詞中：附上剩餘時間
@@ -583,18 +604,21 @@ export class Island {
     }
     return o;
   }
-  // 打到島主：扣血；若在閒置且冷卻過了 → 開始反擊（瞬移島緣鎖定攻擊者）
+  // 打到島主：扣血；若在閒置且冷卻過了 → 開始反擊（樣式照 OWNER_TERRAINS）。攻擊者所在地形決定打的是哪座島的島主
   async dragonHit(ws, att, msg) {
     if (!att.state || !att.terrain) return;
-    const d = await this.getDragon();
+    const terrain = att.terrain;
+    if (!OWNER_TERRAINS[terrain]) return;
+    const d = await this.getDragon(terrain);
     const now = Date.now();
-    if (now - (this.dragonHits.get(ws) || 0) < D_CD_MS) return;
+    const h = this.dragonHits.get(ws);
+    if (now - (h ? h.t : 0) < D_CD_MS) return;
     if (d.st === "dead") return;
-    this.regenDragon(now);   // 扣血前先把該補的血補上（之後廣播的 hp 是回血後的值）
+    this.regenDragon(terrain, now);   // 扣血前先把該補的血補上（之後廣播的 hp 是回血後的值）
     const dmg = Math.max(1, Math.min(2, Math.round(Number(msg.dmg) || 1)));
-    const [ph, pos] = this.dragonPhase(now);
-    if (ph === "dash") return;     // 衝刺中打不到（落地歇腳與散步時都打得到）
-    // 客戶端可能漏接一個路點事件（散步腿落後）：只要它宣稱的龍位置離伺服器的不遠、且玩家貼著宣稱的龍，就接受
+    const [ph, pos] = this.dragonPhase(terrain, now);
+    if (ph === "dash") return;     // 龍衝飛行中打不到（開眼/預警/歇腳與散步時都打得到）
+    // 客戶端可能漏接一個路點事件（散步腿落後）：只要它宣稱的島主位置離伺服器的不遠、且玩家貼著宣稱的位置，就接受
     const distSrv = Math.hypot(Number(msg.x) - pos[0], Number(msg.y) - pos[1]);
     const cdx = Number(msg.ddx), cdy = Number(msg.ddy);
     let near = distSrv <= D_RANGE;
@@ -603,93 +627,89 @@ export class Island {
           && Math.hypot(cdx - pos[0], cdy - pos[1]) <= D_DRIFT_TOLER;
     }
     if (!near) return;
-    this.dragonHits.set(ws, now);
+    this.dragonHits.set(ws, { terrain, t: now });
     d.lastHitAt = now;   // 仇恨計時：D_DROPOUT 內沒有人再打牠就脫離追殺
     d.hp -= dmg;
-    if (d.hp <= 0) {   // 打倒了：全島廣播死亡，30 秒後用鬧鐘重生
+    if (d.hp <= 0) {   // 打倒了：全地形廣播死亡，30 秒後用鬧鐘重生
       d.st = "dead"; d.hp = 0; d.pos = [pos[0], pos[1]]; d.aimTms = 0; d.deadAt = now; d.wander = null; d.aggro = null;
-      await this.saveDragon();
-      this.broadcast({ t: "dragon", ev: "dead", x: pos[0], y: pos[1] }, null, OWNER_TERRAIN);
-      await this.scheduleDragonRespawn(d);
+      await this.saveDragon(terrain);
+      this.broadcast({ t: "dragon", ev: "dead", x: pos[0], y: pos[1] }, null, terrain);
+      await this.armOwnerAlarm();
       return;
     }
-    // 反擊：閒置且冷卻過了才觸發。一被打就先建立仇恨（20 秒從最後一次被打起算）；
-    // 龍衝照樣先放：說台詞 → 瞬移島緣 → 龍衝，落地後不用再被打就馬上接著追殺同一個攻擊者
-    const map = await this.getDragonMap();
+    // 反擊：閒置且冷卻過了才觸發。一被打就先建立仇恨（30 秒從最後一次被打起算）；
+    // 反擊照樣先放：說台詞 →（龍衝＝瞬移島緣／石化之瞳＝原地開眼），放完不用再被打就馬上接著追殺同一個攻擊者
+    const map = await this.getDragonMap(terrain);
     if (ph === "idle" && map && now >= (d.cooldownUntil || 0)) {
       d.aggro = { id: att.id, rotateAt: now + D_AGGRO_MS, clawAt: now + D_CLAW_MS };
       d.sayUntil = now + D_SAY_MS;
-      d.atk = [Number(msg.x), Number(msg.y)];   // 記住攻擊者位置，說完台詞後龍衝要穿過這裡
+      d.atk = [Number(msg.x), Number(msg.y)];   // 記住攻擊者位置：龍衝要穿過這裡／石化之瞳要朝這裡射
       d.wander = null;
       d.pos = [pos[0], pos[1]];   // 打斷散步腿：把位置同步到目前插值點（否則之後的追腿會從舊腿起點出發，client 看起來像瞬移）
-      await this.saveDragon();
-      this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name: (att.state && att.state.name) || "玩家" }, null, OWNER_TERRAIN);
-      this.broadcast({ t: "dragon", ev: "say", x: pos[0], y: pos[1], ms: D_SAY_MS }, null, OWNER_TERRAIN);
-      await this.state.storage.setAlarm(d.sayUntil + 50);
+      await this.saveDragon(terrain);
+      this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name: (att.state && att.state.name) || "玩家" }, null, terrain);
+      this.broadcast({ t: "dragon", ev: "say", x: pos[0], y: pos[1], ms: D_SAY_MS }, null, terrain);
+      await this.armOwnerAlarm();
       return;
     }
-    // 龍衝冷卻中：把攻擊者納入仇恨（從 D_DROPOUT 內打過牠的人隨機挑一位開始追殺；已有目標時由 tick 負責換人）
+    // 反擊冷卻中：把攻擊者納入仇恨（從 D_DROPOUT 內打過牠的人隨機挑一位開始追殺；已有目標時由 tick 負責換人）
     if (!d.aggro && ph === "idle" && now < (d.cooldownUntil || 0) && map) {
-      const cands = this.aggroCandidates(now);
-      if (cands.length) this.startAggro(now, cands[Math.floor(Math.random() * cands.length)]);
+      const cands = this.aggroCandidates(now, terrain);
+      if (cands.length) this.startAggro(now, cands[Math.floor(Math.random() * cands.length)], terrain);
     }
-    await this.saveDragon();   // 扣血就存（DO 休眠後才不會從上次存檔的 血量回復）
-    this.broadcast({ t: "dragon", ev: "hp", hp: d.hp }, null, OWNER_TERRAIN);
-    if (d.aggro && this.hasGrassPlayers()) await this.state.storage.setAlarm(now + 60);   // 仇恨開始：快點醒來追殺
+    await this.saveDragon(terrain);   // 扣血就存（DO 休眠後才不會從上次存檔的血量回復）
+    this.broadcast({ t: "dragon", ev: "hp", hp: d.hp }, null, terrain);
+    await this.armOwnerAlarm();   // 仇恨開始：快點醒來追殺（下一個醒的時間統一在這裡算）
   }
   // 仇恨狀態的 tick（鬧鐘）：追殺目標（每腿重新瞄準目標目前位置）、進爪擊範圍就站定每秒一抓、
-  // 目標死了或 5 秒到隨機換攻擊者、龍衝 CD 一到自動放龍衝、超過 D_DROPOUT 沒人打就脫離仇恨回閒晃
-  async aggroTick(now) {
-    const d = this.dragon;
+  // 目標死了或 5 秒到隨機換攻擊者、反擊 CD 一到自動放招、超過 D_DROPOUT 沒人打就脫離仇恨回閒晃。
+  // 回傳下一個要醒的時間（ms 時間戳），鬧鐘統一由 alarm() 匯總安排
+  async aggroTick(now, terrain) {
+    const d = this.dragons.get(terrain);
     const ag = d.aggro;
-    await this.syncRegen(now);   // 帶傷回血同步：追殺途中沒人打牠時血條也要爬升
-    const map = await this.getDragonMap();
+    await this.syncRegen(terrain, now);   // 帶傷回血同步：追殺途中沒人打牠時血條也要爬升
+    const map = await this.getDragonMap(terrain);
     // 太久沒人攻擊／沒有島形：脫離仇恨；鬧鐘照 一般 idle 路徑（aggro 已清）走散步
     if (!map || now - (d.lastHitAt || 0) > D_DROPOUT) {
-      this.dropAggro();
-      await this.saveDragon();
-      return this.scheduleFirstIdle(now);
+      this.dropAggro(terrain);
+      await this.saveDragon(terrain);
+      return now + 100;
     }
-    let att = this.aggroTarget(ag.id);
+    let att = this.aggroTarget(ag.id, terrain);
     if (!att || now >= ag.rotateAt) {   // 目標死了或 5 秒到：隨機換下一個攻擊者（沒有其他人就維持原目標）
-      const cands = this.aggroCandidates(now).filter(v => v.id !== ag.id);
+      const cands = this.aggroCandidates(now, terrain).filter(v => v.id !== ag.id);
       if (cands.length) {
         att = cands[Math.floor(Math.random() * cands.length)];
         ag.id = att.id; ag.rotateAt = now + D_AGGRO_MS;
-        await this.saveDragon();
-        this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name: (att.state && att.state.name) || "玩家" }, null, OWNER_TERRAIN);
+        await this.saveDragon(terrain);
+        this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name: (att.state && att.state.name) || "玩家" }, null, terrain);
       } else if (!att) {   // 目標死了又沒有其他人可換：脫離仇恨
-        this.dropAggro();
-        await this.saveDragon();
-        return this.scheduleFirstIdle(now);
+        this.dropAggro(terrain);
+        await this.saveDragon(terrain);
+        return now + 100;
       }
     }
-    // 龍衝冷卻到了：直接對現在的仇恨目標發動龍衝（瞬移島緣→預警→衝穿牠）；仇恨保持，落地後不用再被打就接著追殺
+    // 反擊冷卻到了：直接對現在的仇恨目標放招（龍衝＝瞬移島緣→預警→衝穿牠；石化之瞳＝原地開眼）；仇恨保持，放完接著追殺
     if (now >= (d.cooldownUntil || 0)) {
-      const [, pos2] = this.dragonPhase(now);
+      const [, pos2] = this.dragonPhase(terrain, now);
       d.wander = null;
       d.pos = [pos2[0], pos2[1]];   // 打斷追腿：位置同步到目前插值點（同 say 的理由）
       d.atk = [att.state.x, att.state.y];
-      const ok = await this.startCycle(now);
-      await this.saveDragon();
-      if (ok) await this.state.storage.setAlarm(this.dragonIdleAt() + 100);
-      else await this.scheduleFirstIdle(now);
-      return;
+      const ok = await this.startCycle(now, terrain);
+      await this.saveDragon(terrain);
+      return ok ? this.dragonIdleAt(terrain) + 100 : now + 100;
     }
-    const [ph2, pos] = this.dragonPhase(now);
-    if (ph2 === "say") {   // 還在說台詞：說完（鬧鐘接手瞬移島緣）再醒，期間不追不抓
-      await this.state.storage.setAlarm((d.sayUntil || now) + 80);
-      return;
+    const [ph2, pos] = this.dragonPhase(terrain, now);
+    if (ph2 === "say") {   // 還在說台詞：說完（鬧鐘接手反擊）再醒，期間不追不抓
+      return (d.sayUntil || now) + 80;
     }
-    if (ph2 !== "idle") {   // 預警/龍衝/歇腳中：不追不抓、不發 wander（避免 client 的衝刺演出被 wander 事件打斷瞬移），等循環結束再醒
-      const cycleEnd = d.aimTms + D_CAST_MS + d.dashLen / D_DASH * 1000 + D_REST_MS;
-      await this.state.storage.setAlarm(Math.max(60, cycleEnd - now) + now + 80);
-      return;
+    if (ph2 !== "idle") {   // 預警/龍衝/開眼中：不追不抓、不發 wander（避免 client 的演出被 wander 事件打斷），等循環結束再醒
+      return Math.max(now + 60, this.dragonIdleAt(terrain) + 80);
     }
-    if (d.aimTms) {   // 龍衝循環剛結束（仇恨中沒有人清 aimTms）：落在對岸（dest），清掉讓之後的追腿正常插值
+    if (d.aimTms) {   // 反擊循環剛結束（仇恨中沒有人清 aimTms）：清掉讓之後的追腿正常插值
       d.aimTms = 0;
-      d.pos = [...d.dest];
-      await this.saveDragon();
+      if (OWNER_TERRAINS[terrain] !== "gaze") d.pos = [...d.dest];   // 龍衝落在對岸；石化之瞳沒有位移，留在原地
+      await this.saveDragon(terrain);
     }
     const dist = Math.hypot(att.state.x - pos[0], att.state.y - pos[1]);
     if (dist <= D_CLAW_RANGE) {   // 進爪擊範圍：站定連抓（每秒一下）；記下位置，快照不會跳回舊點
@@ -697,8 +717,8 @@ export class Island {
       d.wander = null;
       if (now >= ag.clawAt) {
         ag.clawAt = now + D_CLAW_MS;
-        await this.saveDragon();
-        this.broadcast({ t: "dragon", ev: "claw", x: pos[0], y: pos[1], tx: att.state.x, ty: att.state.y, id: att.id }, null, OWNER_TERRAIN);
+        await this.saveDragon(terrain);
+        this.broadcast({ t: "dragon", ev: "claw", x: pos[0], y: pos[1], tx: att.state.x, ty: att.state.y, id: att.id }, null, terrain);
       }
     } else {   // 追殺腿：接着上一腿走完就重新瞄準目標目前位置（ev: wander 重用同一套客户端插值）
       const w = d.wander;
@@ -727,49 +747,44 @@ export class Island {
         }
         const tms = Math.max(80, Math.round(Math.hypot(tx - pos[0], ty - pos[1]) / D_CHASE * 1000));
         d.wander = { fx: pos[0], fy: pos[1], tx, ty, tms, t0: now, pause: 0 };
-        await this.saveDragon();
-        this.broadcast({ t: "dragon", ev: "wander", fx: pos[0], fy: pos[1], tx, ty, tms }, null, OWNER_TERRAIN);
+        await this.saveDragon(terrain);
+        this.broadcast({ t: "dragon", ev: "wander", fx: pos[0], fy: pos[1], tx, ty, tms }, null, terrain);
       }
     }
-    // 下一個醒的時間：腿走完／爪擊／換人／龍衝 CD／脫離時限，取最近
+    // 下一個醒的時間：腿走完／爪擊／換人／反擊 CD／脫離時限，取最近
     const w = d.wander;
     const ends = [ag.rotateAt, d.cooldownUntil || now, (d.lastHitAt || 0) + D_DROPOUT, ag.clawAt];
     if (w) ends.push(w.t0 + w.tms + 60);
-    await this.state.storage.setAlarm(Math.max(60, Math.min(...ends) - now) + now + 25);
+    return Math.max(now + 60, Math.min(...ends) + 25);
   }
   // 回血同步：補血後若 hp 有變化就廣播 hp 事件（lazy 回血只在被打／快照時結算，血條會卡住不動）
-  async syncRegen(now) {
-    const d = this.dragon;
-    if (d.st === "dead" || d.hp >= D_HP) { this.regenDragon(now); return false; }
+  async syncRegen(terrain, now) {
+    const d = this.dragons.get(terrain);
+    if (d.st === "dead" || d.hp >= D_HP) { this.regenDragon(terrain, now); return false; }
     const before = d.hp;
-    this.regenDragon(now);
+    this.regenDragon(terrain, now);
     if (d.hp !== before) {
-      await this.saveDragon();
-      this.broadcast({ t: "dragon", ev: "hp", hp: d.hp }, null, OWNER_TERRAIN);
+      await this.saveDragon(terrain);
+      this.broadcast({ t: "dragon", ev: "hp", hp: d.hp }, null, terrain);
       return true;
     }
     return false;
   }
-  // 仇恨結束後把鬧鐘排到不久後醒來，讓一般 idle 散步路徑接手
-  async scheduleFirstIdle(now) {
-    await this.state.storage.setAlarm(now + 100);
-  }
-  async scheduleDragonRespawn(d) {
-    await this.state.storage.setAlarm((d.deadAt || Date.now()) + D_RESPAWN_MS);
-  }
-  // 草島上還有沒有人（沒人的話島主停擺省資源，有人進來再恢復散步）
-  hasGrassPlayers() {
+  // 死亡重生：鬧鐘統一由 armOwnerAlarm 依「deadAt + D_RESPAWN_MS」安排（這裡只是觸發重算）
+  async scheduleDragonRespawn(terrain) { await this.armOwnerAlarm(); }
+  // 該地形上還有沒有人（沒人的話島主停擺省資源，有人進來再恢復散步）
+  hasPlayers(terrain) {
     for (const ws of this.state.getWebSockets()) {
-      if ((ws.deserializeAttachment() || {}).terrain === OWNER_TERRAIN) return true;
+      if ((ws.deserializeAttachment() || {}).terrain === terrain) return true;
     }
     return false;
   }
   // idle 時挑一個新路點散步：附近 6～16 格的隨機陸地，直線別太抄水（與 client 的 ownerPickLeg 一致）
-  async startWanderLeg() {
-    const d = this.dragon;
-    const map = await this.getDragonMap();
+  async startWanderLeg(terrain) {
+    const d = this.dragons.get(terrain);
+    const map = await this.getDragonMap(terrain);
     if (d.st === "dead" || !map) return null;
-    const [, pos] = this.dragonPhase(Date.now());
+    const [, pos] = this.dragonPhase(terrain, Date.now());
     let fx = pos[0], fy = pos[1];
     // 卡海自救（舊狀態）：龍在海裡時先拉回最近的陸地，散步才挑得到路點
     const gx0 = Math.floor(fx / CELL), gy0 = Math.floor(fy / CELL);
@@ -794,7 +809,7 @@ export class Island {
       d.wander = { fx, fy, tx: gx * CELL + CELL / 2, ty: gy * CELL + CELL / 2,
                    tms: Math.max(1500, Math.round(dist / D_WALK * 1000)), t0: Date.now(),
                    pause: D_WANDER_PAUSE[0] + Math.round(Math.random() * (D_WANDER_PAUSE[1] - D_WANDER_PAUSE[0])) };
-      this.broadcast({ t: "dragon", ev: "wander", fx: d.wander.fx, fy: d.wander.fy, tx: d.wander.tx, ty: d.wander.ty, tms: d.wander.tms }, null, OWNER_TERRAIN);
+      this.broadcast({ t: "dragon", ev: "wander", fx: d.wander.fx, fy: d.wander.fy, tx: d.wander.tx, ty: d.wander.ty, tms: d.wander.tms }, null, terrain);
       return d.wander;
     }
     return null;   // 挑不到合適的路點：原地下次再試
@@ -816,91 +831,124 @@ export class Island {
     }
     return null;
   }
-  async scheduleWanderAlarm() {
-    const w = this.dragon.wander;
-    const d = this.dragon;
+  // 散步的下一個醒的時間（回傳給 alarm() 匯總，不直接排鬧鐘）
+  wanderWake(terrain) {
+    const d = this.dragons.get(terrain);
+    const w = d.wander;
     let at = w ? w.t0 + w.tms + w.pause : Date.now() + 2000;   // 挑不到路點：2 秒後再試
     if (d.st !== "dead" && d.hp < D_HP) {   // 帶傷：散步鬧鐘提前到「回滿血時刻」，醒來補滿並廣播一次
       at = Math.min(at, d.regenT + Math.ceil((D_HP - d.hp) / D_REGEN) * 1000);
     }
-    await this.state.storage.setAlarm(at + 50);
+    return at + 50;
   }
-  // 說完台詞：瞬移島緣鎖定 d.atk 的攻擊者，進入預警→龍衝循環。回傳是否成功啟動
-  async startCycle(now) {
-    const d = this.dragon;
-    const map = await this.getDragonMap();
+  // 說完台詞：開始反擊循環（龍衝＝瞬移島緣鎖定攻擊者；石化之瞳＝原地開眼直線鎖定）。回傳是否成功啟動
+  async startCycle(now, terrain) {
+    const d = this.dragons.get(terrain);
+    const map = await this.getDragonMap(terrain);
     if (d.st === "dead" || !map) return false;
-    const warp = dragonEdge(map, Math.random() * Math.PI * 2);
+    d.sayUntil = 0;
     const ax = d.atk[0], ay = d.atk[1];
+    if (OWNER_TERRAINS[terrain] === "gaze") {   // 石化之瞳：不瞬移，原地開眼；直線朝攻擊者方向射到島緣對岸
+      const ux = ax - d.pos[0], uy = ay - d.pos[1];
+      const ul = Math.hypot(ux, uy) || 1;
+      d.unit = [ux / ul, uy / ul];
+      d.beam = dragonDashDest(map, d.pos[0], d.pos[1], d.unit[0], d.unit[1]);
+      d.aimTms = now;
+      d.cooldownUntil = now + D_GAZE_CAST_MS + D_RAGE_MS;
+      await this.saveDragon(terrain);
+      this.broadcast({ t: "dragon", ev: "gaze", x: d.pos[0], y: d.pos[1], tx: ax, ty: ay, bx: d.beam[0], by: d.beam[1], castMs: D_GAZE_CAST_MS, hp: d.hp }, null, terrain);
+      return true;
+    }
+    const warp = dragonEdge(map, Math.random() * Math.PI * 2);
     const ux = ax - warp[0], uy = ay - warp[1];
     const ul = Math.hypot(ux, uy) || 1;
     d.warp = warp; d.unit = [ux / ul, uy / ul];
     d.dest = dragonDashDest(map, warp[0], warp[1], d.unit[0], d.unit[1]);
     d.dashLen = Math.hypot(d.dest[0] - warp[0], d.dest[1] - warp[1]);
-    d.aimTms = now; d.sayUntil = 0;
+    d.aimTms = now;
     d.cooldownUntil = now + D_CAST_MS + d.dashLen / D_DASH * 1000 + D_REST_MS + D_RAGE_MS;
-    await this.saveDragon();
-    this.broadcast({ t: "dragon", ev: "aim", x: warp[0], y: warp[1], fx: d.pos[0], fy: d.pos[1], tx: ax, ty: ay, dx: d.dest[0], dy: d.dest[1], castMs: D_CAST_MS, hp: d.hp }, null, OWNER_TERRAIN);
+    await this.saveDragon(terrain);
+    this.broadcast({ t: "dragon", ev: "aim", x: warp[0], y: warp[1], fx: d.pos[0], fy: d.pos[1], tx: ax, ty: ay, dx: d.dest[0], dy: d.dest[1], castMs: D_CAST_MS, hp: d.hp }, null, terrain);
     return true;
   }
-  // 島主鬧鐘（唯一一個鬧鐘）：死→重生；說完台詞→開始反擊循環；閒置→推進散步路點；飛行循環中→回中心時再醒。
-  // 草島沒有人在線時不排下一輪（島主停擺，等有人進草島的 enter 再恢復）。
+  // 島主鬧鐘（唯一一個鬧鐘，多座島共用）：每座有島主的地形各自推進一步（死→重生；說完台詞→反擊；
+  // 仇恨→追殺 tick；閒置→推進散步路點），再取所有島主「下一個要醒的時間」的最早值排鬧鐘。
+  // 沒有人在線的島停擺（回 null），等有人進該地形的 enter 再恢復。
   async alarm() {
-    const d = await this.getDragon();
     const now = Date.now();
-    if (d.st === "dead") {
-      if (now < d.deadAt + D_RESPAWN_MS - 500) { await this.state.storage.setAlarm(d.deadAt + D_RESPAWN_MS); return; }
-      const pos = this.dragonMap ? dragonEdge(this.dragonMap, Math.random() * Math.PI * 2) : [...D_CENTER];
-      d.st = "idle"; d.hp = D_HP; d.pos = pos; d.aimTms = 0; d.wander = null; d.sayUntil = 0; d.aggro = null;
-      await this.saveDragon();
-      this.broadcast({ t: "dragon", ev: "spawn", x: pos[0], y: pos[1], hp: d.hp }, null, OWNER_TERRAIN);
-      if (this.hasGrassPlayers()) {
-        await this.startWanderLeg();
-        await this.saveDragon();
-        await this.scheduleWanderAlarm();
-      }
-      return;
+    let next = null;
+    for (const terrain of Object.keys(OWNER_TERRAINS)) {
+      try {
+        const wake = await this.stepOwner(terrain, now);
+        if (wake !== null && wake !== undefined && (next === null || wake < next)) next = wake;
+      } catch (e) { console.error("[dragon] stepOwner 錯誤：", terrain, e); }
     }
-    if (!this.hasGrassPlayers()) return;   // 沒人看：停擺（enter 時會恢復）
-    if (d.sayUntil && now >= d.sayUntil - 50) {   // 說完台詞：瞬移島緣，開始反擊循環
+    if (next !== null) await this.state.storage.setAlarm(Math.max(Date.now() + 60, next));
+  }
+  // 推進某座島的島主一步，回傳該島下一個要醒的時間（null＝停擺／不用排）
+  async stepOwner(terrain, now) {
+    const d = await this.getDragon(terrain);
+    if (d.st === "dead") {
+      if (now < d.deadAt + D_RESPAWN_MS - 500) return d.deadAt + D_RESPAWN_MS;
+      const map = await this.getDragonMap(terrain);
+      const pos = map ? dragonEdge(map, Math.random() * Math.PI * 2) : [...D_CENTER];
+      d.st = "idle"; d.hp = D_HP; d.pos = pos; d.aimTms = 0; d.wander = null; d.sayUntil = 0; d.aggro = null;
+      await this.saveDragon(terrain);
+      this.broadcast({ t: "dragon", ev: "spawn", x: pos[0], y: pos[1], hp: d.hp }, null, terrain);
+      if (!this.hasPlayers(terrain)) return null;   // 沒人看：等 enter 恢復散步
+      await this.startWanderLeg(terrain);
+      await this.saveDragon(terrain);
+      return this.wanderWake(terrain);
+    }
+    if (!this.hasPlayers(terrain)) return null;   // 沒人看：停擺（enter 時會恢復）
+    if (d.sayUntil && now >= d.sayUntil - 50) {   // 說完台詞：開始反擊循環
       d.sayUntil = 0;
-      const ok = await this.startCycle(now);
-      if (ok) await this.state.storage.setAlarm(this.dragonIdleAt() + 100);
-      return;
+      const ok = await this.startCycle(now, terrain);
+      return ok ? this.dragonIdleAt(terrain) + 100 : now + 100;
     }
     if (d.sayUntil) {   // 還在說台詞：說完再醒
-      await this.state.storage.setAlarm(d.sayUntil + 50);
-      return;
+      return d.sayUntil + 50;
     }
-    const [ph] = this.dragonPhase(now);
+    const [ph] = this.dragonPhase(terrain, now);
     if (ph === "idle") {
-      if (d.aggro) {   // 仇恨中：追殺（tick 自己排下一個鬧鐘）；保險：tick 出錯就清仇恨讓散步接手，不會卡死
-        try { await this.aggroTick(now); }
-        catch (e) { console.error("[dragon] aggroTick 錯誤：", e); d.aggro = null; await this.saveDragon(); await this.scheduleFirstIdle(now); }
-        return;
+      if (d.aggro) {   // 仇恨中：追殺（tick 回傳下一個醒的時間）；保險：tick 出錯就清仇恨讓散步接手，不會卡死
+        try { return await this.aggroTick(now, terrain); }
+        catch (e) { console.error("[dragon] aggroTick 錯誤：", terrain, e); d.aggro = null; await this.saveDragon(terrain); return now + 100; }
       }
-      if (d.aimTms) {   // 反擊循環剛結束：落在對岸（dest），清掉 aimTms 讓散步插值生效，從這裡接續
+      if (d.aimTms) {   // 反擊循環剛結束：龍衝落在對岸（dest）清掉 aimTms 讓散步插值生效；石化之瞳留在原地
         d.aimTms = 0;
-        d.pos = [...d.dest];
+        if (OWNER_TERRAINS[terrain] !== "gaze") d.pos = [...d.dest];
       }
-      // 帶傷回血：補血；並把鬧鐘排到「回滿血的那一刻」醒來廣播一次（不用定期輪詢，省資源）
+      // 帶傷回血：補血（滿血那一刻醒來廣播一次的事由 wanderWake 的提前量處理，不用定期輪詢）
       const damaged = d.st !== "dead" && d.hp < D_HP;
-      if (damaged) await this.syncRegen(now);
-      const healedNow = damaged && d.hp >= D_HP;
+      if (damaged) await this.syncRegen(terrain, now);
       const w = d.wander;
-      if (w && now < w.t0 + w.tms + w.pause) {   // 腿還沒走完／還在休息：照表再睡（帶傷時改到回滿血時刻醒）
-        let at = w.t0 + w.tms + w.pause + 50;
-        if (damaged && !healedNow) at = Math.min(at, d.regenT + Math.ceil((D_HP - d.hp) / D_REGEN) * 1000 + 50);
-        await this.state.storage.setAlarm(at);
-        return;
-      }
-      await this.startWanderLeg();
-      await this.saveDragon();
-      await this.scheduleWanderAlarm();
-    } else {
-      // 反擊循環中：回中心、idle 開始時醒來接著散步
-      await this.state.storage.setAlarm(this.dragonIdleAt() + 100);
-    }  }
+      if (w && now < w.t0 + w.tms + w.pause) return this.wanderWake(terrain);   // 腿還沒走完／還在休息：照表再睡
+      await this.startWanderLeg(terrain);
+      await this.saveDragon(terrain);
+      return this.wanderWake(terrain);
+    }
+    // 反擊循環中：idle 開始時醒來接著散步
+    return this.dragonIdleAt(terrain) + 100;
+  }
+  // 統一的鬧鐘安排：狀態變動後呼叫，重算所有島主下一次要醒的最早時間（單一 DO 鬧鐘，誰先到誰先處理）
+  async armOwnerAlarm() {
+    const now = Date.now();
+    let next = null;
+    for (const terrain of Object.keys(OWNER_TERRAINS)) {
+      const d = this.dragons.get(terrain);
+      if (!d) continue;   // 還沒用過的島主：等 enter／被打時才會需要
+      let wake;
+      if (d.st === "dead") wake = d.deadAt + D_RESPAWN_MS;   // 死亡重生不受「有沒有人看」影響
+      else if (!this.hasPlayers(terrain)) continue;
+      else if (d.sayUntil && now < d.sayUntil) wake = d.sayUntil + 50;
+      else if (d.aggro) wake = now + 60;   // 仇恨中：快醒（追殺 tick 會自己細排）
+      else if (d.aimTms) wake = this.dragonIdleAt(terrain) + 100;
+      else wake = this.wanderWake(terrain);
+      if (next === null || wake < next) next = wake;
+    }
+    if (next !== null) await this.state.storage.setAlarm(Math.max(now + 60, next));
+  }
 
   // 家具編輯：伺服器是唯一權威。裝飾模式的變動是「草稿」，客戶端按保存才送 commit（一批操作）；
   // 每個操作各自驗證（不合法的跳過，不影響其他），「清空」只有管理員能做。改完把整份清單廣播給同地形的人
