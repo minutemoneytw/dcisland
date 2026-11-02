@@ -374,9 +374,11 @@ function blocked(px, py, ignoreFurn) { // 像素座標（腳底）；ignoreFurn�
 // ---------------- 造型合成 ----------------
 function hexRGB(h) { const s = h.replace('#', ''); return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)]; }
 
-function charSprite(skin, hairId, shirtIdx, frame) {   // frame：0/1 走路兩幀、2 坐姿
-  const shirtHex = S.avatar.shirtColors[shirtIdx];
-  const k = `${skin}|${hairId}|${shirtHex}`;
+function charSprite(skin, hairId, shirtIdx, frame, pantsIdx) {   // frame：0/1 走路兩幀、2 坐姿
+  // 索引超出範圍（舊存檔/別人送來的怪值）就用 0 號，避免畫圖當掉
+  const shirtHex = S.avatar.shirtColors[shirtIdx] ?? S.avatar.shirtColors[0];
+  const pantsHex = S.avatar.pantsColors[pantsIdx || 0] ?? S.avatar.pantsColors[0];
+  const k = `${skin}|${hairId}|${shirtHex}|${pantsHex}`;
   let entry = S.charCache.get(k);
   if (!entry) entry = {};
   const fk = 'abc'[frame] || 'a';
@@ -390,12 +392,18 @@ function charSprite(skin, hairId, shirtIdx, frame) {   // frame：0/1 走路兩�
   const [br, bg, bb] = hexRGB(S.avatar.recolor.shirtBase);
   const [sr, sg, sb] = hexRGB(S.avatar.recolor.shirtShadeBase);
   const [tr, tg, tb] = hexRGB(shirtHex);
+  const [pbr, pbg, pbb] = hexRGB(S.avatar.recolor.pantsBase);
+  const [psr, psg, psb] = hexRGB(S.avatar.recolor.pantsShadeBase);
+  const [ptr, ptg, ptb] = hexRGB(pantsHex);
   for (let i = 0; i < p.length; i += 4) {
     const r = p[i], gg = p[i + 1], b = p[i + 2], a = p[i + 3];
     if (a === 0) continue;
     if (r === br && gg === bg && b === bb) { p[i] = tr; p[i + 1] = tg; p[i + 2] = tb; }
     else if (r === sr && gg === sg && b === sb) {
       p[i] = tr * .78 | 0; p[i + 1] = tg * .78 | 0; p[i + 2] = tb * .78 | 0;
+    } else if (r === pbr && gg === pbg && b === pbb) { p[i] = ptr; p[i + 1] = ptg; p[i + 2] = ptb; }      // 褲子
+    else if (r === psr && gg === psg && b === psb) {
+      p[i] = ptr * .78 | 0; p[i + 1] = ptg * .78 | 0; p[i + 2] = ptb * .78 | 0;
     }
   }
   g.putImageData(d, 0, 0);
@@ -443,8 +451,8 @@ function spawnNPCs() {
 
 function playerSpriteDiv(p, frame) {
   // NPC 與遠端玩家都有自己的 look；自己（players[0]）則用當前造型
-  if (p.look) return charSprite(p.look.skin, p.look.hair, p.look.shirt, frame);
-  return charSprite(S.me.skin, S.me.hair, S.me.shirt, frame);
+  if (p.look) return charSprite(p.look.skin, p.look.hair, p.look.shirt, frame, p.look.pants);
+  return charSprite(S.me.skin, S.me.hair, S.me.shirt, frame, S.me.pants);
 }
 
 // ---- M2：遠端玩家（位置用內插，避免網路抖動造成瞬移）----
@@ -1047,6 +1055,17 @@ function buildFurnPanel() {
   }
 }
 
+// 色票的「顯示順序」：色系（紅粉→棕橙→黃→綠→青→藍→靛紫）由深到淺，灰白黑類放最後。
+// 只影響面板怎麼排，顏色編號（存檔/同步用的索引）不變，所以舊存檔的造型不會跑掉；新增顏色也會自動排進去
+function swatchOrder(colors) {
+  return colors.map((hex, i) => {
+    const [r, g, b] = hexRGB(hex).map(v => v / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let h = 0;
+    if (d) { h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+    return { i, neutral: (mx ? d / mx : 0) < .12 || mx < .2, fam: Math.floor(((h + 25) % 360) / 30), l: (mx + mn) / 2 };
+  }).sort((a, b) => (a.neutral - b.neutral) || (a.neutral ? a.l - b.l : (a.fam - b.fam) || (a.l - b.l))).map(x => x.i);
+}
+
 function buildAvatarPanel() {
   const sk = $('skinOpts'); sk.innerHTML = '';
   for (const s of S.avatar.skins) {
@@ -1064,9 +1083,17 @@ function buildAvatarPanel() {
     o.onclick = () => { S.me.hair = h.id; saveAvatar(); buildAvatarPanel(); };
     hr.appendChild(o);
   }
+  const pn = $('pantsOpts'); pn.innerHTML = '';
+  swatchOrder(S.avatar.pantsColors).forEach(i => {
+    const hex = S.avatar.pantsColors[i], o = document.createElement('div');
+    o.className = 'opt' + ((S.me.pants || 0) === i ? ' sel' : '');
+    o.style.background = hex;
+    o.onclick = () => { S.me.pants = i; saveAvatar(); buildAvatarPanel(); };
+    pn.appendChild(o);
+  });
   const sh = $('shirtOpts'); sh.innerHTML = '';
-  S.avatar.shirtColors.forEach((hex, i) => {
-    const o = document.createElement('div');
+  swatchOrder(S.avatar.shirtColors).forEach(i => {
+    const hex = S.avatar.shirtColors[i], o = document.createElement('div');
     o.className = 'opt' + (S.me.shirt === i ? ' sel' : '');
     o.style.background = hex;
     o.onclick = () => { S.me.shirt = i; saveAvatar(); buildAvatarPanel(); };

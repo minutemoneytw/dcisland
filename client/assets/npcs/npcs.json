@@ -33,7 +33,7 @@
    {
     "title": "其他",
     "items": [
-     "右上「造型」：換膚色、髮型、上衣與武器",
+     "右上「造型」：換膚色、髮型、上衣、褲子與武器",
      "上方的島名按鈕：切換地圖（只有你自己過去）",
      "同一個語音頻道＝同一座公共島，同一張地圖的人看得到彼此"
     ]
@@ -47,7 +47,8 @@
     "look": {
      "skin": "tan",
      "hair": "hair1",
-     "shirt": 2
+     "shirt": 2,
+     "pants": 5
     },
     "lines": [
      "早安",
@@ -65,7 +66,8 @@
     "look": {
      "skin": "light",
      "hair": "hair3",
-     "shirt": 7
+     "shirt": 7,
+     "pants": 11
     },
     "lines": [
      "你今天跳跳樂了嗎",
@@ -83,7 +85,8 @@
     "look": {
      "skin": "pale",
      "hair": "hair2",
-     "shirt": 3
+     "shirt": 3,
+     "pants": 2
     },
     "lines": [
      "歡迎來到島上",
@@ -103,7 +106,8 @@
     "look": {
      "skin": "tan",
      "hair": "hair2",
-     "shirt": 1
+     "shirt": 1,
+     "pants": 6
     },
     "lines": [
      "適合翹班",
@@ -121,7 +125,8 @@
     "look": {
      "skin": "pale",
      "hair": "hair3",
-     "shirt": 4
+     "shirt": 4,
+     "pants": 4
     },
     "lines": [
      "你好",
@@ -139,7 +144,8 @@
     "look": {
      "skin": "light",
      "hair": "hair1",
-     "shirt": 3
+     "shirt": 3,
+     "pants": 12
     },
     "lines": [
      "歡迎來到島上",
@@ -159,7 +165,8 @@
     "look": {
      "skin": "pale",
      "hair": "hair1",
-     "shirt": 5
+     "shirt": 5,
+     "pants": 1
     },
     "lines": [
      "好",
@@ -176,7 +183,8 @@
     "look": {
      "skin": "light",
      "hair": "hair3",
-     "shirt": 0
+     "shirt": 0,
+     "pants": 15
     },
     "lines": [
      "哇，是新朋友！",
@@ -193,7 +201,8 @@
     "look": {
      "skin": "deep",
      "hair": "hair2",
-     "shirt": 3
+     "shirt": 3,
+     "pants": 2
     },
     "lines": [
      "歡迎來到島上",
@@ -213,7 +222,8 @@
     "look": {
      "skin": "deep",
      "hair": "hair3",
-     "shirt": 6
+     "shirt": 6,
+     "pants": 20
     },
     "lines": [
      "好睏",
@@ -230,7 +240,8 @@
     "look": {
      "skin": "pale",
      "hair": "hair2",
-     "shirt": 4
+     "shirt": 4,
+     "pants": 14
     },
     "lines": [
      "(一些艱澀難懂的話)",
@@ -248,7 +259,8 @@
     "look": {
      "skin": "tan",
      "hair": "hair1",
-     "shirt": 3
+     "shirt": 3,
+     "pants": 1
     },
     "lines": [
      "歡迎來到島上",
@@ -268,7 +280,8 @@
     "look": {
      "skin": "deep",
      "hair": "hair1",
-     "shirt": 2
+     "shirt": 2,
+     "pants": 7
     },
     "lines": [
      "(一些富含哲理的話)",
@@ -286,7 +299,8 @@
     "look": {
      "skin": "light",
      "hair": "hair2",
-     "shirt": 7
+     "shirt": 7,
+     "pants": 9
     },
     "lines": [
      "這朵可以吃，那朵不行",
@@ -303,7 +317,8 @@
     "look": {
      "skin": "pale",
      "hair": "hair3",
-     "shirt": 3
+     "shirt": 3,
+     "pants": 2
     },
     "lines": [
      "歡迎來到島上",
@@ -323,7 +338,8 @@
     "look": {
      "skin": "deep",
      "hair": "hair1",
-     "shirt": 0
+     "shirt": 0,
+     "pants": 7
     },
     "lines": [
      "熱死人了！",
@@ -340,7 +356,8 @@
     "look": {
      "skin": "tan",
      "hair": "hair3",
-     "shirt": 1
+     "shirt": 1,
+     "pants": 12
     },
     "lines": [
      "你今天柏德之門3了嗎？",
@@ -357,7 +374,8 @@
     "look": {
      "skin": "light",
      "hair": "hair2",
-     "shirt": 3
+     "shirt": 3,
+     "pants": 2
     },
     "lines": [
      "歡迎來到島上",

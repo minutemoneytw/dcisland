@@ -28,7 +28,7 @@ export function connectNet(S, opts = {}) {
       moving: p.moving,
       z: Math.round(p.z),
       name: p.name,
-      look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt },
+      look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt, pants: S.me.pants || 0 },
       weapon: p.tool || S.me.weapon,       // 手上拿的（打石頭/樹木時是工具）
       pose: p.pose || null,                // 'sit' | 'sleep'（坐/睡在家具上）
       seat: p.seatType || null,            // 坐/睡的家具種類（畫圖用）
@@ -38,7 +38,7 @@ export function connectNet(S, opts = {}) {
   function upsert(id, st) {
     let r = S.remotes.get(id);
     if (!r) {
-      r = { id, name: '訪客', look: { skin: 'light', hair: 'hair1', shirt: 0 }, weapon: 'hands',
+      r = { id, name: '訪客', look: { skin: 'light', hair: 'hair1', shirt: 0, pants: 0 }, weapon: 'hands',
             x: 0, y: 0, tx: 0, ty: 0, dir: 1, moving: false, frame: 0, animT: 0,
             z: 0, tz: 0, swing: 0, remote: true, seen: performance.now() };
       // 首次出現先放到自己附近，避免從地圖角落滑過來
