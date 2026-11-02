@@ -1509,7 +1509,7 @@ function draw() {
         if (a.dead) return;
         if (def.owner && !a.fly) {   // 島主腳下判定圈：以「武器尖端」為準——武器點（人前方 WEAPON_REACH 處的小圓點）進圈就打得到，不看面向。靠近（約 220px 內）才顯示
           const me = S.players[0], d = Math.hypot(a.x - me.x, a.y - me.y);
-          if (d < 220 && !me.dead && !me.pose) {
+          if (d < 220 && !me.dead && !me.pose && S.me.weapon !== 'hands') {   // 空手（沒裝備武器）不顯示
             const R = hitRadius(def), wp = weaponPt(me), ok = Math.hypot(a.x - wp.x, a.y - wp.y) <= R, bodyIn = d <= R;
             ctx.save();
             ctx.beginPath(); ctx.arc(a.x, a.y, R, 0, Math.PI * 2);
