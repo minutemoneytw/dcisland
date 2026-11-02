@@ -1117,8 +1117,8 @@ function stepPlayer(p, dt) {
     if (!blocked(nx, p.y, ig)) p.x = nx;
     if (!blocked(p.x, ny, ig)) p.y = ny;
   }
-  // 跳躍（裝飾模式不跳；石化中不能跳）
-  if (S.mode === 'walk' && !pet && keys[' '] && p.z === 0 && p.vz === 0) p.vz = 240;
+  // 跳躍（走路與裝飾模式都能跳；石化中不能跳）
+  if (!pet && keys[' '] && p.z === 0 && p.vz === 0) p.vz = 240;
   if (p.z > 0 || p.vz > 0) {
     p.z += p.vz * dt; p.vz -= 780 * dt;
     if (p.z <= 0) { p.z = 0; p.vz = 0; }
