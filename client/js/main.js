@@ -1366,7 +1366,7 @@ function draw() {
     });
   }
   // 死亡：原地墓碑（本地或同島的人都一樣畫）
-  function tombEntry(x, y, name) {
+  function tombEntry(x, y, name, secsLeft) {
     return {
       y,
       draw: () => {
@@ -1379,11 +1379,17 @@ function draw() {
         ctx.strokeText(name, x, y - img.height * 2 - 4);
         ctx.fillStyle = '#cfd8c8';
         ctx.fillText(name, x, y - img.height * 2 - 4);
+        if (secsLeft != null) {   // 復活倒數（遠端玩家是依「我看到他倒下」起算，與本人畫面可能差一點點）
+          ctx.font = 'bold 9px "Microsoft JhengHei"';
+          ctx.strokeText(`${Math.max(1, Math.ceil(secsLeft))} 秒後復活`, x, y + 11);
+          ctx.fillStyle = '#ffd86b';
+          ctx.fillText(`${Math.max(1, Math.ceil(secsLeft))} 秒後復活`, x, y + 11);
+        }
       }
     };
   }
   for (const p of S.players) {
-    if (p.dead) { list.push(tombEntry(p.x, p.y, p.name)); continue; }   // 死亡：畫墓碑不畫人（NPC 不會死，不受影響）
+    if (p.dead) { list.push(tombEntry(p.x, p.y, p.name, DEAD_SECONDS - (S.t - p.deadAt))); continue; }   // 死亡：畫墓碑不畫人（NPC 不會死，不受影響）
     list.push({
       y: p.y + (p.pose ? 2 : 0),      // 坐著/睡著的人要畫在自己的椅子/床之後（排序鍵比家具大一點）
       draw: () => {
@@ -1395,7 +1401,7 @@ function draw() {
   }
   // M2：同島的其他玩家
   for (const r of S.remotes.values()) {
-    if (r.dead) { list.push(tombEntry(r.x, r.y, r.name)); continue; }
+    if (r.dead) { list.push(tombEntry(r.x, r.y, r.name, DEAD_SECONDS - (performance.now() - (r.deadAt || performance.now())) / 1000)); continue; }
     list.push({
       y: r.y + (r.pose ? 2 : 0),
       draw: () => drawPerson(r, r.weapon && r.weapon !== 'hands' ? S.weaponImgs[r.weapon] : null, '#ffe9a8')   // 同島的人用暖金色名牌區分

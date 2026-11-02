@@ -62,6 +62,7 @@ export function connectNet(S, opts = {}) {
         r.tx = st.x; r.ty = st.y; r.dir = st.dir ?? r.dir; r.z = st.z ?? r.z;
         r.moving = !!st.moving;
       } else r.moving = false;
+      if (r.dead && !wasDead) r.deadAt = performance.now();   // 復活倒數的起點（本地時鐘）
       if (r.dead && !wasDead) notice(`${r.name} 倒地了，躺在墓碑裡…`);
       else if (!r.dead && wasDead) notice(`${r.name} 復活了！`);
       r.seen = performance.now();
