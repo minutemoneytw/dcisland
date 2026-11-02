@@ -415,6 +415,67 @@ def frog():  # 大肚蛙（眼神無辜）
     cv.outline()
     return cv
 
+def golden_dragon():  # 島主黃金肥龍（正面、雙翼上展、金黃配色；自製 placeholder，非 SE 素材）
+    cv = Canvas(24, 20)
+    y1 = hx("#e8c23a"); yl = shade(y1, 0.92); yd = shade(y1, 0.72); ys = shade(y1, 0.5); yhi = shade(y1, 1.25)
+    dark = (30, 24, 22, 255)
+
+    def poly_fill(pts, c):   # 多邊形掃描填色（畫翼膜用）
+        top = min(p[1] for p in pts); bot = max(p[1] for p in pts)
+        for y in range(top, bot + 1):
+            xs = []
+            for i in range(len(pts)):
+                (xa, ya), (xb, yb) = pts[i], pts[(i + 1) % len(pts)]
+                if (ya <= y < yb) or (yb <= y < ya):
+                    xs.append(xa + (xb - xa) * (y - ya) / (yb - ya))
+            if len(xs) >= 2:
+                cv.rect(round(min(xs)), y, round(max(xs)), y, c)
+
+    # ---- 雙翼（上展的尖三角＋扇貝形下緣），左右鏡像 ----
+    wing = [(2, 1), (11, 6), (9, 13), (6, 10), (3, 13)]
+    for mx in (0, 1):
+        pts = [(x if mx == 0 else 23 - x, y) for x, y in wing]
+        poly_fill(pts, yl)
+        # 翼骨：肩→翼尖的斜線（連續短筆避免斷點）
+        (x0, y0), (x1, y1p) = pts[0], pts[1]
+        for i in range(10):
+            xx = round(x0 + (x1 - x0) * i / 9)
+            cv.rect(xx, round(y0 + (y1p - y0) * i / 9), xx + 1, round(y0 + (y1p - y0) * i / 9), ys)
+        # 撐出扇貝的兩根輔骨：肩→下緣兩個凹谷（近垂直，畫短豎線）
+        for j in (2, 4):
+            (x0, y0), (x1, y1p) = pts[1], pts[j]
+            for i in range(6):
+                yv = round(y0 + (y1p - y0) * i / 5)
+                cv.rect(round(x0 + (x1 - x0) * i / 5), yv, round(x0 + (x1 - x0) * i / 5), yv + 1, yd)
+    # ---- 腿與爪 ----
+    cv.rect(8, 13, 10, 17, y1); cv.rect(13, 13, 15, 17, y1)
+    cv.rect(6, 17, 10, 18, yl); cv.rect(13, 17, 17, 18, yl)
+    for cx in (6, 8, 10): cv.rect(cx, 18, cx, 19, yhi)
+    for cx in (13, 15, 17): cv.rect(cx, 18, cx, 19, yhi)
+    # ---- 軀幹、頸、頭（畫在最上層，覆蓋翼根）----
+    cv.rect(10, 6, 13, 13, y1)
+    cv.ellipse(11.5, 10.5, 2.0, 3.0, yd)          # 肚
+    cv.rect(10, 4, 13, 6, y1)
+    cv.ellipse(11.5, 3.4, 2.3, 2.5, y1)
+    cv.rect(10, 5, 13, 5, yd)                     # 下顎
+    cv.set(10, 2, dark); cv.set(13, 2, dark)      # 眼
+    cv.rect(9, 0, 9, 2, yd); cv.rect(14, 0, 14, 2, yd)  # 頭冠角
+    cv.rect(10, 0, 13, 0, yd)                     # 冠
+    cv.outline()
+    return cv
+
+def tombstone():  # 死亡墓碑（被島主打倒後原地出現，30 秒後復活；自製 placeholder）
+    cv = Canvas(14, 16)
+    st = hx("#b9b4a8"); std = shade(st, 0.78); std2 = shade(st, 0.62)
+    cv.rect(3, 3, 10, 14, st)                 # 碑身
+    cv.rect(4, 1, 9, 2, st)                   # 圓弧頂
+    cv.rect(2, 14, 11, 15, std2)              # 底座
+    cv.rect(3, 13, 10, 13, std2)
+    cv.rect(6, 4, 7, 9, std); cv.hline(5, 8, 5, std); cv.hline(5, 8, 6, std)   # 十字刻痕
+    cv.set(5, 11, std2)                       # 小裂痕
+    cv.outline((30, 26, 28, 255))
+    return cv
+
 def weapon_sword():  # 木劍（M0 武器 1 號）
     cv = Canvas(6, 18)
     sv = hx("#c9b98a"); hi = hx("#e8d8a8")
@@ -527,7 +588,7 @@ FURN_MANIFEST = dict(
     ],
 )
 
-# FF14 致敬野生動物（三種）+ 各地形出現組合
+# FF14 致敬野生動物（三種）＋各地形島主 + 各地形出現組合
 ANIMAL_MANIFEST = dict(
     scale=2, respawn=30,
     animals=[
@@ -537,8 +598,17 @@ ANIMAL_MANIFEST = dict(
              line="「波波羊」慢悠悠地嚼著草。"),
         dict(id="frog",  name="大肚蛙", sprite="frog.png",  swim=True, speed=26, flee=70, hp=3,
              line="「大肚蛙」的眼神飄向遠方。"),
+        # 島主：terrain.json 的 owner 指定的動物；big=N＝比普通動物大 N 倍；owner=True＝不會被嚇跑、金色名牌
+        dict(id="gold_dragon", name="黃金肥龍", sprite="golden_dragon.png", owner=True, big=5,
+             speed=16, flee=110, hp=30,
+             line="「黃金肥龍」抖了抖金色的肚皮，打了一個不容小覷的呵欠。"),
     ],
 )
+
+# 每座地形的島主（id＝animals.json 裡的動物 id；沒列的就是還沒有島主）
+OWNER_BY_TERRAIN = {
+    "grass": "gold_dragon",
+}
 
 # 各地形出現的小動物（id=權重）
 ANIMALS_BY_TERRAIN = {
@@ -576,12 +646,14 @@ def main():
             save(mushroom(), "mushroom.png", sub)
         if t["id"] == "volcano":
             save(volcanic(), "volcanic.png", sub)
-        json.dump(dict(id=t["id"], name=t["name"], scale=2, tile=TILE,
-                       ground="ground.png", edge="edge.png", water="water.png",
-                       deco=[dict(sprite=s, weight=w) for s, w in t["deco"]],
-                       animals=[dict(id=i, weight=w) for i, w in ANIMALS_BY_TERRAIN.get(t["id"], [])],
-                       uiColor=t["ui"]),
-                  open(os.path.join(ASSETS, sub, "terrain.json"), "w", encoding="utf-8"),
+        td = dict(id=t["id"], name=t["name"], scale=2, tile=TILE,
+                  ground="ground.png", edge="edge.png", water="water.png",
+                  deco=[dict(sprite=s, weight=w) for s, w in t["deco"]],
+                  animals=[dict(id=i, weight=w) for i, w in ANIMALS_BY_TERRAIN.get(t["id"], [])],
+                  uiColor=t["ui"])
+        if t["id"] in OWNER_BY_TERRAIN:
+            td["owner"] = OWNER_BY_TERRAIN[t["id"]]
+        json.dump(td, open(os.path.join(ASSETS, sub, "terrain.json"), "w", encoding="utf-8"),
                   ensure_ascii=False, indent=1)
         print(f"  terrain/{t['id']}/terrain.json")
 
@@ -597,12 +669,14 @@ def main():
 
     print("== 小動物（FF14 致敬）==")
     adir = os.path.join(ASSETS, "animals")
-    for fn, cv in [("bird", bird()), ("sheep", sheep()), ("frog", frog())]:
+    for fn, cv in [("bird", bird()), ("sheep", sheep()), ("frog", frog()), ("golden_dragon", golden_dragon())]:
         save(cv, fn + ".png", "animals")
     json.dump(ANIMAL_MANIFEST, open(os.path.join(adir, "animals.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
     print("  animals/animals.json")
 
+    print("== 一般素材 ==")
+    save(tombstone(), "tombstone.png")
     print("== 武器 ==")
     save(weapon_sword(), "weapon_sword.png", "avatar")
     print("== 採集工具（tools.json 為手寫資料，這裡只畫圖）==")

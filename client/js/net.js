@@ -32,6 +32,7 @@ export function connectNet(S, opts = {}) {
       weapon: p.tool || S.me.weapon,       // 手上拿的（打石頭/樹木時是工具）
       pose: p.pose || null,                // 'sit' | 'sleep'（坐/睡在家具上）
       seat: p.seatType || null,            // 坐/睡的家具種類（畫圖用）
+      dead: p.dead ? 1 : 0,                // 死亡（墓碑）：被島主的龍衝打倒後倒數復活
     };
   }
 
@@ -40,7 +41,7 @@ export function connectNet(S, opts = {}) {
     if (!r) {
       r = { id, name: '訪客', look: { skin: 'light', hair: 'hair1', shirt: 0, pants: 0 }, weapon: 'hands',
             x: 0, y: 0, tx: 0, ty: 0, dir: 1, moving: false, frame: 0, animT: 0,
-            z: 0, tz: 0, swing: 0, remote: true, seen: performance.now() };
+            z: 0, tz: 0, swing: 0, dead: false, remote: true, seen: performance.now() };
       // 首次出現先放到自己附近，避免從地圖角落滑過來
       const me = S.players[0];
       r.x = r.tx = me.x + (Math.random() * 60 - 30);
@@ -53,8 +54,14 @@ export function connectNet(S, opts = {}) {
       r.weapon = st.weapon || r.weapon;
       r.pose = st.pose === 'sit' || st.pose === 'sleep' ? st.pose : null;
       r.seatType = typeof st.seat === 'string' ? st.seat : null;
-      r.tx = st.x; r.ty = st.y; r.dir = st.dir ?? r.dir; r.z = st.z ?? r.z;
-      r.moving = !!st.moving;
+      const wasDead = !!r.dead;
+      r.dead = !!st.dead;                  // 死亡（墓碑）：進出死亡時跟同島的人說一聲
+      if (!r.dead) {                       // 死亡時位置凍結（墓碑不會被推著走）
+        r.tx = st.x; r.ty = st.y; r.dir = st.dir ?? r.dir; r.z = st.z ?? r.z;
+        r.moving = !!st.moving;
+      } else r.moving = false;
+      if (r.dead && !wasDead) notice(`${r.name} 被龍衝打倒了，躺在墓碑裡…`);
+      else if (!r.dead && wasDead) notice(`${r.name} 復活了！`);
       r.seen = performance.now();
     }
     return r;
@@ -81,9 +88,11 @@ export function connectNet(S, opts = {}) {
         }
         if (opts.onFurn) opts.onFurn(msg.furn || []);
         if (opts.onDecos) opts.onDecos(msg.terrain, msg.decos || []);   // 在擺設之後（重生判斷要看家具）
+        if (msg.dragon && opts.onDragon) opts.onDragon({ ...msg.dragon, ev: 'state' });   // 進草島時的島主快照
         break;
       }
       case 'deco': if (opts.onDeco) opts.onDeco(msg); break;
+      case 'dragon': if (opts.onDragon) opts.onDragon(msg); break;   // 島主事件（aim/hp/dead/spawn）由 main.js 演出
       case 'join': {
         const r = upsert(msg.id, null);
         if (msg.name) r.name = msg.name;
@@ -144,6 +153,9 @@ export function connectNet(S, opts = {}) {
   net.commitFurn = ops => net.connected && send({ t: 'commit', ops });       // 裝飾模式保存：一批操作（place/remove/clear）
   // 打可破壞物件：只送意圖（物件編號、圖檔名、所在格），血量由伺服器扣
   net.hitDeco = (i, sprite, cell) => net.connected && send({ t: 'hit', i, sprite, cell });
+  // 島主：上傳陸地位圖（進草島時）／打到島主時送意圖（座標＋傷害），流程由伺服器權威
+  net.sendDragonMap = v => net.connected && send({ t: 'dragonMap', v });
+  net.dragonHit = (x, y, dmg) => net.connected && send({ t: 'dragonHit', x, y, dmg });
 
   return net;
 }

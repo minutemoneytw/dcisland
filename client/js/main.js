@@ -113,6 +113,18 @@ function spawnAnimals() {
       break;
     }
   }
+  // 島主：terrain.json 的 owner 指定的動物，每座地形固定一隻（不會被嚇跑、被打倒會重生、會龍衝反擊）
+  // 連線時島主由伺服器同步（進草島的快照與事件），只在單機時本地生成
+  const odef = td.owner && animalDef(td.owner);
+  if (odef && !netOn()) for (let tries = 0; tries < 40; tries++) {
+    const x = Math.floor(Math.random() * COLS), y = Math.floor(Math.random() * ROWS);
+    if (S.world.types[y * COLS + x] !== 2) continue;
+    if (Math.abs(x - cx) < 5 && Math.abs(y - cy) < 4) continue;   // 大隻的，出生點周圍留空
+    if (S.occ.get(key(x, y)) !== undefined) continue;
+    S.animals.push({ id: td.owner, x: x * CELL + CELL / 2, y: y * CELL + CELL / 2, dir: 1, target: null, idle: Math.random(), startle: 0, z: 0, bounce: 0,
+                     hp: odef.hp, maxHp: odef.hp, dead: false, dieT: 0 });
+    break;
+  }
 }
 
 function respawnAnimal(id) {
@@ -234,17 +246,26 @@ function doAttack(auto) {
   const p = S.players[0];
   S._hits = 0;
   if (S.mode !== 'walk') return;
+  if (p.dead) return;
   if (p.pose) {   // 坐著/睡著不能揮擊；按 F（不是長按的自動重複）就起身
     if (auto && !quiet) { standUp(p); S.holdSkipF = true; }
     return;
   }
   if (auto) {   // F 鍵：前方有可破壞物件就自動用對應工具
-    const d = decoNear(p);
-    if (d) { S._hits = 1; useTool(d); return; }
-    const seat = quiet ? null : seatNear(p);   // 身邊有椅子/沙發/床就坐下（長按自動連擊不會反覆切換）
-    if (seat) { S._hits = 1; usePose(seat); S.holdSkipF = true; return; }
-    const npc = quiet ? null : npcNear(p);       // 身邊有 NPC 就跟他說話
-    if (npc) { S._hits = 1; talkTo(npc); S.holdSkipF = true; return; }
+    // 島主在揮擊範圍內就優先打牠：採集／座位／NPC 都讓位（島主常駐重生點，旁邊一堆家具，按 F 不該變成坐下）
+    const own = S.animals.find(a => {
+      const od = animalDef(a.id);
+      return od?.owner && !a.dead && !a.fly && Math.hypot(a.x - p.x, a.y - p.y) <= ATK_RANGE;
+    });
+    const ownerFirst = own && ((own.x - p.x) * p.dir) / (Math.hypot(own.x - p.x, own.y - p.y) || 1) >= .15;
+    if (!ownerFirst) {
+      const d = decoNear(p);
+      if (d) { S._hits = 1; useTool(d); return; }
+      const seat = quiet ? null : seatNear(p);   // 身邊有椅子/沙發/床就坐下（長按自動連擊不會反覆切換）
+      if (seat) { S._hits = 1; usePose(seat); S.holdSkipF = true; return; }
+      const npc = quiet ? null : npcNear(p);       // 身邊有 NPC 就跟他說話
+      if (npc) { S._hits = 1; talkTo(npc); S.holdSkipF = true; return; }
+    }
   }
   if (S.me.weapon === 'hands') { say('先在「造型」裡裝備武器！'); return; }
   if (!S.weaponImgs[S.me.weapon]) return;
@@ -252,16 +273,26 @@ function doAttack(auto) {
   p.lastAtk = S.t; p.swing = ATK_T; p.tool = null;
   S.net?.notifyAttack?.();          // M2：讓同島的人看到你的揮擊
   for (const a of S.animals) {
-    if (a.dead) continue;
+    if (a.dead || a.fly) continue;   // 島主飛在空中打不到
     const dx = a.x - p.x, dy = a.y - p.y, dist = Math.hypot(dx, dy);
     if (dist > ATK_RANGE || dist < 1) continue;
     if ((dx * p.dir) / dist < .15) continue; // 只有前方扇形
     S._hits++;
     const crit = Math.random() < .18;
     const dmg = crit ? 2 : 1;
-    a.hp -= dmg; a.startle = 1; a.startleT = 3; a.target = null; a.idle = 0;
+    const od = animalDef(a.id);
+    if (od.owner && a.proxy) {   // 島主連線時由伺服器權威：送意圖（座標＋傷害），本地不扣血（血量等伺服器廣播）
+      S.net?.dragonHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, dmg);
+    } else {
+      a.hp -= dmg;
+      a.startle = 1; a.startleT = 3; a.target = null; a.idle = 0;
+    }
     S.floaters.push({ x: a.x + (Math.random() * 24 - 12), y: a.y - 42, v: String(dmg), life: .8, crit });
-    a.target = fleeTarget(a, animalDef(a.id), p.x, p.y, 220);
+    if (od.owner) {   // 打到島主：不逃跑，瞬移到島緣鎖定攻擊者準備龍衝（飛行/預警/歇腳或冷卻中不重觸發；連線時反擊由伺服器觸發）
+      if (!a.proxy && !a.fly && !a.cast && !a.rest && S.t >= (a.rageCd ?? 0)) ownerTakeoff(a, p);
+    } else {
+      a.target = fleeTarget(a, od, p.x, p.y, 220);
+    }
     if (a.hp <= 0) {
       a.dead = true; a.dieT = .6;
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
@@ -302,10 +333,203 @@ function nearestLand(a) {
   return null;
 }
 
+// ---- 島主的龍衝反擊（沿用野外動物「刻意不同步」規則）：被打後瞬間消失、在島隨機邊緣現蹤瞄準攻擊者 ----
+// 預警範圍提示 1 秒後，以龍本體直線飛衝過島（攻擊範圍＝龍的大小，被撞到＝KO），衝到對岸落地後飛回地圖中心
+const OWNER_FLY_SPEED = 240, OWNER_DASH_SPEED = 460, OWNER_CAST = 1, OWNER_CD = 5;
+function ownerEdgeAt(angle) {
+  // 從島心沿指定角度找最後一格陸地（島邊緣）
+  const cx = COLS / 2 - .5, cy = ROWS / 2 - .5;
+  const ux = Math.cos(angle), uy = Math.sin(angle);
+  let last = [cx, cy];
+  for (let r = 1; r <= 44; r++) {
+    const x = Math.round(cx + ux * r), y = Math.round(cy + uy * r);
+    if (x < 0 || y < 0 || x >= COLS || y >= ROWS) break;
+    if (S.world.types[y * COLS + x] === 0) break;
+    last = [x, y];
+  }
+  return { x: last[0] * CELL + CELL / 2, y: last[1] * CELL + CELL / 2 };
+}
+function ownerTakeoff(a, src) {
+  const def = animalDef(a.id);
+  S.floaters.push({ x: a.x, y: a.y - 40, poof: true, life: .55 });   // 原地消失
+  const to = ownerEdgeAt(Math.random() * Math.PI * 2);               // 島隨機邊緣現蹤
+  a.x = to.x; a.y = to.y; a.z = 0; a.target = null; a.idle = 0; a.bounce = 0;
+  a.dir = src.x < a.x ? -1 : 1;
+  S.floaters.push({ x: a.x, y: a.y - 40, poof: true, life: .55 });
+  a.cast = OWNER_CAST; a.castFrom = { x: src.x, y: src.y };   // 鎖定攻擊者位置＝龍衝方向（走位就能躲）
+  toast(`${def.name} 瞬間消失，在島緣現出蹤影鎖定了你！`, 2400);
+}
+function ownerStep(a, dt, def) {
+  if (a.cast) {
+    a.cast -= dt;   // 預警 1 秒：畫面顯示金色虛線鎖定的攻擊範圍
+    if (a.cast <= 0) { a.cast = 0; ownerDive(a, def); }
+    return;
+  }
+  if (a.rest) {   // 龍衝結束在邊緣歇腳：停住不動，然後飛回地圖中心
+    a.rest -= dt;
+    if (a.rest <= 0) {
+      a.rest = 0;
+      a.fly = true; a.retHome = true;
+      a.flyTo = { x: (COLS / 2 - .5) * CELL, y: (ROWS / 2 - .5) * CELL };
+    }
+    return;
+  }
+  // 飛行（龍衝或回中心）：直線掠過（飛在空中，龍也可以越過海）
+  const dx = a.flyTo.x - a.x, dy = a.flyTo.y - a.y, d = Math.hypot(dx, dy);
+  if (d < 14) {
+    if (a.dashU) {   // 龍衝到底（島邊緣對岸）：落地停下歇一下
+      a.fly = false; a.dashU = null; a.z = 0; a.bounce = 0;
+      a.rest = .7;
+      return;
+    }
+    // 飛回中心：落地下來，恢復一般漫步
+    a.fly = false; a.retHome = false; a.z = 0; a.bounce = 0;
+    return;
+  }
+  if (dx) a.dir = Math.sign(dx);
+  const sp = a.dashU ? OWNER_DASH_SPEED : OWNER_FLY_SPEED;
+  a.x += dx / d * sp * dt; a.y += dy / d * sp * dt;
+  a.bounce += dt * (a.dashU ? 14 : 8);
+  if (a.dashU) {
+    a.z = 34 + Math.sin(a.bounce * 1.4) * 5;   // 龍衝：貼地高速掠過
+    // 攻擊範圍＝龍的大小：路徑上被龍本體撞到（貼太近）就被打倒
+    const q = S.players[0];
+    if (!q.dead && Math.hypot(q.x - a.x, q.y - a.y) < 20 * (def.big || 1)) killPlayer(q, def.name);
+  } else {
+    a.z = 70 + Math.sin(a.bounce) * 7;   // 升空高度
+  }
+}
+function ownerDive(a, def) {
+  const u = { x: a.castFrom.x - a.x, y: a.castFrom.y - a.y };
+  const len = Math.hypot(u.x, u.y) || 1;
+  u.x /= len; u.y /= len;
+  a.castFrom = null; a.rageCd = S.t + OWNER_CD;
+  // 龍衝：直線飛越整座島，終點是這個方向上的島邊緣對岸（最後一格陸地）；連線時終點由伺服器算好（dashDest）
+  const dest = a.dashDest || (() => {
+    const gx = Math.floor(a.x / CELL), gy = Math.floor(a.y / CELL);
+    let last = [gx, gy];
+    for (let r = 1; r <= 50; r++) {
+      const x = Math.round(gx + u.x * r), y = Math.round(gy + u.y * r);
+      if (x < 0 || y < 0 || x >= COLS || y >= ROWS) break;
+      if (S.world.types[y * COLS + x] === 0) break;
+      last = [x, y];
+    }
+    return { x: last[0] * CELL + CELL / 2, y: last[1] * CELL + CELL / 2 };
+  })();
+  a.dashDest = null;
+  a.fly = true; a.dashU = u;
+  a.flyTo = dest;
+  a.dir = u.x < 0 ? -1 : 1;
+  toast(`${def.name} 發動龍衝！`, 2000);
+}
+
+// ---- 島主的伺服器同步：連線時龍的本體與流程由伺服器權威，客戶端只負責演出和自己有沒有被撞到 ----
+// 事件：aim（被打→瞬移島緣鎖定攻擊者）/ hp（扣血）/ dead（被打倒）/ spawn（重生）/ state（進草島時的快照）
+// 陸地位圖：世界由前端種子生成，伺服器不知道島形；進草島時上傳（RLE，1＝陸地，與 ownerEdgeAt 的判定一致：types!==0）
+function landRLE() {
+  const t = S.world.types, n = COLS * ROWS;
+  const runs = [t[0] !== 0 ? 1 : 0];   // 第一個值是起始值，之後交替
+  let val = runs[0], run = 0;
+  for (let i = 0; i < n; i++) {
+    const v = t[i] !== 0 ? 1 : 0;
+    if (v === val) run++;
+    else { runs.push(run); val = v; run = 1; }
+  }
+  runs.push(run);
+  return runs.join(':');
+}
+// 取得（或建立）伺服器同步的島主 proxy；單機本地模擬的島主沒有 proxy 旗標
+function dragonEnsure(x, y, hp) {
+  const oid = S.terrains[S.terrain]?.owner;
+  if (!oid) return null;
+  let a = S.animals.find(v => v.id === oid);
+  if (!a) {
+    const def = animalDef(oid);
+    a = { id: oid, x, y, dir: 1, target: null, idle: 0, startle: 0, z: 0, bounce: 0,
+          hp: hp ?? def.hp, maxHp: def.hp, dead: false, dieT: 0, proxy: true };
+    S.animals.push(a);
+  }
+  a.proxy = true;   // 開機時（還沒連線）可能已本地生成了島主，接手時補上 proxy 旗標改為伺服器同步
+  return a;
+}
+// 套用進草島時的島主快照：不論收到時龍在哪個階段都接得上（預警剩餘時間、衝刺位置、回程…）
+function applyDragonSnap(o) {
+  if (o.ph === 'dead') return;   // 死了就先不生成，等 spawn 事件
+  const a = dragonEnsure(o.x, o.y, o.hp);
+  if (!a) return;
+  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null;
+  if (o.ph === 'aim') {   // 島緣鎖定中：續播剩下的預警時間
+    a.x = o.x; a.y = o.y; a.z = 0; a.fly = false; a.dashU = null; a.rest = 0; a.retHome = false;
+    a.cast = (o.castMs || 1000) / 1000; a.castFrom = { x: o.tx, y: o.ty };
+    a.dashDest = { x: o.dx, y: o.dy };
+    a.dir = o.tx < o.x ? -1 : 1;
+  } else if (o.ph === 'dash') {   // 龍衝中：從目前位置沿伺服器的方向續飛到終點
+    a.x = o.x; a.y = o.y; a.cast = 0; a.castFrom = null; a.rest = 0; a.retHome = false;
+    a.fly = true; a.dashU = { x: o.ux, y: o.uy };
+    a.flyTo = { x: o.dx, y: o.dy };
+    a.bounce = 0; a.dir = o.ux < 0 ? -1 : 1;
+  } else if (o.ph === 'rest') {   // 衝到底歇腳中
+    a.x = o.x; a.y = o.y; a.z = 0; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.retHome = false;
+    a.rest = (o.restMs || 700) / 1000;
+  } else if (o.ph === 'gohome') {   // 飛回中心中
+    a.x = o.x; a.y = o.y; a.cast = 0; a.castFrom = null; a.rest = 0; a.retHome = true; a.dashU = null;
+    a.fly = true; a.flyTo = { x: (COLS / 2 - .5) * CELL, y: (ROWS / 2 - .5) * CELL };
+    a.bounce = 0;
+  } else {   // idle：在中心附近漫步
+    a.x = o.x; a.y = o.y; a.z = 0; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0; a.retHome = false;
+    a.idle = Math.random() * 2;
+  }
+}
+function onNetDragon(m) {
+  if (!S.terrains[S.terrain]?.owner) return;   // 島主事件只跟草島有關
+  if (m.ev === 'state') { applyDragonSnap(m); return; }
+  const a = S.animals.find(v => v.id === S.terrains[S.terrain].owner);
+  if (m.ev === 'hp') {   // 別人（或自己）打到牠：更新血條
+    if (a) a.hp = m.hp;
+    return;
+  }
+  if (m.ev === 'dead') {   // 被打倒了：原地死亡；重生等伺服器的 spawn 事件，不排本地重生
+    if (a && !a.dead) {
+      a.dead = true; a.dieT = .6; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0;
+      S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
+      toast(`${animalDef(a.id).name} 被打倒了！30 秒後重生`, 2200);
+    }
+    return;
+  }
+  if (m.ev === 'spawn') {   // 重生：在島緣（沒島形時中心）現蹤
+    const na = dragonEnsure(m.x, m.y, m.hp);
+    if (na) {
+      na.dead = false; na.dieT = 0; na.x = m.x; na.y = m.y; na.hp = m.hp; na.z = 0;
+      na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.idle = 1.2;
+    }
+    toast(`${animalDef(S.terrains[S.terrain].owner).name} 回來了！`, 1600);
+    return;
+  }
+  if (m.ev === 'aim') {   // 被打 → 伺服器把龍瞬移到島緣鎖定攻擊者（攻擊者可能是自己，也可能是別人）
+    if (!a) { applyDragonSnap({ ...m, ph: 'aim' }); return; }
+    S.floaters.push({ x: a.x, y: a.y - 40, poof: true, life: .55 });   // 原地消失
+    a.x = m.x; a.y = m.y; a.z = 0; a.fly = false; a.dashU = null; a.rest = 0; a.target = null; a.idle = 0; a.bounce = 0;
+    S.floaters.push({ x: a.x, y: a.y - 40, poof: true, life: .55 });
+    a.hp = m.hp; a.cast = (m.castMs || 1000) / 1000;
+    a.castFrom = { x: m.tx, y: m.ty };
+    a.dashDest = { x: m.dx, y: m.dy };
+    a.dir = m.tx < a.x ? -1 : 1;
+    const me = S.players[0];
+    const aimedAtMe = Math.abs(m.tx - me.x) < CELL && Math.abs(m.ty - me.y) < CELL;
+    toast(aimedAtMe ? `${animalDef(a.id).name} 瞬間消失，在島緣現出蹤影鎖定了你！`
+                    : `${animalDef(a.id).name} 被惹怒了，在島緣鎖定了攻擊者！`, 2400);
+  }
+}
+
 function stepAnimal(a, dt) {
   const def = animalDef(a.id);
+  // 島主：飛行/集氣/龍衝後歇腳走專用流程，不走一般漫步
+  if (def.owner) {
+    if (a.fly || a.cast || a.rest) { ownerStep(a, dt, def); return; }
+  }
   // 只有「附近有人揮擊」才會被嚇到（自己或同島的人）；單純走過去、站在旁邊不會嚇跑牠
-  if (S.t - (a.scaredAt ?? -9) > .4) {
+  // 島主大隻又沉穩：近距離揮擊也不會嚇到（`owner: true`）
+  if (!def.owner && S.t - (a.scaredAt ?? -9) > .4) {
     const src = [S.players[0], ...S.remotes.values()]
       .find(q => q.swing > 0 && Math.hypot(q.x - a.x, q.y - a.y) < def.flee);
     if (src) {
@@ -423,6 +647,7 @@ function makePlayer(name, opts) {
     npc: !!opts?.npc,
     target: null, idle: opts?.npc ? 1 : 0,
     swing: 0, lastAtk: 0,
+    dead: false, deadAt: 0,       // 死亡（墓碑）：被島主的龍衝打倒倒數復活
   };
 }
 
@@ -468,8 +693,30 @@ function stepRemote(r, dt) {
   r.z += ((r.tz ?? r.z) - r.z) * Math.min(1, dt * 12);
 }
 
+// ---- 角色死亡：被島主的龍衝撞倒後原地變墓碑，30 秒後復活（NPC／遠端玩家也適用） ----
+const DEAD_SECONDS = 30;
+function killPlayer(p, cause) {
+  if (p.npc || p.remote || p.dead) return;
+  p.dead = true; p.deadAt = S.t;
+  p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null;
+  S.floaters.push({ x: p.x, y: p.y - 46, v: '龍衝', life: 1.1, crit: true });
+  toast(`${cause} 把你打倒了！${DEAD_SECONDS} 秒後在出生點復活`, 3200);
+}
+function revivePlayer(p) {
+  p.dead = false; p.deadAt = 0;
+  const [nx, ny] = landNear((COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL);
+  p.x = nx; p.y = ny; p.z = 0; p.vz = 0; p.dir = 1;
+  S.floaters.push({ x: p.x, y: p.y - 46, v: '復活！', life: 1.2, crit: true });
+  toast('毫髮無傷地復活了！', 1800);
+}
+
 function stepPlayer(p, dt) {
   if (p.npc) { stepNPC(p, dt); return; }
+  if (p.dead) {   // 死亡：原地長出墓碑，期間不動/不跳/不揮擊
+    p.z = 0; p.vz = 0; p.moving = false; p.frame = 0; p.swing = 0;
+    if (S.t - p.deadAt >= DEAD_SECONDS) revivePlayer(p);
+    return;
+  }
   if (p.pose) {   // 坐/睡：不動；按移動鍵或跳躍就起身（也會一路走出去），家具被拿走也會起身
     const wantsMove = keys['a'] || keys['arrowleft'] || keys['d'] || keys['arrowright'] || keys['w'] || keys['arrowup'] || keys['s'] || keys['arrowdown'] || keys[' '];
     if (!seatItem(p) || wantsMove) standUp(p);
@@ -779,9 +1026,10 @@ function draw() {
     list.push({
       y: a.y - (a.z ? .5 : 1),
       draw: () => {
+        const bs = def.big || 1, W = img.width * 2 * bs, H = img.height * 2 * bs;   // big=N＝比普通動物大 N 倍；錨點在腳底中央
         const shs = 1 - Math.min(.5, a.z / 60);
         ctx.fillStyle = `rgba(10,14,20,${.26 * shs + .03})`;
-        ctx.beginPath(); ctx.ellipse(a.x, a.y + 1, 9 * shs, 3 * shs, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(a.x, a.y + 1, 9 * bs * shs, 3 * shs * Math.max(1, bs * .6), 0, 0, Math.PI * 2); ctx.fill();
         ctx.save(); ctx.translate(a.x, a.y - a.z);
         if (a.dead) {  // 死亡：縮小旋轉淡出
           const q = 1 - a.dieT / .6;
@@ -789,31 +1037,63 @@ function draw() {
           ctx.rotate(q * 1.1); ctx.scale(1 - q * .3, 1 - q * .3);
         }
         if (a.dir < 0) ctx.scale(-1, 1);
-        ctx.drawImage(img, -img.width, -img.height * 2, img.width * 2, img.height * 2);
+        ctx.drawImage(img, -W / 2, -H, W, H);
         ctx.restore();
         if (a.dead) return;
-        // HP 小條（受過傷才顯示）
+        const top = a.y - a.z - H - 2;   // 圖的頂端（名牌/驚嘆號/血條貼這條線往下排）
+        // 龍衝集氣：金色預警虛線＝龍的衝刺路徑（走位離開這條線就不會被撞到）
+        if (a.cast > 0 && a.castFrom) {
+          const cf = a.castFrom, L = 1700;
+          const ux = cf.x - a.x, uy = cf.y - a.y, ul = Math.hypot(ux, uy) || 1;
+          const pul = Math.sin(S.t * 12) * .5 + .5;
+          ctx.save();
+          ctx.strokeStyle = `rgba(255,214,90,${.28 + .34 * pul})`;
+          ctx.lineWidth = 2 + 2 * pul; ctx.setLineDash([10, 12]);
+          ctx.beginPath(); ctx.moveTo(a.x, a.y - H * .5);
+          ctx.lineTo(a.x + ux / ul * L, a.y - H * .5 + uy / ul * L);
+          ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+        }
+        // HP 小條（受過傷才顯示；島主加寬）
         if (a.hp < a.maxHp) {
-          ctx.fillStyle = 'rgba(8,10,14,.7)'; ctx.fillRect(a.x - 11, a.y - a.z - 16, 22, 4);
+          const bw = 22 * (def.big || 1) ** .45;   // bs=1 → 22（同舊版）；大隻的加寬
+          ctx.fillStyle = 'rgba(8,10,14,.7)'; ctx.fillRect(a.x - bw / 2 - 1, top + 18, bw + 2, 4);
           ctx.fillStyle = a.hp / a.maxHp > .4 ? '#7ac86c' : '#e07a68';
-          ctx.fillRect(a.x - 10, a.y - a.z - 15, 20 * (a.hp / a.maxHp), 2);
+          ctx.fillRect(a.x - bw / 2, top + 19, bw * (a.hp / a.maxHp), 2);
         }
         // 驚嚇符號（FF14 「!」）
         if (a.startle && (S.t * 6 | 0) % 2 === 0) {
           ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
           ctx.fillStyle = '#e8c23a'; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.lineWidth = 3;
-          ctx.strokeText('!', a.x, a.y - a.z - 26); ctx.fillText('!', a.x, a.y - a.z - 26);
+          ctx.strokeText('!', a.x, top + 8); ctx.fillText('!', a.x, top + 8);
         }
-        // 小名牌
-        ctx.font = '9px "Microsoft JhengHei"'; ctx.textAlign = 'center';
+        // 名牌（島主用金色，與嚮導同色）
+        ctx.font = (bs > 1 ? 'bold 12px ' : '') + '9px "Microsoft JhengHei"'; ctx.textAlign = 'center';
         ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.75)';
-        ctx.strokeText(def.name, a.x, a.y - a.z - 34);
-        ctx.fillStyle = a.startle ? '#e8b2a2' : '#cfd8c8';
-        ctx.fillText(def.name, a.x, a.y - a.z - 34);
+        ctx.strokeText(def.name, a.x, top);
+        ctx.fillStyle = a.startle ? '#e8b2a2' : (def.owner ? '#ffd86b' : '#cfd8c8');
+        ctx.fillText(def.name, a.x, top);
       }
     });
   }
+  // 死亡：原地墓碑（本地或同島的人都一樣畫）
+  function tombEntry(x, y, name) {
+    return {
+      y,
+      draw: () => {
+        const img = S.tombImg; if (!img) return;
+        ctx.fillStyle = 'rgba(10,14,20,.22)';
+        ctx.beginPath(); ctx.ellipse(x, y + 1, 7, 2.6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.drawImage(img, x - img.width * 2 / 2, y - img.height * 2, img.width * 2, img.height * 2);
+        ctx.font = '9px "Microsoft JhengHei"'; ctx.textAlign = 'center';
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.75)';
+        ctx.strokeText(name, x, y - img.height * 2 - 4);
+        ctx.fillStyle = '#cfd8c8';
+        ctx.fillText(name, x, y - img.height * 2 - 4);
+      }
+    };
+  }
   for (const p of S.players) {
+    if (p.dead) { list.push(tombEntry(p.x, p.y, p.name)); continue; }   // 死亡：畫墓碑不畫人（NPC 不會死，不受影響）
     list.push({
       y: p.y + (p.pose ? 2 : 0),      // 坐著/睡著的人要畫在自己的椅子/床之後（排序鍵比家具大一點）
       draw: () => {
@@ -825,6 +1105,7 @@ function draw() {
   }
   // M2：同島的其他玩家
   for (const r of S.remotes.values()) {
+    if (r.dead) { list.push(tombEntry(r.x, r.y, r.name)); continue; }
     list.push({
       y: r.y + (r.pose ? 2 : 0),
       draw: () => drawPerson(r, r.weapon && r.weapon !== 'hands' ? S.weaponImgs[r.weapon] : null, '#ffe9a8')   // 同島的人用暖金色名牌區分
@@ -1032,6 +1313,8 @@ async function switchTerrain(id) {
     toast(`${S.terrains[id].name} 島上線`);
     // M2：只有自己過去；告訴伺服器，讓新地形的人看到你、舊地形的人看不到你
     S.net?.enter?.(id);
+    // 島主同步：進草島就把陸地位圖交給伺服器（島形只有客戶端知道；各人島形相同，重複上傳也無妨）
+    if (netOn() && S.terrains[id].owner) S.net.sendDragonMap(landRLE());
   } catch (e) {
     // 不要靜默失敗：讓玩家看得到，也回報到伺服器日誌
     toast(`切換${id}失敗：${e.message || e}`, 4000);
@@ -1124,7 +1407,7 @@ addEventListener('keydown', e => {
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   if (S.helpOpen) { if (k === 'escape' || k === 'enter') closeHelp(); return; }       // 操作說明開著：Esc / Enter 關閉，其他鍵不處理
   if (S.confirmOpen) { if (k === 'escape') closeConfirm(); return; }   // 「要保存嗎？」開著時：Esc＝繼續編輯，其他鍵不處理
-  if (k === 'e' && !e.repeat) { if (S.mode === 'walk') enterDecor(); else if (S.mode === 'decor') requestExitDecor(); }
+  if (k === 'e' && !e.repeat) { if (S.players[0].dead) toast('你在墓碑裡動不了', 1400); else if (S.mode === 'walk') enterDecor(); else if (S.mode === 'decor') requestExitDecor(); }
   if (k === 'escape' && S.mode === 'decor') requestExitDecor();     // Esc 也能離開裝飾模式
   if (k === 'f' && !e.repeat) doAttack(true);
 });
@@ -1141,16 +1424,25 @@ canvas.addEventListener('mousemove', e => {
 canvas.addEventListener('mouseleave', () => S.mouseCell = null);
 // 左鍵攻擊（世界座標 wx,wy 是游標指的位置）：先面向游標方向再揮
 function clickAttack(wx, wy) {
+  // 點在島主身上：優先攻擊島主，點擊不讓牠腳下的椅子／NPC 攔走
+  const onOwner = S.animals.some(a => {
+    const od = animalDef(a.id);
+    return od?.owner && !a.dead && Math.hypot(a.x - wx, a.y - wy) < 30 * (od.big || 1);
+  });
   // 點到可坐/可睡的家具（椅子、沙發、床）→ 坐下/躺下；再點一次起身。長按自動連擊時不處理，避免反覆切換
-  if (!quiet) {
+  if (!onOwner && !quiet) {
     const f = furnAtPoint(wx, wy);
     if (f && furnitureDef(f.type)?.use) { usePose(f); return; }
     const n = npcAt(wx, wy);
     if (n) { talkTo(n); return; }                // 點 NPC：跟他說話（不是攻擊）
   }
   if (S.players[0].pose) return;                 // 坐著/睡著不能揮擊
+  if (S.players[0].dead) {                       // 死亡（墓碑）：不能攻擊，長按時不重複提示
+    if (!quiet) toast('你在墓碑裡動不了', 1400);
+    return;
+  }
   // 點到可破壞物件（且那裡沒有動物）→ 自動換工具去打它
-  if (!S.animals.some(a => !a.dead && Math.hypot(a.x - wx, a.y - wy) < 30)) {
+  if (!S.animals.some(a => !a.dead && Math.hypot(a.x - wx, a.y - wy) < 30 * (animalDef(a.id).big || 1))) {
     const d = decoAt(wx, wy);
     if (d) { useTool(d); return; }
   }
@@ -1159,7 +1451,7 @@ function clickAttack(wx, wy) {
   // 沒命中但點到了一隻動物 → 牠的致公告告（FF14 點動物 FU）
   if (!S._hits) {
     for (const a of S.animals) {
-      if (!a.dead && Math.hypot(a.x - wx, a.y - wy) < 30) {
+      if (!a.dead && Math.hypot(a.x - wx, a.y - wy) < 30 * (animalDef(a.id).big || 1)) {   // 島主很大隻：點擊範圍跟著放大
         say(animalDef(a.id).line, 2200);
         break;
       }
@@ -1207,7 +1499,7 @@ canvas.addEventListener('contextmenu', e => {
   if (idx !== undefined) { stageOp({ t: 'remove', cell: [x, y] }); toast('收起擺設'); }
 });
 
-$('btnDecor').onclick = () => { if (S.mode === 'walk') enterDecor(); else requestExitDecor(); };
+$('btnDecor').onclick = () => { if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; } if (S.mode === 'walk') enterDecor(); else requestExitDecor(); };
 $('furnClose').onclick = () => exitDecor(true);                // 完成＝保存並離開
 $('furnCancel').onclick = () => exitDecor(false);              // 取消變動＝不保存並離開
 $('cfSave').onclick = () => exitDecor(true);
@@ -1261,6 +1553,7 @@ async function boot() {
   S.npcDB = await loadJSON('assets/npcs/npcs.json');
   S.toolsDB = await loadJSON('assets/tools/tools.json');
   await Promise.all(S.toolsDB.tools.map(async t => S.weaponImgs[t.id] = await loadImg(`assets/tools/${t.sprite}`)));
+  S.tombImg = await loadImg('assets/tombstone.png');   // 死亡墓碑（島主龍衝打倒後原地出現）
   S.avatar = await loadJSON('assets/avatar/avatar.json');
   if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';
   // 家具圖
@@ -1300,7 +1593,10 @@ async function boot() {
         const a = S.animals[i];
         if (a.dead) {
           a.dieT -= dt;
-          if (a.dieT <= 0) { S.animals.splice(i, 1); S.respawn.push({ id: a.id, at: S.t + (S.animalsDB.respawn || 30) }); }
+          if (a.dieT <= 0) {
+            S.animals.splice(i, 1);
+            if (!a.proxy) S.respawn.push({ id: a.id, at: S.t + (S.animalsDB.respawn || 30) });   // 島主（proxy）重生由伺服器的 spawn 事件驅動
+          }
           continue;
         }
         stepAnimal(a, dt);
@@ -1334,7 +1630,12 @@ async function boot() {
     onCommitResult: onCommitResult,
     onDecos: onNetDecos,
     onDeco: onNetDeco,
-    onOpen: net => { if (performance.now() >= welcomeUntil) toast(`已連上島（${net.room}）`, 2000); },
+    onDragon: onNetDragon,   // 島主事件（aim/hp/dead/spawn/state 快照）
+    onOpen: net => {
+      if (performance.now() >= welcomeUntil) toast(`已連上島（${net.room}）`, 2000);
+      // 島主同步：連上（或重連）時人在草島就補傳陸地位圖（伺服器重啟後也靠這個補回來）
+      if (S.terrains[S.terrain].owner) net.sendDragonMap(landRLE());
+    },
   })).catch(err => console.warn('net:', err));
 }
 

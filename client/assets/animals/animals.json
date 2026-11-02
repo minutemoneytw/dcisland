@@ -30,6 +30,17 @@
    "flee": 70,
    "hp": 3,
    "line": "「大肚蛙」的眼神飄向遠方。"
+  },
+  {
+   "id": "gold_dragon",
+   "name": "黃金肥龍",
+   "sprite": "golden_dragon.png",
+   "owner": true,
+   "big": 5,
+   "speed": 16,
+   "flee": 110,
+   "hp": 30,
+   "line": "「黃金肥龍」抖了抖金色的肚皮，打了一個不容小覷的呵欠。"
   }
  ]
 }

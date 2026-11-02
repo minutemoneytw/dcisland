@@ -5,7 +5,7 @@
 # 2) /api/config   -> 從 dev_config.json 讀 client_id
 # 3) /api/token    -> 用 code+secret 向 Discord 兌換 access_token（secret 只在本機/伺服器端）
 # 用法: python tools/dev_server.py  (先填 tools/dev_config.json)
-import json, math, os, re, sys, base64, hashlib, hmac, struct, threading, time
+import json, math, os, re, sys, base64, hashlib, hmac, struct, threading, time, random
 import urllib.request, urllib.parse, urllib.error, http.server, socketserver
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -114,6 +114,68 @@ CELL = 32                # 與 client/js/main.js 一致
 HIT_RANGE = 140          # 打可破壞物件時，玩家離目標最遠幾 px（客戶端範圍 72，留給延遲）
 HIT_CD = 0.3             # 同一條連線兩次打擊最短間隔（秒）
 
+# ---- 島主（伺服器端同步；與 worker/src/index.js 的常數與演算法保持一致，改一邊要改另一邊）----
+# 被打 → 瞬移島緣 → 鎖定攻擊者 → 預警 1 秒 → 龍本體直線衝過島到對岸 → 停一下 → 飛回中心。
+# 客戶端只負責演出與自己有沒有被撞到的判定；伺服器只送「階段變更」事件，不需要每幀醒著跑。
+OWNER_TERRAIN = "grass"
+D_CAST_MS = 1000         # 島緣鎖定（預警）持續時間
+D_DASH = 460             # 龍衝速度 px/s
+D_REST_MS = 700          # 衝到底落地的停留時間
+D_FLY = 240              # 回中心飛行速度 px/s
+D_RAGE_MS = 5000         # 反擊結束後多久內不被再觸發
+D_RESPAWN_MS = 30000     # 島主被打倒後的重生秒數
+D_HP = 30
+D_RANGE = 70             # 玩家打島主的攻擊距離（客戶端 58，留延遲）
+D_CD = 0.3               # 同一條連線兩次打島主的最短間隔（秒）
+D_CENTER = ((COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL)
+
+def js_round(v):
+    """與前端 Math.round 同義（floor(v+0.5)），避免各家四捨五入規則不同。"""
+    return math.floor(v + 0.5)
+
+def dragon_land(v):
+    """RLE 位圖字串 → list[int]（1＝陸地）。格式錯回 None。"""
+    if not isinstance(v, str) or len(v) > 20000:
+        return None
+    p = v.split(":")
+    land = [0] * (COLS * ROWS)
+    try:
+        val = 1 if p[0] == "1" else 0
+        i = 0
+        for k in p[1:]:
+            n = int(k)
+            if n <= 0 or i + n > COLS * ROWS:
+                return None
+            land[i:i + n] = [val] * n
+            i += n
+            val ^= 1
+    except ValueError:
+        return None
+    return land if i == COLS * ROWS else None
+
+def dragon_edge(m, ang):
+    """島心沿角度找最後一格陸地（島緣）；演算法與 client/js/main.js 相同，兩邊結果一致。"""
+    cx, cy = COLS / 2 - .5, ROWS / 2 - .5
+    ux, uy = math.cos(ang), math.sin(ang)
+    lx, ly = cx, cy
+    for r in range(1, 45):
+        x, y = js_round(cx + ux * r), js_round(cy + uy * r)
+        if not (0 <= x < COLS and 0 <= y < ROWS) or not m[y * COLS + x]:
+            break
+        lx, ly = x, y
+    return [lx * CELL + CELL / 2, ly * CELL + CELL / 2]
+
+def dragon_dash_dest(m, fx, fy, ux, uy):
+    """龍衝終點：沿方向找最後一格陸地（島邊緣對岸）。"""
+    gx, gy = math.floor(fx / CELL), math.floor(fy / CELL)
+    lx, ly = gx, gy
+    for r in range(1, 51):
+        x, y = js_round(gx + ux * r), js_round(gy + uy * r)
+        if not (0 <= x < COLS and 0 <= y < ROWS) or not m[y * COLS + x]:
+            break
+        lx, ly = x, y
+    return [lx * CELL + CELL / 2, ly * CELL + CELL / 2]
+
 _TARGETS = None
 def deco_targets():
     """可破壞物件定義（前端 tools.json 的 targets），血量/重生秒數據此判斷。"""
@@ -149,6 +211,11 @@ class Room:
         self.order = 0
         self.furn = {}          # 地形 -> [{"type","cell":[x,y]}]，擺設依地形各自一份
         self.decos = {}         # 地形 -> {物件編號: {"hp","cell","until"(ms)}}，只存受損/已破壞的
+        # 島主（伺服器端同步）：龍的階段與島形位圖；只在草島
+        self.dragon = None
+        self.dragon_map = None
+        self.dragon_hits = {}   # cid -> 上次打島主的時刻（秒）
+        self.dragon_timer = None
         # 每位玩家各自在某個地形（client["terrain"]）；剛連上時為 None，等 enter
 
     def furn_list(self, terrain):
@@ -251,6 +318,119 @@ class Room:
                     rejected += 1
         return applied, rejected, denied
 
+    # ---- 島主（伺服器端同步）----
+    def dragon_state(self):
+        """島主狀態（懒初始化；名稱不能叫 dragon——會被 self.dragon 屬性蓋掉）。"""
+        if self.dragon is None:
+            self.dragon = {"hp": D_HP, "st": "idle", "pos": list(D_CENTER), "aim_tms": 0.0, "dead_at": 0.0,
+                           "gen": 0, "warp": [0, 0], "atk": [0, 0], "unit": [0, 0], "dest": [0, 0], "dash_len": 0.0}
+        return self.dragon
+
+    def dragon_phase(self, now):
+        """由 aim_tms 推導現在的階段（aim/dash/rest/gohome/idle/dead），回 (階段, 座標, 剩餘 ms)。"""
+        d = self.dragon
+        if d["st"] == "dead":
+            return "dead", list(d["pos"]), 0
+        if not d["aim_tms"]:
+            return "idle", list(d["pos"]), 0
+        dt = now - d["aim_tms"]
+        if dt < D_CAST_MS:
+            return "aim", list(d["warp"]), D_CAST_MS - dt
+        dt -= D_CAST_MS
+        dash_ms = d["dash_len"] / D_DASH * 1000
+        if dt < dash_ms:
+            p = dt / 1000 * D_DASH
+            return "dash", [d["warp"][0] + d["unit"][0] * p, d["warp"][1] + d["unit"][1] * p], dash_ms - dt
+        dt -= dash_ms
+        if dt < D_REST_MS:
+            return "rest", list(d["dest"]), D_REST_MS - dt
+        dt -= D_REST_MS
+        hx, hy = D_CENTER[0] - d["dest"][0], D_CENTER[1] - d["dest"][1]
+        hhyp = math.hypot(hx, hy) or 1
+        home_ms = hhyp / D_FLY * 1000
+        if dt < home_ms:
+            p = dt / 1000 * D_FLY
+            return "gohome", [d["dest"][0] + hx / hhyp * p, d["dest"][1] + hy / hhyp * p], home_ms - dt
+        return "idle", list(D_CENTER), 0
+
+    def dragon_idle_at(self, d):
+        """idle 開始的時刻（沒被觸發過＝0），用於 D_RAGE_MS 冷卻。"""
+        if not d["aim_tms"]:
+            return 0.0
+        return (d["aim_tms"] + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS
+                + (math.hypot(D_CENTER[0] - d["dest"][0], D_CENTER[1] - d["dest"][1]) or 1) / D_FLY * 1000)
+
+    def dragon_snapshot(self):
+        """給剛進草島的玩家的島主快照（把現在階段包成客戶端能續播的欄位）。呼叫前需持有或取得狀態。"""
+        ph, pos, ms = self.dragon_phase(time.time() * 1000)
+        d = self.dragon
+        o = {"ph": ph, "x": pos[0], "y": pos[1], "hp": d["hp"]}
+        if ph == "aim":
+            o.update(castMs=int(ms), tx=d["atk"][0], ty=d["atk"][1], dx=d["dest"][0], dy=d["dest"][1])
+        elif ph == "dash":
+            o.update(ux=d["unit"][0], uy=d["unit"][1], dx=d["dest"][0], dy=d["dest"][1])
+        elif ph == "rest":
+            o["restMs"] = int(ms)
+        return o
+
+    def dragon_hit(self, cid, msg):
+        """打到島主：扣血；閒置且冷卻過了 → 開始反擊。回傳要廣播的訊息或 None（無效/太遠/飛行中）。"""
+        d = self.dragon_state()
+        out = None
+        dead_gen = None
+        ph = pos = None
+        with self.lock:
+            c = self.clients.get(cid)
+            if c is None or not c["terrain"] or not c["state"]:
+                return None
+            if d["st"] == "dead":
+                return None
+            now = time.time() * 1000
+            dmg = 2 if msg.get("dmg") == 2 else 1
+            ph, pos, _ = self.dragon_phase(now)
+            if ph in ("dash", "gohome"):
+                return None
+            try:
+                ax, ay = float(msg.get("x")), float(msg.get("y"))
+            except (TypeError, ValueError):
+                return None
+            if not math.hypot(ax - pos[0], ay - pos[1]) <= D_RANGE:
+                return None
+            d["hp"] -= dmg
+            if d["hp"] <= 0:
+                d["st"], d["hp"], d["pos"], d["aim_tms"], d["dead_at"] = "dead", 0, list(pos), 0.0, now
+                d["gen"] += 1
+                dead_gen = d["gen"]
+                out = {"t": "dragon", "ev": "dead", "x": pos[0], "y": pos[1]}
+            elif ph == "idle" and self.dragon_map and now - self.dragon_idle_at(d) >= D_RAGE_MS:
+                warp = dragon_edge(self.dragon_map, random.random() * math.pi * 2)   # 島隨機邊緣
+                ux, uy = ax - warp[0], ay - warp[1]
+                ul = math.hypot(ux, uy) or 1
+                d.update(warp=warp, atk=[ax, ay], unit=[ux / ul, uy / ul])
+                d["dest"] = dragon_dash_dest(self.dragon_map, warp[0], warp[1], d["unit"][0], d["unit"][1])
+                d["dash_len"] = math.hypot(d["dest"][0] - warp[0], d["dest"][1] - warp[1])
+                d["aim_tms"] = now
+                out = {"t": "dragon", "ev": "aim", "x": warp[0], "y": warp[1], "fx": pos[0], "fy": pos[1],
+                       "tx": ax, "ty": ay, "dx": d["dest"][0], "dy": d["dest"][1], "castMs": D_CAST_MS, "hp": d["hp"]}
+            else:
+                out = {"t": "dragon", "ev": "hp", "hp": d["hp"]}
+        if dead_gen is not None:   # 打倒了：重生計時（鎖外，避免 broadcast 卡住其他人）
+            t = threading.Timer(D_RESPAWN_MS / 1000, self._dragon_respawn, (dead_gen,))
+            t.daemon = True
+            self.dragon_timer = t
+            t.start()
+        return out
+
+    def _dragon_respawn(self, gen):
+        with self.lock:
+            d = self.dragon
+            if d["st"] != "dead" or d["gen"] != gen:   # 期間已有別的變動（例如伺服器重啟重建）
+                return
+            pos = dragon_edge(self.dragon_map, random.random() * math.pi * 2) if self.dragon_map else list(D_CENTER)
+            d.update(st="idle", hp=D_HP, pos=pos, aim_tms=0.0, atk=[0, 0])
+            out = {"t": "dragon", "ev": "spawn", "x": pos[0], "y": pos[1], "hp": d["hp"]}
+        self.broadcast(out, terrain=OWNER_TERRAIN)
+
     def add(self, sock):
         with self.lock:
             if len(self.clients) >= MAX_PLAYERS:
@@ -270,7 +450,7 @@ class Room:
             return c["terrain"] if c else None
 
     def enter(self, cid, v):
-        """玩家進入地形 v。回傳 (舊地形, 同地形其他玩家快照, 該地形擺設)；無變動回 None。"""
+        """玩家進入地形 v。回傳 (舊地形, 同地形其他玩家快照, 該地形擺設, 家具, 島主快照或 None)；無變動回 None。"""
         with self.lock:
             c = self.clients.get(cid)
             if c is None or c["terrain"] == v:
@@ -278,7 +458,11 @@ class Room:
             old, c["terrain"] = c["terrain"], v
             players = {k: dict(o["state"]) for k, o in self.clients.items()
                        if k != cid and o["terrain"] == v and o["state"]}
-            return old, players, list(self.furn_list(v)), self.deco_list(v)
+            dragon = None
+            if v == OWNER_TERRAIN:   # 島主同步：進草島附帶當下的島主快照（客戶端據此續播任意階段）
+                self.dragon_state()
+                dragon = self.dragon_snapshot()
+            return old, players, list(self.furn_list(v)), self.deco_list(v), dragon
 
     # terrain 有給時只送給「目前在該地形」的連線；沒給就是全部
     def broadcast(self, msg, skip=None, terrain=None):
@@ -403,6 +587,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         print(f"[ws] +{cid} @{room_name}（{len(room.clients)} 人在線）", file=sys.stderr, flush=True)
         win_sec, win_n = 0, 0
         last_hit = 0.0
+        last_dragon_hit = 0.0   # 打島主的每連線冷卻（與 last_hit 同款）
         try:
             # 剛連上時還沒進任何地形：看不到也不被看到，等客戶端送 enter
             ws_send(sock, json.dumps({"t": "init", "id": cid, "admin": is_admin(None)}))
@@ -461,11 +646,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     res = room.enter(cid, v)
                     if res is None:
                         continue
-                    old, players, furn, decos = res
+                    old, players, furn, decos, dragon = res
                     if old:   # leave 帶 to＝去了哪個地形（讓留下的人顯示「XXX 移動到了OO區域」）；斷線的 leave 不帶
                         room.broadcast({"t": "leave", "id": cid, "to": v}, skip=cid, terrain=old)
                     with room.clients[cid]["send"]:
-                        ws_send(sock, json.dumps({"t": "enter", "terrain": v, "players": players, "furn": furn, "decos": decos}))
+                        ws_send(sock, json.dumps({"t": "enter", "terrain": v, "players": players, "furn": furn, "decos": decos, "dragon": dragon}))
                     st = room.clients[cid]["state"]
                     room.broadcast({"t": "join", "id": cid, "name": st.get("name")}, skip=cid, terrain=v)
                     if st:
@@ -478,6 +663,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if res:
                         last_hit = now
                         room.broadcast(res[1], terrain=res[0])
+                elif t == "dragonMap":   # 島主：陸地位圖（各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）
+                    land = dragon_land(msg.get("v"))
+                    if land:
+                        room.dragon_map = land
+                elif t == "dragonHit":   # 打島主：驗證後廣播 hp/aim/dead 事件
+                    now = time.time()
+                    if now - last_dragon_hit < D_CD:
+                        continue
+                    res = room.dragon_hit(cid, msg)
+                    if res:
+                        last_dragon_hit = now
+                        room.broadcast(res, terrain=OWNER_TERRAIN)
                 elif t in ("commit", "place", "remove", "clear"):
                     # 裝飾模式的變動是草稿，按保存才送 commit（一批操作）；舊客戶端的單一操作也走同一套驗證與權限
                     cur = room.terrain_of(cid)
