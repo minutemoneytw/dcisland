@@ -464,6 +464,70 @@ def golden_dragon():  # 島主黃金肥龍（正面、雙翼上展、金黃配�
     cv.outline()
     return cv
 
+def snake_queen():  # 島主笨蛋蛇女（夜光島）：正面、蛇髮、紅冠、金甲、蛇尾，一手黑劍一手鬼火（FF14 T7 蛇女造型的致敬 placeholder，非 SE 素材）
+    cv = Canvas(24, 36)
+    tail = hx("#5c4a80"); tail_d = shade(tail, 0.78); belly = shade(tail, 1.42)
+    skin = hx("#a88cc4"); skin_d = shade(skin, 0.82)
+    hair = hx("#322c3e"); hair_l = shade(hair, 1.35)
+    crest = hx("#c43a4e"); crest_hi = shade(crest, 1.3)
+    gold = hx("#d8a838"); gold_d = shade(gold, 0.7); gold_hi = shade(gold, 1.32)
+    face = hx("#efe0ea")
+    blade = hx("#3a3444"); blade_e = hx("#8a80a4")
+    fire_o = hx("#ff9a2e"); fire = hx("#ffd23a"); fire_hi = hx("#fff0a0")
+    dark = (24, 20, 26, 255)
+
+    # ---- 蛇尾（下半身）：粗尾從臀寬平滑漸細、先微右弓再向左勾，尾端鰭狀尖；左緣淺色鱗紋（照參考圖）----
+    cv.rect(8, 15, 15, 18, tail)                    # 臀（接軀幹）
+    cv.rect(8, 19, 16, 22, tail)                    # 粗身（最寬、微向右弓）
+    cv.rect(7, 23, 15, 25, tail)                    # 開始收窄
+    cv.rect(6, 26, 13, 28, tail)
+    cv.rect(5, 29, 10, 31, tail)
+    cv.rect(4, 32, 7, 33, tail)                     # 向左勾
+    cv.set(3, 33, tail)                             # 鰭狀尾尖（上尖）
+    cv.rect(3, 34, 5, 35, tail)                     # 尾尖貼地
+    for y0, x0 in [(19, 9), (22, 9), (25, 8), (28, 7), (31, 6)]:
+        cv.rect(x0, y0, x0 + 1, y0 + 1, belly)      # 左緣分段淺鱗
+    cv.set(12, 20, tail_d); cv.set(14, 21, tail_d)  # 鱗片暗點（交錯）
+    cv.set(11, 23, tail_d); cv.set(13, 24, tail_d)
+    cv.set(10, 26, tail_d); cv.set(12, 27, tail_d)
+    cv.set(9, 29, tail_d); cv.set(7, 30, tail_d)
+    cv.rect(7, 15, 8, 16, gold)                     # 腰帶垂飾（臀側金飾，照參考圖）
+    cv.rect(15, 15, 16, 16, gold)
+
+    # ---- 軀幹：紫膚＋金色胸甲與腰帶 ----
+    cv.rect(9, 8, 14, 14, skin)
+    cv.rect(9, 8, 14, 10, gold)                    # 金色胸甲
+    cv.rect(9, 10, 14, 10, gold_d)                 # 胸甲下緣
+    cv.rect(8, 13, 15, 14, gold)                   # 腰帶
+    cv.set(11, 13, gold_hi); cv.set(12, 13, gold_hi)
+
+    # ---- 左手（畫面左）舉黑劍，右手（畫面右）托鬼火 ----
+    cv.rect(7, 9, 8, 11, skin)                     # 左上臂
+    cv.rect(5, 7, 6, 8, skin)                      # 左前臂（舉起）
+    cv.rect(4, 1, 5, 6, blade)                     # 黑劍劍身（劍尖朝上）
+    cv.rect(4, 1, 4, 6, blade_e)                   # 刃光
+    cv.set(4, 0, blade_e)                          # 劍尖
+    cv.rect(3, 7, 6, 7, gold_d)                    # 護手
+    cv.rect(15, 9, 16, 12, skin)                   # 右臂垂下
+    cv.ellipse(19.5, 10.5, 1.9, 2.8, fire_o)       # 鬼火外焰
+    cv.ellipse(19.5, 11, 1.1, 1.8, fire)           # 內焰
+    cv.set(19, 13, fire_hi)                        # 火心
+
+    # ---- 頭：蒼白臉＋蛇髮＋紅冠 ----
+    cv.ellipse(11.5, 2.2, 4.2, 2.2, hair)          # 髮頂（先畫，臉疊上去）
+    cv.ellipse(11.5, 4.5, 3.1, 3.0, face)          # 臉
+    cv.rect(7, 3, 8, 8, hair)                      # 兩側垂髮
+    cv.rect(15, 3, 16, 8, hair)
+    cv.set(10, 4, dark); cv.set(13, 4, dark)       # 眼
+    cv.hline(11, 12, 6, skin_d)                    # 嘴
+    cv.rect(6, 4, 6, 6, hair); cv.set(5, 5, hair_l)     # 左小蛇頭探出
+    cv.rect(17, 4, 17, 6, hair); cv.set(18, 5, hair_l)  # 右小蛇頭探出
+    cv.rect(11, 0, 12, 1, crest)                   # 紅色頭冠
+    cv.set(10, 1, crest); cv.set(13, 1, crest)
+    cv.set(11, 0, crest_hi)
+    cv.outline()
+    return cv
+
 def tombstone():  # 死亡墓碑（被島主打倒後原地出現，30 秒後復活；自製 placeholder）
     cv = Canvas(14, 16)
     st = hx("#b9b4a8"); std = shade(st, 0.78); std2 = shade(st, 0.62)
@@ -599,15 +663,20 @@ ANIMAL_MANIFEST = dict(
         dict(id="frog",  name="大肚蛙", sprite="frog.png",  swim=True, speed=26, flee=70, hp=3,
              line="「大肚蛙」的眼神飄向遠方。"),
         # 島主：terrain.json 的 owner 指定的動物；big=N＝比普通動物大 N 倍；owner=True＝不會被嚇跑、金色名牌
-        dict(id="gold_dragon", name="黃金肥龍", sprite="golden_dragon.png", owner=True, big=5,
+        # atk＝攻擊樣式：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女：開眼 2 秒→面前直線石化）
+        dict(id="gold_dragon", name="黃金肥龍", sprite="golden_dragon.png", owner=True, big=5, atk="dash",
              speed=16, flee=110, hp=200,
              line="「黃金肥龍」抖了抖金色的肚皮，打了一個不容小覷的呵欠。"),
+        dict(id="snake_queen", name="笨蛋蛇女", sprite="snake_queen.png", owner=True, big=4, atk="gaze",
+             speed=16, flee=110, hp=200,
+             line="「笨蛋蛇女」半閉著眼，慢半拍地捲了一下蛇尾。"),
     ],
 )
 
 # 每座地形的島主（id＝animals.json 裡的動物 id；沒列的就是還沒有島主）
 OWNER_BY_TERRAIN = {
     "grass": "gold_dragon",
+    "night": "snake_queen",
 }
 
 # 各地形出現的小動物（id=權重）
@@ -669,7 +738,8 @@ def main():
 
     print("== 小動物（FF14 致敬）==")
     adir = os.path.join(ASSETS, "animals")
-    for fn, cv in [("bird", bird()), ("sheep", sheep()), ("frog", frog()), ("golden_dragon", golden_dragon())]:
+    for fn, cv in [("bird", bird()), ("sheep", sheep()), ("frog", frog()), ("golden_dragon", golden_dragon()),
+                   ("snake_queen", snake_queen())]:
         save(cv, fn + ".png", "animals")
     json.dump(ANIMAL_MANIFEST, open(os.path.join(adir, "animals.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
