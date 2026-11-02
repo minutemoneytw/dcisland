@@ -32,16 +32,17 @@ export function connectNet(S, opts = {}) {
       weapon: p.tool || S.me.weapon,       // 手上拿的（打石頭/樹木時是工具）
       pose: p.pose || null,                // 'sit' | 'sleep'（坐/睡在家具上）
       seat: p.seatType || null,            // 坐/睡的家具種類（畫圖用）
-      dead: p.dead ? 1 : 0,                // 死亡（墓碑）：被島主的龍衝打倒後倒數復活
+      hp: p.dead ? 0 : Math.round(p.hp ?? 10),   // 血量（島主爪擊扣 2、殺動物回 1；龍衝直接倒地）
+      dead: p.dead ? 1 : 0,                // 死亡（墓碑）：被島主打倒後倒數復活
     };
   }
 
   function upsert(id, st) {
-    let r = S.remotes.get(id);
-    if (!r) {
-      r = { id, name: '訪客', look: { skin: 'light', hair: 'hair1', shirt: 0, pants: 0 }, weapon: 'hands',
-            x: 0, y: 0, tx: 0, ty: 0, dir: 1, moving: false, frame: 0, animT: 0,
-            z: 0, tz: 0, swing: 0, dead: false, remote: true, seen: performance.now() };
+      let r = S.remotes.get(id);
+      if (!r) {
+        r = { id, name: '訪客', look: { skin: 'light', hair: 'hair1', shirt: 0, pants: 0 }, weapon: 'hands',
+              x: 0, y: 0, tx: 0, ty: 0, dir: 1, moving: false, frame: 0, animT: 0,
+              z: 0, tz: 0, swing: 0, hp: 10, dead: false, remote: true, seen: performance.now() };
       // 首次出現先放到自己附近，避免從地圖角落滑過來
       const me = S.players[0];
       r.x = r.tx = me.x + (Math.random() * 60 - 30);
@@ -56,11 +57,12 @@ export function connectNet(S, opts = {}) {
       r.seatType = typeof st.seat === 'string' ? st.seat : null;
       const wasDead = !!r.dead;
       r.dead = !!st.dead;                  // 死亡（墓碑）：進出死亡時跟同島的人說一聲
+      if (st.hp != null) r.hp = st.hp;     // 血量同步（對方自己算好的）
       if (!r.dead) {                       // 死亡時位置凍結（墓碑不會被推著走）
         r.tx = st.x; r.ty = st.y; r.dir = st.dir ?? r.dir; r.z = st.z ?? r.z;
         r.moving = !!st.moving;
       } else r.moving = false;
-      if (r.dead && !wasDead) notice(`${r.name} 被龍衝打倒了，躺在墓碑裡…`);
+      if (r.dead && !wasDead) notice(`${r.name} 倒地了，躺在墓碑裡…`);
       else if (!r.dead && wasDead) notice(`${r.name} 復活了！`);
       r.seen = performance.now();
     }

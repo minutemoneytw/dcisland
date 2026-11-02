@@ -30,14 +30,21 @@ const HIT_CD_MS = 300;       // 同一條連線兩次打擊最短間隔
 // 伺服器本來不知道島的形狀（世界由前端種子生成），由玩家上傳陸地位圖（RLE）；各客戶端的島相同，誰上傳都一樣。
 const OWNER_TERRAIN = "grass";
 const D_CAST_MS = 1000;      // 島緣鎖定（預警）持續時間
-const D_DASH = 460;          // 龍衝速度 px/s
+const D_DASH = 560;          // 龍衝速度 px/s（比仇恨追殺的 180 更快：高速掠過才有威嚇感）
 const D_REST_MS = 700;       // 衝到底落地的停留時間
 const D_WALK = 34;           // 閒晃散步速度 px/s（與 client 的 OWNER_WALK_SPEED 一致）
 const D_WANDER_PAUSE = [1500, 4000];   // 每個路點之間站著休息的時間範圍 ms
-const D_RAGE_MS = 5000;      // 反擊結束後多久內不被再觸發
+const D_RAGE_MS = 12000;     // 龍衝冷卻：到點才能再觸發龍衝；冷卻期間被打進入仇恨追殺
 const D_SAY_MS = 3000;       // 被打後先在原地說台詞的時間（說完才瞬移反擊）
 const D_RESPAWN_MS = 30000;  // 島主被打倒後的重生秒數
-const D_HP = 30;
+const D_HP = 200;
+const D_REGEN = 18;      // 島主每秒回血（用牆鐘 lazy 計算，DO 休眠也照補；約 7 人打不贏、8 人圍毆約 70 秒擊殺，client 的 OWNER_REGEN 與本機 dev_server 的 D_REGEN 要同值）
+const D_CHASE = 180;         // 仇恨追殺速度 px/s（玩家走路 120／跑步 200：走路逃不掉，跑步才能拉開）
+const D_CLAW_RANGE = 36;     // 爪擊範圍（前方扇形；約黃金肥龍大圖的 1/4）
+const D_CLAW_MS = 1000;      // 爪擊間隔（每秒一下）
+const D_CLAW_DMG = 2;        // 爪擊傷害（扣玩家 HP；被打倒由各客戶端自判，伺服器只廣播爪擊事件）
+const D_AGGRO_MS = 5000;     // 仇恨換人週期：打牠的人有複數時，隨機換下一個攻擊者
+const D_DROPOUT = 30000;     // 超過這時間沒有人攻擊島主：脫離仇恨回閒晃
 const D_RANGE = 70;          // 玩家打島主的攻擊距離（客戶端 58，留延遲）
 const D_DRIFT_TOLER = 600;   // 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 const D_CD_MS = 300;         // 同一條連線兩次打島主的最短間隔
@@ -441,13 +448,56 @@ export class Island {
       this.dragon = await this.state.storage.get("dragon") || null;
       if (this.dragon && this.dragon.st === "dead") await this.scheduleDragonRespawn(this.dragon);   // 休眠醒來仍在死，把鬧鐘補回來
     }
-    if (!this.dragon) this.dragon = { hp: D_HP, st: "idle", pos: [...D_CENTER], aimTms: 0, deadAt: 0, wander: null, cooldownUntil: 0, sayUntil: 0 };
+    if (!this.dragon) this.dragon = { hp: D_HP, st: "idle", pos: [...D_CENTER], aimTms: 0, deadAt: 0, wander: null, cooldownUntil: 0, sayUntil: 0, regenT: 0, aggro: null, lastHitAt: 0 };
     if (this.dragon.wander === undefined) this.dragon.wander = null;   // 舊存檔沒有這個欄位
     if (this.dragon.cooldownUntil === undefined) this.dragon.cooldownUntil = 0;
     if (this.dragon.sayUntil === undefined) this.dragon.sayUntil = 0;
+    if (this.dragon.regenT === undefined) this.dragon.regenT = Date.now();   // 舊存檔從現在起算（不憑空補血）
+    if (this.dragon.aggro === undefined) this.dragon.aggro = null;
+    if (this.dragon.lastHitAt === undefined) this.dragon.lastHitAt = 0;
     return this.dragon;
   }
   saveDragon() { return this.state.storage.put("dragon", this.dragon); }
+  // ---- 島主仇恨（龍衝冷卻期間的追殺行為；client 的演出在 ownerAggro 系列）----
+  // D_DROPOUT（20 秒）內在草島打過島主、還在線上沒死的連線名單（仇恨換人從這裡隨機挑）
+  aggroCandidates(now, win = D_DROPOUT) {
+    const out = [];
+    for (const [ws, t] of this.dragonHits) {
+      if (now - t > win) continue;
+      const att = ws.deserializeAttachment?.() || {};
+      if (att.terrain === OWNER_TERRAIN && att.state && !att.state.dead) out.push(att);
+    }
+    return out;
+  }
+  // 依連線編號找仇恨目標（斷線／離開草島／死了就找不到）
+  aggroTarget(id) {
+    for (const ws of this.state.getWebSockets()) {
+      const att = ws.deserializeAttachment() || {};
+      if (att.id === id && att.terrain === OWNER_TERRAIN && att.state && !att.state.dead) return att;
+    }
+    return null;
+  }
+  // 開始/切換追殺目標：廣播 aggro 事件（id＝被鎖定的連線編號，客戶端用來鎖定自己）；存檔由呼叫端負責
+  startAggro(now, att) {
+    const d = this.dragon;
+    d.aggro = { id: att.id, rotateAt: now + D_AGGRO_MS, clawAt: now + D_CLAW_MS };
+    d.wander = null;
+    this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name: (att.state && att.state.name) || "玩家" }, null, OWNER_TERRAIN);
+  }
+  dropAggro(chill = true) {
+    this.dragon.aggro = null;
+    if (chill) this.broadcast({ t: "dragon", ev: "chill" }, null, OWNER_TERRAIN);
+  }
+  // 回血：每秒回 D_REGEN 點（用牆鐘 lazy 計算，不需要計時器；滿血或死亡時把錨點重置為現在，扣血後才重新開始累積）
+  regenDragon(now) {
+    const d = this.dragon;
+    if (d.st === "dead" || d.hp >= D_HP) { d.regenT = now; return; }
+    const n = Math.floor((now - d.regenT) / 1000);
+    if (n > 0) {
+      d.hp = Math.min(D_HP, d.hp + n * D_REGEN);
+      d.regenT = d.hp >= D_HP ? now : d.regenT + n * 1000;
+    }
+  }
   // 島形位圖：玩家上傳後存 storage（懒載入）。各客戶端的島相同，誰上傳都一樣
   async getDragonMap() {
     if (!this.dragonMapLoaded) {
@@ -484,6 +534,7 @@ export class Island {
   }
   dragonSnapshot() {
     const now = Date.now();
+    this.regenDragon(now);   // 讀快照前先把該補的血補上（快照帶 hp）
     const [ph, pos, ms] = this.dragonPhase(now);
     const d = this.dragon;
     const o = { ph, x: pos[0], y: pos[1], hp: d.hp };
@@ -504,6 +555,7 @@ export class Island {
     const now = Date.now();
     if (now - (this.dragonHits.get(ws) || 0) < D_CD_MS) return;
     if (d.st === "dead") return;
+    this.regenDragon(now);   // 扣血前先把該補的血補上（之後廣播的 hp 是回血後的值）
     const dmg = Math.max(1, Math.min(2, Math.round(Number(msg.dmg) || 1)));
     const [ph, pos] = this.dragonPhase(now);
     if (ph === "dash") return;     // 衝刺中打不到（落地歇腳與散步時都打得到）
@@ -517,27 +569,141 @@ export class Island {
     }
     if (!near) return;
     this.dragonHits.set(ws, now);
+    d.lastHitAt = now;   // 仇恨計時：D_DROPOUT 內沒有人再打牠就脫離追殺
     d.hp -= dmg;
     if (d.hp <= 0) {   // 打倒了：全島廣播死亡，30 秒後用鬧鐘重生
-      d.st = "dead"; d.hp = 0; d.pos = [pos[0], pos[1]]; d.aimTms = 0; d.deadAt = now; d.wander = null;
+      d.st = "dead"; d.hp = 0; d.pos = [pos[0], pos[1]]; d.aimTms = 0; d.deadAt = now; d.wander = null; d.aggro = null;
       await this.saveDragon();
       this.broadcast({ t: "dragon", ev: "dead", x: pos[0], y: pos[1] }, null, OWNER_TERRAIN);
       await this.scheduleDragonRespawn(d);
       return;
     }
-    // 反擊：閒置且冷卻過了才觸發；先在原地說台詞（D_SAY_MS），說完才瞬移島緣（循環由鬧鐘在說完時啟動）
+    // 反擊：閒置且冷卻過了才觸發。一被打就先建立仇恨（20 秒從最後一次被打起算）；
+    // 龍衝照樣先放：說台詞 → 瞬移島緣 → 龍衝，落地後不用再被打就馬上接著追殺同一個攻擊者
     const map = await this.getDragonMap();
     if (ph === "idle" && map && now >= (d.cooldownUntil || 0)) {
+      d.aggro = { id: att.id, rotateAt: now + D_AGGRO_MS, clawAt: now + D_CLAW_MS };
       d.sayUntil = now + D_SAY_MS;
       d.atk = [Number(msg.x), Number(msg.y)];   // 記住攻擊者位置，說完台詞後龍衝要穿過這裡
       d.wander = null;
+      d.pos = [pos[0], pos[1]];   // 打斷散步腿：把位置同步到目前插值點（否則之後的追腿會從舊腿起點出發，client 看起來像瞬移）
       await this.saveDragon();
+      this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name: (att.state && att.state.name) || "玩家" }, null, OWNER_TERRAIN);
       this.broadcast({ t: "dragon", ev: "say", x: pos[0], y: pos[1], ms: D_SAY_MS }, null, OWNER_TERRAIN);
       await this.state.storage.setAlarm(d.sayUntil + 50);
       return;
     }
+    // 龍衝冷卻中：把攻擊者納入仇恨（從 D_DROPOUT 內打過牠的人隨機挑一位開始追殺；已有目標時由 tick 負責換人）
+    if (!d.aggro && ph === "idle" && now < (d.cooldownUntil || 0) && map) {
+      const cands = this.aggroCandidates(now);
+      if (cands.length) this.startAggro(now, cands[Math.floor(Math.random() * cands.length)]);
+    }
     await this.saveDragon();   // 扣血就存（DO 休眠後才不會從上次存檔的 血量回復）
     this.broadcast({ t: "dragon", ev: "hp", hp: d.hp }, null, OWNER_TERRAIN);
+    if (d.aggro && this.hasGrassPlayers()) await this.state.storage.setAlarm(now + 60);   // 仇恨開始：快點醒來追殺
+  }
+  // 仇恨狀態的 tick（鬧鐘）：追殺目標（每腿重新瞄準目標目前位置）、進爪擊範圍就站定每秒一抓、
+  // 目標死了或 5 秒到隨機換攻擊者、龍衝 CD 一到自動放龍衝、超過 D_DROPOUT 沒人打就脫離仇恨回閒晃
+  async aggroTick(now) {
+    const d = this.dragon;
+    const ag = d.aggro;
+    const map = await this.getDragonMap();
+    // 太久沒人攻擊／沒有島形：脫離仇恨；鬧鐘照 一般 idle 路徑（aggro 已清）走散步
+    if (!map || now - (d.lastHitAt || 0) > D_DROPOUT) {
+      this.dropAggro();
+      await this.saveDragon();
+      return this.scheduleFirstIdle(now);
+    }
+    let att = this.aggroTarget(ag.id);
+    if (!att || now >= ag.rotateAt) {   // 目標死了或 5 秒到：隨機換下一個攻擊者（沒有其他人就維持原目標）
+      const cands = this.aggroCandidates(now).filter(v => v.id !== ag.id);
+      if (cands.length) {
+        att = cands[Math.floor(Math.random() * cands.length)];
+        ag.id = att.id; ag.rotateAt = now + D_AGGRO_MS;
+        await this.saveDragon();
+        this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name: (att.state && att.state.name) || "玩家" }, null, OWNER_TERRAIN);
+      } else if (!att) {   // 目標死了又沒有其他人可換：脫離仇恨
+        this.dropAggro();
+        await this.saveDragon();
+        return this.scheduleFirstIdle(now);
+      }
+    }
+    // 龍衝冷卻到了：直接對現在的仇恨目標發動龍衝（瞬移島緣→預警→衝穿牠）；仇恨保持，落地後不用再被打就接著追殺
+    if (now >= (d.cooldownUntil || 0)) {
+      const [, pos2] = this.dragonPhase(now);
+      d.wander = null;
+      d.pos = [pos2[0], pos2[1]];   // 打斷追腿：位置同步到目前插值點（同 say 的理由）
+      d.atk = [att.state.x, att.state.y];
+      const ok = await this.startCycle(now);
+      await this.saveDragon();
+      if (ok) await this.state.storage.setAlarm(this.dragonIdleAt() + 100);
+      else await this.scheduleFirstIdle(now);
+      return;
+    }
+    const [ph2, pos] = this.dragonPhase(now);
+    if (ph2 === "say") {   // 還在說台詞：說完（鬧鐘接手瞬移島緣）再醒，期間不追不抓
+      await this.state.storage.setAlarm((d.sayUntil || now) + 80);
+      return;
+    }
+    if (ph2 !== "idle") {   // 預警/龍衝/歇腳中：不追不抓、不發 wander（避免 client 的衝刺演出被 wander 事件打斷瞬移），等循環結束再醒
+      const cycleEnd = d.aimTms + D_CAST_MS + d.dashLen / D_DASH * 1000 + D_REST_MS;
+      await this.state.storage.setAlarm(Math.max(60, cycleEnd - now) + now + 80);
+      return;
+    }
+    if (d.aimTms) {   // 龍衝循環剛結束（仇恨中沒有人清 aimTms）：落在對岸（dest），清掉讓之後的追腿正常插值
+      d.aimTms = 0;
+      d.pos = [...d.dest];
+      await this.saveDragon();
+    }
+    const dist = Math.hypot(att.state.x - pos[0], att.state.y - pos[1]);
+    if (dist <= D_CLAW_RANGE) {   // 進爪擊範圍：站定連抓（每秒一下）；記下位置，快照不會跳回舊點
+      d.pos = [pos[0], pos[1]];
+      d.wander = null;
+      if (now >= ag.clawAt) {
+        ag.clawAt = now + D_CLAW_MS;
+        await this.saveDragon();
+        this.broadcast({ t: "dragon", ev: "claw", x: pos[0], y: pos[1], tx: att.state.x, ty: att.state.y, id: att.id }, null, OWNER_TERRAIN);
+      }
+    } else {   // 追殺腿：接着上一腿走完就重新瞄準目標目前位置（ev: wander 重用同一套客户端插值）
+      const w = d.wander;
+      // 腿走完、或走了 0.6 秒就重新瞄準：緊咬目標現在的位置（否則龍只會抓到幾秒前的舊位置＝抓空氣）
+      if (!w || now >= w.t0 + w.tms || now >= w.t0 + 600) {
+        let tx = att.state.x, ty = att.state.y;
+        // 不走海：龍在陸地時，直線前方連續 3 格是水就截在海邊（0.6 秒後的重新瞄準會繼續沿岸繞）；
+        // 龍本來就在水裡（舊狀態卡海）則不截，直線走回陸地
+        if (map) {
+          const gx0 = Math.floor(pos[0] / CELL), gy0 = Math.floor(pos[1] / CELL);
+          const onLand = gx0 >= 0 && gy0 >= 0 && gx0 < COLS && gy0 < ROWS && !!map[gy0 * COLS + gx0];
+          const steps = Math.max(1, Math.ceil(Math.hypot(tx - pos[0], ty - pos[1]) / CELL));
+          let water = 0;
+          for (let s = 1; s <= steps; s++) {
+            const t = s / steps;
+            const gx = Math.floor((pos[0] + (tx - pos[0]) * t) / CELL), gy = Math.floor((pos[1] + (ty - pos[1]) * t) / CELL);
+            if (onLand && (gx < 0 || gy < 0 || gx >= COLS || gy >= ROWS || !map[gy * COLS + gx])) {
+              if (++water >= 3) {   // 連續 3 格水：截在海邊最後的陸地
+                const tt = Math.max(0, (s - water) / steps);
+                tx = pos[0] + (tx - pos[0]) * tt;
+                ty = pos[1] + (ty - pos[1]) * tt;
+                break;
+              }
+            } else water = 0;
+          }
+        }
+        const tms = Math.max(80, Math.round(Math.hypot(tx - pos[0], ty - pos[1]) / D_CHASE * 1000));
+        d.wander = { fx: pos[0], fy: pos[1], tx, ty, tms, t0: now, pause: 0 };
+        await this.saveDragon();
+        this.broadcast({ t: "dragon", ev: "wander", fx: pos[0], fy: pos[1], tx, ty, tms }, null, OWNER_TERRAIN);
+      }
+    }
+    // 下一個醒的時間：腿走完／爪擊／換人／龍衝 CD／脫離時限，取最近
+    const w = d.wander;
+    const ends = [ag.rotateAt, d.cooldownUntil || now, (d.lastHitAt || 0) + D_DROPOUT, ag.clawAt];
+    if (w) ends.push(w.t0 + w.tms + 60);
+    await this.state.storage.setAlarm(Math.max(60, Math.min(...ends) - now) + now + 25);
+  }
+  // 仇恨結束後把鬧鐘排到不久後醒來，讓一般 idle 散步路徑接手
+  async scheduleFirstIdle(now) {
+    await this.state.storage.setAlarm(now + 100);
   }
   async scheduleDragonRespawn(d) {
     await this.state.storage.setAlarm((d.deadAt || Date.now()) + D_RESPAWN_MS);
@@ -555,7 +721,13 @@ export class Island {
     const map = await this.getDragonMap();
     if (d.st === "dead" || !map) return null;
     const [, pos] = this.dragonPhase(Date.now());
-    const fx = pos[0], fy = pos[1];
+    let fx = pos[0], fy = pos[1];
+    // 卡海自救（舊狀態）：龍在海裡時先拉回最近的陸地，散步才挑得到路點
+    const gx0 = Math.floor(fx / CELL), gy0 = Math.floor(fy / CELL);
+    if (!(gx0 >= 0 && gy0 >= 0 && gx0 < COLS && gy0 < ROWS && map[gy0 * COLS + gx0])) {
+      const land = this.nearestLand(fx, fy, map);
+      if (land) { fx = land[0]; fy = land[1]; d.pos = [fx, fy]; }
+    }
     for (let tries = 0; tries < 24; tries++) {
       const ang = Math.random() * Math.PI * 2;
       const dist = (6 + Math.random() * 10) * CELL;
@@ -577,6 +749,23 @@ export class Island {
       return d.wander;
     }
     return null;   // 挑不到合適的路點：原地下次再試
+  }
+  // 從 (x,y) 找最近的陸地格中心（卡海自救用）；找不到回 null
+  nearestLand(x, y, map) {
+    const gx = Math.floor(x / CELL), gy = Math.floor(y / CELL);
+    if (gx >= 0 && gy >= 0 && gx < COLS && gy < ROWS && map[gy * COLS + gx]) return [gx * CELL + CELL / 2, gy * CELL + CELL / 2];
+    for (let r = 1; r <= 44; r++) {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;   // 只看外圈
+          const nx = gx + dx, ny = gy + dy;
+          if (nx >= 0 && ny >= 0 && nx < COLS && ny < ROWS && map[ny * COLS + nx]) {
+            return [nx * CELL + CELL / 2, ny * CELL + CELL / 2];
+          }
+        }
+      }
+    }
+    return null;
   }
   async scheduleWanderAlarm() {
     const w = this.dragon.wander;
@@ -609,7 +798,7 @@ export class Island {
     if (d.st === "dead") {
       if (now < d.deadAt + D_RESPAWN_MS - 500) { await this.state.storage.setAlarm(d.deadAt + D_RESPAWN_MS); return; }
       const pos = this.dragonMap ? dragonEdge(this.dragonMap, Math.random() * Math.PI * 2) : [...D_CENTER];
-      d.st = "idle"; d.hp = D_HP; d.pos = pos; d.aimTms = 0; d.wander = null; d.sayUntil = 0;
+      d.st = "idle"; d.hp = D_HP; d.pos = pos; d.aimTms = 0; d.wander = null; d.sayUntil = 0; d.aggro = null;
       await this.saveDragon();
       this.broadcast({ t: "dragon", ev: "spawn", x: pos[0], y: pos[1], hp: d.hp }, null, OWNER_TERRAIN);
       if (this.hasGrassPlayers()) {
@@ -632,6 +821,11 @@ export class Island {
     }
     const [ph] = this.dragonPhase(now);
     if (ph === "idle") {
+      if (d.aggro) {   // 仇恨中：追殺（tick 自己排下一個鬧鐘）；保險：tick 出錯就清仇恨讓散步接手，不會卡死
+        try { await this.aggroTick(now); }
+        catch (e) { console.error("[dragon] aggroTick 錯誤：", e); d.aggro = null; await this.saveDragon(); await this.scheduleFirstIdle(now); }
+        return;
+      }
       if (d.aimTms) {   // 反擊循環剛結束：落在對岸（dest），清掉 aimTms 讓散步插值生效，從這裡接續
         d.aimTms = 0;
         d.pos = [...d.dest];
