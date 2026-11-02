@@ -578,9 +578,18 @@ class Room:
                         out = self._dragon_start_leg()
                         if out: outs.append(out)
                         next_delay = ((d["wander"]["tms"] + d["wander"]["pause"]) / 1000 + 0.05) if out else 2.0
+        # 帶傷回血：補血並把變化廣播出去（lazy 回血原本只在被打／快照時結算，血條會卡住不動）
+        if d["st"] != "dead" and d["hp"] < D_HP:
+            before = d["hp"]
+            self.dragon_regen(now)
+            if d["hp"] != before:
+                outs.append({"t": "dragon", "ev": "hp", "hp": d["hp"]})
         for m in outs:
             self.broadcast(m, terrain=OWNER_TERRAIN)
         if next_delay is not None:
+            if d["st"] != "dead" and d["hp"] < D_HP:   # 帶傷：下一次醒來提早到「回滿血時刻」，屆時補滿並廣播一次（不用定期輪詢）
+                full_at = d["regen_t"] + math.ceil((D_HP - d["hp"]) / D_REGEN) * 1000
+                next_delay = min(next_delay, max(0.1, (full_at - now) / 1000 + 0.05))
             self._schedule_wander_tick(next_delay, gen)
 
     def _aggro_tick_locked(self, now):

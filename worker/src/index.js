@@ -607,6 +607,7 @@ export class Island {
   async aggroTick(now) {
     const d = this.dragon;
     const ag = d.aggro;
+    await this.syncRegen(now);   // 帶傷回血同步：追殺途中沒人打牠時血條也要爬升
     const map = await this.getDragonMap();
     // 太久沒人攻擊／沒有島形：脫離仇恨；鬧鐘照 一般 idle 路徑（aggro 已清）走散步
     if (!map || now - (d.lastHitAt || 0) > D_DROPOUT) {
@@ -701,6 +702,19 @@ export class Island {
     if (w) ends.push(w.t0 + w.tms + 60);
     await this.state.storage.setAlarm(Math.max(60, Math.min(...ends) - now) + now + 25);
   }
+  // 回血同步：補血後若 hp 有變化就廣播 hp 事件（lazy 回血只在被打／快照時結算，血條會卡住不動）
+  async syncRegen(now) {
+    const d = this.dragon;
+    if (d.st === "dead" || d.hp >= D_HP) { this.regenDragon(now); return false; }
+    const before = d.hp;
+    this.regenDragon(now);
+    if (d.hp !== before) {
+      await this.saveDragon();
+      this.broadcast({ t: "dragon", ev: "hp", hp: d.hp }, null, OWNER_TERRAIN);
+      return true;
+    }
+    return false;
+  }
   // 仇恨結束後把鬧鐘排到不久後醒來，讓一般 idle 散步路徑接手
   async scheduleFirstIdle(now) {
     await this.state.storage.setAlarm(now + 100);
@@ -769,7 +783,11 @@ export class Island {
   }
   async scheduleWanderAlarm() {
     const w = this.dragon.wander;
-    const at = w ? w.t0 + w.tms + w.pause : Date.now() + 2000;   // 挑不到路點：2 秒後再試
+    const d = this.dragon;
+    let at = w ? w.t0 + w.tms + w.pause : Date.now() + 2000;   // 挑不到路點：2 秒後再試
+    if (d.st !== "dead" && d.hp < D_HP) {   // 帶傷：散步鬧鐘提前到「回滿血時刻」，醒來補滿並廣播一次
+      at = Math.min(at, d.regenT + Math.ceil((D_HP - d.hp) / D_REGEN) * 1000);
+    }
     await this.state.storage.setAlarm(at + 50);
   }
   // 說完台詞：瞬移島緣鎖定 d.atk 的攻擊者，進入預警→龍衝循環。回傳是否成功啟動
@@ -830,9 +848,15 @@ export class Island {
         d.aimTms = 0;
         d.pos = [...d.dest];
       }
+      // 帶傷回血：補血；並把鬧鐘排到「回滿血的那一刻」醒來廣播一次（不用定期輪詢，省資源）
+      const damaged = d.st !== "dead" && d.hp < D_HP;
+      if (damaged) await this.syncRegen(now);
+      const healedNow = damaged && d.hp >= D_HP;
       const w = d.wander;
-      if (w && now < w.t0 + w.tms + w.pause) {   // 腿還沒走完／還在休息：照表再睡
-        await this.state.storage.setAlarm(w.t0 + w.tms + w.pause + 50);
+      if (w && now < w.t0 + w.tms + w.pause) {   // 腿還沒走完／還在休息：照表再睡（帶傷時改到回滿血時刻醒）
+        let at = w.t0 + w.tms + w.pause + 50;
+        if (damaged && !healedNow) at = Math.min(at, d.regenT + Math.ceil((D_HP - d.hp) / D_REGEN) * 1000 + 50);
+        await this.state.storage.setAlarm(at);
         return;
       }
       await this.startWanderLeg();
