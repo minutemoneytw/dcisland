@@ -32,7 +32,8 @@ const OWNER_TERRAIN = "grass";
 const D_CAST_MS = 1000;      // 島緣鎖定（預警）持續時間
 const D_DASH = 460;          // 龍衝速度 px/s
 const D_REST_MS = 700;       // 衝到底落地的停留時間
-const D_FLY = 240;           // 回中心飛行速度 px/s
+const D_WALK = 34;           // 閒晃散步速度 px/s（與 client 的 OWNER_WALK_SPEED 一致）
+const D_WANDER_PAUSE = [1500, 4000];   // 每個路點之間站著休息的時間範圍 ms
 const D_RAGE_MS = 5000;      // 反擊結束後多久內不被再觸發
 const D_RESPAWN_MS = 30000;  // 島主被打倒後的重生秒數
 const D_HP = 30;
@@ -338,6 +339,7 @@ export class Island {
     if (v === OWNER_TERRAIN) {    // 島主同步：進草島時給一份當下的島主快照（重算現在的階段）
       await this.getDragon();
       dragon = this.dragonSnapshot();
+      await this.state.storage.setAlarm(Date.now() + 1000);   // 有人進草島了：1 秒後醒來恢復散步（alarm 會照 phase 自行安排）
     }
     ws.send(JSON.stringify({ t: "enter", terrain: v, players, furn: await this.getFurn(v), decos, dragon }));
     this.broadcast({ t: "join", id: att.id, name: att.state && att.state.name }, ws, v);
@@ -383,6 +385,11 @@ export class Island {
     } else if (msg.t === "dragonMap") {   // 島主：陸地位圖（各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）
       const land = dragonLand(msg.v);
       if (land) this.dragonMap = land;
+    } else if (msg.t === "dragonSnap") {   // 客戶端凍結恢復：回一份島主即時快照（只給這條連線，走 dragon 事件的 state）
+      if (att.terrain === OWNER_TERRAIN) {
+        await this.getDragon();
+        ws.send(JSON.stringify({ t: "dragon", ev: "state", ...this.dragonSnapshot() }));
+      }
     } else if (msg.t === "dragonHit") {
       await this.dragonHit(ws, att, msg);
     } else if (msg.t === "commit" || msg.t === "place" || msg.t === "remove" || msg.t === "clear") {
@@ -427,7 +434,8 @@ export class Island {
       this.dragon = await this.state.storage.get("dragon") || null;
       if (this.dragon && this.dragon.st === "dead") await this.scheduleDragonRespawn(this.dragon);   // 休眠醒來仍在死，把鬧鐘補回來
     }
-    if (!this.dragon) this.dragon = { hp: D_HP, st: "idle", pos: [...D_CENTER], aimTms: 0, deadAt: 0 };
+    if (!this.dragon) this.dragon = { hp: D_HP, st: "idle", pos: [...D_CENTER], aimTms: 0, deadAt: 0, wander: null };
+    if (this.dragon.wander === undefined) this.dragon.wander = null;   // 舊存檔沒有這個欄位
     return this.dragon;
   }
   saveDragon() { return this.state.storage.put("dragon", this.dragon); }
@@ -435,7 +443,11 @@ export class Island {
   dragonPhase(now) {
     const d = this.dragon;
     if (d.st === "dead") return ["dead", d.pos, 0];
-    if (!d.aimTms) return ["idle", d.pos, 0];
+    if (!d.aimTms) {
+      if (!d.wander) return ["idle", d.pos, 0];
+      const t = Math.min(1, Math.max(0, (now - d.wander.t0) / d.wander.tms));
+      return ["idle", [d.wander.fx + (d.wander.tx - d.wander.fx) * t, d.wander.fy + (d.wander.ty - d.wander.fy) * t], 0];
+    }
     let dt = now - d.aimTms;
     if (dt < D_CAST_MS) return ["aim", d.warp, D_CAST_MS - dt];
     dt -= D_CAST_MS;
@@ -443,17 +455,13 @@ export class Island {
     if (dt < dashMs) return ["dash", [d.warp[0] + d.unit[0] * (dt / 1000 * D_DASH), d.warp[1] + d.unit[1] * (dt / 1000 * D_DASH)], dashMs - dt];
     dt -= dashMs;
     if (dt < D_REST_MS) return ["rest", d.dest, D_REST_MS - dt];
-    dt -= D_REST_MS;
-    const hx = D_CENTER[0] - d.dest[0], hy = D_CENTER[1] - d.dest[1];
-    const hhyp = Math.hypot(hx, hy) || 1, homeMs = hhyp / D_FLY * 1000;
-    if (dt < homeMs) return ["gohome", [d.dest[0] + hx / hhyp * (dt / 1000 * D_FLY), d.dest[1] + hy / hhyp * (dt / 1000 * D_FLY)], homeMs - dt];
-    return ["idle", D_CENTER, 0];
+    return ["idle", d.dest, 0];   // 衝完在對岸就地閒晃（不回中心）
   }
   // idle 開始的時間（沒被觸發過就是 0）；用於 D_RAGE_MS 冷卻
   dragonIdleAt() {
     const d = this.dragon;
     if (!d.aimTms) return 0;
-    return d.aimTms + D_CAST_MS + d.dashLen / D_DASH * 1000 + D_REST_MS + Math.hypot(D_CENTER[0] - d.dest[0], D_CENTER[1] - d.dest[1]) / D_FLY * 1000;
+    return d.aimTms + D_CAST_MS + d.dashLen / D_DASH * 1000 + D_REST_MS;
   }
   dragonSnapshot() {
     const now = Date.now();
@@ -463,6 +471,10 @@ export class Island {
     if (ph === "aim") { o.castMs = Math.round(ms); o.tx = d.atk[0]; o.ty = d.atk[1]; o.dx = d.dest[0]; o.dy = d.dest[1]; }
     if (ph === "dash") { o.ux = d.unit[0]; o.uy = d.unit[1]; o.dx = d.dest[0]; o.dy = d.dest[1]; }
     if (ph === "rest") o.restMs = Math.round(ms);
+    if (ph === "idle" && d.wander) {   // 散步中：附上路點與已走時間，客戶端接著插值
+      const w = d.wander;
+      o.wleg = { fx: w.fx, fy: w.fy, tx: w.tx, ty: w.ty, tms: w.tms, el: Math.max(0, Math.min(w.tms, now - w.t0)) };
+    }
     return o;
   }
   // 打到島主：扣血；若在閒置且冷卻過了 → 開始反擊（瞬移島緣鎖定攻擊者）
@@ -474,12 +486,12 @@ export class Island {
     if (d.st === "dead") return;
     const dmg = Math.max(1, Math.min(2, Math.round(Number(msg.dmg) || 1)));
     const [ph, pos] = this.dragonPhase(now);
-    if (ph === "dash" || ph === "gohome") return;     // 飛行中打不到
+    if (ph === "dash") return;     // 衝刺中打不到（落地歇腳與散步時都打得到）
     if (!(Math.hypot(Number(msg.x) - pos[0], Number(msg.y) - pos[1]) <= D_RANGE)) return;
     this.dragonHits.set(ws, now);
     d.hp -= dmg;
     if (d.hp <= 0) {   // 打倒了：全島廣播死亡，30 秒後用鬧鐘重生
-      d.st = "dead"; d.hp = 0; d.pos = [pos[0], pos[1]]; d.aimTms = 0; d.deadAt = now;
+      d.st = "dead"; d.hp = 0; d.pos = [pos[0], pos[1]]; d.aimTms = 0; d.deadAt = now; d.wander = null;
       await this.saveDragon();
       this.broadcast({ t: "dragon", ev: "dead", x: pos[0], y: pos[1] }, null, OWNER_TERRAIN);
       await this.scheduleDragonRespawn(d);
@@ -495,9 +507,10 @@ export class Island {
       d.unit = [ux / ul, uy / ul];
       d.dest = dragonDashDest(this.dragonMap, warp[0], warp[1], d.unit[0], d.unit[1]);
       d.dashLen = Math.hypot(d.dest[0] - warp[0], d.dest[1] - warp[1]);
-      d.aimTms = now;
+      d.aimTms = now; d.wander = null;   // 散步作廢，進入反擊循環
       await this.saveDragon();
       this.broadcast({ t: "dragon", ev: "aim", x: warp[0], y: warp[1], fx: pos[0], fy: pos[1], tx: d.atk[0], ty: d.atk[1], dx: d.dest[0], dy: d.dest[1], castMs: D_CAST_MS, hp: d.hp }, null, OWNER_TERRAIN);
+      await this.state.storage.setAlarm(this.dragonIdleAt() + 100);   // 循環結束（回中心）時醒來接著散步
       return;
     }
     await this.saveDragon();   // 扣血就存（DO 休眠後才不會從上次存檔的 血量回復）
@@ -506,14 +519,79 @@ export class Island {
   async scheduleDragonRespawn(d) {
     await this.state.storage.setAlarm((d.deadAt || Date.now()) + D_RESPAWN_MS);
   }
-  // 島主重生鬧鐘（Durable Object 鬧鐘；休眠時也會準時醒）
+  // 草島上還有沒有人（沒人的話島主停擺省資源，有人進來再恢復散步）
+  hasGrassPlayers() {
+    for (const ws of this.state.getWebSockets()) {
+      if ((ws.deserializeAttachment() || {}).terrain === OWNER_TERRAIN) return true;
+    }
+    return false;
+  }
+  // idle 時挑一個新路點散步：附近 6～16 格的隨機陸地，直線別太抄水（與 client 的 ownerPickLeg 一致）
+  startWanderLeg() {
+    const d = this.dragon;
+    if (d.st === "dead" || !this.dragonMap) return null;
+    const [, pos] = this.dragonPhase(Date.now());
+    const fx = pos[0], fy = pos[1];
+    for (let tries = 0; tries < 24; tries++) {
+      const ang = Math.random() * Math.PI * 2;
+      const dist = (6 + Math.random() * 10) * CELL;
+      const tx = fx + Math.cos(ang) * dist, ty = fy + Math.sin(ang) * dist;
+      const gx = jsRound(tx / CELL - .5), gy = jsRound(ty / CELL - .5);
+      if (gx < 1 || gy < 1 || gx >= COLS - 1 || gy >= ROWS - 1) continue;
+      if (!this.dragonMap[gy * COLS + gx]) continue;
+      const steps = Math.max(1, Math.ceil(dist / CELL));
+      let water = 0;
+      for (let s = 0; s <= steps; s++) {
+        const sx = fx + (tx - fx) * s / steps, sy = fy + (ty - fy) * s / steps;
+        if (!this.dragonMap[Math.floor(sy / CELL) * COLS + Math.floor(sx / CELL)]) water++;
+      }
+      if (water / (steps + 1) > .1) continue;
+      d.wander = { fx, fy, tx: gx * CELL + CELL / 2, ty: gy * CELL + CELL / 2,
+                   tms: Math.max(1500, Math.round(dist / D_WALK * 1000)), t0: Date.now(),
+                   pause: D_WANDER_PAUSE[0] + Math.round(Math.random() * (D_WANDER_PAUSE[1] - D_WANDER_PAUSE[0])) };
+      this.broadcast({ t: "dragon", ev: "wander", fx: d.wander.fx, fy: d.wander.fy, tx: d.wander.tx, ty: d.wander.ty, tms: d.wander.tms }, null, OWNER_TERRAIN);
+      return d.wander;
+    }
+    return null;   // 挑不到合適的路點：原地下次再試
+  }
+  async scheduleWanderAlarm() {
+    const w = this.dragon.wander;
+    const at = w ? w.t0 + w.tms + w.pause : Date.now() + 2000;   // 挑不到路點：2 秒後再試
+    await this.state.storage.setAlarm(at + 50);
+  }
+  // 島主鬧鐘（唯一一個鬧鐘）：死→重生；閒置→推進散步路點；飛行循環中→回中心時再醒。
+  // 草島沒有人在線時不排下一輪（島主停擺，等有人進草島的 enter 再恢復）。
   async alarm() {
     const d = await this.getDragon();
-    if (d.st !== "dead" || Date.now() < d.deadAt + D_RESPAWN_MS - 500) return;
-    const pos = this.dragonMap ? dragonEdge(this.dragonMap, Math.random() * Math.PI * 2) : [...D_CENTER];
-    d.st = "idle"; d.hp = D_HP; d.pos = pos; d.aimTms = 0;
-    await this.saveDragon();
-    this.broadcast({ t: "dragon", ev: "spawn", x: pos[0], y: pos[1], hp: d.hp }, null, OWNER_TERRAIN);
+    const now = Date.now();
+    if (d.st === "dead") {
+      if (now < d.deadAt + D_RESPAWN_MS - 500) { await this.state.storage.setAlarm(d.deadAt + D_RESPAWN_MS); return; }
+      const pos = this.dragonMap ? dragonEdge(this.dragonMap, Math.random() * Math.PI * 2) : [...D_CENTER];
+      d.st = "idle"; d.hp = D_HP; d.pos = pos; d.aimTms = 0; d.wander = null;
+      await this.saveDragon();
+      this.broadcast({ t: "dragon", ev: "spawn", x: pos[0], y: pos[1], hp: d.hp }, null, OWNER_TERRAIN);
+      if (this.hasGrassPlayers()) {
+        this.startWanderLeg();
+        await this.saveDragon();
+        await this.scheduleWanderAlarm();
+      }
+      return;
+    }
+    if (!this.hasGrassPlayers()) return;   // 沒人看：停擺（enter 時會恢復）
+    const [ph] = this.dragonPhase(now);
+    if (ph === "idle") {
+      const w = d.wander;
+      if (w && now < w.t0 + w.tms + w.pause) {   // 腿還沒走完／還在休息：照表再睡
+        await this.state.storage.setAlarm(w.t0 + w.tms + w.pause + 50);
+        return;
+      }
+      this.startWanderLeg();
+      await this.saveDragon();
+      await this.scheduleWanderAlarm();
+    } else {
+      // 反擊循環中：回中心、idle 開始時醒來接著散步
+      await this.state.storage.setAlarm(this.dragonIdleAt() + 100);
+    }
   }
 
   // 家具編輯：伺服器是唯一權威。裝飾模式的變動是「草稿」，客戶端按保存才送 commit（一批操作）；

@@ -156,6 +156,8 @@ export function connectNet(S, opts = {}) {
   // 島主：上傳陸地位圖（進草島時）／打到島主時送意圖（座標＋傷害），流程由伺服器權威
   net.sendDragonMap = v => net.connected && send({ t: 'dragonMap', v });
   net.dragonHit = (x, y, dmg) => net.connected && send({ t: 'dragonHit', x, y, dmg });
+  // 分頁凍結恢復後要島主即時快照（伺服器用 dragon 事件的 state 回這條連線）
+  net.requestDragonSnap = () => net.connected && send({ t: 'dragonSnap' });
 
   return net;
 }

@@ -336,6 +336,7 @@ function nearestLand(a) {
 // ---- 島主的龍衝反擊（沿用野外動物「刻意不同步」規則）：被打後瞬間消失、在島隨機邊緣現蹤瞄準攻擊者 ----
 // 預警範圍提示 1 秒後，以龍本體直線飛衝過島（攻擊範圍＝龍的大小，被撞到＝KO），衝到對岸落地後飛回地圖中心
 const OWNER_FLY_SPEED = 240, OWNER_DASH_SPEED = 460, OWNER_CAST = 1, OWNER_CD = 5;
+const OWNER_WALK_SPEED = 34, OWNER_LEG_MIN = 1500, OWNER_PAUSE = [1.5, 4];   // 閒晃：路點間散步速度／每腿最短時長／休息範圍（秒）
 function ownerEdgeAt(angle) {
   // 從島心沿指定角度找最後一格陸地（島邊緣）
   const cx = COLS / 2 - .5, cy = ROWS / 2 - .5;
@@ -357,6 +358,7 @@ function ownerTakeoff(a, src) {
   a.dir = src.x < a.x ? -1 : 1;
   S.floaters.push({ x: a.x, y: a.y - 40, poof: true, life: .55 });
   a.cast = OWNER_CAST; a.castFrom = { x: src.x, y: src.y };   // 鎖定攻擊者位置＝龍衝方向（走位就能躲）
+  a.wleg = null;   // 散步中被打斷：路點作廢
   toast(`${def.name} 瞬間消失，在島緣現出蹤影鎖定了你！`, 2400);
 }
 function ownerStep(a, dt, def) {
@@ -365,12 +367,11 @@ function ownerStep(a, dt, def) {
     if (a.cast <= 0) { a.cast = 0; ownerDive(a, def); }
     return;
   }
-  if (a.rest) {   // 龍衝結束在邊緣歇腳：停住不動，然後飛回地圖中心
+  if (a.rest) {   // 龍衝結束在邊緣歇腳：停一下，然後就在當地繼續閒晃（不回中心）
     a.rest -= dt;
     if (a.rest <= 0) {
       a.rest = 0;
-      a.fly = true; a.retHome = true;
-      a.flyTo = { x: (COLS / 2 - .5) * CELL, y: (ROWS / 2 - .5) * CELL };
+      a.idle = .5 + Math.random() * 1.5;   // 單機：歇完由路點挑選接手；連線：等伺服器的 wander 事件
     }
     return;
   }
@@ -423,6 +424,40 @@ function ownerDive(a, def) {
   toast(`${def.name} 發動龍衝！`, 2000);
 }
 
+// ---- 島主閒晃：idle 時在島上四處散步（連線時路點由伺服器廣播，單機自己挑；兩邊演算法一致）----
+// 挑路點：附近 6～16 格的隨機陸地，直線不能太抄水；每腿最短 1.5 秒
+function ownerPickLeg(x, y) {
+  for (let tries = 0; tries < 24; tries++) {
+    const ang = Math.random() * Math.PI * 2;
+    const dist = (6 + Math.random() * 10) * CELL;
+    const tx = x + Math.cos(ang) * dist, ty = y + Math.sin(ang) * dist;
+    const gx = Math.round(tx / CELL - .5), gy = Math.round(ty / CELL - .5);
+    if (gx < 1 || gy < 1 || gx >= COLS - 1 || gy >= ROWS - 1) continue;
+    if (S.world.types[gy * COLS + gx] === 0) continue;
+    const steps = Math.max(1, Math.ceil(dist / CELL));
+    let water = 0;
+    for (let s = 0; s <= steps; s++) {
+      const sx = x + (tx - x) * s / steps, sy = y + (ty - y) * s / steps;
+      if (S.world.types[Math.floor(sy / CELL) * COLS + Math.floor(sx / CELL)] === 0) water++;
+    }
+    if (water / (steps + 1) > .1) continue;
+    return { fx: x, fy: y, tx: gx * CELL + CELL / 2, ty: gy * CELL + CELL / 2,
+             tms: Math.max(OWNER_LEG_MIN, Math.round(dist / OWNER_WALK_SPEED * 1000)) };
+  }
+  return null;
+}
+// 路點插值：位置由牆鐘 (Date.now()-t0ms)/tms 決定，跟伺服器的演算法一致（分頁凍結後恢復也能直接跳到正確位置）
+function stepOwnerWalk(a, dt) {
+  const w = a.wleg;
+  const t = Math.min(1, Math.max(0, (Date.now() - w.t0ms) / w.tms));
+  a.x = w.fx + (w.tx - w.fx) * t;
+  a.y = w.fy + (w.ty - w.fy) * t;
+  if (w.tx !== w.fx) a.dir = Math.sign(w.tx - w.fx);
+  a.bounce += dt * 8;
+  a.z = Math.abs(Math.sin(a.bounce * Math.PI)) * 4;
+  if (t >= 1) { a.wleg = null; a.z = 0; }
+}
+
 // ---- 島主的伺服器同步：連線時龍的本體與流程由伺服器權威，客戶端只負責演出和自己有沒有被撞到 ----
 // 事件：aim（被打→瞬移島緣鎖定攻擊者）/ hp（扣血）/ dead（被打倒）/ spawn（重生）/ state（進草島時的快照）
 // 陸地位圖：世界由前端種子生成，伺服器不知道島形；進草島時上傳（RLE，1＝陸地，與 ownerEdgeAt 的判定一致：types!==0）
@@ -457,7 +492,7 @@ function applyDragonSnap(o) {
   if (o.ph === 'dead') return;   // 死了就先不生成，等 spawn 事件
   const a = dragonEnsure(o.x, o.y, o.hp);
   if (!a) return;
-  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null;
+  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null;
   if (o.ph === 'aim') {   // 島緣鎖定中：續播剩下的預警時間
     a.x = o.x; a.y = o.y; a.z = 0; a.fly = false; a.dashU = null; a.rest = 0; a.retHome = false;
     a.cast = (o.castMs || 1000) / 1000; a.castFrom = { x: o.tx, y: o.ty };
@@ -475,9 +510,10 @@ function applyDragonSnap(o) {
     a.x = o.x; a.y = o.y; a.cast = 0; a.castFrom = null; a.rest = 0; a.retHome = true; a.dashU = null;
     a.fly = true; a.flyTo = { x: (COLS / 2 - .5) * CELL, y: (ROWS / 2 - .5) * CELL };
     a.bounce = 0;
-  } else {   // idle：在中心附近漫步
-    a.x = o.x; a.y = o.y; a.z = 0; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0; a.retHome = false;
-    a.idle = Math.random() * 2;
+  } else {   // idle：照快照站著，或接續伺服器正在走的散步腿
+    a.x = o.x; a.y = o.y; a.z = 0; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0; a.retHome = false; a.wleg = null;
+    if (o.wleg) a.wleg = { fx: o.wleg.fx, fy: o.wleg.fy, tx: o.wleg.tx, ty: o.wleg.ty, tms: o.wleg.tms, t0ms: Date.now() - (o.wleg.el || 0) };
+    else a.idle = 0;
   }
 }
 function onNetDragon(m) {
@@ -490,7 +526,7 @@ function onNetDragon(m) {
   }
   if (m.ev === 'dead') {   // 被打倒了：原地死亡；重生等伺服器的 spawn 事件，不排本地重生
     if (a && !a.dead) {
-      a.dead = true; a.dieT = .6; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0;
+      a.dead = true; a.dieT = .6; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0; a.wleg = null;
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
       toast(`${animalDef(a.id).name} 被打倒了！30 秒後重生`, 2200);
     }
@@ -500,15 +536,23 @@ function onNetDragon(m) {
     const na = dragonEnsure(m.x, m.y, m.hp);
     if (na) {
       na.dead = false; na.dieT = 0; na.x = m.x; na.y = m.y; na.hp = m.hp; na.z = 0;
-      na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.idle = 1.2;
+      na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.idle = 1.2; na.wleg = null;
     }
     toast(`${animalDef(S.terrains[S.terrain].owner).name} 回來了！`, 1600);
+    return;
+  }
+  if (m.ev === 'wander') {   // 島主往新路點散步（伺服器帶路；插值與伺服器一致，凍結恢復也正確）
+    const na = a || dragonEnsure(m.fx, m.fy);
+    if (!na) return;
+    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false;
+    na.wleg = { fx: m.fx, fy: m.fy, tx: m.tx, ty: m.ty, tms: m.tms, t0ms: Date.now() };
+    na.x = m.fx; na.y = m.fy; na.dir = m.tx < m.fx ? -1 : 1;
     return;
   }
   if (m.ev === 'aim') {   // 被打 → 伺服器把龍瞬移到島緣鎖定攻擊者（攻擊者可能是自己，也可能是別人）
     if (!a) { applyDragonSnap({ ...m, ph: 'aim' }); return; }
     S.floaters.push({ x: a.x, y: a.y - 40, poof: true, life: .55 });   // 原地消失
-    a.x = m.x; a.y = m.y; a.z = 0; a.fly = false; a.dashU = null; a.rest = 0; a.target = null; a.idle = 0; a.bounce = 0;
+    a.x = m.x; a.y = m.y; a.z = 0; a.fly = false; a.dashU = null; a.rest = 0; a.target = null; a.idle = 0; a.bounce = 0; a.wleg = null;
     S.floaters.push({ x: a.x, y: a.y - 40, poof: true, life: .55 });
     a.hp = m.hp; a.cast = (m.castMs || 1000) / 1000;
     a.castFrom = { x: m.tx, y: m.ty };
@@ -523,9 +567,16 @@ function onNetDragon(m) {
 
 function stepAnimal(a, dt) {
   const def = animalDef(a.id);
-  // 島主：飛行/集氣/龍衝後歇腳走專用流程，不走一般漫步
+  // 島主：飛行/集氣/龍衝後歇腳走專用流程，不走一般漫步；閒晃走路點插值（連線跟伺服器、單機自挑）
   if (def.owner) {
     if (a.fly || a.cast || a.rest) { ownerStep(a, dt, def); return; }
+    if (a.wleg) { stepOwnerWalk(a, dt); return; }
+    if (a.proxy) { a.z = 0; return; }   // 連線但沒有腿：站著等伺服器帶路（位置以伺服器為準，不跑本地漫步 AI）
+    if (a.idle > 0) { a.idle -= dt; a.z = 0; return; }
+    const leg = ownerPickLeg(a.x, a.y);   // 單機：自己挑路點散步
+    if (leg) a.wleg = { ...leg, t0ms: Date.now() };
+    else a.idle = 2;
+    return;
   }
   // 只有「附近有人揮擊」才會被嚇到（自己或同島的人）；單純走過去、站在旁邊不會嚇跑牠
   // 島主大隻又沉穩：近距離揮擊也不會嚇到（`owner: true`）
@@ -1579,6 +1630,7 @@ async function boot() {
 
   let last = performance.now();
   function loop(now) {
+    if (now - last > 2000) S.net?.requestDragonSnap?.();   // 分頁被凍結過（切視窗回來）：要一份島主即時快照，別用舊位置打人
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     try {
       S.t += dt;

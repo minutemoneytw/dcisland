@@ -115,18 +115,19 @@ HIT_RANGE = 140          # 打可破壞物件時，玩家離目標最遠幾 px�
 HIT_CD = 0.3             # 同一條連線兩次打擊最短間隔（秒）
 
 # ---- 島主（伺服器端同步；與 worker/src/index.js 的常數與演算法保持一致，改一邊要改另一邊）----
-# 被打 → 瞬移島緣 → 鎖定攻擊者 → 預警 1 秒 → 龍本體直線衝過島到對岸 → 停一下 → 飛回中心。
+# 被打 → 瞬移島緣 → 鎖定攻擊者 → 預警 1 秒 → 龍本體直線衝過島到對岸 → 停一下 → 在當地繼續閒晃。
 # 客戶端只負責演出與自己有沒有被撞到的判定；伺服器只送「階段變更」事件，不需要每幀醒著跑。
 OWNER_TERRAIN = "grass"
 D_CAST_MS = 1000         # 島緣鎖定（預警）持續時間
 D_DASH = 460             # 龍衝速度 px/s
 D_REST_MS = 700          # 衝到底落地的停留時間
-D_FLY = 240              # 回中心飛行速度 px/s
 D_RAGE_MS = 5000         # 反擊結束後多久內不被再觸發
 D_RESPAWN_MS = 30000     # 島主被打倒後的重生秒數
 D_HP = 30
 D_RANGE = 70             # 玩家打島主的攻擊距離（客戶端 58，留延遲）
 D_CD = 0.3               # 同一條連線兩次打島主的最短間隔（秒）
+D_WALK = 34              # 閒晃散步速度 px/s（與 client 的 OWNER_WALK_SPEED 一致）
+D_WANDER_PAUSE = (1.5, 4.0)   # 每個路點之間站著休息的時間範圍（秒）
 D_CENTER = ((COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL)
 
 def js_round(v):
@@ -216,6 +217,8 @@ class Room:
         self.dragon_map = None
         self.dragon_hits = {}   # cid -> 上次打島主的時刻（秒）
         self.dragon_timer = None
+        self.dragon_wander_timer = None
+        self.wander_tick_seq = 0
         # 每位玩家各自在某個地形（client["terrain"]）；剛連上時為 None，等 enter
 
     def furn_list(self, terrain):
@@ -323,7 +326,8 @@ class Room:
         """島主狀態（懒初始化；名稱不能叫 dragon——會被 self.dragon 屬性蓋掉）。"""
         if self.dragon is None:
             self.dragon = {"hp": D_HP, "st": "idle", "pos": list(D_CENTER), "aim_tms": 0.0, "dead_at": 0.0,
-                           "gen": 0, "warp": [0, 0], "atk": [0, 0], "unit": [0, 0], "dest": [0, 0], "dash_len": 0.0}
+                           "gen": 0, "wander": None, "wander_gen": 0, "warp": [0, 0], "atk": [0, 0],
+                           "unit": [0, 0], "dest": [0, 0], "dash_len": 0.0}
         return self.dragon
 
     def dragon_phase(self, now):
@@ -332,7 +336,11 @@ class Room:
         if d["st"] == "dead":
             return "dead", list(d["pos"]), 0
         if not d["aim_tms"]:
-            return "idle", list(d["pos"]), 0
+            if not d["wander"]:
+                return "idle", list(d["pos"]), 0
+            w = d["wander"]
+            t = max(0.0, min(1.0, (now - w["t0"]) / w["tms"]))
+            return "idle", [w["fx"] + (w["tx"] - w["fx"]) * t, w["fy"] + (w["ty"] - w["fy"]) * t], 0
         dt = now - d["aim_tms"]
         if dt < D_CAST_MS:
             return "aim", list(d["warp"]), D_CAST_MS - dt
@@ -344,21 +352,13 @@ class Room:
         dt -= dash_ms
         if dt < D_REST_MS:
             return "rest", list(d["dest"]), D_REST_MS - dt
-        dt -= D_REST_MS
-        hx, hy = D_CENTER[0] - d["dest"][0], D_CENTER[1] - d["dest"][1]
-        hhyp = math.hypot(hx, hy) or 1
-        home_ms = hhyp / D_FLY * 1000
-        if dt < home_ms:
-            p = dt / 1000 * D_FLY
-            return "gohome", [d["dest"][0] + hx / hhyp * p, d["dest"][1] + hy / hhyp * p], home_ms - dt
-        return "idle", list(D_CENTER), 0
+        return "idle", list(d["dest"]), 0   # 衝完在對岸就地閒晃（不回中心）
 
     def dragon_idle_at(self, d):
         """idle 開始的時刻（沒被觸發過＝0），用於 D_RAGE_MS 冷卻。"""
         if not d["aim_tms"]:
             return 0.0
-        return (d["aim_tms"] + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS
-                + (math.hypot(D_CENTER[0] - d["dest"][0], D_CENTER[1] - d["dest"][1]) or 1) / D_FLY * 1000)
+        return d["aim_tms"] + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS
 
     def dragon_snapshot(self):
         """給剛進草島的玩家的島主快照（把現在階段包成客戶端能續播的欄位）。呼叫前需持有或取得狀態。"""
@@ -371,13 +371,89 @@ class Room:
             o.update(ux=d["unit"][0], uy=d["unit"][1], dx=d["dest"][0], dy=d["dest"][1])
         elif ph == "rest":
             o["restMs"] = int(ms)
+        elif ph == "idle" and d["wander"]:   # 散步中：附上路點與已走時間，客戶端接著插值
+            w = d["wander"]
+            now_ms = time.time() * 1000
+            o["wleg"] = {"fx": w["fx"], "fy": w["fy"], "tx": w["tx"], "ty": w["ty"], "tms": w["tms"],
+                         "el": int(max(0, min(w["tms"], now_ms - w["t0"])))}
         return o
+
+    def _dragon_start_leg(self):
+        """idle 時挑一個新路點散步（附近 6～16 格陸地、直線別太抄水；與 client 的 ownerPickLeg 一致）。
+        挑不到回 None。需在鎖內呼叫；回傳要廣播的 wander 訊息。"""
+        d = self.dragon
+        if d["st"] == "dead" or not self.dragon_map:
+            return None
+        ph, pos, _ = self.dragon_phase(time.time() * 1000)
+        if ph != "idle":
+            return None
+        fx, fy = pos[0], pos[1]
+        for _ in range(24):
+            ang = random.random() * math.pi * 2
+            dist = (6 + random.random() * 10) * CELL
+            tx, ty = fx + math.cos(ang) * dist, fy + math.sin(ang) * dist
+            gx, gy = js_round(tx / CELL - .5), js_round(ty / CELL - .5)
+            if not (1 <= gx < COLS - 1 and 1 <= gy < ROWS - 1) or not self.dragon_map[gy * COLS + gx]:
+                continue
+            steps = max(1, math.ceil(dist / CELL))
+            water = 0
+            for s in range(steps + 1):
+                sx, sy = fx + (tx - fx) * s / steps, fy + (ty - fy) * s / steps
+                if not self.dragon_map[math.floor(sy / CELL) * COLS + math.floor(sx / CELL)]:
+                    water += 1
+            if water / (steps + 1) > 0.1:
+                continue
+            tms = max(1500, int(dist / D_WALK * 1000))
+            d["wander"] = {"fx": fx, "fy": fy, "tx": gx * CELL + CELL / 2, "ty": gy * CELL + CELL / 2, "tms": tms,
+                           "t0": time.time() * 1000, "pause": random.uniform(*D_WANDER_PAUSE) * 1000}
+            return {"t": "dragon", "ev": "wander", "fx": fx, "fy": fy, "tx": d["wander"]["tx"],
+                    "ty": d["wander"]["ty"], "tms": tms}
+        return None
+
+    def _has_grass_clients(self):
+        return any(c.get("terrain") == OWNER_TERRAIN for c in self.clients.values())
+
+    def _schedule_wander_tick(self, delay, gen):
+        """排下一次散步狀態機 tick；只讓「最新排程」生效（多次 enter 不會堆出重複計時器）。"""
+        self.wander_tick_seq = getattr(self, "wander_tick_seq", 0) + 1
+        seq = self.wander_tick_seq
+        t = threading.Timer(delay, self._wander_tick, (gen, seq))
+        t.daemon = True
+        self.dragon_wander_timer = t
+        t.start()
+
+    def _wander_tick(self, gen, seq):
+        """散步狀態機：到期推進路點。序號/代數不符＝被更新的排程或反擊/死亡作廢；草島沒人＝停擺。"""
+        out = None
+        next_delay = None
+        with self.lock:
+            d = self.dragon
+            if seq != getattr(self, "wander_tick_seq", 0) or gen != d["wander_gen"]:
+                return
+            if d["st"] == "dead" or not self._has_grass_clients():
+                return
+            now = time.time() * 1000
+            ph, _, _ = self.dragon_phase(now)
+            if ph != "idle":   # 反擊循環中：回中心時再續（正常不會走到——rage 時已改排）
+                next_delay = max(0.1, self.dragon_idle_at(d) / 1000 - time.time() + 0.1)
+            else:
+                w = d["wander"]
+                if w and now < w["t0"] + w["tms"] + w["pause"]:
+                    next_delay = (w["t0"] + w["tms"] + w["pause"] - now) / 1000 + 0.05
+                else:
+                    out = self._dragon_start_leg()
+                    next_delay = ((d["wander"]["tms"] + d["wander"]["pause"]) / 1000 + 0.05) if out else 2.0
+        if out:
+            self.broadcast(out, terrain=OWNER_TERRAIN)
+        if next_delay is not None:
+            self._schedule_wander_tick(next_delay, gen)
 
     def dragon_hit(self, cid, msg):
         """打到島主：扣血；閒置且冷卻過了 → 開始反擊。回傳要廣播的訊息或 None（無效/太遠/飛行中）。"""
         d = self.dragon_state()
         out = None
         dead_gen = None
+        post_cycle = None
         ph = pos = None
         with self.lock:
             c = self.clients.get(cid)
@@ -388,7 +464,7 @@ class Room:
             now = time.time() * 1000
             dmg = 2 if msg.get("dmg") == 2 else 1
             ph, pos, _ = self.dragon_phase(now)
-            if ph in ("dash", "gohome"):
+            if ph == "dash":
                 return None
             try:
                 ax, ay = float(msg.get("x")), float(msg.get("y"))
@@ -400,6 +476,8 @@ class Room:
             if d["hp"] <= 0:
                 d["st"], d["hp"], d["pos"], d["aim_tms"], d["dead_at"] = "dead", 0, list(pos), 0.0, now
                 d["gen"] += 1
+                d["wander"] = None
+                d["wander_gen"] += 1   # 作廢散步 tick
                 dead_gen = d["gen"]
                 out = {"t": "dragon", "ev": "dead", "x": pos[0], "y": pos[1]}
             elif ph == "idle" and self.dragon_map and now - self.dragon_idle_at(d) >= D_RAGE_MS:
@@ -410,6 +488,9 @@ class Room:
                 d["dest"] = dragon_dash_dest(self.dragon_map, warp[0], warp[1], d["unit"][0], d["unit"][1])
                 d["dash_len"] = math.hypot(d["dest"][0] - warp[0], d["dest"][1] - warp[1])
                 d["aim_tms"] = now
+                d["wander"] = None   # 散步作廢，進入反擊循環
+                d["wander_gen"] += 1
+                post_cycle = self.dragon_idle_at(d) / 1000 - time.time() + 0.1   # 回中心後接著散步
                 out = {"t": "dragon", "ev": "aim", "x": warp[0], "y": warp[1], "fx": pos[0], "fy": pos[1],
                        "tx": ax, "ty": ay, "dx": d["dest"][0], "dy": d["dest"][1], "castMs": D_CAST_MS, "hp": d["hp"]}
             else:
@@ -419,17 +500,30 @@ class Room:
             t.daemon = True
             self.dragon_timer = t
             t.start()
+        elif post_cycle is not None:
+            self._schedule_wander_tick(post_cycle, self.dragon["wander_gen"])
         return out
 
     def _dragon_respawn(self, gen):
+        out2 = leg_delay = None
         with self.lock:
             d = self.dragon
             if d["st"] != "dead" or d["gen"] != gen:   # 期間已有別的變動（例如伺服器重啟重建）
                 return
             pos = dragon_edge(self.dragon_map, random.random() * math.pi * 2) if self.dragon_map else list(D_CENTER)
-            d.update(st="idle", hp=D_HP, pos=pos, aim_tms=0.0, atk=[0, 0])
+            d.update(st="idle", hp=D_HP, pos=pos, aim_tms=0.0, atk=[0, 0], wander=None)
+            d["wander_gen"] += 1   # 作廢舊散步 tick
             out = {"t": "dragon", "ev": "spawn", "x": pos[0], "y": pos[1], "hp": d["hp"]}
+            if self._has_grass_clients():
+                out2 = self._dragon_start_leg()
+                if out2:
+                    leg_delay = (d["wander"]["tms"] + d["wander"]["pause"]) / 1000 + 0.05
+            wgen = d["wander_gen"]
         self.broadcast(out, terrain=OWNER_TERRAIN)
+        if out2:
+            self.broadcast(out2, terrain=OWNER_TERRAIN)
+        if leg_delay is not None:
+            self._schedule_wander_tick(leg_delay, wgen)
 
     def add(self, sock):
         with self.lock:
@@ -462,6 +556,8 @@ class Room:
             if v == OWNER_TERRAIN:   # 島主同步：進草島附帶當下的島主快照（客戶端據此續播任意階段）
                 self.dragon_state()
                 dragon = self.dragon_snapshot()
+                if self.dragon["st"] == "idle":   # 有人進草島了：排一次 tick 恢復散步（沒人看時是停擺的）
+                    self._schedule_wander_tick(1.0, self.dragon["wander_gen"])
             return old, players, list(self.furn_list(v)), self.deco_list(v), dragon
 
     # terrain 有給時只送給「目前在該地形」的連線；沒給就是全部
@@ -675,6 +771,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if res:
                         last_dragon_hit = now
                         room.broadcast(res, terrain=OWNER_TERRAIN)
+                elif t == "dragonSnap":   # 客戶端凍結恢復：回一份島主即時快照（只給這條連線）
+                    c2 = room.clients.get(cid)
+                    if c2 and c2.get("terrain") == OWNER_TERRAIN:
+                        room.dragon_state()
+                        snap = room.dragon_snapshot()
+                        with c2["send"]:
+                            ws_send(sock, json.dumps({"t": "dragon", "ev": "state", **snap}))
                 elif t in ("commit", "place", "remove", "clear"):
                     # 裝飾模式的變動是草稿，按保存才送 commit（一批操作）；舊客戶端的單一操作也走同一套驗證與權限
                     cur = room.terrain_of(cid)
