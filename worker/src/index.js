@@ -38,6 +38,7 @@ const D_RAGE_MS = 5000;      // 反擊結束後多久內不被再觸發
 const D_RESPAWN_MS = 30000;  // 島主被打倒後的重生秒數
 const D_HP = 30;
 const D_RANGE = 70;          // 玩家打島主的攻擊距離（客戶端 58，留延遲）
+const D_DRIFT_TOLER = 600;   // 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 const D_CD_MS = 300;         // 同一條連線兩次打島主的最短間隔
 const D_CENTER = [(COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL];
 const jsRound = v => Math.floor(v + .5);   // 與前端 Math.round 同義（明寫以防其他語言實作四捨五入規則不同）
@@ -439,8 +440,9 @@ export class Island {
       this.dragon = await this.state.storage.get("dragon") || null;
       if (this.dragon && this.dragon.st === "dead") await this.scheduleDragonRespawn(this.dragon);   // 休眠醒來仍在死，把鬧鐘補回來
     }
-    if (!this.dragon) this.dragon = { hp: D_HP, st: "idle", pos: [...D_CENTER], aimTms: 0, deadAt: 0, wander: null };
+    if (!this.dragon) this.dragon = { hp: D_HP, st: "idle", pos: [...D_CENTER], aimTms: 0, deadAt: 0, wander: null, cooldownUntil: 0 };
     if (this.dragon.wander === undefined) this.dragon.wander = null;   // 舊存檔沒有這個欄位
+    if (this.dragon.cooldownUntil === undefined) this.dragon.cooldownUntil = 0;
     return this.dragon;
   }
   saveDragon() { return this.state.storage.put("dragon", this.dragon); }
@@ -501,7 +503,15 @@ export class Island {
     const dmg = Math.max(1, Math.min(2, Math.round(Number(msg.dmg) || 1)));
     const [ph, pos] = this.dragonPhase(now);
     if (ph === "dash") return;     // 衝刺中打不到（落地歇腳與散步時都打得到）
-    if (!(Math.hypot(Number(msg.x) - pos[0], Number(msg.y) - pos[1]) <= D_RANGE)) return;
+    // 客戶端可能漏接一個路點事件（散步腿落後）：只要它宣稱的龍位置離伺服器的不遠、且玩家貼著宣稱的龍，就接受
+    const distSrv = Math.hypot(Number(msg.x) - pos[0], Number(msg.y) - pos[1]);
+    const cdx = Number(msg.ddx), cdy = Number(msg.ddy);
+    let near = distSrv <= D_RANGE;
+    if (!near && Number.isFinite(cdx) && Number.isFinite(cdy)) {
+      near = Math.hypot(Number(msg.x) - cdx, Number(msg.y) - cdy) <= D_RANGE
+          && Math.hypot(cdx - pos[0], cdy - pos[1]) <= D_DRIFT_TOLER;
+    }
+    if (!near) return;
     this.dragonHits.set(ws, now);
     d.hp -= dmg;
     if (d.hp <= 0) {   // 打倒了：全島廣播死亡，30 秒後用鬧鐘重生
@@ -513,8 +523,7 @@ export class Island {
     }
     // 反擊：閒置且冷卻過了才觸發；沒有島形位圖就只能扣血（無法挑島緣）
     const map = await this.getDragonMap();
-    const idleAt = this.dragonIdleAt(now);
-    if (ph === "idle" && map && now - idleAt >= D_RAGE_MS) {
+    if (ph === "idle" && map && now >= (d.cooldownUntil || 0)) {
       const warp = dragonEdge(map, Math.random() * Math.PI * 2);          // 島隨機邊緣
       const ux = Number(msg.x) - warp[0], uy = Number(msg.y) - warp[1];
       const ul = Math.hypot(ux, uy) || 1;
@@ -523,6 +532,7 @@ export class Island {
       d.dest = dragonDashDest(map, warp[0], warp[1], d.unit[0], d.unit[1]);
       d.dashLen = Math.hypot(d.dest[0] - warp[0], d.dest[1] - warp[1]);
       d.aimTms = now; d.wander = null;   // 散步作廢，進入反擊循環
+      d.cooldownUntil = now + D_CAST_MS + d.dashLen / D_DASH * 1000 + D_REST_MS + D_RAGE_MS;   // 循環全程＋結束後 5 秒
       await this.saveDragon();
       this.broadcast({ t: "dragon", ev: "aim", x: warp[0], y: warp[1], fx: pos[0], fy: pos[1], tx: d.atk[0], ty: d.atk[1], dx: d.dest[0], dy: d.dest[1], castMs: D_CAST_MS, hp: d.hp }, null, OWNER_TERRAIN);
       await this.state.storage.setAlarm(this.dragonIdleAt() + 100);   // 循環結束（回中心）時醒來接著散步
@@ -596,6 +606,10 @@ export class Island {
     if (!this.hasGrassPlayers()) return;   // 沒人看：停擺（enter 時會恢復）
     const [ph] = this.dragonPhase(now);
     if (ph === "idle") {
+      if (d.aimTms) {   // 反擊循環剛結束：落在對岸（dest），清掉 aimTms 讓散步插值生效，從這裡接續
+        d.aimTms = 0;
+        d.pos = [...d.dest];
+      }
       const w = d.wander;
       if (w && now < w.t0 + w.tms + w.pause) {   // 腿還沒走完／還在休息：照表再睡
         await this.state.storage.setAlarm(w.t0 + w.tms + w.pause + 50);

@@ -125,6 +125,7 @@ D_RAGE_MS = 5000         # 反擊結束後多久內不被再觸發
 D_RESPAWN_MS = 30000     # 島主被打倒後的重生秒數
 D_HP = 30
 D_RANGE = 70             # 玩家打島主的攻擊距離（客戶端 58，留延遲）
+D_DRIFT_TOLER = 600      # 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 D_CD = 0.3               # 同一條連線兩次打島主的最短間隔（秒）
 D_WALK = 34              # 閒晃散步速度 px/s（與 client 的 OWNER_WALK_SPEED 一致）
 D_WANDER_PAUSE = (1.5, 4.0)   # 每個路點之間站著休息的時間範圍（秒）
@@ -326,8 +327,8 @@ class Room:
         """島主狀態（懒初始化；名稱不能叫 dragon——會被 self.dragon 屬性蓋掉）。"""
         if self.dragon is None:
             self.dragon = {"hp": D_HP, "st": "idle", "pos": list(D_CENTER), "aim_tms": 0.0, "dead_at": 0.0,
-                           "gen": 0, "wander": None, "wander_gen": 0, "warp": [0, 0], "atk": [0, 0],
-                           "unit": [0, 0], "dest": [0, 0], "dash_len": 0.0}
+                           "gen": 0, "wander": None, "wander_gen": 0, "cooldown_until": 0.0,
+                           "warp": [0, 0], "atk": [0, 0], "unit": [0, 0], "dest": [0, 0], "dash_len": 0.0}
         return self.dragon
 
     def dragon_phase(self, now):
@@ -353,12 +354,6 @@ class Room:
         if dt < D_REST_MS:
             return "rest", list(d["dest"]), D_REST_MS - dt
         return "idle", list(d["dest"]), 0   # 衝完在對岸就地閒晃（不回中心）
-
-    def dragon_idle_at(self, d):
-        """idle 開始的時刻（沒被觸發過＝0），用於 D_RAGE_MS 冷卻。"""
-        if not d["aim_tms"]:
-            return 0.0
-        return d["aim_tms"] + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS
 
     def dragon_snapshot(self):
         """給剛進草島的玩家的島主快照（把現在階段包成客戶端能續播的欄位）。呼叫前需持有或取得狀態。"""
@@ -434,9 +429,13 @@ class Room:
                 return
             now = time.time() * 1000
             ph, _, _ = self.dragon_phase(now)
-            if ph != "idle":   # 反擊循環中：回中心時再續（正常不會走到——rage 時已改排）
-                next_delay = max(0.1, self.dragon_idle_at(d) / 1000 - time.time() + 0.1)
+            if ph != "idle":   # 反擊循環中：循環結束時再續
+                cycle_end = d["aim_tms"] + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS
+                next_delay = max(0.1, cycle_end / 1000 - time.time() + 0.1)
             else:
+                if d["aim_tms"]:   # 反擊循環剛結束：落在對岸（dest），從這裡接續散步（清 aim_tms 讓散步插值生效）
+                    d["aim_tms"] = 0.0
+                    d["pos"] = list(d["dest"])
                 w = d["wander"]
                 if w and now < w["t0"] + w["tms"] + w["pause"]:
                     next_delay = (w["t0"] + w["tms"] + w["pause"] - now) / 1000 + 0.05
@@ -465,13 +464,21 @@ class Room:
             dmg = 2 if msg.get("dmg") == 2 else 1
             ph, pos, _ = self.dragon_phase(now)
             if ph == "dash":
-                return None
+                return self._drej(f"衝刺中")
             try:
                 ax, ay = float(msg.get("x")), float(msg.get("y"))
             except (TypeError, ValueError):
-                return None
-            if not math.hypot(ax - pos[0], ay - pos[1]) <= D_RANGE:
-                return None
+                return self._drej("座標格式壞")
+            dist = math.hypot(ax - pos[0], ay - pos[1])
+            # 客戶端可能漏接一個路點事件（散步腿落後）：只要它宣稱的龍位置離伺服器的不遠、且玩家貼著宣稱的龍，就接受
+            try:
+                cdx, cdy = float(msg.get("ddx")), float(msg.get("ddy"))
+                near = dist <= D_RANGE or (math.hypot(ax - cdx, ay - cdy) <= D_RANGE
+                                           and math.hypot(cdx - pos[0], cdy - pos[1]) <= D_DRIFT_TOLER)
+            except (TypeError, ValueError):
+                near = dist <= D_RANGE
+            if not near:
+                return self._drej(f"太遠 dist={dist:.0f}（龍=({pos[0]:.0f},{pos[1]:.0f}) 打擊點=({ax:.0f},{ay:.0f}) ph={ph}）")
             d["hp"] -= dmg
             if d["hp"] <= 0:
                 d["st"], d["hp"], d["pos"], d["aim_tms"], d["dead_at"] = "dead", 0, list(pos), 0.0, now
@@ -480,7 +487,7 @@ class Room:
                 d["wander_gen"] += 1   # 作廢散步 tick
                 dead_gen = d["gen"]
                 out = {"t": "dragon", "ev": "dead", "x": pos[0], "y": pos[1]}
-            elif ph == "idle" and self.dragon_map and now - self.dragon_idle_at(d) >= D_RAGE_MS:
+            elif ph == "idle" and self.dragon_map and now >= d["cooldown_until"]:
                 warp = dragon_edge(self.dragon_map, random.random() * math.pi * 2)   # 島隨機邊緣
                 ux, uy = ax - warp[0], ay - warp[1]
                 ul = math.hypot(ux, uy) or 1
@@ -490,10 +497,21 @@ class Room:
                 d["aim_tms"] = now
                 d["wander"] = None   # 散步作廢，進入反擊循環
                 d["wander_gen"] += 1
-                post_cycle = self.dragon_idle_at(d) / 1000 - time.time() + 0.1   # 回中心後接著散步
+                # 反擊循環全程＋結束後 D_RAGE_MS 內不再觸發（cooldown_until 蓋掉整個循環）
+                d["cooldown_until"] = now + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS + D_RAGE_MS
+                post_cycle = (d["aim_tms"] + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS) / 1000 - time.time() + 0.1   # 對岸歇完接著散步
                 out = {"t": "dragon", "ev": "aim", "x": warp[0], "y": warp[1], "fx": pos[0], "fy": pos[1],
                        "tx": ax, "ty": ay, "dx": d["dest"][0], "dy": d["dest"][1], "castMs": D_CAST_MS, "hp": d["hp"]}
             else:
+                why = []
+                if ph != "idle":
+                    why.append(f"ph={ph}")
+                if not self.dragon_map:
+                    why.append("無島形")
+                cd_left = d["cooldown_until"] - now
+                if cd_left > 0:
+                    why.append(f"怒氣冷卻剩 {cd_left:.0f}ms")
+                print(f"[dragon] 命中但沒反擊: {' / '.join(why) or '未知'}", file=sys.stderr, flush=True)
                 out = {"t": "dragon", "ev": "hp", "hp": d["hp"]}
         if dead_gen is not None:   # 打倒了：重生計時（鎖外，避免 broadcast 卡住其他人）
             t = threading.Timer(D_RESPAWN_MS / 1000, self._dragon_respawn, (dead_gen,))
@@ -503,6 +521,11 @@ class Room:
         elif post_cycle is not None:
             self._schedule_wander_tick(post_cycle, self.dragon["wander_gen"])
         return out
+
+    def _drej(self, why):
+        """打擊被拒（暫時性診斷日誌）。"""
+        print(f"[dragon] 打擊拒絕: {why}", file=sys.stderr, flush=True)
+        return None
 
     def _dragon_respawn(self, gen):
         out2 = leg_delay = None
