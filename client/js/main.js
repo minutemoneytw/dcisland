@@ -57,6 +57,7 @@ const S = {
   draft: [],                    // 裝飾模式未保存的操作
   baseFurn: [],                 // 草稿所依據的擺設（進入裝飾模式時、或最近一次伺服器同步）
   confirmOpen: false,           // 「要保存嗎？」視窗是否開著
+  npcDB: null,                  // NPC 對話（assets/npcs/npcs.json）
   toolsDB: null,                // 採集工具與可破壞物件（assets/tools/tools.json）
   drops: [],                    // 地上的掉落物 {item,x,y,born}
   inv: JSON.parse(localStorage.getItem('dcisland.m0.inv') || '{}'),   // 背包：物品id -> 數量
@@ -241,6 +242,8 @@ function doAttack(auto) {
     if (d) { S._hits = 1; useTool(d); return; }
     const seat = quiet ? null : seatNear(p);   // 身邊有椅子/沙發/床就坐下（長按自動連擊不會反覆切換）
     if (seat) { S._hits = 1; usePose(seat); S.holdSkipF = true; return; }
+    const npc = quiet ? null : npcNear(p);       // 身邊有 NPC 就跟他說話
+    if (npc) { S._hits = 1; talkTo(npc); S.holdSkipF = true; return; }
   }
   if (S.me.weapon === 'hands') { say('先在「造型」裡裝備武器！'); return; }
   if (!S.weaponImgs[S.me.weapon]) return;
@@ -524,6 +527,7 @@ function drawPerson(p, wi, nameColor) {
   ctx.strokeText(p.name, p.x, nameY);
   ctx.fillStyle = nameColor;
   ctx.fillText(p.name, p.x, nameY);
+  if (p.say && S.t < p.say.until) drawBubble(p.x, nameY - 14, p.say.text, Math.min(1, (p.say.until - S.t) / .4));
 }
 // 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）
 function drawSleeper(p) {
@@ -554,6 +558,44 @@ function furnAtPoint(wx, wy) {   // 世界座標點到哪件家具（依繪製�
   }
   return null;
 }
+// ---------------- NPC 對話 ----------------
+// 點 NPC（左鍵/右鍵）或在旁邊按 F，NPC 會隨機說 npcs.json 裡的一句，頭上冒泡泡。NPC 與對話只存在自己的畫面（不同步）
+function npcAt(wx, wy) {
+  return S.players.find(n => n.npc && wx >= n.x - 18 && wx <= n.x + 18 && wy >= n.y - 52 && wy <= n.y + 4) || null;
+}
+function npcNear(p) {
+  let best = null, bd = 56;
+  for (const n of S.players) {
+    if (!n.npc) continue;
+    const d = Math.hypot(n.x - p.x, n.y - p.y);
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best;
+}
+function talkTo(n) {
+  const me = S.players[0], db = S.npcDB;
+  if (Math.hypot(n.x - me.x, n.y - me.y) > db.range) { say(`靠近一點再跟${n.name}說話`); return; }
+  let line;
+  do { line = db.lines[Math.floor(Math.random() * db.lines.length)]; } while (db.lines.length > 1 && line === n.lastLine);   // 不連續說同一句
+  n.lastLine = line;
+  n.say = { text: line, until: S.t + db.duration };
+  n.idle = db.duration + .5; n.moving = false; n.target = null;      // 停下來說話，面向玩家
+  if (Math.abs(me.x - n.x) > 6) n.dir = Math.sign(me.x - n.x);
+}
+// 對話泡泡（畫在名牌上方）
+function drawBubble(x, y, text, alpha) {
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.font = '11px "Microsoft JhengHei"'; ctx.textAlign = 'center';
+  const w = Math.ceil(ctx.measureText(text).width) + 14, h = 18, bx = Math.round(x - w / 2), by = Math.round(y - h);
+  ctx.fillStyle = 'rgba(252,250,242,.96)'; ctx.strokeStyle = 'rgba(30,24,22,.9)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.roundRect(bx, by, w, h, 5); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 4, by + h); ctx.lineTo(x, by + h + 5); ctx.lineTo(x + 4, by + h); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = 'rgba(252,250,242,.96)'; ctx.fillRect(x - 3, by + h - 1, 6, 2);       // 蓋掉尾巴與泡泡相接的線
+  ctx.fillStyle = '#2a2420'; ctx.fillText(text, x, by + 13);
+  ctx.restore();
+}
+
 function seatNear(p) {     // F 鍵：身邊最近的可坐/可睡家具
   let best = null, bd = 56;
   for (const it of S.furnItems) {
@@ -1023,6 +1065,8 @@ function clickAttack(wx, wy) {
   if (!quiet) {
     const f = furnAtPoint(wx, wy);
     if (f && furnitureDef(f.type)?.use) { usePose(f); return; }
+    const n = npcAt(wx, wy);
+    if (n) { talkTo(n); return; }                // 點 NPC：跟他說話（不是攻擊）
   }
   if (S.players[0].pose) return;                 // 坐著/睡著不能揮擊
   // 點到可破壞物件（且那裡沒有動物）→ 自動換工具去打它
@@ -1074,6 +1118,7 @@ canvas.addEventListener('contextmenu', e => {
     const r = canvas.getBoundingClientRect();
     const f = furnAtPoint(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y);
     if (f && furnitureDef(f.type)?.use) usePose(f);
+    else { const n = npcAt(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y); if (n) talkTo(n); }
     return;
   }
   if (S.mode !== 'decor' || !S.mouseCell) return;
@@ -1131,6 +1176,7 @@ async function boot() {
   S.animalsDB = await loadJSON('assets/animals/animals.json');
   await Promise.all(S.animalsDB.animals.map(async a => S.anImgs[a.id] = await loadImg(`assets/animals/${a.sprite}`)));
   // 採集工具（鎬子/斧頭）：圖放進 weaponImgs，讓繪製與遠端玩家共用同一套武器繪製
+  S.npcDB = await loadJSON('assets/npcs/npcs.json');
   S.toolsDB = await loadJSON('assets/tools/tools.json');
   await Promise.all(S.toolsDB.tools.map(async t => S.weaponImgs[t.id] = await loadImg(`assets/tools/${t.sprite}`)));
   S.avatar = await loadJSON('assets/avatar/avatar.json');
@@ -1208,7 +1254,7 @@ async function boot() {
   try { first = !localStorage.getItem('dcisland.m0.seen'); localStorage.setItem('dcisland.m0.seen', '1'); } catch { /* 無痕等：當作第一次 */ }
   const welcomeMs = first ? 7000 : 3000;
   welcomeUntil = performance.now() + welcomeMs;           // 歡迎訊息顯示期間，不讓「已連上島」把它蓋掉
-  if (first) toast('歡迎來到 DC島！左鍵／F 鍵互動（攻擊、採集）・WASD 走動・Shift 跑・Space 跳・E 裝飾', welcomeMs);
+  if (first) toast('歡迎來到 DC島！左鍵／F 鍵互動（攻擊、採集、坐下、聊天）・WASD 走動・Shift 跑・Space 跳・E 裝飾', welcomeMs);
   else toast('歡迎來到 DC島！WASD 走動・Shift 跑・Space 跳・左鍵/F 攻擊・E 裝飾', welcomeMs);
   import('./discord.js').then(m => m.hookDiscord()).catch(err => console.warn('hookDiscord:', err));
   // M2：多人同步（同語音頻道＝同島；本機則 ?room= 或預設 local:local）

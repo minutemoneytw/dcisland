@@ -58,7 +58,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 
 ## 操作
 
-`WASD/方向鍵` 走 · `Shift` 跑 · `Space` 跳 · **左鍵（或 `F`）攻擊，長按自動連續揮擊**（點石頭自動用鎬子、點樹木/蘑菇自動用斧頭） · 左/右鍵點椅子/沙發/床（或在旁邊按 `F`）坐下/睡覺，再點一次、按 `F` 或移動就起身 · `E` 裝飾模式（可邊走邊擺、可穿過擺飾；左鍵放置、右鍵拿取；按「完成」才保存、「取消變動」可還原，`E` 或 `Esc` 離開時有未保存的變動會先問；「清空」需要管理員）· 頂部 chip 切地形 · `造型` 換膚色/髮型/上衣/武器。
+`WASD/方向鍵` 走 · `Shift` 跑 · `Space` 跳 · **左鍵（或 `F`）攻擊，長按自動連續揮擊**（點石頭自動用鎬子、點樹木/蘑菇自動用斧頭） · 左/右鍵點 NPC 聊天、點椅子/沙發/床（或在旁邊按 `F`）坐下/睡覺，再點一次、按 `F` 或移動就起身 · `E` 裝飾模式（可邊走邊擺、可穿過擺飾；左鍵放置、右鍵拿取；按「完成」才保存、「取消變動」可還原，`E` 或 `Esc` 離開時有未保存的變動會先問；「清空」需要管理員）· 頂部 chip 切地形 · `造型` 換膚色/髮型/上衣/武器。
 
 ## 內容擴充（都不用改程式）
 
@@ -68,6 +68,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 | 家具 | `client/assets/furniture/furniture.json` 加條目 + png |
 | 動物 | `client/assets/animals/animals.json` 加條目 + png，並在各地形 `terrain.json` 的 `animals` 指定；會游泳/兩棲/會飛的加 `"swim": true`（才能逃到海上） |
 | 造型 | `client/assets/avatar/avatar.json`（＋對應 png） |
+| NPC 台詞 | `client/assets/npcs/npcs.json` 的 `lines` |
 | 可破壞物件／採集工具／掉落物 | `client/assets/tools/tools.json`（key＝地形 deco 的圖檔名；掉落物目前為空） |
 
 ## 機密與安全
