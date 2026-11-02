@@ -842,6 +842,7 @@ function killPlayer(p, cause) {
 }
 function revivePlayer(p) {
   p.dead = false; p.deadAt = 0;
+  p.pose = null; p.seat = null; p.seatType = null;                 // 復活後一定是站著的
   const [nx, ny] = landNear((COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL);
   p.x = nx; p.y = ny; p.z = 0; p.vz = 0; p.dir = 1;
   S.floaters.push({ x: p.x, y: p.y - 46, v: '復活！', life: 1.2, crit: true });
@@ -1051,6 +1052,7 @@ function seatNear(p) {     // F 鍵：身邊最近的可坐/可睡家具
 }
 function usePose(it) {
   const p = S.players[0], def = furnitureDef(it.type);
+  if (p.dead) { say('你在墓碑裡動不了', 1400); return; }          // 死亡（墓碑）期間不能坐/躺，否則墓碑會被帶到家具上
   if (p.pose) {   // 已經坐/睡著：再點同一件＝起身；點別件＝先起身再去
     const same = p.seat.type === it.type && p.seat.cell[0] === it.cell[0] && p.seat.cell[1] === it.cell[1];
     standUp(p);
@@ -1547,7 +1549,10 @@ addEventListener('keydown', e => {
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   if (S.helpOpen) { if (k === 'escape' || k === 'enter') closeHelp(); return; }       // 操作說明開著：Esc / Enter 關閉，其他鍵不處理
   if (S.confirmOpen) { if (k === 'escape') closeConfirm(); return; }   // 「要保存嗎？」開著時：Esc＝繼續編輯，其他鍵不處理
-  if (k === 'e' && !e.repeat) { if (S.players[0].dead) toast('你在墓碑裡動不了', 1400); else if (S.mode === 'walk') enterDecor(); else if (S.mode === 'decor') requestExitDecor(); }
+  if (k === 'e' && !e.repeat) {
+    if (S.mode === 'decor') requestExitDecor();                       // 離開不受死亡影響
+    else if (S.mode === 'walk') { if (S.players[0].dead) toast('你在墓碑裡動不了', 1400); else enterDecor(); }
+  }
   if (k === 'escape' && S.mode === 'decor') requestExitDecor();     // Esc 也能離開裝飾模式
   if (k === 'f' && !e.repeat) doAttack(true);
 });
@@ -1618,6 +1623,7 @@ canvas.addEventListener('mousedown', e => {
     return;
   }
   if (S.mode !== 'decor' || !S.mouseCell || !S.sel) return;
+  if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
   const [x, y] = S.mouseCell;
   if (S.draft.length >= 300) { toast('未保存的變動太多了，請先按「完成」保存'); return; }
   if (canPlace(S.sel, x, y)) { stageOp({ t: 'place', type: S.sel, cell: [x, y] }); toast('放置'); }
@@ -1634,12 +1640,17 @@ canvas.addEventListener('contextmenu', e => {
     return;
   }
   if (S.mode !== 'decor' || !S.mouseCell) return;
+  if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
   const [x, y] = S.mouseCell;
   const idx = S.occ.get(key(x, y));
   if (idx !== undefined) { stageOp({ t: 'remove', cell: [x, y] }); toast('收起擺設'); }
 });
 
-$('btnDecor').onclick = () => { if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; } if (S.mode === 'walk') enterDecor(); else requestExitDecor(); };
+$('btnDecor').onclick = () => {
+  if (S.mode === 'decor') { requestExitDecor(); return; }
+  if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
+  enterDecor();
+};
 $('furnClose').onclick = () => exitDecor(true);                // 完成＝保存並離開
 $('furnCancel').onclick = () => exitDecor(false);              // 取消變動＝不保存並離開
 $('cfSave').onclick = () => exitDecor(true);
@@ -1647,6 +1658,7 @@ $('cfDiscard').onclick = () => exitDecor(false);
 $('cfKeep').onclick = closeConfirm;
 $('helpClose').onclick = closeHelp;
 $('furnClear').onclick = () => {
+  if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
   if (!canClear()) { toast('清空需要管理員權限'); return; }
   stageOp({ t: 'clear' }); toast('已清空（按「完成」才會保存，「取消變動」可還原）', 2600);
 };
