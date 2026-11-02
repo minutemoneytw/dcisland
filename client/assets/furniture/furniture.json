@@ -61,14 +61,6 @@
    "sprite": "tv.png"
   },
   {
-   "id": "cat",
-   "name": "貓",
-   "w": 1,
-   "h": 1,
-   "solid": false,
-   "sprite": "cat.png"
-  },
-  {
    "id": "bed",
    "name": "床",
    "w": 1,
@@ -92,7 +84,8 @@
    "w": 1,
    "h": 1,
    "solid": true,
-   "sprite": "sign.png"
+   "sprite": "sign.png",
+   "text": true
   }
  ]
 }

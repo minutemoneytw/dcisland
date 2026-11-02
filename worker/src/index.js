@@ -14,6 +14,7 @@ const json = (obj, status = 200) =>
 // 與 client/js/main.js 的島尺寸一致（改一邊要改另一邊）
 const COLS = 88, ROWS = 56;
 const MAX_FURN = 500;        // 每個地形的擺設上限
+const SIGN_MAX = 100;        // 看板文字上限（字）
 const MAX_MSG = 16384;       // 單則訊息長度上限（字元）；裝飾模式的 commit 會一次帶多個操作
 const MAX_OPS = 100;         // 一次 commit 最多處理幾個操作（超過的忽略，客戶端會分批送）
 const MAX_PLAYERS = 64;      // 一座島同時在線上限
@@ -301,7 +302,7 @@ export class Island {
     try {
       const res = await this.env.ASSETS.fetch(new Request("https://assets.local/assets/furniture/furniture.json"));
       const man = await res.json();
-      this.furnDefs = new Map(man.items.map(it => [it.id, { w: it.w, h: it.h }]));
+      this.furnDefs = new Map(man.items.map(it => [it.id, { w: it.w, h: it.h, text: !!it.text }]));
     } catch (e) {
       console.log("[furn] manifest 載入失敗", String(e));
       return new Map();          // 載入失敗就不接受擺放，下次再試
@@ -441,6 +442,8 @@ export class Island {
     } else if (msg.t === "commit" || msg.t === "place" || msg.t === "remove" || msg.t === "clear") {
       // 舊客戶端的單一操作（place/remove/clear）也走同一套驗證與權限
       if (att.terrain) await this.commitFurn(ws, att, msg.t === "commit" ? msg.ops : [msg]);
+    } else if (msg.t === "sign") {
+      if (att.terrain) await this.editSign(ws, att, msg);
     } else if (msg.t === "event") {
       if (att.terrain) this.broadcast({ t: "event", id: att.id, kind: msg.kind }, ws, att.terrain);
     }
@@ -926,6 +929,22 @@ export class Island {
       this.broadcast({ t: "floor", items: floorToList(floor) }, null, terrain);
     }
     try { ws.send(JSON.stringify({ t: "commit_result", applied, rejected, denied })); } catch { /* 對方已斷線 */ }
+  }
+
+  // 看板改字：所有人都能改（與一般家具同樣開放）。只接受 manifest 標了 text 的家具、文字最多 SIGN_MAX 字，改完廣播整份擺設
+  async editSign(ws, att, msg) {
+    const cell = msg.cell;
+    if (!Array.isArray(cell) || cell.length !== 2 || !Number.isInteger(cell[0]) || !Number.isInteger(cell[1])) return;
+    const defs = await this.getFurnDefs(), items = await this.getFurn(att.terrain);
+    const it = items.find(o => {
+      const d = defs.get(o.type);
+      return d && d.text && cell[0] >= o.cell[0] && cell[0] < o.cell[0] + d.w && cell[1] >= o.cell[1] && cell[1] < o.cell[1] + d.h;
+    });
+    if (!it) return;
+    const text = String(msg.text ?? "").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").slice(0, SIGN_MAX).trim();
+    if (text) it.text = text; else delete it.text;
+    await this.state.storage.put("furn:" + att.terrain, items);
+    this.broadcast({ t: "furn", items }, null, att.terrain);
   }
 
   async webSocketClose(ws) { this.leave(ws); }

@@ -64,6 +64,7 @@ const S = {
   baseFurn: [],                 // 草稿所依據的擺設（進入裝飾模式時、或最近一次伺服器同步）
   confirmOpen: false,           // 「要保存嗎？」視窗是否開著
   helpOpen: false,              // 嚮導的操作說明視窗是否開著
+  signOpen: false, signItem: null,   // 看板編輯視窗是否開著／正在編輯哪一塊
   npcDB: null,                  // NPC 對話（assets/npcs/npcs.json）
   toolsDB: null,                // 採集工具與可破壞物件（assets/tools/tools.json）
   drops: [],                    // 地上的掉落物 {item,x,y,born}
@@ -267,6 +268,8 @@ function doAttack(auto) {
     if (!ownerFirst) {
       const d = decoNear(p);
       if (d) { S._hits = 1; useTool(d); return; }
+      const sgn = quiet ? null : signNear(p);    // 身邊有看板就打開（長按自動連擊不會反覆打開）
+      if (sgn) { S._hits = 1; openSign(sgn); S.holdSkipF = true; return; }
       const seat = quiet ? null : seatNear(p);   // 身邊有椅子/沙發/床就坐下（長按自動連擊不會反覆切換）
       if (seat) { S._hits = 1; usePose(seat); S.holdSkipF = true; return; }
       const npc = quiet ? null : npcNear(p);       // 身邊有 NPC 就跟他說話
@@ -1181,6 +1184,39 @@ function openHelp() {
   S.helpOpen = true; $('helpBox').classList.remove('hidden');
 }
 function closeHelp() { S.helpOpen = false; $('helpBox').classList.add('hidden'); }
+
+// ---- 看板：點它（或旁邊按 F）打開視窗，所有人都能看、都能改；文字由伺服器同步（沒連線時存本機）----
+const SIGN_RANGE = 90;
+function signNear(p) {     // F 鍵：身邊最近的看板
+  let best = null, bd = 56;
+  for (const it of S.furnItems) {
+    const def = furnitureDef(it.type); if (!def?.text) continue;
+    const d = Math.hypot((it.cell[0] + def.w / 2) * CELL - p.x, (it.cell[1] + def.h / 2) * CELL - p.y);
+    if (d < bd) { bd = d; best = it; }
+  }
+  return best;
+}
+function openSign(it) {
+  const p = S.players[0], def = furnitureDef(it.type);
+  if (p.dead) { say('你在墓碑裡動不了', 1400); return; }
+  if (Math.hypot((it.cell[0] + def.w / 2) * CELL - p.x, (it.cell[1] + def.h / 2) * CELL - p.y) > SIGN_RANGE) { say('靠近一點再看'); return; }
+  S.signOpen = true; S.signItem = { type: it.type, cell: [it.cell[0], it.cell[1]] };
+  for (const k in keys) keys[k] = false; S.mouseHeld = false;
+  $('signText').value = it.text || '';
+  $('signBox').classList.remove('hidden');
+  setTimeout(() => { $('signText').focus(); $('signText').select(); }, 0);
+}
+function closeSign() { S.signOpen = false; S.signItem = null; $('signBox').classList.add('hidden'); $('signText').blur(); }
+function saveSign() {
+  const it = S.signItem; if (!it) return;
+  const text = $('signText').value.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').slice(0, 100).trim();
+  if (netOn()) S.net.editSign(it.cell, text);           // 結果以伺服器廣播的擺設為準
+  else {                                                // 單機：直接改本機並存檔
+    const cur = S.furnItems.find(o => o.type === it.type && o.cell[0] === it.cell[0] && o.cell[1] === it.cell[1]);
+    if (cur) { if (text) cur.text = text; else delete cur.text; saveLayout(); }
+  }
+  closeSign(); toast(text ? '看板已更新' : '看板已清空', 1600);
+}
 // 對話泡泡（畫在名牌上方）
 function drawBubble(x, y, text, alpha) {
   ctx.save(); ctx.globalAlpha = alpha;
@@ -1314,6 +1350,16 @@ function draw() {
         ctx.save();
         if (idx === S.pickedIdx) ctx.globalAlpha = .5;
         ctx.drawImage(img, it.cell[0] * CELL, (it.cell[1] + def.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
+        if (def.text && it.text) {   // 看板的字：走近（約 4 格內）才顯示在上方，只顯示第一行前 16 字，點開看全文
+          const me = S.players[0], cx = (it.cell[0] + def.w / 2) * CELL, cy = (it.cell[1] + def.h) * CELL;
+          if (Math.hypot(cx - me.x, cy - me.y) < 130) {
+            const line = it.text.split('\n')[0], txt = line.length > 16 ? line.slice(0, 16) + '…' : line;
+            ctx.font = '10px "Microsoft JhengHei"'; ctx.textAlign = 'center';
+            const ty = cy - img.height * SC - 6, w = ctx.measureText(txt).width + 10;
+            ctx.fillStyle = 'rgba(20,16,12,.78)'; ctx.fillRect(cx - w / 2, ty - 11, w, 15);
+            ctx.fillStyle = '#ffe9a8'; ctx.fillText(txt, cx, ty);
+          }
+        }
         ctx.restore();
       }
     });
@@ -1578,7 +1624,7 @@ function onNetFurn(items) {
 // 裝飾模式的變動先記成「操作清單」S.draft（{t:'place',type,cell} / {t:'remove',cell} / {t:'clear'}），
 // 畫面上立刻看得到，但要按「完成」（或離開時選保存）才會真的送給伺服器；「取消變動」就全部丟掉。
 // 同島的人在你保存之前看不到。保存時伺服器會逐一驗證（被別人搶先占用的會被跳過），清空只有管理員能做。
-const cloneFurn = list => list.map(it => ({ type: it.type, cell: [it.cell[0], it.cell[1]] }));
+const cloneFurn = list => list.map(it => it.text ? { type: it.type, cell: [it.cell[0], it.cell[1]], text: it.text } : { type: it.type, cell: [it.cell[0], it.cell[1]] });
 const furnCovers = (it, cell) => {
   const d = furnitureDef(it.type) || { w: 1, h: 1 };
   return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
@@ -1810,6 +1856,11 @@ function saveAvatar() { localStorage.setItem('dcisland.m0.avatar', JSON.stringif
 const keys = {};
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
+  if (S.signOpen) {                                             // 看板視窗開著：Esc 取消、Ctrl+Enter 儲存，其他鍵留給輸入框
+    if (k === 'escape') { e.preventDefault(); closeSign(); }
+    else if (k === 'enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveSign(); }
+    return;
+  }
   keys[k] = true;
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   if (S.helpOpen) { if (k === 'escape' || k === 'enter') closeHelp(); return; }       // 操作說明開著：Esc / Enter 關閉，其他鍵不處理
@@ -1843,6 +1894,7 @@ function clickAttack(wx, wy) {
   if (!onOwner && !quiet) {
     const f = furnAtPoint(wx, wy);
     if (f && furnitureDef(f.type)?.use) { usePose(f); return; }
+    if (f && furnitureDef(f.type)?.text) { openSign(f); return; }
     const n = npcAt(wx, wy);
     if (n) { talkTo(n); return; }                // 點 NPC：跟他說話（不是攻擊）
   }
@@ -1870,7 +1922,7 @@ function clickAttack(wx, wy) {
 }
 // 長按 F 或左鍵：冷卻一到就自動再揮（每幀呼叫；第一下由按下事件負責，之後這裡接手）
 function autoAttack() {
-  if (S.mode !== 'walk' || S.helpOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
+  if (S.mode !== 'walk' || S.helpOpen || S.signOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
   quiet = true;
   try {
     if (S.mouseHeld && S.mouseClient) {
@@ -1911,6 +1963,7 @@ canvas.addEventListener('contextmenu', e => {
     const r = canvas.getBoundingClientRect();
     const f = furnAtPoint(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y);
     if (f && furnitureDef(f.type)?.use) usePose(f);
+    else if (f && furnitureDef(f.type)?.text) openSign(f);
     else { const n = npcAt(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y); if (n) talkTo(n); }
     return;
   }
@@ -1934,6 +1987,8 @@ $('cfSave').onclick = () => exitDecor(true);
 $('cfDiscard').onclick = () => exitDecor(false);
 $('cfKeep').onclick = closeConfirm;
 $('helpClose').onclick = closeHelp;
+$('signSave').onclick = saveSign;
+$('signCancel').onclick = closeSign;
 $('furnClear').onclick = () => {
   if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
   if (!canClear()) { toast('清空需要管理員權限'); return; }

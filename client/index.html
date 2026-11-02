@@ -66,6 +66,17 @@
     <div class="ff-panel-foot"><button id="helpClose" class="ff-btn small">知道了</button></div>
   </div>
 
+  <!-- 看板：所有人都看得到、都能改 -->
+  <div id="signBox" class="ff-panel hidden">
+    <div class="ff-panel-title">看板</div>
+    <div class="ff-panel-hint">寫點什麼吧——同島的人都看得到，也都能修改</div>
+    <textarea id="signText" maxlength="100" rows="4" spellcheck="false"></textarea>
+    <div class="ff-panel-foot">
+      <button id="signSave" class="ff-btn small">儲存</button>
+      <button id="signCancel" class="ff-btn small">取消</button>
+    </div>
+  </div>
+
   <div id="toast" class="hidden"></div>
 </div>
 <script type="module" src="js/main.js"></script>

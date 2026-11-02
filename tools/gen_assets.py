@@ -581,10 +581,9 @@ FURN_MANIFEST = dict(
         dict(id="rug",   name="地毯",  w=2, h=2, solid=False, sprite="rug.png"),
         dict(id="lamp",  name="電燈",  w=1, h=1, solid=True,  sprite="lamp.png"),
         dict(id="tv",    name="電視",  w=1, h=1, solid=True,  sprite="tv.png"),
-        dict(id="cat",   name="貓",    w=1, h=1, solid=False, sprite="cat.png"),
         dict(id="bed",   name="床",    w=1, h=1, solid=True,  sprite="bed.png", use="sleep", quiltRow=13),
         dict(id="shelf", name="書架",  w=1, h=1, solid=True,  sprite="shelf.png"),
-        dict(id="sign",  name="看板",  w=1, h=1, solid=True,  sprite="sign.png"),
+        dict(id="sign",  name="看板",  w=1, h=1, solid=True,  sprite="sign.png", text=True),
     ],
 )
 

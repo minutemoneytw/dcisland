@@ -104,6 +104,7 @@ WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 # 以下限制與 worker/src/index.js 一致（改一邊要改另一邊）
 COLS, ROWS = 88, 56
 MAX_FURN = 500
+SIGN_MAX = 100            # 看板文字上限（字）
 MAX_MSG = 16384           # 裝飾模式的 commit 會一次帶多個操作
 MAX_OPS = 100
 MAX_PLAYERS = 64
@@ -225,6 +226,15 @@ def cell_has_furn(items, cell):
         if it["cell"][0] <= cell[0] < it["cell"][0] + w and it["cell"][1] <= cell[1] < it["cell"][1] + h:
             return True
     return False
+
+_TEXT_TYPES = None
+def text_types():
+    """可編輯文字的家具種類（furniture.json 標了 text 的，例如看板）。"""
+    global _TEXT_TYPES
+    if _TEXT_TYPES is None:
+        with open(os.path.join(CLIENT, "assets", "furniture", "furniture.json"), encoding="utf-8") as f:
+            _TEXT_TYPES = {it["id"] for it in json.load(f)["items"] if it.get("text")}
+    return _TEXT_TYPES
 
 _FURN_DEFS = None
 def furn_defs():
@@ -367,6 +377,23 @@ class Room:
         if t == "clear":
             items.clear()
             return True
+        return False
+
+    def edit_sign(self, terrain, cell, text):
+        """看板改字：所有人都能改。只接受標了 text 的家具、最多 SIGN_MAX 字。回傳 True 表示有變動。"""
+        if not (isinstance(cell, list) and len(cell) == 2 and all(isinstance(v, int) and not isinstance(v, bool) for v in cell)):
+            return False
+        text = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", str(text if text is not None else ""))[:SIGN_MAX].strip()
+        defs = furn_defs()
+        with self.lock:
+            for it in self.furn_list(terrain):
+                w, h = defs.get(it["type"], (1, 1))
+                if it["type"] in text_types() and it["cell"][0] <= cell[0] < it["cell"][0] + w and it["cell"][1] <= cell[1] < it["cell"][1] + h:
+                    if text:
+                        it["text"] = text
+                    else:
+                        it.pop("text", None)
+                    return True
         return False
 
     def commit_furn(self, terrain, ops, admin):
@@ -1103,6 +1130,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             room.broadcast({"t": "furn", "items": list(room.furn_list(cur))}, terrain=cur)
                         if floor_changed:
                             room.broadcast({"t": "floor", "items": floor_to_list(room.floor_map(cur))}, terrain=cur)
+                elif t == "sign":   # 看板改字（所有人都能改）
+                    cur = room.terrain_of(cid)
+                    if cur and room.edit_sign(cur, msg.get("cell"), msg.get("text")):
+                        room.broadcast({"t": "furn", "items": list(room.furn_list(cur))}, terrain=cur)
                 elif t == "event":   # 揮擊等瞬時事件
                     cur = room.terrain_of(cid)
                     if cur:

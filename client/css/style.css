@@ -148,3 +148,9 @@ body {
 /* ---------- 裝飾面板：擺設／地板分頁 ---------- */
 .ff-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
 .ff-tabs .ff-btn { flex: 1; }
+
+/* ---------- 看板編輯視窗 ---------- */
+#signBox { left: 50%; top: 40%; transform: translate(-50%, -50%); width: 340px; z-index: 31; }
+#signBox.hidden { display: none !important; }
+#signText { width: 100%; box-sizing: border-box; resize: none; background: #1d2230; color: var(--text); border: 1px solid var(--gold-dim); padding: 6px 8px; font: 13px/1.6 "Microsoft JhengHei", sans-serif; }
+#signText:focus { outline: none; border-color: var(--gold); }
