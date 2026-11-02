@@ -622,7 +622,10 @@ function talkTo(n) {
   n.say = { text: line, until: S.t + db.duration };
   n.idle = db.duration + .5; n.moving = false; n.target = null;      // 停下來說話，面向玩家
   if (Math.abs(me.x - n.x) > 6) n.dir = Math.sign(me.x - n.x);
-  if (n.guide) openHelp();                    // 嚮導：除了說一句話，還會跳出簡易操作說明
+  if (n.guide) {                              // 嚮導：先說一句話，讓台詞看得到，約 1.5 秒後再跳出簡易操作說明
+    clearTimeout(S.helpTimer);
+    S.helpTimer = setTimeout(() => { if (S.players.includes(n) && !S.helpOpen && !S.confirmOpen) openHelp(); }, 1500);
+  }
 }
 // 嚮導的簡易操作說明視窗（內容在 npcs.json 的 help）
 function openHelp() {
