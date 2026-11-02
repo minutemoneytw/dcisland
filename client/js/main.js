@@ -357,7 +357,6 @@ function nearestLand(a) {
 // 預警範圍提示 1 秒後，以龍本體直線飛衝過島（攻擊範圍＝龍的大小，被撞到＝KO），衝到對岸落地後飛回地圖中心
 const OWNER_FLY_SPEED = 240, OWNER_DASH_SPEED = 560, OWNER_CAST = 1, OWNER_CD = 12;
 const OWNER_GAZE_CAST = 2;      // 石化之瞳的開眼預警秒數（與兩份伺服器的 D_GAZE_CAST_MS 一致）
-const OWNER_BEAM_HALF = 104;    // 石化光束半寬 px（受害者自判用；各客戶端同一常數，伺服器不判定）
 const OWNER_PETRIFY_MS = 10000; // 石化時長：不能移動＋每秒扣 1 HP（判定在各人自己的畫面，不進同步協定）
 const OWNER_WALK_SPEED = 34, OWNER_LEG_MIN = 1500, OWNER_PAUSE = [1.5, 4];   // 閒晃：路點間散步速度／每腿最短時長／休息範圍（秒）
 const OWNER_REGEN = 18;   // 島主每秒回血（單機本地模擬；連線時血量由伺服器權威，與兩份伺服器的 D_REGEN 一致）
@@ -488,45 +487,27 @@ function ownerDive(a, def) {
   toast(`${def.name} 發動龍衝！`, 2000);
 }
 
-// ---- 石化之瞳（笨蛋蛇女的攻擊，atk: "gaze"）：不瞬移，原地開眼 2 秒 → 面前直線石化 ----
-// 直線在開眼瞬間就鎖定攻擊者位置（走位就能躲）；石化由各客戶端自判（跟龍衝的受害者自判同源），伺服器只廣播光束幾何
-function ownerGazeCast(a, src) {   // 說完台詞：原地開眼（大眼睛預警），鎖定攻擊者方向
+// ---- 石化之瞳（笨蛋蛇女的攻擊，atk: "gaze"）：不瞬移，原地開眼 2 秒 → 全地圖「正面朝著她」的人石化 ----
+// 沒有直線、不看距離：發射瞬間臉朝向蛇女的人（左右朝向）都會石化，背對她／看向另一邊就安全。
+// 石化由各客戶端自判（跟龍衝的受害者自判同源）；伺服器仍會帶光束幾何（舊協定），客戶端不再用它判定
+function ownerGazeCast(a, src) {   // 說完台詞：原地開眼（大眼睛預警），蛇女轉向攻擊者
   const def = animalDef(a.id);
   a.cast = OWNER_GAZE_CAST; a.castFrom = { x: src.x, y: src.y };
   a.wleg = null; a.z = 0; a.fly = false;
   a.dir = src.x < a.x ? -1 : 1;
-  toast(`${def.name} 睜開了石化之瞳——快離開她面前的直線！`, 2600);
+  toast(`${def.name} 睜開了石化之瞳——面向她就會石化，快轉身背對她！`, 2600);
 }
-function gazeBeamDest(fx, fy, ux, uy) {   // 光束終點：沿方向找最後一格陸地（單機自算；連線時用伺服器帶的，演算法同兩份伺服器）
-  const gx = Math.floor(fx / CELL), gy = Math.floor(fy / CELL);
-  let last = [gx, gy];
-  for (let r = 1; r <= 50; r++) {
-    const x = Math.round(gx + ux * r), y = Math.round(gy + uy * r);
-    if (x < 0 || y < 0 || x >= COLS || y >= ROWS) break;
-    if (S.world.types[y * COLS + x] === 0) break;
-    last = [x, y];
-  }
-  return { x: last[0] * CELL + CELL / 2, y: last[1] * CELL + CELL / 2 };
-}
-function distToSeg(px, py, x1, y1, x2, y2) {   // 點到線段距離（石化判定用）
-  const dx = x2 - x1, dy = y2 - y1;
-  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy || 1)));
-  return Math.hypot(px - (x1 + dx * t), py - (y1 + dy * t));
-}
-function gazeFire(a, def, destOverride) {   // 開眼結束：射出石化光束（destOverride＝伺服器帶的終點）
-  const cf = a.castFrom || { x: a.x + (a.dir || 1), y: a.y };
-  const u = { x: cf.x - a.x, y: cf.y - a.y };
-  const len = Math.hypot(u.x, u.y) || 1;
-  u.x /= len; u.y /= len;
+// 這個人是不是「正面朝著」蛇女：臉朝向（dir＝左右）與蛇女所在的左右一致；幾乎在正上/正下方分不出左右時算面對（保守）
+const facingGazer = (q, a) => { const dx = a.x - q.x; return Math.abs(dx) < 6 || dx * (q.dir || 1) > 0; };
+function gazeFire(a, def) {   // 開眼結束：石化之瞳發射（全地圖光閃一下），判定在各人自己的畫面
   a.castFrom = null;
   a.rageCd = S.t + OWNER_CD;
-  const dest = destOverride || gazeBeamDest(a.x, a.y, u.x, u.y);
-  S.floaters.push({ beam: true, x1: a.x, y1: a.y - 24 * (def.big || 1), x2: dest.x, y2: dest.y, life: .5 });
-  gazePetrify(a, def, dest.x, dest.y);
+  S.floaters.push({ beam: true, x1: a.x, y1: a.y - 24 * (def.big || 1), life: .7 });
+  gazePetrify(a, def);
   toast(`${def.name} 的石化之瞳發射了！`, 2000);
 }
-function gazePetrify(a, def, tx, ty) {   // 光束線上的玩家石化：自己不能動＋每秒扣 1 HP；別人只做灰階演出（由對方畫面自判）
-  const hit = q => !q.dead && distToSeg(q.x, q.y, a.x, a.y, tx, ty) <= OWNER_BEAM_HALF;
+function gazePetrify(a, def) {   // 面向蛇女的玩家石化（全地圖）：自己不能動＋每秒扣 1 HP；別人只做灰階演出（由對方畫面自判）
+  const hit = q => !q.dead && facingGazer(q, a);
   const me = S.players[0];
   if (hit(me)) petrifyPlayer(me, def.name);
   for (const r of S.remotes.values()) {
@@ -662,7 +643,7 @@ function stepOwnerProxy(a, dt, def) {
     a.cast = Math.max(0, (g.castMs - el) / 1000); a.castFrom = g.from;
     if (el >= g.castMs) {
       a.gaze = null; a.cast = 0; a.castFrom = null;
-      gazeFire(a, def, g.bx != null ? { x: g.bx, y: g.by } : null);
+      gazeFire(a, def);
     }
     return;
   }
@@ -814,7 +795,7 @@ function onNetDragon(m) {
     ownerSay(na);
     return;
   }
-  if (m.ev === 'gaze') {   // 蛇女開眼：原地石化預警（直線已鎖定，castMs 後本地射出；線上的人快走開）
+  if (m.ev === 'gaze') {   // 蛇女開眼：原地石化預警（castMs 後本地發射；發射瞬間面向她的人石化）
     const na = a || dragonEnsure(m.x, m.y);
     if (!na) return;
     na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.rest = 0; na.retHome = false; na.cycle = null; na.wleg = null;
@@ -824,9 +805,9 @@ function onNetDragon(m) {
     na.gaze = { t0ms: Date.now(), castMs: m.castMs || OWNER_GAZE_CAST * 1000,
                 from: { x: m.tx, y: m.ty }, x: m.x, y: m.y, bx: m.bx, by: m.by };
     const me = S.players[0];
-    const inLine = !me.dead && distToSeg(me.x, me.y, m.x, m.y, m.bx, m.by) <= OWNER_BEAM_HALF;
-    toast(inLine ? `${animalDef(na.id).name} 對你這條線睜開了石化之瞳——快走開！`
-                 : `${animalDef(na.id).name} 睜開了石化之瞳！`, 2600);
+    const facing = !me.dead && facingGazer(me, na);
+    toast(facing ? `${animalDef(na.id).name} 睜開了石化之瞳——你正面對她，快轉身背對她！`
+                 : `${animalDef(na.id).name} 睜開了石化之瞳——別面向她！`, 2600);
     return;
   }
   if (m.ev === 'wander') {   // 島主往新路點散步（伺服器帶路；插值與伺服器一致，凍結恢復也正確）
@@ -1511,18 +1492,20 @@ function draw() {
         ctx.restore();
         if (a.dead) return;
         const top = a.y - a.z - H - 2;   // 圖的頂端（名牌/驚嘆號/血條貼這條線往下排）
-        // 島主預警：龍衝＝金色虛線＝衝刺路徑；石化之瞳＝綠色虛線＝石化直線（走位離開這條線就不會被石化）
+        // 島主預警：龍衝＝金色虛線＝衝刺路徑；石化之瞳＝只有大眼睛（沒有直線，全地圖面向她的人都會石化）
         if (a.cast > 0 && a.castFrom) {
           const cf = a.castFrom, L = 1700;
           const ux = cf.x - a.x, uy = cf.y - a.y, ul = Math.hypot(ux, uy) || 1;
           const pul = Math.sin(S.t * 12) * .5 + .5;
           const gaze = ownerAtk(def) === 'gaze';
-          ctx.save();
-          ctx.strokeStyle = gaze ? `rgba(150,240,150,${.28 + .34 * pul})` : `rgba(255,214,90,${.28 + .34 * pul})`;
-          ctx.lineWidth = 2 + 2 * pul; ctx.setLineDash([10, 12]);
-          ctx.beginPath(); ctx.moveTo(a.x, a.y - H * .5);
-          ctx.lineTo(a.x + ux / ul * L, a.y - H * .5 + uy / ul * L);
-          ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+          if (!gaze) {
+            ctx.save();
+            ctx.strokeStyle = `rgba(255,214,90,${.28 + .34 * pul})`;
+            ctx.lineWidth = 2 + 2 * pul; ctx.setLineDash([10, 12]);
+            ctx.beginPath(); ctx.moveTo(a.x, a.y - H * .5);
+            ctx.lineTo(a.x + ux / ul * L, a.y - H * .5 + uy / ul * L);
+            ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+          }
           if (gaze) drawGazeEye(a.x, a.y - H * .62, 9 * bs + 6 * (1 - a.cast / OWNER_GAZE_CAST), pul);
         }
         // HP 小條（受過傷才顯示；島主加寬）
@@ -1620,15 +1603,14 @@ function draw() {
   // 傷害飄字 / 消失特效
   for (const f of S.floaters) {
     ctx.save();
-    if (f.beam) {   // 石化光束：從蛇女身上射到對岸的綠白光柱（先粗後細，0.5 秒淡出）
-      const q = 1 - f.life / .5, w = 48 * (1 - q) + 12;
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = `rgba(160,255,180,${.85 * (1 - q)})`;
-      ctx.lineWidth = w;
-      ctx.beginPath(); ctx.moveTo(f.x1, f.y1); ctx.lineTo(f.x2, f.y2); ctx.stroke();
+    if (f.beam) {   // 石化之瞳發射：以蛇女為中心的綠白光環快速擴散到全地圖（0.7 秒淡出）
+      const q = 1 - f.life / .7;
+      ctx.strokeStyle = `rgba(160,255,180,${.9 * (1 - q)})`;
+      ctx.lineWidth = 26 * (1 - q) + 4;
+      ctx.beginPath(); ctx.arc(f.x1, f.y1, 40 + q * 2200, 0, Math.PI * 2); ctx.stroke();
       ctx.strokeStyle = `rgba(255,255,240,${.7 * (1 - q)})`;
-      ctx.lineWidth = Math.max(1, w * .4);
-      ctx.beginPath(); ctx.moveTo(f.x1, f.y1); ctx.lineTo(f.x2, f.y2); ctx.stroke();
+      ctx.lineWidth = 8 * (1 - q) + 1;
+      ctx.beginPath(); ctx.arc(f.x1, f.y1, 40 + q * 2200, 0, Math.PI * 2); ctx.stroke();
       ctx.restore(); continue;
     }
     ctx.translate(f.x, f.y);
