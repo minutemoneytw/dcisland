@@ -228,9 +228,15 @@ function doAttack(auto) {
   const p = S.players[0];
   S._hits = 0;
   if (S.mode !== 'walk') return;
+  if (p.pose) {   // 坐著/睡著不能揮擊；按 F（不是長按的自動重複）就起身
+    if (auto && !quiet) { standUp(p); S.holdSkipF = true; }
+    return;
+  }
   if (auto) {   // F 鍵：前方有可破壞物件就自動用對應工具
     const d = decoNear(p);
     if (d) { S._hits = 1; useTool(d); return; }
+    const seat = quiet ? null : seatNear(p);   // 身邊有椅子/沙發/床就坐下（長按自動連擊不會反覆切換）
+    if (seat) { S._hits = 1; usePose(seat); S.holdSkipF = true; return; }
   }
   if (S.me.weapon === 'hands') { say('先在「造型」裡裝備武器！'); return; }
   if (!S.weaponImgs[S.me.weapon]) return;
@@ -360,14 +366,14 @@ function blocked(px, py, ignoreFurn) { // 像素座標（腳底）；ignoreFurn�
 // ---------------- 造型合成 ----------------
 function hexRGB(h) { const s = h.replace('#', ''); return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)]; }
 
-function charSprite(skin, hairId, shirtIdx, frame) {
+function charSprite(skin, hairId, shirtIdx, frame) {   // frame：0/1 走路兩幀、2 坐姿
   const shirtHex = S.avatar.shirtColors[shirtIdx];
   const k = `${skin}|${hairId}|${shirtHex}`;
   let entry = S.charCache.get(k);
-  if (!entry) entry = { a: null, b: null };
-  const c = entry[frame ? 'b' : 'a'];
-  if (c) return c;
-  const src = S.bodyImgs[skin][frame ? 'b' : 'a'];
+  if (!entry) entry = {};
+  const fk = 'abc'[frame] || 'a';
+  if (entry[fk]) return entry[fk];
+  const src = S.bodyImgs[skin][fk];
   const cv = document.createElement('canvas'); cv.width = 16; cv.height = 24;
   const g = cv.getContext('2d');
   // 上衣換色
@@ -385,10 +391,10 @@ function charSprite(skin, hairId, shirtIdx, frame) {
     }
   }
   g.putImageData(d, 0, 0);
-  const hair = S.hairImgs[hairId]; if (hair) g.drawImage(hair, 0, 0);
-  entry[frame ? 'b' : 'a'] = cv;
+  const hair = S.hairImgs[hairId]; if (hair) g.drawImage(hair, 0, fk === 'c' ? 3 : 0);   // 坐姿的頭整體下移 3 列，頭髮跟著下移
+  entry[fk] = cv;
   S.charCache.set(k, entry);
-  return (frame ? 'b' : 'a') === 'b' ? entry.b : entry.a;
+  return cv;
 }
 
 // ---------------- 玩家 ----------------
@@ -412,6 +418,7 @@ function playerSpriteDiv(p, frame) {
 
 // ---- M2：遠端玩家（位置用內插，避免網路抖動造成瞬移）----
 function stepRemote(r, dt) {
+  if (r.pose) r.frame = 0;
   const k = Math.min(1, dt * 14);
   const dx = r.tx - r.x, dy = r.ty - r.y;
   r.x += dx * k; r.y += dy * k;
@@ -424,6 +431,11 @@ function stepRemote(r, dt) {
 
 function stepPlayer(p, dt) {
   if (p.npc) { stepNPC(p, dt); return; }
+  if (p.pose) {   // 坐/睡：不動；按移動鍵或跳躍就起身（也會一路走出去），家具被拿走也會起身
+    const wantsMove = keys['a'] || keys['arrowleft'] || keys['d'] || keys['arrowright'] || keys['w'] || keys['arrowup'] || keys['s'] || keys['arrowdown'] || keys[' '];
+    if (!seatItem(p) || wantsMove) standUp(p);
+    else { p.moving = false; p.frame = 0; p.z = 0; p.vz = 0; return; }
+  }
   let dx = 0, dy = 0;
   // 走路與裝飾模式都能移動（裝飾模式要邊走邊擺）
   if (keys['a'] || keys['arrowleft']) dx -= 1;
@@ -476,6 +488,100 @@ function stepNPC(p, dt) {
   if (!blocked(p.x, ny)) p.y = ny;
   p.animT += dt; if (p.animT > .18) { p.animT = 0; p.frame ^= 1; }
   if (Math.random() < .002) p.idle = .8 + Math.random() * 1.6;
+}
+
+// 畫一個人（本人/NPC/同島玩家共用）：影子、身體（站/坐/睡）、武器、名牌。ctx 在世界座標
+function drawPerson(p, wi, nameColor) {
+  const pose = p.pose === 'sit' || p.pose === 'sleep' ? p.pose : null;
+  let nameY = p.y - p.z - 52;
+  if (pose === 'sleep') {
+    drawSleeper(p);
+    nameY = p.y - 46;
+  } else {
+    if (!pose) {   // 影子（跳起來時縮小變淡）；坐著的不畫（會蓋在椅子上）
+      const shs = 1 - Math.min(.55, p.z / 80);
+      ctx.fillStyle = `rgba(10,14,20,${.32 * shs + .04})`;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y + 1, 11 * shs, 4 * shs, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    const img = playerSpriteDiv(p, pose ? 2 : (p.frame === 1 ? 1 : 0));
+    ctx.save(); ctx.translate(p.x, p.y - p.z);
+    if (p.dir < 0) ctx.scale(-1, 1);
+    // 武器（背在肩上 / 揮擊時畫在身前）；坐著時不拿
+    if (wi && !pose && !(p.swing > 0)) drawWeaponBack(wi);
+    ctx.drawImage(img, -16, -48, 32, 48);
+    if (wi && !pose && p.swing > 0) drawWeaponSwing(wi, p.swing);
+    ctx.restore();
+    if (pose) nameY = p.y - 46;
+  }
+  // 名牌（FFXIV 感：白字黑邊）
+  ctx.font = '10px "Microsoft JhengHei"';
+  ctx.textAlign = 'center';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.8)';
+  ctx.strokeText(p.name, p.x, nameY);
+  ctx.fillStyle = nameColor;
+  ctx.fillText(p.name, p.x, nameY);
+}
+// 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）
+function drawSleeper(p) {
+  const img = playerSpriteDiv(p, 0);
+  ctx.drawImage(img, 0, 2, 16, 11, p.x - 16, p.y - 33, 32, 22);   // 頭的水平中心對準枕頭（單人床中央）
+  const def = furnitureDef(p.seatType || 'bed'), bed = S.furnImgs[p.seatType || 'bed'];
+  if (bed && def?.quiltRow) {
+    const rows = bed.height - def.quiltRow;
+    ctx.drawImage(bed, 0, def.quiltRow, bed.width, rows, p.x - bed.width, p.y - rows * 2, bed.width * 2, rows * 2);
+  }
+  // Zzz 飄字
+  const ph = (S.t * 1.2) % 1;
+  ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillStyle = `rgba(190,215,255,${1 - ph})`; ctx.strokeStyle = `rgba(8,10,14,${.8 * (1 - ph)})`; ctx.lineWidth = 3;
+  ctx.strokeText('Z', p.x + 6 + ph * 14, p.y - 40 - ph * 16); ctx.fillText('Z', p.x + 6 + ph * 14, p.y - 40 - ph * 16);
+}
+
+// ---------------- 坐下 / 睡覺（家具 manifest 的 use: "sit" | "sleep"）----------------
+function seatItem(p) {      // 現在坐/睡的那件家具（家具被拿走或換地形就找不到）
+  return p.seat && S.furnItems.find(it => it.type === p.seat.type && it.cell[0] === p.seat.cell[0] && it.cell[1] === p.seat.cell[1]);
+}
+function furnAtPoint(wx, wy) {   // 世界座標點到哪件家具（依繪製範圍，後放的在上面）
+  for (let i = S.furnItems.length - 1; i >= 0; i--) {
+    const it = S.furnItems[i], def = furnitureDef(it.type), img = S.furnImgs[it.type];
+    if (!def || !img) continue;
+    const sc = S.furn.scale || 2, x0 = it.cell[0] * CELL, y1 = (it.cell[1] + def.h) * CELL;
+    if (wx >= x0 && wx <= x0 + Math.max(def.w * CELL, img.width * sc) && wy >= y1 - img.height * sc && wy <= y1) return it;
+  }
+  return null;
+}
+function seatNear(p) {     // F 鍵：身邊最近的可坐/可睡家具
+  let best = null, bd = 56;
+  for (const it of S.furnItems) {
+    const def = furnitureDef(it.type); if (!def?.use) continue;
+    const d = Math.hypot((it.cell[0] + def.w / 2) * CELL - p.x, (it.cell[1] + def.h / 2) * CELL - p.y);
+    if (d < bd) { bd = d; best = it; }
+  }
+  return best;
+}
+function usePose(it) {
+  const p = S.players[0], def = furnitureDef(it.type);
+  if (p.pose) {   // 已經坐/睡著：再點同一件＝起身；點別件＝先起身再去
+    const same = p.seat.type === it.type && p.seat.cell[0] === it.cell[0] && p.seat.cell[1] === it.cell[1];
+    standUp(p);
+    if (same) return;
+  }
+  const cx = (it.cell[0] + def.w / 2) * CELL, cy = (it.cell[1] + def.h / 2) * CELL;
+  if (Math.hypot(cx - p.x, cy - p.y) > 80) { say(`靠近一點再${def.use === 'sit' ? '坐' : '躺'}`); return; }
+  const sx = cx, sy = (it.cell[1] + def.h) * CELL - (def.use === 'sit' ? 2 : 0);
+  for (const r of S.remotes.values()) if (r.pose && Math.abs(r.x - sx) < 10 && Math.abs(r.y - sy) < 10) { say('這裡有人了'); return; }
+  p.pose = def.use; p.seat = { type: it.type, cell: [it.cell[0], it.cell[1]] }; p.seatType = it.type;
+  p.x = sx; p.y = sy; p.z = 0; p.vz = 0; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null;
+  say(def.use === 'sit' ? '坐下了（移動、F 或再點一次起身）' : '晚安～（移動、F 或再點一次起身）', 1800);
+}
+function standUp(p) {
+  if (!p.pose) return;
+  const seat = p.seat;
+  p.pose = null; p.seat = null; p.seatType = null;
+  if (seat) {   // 起身時站到家具前面（前面有東西擋就原地，仍可走出來）
+    const def = furnitureDef(seat.type), ny = (seat.cell[1] + (def?.h || 1)) * CELL + 6;
+    if (!blocked(p.x, ny)) p.y = ny;
+  }
 }
 
 // ---------------- 繪製 ----------------
@@ -604,53 +710,19 @@ function draw() {
   }
   for (const p of S.players) {
     list.push({
-      y: p.y,      draw: () => {
-        // 影子（跳起來時縮小變淡）
-        const shs = 1 - Math.min(.55, p.z / 80);
-        ctx.fillStyle = `rgba(10,14,20,${.32 * shs + .04})`;
-        ctx.beginPath(); ctx.ellipse(p.x, p.y + 1, 11 * shs, 4 * shs, 0, 0, Math.PI * 2); ctx.fill();
-        const img = playerSpriteDiv(p, p.frame === 1 ? 1 : 0);
-        ctx.save(); ctx.translate(p.x, p.y - p.z);
-        if (p.dir < 0) ctx.scale(-1, 1);
-        // 武器（背在肩上 / 揮擊時畫在身前）
+      y: p.y + (p.pose ? 2 : 0),      // 坐著/睡著的人要畫在自己的椅子/床之後（排序鍵比家具大一點）
+      draw: () => {
         const wid = p.tool || S.me.weapon;      // 打石頭/樹木時暫時換成鎬子/斧頭
         const wi = !p.npc && wid !== 'hands' ? S.weaponImgs[wid] : null;
-        if (wi && !(p.swing > 0)) drawWeaponBack(wi);
-        ctx.drawImage(img, -16, -48, 32, 48);
-        if (wi && p.swing > 0) drawWeaponSwing(wi, p.swing);
-        ctx.restore();
-        // 名牌（FFXIV 感：白字黑邊）
-        ctx.font = '10px "Microsoft JhengHei"';
-        ctx.textAlign = 'center';
-        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.8)';
-        ctx.strokeText(p.name, p.x, p.y - p.z - 52);
-        ctx.fillStyle = p.npc ? '#bcd8e8' : '#ffffff';
-        ctx.fillText(p.name, p.x, p.y - p.z - 52);
+        drawPerson(p, wi, p.npc ? '#bcd8e8' : '#ffffff');
       }
     });
   }
   // M2：同島的其他玩家
   for (const r of S.remotes.values()) {
     list.push({
-      y: r.y, draw: () => {
-        const shs = 1 - Math.min(.55, r.z / 80);
-        ctx.fillStyle = `rgba(10,14,20,${.32 * shs + .04})`;
-        ctx.beginPath(); ctx.ellipse(r.x, r.y + 1, 11 * shs, 4 * shs, 0, 0, Math.PI * 2); ctx.fill();
-        const img = playerSpriteDiv(r, r.frame === 1 ? 1 : 0);
-        ctx.save(); ctx.translate(r.x, r.y - r.z);
-        if (r.dir < 0) ctx.scale(-1, 1);
-        const wi = r.weapon && r.weapon !== 'hands' ? S.weaponImgs[r.weapon] : null;
-        if (wi && !(r.swing > 0)) drawWeaponBack(wi);
-        ctx.drawImage(img, -16, -48, 32, 48);
-        if (wi && r.swing > 0) drawWeaponSwing(wi, r.swing);
-        ctx.restore();
-        ctx.font = '10px "Microsoft JhengHei"';
-        ctx.textAlign = 'center';
-        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.8)';
-        ctx.strokeText(r.name, r.x, r.y - r.z - 52);
-        ctx.fillStyle = '#ffe9a8';          // 同島的人用暖金色名牌區分
-        ctx.fillText(r.name, r.x, r.y - r.z - 52);
-      }
+      y: r.y + (r.pose ? 2 : 0),
+      draw: () => drawPerson(r, r.weapon && r.weapon !== 'hands' ? S.weaponImgs[r.weapon] : null, '#ffe9a8')   // 同島的人用暖金色名牌區分
     });
   }
   list.sort((a, b) => a.y - b.y).forEach(o => o.draw());
@@ -853,7 +925,7 @@ addEventListener('keydown', e => {
   if (k === 'escape' && S.mode === 'decor') setDecor(false);     // Esc 也能離開裝飾模式
   if (k === 'f' && !e.repeat) doAttack(true);
 });
-addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key.toLowerCase() === 'f') S.holdSkipF = false; });
 // 切走視窗時放開所有按住的鍵，避免卡住一直揮擊/走路
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; S.mouseHeld = false; });
 addEventListener('mouseup', e => { if (e.button === 0) S.mouseHeld = false; });
@@ -866,6 +938,12 @@ canvas.addEventListener('mousemove', e => {
 canvas.addEventListener('mouseleave', () => S.mouseCell = null);
 // 左鍵攻擊（世界座標 wx,wy 是游標指的位置）：先面向游標方向再揮
 function clickAttack(wx, wy) {
+  // 點到可坐/可睡的家具（椅子、沙發、床）→ 坐下/躺下；再點一次起身。長按自動連擊時不處理，避免反覆切換
+  if (!quiet) {
+    const f = furnAtPoint(wx, wy);
+    if (f && furnitureDef(f.type)?.use) { usePose(f); return; }
+  }
+  if (S.players[0].pose) return;                 // 坐著/睡著不能揮擊
   // 點到可破壞物件（且那裡沒有動物）→ 自動換工具去打它
   if (!S.animals.some(a => !a.dead && Math.hypot(a.x - wx, a.y - wy) < 30)) {
     const d = decoAt(wx, wy);
@@ -885,13 +963,13 @@ function clickAttack(wx, wy) {
 }
 // 長按 F 或左鍵：冷卻一到就自動再揮（每幀呼叫；第一下由按下事件負責，之後這裡接手）
 function autoAttack() {
-  if (S.mode !== 'walk' || S.t - S.players[0].lastAtk < ATK_CD) return;
+  if (S.mode !== 'walk' || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
   quiet = true;
   try {
     if (S.mouseHeld && S.mouseClient) {
       const r = canvas.getBoundingClientRect();
       clickAttack(S.mouseClient[0] - r.left + S.cam.x, S.mouseClient[1] - r.top + S.cam.y);
-    } else if (keys['f']) doAttack(true);
+    } else if (keys['f'] && !S.holdSkipF) doAttack(true);     // F 剛拿來坐下/起身時，按住不放不要接著揮劍
   } finally { quiet = false; }
 }
 canvas.addEventListener('mousedown', e => {
@@ -912,6 +990,12 @@ canvas.addEventListener('mousedown', e => {
 });
 canvas.addEventListener('contextmenu', e => {
   e.preventDefault();
+  if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身
+    const r = canvas.getBoundingClientRect();
+    const f = furnAtPoint(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y);
+    if (f && furnitureDef(f.type)?.use) usePose(f);
+    return;
+  }
   if (S.mode !== 'decor' || !S.mouseCell) return;
   const [x, y] = S.mouseCell;
   const idx = S.occ.get(key(x, y));
@@ -979,6 +1063,7 @@ async function boot() {
     S.bodyImgs[s.id] = {
       a: await loadImg(`assets/avatar/body_${s.id}_a.png`),
       b: await loadImg(`assets/avatar/body_${s.id}_b.png`),
+      c: await loadImg(`assets/avatar/body_${s.id}_sit.png`),
     };
   }));
   await Promise.all(S.avatar.hair.map(async h => S.hairImgs[h.id] = await loadImg(`assets/avatar/${h.sprite}`)));

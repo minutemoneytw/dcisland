@@ -8,7 +8,8 @@
    "w": 1,
    "h": 1,
    "solid": true,
-   "sprite": "sofa.png"
+   "sprite": "sofa.png",
+   "use": "sit"
   },
   {
    "id": "table",
@@ -24,7 +25,8 @@
    "w": 1,
    "h": 1,
    "solid": true,
-   "sprite": "chair.png"
+   "sprite": "chair.png",
+   "use": "sit"
   },
   {
    "id": "plant",
@@ -69,10 +71,12 @@
   {
    "id": "bed",
    "name": "床",
-   "w": 2,
+   "w": 1,
    "h": 1,
    "solid": true,
-   "sprite": "bed.png"
+   "sprite": "bed.png",
+   "use": "sleep",
+   "quiltRow": 13
   },
   {
    "id": "shelf",

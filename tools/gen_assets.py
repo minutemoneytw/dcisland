@@ -227,6 +227,27 @@ def body(skin, frame):
     cv.outline()
     return cv
 
+def body_sit(skin):
+    """坐姿（正面）：頭與上身整體下移 3 列（head/hair 疊圖時 client 也要往下 3 列），大腿縮短、小腿朝前，手放在腿上。
+    上衣顏色與 body() 相同，client 的換色邏輯可直接套用。"""
+    f, sf = hx(skin[0]), hx(skin[1])
+    sh, shd = SHIRT
+    d = 3
+    cv = Canvas(16, 24)
+    cv.rect(5, 3 + d, 10, 8 + d, f)                    # 頭
+    cv.hline(6, 7, 5 + d, f); cv.hline(8, 9, 5 + d, f)
+    cv.set(7, 6 + d, EYE); cv.set(9, 6 + d, EYE)       # 眼睛
+    cv.rect(4, 9 + d, 11, 14 + d, sh)                  # 身體
+    cv.rect(4, 12 + d, 11, 14 + d, shd)                # 下擺陰影
+    cv.rect(3, 10 + d, 3, 12 + d, sh); cv.rect(12, 10 + d, 12, 12 + d, sh)   # 手臂（較短）
+    cv.rect(3, 13 + d, 3, 13 + d, sf); cv.rect(12, 13 + d, 12, 13 + d, sf)   # 手放在腿上
+    cv.rect(4, 18, 11, 19, PANTS[0])                   # 大腿（正面看很短）
+    cv.rect(4, 19, 11, 19, PANTS[1])
+    cv.rect(4, 20, 7, 21, PANTS[0]); cv.rect(8, 20, 11, 21, PANTS[0])        # 小腿
+    cv.rect(4, 22, 7, 22, SHOE); cv.rect(8, 22, 11, 22, SHOE)
+    cv.outline()
+    return cv
+
 def hair(style):
     hh = hx("#4a3428"); hhd = hx("#7a5a44")
     cv = Canvas(16, 24)
@@ -271,10 +292,11 @@ def table():
 def chair():
     w = hx("#b8865a")
     cv = Canvas(16, 14)
-    cv.rect(4, 3, 11, 5, w)      # 背
-    cv.rect(4, 6, 11, 8, shade(w, 1.1))   # 座
-    cv.rect(4, 6, 4, 8, shade(w, 0.8)); cv.rect(11, 6, 11, 8, shade(w, 0.8))
-    cv.rect(5, 9, 5, 12, shade(w, 0.85)); cv.rect(10, 9, 10, 12, shade(w, 0.85))
+    # 比角色（含手臂 10 格寬）更寬一點，坐上去時椅背/椅面才會從兩側露出來
+    cv.rect(2, 3, 13, 5, w)      # 背
+    cv.rect(2, 6, 13, 8, shade(w, 1.1))   # 座
+    cv.rect(2, 6, 2, 8, shade(w, 0.8)); cv.rect(13, 6, 13, 8, shade(w, 0.8))
+    cv.rect(3, 9, 3, 12, shade(w, 0.85)); cv.rect(12, 9, 12, 12, shade(w, 0.85))
     cv.outline()
     return cv
 
@@ -435,17 +457,16 @@ def tool_axe():  # 斧頭（斧刃在右側＝揮向前方時朝外）
     cv.outline((30, 24, 22, 255))
     return cv
 
-def bed():
-    cv = Canvas(32, 24)
+def bed():   # 單人床（一格寬）：一個枕頭，睡覺時頭靠在枕頭上；quiltRow=13（被子從第 13 列開始）
+    cv = Canvas(16, 24)
     cf = hx("#4a6ab0"); cfd = shade(cf, 0.8)
-    cv.rect(1, 8, 30, 20, hx("#a57c4e"))       # 床架
-    cv.rect(2, 9, 29, 12, hx("#f2ede0"))       # 枕頭帶
-    cv.ellipse(6, 10, 3.5, 2.0, hx("#ffffff"))
-    cv.ellipse(13, 10, 3.5, 2.0, hx("#ffffff"))
-    cv.rect(2, 13, 29, 19, cf)                 # 棉被
-    cv.rect(2, 13, 29, 13, shade(cf, 1.15))
-    cv.rect(1, 20, 30, 21, cfd)
-    cv.rect(2, 22, 5, 23, hx("#4a3630")); cv.rect(26, 22, 29, 23, hx("#4a3630"))
+    cv.rect(1, 8, 14, 20, hx("#a57c4e"))       # 床架
+    cv.rect(2, 9, 13, 12, hx("#f2ede0"))       # 枕頭帶
+    cv.ellipse(8, 10, 4.5, 2.0, hx("#ffffff"))  # 枕頭
+    cv.rect(2, 13, 13, 19, cf)                 # 棉被
+    cv.rect(2, 13, 13, 13, shade(cf, 1.15))
+    cv.rect(1, 20, 14, 21, cfd)
+    cv.rect(2, 22, 3, 23, hx("#4a3630")); cv.rect(12, 22, 13, 23, hx("#4a3630"))
     cv.outline()
     return cv
 
@@ -492,15 +513,15 @@ TERRAINS = [
 FURN_MANIFEST = dict(
     scale=2, tile=TILE,
     items=[
-        dict(id="sofa",  name="沙發",  w=1, h=1, solid=True,  sprite="sofa.png"),
+        dict(id="sofa",  name="沙發",  w=1, h=1, solid=True,  sprite="sofa.png", use="sit"),
         dict(id="table", name="桌子",  w=1, h=1, solid=True,  sprite="table.png"),
-        dict(id="chair", name="椅子",  w=1, h=1, solid=True,  sprite="chair.png"),
+        dict(id="chair", name="椅子",  w=1, h=1, solid=True,  sprite="chair.png", use="sit"),
         dict(id="plant", name="植栽",  w=1, h=1, solid=True,  sprite="plant.png"),
         dict(id="rug",   name="地毯",  w=2, h=2, solid=False, sprite="rug.png"),
         dict(id="lamp",  name="電燈",  w=1, h=1, solid=True,  sprite="lamp.png"),
         dict(id="tv",    name="電視",  w=1, h=1, solid=True,  sprite="tv.png"),
         dict(id="cat",   name="貓",    w=1, h=1, solid=False, sprite="cat.png"),
-        dict(id="bed",   name="床",    w=2, h=1, solid=True,  sprite="bed.png"),
+        dict(id="bed",   name="床",    w=1, h=1, solid=True,  sprite="bed.png", use="sleep", quiltRow=13),
         dict(id="shelf", name="書架",  w=1, h=1, solid=True,  sprite="shelf.png"),
         dict(id="sign",  name="看板",  w=1, h=1, solid=True,  sprite="sign.png"),
     ],
@@ -593,6 +614,7 @@ def main():
     for key, skin in SKINS.items():
         save(body(skin, 0), f"body_{key}_a.png", sub)
         save(body(skin, 1), f"body_{key}_b.png", sub)
+        save(body_sit(skin), f"body_{key}_sit.png", sub)
     for i, st in enumerate(["short", "side", "fluffy"]):
         save(hair(st), f"hair{i + 1}.png", sub)
     json.dump(dict(

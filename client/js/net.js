@@ -30,6 +30,8 @@ export function connectNet(S, opts = {}) {
       name: p.name,
       look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt },
       weapon: p.tool || S.me.weapon,       // 手上拿的（打石頭/樹木時是工具）
+      pose: p.pose || null,                // 'sit' | 'sleep'（坐/睡在家具上）
+      seat: p.seatType || null,            // 坐/睡的家具種類（畫圖用）
     };
   }
 
@@ -49,6 +51,8 @@ export function connectNet(S, opts = {}) {
       r.name = st.name || r.name;
       if (st.look) r.look = st.look;
       r.weapon = st.weapon || r.weapon;
+      r.pose = st.pose === 'sit' || st.pose === 'sleep' ? st.pose : null;
+      r.seatType = typeof st.seat === 'string' ? st.seat : null;
       r.tx = st.x; r.ty = st.y; r.dir = st.dir ?? r.dir; r.z = st.z ?? r.z;
       r.moving = !!st.moving;
       r.seen = performance.now();
