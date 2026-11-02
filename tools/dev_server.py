@@ -122,6 +122,7 @@ D_CAST_MS = 1000         # 島緣鎖定（預警）持續時間
 D_DASH = 460             # 龍衝速度 px/s
 D_REST_MS = 700          # 衝到底落地的停留時間
 D_RAGE_MS = 5000         # 反擊結束後多久內不被再觸發
+D_SAY_MS = 3000          # 被打後先在原地說台詞的時間（說完才瞬移反擊）
 D_RESPAWN_MS = 30000     # 島主被打倒後的重生秒數
 D_HP = 30
 D_RANGE = 70             # 玩家打島主的攻擊距離（客戶端 58，留延遲）
@@ -327,7 +328,7 @@ class Room:
         """島主狀態（懒初始化；名稱不能叫 dragon——會被 self.dragon 屬性蓋掉）。"""
         if self.dragon is None:
             self.dragon = {"hp": D_HP, "st": "idle", "pos": list(D_CENTER), "aim_tms": 0.0, "dead_at": 0.0,
-                           "gen": 0, "wander": None, "wander_gen": 0, "cooldown_until": 0.0,
+                           "gen": 0, "wander": None, "wander_gen": 0, "cooldown_until": 0.0, "say_until": 0.0,
                            "warp": [0, 0], "atk": [0, 0], "unit": [0, 0], "dest": [0, 0], "dash_len": 0.0}
         return self.dragon
 
@@ -337,6 +338,8 @@ class Room:
         if d["st"] == "dead":
             return "dead", list(d["pos"]), 0
         if not d["aim_tms"]:
+            if d["say_until"] and now < d["say_until"]:
+                return "say", list(d["pos"]), int(d["say_until"] - now)   # 說台詞中：原地不動
             if not d["wander"]:
                 return "idle", list(d["pos"]), 0
             w = d["wander"]
@@ -371,6 +374,8 @@ class Room:
             now_ms = time.time() * 1000
             o["wleg"] = {"fx": w["fx"], "fy": w["fy"], "tx": w["tx"], "ty": w["ty"], "tms": w["tms"],
                          "el": int(max(0, min(w["tms"], now_ms - w["t0"])))}
+        elif ph == "say":   # 說台詞中：附上剩餘時間
+            o["sayMs"] = int(ms)
         return o
 
     def _dragon_start_leg(self):
@@ -428,20 +433,26 @@ class Room:
             if d["st"] == "dead" or not self._has_grass_clients():
                 return
             now = time.time() * 1000
-            ph, _, _ = self.dragon_phase(now)
-            if ph != "idle":   # 反擊循環中：循環結束時再續
-                cycle_end = d["aim_tms"] + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS
-                next_delay = max(0.1, cycle_end / 1000 - time.time() + 0.1)
+            if d["say_until"] and now >= d["say_until"]:   # 說完台詞：瞬移島緣，開始反擊循環
+                out = self._dragon_start_cycle(now)
+                next_delay = ((D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS) / 1000 + 0.1) if out else 2.0
+            elif d["say_until"]:   # 還在說台詞：說完再醒
+                next_delay = (d["say_until"] - now) / 1000 + 0.05
             else:
-                if d["aim_tms"]:   # 反擊循環剛結束：落在對岸（dest），從這裡接續散步（清 aim_tms 讓散步插值生效）
-                    d["aim_tms"] = 0.0
-                    d["pos"] = list(d["dest"])
-                w = d["wander"]
-                if w and now < w["t0"] + w["tms"] + w["pause"]:
-                    next_delay = (w["t0"] + w["tms"] + w["pause"] - now) / 1000 + 0.05
+                ph, _, _ = self.dragon_phase(now)
+                if ph != "idle":   # 反擊循環中：循環結束時再續
+                    cycle_end = d["aim_tms"] + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS
+                    next_delay = max(0.1, cycle_end / 1000 - time.time() + 0.1)
                 else:
-                    out = self._dragon_start_leg()
-                    next_delay = ((d["wander"]["tms"] + d["wander"]["pause"]) / 1000 + 0.05) if out else 2.0
+                    if d["aim_tms"]:   # 反擊循環剛結束：落在對岸（dest），從這裡接續散步（清 aim_tms 讓散步插值生效）
+                        d["aim_tms"] = 0.0
+                        d["pos"] = list(d["dest"])
+                    w = d["wander"]
+                    if w and now < w["t0"] + w["tms"] + w["pause"]:
+                        next_delay = (w["t0"] + w["tms"] + w["pause"] - now) / 1000 + 0.05
+                    else:
+                        out = self._dragon_start_leg()
+                        next_delay = ((d["wander"]["tms"] + d["wander"]["pause"]) / 1000 + 0.05) if out else 2.0
         if out:
             self.broadcast(out, terrain=OWNER_TERRAIN)
         if next_delay is not None:
@@ -488,20 +499,13 @@ class Room:
                 dead_gen = d["gen"]
                 out = {"t": "dragon", "ev": "dead", "x": pos[0], "y": pos[1]}
             elif ph == "idle" and self.dragon_map and now >= d["cooldown_until"]:
-                warp = dragon_edge(self.dragon_map, random.random() * math.pi * 2)   # 島隨機邊緣
-                ux, uy = ax - warp[0], ay - warp[1]
-                ul = math.hypot(ux, uy) or 1
-                d.update(warp=warp, atk=[ax, ay], unit=[ux / ul, uy / ul])
-                d["dest"] = dragon_dash_dest(self.dragon_map, warp[0], warp[1], d["unit"][0], d["unit"][1])
-                d["dash_len"] = math.hypot(d["dest"][0] - warp[0], d["dest"][1] - warp[1])
-                d["aim_tms"] = now
-                d["wander"] = None   # 散步作廢，進入反擊循環
+                # 先在原地說台詞（D_SAY_MS），說完才瞬移島緣反擊（循環由 tick 在說完時接手啟動）
+                d["say_until"] = now + D_SAY_MS
+                d["atk"] = [ax, ay]   # 記住攻擊者位置，說完台詞後龍衝要穿過這裡
+                d["wander"] = None
                 d["wander_gen"] += 1
-                # 反擊循環全程＋結束後 D_RAGE_MS 內不再觸發（cooldown_until 蓋掉整個循環）
-                d["cooldown_until"] = now + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS + D_RAGE_MS
-                post_cycle = (d["aim_tms"] + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS) / 1000 - time.time() + 0.1   # 對岸歇完接著散步
-                out = {"t": "dragon", "ev": "aim", "x": warp[0], "y": warp[1], "fx": pos[0], "fy": pos[1],
-                       "tx": ax, "ty": ay, "dx": d["dest"][0], "dy": d["dest"][1], "castMs": D_CAST_MS, "hp": d["hp"]}
+                post_cycle = D_SAY_MS / 1000 + 0.1
+                out = {"t": "dragon", "ev": "say", "x": pos[0], "y": pos[1], "ms": D_SAY_MS}
             else:
                 why = []
                 if ph != "idle":
@@ -526,6 +530,24 @@ class Room:
         """打擊被拒（暫時性診斷日誌）。"""
         print(f"[dragon] 打擊拒絕: {why}", file=sys.stderr, flush=True)
         return None
+
+    def _dragon_start_cycle(self, now):
+        """說完台詞：瞬移島緣鎖定 d["atk"] 的攻擊者，進入預警→龍衝循環。需在鎖內；回傳 aim 廣播訊息。"""
+        d = self.dragon
+        if d["st"] == "dead" or not self.dragon_map:
+            return None
+        warp = dragon_edge(self.dragon_map, random.random() * math.pi * 2)
+        ax, ay = d["atk"][0], d["atk"][1]
+        ux, uy = ax - warp[0], ay - warp[1]
+        ul = math.hypot(ux, uy) or 1
+        d.update(warp=warp, unit=[ux / ul, uy / ul])
+        d["dest"] = dragon_dash_dest(self.dragon_map, warp[0], warp[1], d["unit"][0], d["unit"][1])
+        d["dash_len"] = math.hypot(d["dest"][0] - warp[0], d["dest"][1] - warp[1])
+        d["aim_tms"] = now
+        d["say_until"] = 0.0
+        d["cooldown_until"] = now + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS + D_RAGE_MS
+        return {"t": "dragon", "ev": "aim", "x": warp[0], "y": warp[1], "fx": d["pos"][0], "fy": d["pos"][1],
+                "tx": ax, "ty": ay, "dx": d["dest"][0], "dy": d["dest"][1], "castMs": D_CAST_MS, "hp": d["hp"]}
 
     def _dragon_respawn(self, gen):
         out2 = leg_delay = None

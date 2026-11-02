@@ -35,6 +35,7 @@ const D_REST_MS = 700;       // 衝到底落地的停留時間
 const D_WALK = 34;           // 閒晃散步速度 px/s（與 client 的 OWNER_WALK_SPEED 一致）
 const D_WANDER_PAUSE = [1500, 4000];   // 每個路點之間站著休息的時間範圍 ms
 const D_RAGE_MS = 5000;      // 反擊結束後多久內不被再觸發
+const D_SAY_MS = 3000;       // 被打後先在原地說台詞的時間（說完才瞬移反擊）
 const D_RESPAWN_MS = 30000;  // 島主被打倒後的重生秒數
 const D_HP = 30;
 const D_RANGE = 70;          // 玩家打島主的攻擊距離（客戶端 58，留延遲）
@@ -440,9 +441,10 @@ export class Island {
       this.dragon = await this.state.storage.get("dragon") || null;
       if (this.dragon && this.dragon.st === "dead") await this.scheduleDragonRespawn(this.dragon);   // 休眠醒來仍在死，把鬧鐘補回來
     }
-    if (!this.dragon) this.dragon = { hp: D_HP, st: "idle", pos: [...D_CENTER], aimTms: 0, deadAt: 0, wander: null, cooldownUntil: 0 };
+    if (!this.dragon) this.dragon = { hp: D_HP, st: "idle", pos: [...D_CENTER], aimTms: 0, deadAt: 0, wander: null, cooldownUntil: 0, sayUntil: 0 };
     if (this.dragon.wander === undefined) this.dragon.wander = null;   // 舊存檔沒有這個欄位
     if (this.dragon.cooldownUntil === undefined) this.dragon.cooldownUntil = 0;
+    if (this.dragon.sayUntil === undefined) this.dragon.sayUntil = 0;
     return this.dragon;
   }
   saveDragon() { return this.state.storage.put("dragon", this.dragon); }
@@ -460,6 +462,7 @@ export class Island {
     const d = this.dragon;
     if (d.st === "dead") return ["dead", d.pos, 0];
     if (!d.aimTms) {
+      if (d.sayUntil && now < d.sayUntil) return ["say", d.pos, d.sayUntil - now];   // 說台詞中：原地不動
       if (!d.wander) return ["idle", d.pos, 0];
       const t = Math.min(1, Math.max(0, (now - d.wander.t0) / d.wander.tms));
       return ["idle", [d.wander.fx + (d.wander.tx - d.wander.fx) * t, d.wander.fy + (d.wander.ty - d.wander.fy) * t], 0];
@@ -487,6 +490,7 @@ export class Island {
     if (ph === "aim") { o.castMs = Math.round(ms); o.tx = d.atk[0]; o.ty = d.atk[1]; o.dx = d.dest[0]; o.dy = d.dest[1]; }
     if (ph === "dash") { o.ux = d.unit[0]; o.uy = d.unit[1]; o.dx = d.dest[0]; o.dy = d.dest[1]; }
     if (ph === "rest") o.restMs = Math.round(ms);
+    if (ph === "say") o.sayMs = Math.round(ms);   // 說台詞中：附上剩餘時間
     if (ph === "idle" && d.wander) {   // 散步中：附上路點與已走時間，客戶端接著插值
       const w = d.wander;
       o.wleg = { fx: w.fx, fy: w.fy, tx: w.tx, ty: w.ty, tms: w.tms, el: Math.max(0, Math.min(w.tms, now - w.t0)) };
@@ -521,21 +525,15 @@ export class Island {
       await this.scheduleDragonRespawn(d);
       return;
     }
-    // 反擊：閒置且冷卻過了才觸發；沒有島形位圖就只能扣血（無法挑島緣）
+    // 反擊：閒置且冷卻過了才觸發；先在原地說台詞（D_SAY_MS），說完才瞬移島緣（循環由鬧鐘在說完時啟動）
     const map = await this.getDragonMap();
     if (ph === "idle" && map && now >= (d.cooldownUntil || 0)) {
-      const warp = dragonEdge(map, Math.random() * Math.PI * 2);          // 島隨機邊緣
-      const ux = Number(msg.x) - warp[0], uy = Number(msg.y) - warp[1];
-      const ul = Math.hypot(ux, uy) || 1;
-      d.warp = warp; d.atk = [Number(msg.x), Number(msg.y)];
-      d.unit = [ux / ul, uy / ul];
-      d.dest = dragonDashDest(map, warp[0], warp[1], d.unit[0], d.unit[1]);
-      d.dashLen = Math.hypot(d.dest[0] - warp[0], d.dest[1] - warp[1]);
-      d.aimTms = now; d.wander = null;   // 散步作廢，進入反擊循環
-      d.cooldownUntil = now + D_CAST_MS + d.dashLen / D_DASH * 1000 + D_REST_MS + D_RAGE_MS;   // 循環全程＋結束後 5 秒
+      d.sayUntil = now + D_SAY_MS;
+      d.atk = [Number(msg.x), Number(msg.y)];   // 記住攻擊者位置，說完台詞後龍衝要穿過這裡
+      d.wander = null;
       await this.saveDragon();
-      this.broadcast({ t: "dragon", ev: "aim", x: warp[0], y: warp[1], fx: pos[0], fy: pos[1], tx: d.atk[0], ty: d.atk[1], dx: d.dest[0], dy: d.dest[1], castMs: D_CAST_MS, hp: d.hp }, null, OWNER_TERRAIN);
-      await this.state.storage.setAlarm(this.dragonIdleAt() + 100);   // 循環結束（回中心）時醒來接著散步
+      this.broadcast({ t: "dragon", ev: "say", x: pos[0], y: pos[1], ms: D_SAY_MS }, null, OWNER_TERRAIN);
+      await this.state.storage.setAlarm(d.sayUntil + 50);
       return;
     }
     await this.saveDragon();   // 扣血就存（DO 休眠後才不會從上次存檔的 血量回復）
@@ -585,7 +583,25 @@ export class Island {
     const at = w ? w.t0 + w.tms + w.pause : Date.now() + 2000;   // 挑不到路點：2 秒後再試
     await this.state.storage.setAlarm(at + 50);
   }
-  // 島主鬧鐘（唯一一個鬧鐘）：死→重生；閒置→推進散步路點；飛行循環中→回中心時再醒。
+  // 說完台詞：瞬移島緣鎖定 d.atk 的攻擊者，進入預警→龍衝循環。回傳是否成功啟動
+  async startCycle(now) {
+    const d = this.dragon;
+    const map = await this.getDragonMap();
+    if (d.st === "dead" || !map) return false;
+    const warp = dragonEdge(map, Math.random() * Math.PI * 2);
+    const ax = d.atk[0], ay = d.atk[1];
+    const ux = ax - warp[0], uy = ay - warp[1];
+    const ul = Math.hypot(ux, uy) || 1;
+    d.warp = warp; d.unit = [ux / ul, uy / ul];
+    d.dest = dragonDashDest(map, warp[0], warp[1], d.unit[0], d.unit[1]);
+    d.dashLen = Math.hypot(d.dest[0] - warp[0], d.dest[1] - warp[1]);
+    d.aimTms = now; d.sayUntil = 0;
+    d.cooldownUntil = now + D_CAST_MS + d.dashLen / D_DASH * 1000 + D_REST_MS + D_RAGE_MS;
+    await this.saveDragon();
+    this.broadcast({ t: "dragon", ev: "aim", x: warp[0], y: warp[1], fx: d.pos[0], fy: d.pos[1], tx: ax, ty: ay, dx: d.dest[0], dy: d.dest[1], castMs: D_CAST_MS, hp: d.hp }, null, OWNER_TERRAIN);
+    return true;
+  }
+  // 島主鬧鐘（唯一一個鬧鐘）：死→重生；說完台詞→開始反擊循環；閒置→推進散步路點；飛行循環中→回中心時再醒。
   // 草島沒有人在線時不排下一輪（島主停擺，等有人進草島的 enter 再恢復）。
   async alarm() {
     const d = await this.getDragon();
@@ -593,7 +609,7 @@ export class Island {
     if (d.st === "dead") {
       if (now < d.deadAt + D_RESPAWN_MS - 500) { await this.state.storage.setAlarm(d.deadAt + D_RESPAWN_MS); return; }
       const pos = this.dragonMap ? dragonEdge(this.dragonMap, Math.random() * Math.PI * 2) : [...D_CENTER];
-      d.st = "idle"; d.hp = D_HP; d.pos = pos; d.aimTms = 0; d.wander = null;
+      d.st = "idle"; d.hp = D_HP; d.pos = pos; d.aimTms = 0; d.wander = null; d.sayUntil = 0;
       await this.saveDragon();
       this.broadcast({ t: "dragon", ev: "spawn", x: pos[0], y: pos[1], hp: d.hp }, null, OWNER_TERRAIN);
       if (this.hasGrassPlayers()) {
@@ -604,6 +620,16 @@ export class Island {
       return;
     }
     if (!this.hasGrassPlayers()) return;   // 沒人看：停擺（enter 時會恢復）
+    if (d.sayUntil && now >= d.sayUntil - 50) {   // 說完台詞：瞬移島緣，開始反擊循環
+      d.sayUntil = 0;
+      const ok = await this.startCycle(now);
+      if (ok) await this.state.storage.setAlarm(this.dragonIdleAt() + 100);
+      return;
+    }
+    if (d.sayUntil) {   // 還在說台詞：說完再醒
+      await this.state.storage.setAlarm(d.sayUntil + 50);
+      return;
+    }
     const [ph] = this.dragonPhase(now);
     if (ph === "idle") {
       if (d.aimTms) {   // 反擊循環剛結束：落在對岸（dest），清掉 aimTms 讓散步插值生效，從這裡接續

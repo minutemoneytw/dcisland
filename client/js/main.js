@@ -337,6 +337,15 @@ function nearestLand(a) {
 // 預警範圍提示 1 秒後，以龍本體直線飛衝過島（攻擊範圍＝龍的大小，被撞到＝KO），衝到對岸落地後飛回地圖中心
 const OWNER_FLY_SPEED = 240, OWNER_DASH_SPEED = 460, OWNER_CAST = 1, OWNER_CD = 5;
 const OWNER_WALK_SPEED = 34, OWNER_LEG_MIN = 1500, OWNER_PAUSE = [1.5, 4];   // 閒晃：路點間散步速度／每腿最短時長／休息範圍（秒）
+// 島主被激怒的經典台詞：發動反擊前隨機說一句（不連續重複）
+const OWNER_LINES = ['紅月啊，用你的熾熱燒盡敵人！', '紅月啊，照亮我征服的道路！', '熾熱的通路啊，引導我走向征服！',
+                     '皎潔的紅月啊，傾注你的光芒！', '我自高空降臨，將敵人全部擊碎！', '我自高空降臨，重塑這個世界！'];
+function ownerSay(a) {
+  let line;
+  do { line = OWNER_LINES[Math.floor(Math.random() * OWNER_LINES.length)]; } while (OWNER_LINES.length > 1 && line === a.lastLine);
+  a.lastLine = line;
+  a.say = { text: line, until: S.t + 3 };
+}
 function ownerEdgeAt(angle) {
   // 從島心沿指定角度找最後一格陸地（島邊緣）
   const cx = COLS / 2 - .5, cy = ROWS / 2 - .5;
@@ -351,6 +360,13 @@ function ownerEdgeAt(angle) {
   return { x: last[0] * CELL + CELL / 2, y: last[1] * CELL + CELL / 2 };
 }
 function ownerTakeoff(a, src) {
+  // 被打：先在原地說台詞（3 秒泡泡），說完才瞬移到島緣（ownerStep 的 sayPhase 接手）
+  ownerSay(a);
+  a.sayPhase = S.t + 3; a.saySrc = { x: src.x, y: src.y };
+  a.target = null; a.idle = 0; a.wleg = null;
+  a.rageCd = S.t + 4;   // 說台詞＋預警期間被打不重觸發（龍衝時會再重設為 5 秒）
+}
+function ownerWarp(a, src) {   // 說完台詞：瞬移到島緣鎖定攻擊者，準備龍衝
   const def = animalDef(a.id);
   S.floaters.push({ x: a.x, y: a.y - 40, poof: true, life: .55 });   // 原地消失
   const to = ownerEdgeAt(Math.random() * Math.PI * 2);               // 島隨機邊緣現蹤
@@ -358,10 +374,17 @@ function ownerTakeoff(a, src) {
   a.dir = src.x < a.x ? -1 : 1;
   S.floaters.push({ x: a.x, y: a.y - 40, poof: true, life: .55 });
   a.cast = OWNER_CAST; a.castFrom = { x: src.x, y: src.y };   // 鎖定攻擊者位置＝龍衝方向（走位就能躲）
-  a.wleg = null;   // 散步中被打斷：路點作廢
+  a.dashDest = null; a.wleg = null;
   toast(`${def.name} 瞬間消失，在島緣現出蹤影鎖定了你！`, 2400);
 }
 function ownerStep(a, dt, def) {
+  if (a.sayPhase) {   // 說台詞：原地不動（泡泡顯示中），說完瞬移
+    if (S.t < a.sayPhase) { a.z = 0; return; }
+    const src = a.saySrc;
+    a.sayPhase = 0; a.saySrc = null;
+    ownerWarp(a, src);
+    return;
+  }
   if (a.cast) {
     a.cast -= dt;   // 預警 1 秒：畫面顯示金色虛線鎖定的攻擊範圍
     if (a.cast <= 0) { a.cast = 0; ownerDive(a, def); }
@@ -549,6 +572,10 @@ function applyDragonSnap(o) {
     a.cycle = { t0ms: Date.now(), castMs: 0, dashMs: 1, restMs: o.restMs || 700,
                 warp: { x: o.x, y: o.y }, from: null, dest: { x: o.x, y: o.y } };
     a.x = o.x; a.y = o.y; a.z = 0;
+  } else if (o.ph === 'say') {   // 說台詞中：站在原地（說完才會收到 aim 事件）
+    a.cycle = null; a.wleg = null;
+    a.x = o.x; a.y = o.y; a.z = 0; a.fly = false;
+    ownerSay(a);
   } else if (o.ph === 'gohome') {   // 舊伺服器相容：當作在當地站著
     a.cycle = null;
     a.x = o.x; a.y = o.y; a.z = 0; a.fly = false;
@@ -589,6 +616,14 @@ function onNetDragon(m) {
     toast(`${animalDef(S.terrains[S.terrain].owner).name} 回來了！`, 1600);
     return;
   }
+  if (m.ev === 'say') {   // 島主被激怒：先在原地說台詞（泡泡 3 秒），說完才瞬移反擊
+    const na = a || dragonEnsure(m.x, m.y);
+    if (!na) return;
+    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.wleg = null;
+    na.x = m.x; na.y = m.y;
+    ownerSay(na);
+    return;
+  }
   if (m.ev === 'wander') {   // 島主往新路點散步（伺服器帶路；插值與伺服器一致，凍結恢復也正確）
     const na = a || dragonEnsure(m.fx, m.fy);
     if (!na) return;
@@ -622,7 +657,7 @@ function stepAnimal(a, dt) {
   // 島主：連線時整個狀態機用牆鐘（與伺服器同軸，webview 節流也不影響）；單機沿用 dt 積分
   if (def.owner) {
     if (a.proxy) { stepOwnerProxy(a, dt, def); return; }
-    if (a.fly || a.cast || a.rest) { ownerStep(a, dt, def); return; }
+    if (a.fly || a.cast || a.rest || a.sayPhase) { ownerStep(a, dt, def); return; }
     if (a.wleg) { stepOwnerWalk(a, dt); return; }
     if (a.idle > 0) { a.idle -= dt; a.z = 0; return; }
     const leg = ownerPickLeg(a.x, a.y);   // 單機：自己挑路點散步
@@ -1175,6 +1210,8 @@ function draw() {
         ctx.strokeText(def.name, a.x, top);
         ctx.fillStyle = a.startle ? '#e8b2a2' : (def.owner ? '#ffd86b' : '#cfd8c8');
         ctx.fillText(def.name, a.x, top);
+        // 島主的台詞泡泡（被打反擊前隨機一句；與 NPC 泡泡同款，畫在名牌上方）
+        if (a.say && S.t < a.say.until) drawBubble(a.x, top - 8, a.say.text, Math.min(1, (a.say.until - S.t) / .4));
       }
     });
   }
