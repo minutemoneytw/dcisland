@@ -31,6 +31,7 @@ export function connectNet(S, opts = {}) {
       look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt, pants: S.me.pants || 0 },
       weapon: p.tool || S.me.weapon,       // 手上拿的（打石頭/樹木時是工具）
       pose: p.pose || null,                // 'sit' | 'sleep'（坐/睡在家具上）
+      face: p.face || 'down',              // 四方向朝向：'up'（背面）| 'down'（正面）| 'side'（側，dir 決定左右）
       seat: p.seatType || null,            // 坐/睡的家具種類（畫圖用）
       hp: p.dead ? 0 : Math.round(p.hp ?? 10),   // 血量（島主爪擊扣 2、殺動物回 1；龍衝直接倒地）
       dead: p.dead ? 1 : 0,                // 死亡（墓碑）：被島主打倒後倒數復活
@@ -54,6 +55,7 @@ export function connectNet(S, opts = {}) {
       if (st.look) r.look = st.look;
       r.weapon = st.weapon || r.weapon;
       r.pose = st.pose === 'sit' || st.pose === 'sleep' ? st.pose : null;
+      r.face = st.face === 'up' || st.face === 'side' ? st.face : 'down';
       r.seatType = typeof st.seat === 'string' ? st.seat : null;
       const wasDead = !!r.dead;
       r.dead = !!st.dead;                  // 死亡（墓碑）：進出死亡時跟同島的人說一聲

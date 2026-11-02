@@ -266,6 +266,23 @@ def hair(style):
         cv.set(4, 1, hhd); cv.set(6, 1, hhd); cv.set(9, 1, hhd)
     return cv
 
+def hair_back(style):
+    """背面（往上走）的頭髮：整顆頭被頭髮蓋住（連眼睛都蓋掉，身體圖不用另畫背面），疊在 body 上。"""
+    hh = hx("#4a3428"); hhd = hx("#7a5a44")
+    cv = Canvas(16, 24)
+    if style == "short":
+        cv.rect(4, 2, 11, 8, hh)
+        cv.rect(5, 2, 5, 2, hhd); cv.vline(8, 4, 7, shade(hh, 0.85))
+    elif style == "side":      # 長髮：披到肩膀
+        cv.rect(4, 2, 11, 11, hh)
+        cv.rect(5, 2, 5, 2, hhd); cv.vline(8, 4, 10, shade(hh, 0.85))
+    else:  # fluffy
+        cv.rect(3, 2, 12, 9, hh)
+        cv.rect(4, 10, 5, 10, hh); cv.rect(10, 10, 11, 10, hh)
+        cv.set(4, 1, hhd); cv.set(6, 1, hhd); cv.set(9, 1, hhd)
+        cv.vline(8, 4, 9, shade(hh, 0.85))
+    return cv
+
 # ---------------- 家具 ----------------
 def sofa():
     r = hx("#c9544f"); rd = shade(r, 0.72)
@@ -803,13 +820,14 @@ def main():
         save(body_sit(skin), f"body_{key}_sit.png", sub)
     for i, st in enumerate(["short", "side", "fluffy"]):
         save(hair(st), f"hair{i + 1}.png", sub)
+        save(hair_back(st), f"hair{i + 1}_back.png", sub)
     json.dump(dict(
         scale=2, px=16, py=24,
         skins=[dict(id=k, name=n, base=SKINS[k][0], shade=SKINS[k][1])
                for k, n in [("pale", "白皙"), ("light", "自然"), ("tan", "小麥"), ("deep", "深膚")]],
-        hair=[dict(id="hair1", name="短髮", sprite="hair1.png"),
-              dict(id="hair2", name="披髮", sprite="hair2.png"),
-              dict(id="hair3", name="蓬鬆", sprite="hair3.png")],
+        hair=[dict(id="hair1", name="短髮", sprite="hair1.png", back="hair1_back.png"),
+              dict(id="hair2", name="披髮", sprite="hair2.png", back="hair2_back.png"),
+              dict(id="hair3", name="蓬鬆", sprite="hair3.png", back="hair3_back.png")],
         hairColor="#4a3428",
         shirtColors=['#d95c68', '#4a90d9', '#4aa564', '#c9a227', '#8a5cc9', '#e0e0e0', '#4a4a52', '#d97a3a', '#f2a1b5', '#b5303f', '#f0c93a', '#8fd0e8', '#2e5fa8', '#3a3f8c', '#6fcfc0', '#2f8a78', '#8fc455', '#3e6b3a', '#b48be0', '#6a3f9a', '#8a5a3a', '#c8b08a', '#9aa0aa', '#f4ede0'],
         pantsColors=['#4a54a0', '#2f3548', '#4a4a52', '#8a8f99', '#d8d4c8', '#8a6a46', '#c8b08a', '#5a4a3a', '#3e6b3a', '#6a8a4a', '#2f8a78', '#3a78c8', '#2e5fa8', '#7aa8d8', '#6a3f9a', '#a63d4a', '#d97a3a', '#e0b840', '#e8a0b8', '#b5303f', '#1f1f26', '#f0f0f0', '#6fcfc0', '#b48be0'],

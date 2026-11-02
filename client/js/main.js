@@ -34,7 +34,7 @@ const S = {
   terrains: {},                 // id -> manifest
   tImages: {},                  // id -> {file: Image}
   furn: null, furnImgs: {},
-  avatar: null, bodyImgs: {}, hairImgs: {},
+  avatar: null, bodyImgs: {}, hairImgs: {}, hairBackImgs: {},
   charCache: new Map(),         // key -> {a: canvas, b: canvas}
   me: JSON.parse(localStorage.getItem('dcisland.m0.avatar') || 'null') || { skin: 'light', hair: 'hair1', shirt: 0, weapon: 'sword' },
   world: null,                  // {types: Uint8Array, decos: []}
@@ -502,8 +502,15 @@ function ownerGazeCast(a, src) {   // 說完台詞：原地開眼（大眼睛預
   a.dir = src.x < a.x ? -1 : 1;
   toast(`${def.name} 睜開了石化之瞳——面向她就會石化，快轉身背對她！`, 2600);
 }
-// 這個人是不是「正面朝著」蛇女：臉朝向（dir＝左右）與蛇女所在的左右一致；幾乎在正上/正下方分不出左右時算面對（保守）
-const facingGazer = (q, a) => { const dx = a.x - q.x; return Math.abs(dx) < 6 || dx * (q.dir || 1) > 0; };
+// 這個人是不是「正面朝著」蛇女：朝向向量（往上走＝(0,-1)、往下＝(0,1)、側面＝(dir,0)）與「到蛇女的方向」夾角小於約 80°。
+// 背對（往上走而蛇女在下方）或看向旁邊（側面而蛇女在正上/正下方）都安全；重疊（距離<1）算面對
+const facingVec = q => q.face === 'up' ? [0, -1] : q.face === 'down' ? [0, 1] : [q.dir || 1, 0];
+const facingGazer = (q, a) => {
+  const dx = a.x - q.x, dy = a.y - q.y, d = Math.hypot(dx, dy);
+  if (d < 1) return true;
+  const [fx, fy] = facingVec(q);
+  return (fx * dx + fy * dy) / d > .17;
+};
 function gazeFire(a, def) {   // 開眼結束：石化之瞳發射（全地圖光閃一下），判定在各人自己的畫面
   a.castFrom = null;
   a.rageCd = S.t + OWNER_CD;
@@ -973,16 +980,16 @@ function blocked(px, py, ignoreFurn) { // 像素座標（腳底）；ignoreFurn�
 // ---------------- 造型合成 ----------------
 function hexRGB(h) { const s = h.replace('#', ''); return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)]; }
 
-function charSprite(skin, hairId, shirtIdx, frame, pantsIdx) {   // frame：0/1 走路兩幀、2 坐姿
+function charSprite(skin, hairId, shirtIdx, frame, pantsIdx) {   // frame：0/1 走路兩幀、2 坐姿、3/4 背面（往上走）的站/走
   // 索引超出範圍（舊存檔/別人送來的怪值）就用 0 號，避免畫圖當掉
   const shirtHex = S.avatar.shirtColors[shirtIdx] ?? S.avatar.shirtColors[0];
   const pantsHex = S.avatar.pantsColors[pantsIdx || 0] ?? S.avatar.pantsColors[0];
   const k = `${skin}|${hairId}|${shirtHex}|${pantsHex}`;
   let entry = S.charCache.get(k);
   if (!entry) entry = {};
-  const fk = 'abc'[frame] || 'a';
+  const fk = 'abcde'[frame] || 'a';
   if (entry[fk]) return entry[fk];
-  const src = S.bodyImgs[skin][fk];
+  const src = S.bodyImgs[skin][fk === 'd' ? 'a' : fk === 'e' ? 'b' : fk];   // 背面沿用正面的身體，頭髮整顆蓋住臉
   const cv = document.createElement('canvas'); cv.width = 16; cv.height = 24;
   const g = cv.getContext('2d');
   // 上衣換色
@@ -1006,7 +1013,9 @@ function charSprite(skin, hairId, shirtIdx, frame, pantsIdx) {   // frame：0/1 
     }
   }
   g.putImageData(d, 0, 0);
-  const hair = S.hairImgs[hairId]; if (hair) g.drawImage(hair, 0, fk === 'c' ? 3 : 0);   // 坐姿的頭整體下移 3 列，頭髮跟著下移
+  const back = fk === 'd' || fk === 'e';
+  const hair = (back ? S.hairBackImgs[hairId] : null) || S.hairImgs[hairId];
+  if (hair) g.drawImage(hair, 0, fk === 'c' ? 3 : 0);   // 坐姿的頭整體下移 3 列，頭髮跟著下移；背面用整顆蓋住的頭髮
   entry[fk] = cv;
   S.charCache.set(k, entry);
   return cv;
@@ -1115,7 +1124,11 @@ function stepPlayer(p, dt) {
     if (S.mode === 'walk' && S.mouseHeld && S.mouseClient) {   // 按住滑鼠攻擊時，面向跟著游標（可以一邊朝右攻擊一邊往左退）
       const wx = S.mouseClient[0] - canvas.getBoundingClientRect().left + S.cam.x;
       if (Math.abs(wx - p.x) > 6) p.dir = Math.sign(wx - p.x);
-    } else if (dx !== 0) p.dir = dx;
+      p.face = 'side';
+    } else {   // 四方向朝向：只往上＝背面、只往下＝正面、有左右分量＝側（dir 左右）；站著不動維持上次的朝向
+      if (dx !== 0) { p.dir = dx; p.face = 'side'; }
+      else p.face = dy < 0 ? 'up' : 'down';
+    }
     const len = Math.hypot(dx, dy) || 1, sp = (keys['shift'] ? 200 : 120) * dt;
     const nx = clamp(p.x + dx / len * sp, 8, COLS * CELL - 8);
     const ny = clamp(p.y + dy / len * sp, 8, ROWS * CELL - 8);
@@ -1130,7 +1143,7 @@ function stepPlayer(p, dt) {
     p.z += p.vz * dt; p.vz -= 780 * dt;
     if (p.z <= 0) { p.z = 0; p.vz = 0; }
   }
-  if (p.swing > 0) p.swing -= dt;
+  if (p.swing > 0) { p.swing -= dt; p.face = 'side'; }   // 揮擊／採集是朝左右揮，轉成側面
   if (p.tool && S.t > p.toolUntil && !(p.swing > 0)) p.tool = null;
   if (p.moving) { p.animT += dt; if (p.animT > .16) { p.animT = 0; p.frame ^= 1; } }
   else p.frame = 0;
@@ -1182,7 +1195,7 @@ function drawPerson(p, wi, nameColor) {
       ctx.fillStyle = `rgba(10,14,20,${.32 * shs + .04})`;
       ctx.beginPath(); ctx.ellipse(p.x, p.y + 1, 11 * shs, 4 * shs, 0, 0, Math.PI * 2); ctx.fill();
     }
-    const img = playerSpriteDiv(p, pose ? 2 : (p.frame === 1 ? 1 : 0));
+    const img = playerSpriteDiv(p, pose ? 2 : p.face === 'up' ? (p.frame === 1 ? 4 : 3) : (p.frame === 1 ? 1 : 0));   // 往上走＝背面
     const pet = S.t < (p.petUntil ?? 0);   // 石化：身體灰階（自己的石化即時同步；遠端玩家的石化由光束事件就地推斷，純演出）
     if (pet) { ctx.save(); ctx.filter = 'grayscale(1) brightness(.92)'; }
     ctx.save(); ctx.translate(p.x, p.y - p.z);
@@ -1374,7 +1387,7 @@ function usePose(it) {
   if (Math.hypot(cx - p.x, cy - p.y) > 80) { say(`靠近一點再${def.use === 'sit' ? '坐' : '躺'}`); return; }
   const sx = cx, sy = (it.cell[1] + def.h) * CELL - (def.use === 'sit' ? 2 : 0);
   for (const r of S.remotes.values()) if (r.pose && Math.abs(r.x - sx) < 10 && Math.abs(r.y - sy) < 10) { say('這裡有人了'); return; }
-  p.pose = def.use; p.seat = { type: it.type, cell: [it.cell[0], it.cell[1]] }; p.seatType = it.type;
+  p.pose = def.use; p.seat = { type: it.type, cell: [it.cell[0], it.cell[1]] }; p.seatType = it.type; p.face = 'down';
   p.x = sx; p.y = sy; p.z = 0; p.vz = 0; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null;
   say(def.use === 'sit' ? '坐下了（移動、F 或再點一次起身）' : '晚安～（移動、F 或再點一次起身）', 1800);
 }
@@ -2207,7 +2220,10 @@ async function boot() {
       c: await loadImg(`assets/avatar/body_${s.id}_sit.png`),
     };
   }));
-  await Promise.all(S.avatar.hair.map(async h => S.hairImgs[h.id] = await loadImg(`assets/avatar/${h.sprite}`)));
+  await Promise.all(S.avatar.hair.map(async h => {
+    S.hairImgs[h.id] = await loadImg(`assets/avatar/${h.sprite}`);
+    if (h.back) S.hairBackImgs[h.id] = await loadImg(`assets/avatar/${h.back}`);
+  }));
   await Promise.all(S.avatar.weapons.filter(w => w.sprite).map(async w => S.weaponImgs[w.id] = await loadImg(`assets/avatar/${w.sprite}`)));
 
   await ensureTerrain(S.terrain);
