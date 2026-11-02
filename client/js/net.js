@@ -59,7 +59,7 @@ export function connectNet(S, opts = {}) {
       r.dead = !!st.dead;                  // 死亡（墓碑）：進出死亡時跟同島的人說一聲
       if (st.hp != null) r.hp = st.hp;     // 血量同步（對方自己算好的）
       if (!r.dead) {                       // 死亡時位置凍結（墓碑不會被推著走）
-        r.tx = st.x; r.ty = st.y; r.dir = st.dir ?? r.dir; r.z = st.z ?? r.z;
+        r.tx = st.x; r.ty = st.y; r.dir = st.dir ?? r.dir; r.tz = st.z ?? r.tz;   // 高度只設目標，由 stepRemote 平滑追上（直接覆蓋會每次封包都彈回 0 → 跳躍抽動）
         r.moving = !!st.moving;
       } else r.moving = false;
       if (r.dead && !wasDead) r.deadAt = performance.now();   // 復活倒數的起點（本地時鐘）

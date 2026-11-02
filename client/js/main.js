@@ -1062,7 +1062,7 @@ function stepRemote(r, dt) {
   if (r.moving) { r.animT += dt; if (r.animT > .16) { r.animT = 0; r.frame ^= 1; } }
   else r.frame = 0;
   if (r.swing > 0) r.swing -= dt;
-  r.z += ((r.tz ?? r.z) - r.z) * Math.min(1, dt * 12);
+  r.z += ((r.tz ?? r.z) - r.z) * Math.min(1, dt * 22);   // 跳躍高度追目標（封包 12Hz，這個速度追得上又夠平滑）
 }
 
 // ---- 角色死亡：被島主的龍衝撞倒後原地變墓碑，30 秒後復活（NPC／遠端玩家也適用） ----
