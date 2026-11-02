@@ -1215,15 +1215,15 @@ function drawPerson(p, wi, nameColor) {
     ctx.strokeText('?', p.x, yy); ctx.fillText('?', p.x, yy);
   }
 }
-// 石化之瞳的預警大眼睛：暗紫眼眶＋金虹膜＋直瞳，疊在蛇女身上；pul＝脈動（越接近發射越亮）
+// 石化之瞳的預警大眼睛：暗紅眼眶＋紅虹膜＋直瞳，疊在蛇女身上；pul＝脈動（越接近發射越亮）
 function drawGazeEye(x, y, r, pul) {
   ctx.save(); ctx.translate(x, y);
-  ctx.fillStyle = `rgba(44,28,60,${.72 + .2 * pul})`;
-  ctx.strokeStyle = `rgba(196,150,255,${.45 + .4 * pul})`; ctx.lineWidth = 2;
+  ctx.fillStyle = `rgba(40,12,16,${.72 + .2 * pul})`;
+  ctx.strokeStyle = `rgba(255,90,80,${.45 + .4 * pul})`; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.ellipse(0, 0, r * 1.28, r, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#e8c23a';
+  ctx.fillStyle = `rgb(${210 + 40 * pul | 0},${28 + 20 * pul | 0},${28 + 12 * pul | 0})`;   // 紅色虹膜，越接近發射越亮
   ctx.beginPath(); ctx.ellipse(0, 0, r * .55, r * .66, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#241a30';
+  ctx.fillStyle = '#1a0608';
   ctx.beginPath(); ctx.ellipse(0, 0, r * .16, r * .58, 0, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
