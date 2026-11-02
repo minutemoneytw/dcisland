@@ -254,6 +254,7 @@ function doAttack(auto) {
   S._hits = 0;
   if (S.mode !== 'walk') return;
   if (p.dead) return;
+  if (S.t < (p.petUntil ?? 0)) { if (!quiet) say('被石化了，動彈不得', 1200); return; }   // 石化：不能揮擊／採集／互動（長按時不重複提示）
   if (p.pose) {   // 坐著/睡著不能揮擊；按 F（不是長按的自動重複）就起身
     if (auto && !quiet) { standUp(p); S.holdSkipF = true; }
     return;
@@ -1077,7 +1078,7 @@ function revivePlayer(p) {
   p.dead = false; p.deadAt = 0;
   p.pose = null; p.seat = null; p.seatType = null;                 // 復活後一定是站著的
   p.hp = PLAYER_HP;   // 復活即滿血
-  p.petUntil = 0; p.petTick = 0;   // 復活順便清石化（石化時長比死亡短，正常輪不到）
+  p.petUntil = 0; p.petTick = 0; p.petWas = false;   // 復活順便清石化（石化時長比死亡短，正常輪不到）
   const [nx, ny] = landNear((COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL);
   p.x = nx; p.y = ny; p.z = 0; p.vz = 0; p.dir = 1;
   S.floaters.push({ x: p.x, y: p.y - 46, v: '復活！', life: 1.2, crit: true });
@@ -1130,6 +1131,8 @@ function stepPlayer(p, dt) {
     p.petTick = S.t + 1;
     playerDamage(p, 1, p.petCause || '石化');
   }
+  if (p.petWas && !pet && !p.dead) toast('石化解除了！', 1600);   // 自然倒數結束（復活/換地形有清 petWas，不會誤報）
+  p.petWas = pet;
 }
 
 function stepNPC(p, dt) {
@@ -1197,6 +1200,12 @@ function drawPerson(p, wi, nameColor) {
     const bw = 30, by = nameY + 3;
     ctx.fillStyle = 'rgba(8,10,14,.72)'; ctx.fillRect(p.x - bw / 2, by, bw, 3);
     ctx.fillStyle = '#e07a68'; ctx.fillRect(p.x - bw / 2 + 1, by + 1, Math.max(0, (bw - 2) * p.hp / PLAYER_HP), 1.6);
+  }
+  if (S.t < (p.petUntil ?? 0)) {   // 石化倒數：名牌（與血條）下方顯示還剩幾秒
+    const ty = nameY + (!p.npc && p.hp != null && p.hp < PLAYER_HP ? 16 : 12), txt = `石化 ${Math.ceil(p.petUntil - S.t)}`;
+    ctx.font = 'bold 10px "Microsoft JhengHei"'; ctx.textAlign = 'center';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#9ff0b4';
+    ctx.strokeText(txt, p.x, ty); ctx.fillText(txt, p.x, ty);
   }
   if (p.say && S.t < p.say.until) drawBubble(p.x, nameY - 14, p.say.text, Math.min(1, (p.say.until - S.t) / .4));
   else if (p.guide) {   // 嚮導頭上有個會晃動的「？」，提示可以問他
@@ -1859,7 +1868,7 @@ async function switchTerrain(id) {
     const me = S.players[0];
     const [nx, ny] = landNear(me.x, me.y);
     me.x = nx; me.y = ny;
-    me.petUntil = 0; me.petTick = 0;   // 石化判定只在畫面本地，換地形就解除
+    me.petUntil = 0; me.petTick = 0; me.petWas = false;   // 石化判定只在畫面本地，換地形就解除
     buildTerrainChips();
     toast(`${S.terrains[id].name} 島上線`);
     // M2：只有自己過去；告訴伺服器，讓新地形的人看到你、舊地形的人看不到你
@@ -2025,6 +2034,7 @@ function clickAttack(wx, wy) {
     if (!quiet) toast('你在墓碑裡動不了', 1400);
     return;
   }
+  if (S.t < (S.players[0].petUntil ?? 0)) { if (!quiet) say('被石化了，動彈不得', 1200); return; }   // 石化：不能打動物／採集
   // 點到可破壞物件（且那裡沒有動物）→ 自動換工具去打它
   if (!S.animals.some(a => !a.dead && Math.hypot(a.x - wx, a.y - wy) < 30 * (animalDef(a.id).big || 1))) {
     const d = decoAt(wx, wy);
