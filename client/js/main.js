@@ -57,6 +57,7 @@ const S = {
   draft: [],                    // 裝飾模式未保存的操作
   baseFurn: [],                 // 草稿所依據的擺設（進入裝飾模式時、或最近一次伺服器同步）
   confirmOpen: false,           // 「要保存嗎？」視窗是否開著
+  helpOpen: false,              // 嚮導的操作說明視窗是否開著
   npcDB: null,                  // NPC 對話（assets/npcs/npcs.json）
   toolsDB: null,                // 採集工具與可破壞物件（assets/tools/tools.json）
   drops: [],                    // 地上的掉落物 {item,x,y,born}
@@ -417,6 +418,29 @@ function makePlayer(name, opts) {
   };
 }
 
+// ---- NPC：每張地圖各自一組（assets/npcs/npcs.json 的 terrains），切換地圖時換成新地圖的 NPC，不會跟著玩家過去 ----
+function spawnNPCs() {
+  const defs = S.npcDB?.terrains[S.terrain] || [], out = [];
+  const cx = COLS / 2 - .5, cy = ROWS / 2 - .5;
+  for (const d of defs) {
+    let pos = null;
+    for (let t = 0; t < 80 && !pos; t++) {   // 在島中央附近找沒有家具、彼此不太近的陸地格
+      const gx = Math.floor(cx + (Math.random() * 2 - 1) * 7), gy = Math.floor(cy + (Math.random() * 2 - 1) * 5);
+      if (S.world.types[gy * COLS + gx] !== 2 || S.occ.has(key(gx, gy))) continue;
+      const px = gx * CELL + CELL / 2, py = gy * CELL + CELL / 2;
+      if (out.some(o => Math.hypot(o.x - px, o.y - py) < 3 * CELL)) continue;
+      pos = [px, py];
+    }
+    pos ||= [cx * CELL, cy * CELL];
+    const p = makePlayer(d.name, { look: d.look, npc: true });
+    p.x = pos[0]; p.y = pos[1]; p.home = { x: pos[0], y: pos[1] };
+    p.roam = d.guide ? 96 : 192;              // 嚮導只在原地附近晃，好找
+    p.lines = d.lines; p.guide = !!d.guide; p.idle = Math.random() * 2;
+    out.push(p);
+  }
+  S.players = [S.players[0], ...out];
+}
+
 function playerSpriteDiv(p, frame) {
   // NPC 與遠端玩家都有自己的 look；自己（players[0]）則用當前造型
   if (p.look) return charSprite(p.look.skin, p.look.hair, p.look.shirt, frame);
@@ -476,8 +500,10 @@ function stepNPC(p, dt) {
   if (p.idle > 0) { p.idle -= dt; p.moving = false; p.frame = 0; return; }
   if (!p.target || Math.hypot(p.target.x - p.x, p.target.y - p.y) < 4) {
     // 換目標
+    const h = p.home || { x: p.x, y: p.y }, rr = p.roam || 192;
     for (let t = 0; t < 24; t++) {
-      const x = Math.floor(Math.random() * COLS), y = Math.floor(Math.random() * ROWS);
+      const x = Math.floor((h.x + (Math.random() * 2 - 1) * rr) / CELL), y = Math.floor((h.y + (Math.random() * 2 - 1) * rr * .7) / CELL);
+      if (x < 0 || y < 0 || x >= COLS || y >= ROWS) continue;
       if (S.world.types[y * COLS + x] === 2) {
         let ok = true;
         const fi = S.occ.get(key(x, y));
@@ -528,6 +554,12 @@ function drawPerson(p, wi, nameColor) {
   ctx.fillStyle = nameColor;
   ctx.fillText(p.name, p.x, nameY);
   if (p.say && S.t < p.say.until) drawBubble(p.x, nameY - 14, p.say.text, Math.min(1, (p.say.until - S.t) / .4));
+  else if (p.guide) {   // 嚮導頭上有個會晃動的「？」，提示可以問他
+    ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+    const yy = nameY - 14 + Math.sin(S.t * 4) * 2;
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#ffd86b';
+    ctx.strokeText('?', p.x, yy); ctx.fillText('?', p.x, yy);
+  }
 }
 // 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）
 function drawSleeper(p) {
@@ -575,13 +607,29 @@ function npcNear(p) {
 function talkTo(n) {
   const me = S.players[0], db = S.npcDB;
   if (Math.hypot(n.x - me.x, n.y - me.y) > db.range) { say(`靠近一點再跟${n.name}說話`); return; }
+  const lines = n.lines?.length ? n.lines : ['……'];
   let line;
-  do { line = db.lines[Math.floor(Math.random() * db.lines.length)]; } while (db.lines.length > 1 && line === n.lastLine);   // 不連續說同一句
+  do { line = lines[Math.floor(Math.random() * lines.length)]; } while (lines.length > 1 && line === n.lastLine);   // 不連續說同一句
   n.lastLine = line;
   n.say = { text: line, until: S.t + db.duration };
   n.idle = db.duration + .5; n.moving = false; n.target = null;      // 停下來說話，面向玩家
   if (Math.abs(me.x - n.x) > 6) n.dir = Math.sign(me.x - n.x);
+  if (n.guide) openHelp();                    // 嚮導：除了說一句話，還會跳出簡易操作說明
 }
+// 嚮導的簡易操作說明視窗（內容在 npcs.json 的 help）
+function openHelp() {
+  const h = S.npcDB?.help; if (!h) return;
+  $('helpTitle').textContent = h.title || '操作說明';
+  const body = $('helpBody'); body.innerHTML = '';
+  for (const sec of h.sections || []) {
+    const t = document.createElement('div'); t.className = 'help-sec'; t.textContent = sec.title; body.appendChild(t);
+    const ul = document.createElement('ul');
+    for (const it of sec.items || []) { const li = document.createElement('li'); li.textContent = it; ul.appendChild(li); }
+    body.appendChild(ul);
+  }
+  S.helpOpen = true; $('helpBox').classList.remove('hidden');
+}
+function closeHelp() { S.helpOpen = false; $('helpBox').classList.add('hidden'); }
 // 對話泡泡（畫在名牌上方）
 function drawBubble(x, y, text, alpha) {
   ctx.save(); ctx.globalAlpha = alpha;
@@ -760,7 +808,7 @@ function draw() {
       draw: () => {
         const wid = p.tool || S.me.weapon;      // 打石頭/樹木時暫時換成鎬子/斧頭
         const wi = !p.npc && wid !== 'hands' ? S.weaponImgs[wid] : null;
-        drawPerson(p, wi, p.npc ? '#bcd8e8' : '#ffffff');
+        drawPerson(p, wi, p.npc ? (p.guide ? '#ffd86b' : '#bcd8e8') : '#ffffff');
       }
     });
   }
@@ -964,6 +1012,7 @@ async function switchTerrain(id) {
     S.remotes.clear();                          // 換了地形，原地形的人都看不到了
     if (netOn()) S.netFurn = [];                // 等伺服器送該地形的擺設
     genWorld(id); loadLayout();
+    spawnNPCs();                                // 這張地圖自己的 NPC（上一張地圖的留在原地）
     // 留在原地（切地形不該把人吸到出生點）
     const me = S.players[0];
     const [nx, ny] = landNear(me.x, me.y);
@@ -1043,6 +1092,7 @@ addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   keys[k] = true;
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+  if (S.helpOpen) { if (k === 'escape' || k === 'enter') closeHelp(); return; }       // 操作說明開著：Esc / Enter 關閉，其他鍵不處理
   if (S.confirmOpen) { if (k === 'escape') closeConfirm(); return; }   // 「要保存嗎？」開著時：Esc＝繼續編輯，其他鍵不處理
   if (k === 'e' && !e.repeat) { if (S.mode === 'walk') enterDecor(); else if (S.mode === 'decor') requestExitDecor(); }
   if (k === 'escape' && S.mode === 'decor') requestExitDecor();     // Esc 也能離開裝飾模式
@@ -1088,7 +1138,7 @@ function clickAttack(wx, wy) {
 }
 // 長按 F 或左鍵：冷卻一到就自動再揮（每幀呼叫；第一下由按下事件負責，之後這裡接手）
 function autoAttack() {
-  if (S.mode !== 'walk' || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
+  if (S.mode !== 'walk' || S.helpOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
   quiet = true;
   try {
     if (S.mouseHeld && S.mouseClient) {
@@ -1098,7 +1148,7 @@ function autoAttack() {
   } finally { quiet = false; }
 }
 canvas.addEventListener('mousedown', e => {
-  if (e.button !== 0 || S.confirmOpen) return;
+  if (e.button !== 0 || S.confirmOpen || S.helpOpen) return;
   if (S.mode === 'walk') {
     const r = canvas.getBoundingClientRect();
     S.mouseHeld = true; S.mouseClient = [e.clientX, e.clientY];
@@ -1113,7 +1163,7 @@ canvas.addEventListener('mousedown', e => {
 });
 canvas.addEventListener('contextmenu', e => {
   e.preventDefault();
-  if (S.confirmOpen) return;
+  if (S.confirmOpen || S.helpOpen) return;
   if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身
     const r = canvas.getBoundingClientRect();
     const f = furnAtPoint(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y);
@@ -1133,11 +1183,13 @@ $('furnCancel').onclick = () => exitDecor(false);              // 取消變動�
 $('cfSave').onclick = () => exitDecor(true);
 $('cfDiscard').onclick = () => exitDecor(false);
 $('cfKeep').onclick = closeConfirm;
+$('helpClose').onclick = closeHelp;
 $('furnClear').onclick = () => {
   if (!canClear()) { toast('清空需要管理員權限'); return; }
   stageOp({ t: 'clear' }); toast('已清空（按「完成」才會保存，「取消變動」可還原）', 2600);
 };
 
+$('btnHelp').onclick = openHelp;       // 右上「？」：和嚮導一樣的操作說明
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => $('avatarPanel').classList.add('hidden');
 
@@ -1199,17 +1251,8 @@ async function boot() {
   loadLayout();
   buildTerrainChips();
 
-  const looks = [
-    { skin: 'pale', hair: 'hair3', shirt: 3 },
-    { skin: 'tan', hair: 'hair2', shirt: 1 },
-    { skin: 'deep', hair: 'hair1', shirt: 2 },
-  ];
-  S.players = [
-    makePlayer('我', { dx: -40, dy: 10 }),
-    makePlayer('訪客・波特', { look: looks[0], npc: true, dx: 52, dy: -8 }),
-    makePlayer('訪客・ ooops', { look: looks[1], npc: true, dx: -10, dy: 64 }),
-    makePlayer('會長', { look: looks[2], npc: true, dx: 74, dy: 48 }),
-  ];
+  S.players = [makePlayer('我', { dx: -40, dy: 10 })];
+  spawnNPCs();
 
   let last = performance.now();
   function loop(now) {
@@ -1249,13 +1292,10 @@ async function boot() {
   requestAnimationFrame(loop);
   window.S = S; // debug / discord.js 接線用
   window.toast = toast;
-  // 第一次來（這個瀏覽器沒看過）：多提示一次怎麼互動；之後只顯示簡短歡迎
-  let first = true;
-  try { first = !localStorage.getItem('dcisland.m0.seen'); localStorage.setItem('dcisland.m0.seen', '1'); } catch { /* 無痕等：當作第一次 */ }
-  const welcomeMs = first ? 7000 : 3000;
+  // 進島只提示歡迎；操作方式看右上「？」或問嚮導
+  const welcomeMs = 3000;
   welcomeUntil = performance.now() + welcomeMs;           // 歡迎訊息顯示期間，不讓「已連上島」把它蓋掉
-  if (first) toast('歡迎來到 DC島！左鍵／F 鍵互動（攻擊、採集、坐下、聊天）・WASD 走動・Shift 跑・Space 跳・E 裝飾', welcomeMs);
-  else toast('歡迎來到 DC島！WASD 走動・Shift 跑・Space 跳・左鍵/F 攻擊・E 裝飾', welcomeMs);
+  toast('歡迎來到 DC島！', welcomeMs);
   import('./discord.js').then(m => m.hookDiscord()).catch(err => console.warn('hookDiscord:', err));
   // M2：多人同步（同語音頻道＝同島；本機則 ?room= 或預設 local:local）
   import('./net.js').then(m => m.connectNet(S, {

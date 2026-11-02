@@ -131,3 +131,12 @@ body {
 .ff-btn.disabled { opacity: .45; cursor: not-allowed; }
 #confirmBox { left: 50%; top: 36%; transform: translateX(-50%); width: 320px; z-index: 30; }
 #confirmBox .ff-panel-hint { font-size: 12px; color: var(--text); margin: 4px 0 6px; }
+
+/* ---------- 嚮導的操作說明 ---------- */
+#helpBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 460px; max-height: 500px; display: flex; flex-direction: column; z-index: 31; }
+#helpBox.hidden { display: none !important; }
+#helpBody { overflow-y: auto; flex: 1 1 auto; min-height: 0; padding-right: 4px; }
+#helpBox .help-sec { font-size: 12px; letter-spacing: 2px; color: var(--gold); margin: 10px 0 4px; }
+#helpBox ul { list-style: none; }
+#helpBox li { font-size: 12px; line-height: 1.7; color: var(--text); padding-left: 12px; position: relative; }
+#helpBox li::before { content: "·"; position: absolute; left: 2px; color: var(--gold-dim); }

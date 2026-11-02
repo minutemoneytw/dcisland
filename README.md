@@ -68,7 +68,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 | 家具 | `client/assets/furniture/furniture.json` 加條目 + png |
 | 動物 | `client/assets/animals/animals.json` 加條目 + png，並在各地形 `terrain.json` 的 `animals` 指定；會游泳/兩棲/會飛的加 `"swim": true`（才能逃到海上） |
 | 造型 | `client/assets/avatar/avatar.json`（＋對應 png） |
-| NPC 台詞 | `client/assets/npcs/npcs.json` 的 `lines` |
+| NPC／嚮導／台詞／操作說明 | `client/assets/npcs/npcs.json`（`terrains.<地圖>` 每張地圖各自的 NPC，`help` 是嚮導的說明視窗） |
 | 可破壞物件／採集工具／掉落物 | `client/assets/tools/tools.json`（key＝地形 deco 的圖檔名；掉落物目前為空） |
 
 ## 機密與安全
