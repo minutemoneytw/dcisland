@@ -235,6 +235,19 @@ def furn_defs():
             _FURN_DEFS = {it["id"]: (it["w"], it["h"]) for it in json.load(f)["items"]}
     return _FURN_DEFS
 
+_FLOOR_IDS = None
+def floor_ids():
+    """地板 id 集合，取自前端 floors.json，用來驗證地板操作。"""
+    global _FLOOR_IDS
+    if _FLOOR_IDS is None:
+        with open(os.path.join(CLIENT, "assets", "floors", "floors.json"), encoding="utf-8") as f:
+            _FLOOR_IDS = {it["id"] for it in json.load(f)["items"]}
+    return _FLOOR_IDS
+
+def floor_to_list(floor):
+    """地板 {(x,y): id} → [[x,y,id],…]（與 Worker 的儲存/廣播格式相同）。"""
+    return [[x, y, fid] for (x, y), fid in floor.items()]
+
 class Room:
     """一座島＝一個房間（鍵：guild:channel）。"""
     def __init__(self):
@@ -242,6 +255,7 @@ class Room:
         self.clients = {}   # cid -> {"sock":socket, "send":Lock, "state":dict}
         self.order = 0
         self.furn = {}          # 地形 -> [{"type","cell":[x,y]}]，擺設依地形各自一份
+        self.floor = {}         # 地形 -> {(x,y): 地板id}，地板層（與家具各自獨立）
         self.decos = {}         # 地形 -> {物件編號: {"hp","cell","until"(ms)}}，只存受損/已破壞的
         # 島主（伺服器端同步）：龍的階段與島形位圖；只在草島
         self.dragon = None
@@ -251,6 +265,25 @@ class Room:
         self.dragon_wander_timer = None
         self.wander_tick_seq = 0
         # 每位玩家各自在某個地形（client["terrain"]）；剛連上時為 None，等 enter
+
+    def floor_map(self, terrain):
+        return self.floor.setdefault(terrain, {})
+
+    def edit_floor(self, op, terrain):
+        """地板操作 {"t":"floor","cell":[x,y],"type":id|None}（None＝拆除）。回傳 True 表示有變動。呼叫時需持有 self.lock。"""
+        cell = op.get("cell")
+        if not (isinstance(cell, list) and len(cell) == 2 and all(isinstance(v, int) and not isinstance(v, bool) for v in cell)):
+            return False
+        x, y = cell
+        if x < 0 or y < 0 or x >= COLS or y >= ROWS:
+            return False
+        floor, typ = self.floor_map(terrain), op.get("type")
+        if typ is None:
+            return floor.pop((x, y), None) is not None
+        if not isinstance(typ, str) or typ not in floor_ids() or floor.get((x, y)) == typ:
+            return False
+        floor[(x, y)] = typ
+        return True
 
     def furn_list(self, terrain):
         return self.furn.setdefault(terrain, [])
@@ -340,17 +373,23 @@ class Room:
         """一批擺設操作：每個各自驗證（不合法的跳過），「清空」只有管理員能做。回傳 (applied, rejected, denied)。"""
         applied = rejected = 0
         denied = False
+        furn_changed = floor_changed = False
         with self.lock:
             for op in ops[:MAX_OPS]:
                 if not isinstance(op, dict):
                     rejected += 1
+                elif op.get("t") == "floor":   # 地板層：與家具各自獨立，不看身分
+                    if self.edit_floor(op, terrain):
+                        applied += 1; floor_changed = True
+                    else:
+                        rejected += 1
                 elif op.get("t") == "clear" and not admin:
                     denied = True
                 elif self.edit_furn(op, terrain):
-                    applied += 1
+                    applied += 1; furn_changed = True
                 else:
                     rejected += 1
-        return applied, rejected, denied
+        return applied, rejected, denied, furn_changed, floor_changed
 
     # ---- 島主（伺服器端同步）----
     def dragon_state(self):
@@ -830,7 +869,7 @@ class Room:
                 dragon = self.dragon_snapshot()
                 if self.dragon["st"] == "idle":   # 有人進草島了：排一次 tick 恢復散步（沒人看時是停擺的）
                     self._schedule_wander_tick(1.0, self.dragon["wander_gen"])
-            return old, players, list(self.furn_list(v)), self.deco_list(v), dragon
+            return old, players, list(self.furn_list(v)), floor_to_list(self.floor_map(v)), self.deco_list(v), dragon
 
     # terrain 有給時只送給「目前在該地形」的連線；沒給就是全部
     def broadcast(self, msg, skip=None, terrain=None):
@@ -1014,11 +1053,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     res = room.enter(cid, v)
                     if res is None:
                         continue
-                    old, players, furn, decos, dragon = res
+                    old, players, furn, floor, decos, dragon = res
                     if old:   # leave 帶 to＝去了哪個地形（讓留下的人顯示「XXX 移動到了OO區域」）；斷線的 leave 不帶
                         room.broadcast({"t": "leave", "id": cid, "to": v}, skip=cid, terrain=old)
                     with room.clients[cid]["send"]:
-                        ws_send(sock, json.dumps({"t": "enter", "terrain": v, "players": players, "furn": furn, "decos": decos, "dragon": dragon}))
+                        ws_send(sock, json.dumps({"t": "enter", "terrain": v, "players": players, "furn": furn, "floor": floor, "decos": decos, "dragon": dragon}))
                     st = room.clients[cid]["state"]
                     room.broadcast({"t": "join", "id": cid, "name": st.get("name")}, skip=cid, terrain=v)
                     if st:
@@ -1057,11 +1096,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     ops = msg.get("ops") if t == "commit" else [msg]
                     if cur and isinstance(ops, list):
                         c = room.clients.get(cid) or {}
-                        applied, rejected, denied = room.commit_furn(cur, ops, c.get("admin", is_admin(None)))
+                        applied, rejected, denied, furn_changed, floor_changed = room.commit_furn(cur, ops, c.get("admin", is_admin(None)))
                         with c["send"]:
                             ws_send(sock, json.dumps({"t": "commit_result", "applied": applied, "rejected": rejected, "denied": denied}))
-                        if applied:
+                        if furn_changed:
                             room.broadcast({"t": "furn", "items": list(room.furn_list(cur))}, terrain=cur)
+                        if floor_changed:
+                            room.broadcast({"t": "floor", "items": floor_to_list(room.floor_map(cur))}, terrain=cur)
                 elif t == "event":   # 揮擊等瞬時事件
                     cur = room.terrain_of(cid)
                     if cur:

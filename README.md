@@ -66,6 +66,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 |---|---|
 | 地形 | `client/assets/terrain/<id>/` 加資料夾 + `terrain.json`，並在 `main.js` 的 `TERRAIN_IDS` 登記 |
 | 家具 | `client/assets/furniture/furniture.json` 加條目 + png |
+| 地板 | `client/assets/floors/floors.json` 加條目 + 16×16 無縫磚 png（`gen_assets.py` 的 `FLOOR_MANIFEST`） |
 | 動物 | `client/assets/animals/animals.json` 加條目 + png，並在各地形 `terrain.json` 的 `animals` 指定；會游泳/兩棲/會飛的加 `"swim": true`（才能逃到海上） |
 | 造型 | `client/assets/avatar/avatar.json`（＋對應 png） |
 | NPC／嚮導／台詞／操作說明 | `client/assets/npcs/npcs.json`（`terrains.<地圖>` 每張地圖各自的 NPC，`help` 是嚮導的說明視窗） |

@@ -90,6 +90,7 @@ export function connectNet(S, opts = {}) {
           r.x = r.tx; r.y = r.ty;               // 一進場就在對方位置，不用滑過來
         }
         if (opts.onFurn) opts.onFurn(msg.furn || []);
+        if (opts.onFloor) opts.onFloor(msg.floor || []);
         if (opts.onDecos) opts.onDecos(msg.terrain, msg.decos || []);   // 在擺設之後（重生判斷要看家具）
         if (msg.dragon && opts.onDragon) opts.onDragon({ ...msg.dragon, ev: 'state' });   // 進草島時的島主快照
         break;
@@ -111,6 +112,7 @@ export function connectNet(S, opts = {}) {
         break;
       }
       case 'furn': if (opts.onFurn) opts.onFurn(msg.items || []); break;
+      case 'floor': if (opts.onFloor) opts.onFloor(msg.items || []); break;
       case 'event': {
         const r = S.remotes.get(msg.id);
         if (r && msg.kind === 'attack') r.swing = 0.22;
@@ -153,7 +155,7 @@ export function connectNet(S, opts = {}) {
   // 宣告自己進入某地形：只有自己過去，同地形的人才看得到你
   net.enter = v => net.connected && send({ t: 'enter', v });
   // 家具編輯：只送意圖，結果以伺服器廣播的 furn 清單為準
-  net.commitFurn = ops => net.connected && send({ t: 'commit', ops });       // 裝飾模式保存：一批操作（place/remove/clear）
+  net.commitFurn = ops => net.connected && send({ t: 'commit', ops });       // 裝飾模式保存：一批操作（place/remove/clear/floor）
   // 打可破壞物件：只送意圖（物件編號、圖檔名、所在格），血量由伺服器扣
   net.hitDeco = (i, sprite, cell) => net.connected && send({ t: 'hit', i, sprite, cell });
   // 島主：上傳陸地位圖（進草島時）／打到島主時送意圖（座標＋傷害＋我們看到的龍位置），流程由伺服器權威

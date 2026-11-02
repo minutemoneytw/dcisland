@@ -53,6 +53,12 @@ const S = {
   remotes: new Map(),           // M2：同島的其他玩家（id -> player-like）
   net: null,                    // M2：連線物件（net.js）
   netFurn: [],                  // 伺服器端目前地形的擺設（連線時以此為準）
+  floors: null, floorImgs: {},  // 地板 manifest / 圖
+  floorMap: new Map(),          // 地板層：y*COLS+x -> 地板 id（畫在地面與家具之間）
+  netFloor: [],                 // 伺服器端目前地形的地板 [[x,y,id],…]
+  baseFloor: new Map(),         // 地板草稿所依據的底（同 baseFurn）
+  decorTab: 'furn',             // 裝飾模式分頁：'furn'（擺設）| 'floor'（地板：只能鋪/拆，長按左鍵鋪、長按右鍵拆）
+  selFloor: null, paint: null,  // 選中的地板 id；長按中的動作 'add' | 'del'
   admin: false,                 // 我是不是管理員（伺服器告知；可以清空擺設）
   draft: [],                    // 裝飾模式未保存的操作
   baseFurn: [],                 // 草稿所依據的擺設（進入裝飾模式時、或最近一次伺服器同步）
@@ -1258,6 +1264,11 @@ function draw() {
     if (!img) continue;
     ctx.drawImage(img, x * CELL, y * CELL, CELL, CELL);
   }
+  // 地板層：蓋在地面上、家具與角色之下
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const fid = S.floorMap.get(y * COLS + x), img = fid && S.floorImgs[fid];
+    if (img) ctx.drawImage(img, x * CELL, y * CELL, CELL, CELL);
+  }
   // 裝飾模式半透明格線
   if (S.mode === 'decor') {
     ctx.strokeStyle = 'rgba(255,255,255,.06)';
@@ -1409,8 +1420,19 @@ function draw() {
   }
   list.sort((a, b) => a.y - b.y).forEach(o => o.draw());
 
+  // 地板模式 ghost：游標所在格（長按右鍵時顯示拆除）
+  if (S.mode === 'decor' && S.decorTab === 'floor' && S.mouseCell) {
+    const [mx, my] = S.mouseCell, ok = floorCellOk(mx, my), del = S.paint === 'del';
+    if (!del && ok && S.selFloor && S.floorImgs[S.selFloor]) {
+      ctx.globalAlpha = .7; ctx.drawImage(S.floorImgs[S.selFloor], mx * CELL, my * CELL, CELL, CELL); ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = !ok ? 'rgba(220,80,80,.3)' : del ? 'rgba(230,150,60,.3)' : 'rgba(90,220,120,.18)';
+    ctx.fillRect(mx * CELL, my * CELL, CELL, CELL);
+    ctx.strokeStyle = !ok ? 'rgba(255,120,120,.8)' : del ? 'rgba(255,190,90,.9)' : 'rgba(120,255,160,.8)';
+    ctx.strokeRect(mx * CELL + .5, my * CELL + .5, CELL - 1, CELL - 1);
+  }
   // 裝飾模式 ghost
-  if (S.mode === 'decor' && S.mouseCell && S.sel) {
+  if (S.mode === 'decor' && S.decorTab === 'furn' && S.mouseCell && S.sel) {
     const def = furnitureDef(S.sel), img = S.furnImgs[S.sel];
     const [mx, my] = S.mouseCell, w = def.w * CELL, h = def.h * CELL;
     const valid = canPlace(S.sel, mx, my);
@@ -1481,12 +1503,61 @@ function netOn() { return !!S.net?.connected; }
 function saveLayout() {
   if (netOn()) return;
   localStorage.setItem('dcisland.m0.layout.' + S.terrain, JSON.stringify(S.furnItems));
+  localStorage.setItem('dcisland.m0.floor.' + S.terrain, JSON.stringify(floorToList(S.floorMap)));
 }
 function loadLayout() {
-  if (netOn()) { applyFurn(S.netFurn); return; }
+  if (netOn()) { applyFurn(S.netFurn); applyFloor(S.netFloor); return; }
   try { S.furnItems = JSON.parse(localStorage.getItem('dcisland.m0.layout.' + S.terrain)) || []; }
   catch { S.furnItems = []; }
   rebuildOcc();
+  try { applyFloor(JSON.parse(localStorage.getItem('dcisland.m0.floor.' + S.terrain)) || []); }
+  catch { applyFloor([]); }
+}
+
+// ---- 地板層 ----
+// 資料格式與伺服器相同：[[x,y,id],…]；記憶體裡用 Map（y*COLS+x -> id）。略過 manifest 沒有的種類
+const floorToList = m => [...m].map(([k, id]) => [k % COLS, Math.floor(k / COLS), id]);
+function listToFloor(items) {
+  const m = new Map();
+  for (const it of items) {
+    if (!Array.isArray(it) || !S.floors?.items.some(f => f.id === it[2])) continue;
+    if (Number.isInteger(it[0]) && Number.isInteger(it[1]) && it[0] >= 0 && it[0] < COLS && it[1] >= 0 && it[1] < ROWS) m.set(it[1] * COLS + it[0], it[2]);
+  }
+  return m;
+}
+function applyFloor(items) { S.floorMap = listToFloor(items); }
+function onNetFloor(items) {
+  S.netFloor = items;
+  if (!S.floors) return;
+  if (S.mode === 'decor') {      // 別人保存了新的地板：以它為底，把我的地板草稿重新疊上去
+    S.baseFloor = listToFloor(items);
+    S.floorMap = applyFloorOps(S.baseFloor, S.draft);
+  } else applyFloor(items);
+}
+// 把草稿裡的地板操作套到一份地板上（回傳新 Map；水上的格子略過）
+function applyFloorOps(base, ops) {
+  const m = new Map(base);
+  for (const op of ops) if (op.t === 'floor') applyFloorOp(m, op);
+  return m;
+}
+function applyFloorOp(m, op) {
+  const [x, y] = op.cell, k = y * COLS + x;
+  if (op.type === null) m.delete(k);
+  else if (S.world.types[k]) m.set(k, op.type);
+}
+const floorCellOk = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS && !!S.world.types[y * COLS + x];
+// 長按鋪設/拆除：游標所在格套用目前動作（同一格不會重複記草稿）
+function paintFloor() {
+  if (S.mode !== 'decor' || S.decorTab !== 'floor' || !S.paint || !S.mouseCell || S.players[0].dead) return;
+  const [x, y] = S.mouseCell;
+  if (!floorCellOk(x, y)) return;
+  const cur = S.floorMap.get(y * COLS + x), type = S.paint === 'add' ? S.selFloor : null;
+  if (S.paint === 'add' && !type) return;
+  if ((cur ?? null) === type) return;
+  if (S.draft.length >= 1200) { toast('未保存的變動太多了，請先按「完成」保存'); S.paint = null; return; }
+  S.draft.push({ t: 'floor', cell: [x, y], type });
+  applyFloorOp(S.floorMap, S.draft[S.draft.length - 1]);
+  updateDecorUI();
 }
 
 // 套用伺服器送來的擺設清單（略過 manifest 沒有的種類，避免壞資料讓繪圖當掉）
@@ -1546,9 +1617,10 @@ function updateDecorUI() {
   $('furnClear').title = canClear() ? '' : '需要管理員權限';
 }
 function enterDecor() {
-  S.mode = 'decor'; S.draft = []; S.baseFurn = cloneFurn(S.furnItems);
+  S.mode = 'decor'; S.draft = []; S.baseFurn = cloneFurn(S.furnItems); S.baseFloor = new Map(S.floorMap); S.paint = null;
   $('btnDecor').classList.add('active'); $('furnPanel').classList.remove('hidden');
-  S.sel = S.sel || S.furn.items[0].id; buildFurnPanel(); updateDecorUI();
+  S.sel = S.sel || S.furn.items[0].id; S.selFloor = S.selFloor || S.floors.items[0].id;
+  buildFurnPanel(); updateDecorUI();
   toast('裝飾模式：左鍵放置／右鍵移除（按「完成」才會保存）', 2600);
 }
 function exitDecor(save) {
@@ -1557,9 +1629,9 @@ function exitDecor(save) {
     if (netOn()) for (let i = 0; i < n; i += 80) S.net.commitFurn(S.draft.slice(i, i + 80));   // 結果以伺服器廣播的清單為準
     else saveLayout();
   } else if (n) {                                  // 不保存：回到進入裝飾模式（或最近一次同步）時的樣子
-    S.furnItems = cloneFurn(S.baseFurn); rebuildOcc();
+    S.furnItems = cloneFurn(S.baseFurn); rebuildOcc(); S.floorMap = new Map(S.baseFloor);
   }
-  S.mode = 'walk'; S.draft = []; closeConfirm();
+  S.mode = 'walk'; S.draft = []; S.paint = null; closeConfirm();
   $('btnDecor').classList.remove('active'); $('furnPanel').classList.add('hidden');
   if (!n) toast('已離開裝飾模式');
   else if (!save) toast('已取消變動');
@@ -1613,7 +1685,7 @@ async function switchTerrain(id) {
     await ensureTerrain(id);      // 先載好圖，再切地形
     S.terrain = id; localStorage.setItem('dcisland.m0.terrain', id);
     S.remotes.clear();                          // 換了地形，原地形的人都看不到了
-    if (netOn()) S.netFurn = [];                // 等伺服器送該地形的擺設
+    if (netOn()) { S.netFurn = []; S.netFloor = []; }   // 等伺服器送該地形的擺設與地板
     genWorld(id); loadLayout();
     spawnNPCs();                                // 這張地圖自己的 NPC（上一張地圖的留在原地）
     // 留在原地（切地形不該把人吸到出生點）
@@ -1634,8 +1706,32 @@ async function switchTerrain(id) {
   }
 }
 
+function setDecorTab(tab) {
+  S.decorTab = tab; S.paint = null; buildFurnPanel();
+  toast(tab === 'floor' ? '地板模式：長按左鍵鋪設／長按右鍵拆除' : '擺設模式：左鍵放置／右鍵移除', 2200);
+}
 function buildFurnPanel() {
+  const floorTab = S.decorTab === 'floor';
+  $('tabFurn').classList.toggle('active', !floorTab); $('tabFloor').classList.toggle('active', floorTab);
+  $('furnHint').textContent = floorTab ? '長按左鍵鋪設／長按右鍵拆除 · 按「完成」才會保存 · E／Esc 離開'
+                                       : '左鍵放置／右鍵移除 · 按「完成」才會保存 · E／Esc 離開';
+  $('furnClear').classList.toggle('hidden', floorTab);        // 清空只針對擺設，地板用長按右鍵拆
   const box = $('furnList'); box.innerHTML = '';
+  if (floorTab) {
+    for (const it of S.floors.items) {
+      const div = document.createElement('div');
+      div.className = 'fitem' + (S.selFloor === it.id ? ' sel' : '');
+      const cv = document.createElement('canvas');
+      cv.width = 44; cv.height = 40; cv.style.height = '40px';
+      const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+      g.drawImage(S.floorImgs[it.id], 6, 4, 32, 32);
+      const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = it.name;
+      div.appendChild(cv); div.appendChild(nm);
+      div.onclick = () => { S.selFloor = it.id; buildFurnPanel(); };
+      box.appendChild(div);
+    }
+    return;
+  }
   for (const it of S.furn.items) {
     const div = document.createElement('div');
     div.className = 'fitem' + (S.sel === it.id ? ' sel' : '');
@@ -1727,8 +1823,8 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key.toLowerCase() === 'f') S.holdSkipF = false; });
 // 切走視窗時放開所有按住的鍵，避免卡住一直揮擊/走路
-addEventListener('blur', () => { for (const k in keys) keys[k] = false; S.mouseHeld = false; });
-addEventListener('mouseup', e => { if (e.button === 0) S.mouseHeld = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; S.mouseHeld = false; S.paint = null; });
+addEventListener('mouseup', e => { if (e.button === 0) S.mouseHeld = false; if (e.button === 0 || e.button === 2) S.paint = null; });
 
 canvas.addEventListener('mousemove', e => {
   S.mouseClient = [e.clientX, e.clientY];     // 長按左鍵時，鏡頭/角色移動後仍要用最新的游標位置
@@ -1784,7 +1880,17 @@ function autoAttack() {
   } finally { quiet = false; }
 }
 canvas.addEventListener('mousedown', e => {
-  if (e.button !== 0 || S.confirmOpen || S.helpOpen) return;
+  if (S.confirmOpen || S.helpOpen) return;
+  if (S.mode === 'decor' && S.decorTab === 'floor' && (e.button === 0 || e.button === 2)) {   // 地板模式：長按左鍵鋪、長按右鍵拆
+    if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
+    const r = canvas.getBoundingClientRect();
+    S.mouseClient = [e.clientX, e.clientY];
+    S.mouseCell = [Math.floor((e.clientX - r.left + S.cam.x) / CELL), Math.floor((e.clientY - r.top + S.cam.y) / CELL)];
+    S.paint = e.button === 0 ? 'add' : 'del';
+    paintFloor();
+    return;
+  }
+  if (e.button !== 0) return;
   if (S.mode === 'walk') {
     const r = canvas.getBoundingClientRect();
     S.mouseHeld = true; S.mouseClient = [e.clientX, e.clientY];
@@ -1808,7 +1914,7 @@ canvas.addEventListener('contextmenu', e => {
     else { const n = npcAt(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y); if (n) talkTo(n); }
     return;
   }
-  if (S.mode !== 'decor' || !S.mouseCell) return;
+  if (S.mode !== 'decor' || !S.mouseCell || S.decorTab === 'floor') return;   // 地板模式的拆除由 mousedown 處理
   if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
   const [x, y] = S.mouseCell;
   const idx = S.occ.get(key(x, y));
@@ -1820,6 +1926,8 @@ $('btnDecor').onclick = () => {
   if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
   enterDecor();
 };
+$('tabFurn').onclick = () => { if (S.decorTab !== 'furn') setDecorTab('furn'); };
+$('tabFloor').onclick = () => { if (S.decorTab !== 'floor') setDecorTab('floor'); };
 $('furnClose').onclick = () => exitDecor(true);                // 完成＝保存並離開
 $('furnCancel').onclick = () => exitDecor(false);              // 取消變動＝不保存並離開
 $('cfSave').onclick = () => exitDecor(true);
@@ -1867,6 +1975,8 @@ async function boot() {
   const tjson = await Promise.all(TERRAIN_IDS.map(id => loadJSON(`assets/terrain/${id}/terrain.json`)));
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
   S.furn = await loadJSON('assets/furniture/furniture.json');
+  S.floors = await loadJSON('assets/floors/floors.json');
+  await Promise.all(S.floors.items.map(async f => S.floorImgs[f.id] = await loadImg(`assets/floors/${f.sprite}`)));
   // 小動物（FF14 致敬）
   S.animalsDB = await loadJSON('assets/animals/animals.json');
   await Promise.all(S.animalsDB.animals.map(async a => S.anImgs[a.id] = await loadImg(`assets/animals/${a.sprite}`)));
@@ -1910,6 +2020,7 @@ async function boot() {
         const r = canvas.getBoundingClientRect();
         S.mouseCell = [Math.floor((S.mouseClient[0] - r.left + S.cam.x) / CELL), Math.floor((S.mouseClient[1] - r.top + S.cam.y) / CELL)];
       }
+      paintFloor();                            // 地板模式長按中：游標掃過的格子持續鋪/拆
       for (const r of S.remotes.values()) stepRemote(r, dt);
       for (let i = S.animals.length - 1; i >= 0; i--) {
         const a = S.animals[i];
@@ -1949,6 +2060,7 @@ async function boot() {
   // M2：多人同步（同語音頻道＝同島；本機則 ?room= 或預設 local:local）
   import('./net.js').then(m => m.connectNet(S, {
     onFurn: onNetFurn,
+    onFloor: onNetFloor,
     onAdmin: v => { S.admin = !!v; updateDecorUI(); },
     onCommitResult: onCommitResult,
     onDecos: onNetDecos,

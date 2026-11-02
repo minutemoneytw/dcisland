@@ -620,6 +620,42 @@ ANIMALS_BY_TERRAIN = {
     "volcano": [("frog", 1), ("bird", 1)],
 }
 
+# ---------------- 地板（裝飾模式的地板層，16×16 無縫磚，畫在地面與家具之間）----------------
+def floor_wood():
+    base, dark, hi = hx("#b98a5a"), hx("#8a6038"), hx("#cfa26e")
+    cv = Canvas(16, 16)
+    cv.rect(0, 0, 15, 15, base)
+    for row, y0 in enumerate((0, 4, 8, 12)):          # 四排橫木板，接縫左右錯開
+        cv.hline(0, 15, y0 + 3, dark)
+        cv.hline(0, 15, y0, hi)
+        jx = (3, 11, 7, 14)[row]
+        cv.vline(jx, y0, y0 + 2, dark)
+        for gx in (1 + row * 3, 9 - row):              # 一點木紋
+            cv.set(gx % 16, y0 + 1, shade(base, 0.9)); cv.set((gx + 1) % 16, y0 + 2, shade(base, 0.9))
+    return cv
+
+def floor_stone():
+    base, dark, hi = hx("#9a9aa2"), hx("#6a6a74"), hx("#b4b4bc")
+    cv = Canvas(16, 16)
+    cv.rect(0, 0, 15, 15, base)
+    # 不規則石板：先畫縫（可無縫重複），再各板點亮上緣
+    for y in (0, 8): cv.hline(0, 15, y, dark)
+    for x, y0, y1 in ((0, 0, 7), (6, 0, 7), (12, 0, 7), (3, 8, 15), (9, 8, 15), (15, 8, 15)):
+        cv.vline(x, y0, y1, dark)
+    for x0, x1, y in ((1, 5, 1), (7, 11, 1), (13, 15, 1), (4, 8, 9), (10, 14, 9), (0, 2, 9)):
+        cv.hline(x0, x1, y, hi)
+    for pt in ((2, 4), (9, 5), (14, 3), (6, 12), (12, 13), (1, 14)):
+        cv.set(pt[0], pt[1], shade(base, 0.88))
+    return cv
+
+FLOOR_MANIFEST = dict(
+    tile=16,
+    items=[
+        dict(id="wood", name="木紋地板", sprite="floor_wood.png"),
+        dict(id="stone", name="石製地板", sprite="floor_stone.png"),
+    ],
+)
+
 def main():
     print("== 地形 ==")
     for t in TERRAINS:
@@ -666,6 +702,13 @@ def main():
     json.dump(FURN_MANIFEST, open(os.path.join(ASSETS, "furniture", "furniture.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
     print("  furniture/furniture.json")
+
+    print("== 地板 ==")
+    save(floor_wood(), "floor_wood.png", "floors")
+    save(floor_stone(), "floor_stone.png", "floors")
+    json.dump(FLOOR_MANIFEST, open(os.path.join(ASSETS, "floors", "floors.json"), "w", encoding="utf-8"),
+              ensure_ascii=False, indent=1)
+    print("  floors/floors.json")
 
     print("== 小動物（FF14 致敬）==")
     adir = os.path.join(ASSETS, "animals")

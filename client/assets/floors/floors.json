@@ -1,0 +1,15 @@
+{
+ "tile": 16,
+ "items": [
+  {
+   "id": "wood",
+   "name": "木紋地板",
+   "sprite": "floor_wood.png"
+  },
+  {
+   "id": "stone",
+   "name": "石製地板",
+   "sprite": "floor_stone.png"
+  }
+ ]
+}

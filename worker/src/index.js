@@ -125,6 +125,20 @@ function applyFurnOp(items, defs, op) {
   return false;
 }
 
+// 地板層：每格一種地板（鍵＝y*COLS+x，值＝地板 id）。op＝{t:"floor", cell:[x,y], type:"wood"|null}（null＝拆除）
+function applyFloorOp(floor, ids, op) {
+  const cell = op.cell;
+  if (!Array.isArray(cell) || cell.length !== 2 || !Number.isInteger(cell[0]) || !Number.isInteger(cell[1])) return false;
+  const [x, y] = cell;
+  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return false;
+  const k = y * COLS + x;
+  if (op.type === null) return floor.delete(k);
+  if (typeof op.type !== "string" || !ids.has(op.type) || floor.get(k) === op.type) return false;
+  floor.set(k, op.type);
+  return true;
+}
+const floorToList = floor => [...floor].map(([k, id]) => [k % COLS, Math.floor(k / COLS), id]);
+
 // 該格有沒有家具（家具佔 w×h 格）
 function cellHasFurn(items, defs, cell) {
   return items.some(it => {
@@ -238,6 +252,7 @@ export class Island {
     this.env = env;
     this.rate = new Map();       // ws -> {sec, n}；休眠醒來會重置，無妨
     this.furnDefs = null;        // id -> {w,h}，由 furniture.json 載入
+    this.floorIds = null;        // 地板 id 集合，由 floors.json 載入
     this.targets = null;         // 可破壞物件定義（tools.json 的 targets）
     this.lastHit = new Map();    // ws -> 上次打擊的時間
     this.dragonLoaded = false;   // 島主狀態只在第一次用到時從 storage 拉回（休眠後記憶體會清空）
@@ -292,6 +307,23 @@ export class Island {
       return new Map();          // 載入失敗就不接受擺放，下次再試
     }
     return this.furnDefs;
+  }
+
+  // 地板種類取自前端 floors.json
+  async getFloorIds() {
+    if (this.floorIds) return this.floorIds;
+    try {
+      const res = await this.env.ASSETS.fetch(new Request("https://assets.local/assets/floors/floors.json"));
+      this.floorIds = new Set((await res.json()).items.map(it => it.id));
+    } catch (e) {
+      console.log("[floor] manifest 載入失敗", String(e));
+      return new Set();
+    }
+    return this.floorIds;
+  }
+
+  async getFloor(terrain) {   // 儲存格式 [[x,y,id],…]；記憶體裡用 Map 方便逐格改
+    return new Map(((await this.state.storage.get("floor:" + terrain)) || []).map(([x, y, id]) => [y * COLS + x, id]));
   }
 
   async getFurn(terrain) {
@@ -351,7 +383,7 @@ export class Island {
       dragon = this.dragonSnapshot();
       await this.state.storage.setAlarm(Date.now() + 1000);   // 有人進草島了：1 秒後醒來恢復散步（alarm 會照 phase 自行安排）
     }
-    ws.send(JSON.stringify({ t: "enter", terrain: v, players, furn: await this.getFurn(v), decos, dragon }));
+    ws.send(JSON.stringify({ t: "enter", terrain: v, players, furn: await this.getFurn(v), floor: floorToList(await this.getFloor(v)), decos, dragon }));
     this.broadcast({ t: "join", id: att.id, name: att.state && att.state.name }, ws, v);
     if (att.state) this.broadcast({ t: "p", id: att.id, s: att.state }, ws, v);
   }
@@ -873,15 +905,25 @@ export class Island {
     if (!Array.isArray(ops) || !att.terrain) return;
     const terrain = att.terrain, defs = await this.getFurnDefs();
     const items = await this.getFurn(terrain);
+    let floor = null, floorIds = null, furnApplied = 0, floorApplied = 0;
     let applied = 0, rejected = 0, denied = false;
     for (const op of ops.slice(0, MAX_OPS)) {
       if (!op || typeof op !== "object") { rejected++; continue; }
+      if (op.t === "floor") {      // 地板層：與家具各自獨立，不看家具、不看身分
+        if (!floor) { floor = await this.getFloor(terrain); floorIds = await this.getFloorIds(); }
+        if (applyFloorOp(floor, floorIds, op)) { applied++; floorApplied++; } else rejected++;
+        continue;
+      }
       if (op.t === "clear" && !att.admin) { denied = true; continue; }
-      if (applyFurnOp(items, defs, op)) applied++; else rejected++;
+      if (applyFurnOp(items, defs, op)) { applied++; furnApplied++; } else rejected++;
     }
-    if (applied) {
+    if (furnApplied) {
       await this.state.storage.put("furn:" + terrain, items);
       this.broadcast({ t: "furn", items }, null, terrain);
+    }
+    if (floorApplied) {
+      await this.state.storage.put("floor:" + terrain, floorToList(floor));
+      this.broadcast({ t: "floor", items: floorToList(floor) }, null, terrain);
     }
     try { ws.send(JSON.stringify({ t: "commit_result", applied, rejected, denied })); } catch { /* 對方已斷線 */ }
   }
