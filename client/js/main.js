@@ -1112,7 +1112,10 @@ function stepPlayer(p, dt) {
   }
   p.moving = dx !== 0 || dy !== 0;
   if (p.moving) {
-    if (dx !== 0) p.dir = dx;
+    if (S.mode === 'walk' && S.mouseHeld && S.mouseClient) {   // 按住滑鼠攻擊時，面向跟著游標（可以一邊朝右攻擊一邊往左退）
+      const wx = S.mouseClient[0] - canvas.getBoundingClientRect().left + S.cam.x;
+      if (Math.abs(wx - p.x) > 6) p.dir = Math.sign(wx - p.x);
+    } else if (dx !== 0) p.dir = dx;
     const len = Math.hypot(dx, dy) || 1, sp = (keys['shift'] ? 200 : 120) * dt;
     const nx = clamp(p.x + dx / len * sp, 8, COLS * CELL - 8);
     const ny = clamp(p.y + dy / len * sp, 8, ROWS * CELL - 8);
