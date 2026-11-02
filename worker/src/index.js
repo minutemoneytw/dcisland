@@ -233,7 +233,8 @@ export class Island {
     this.lastHit = new Map();    // ws -> 上次打擊的時間
     this.dragonLoaded = false;   // 島主狀態只在第一次用到時從 storage 拉回（休眠後記憶體會清空）
     this.dragon = null;
-    this.dragonMap = null;       // 陸地位圖（玩家上傳，來源的島到處都一樣就對了）
+    this.dragonMapLoaded = false;   // 島形位圖存在 storage（懒載入）——只放記憶體的話 DO 休眠後就沒了，打島主不會反擊
+    this.dragonMap = null;
     this.dragonHits = new Map(); // ws -> 上次打島主的時間
   }
 
@@ -384,7 +385,11 @@ export class Island {
       await this.hitDeco(ws, att, msg);
     } else if (msg.t === "dragonMap") {   // 島主：陸地位圖（各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）
       const land = dragonLand(msg.v);
-      if (land) this.dragonMap = land;
+      if (land) {
+        this.dragonMap = land;
+        this.dragonMapLoaded = true;
+        await this.state.storage.put("dragonMap", msg.v);   // 一定要存：DO 休眠會清空記憶體，沒存的話之後打島主不會反擊
+      }
     } else if (msg.t === "dragonSnap") {   // 客戶端凍結恢復：回一份島主即時快照（只給這條連線，走 dragon 事件的 state）
       if (att.terrain === OWNER_TERRAIN) {
         await this.getDragon();
@@ -439,6 +444,15 @@ export class Island {
     return this.dragon;
   }
   saveDragon() { return this.state.storage.put("dragon", this.dragon); }
+  // 島形位圖：玩家上傳後存 storage（懒載入）。各客戶端的島相同，誰上傳都一樣
+  async getDragonMap() {
+    if (!this.dragonMapLoaded) {
+      this.dragonMapLoaded = true;
+      const v = await this.state.storage.get("dragonMap");
+      this.dragonMap = typeof v === "string" ? dragonLand(v) : null;
+    }
+    return this.dragonMap;
+  }
   // 由 aimTms 推導現在的階段（閒置/瞬移鎖定/龍衝/停留/回中心），不需要每幀醒著跑
   dragonPhase(now) {
     const d = this.dragon;
@@ -498,14 +512,15 @@ export class Island {
       return;
     }
     // 反擊：閒置且冷卻過了才觸發；沒有島形位圖就只能扣血（無法挑島緣）
+    const map = await this.getDragonMap();
     const idleAt = this.dragonIdleAt(now);
-    if (ph === "idle" && this.dragonMap && now - idleAt >= D_RAGE_MS) {
-      const warp = dragonEdge(this.dragonMap, Math.random() * Math.PI * 2);          // 島隨機邊緣
+    if (ph === "idle" && map && now - idleAt >= D_RAGE_MS) {
+      const warp = dragonEdge(map, Math.random() * Math.PI * 2);          // 島隨機邊緣
       const ux = Number(msg.x) - warp[0], uy = Number(msg.y) - warp[1];
       const ul = Math.hypot(ux, uy) || 1;
       d.warp = warp; d.atk = [Number(msg.x), Number(msg.y)];
       d.unit = [ux / ul, uy / ul];
-      d.dest = dragonDashDest(this.dragonMap, warp[0], warp[1], d.unit[0], d.unit[1]);
+      d.dest = dragonDashDest(map, warp[0], warp[1], d.unit[0], d.unit[1]);
       d.dashLen = Math.hypot(d.dest[0] - warp[0], d.dest[1] - warp[1]);
       d.aimTms = now; d.wander = null;   // 散步作廢，進入反擊循環
       await this.saveDragon();
@@ -527,9 +542,10 @@ export class Island {
     return false;
   }
   // idle 時挑一個新路點散步：附近 6～16 格的隨機陸地，直線別太抄水（與 client 的 ownerPickLeg 一致）
-  startWanderLeg() {
+  async startWanderLeg() {
     const d = this.dragon;
-    if (d.st === "dead" || !this.dragonMap) return null;
+    const map = await this.getDragonMap();
+    if (d.st === "dead" || !map) return null;
     const [, pos] = this.dragonPhase(Date.now());
     const fx = pos[0], fy = pos[1];
     for (let tries = 0; tries < 24; tries++) {
@@ -538,12 +554,12 @@ export class Island {
       const tx = fx + Math.cos(ang) * dist, ty = fy + Math.sin(ang) * dist;
       const gx = jsRound(tx / CELL - .5), gy = jsRound(ty / CELL - .5);
       if (gx < 1 || gy < 1 || gx >= COLS - 1 || gy >= ROWS - 1) continue;
-      if (!this.dragonMap[gy * COLS + gx]) continue;
+      if (!map[gy * COLS + gx]) continue;
       const steps = Math.max(1, Math.ceil(dist / CELL));
       let water = 0;
       for (let s = 0; s <= steps; s++) {
         const sx = fx + (tx - fx) * s / steps, sy = fy + (ty - fy) * s / steps;
-        if (!this.dragonMap[Math.floor(sy / CELL) * COLS + Math.floor(sx / CELL)]) water++;
+        if (!map[Math.floor(sy / CELL) * COLS + Math.floor(sx / CELL)]) water++;
       }
       if (water / (steps + 1) > .1) continue;
       d.wander = { fx, fy, tx: gx * CELL + CELL / 2, ty: gy * CELL + CELL / 2,
@@ -571,7 +587,7 @@ export class Island {
       await this.saveDragon();
       this.broadcast({ t: "dragon", ev: "spawn", x: pos[0], y: pos[1], hp: d.hp }, null, OWNER_TERRAIN);
       if (this.hasGrassPlayers()) {
-        this.startWanderLeg();
+        await this.startWanderLeg();
         await this.saveDragon();
         await this.scheduleWanderAlarm();
       }
@@ -585,14 +601,13 @@ export class Island {
         await this.state.storage.setAlarm(w.t0 + w.tms + w.pause + 50);
         return;
       }
-      this.startWanderLeg();
+      await this.startWanderLeg();
       await this.saveDragon();
       await this.scheduleWanderAlarm();
     } else {
       // 反擊循環中：回中心、idle 開始時醒來接著散步
       await this.state.storage.setAlarm(this.dragonIdleAt() + 100);
-    }
-  }
+    }  }
 
   // 家具編輯：伺服器是唯一權威。裝飾模式的變動是「草稿」，客戶端按保存才送 commit（一批操作）；
   // 每個操作各自驗證（不合法的跳過，不影響其他），「清空」只有管理員能做。改完把整份清單廣播給同地形的人

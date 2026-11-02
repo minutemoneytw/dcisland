@@ -518,7 +518,12 @@ function applyDragonSnap(o) {
 }
 function onNetDragon(m) {
   if (!S.terrains[S.terrain]?.owner) return;   // 島主事件只跟草島有關
-  if (m.ev === 'state') { applyDragonSnap(m); return; }
+  if (m.ev === 'state') {
+    applyDragonSnap(m);
+    // 保險：伺服器端的島形若因部署/重啟消失，進草島時補傳（各人島形相同，重複上傳無妨）
+    if (netOn() && S.world) S.net.sendDragonMap(landRLE());
+    return;
+  }
   const a = S.animals.find(v => v.id === S.terrains[S.terrain].owner);
   if (m.ev === 'hp') {   // 別人（或自己）打到牠：更新血條
     if (a) a.hp = m.hp;
