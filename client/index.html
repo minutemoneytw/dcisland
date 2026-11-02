@@ -26,11 +26,24 @@
   <!-- 裝飾面板：左下，FFXIV housing 感 -->
   <div id="furnPanel" class="ff-panel hidden">
     <div class="ff-panel-title">擺設一覽</div>
-    <div class="ff-panel-hint">左鍵放置／右鍵移除 · E／Esc 離開模式</div>
+    <div class="ff-panel-hint">左鍵放置／右鍵移除 · 按「完成」才會保存 · E／Esc 離開</div>
+    <div id="furnDirty" class="ff-panel-hint dirty hidden"></div>
     <div id="furnList"></div>
     <div class="ff-panel-foot">
       <button id="furnClose" class="ff-btn small">完成</button>
+      <button id="furnCancel" class="ff-btn small">取消變動</button>
       <button id="furnClear" class="ff-btn small warn">清空</button>
+    </div>
+  </div>
+
+  <!-- 離開裝飾模式時，有未保存的變動就問 -->
+  <div id="confirmBox" class="ff-panel hidden">
+    <div class="ff-panel-title">尚未保存的變動</div>
+    <div id="confirmMsg" class="ff-panel-hint"></div>
+    <div class="ff-panel-foot">
+      <button id="cfSave" class="ff-btn small">保存</button>
+      <button id="cfDiscard" class="ff-btn small warn">不保存</button>
+      <button id="cfKeep" class="ff-btn small">繼續編輯</button>
     </div>
   </div>
 

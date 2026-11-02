@@ -53,6 +53,10 @@ const S = {
   remotes: new Map(),           // M2：同島的其他玩家（id -> player-like）
   net: null,                    // M2：連線物件（net.js）
   netFurn: [],                  // 伺服器端目前地形的擺設（連線時以此為準）
+  admin: false,                 // 我是不是管理員（伺服器告知；可以清空擺設）
+  draft: [],                    // 裝飾模式未保存的操作
+  baseFurn: [],                 // 草稿所依據的擺設（進入裝飾模式時、或最近一次伺服器同步）
+  confirmOpen: false,           // 「要保存嗎？」視窗是否開著
   toolsDB: null,                // 採集工具與可破壞物件（assets/tools/tools.json）
   drops: [],                    // 地上的掉落物 {item,x,y,born}
   inv: JSON.parse(localStorage.getItem('dcisland.m0.inv') || '{}'),   // 背包：物品id -> 數量
@@ -799,7 +803,88 @@ function applyFurn(items) {
 }
 function onNetFurn(items) {
   S.netFurn = items;
-  if (S.furn) applyFurn(items);
+  if (!S.furn) return;
+  if (S.mode === 'decor') {      // 別人保存了新的擺設：以它為底，把我的草稿重新疊上去
+    S.baseFurn = cloneFurn(items.filter(it => it && furnitureDef(it.type) && Array.isArray(it.cell)));
+    S.furnItems = applyOps(S.baseFurn, S.draft); rebuildOcc(); updateDecorUI();
+  } else applyFurn(items);
+}
+
+// ---------------- 裝飾模式：草稿＋保存 ----------------
+// 裝飾模式的變動先記成「操作清單」S.draft（{t:'place',type,cell} / {t:'remove',cell} / {t:'clear'}），
+// 畫面上立刻看得到，但要按「完成」（或離開時選保存）才會真的送給伺服器；「取消變動」就全部丟掉。
+// 同島的人在你保存之前看不到。保存時伺服器會逐一驗證（被別人搶先占用的會被跳過），清空只有管理員能做。
+const cloneFurn = list => list.map(it => ({ type: it.type, cell: [it.cell[0], it.cell[1]] }));
+const furnCovers = (it, cell) => {
+  const d = furnitureDef(it.type) || { w: 1, h: 1 };
+  return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
+};
+// 在指定清單上能不能放（範圍、水邊、與清單內家具重疊）
+function canPlaceIn(list, typeId, x, y) {
+  const def = furnitureDef(typeId); if (!def) return false;
+  for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
+    const xx = x + dx, yy = y + dy;
+    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !S.world.types[yy * COLS + xx]) return false;
+  }
+  return !list.some(it => { const d = furnitureDef(it.type) || { w: 1, h: 1 };
+    return x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h; });
+}
+// 把一串操作套到一份清單上（回傳新清單；不合法的操作略過）
+function applyOps(base, ops) {
+  const list = cloneFurn(base);
+  for (const op of ops) {
+    if (op.t === 'clear') list.length = 0;
+    else if (op.t === 'remove') { const i = list.findIndex(it => furnCovers(it, op.cell)); if (i >= 0) list.splice(i, 1); }
+    else if (op.t === 'place' && canPlaceIn(list, op.type, op.cell[0], op.cell[1])) list.push({ type: op.type, cell: [op.cell[0], op.cell[1]] });
+  }
+  return list;
+}
+function stageOp(op) {
+  S.draft.push(op);
+  S.furnItems = applyOps(S.furnItems, [op]);
+  rebuildOcc(); updateDecorUI();
+}
+const canClear = () => !netOn() || S.admin;      // 連線時要管理員；沒連線（單機）自己的島自己清
+function updateDecorUI() {
+  const n = S.draft.length, el = $('furnDirty');
+  el.classList.toggle('hidden', !n);
+  el.textContent = `有 ${n} 項未保存的變動`;
+  $('furnClear').classList.toggle('disabled', !canClear());
+  $('furnClear').title = canClear() ? '' : '需要管理員權限';
+}
+function enterDecor() {
+  S.mode = 'decor'; S.draft = []; S.baseFurn = cloneFurn(S.furnItems);
+  $('btnDecor').classList.add('active'); $('furnPanel').classList.remove('hidden');
+  S.sel = S.sel || S.furn.items[0].id; buildFurnPanel(); updateDecorUI();
+  toast('裝飾模式：左鍵放置／右鍵移除（按「完成」才會保存）', 2600);
+}
+function exitDecor(save) {
+  const n = S.draft.length;
+  if (n && save) {
+    if (netOn()) for (let i = 0; i < n; i += 80) S.net.commitFurn(S.draft.slice(i, i + 80));   // 結果以伺服器廣播的清單為準
+    else saveLayout();
+  } else if (n) {                                  // 不保存：回到進入裝飾模式（或最近一次同步）時的樣子
+    S.furnItems = cloneFurn(S.baseFurn); rebuildOcc();
+  }
+  S.mode = 'walk'; S.draft = []; closeConfirm();
+  $('btnDecor').classList.remove('active'); $('furnPanel').classList.add('hidden');
+  if (!n) toast('已離開裝飾模式');
+  else if (!save) toast('已取消變動');
+  else if (!netOn()) toast('擺設已保存');          // 連線時等伺服器的 commit_result 再提示
+}
+// E / Esc / 按鈕：有未保存的變動就先問
+function requestExitDecor() {
+  if (S.confirmOpen) { closeConfirm(); return; }
+  if (!S.draft.length) { exitDecor(false); return; }
+  S.confirmOpen = true;
+  $('confirmMsg').textContent = `有 ${S.draft.length} 項擺設變動還沒保存，要保存嗎？`;
+  $('confirmBox').classList.remove('hidden');
+}
+function closeConfirm() { S.confirmOpen = false; $('confirmBox').classList.add('hidden'); }
+function onCommitResult(m) {
+  if (m.denied) toast('清空需要管理員權限，這項已略過' + (m.applied ? `（其他 ${m.applied} 項已保存）` : ''), 3200);
+  else if (m.rejected) toast(`已保存（${m.rejected} 項因被別人搶先占用或不合法而未套用）`, 3200);
+  else toast('擺設已保存');
 }
 
 // ---------------- UI ----------------
@@ -829,8 +914,9 @@ function landNear(px, py) {
 
 async function switchTerrain(id) {
   if (id === S.terrain) return;
+  if (S.mode === 'decor' && S.draft.length) { toast('有未保存的擺設變動，請先按「完成」保存或「取消變動」', 3000); return; }
   try {
-    if (S.mode === 'decor') S.mode = 'walk';
+    if (S.mode === 'decor') exitDecor(false);
     await ensureTerrain(id);      // 先載好圖，再切地形
     S.terrain = id; localStorage.setItem('dcisland.m0.terrain', id);
     S.remotes.clear();                          // 換了地形，原地形的人都看不到了
@@ -907,13 +993,7 @@ function buildAvatarPanel() {
 }
 function saveAvatar() { localStorage.setItem('dcisland.m0.avatar', JSON.stringify(S.me)); }
 
-function setDecor(on) {
-  S.mode = on ? 'decor' : 'walk';
-  $('btnDecor').classList.toggle('active', on);
-  $('furnPanel').classList.toggle('hidden', !on);
-  if (on) { S.sel = S.sel || S.furn.items[0].id; buildFurnPanel(); toast('裝飾模式：左鍵放置／右鍵移除'); }
-  else { saveLayout(); toast('擺設已保存'); }
-}
+
 
 // ---------------- 輸入 ----------------
 const keys = {};
@@ -921,8 +1001,9 @@ addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   keys[k] = true;
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
-  if (k === 'e' && !e.repeat) setDecor(S.mode === 'walk');
-  if (k === 'escape' && S.mode === 'decor') setDecor(false);     // Esc 也能離開裝飾模式
+  if (S.confirmOpen) { if (k === 'escape') closeConfirm(); return; }   // 「要保存嗎？」開著時：Esc＝繼續編輯，其他鍵不處理
+  if (k === 'e' && !e.repeat) { if (S.mode === 'walk') enterDecor(); else if (S.mode === 'decor') requestExitDecor(); }
+  if (k === 'escape' && S.mode === 'decor') requestExitDecor();     // Esc 也能離開裝飾模式
   if (k === 'f' && !e.repeat) doAttack(true);
 });
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key.toLowerCase() === 'f') S.holdSkipF = false; });
@@ -973,7 +1054,7 @@ function autoAttack() {
   } finally { quiet = false; }
 }
 canvas.addEventListener('mousedown', e => {
-  if (e.button !== 0) return;
+  if (e.button !== 0 || S.confirmOpen) return;
   if (S.mode === 'walk') {
     const r = canvas.getBoundingClientRect();
     S.mouseHeld = true; S.mouseClient = [e.clientX, e.clientY];
@@ -982,14 +1063,13 @@ canvas.addEventListener('mousedown', e => {
   }
   if (S.mode !== 'decor' || !S.mouseCell || !S.sel) return;
   const [x, y] = S.mouseCell;
-  if (canPlace(S.sel, x, y)) {
-    if (netOn()) S.net.placeFurn(S.sel, x, y);
-    else { S.furnItems.push({ type: S.sel, cell: [x, y] }); rebuildOcc(); saveLayout(); }
-    toast('放置');
-  } else toast('這裡放不下（水邊／已占用）');
+  if (S.draft.length >= 300) { toast('未保存的變動太多了，請先按「完成」保存'); return; }
+  if (canPlace(S.sel, x, y)) { stageOp({ t: 'place', type: S.sel, cell: [x, y] }); toast('放置'); }
+  else toast('這裡放不下（水邊／已占用）');
 });
 canvas.addEventListener('contextmenu', e => {
   e.preventDefault();
+  if (S.confirmOpen) return;
   if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身
     const r = canvas.getBoundingClientRect();
     const f = furnAtPoint(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y);
@@ -999,19 +1079,18 @@ canvas.addEventListener('contextmenu', e => {
   if (S.mode !== 'decor' || !S.mouseCell) return;
   const [x, y] = S.mouseCell;
   const idx = S.occ.get(key(x, y));
-  if (idx !== undefined) {
-    if (netOn()) S.net.removeFurn(x, y);
-    else { S.furnItems.splice(idx, 1); rebuildOcc(); saveLayout(); }
-    toast('收起擺設');
-  }
+  if (idx !== undefined) { stageOp({ t: 'remove', cell: [x, y] }); toast('收起擺設'); }
 });
 
-$('btnDecor').onclick = () => setDecor(S.mode === 'walk');
-$('furnClose').onclick = () => setDecor(false);
+$('btnDecor').onclick = () => { if (S.mode === 'walk') enterDecor(); else requestExitDecor(); };
+$('furnClose').onclick = () => exitDecor(true);                // 完成＝保存並離開
+$('furnCancel').onclick = () => exitDecor(false);              // 取消變動＝不保存並離開
+$('cfSave').onclick = () => exitDecor(true);
+$('cfDiscard').onclick = () => exitDecor(false);
+$('cfKeep').onclick = closeConfirm;
 $('furnClear').onclick = () => {
-  if (netOn()) S.net.clearFurn();
-  else { S.furnItems = []; rebuildOcc(); saveLayout(); }
-  toast('已清空');
+  if (!canClear()) { toast('清空需要管理員權限'); return; }
+  stageOp({ t: 'clear' }); toast('已清空（按「完成」才會保存，「取消變動」可還原）', 2600);
 };
 
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
@@ -1135,6 +1214,8 @@ async function boot() {
   // M2：多人同步（同語音頻道＝同島；本機則 ?room= 或預設 local:local）
   import('./net.js').then(m => m.connectNet(S, {
     onFurn: onNetFurn,
+    onAdmin: v => { S.admin = !!v; updateDecorUI(); },
+    onCommitResult: onCommitResult,
     onDecos: onNetDecos,
     onDeco: onNetDeco,
     onOpen: net => { if (performance.now() >= welcomeUntil) toast(`已連上島（${net.room}）`, 2000); },

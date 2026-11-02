@@ -60,6 +60,14 @@ def verify_session(token):
     except Exception:
         return None
 
+def is_admin(user):
+    """管理員：dev_config.json 的 admin_ids（Discord 使用者 ID 清單）。
+    ⚠️ 沒設定 admin_ids 時，本機開發讓所有人（含訪客）都是管理員，方便測試；正式版（Worker）沒設就沒有管理員。"""
+    ids = config().get("admin_ids")
+    if ids is None:
+        return True
+    return bool(user) and str(user["id"]) in [str(i) for i in ids]
+
 def discord_me(access_token):
     """用 access_token 問 Discord 這是誰。失敗回 None（名字可之後再補）。"""
     try:
@@ -96,7 +104,8 @@ WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 # 以下限制與 worker/src/index.js 一致（改一邊要改另一邊）
 COLS, ROWS = 88, 56
 MAX_FURN = 500
-MAX_MSG = 2048
+MAX_MSG = 16384           # 裝飾模式的 commit 會一次帶多個操作
+MAX_OPS = 100
 MAX_PLAYERS = 64
 RATE_MAX = 40
 TERRAIN_RE = re.compile(r"^[a-z0-9_-]{1,24}$")
@@ -225,6 +234,22 @@ class Room:
             items.clear()
             return True
         return False
+
+    def commit_furn(self, terrain, ops, admin):
+        """一批擺設操作：每個各自驗證（不合法的跳過），「清空」只有管理員能做。回傳 (applied, rejected, denied)。"""
+        applied = rejected = 0
+        denied = False
+        with self.lock:
+            for op in ops[:MAX_OPS]:
+                if not isinstance(op, dict):
+                    rejected += 1
+                elif op.get("t") == "clear" and not admin:
+                    denied = True
+                elif self.edit_furn(op, terrain):
+                    applied += 1
+                else:
+                    rejected += 1
+        return applied, rejected, denied
 
     def add(self, sock):
         with self.lock:
@@ -380,7 +405,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         last_hit = 0.0
         try:
             # 剛連上時還沒進任何地形：看不到也不被看到，等客戶端送 enter
-            ws_send(sock, json.dumps({"t": "init", "id": cid}))
+            ws_send(sock, json.dumps({"t": "init", "id": cid, "admin": is_admin(None)}))
             while True:
                 fr = ws_read(sock)
                 if fr is None:
@@ -411,6 +436,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     c = room.clients.get(cid)
                     if c is not None:
                         c["user"] = verify_session(msg.get("s"))
+                        c["admin"] = is_admin(c["user"])
+                        with c["send"]:
+                            ws_send(sock, json.dumps({"t": "me", "admin": c["admin"]}))
                 elif t == "state":
                     c = room.clients.get(cid)
                     st = msg.get("s") if isinstance(msg.get("s"), dict) else {}
@@ -450,12 +478,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if res:
                         last_hit = now
                         room.broadcast(res[1], terrain=res[0])
-                elif t in ("place", "remove", "clear"):
+                elif t in ("commit", "place", "remove", "clear"):
+                    # 裝飾模式的變動是草稿，按保存才送 commit（一批操作）；舊客戶端的單一操作也走同一套驗證與權限
                     cur = room.terrain_of(cid)
-                    if cur:
-                        with room.lock:
-                            changed = room.edit_furn(msg, cur)
-                        if changed:
+                    ops = msg.get("ops") if t == "commit" else [msg]
+                    if cur and isinstance(ops, list):
+                        c = room.clients.get(cid) or {}
+                        applied, rejected, denied = room.commit_furn(cur, ops, c.get("admin", is_admin(None)))
+                        with c["send"]:
+                            ws_send(sock, json.dumps({"t": "commit_result", "applied": applied, "rejected": rejected, "denied": denied}))
+                        if applied:
                             room.broadcast({"t": "furn", "items": list(room.furn_list(cur))}, terrain=cur)
                 elif t == "event":   # 揮擊等瞬時事件
                     cur = room.terrain_of(cid)

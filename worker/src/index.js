@@ -14,13 +14,50 @@ const json = (obj, status = 200) =>
 // 與 client/js/main.js 的島尺寸一致（改一邊要改另一邊）
 const COLS = 88, ROWS = 56;
 const MAX_FURN = 500;        // 每個地形的擺設上限
-const MAX_MSG = 2048;        // 單則訊息長度上限（字元）
+const MAX_MSG = 16384;       // 單則訊息長度上限（字元）；裝飾模式的 commit 會一次帶多個操作
+const MAX_OPS = 100;         // 一次 commit 最多處理幾個操作（超過的忽略，客戶端會分批送）
 const MAX_PLAYERS = 64;      // 一座島同時在線上限
 const RATE_MAX = 40;         // 每條連線每秒最多處理幾則訊息（state 約 12 則/秒）
 const TERRAIN_RE = /^[a-z0-9_-]{1,24}$/;
 const CELL = 32;             // 與 client/js/main.js 一致
 const HIT_RANGE = 140;       // 打可破壞物件時，玩家離目標最遠幾 px（客戶端範圍 72，留給延遲）
 const HIT_CD_MS = 300;       // 同一條連線兩次打擊最短間隔
+
+// 管理員：Worker 環境變數 ADMIN_IDS（逗號分隔的 Discord 使用者 ID）。沒設就沒有管理員
+function isAdminId(env, id) {
+  return !!id && String(env.ADMIN_IDS || "").split(",").map(s => s.trim()).filter(Boolean).includes(String(id));
+}
+
+// 對一份擺設清單套用單一操作（place / remove / clear），成功回 true。清空的權限在呼叫端檢查
+function applyFurnOp(items, defs, op) {
+  const cell = op.cell;
+  const validCell = Array.isArray(cell) && cell.length === 2 && Number.isInteger(cell[0]) && Number.isInteger(cell[1]);
+  if (op.t === "place") {
+    const def = defs.get(String(op.type));
+    if (!def || !validCell || items.length >= MAX_FURN) return false;
+    const [x, y] = cell;
+    if (x < 0 || y < 0 || x + def.w > COLS || y + def.h > ROWS) return false;
+    for (const it of items) {
+      const d = defs.get(it.type);
+      if (!d) continue;
+      if (x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h) return false;
+    }
+    items.push({ type: String(op.type), cell: [x, y] });
+    return true;
+  }
+  if (op.t === "remove") {
+    if (!validCell) return false;
+    const i = items.findIndex(it => {
+      const d = defs.get(it.type) || { w: 1, h: 1 };
+      return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
+    });
+    if (i < 0) return false;
+    items.splice(i, 1);
+    return true;
+  }
+  if (op.t === "clear") { items.length = 0; return true; }
+  return false;
+}
 
 // 該格有沒有家具（家具佔 w×h 格）
 function cellHasFurn(items, defs, cell) {
@@ -206,7 +243,7 @@ export class Island {
     this.state.acceptWebSocket(server);
 
     // 剛連上時還沒進任何地形（terrain 為空）：看不到也不被看到，等客戶端送 enter
-    server.send(JSON.stringify({ t: "init", id: seq }));
+    server.send(JSON.stringify({ t: "init", id: seq, admin: false }));
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -263,7 +300,9 @@ export class Island {
     if (msg.t === "hello") {
       // 帶簽章憑證表明身分；驗證失敗就維持訪客
       att.user = await verifySession(this.env, msg.s);
+      att.admin = !!att.user && isAdminId(this.env, att.user.id);
       ws.serializeAttachment(att);
+      ws.send(JSON.stringify({ t: "me", admin: att.admin }));
     } else if (msg.t === "state") {
       const s = msg.s && typeof msg.s === "object" ? msg.s : {};
       // 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）
@@ -276,8 +315,9 @@ export class Island {
       await this.enter(ws, att, String(msg.v));
     } else if (msg.t === "hit") {
       await this.hitDeco(ws, att, msg);
-    } else if (msg.t === "place" || msg.t === "remove" || msg.t === "clear") {
-      if (att.terrain) await this.editFurn(msg, att.terrain);
+    } else if (msg.t === "commit" || msg.t === "place" || msg.t === "remove" || msg.t === "clear") {
+      // 舊客戶端的單一操作（place/remove/clear）也走同一套驗證與權限
+      if (att.terrain) await this.commitFurn(ws, att, msg.t === "commit" ? msg.ops : [msg]);
     } else if (msg.t === "event") {
       if (att.terrain) this.broadcast({ t: "event", id: att.id, kind: msg.kind }, ws, att.terrain);
     }
@@ -310,37 +350,23 @@ export class Island {
     this.broadcast({ t: "deco", i, hp: e.hp, ttl: e.hp <= 0 ? ttl : 0, by: att.id }, null, terrain);
   }
 
-  // 家具編輯：伺服器是唯一權威，改完把整份清單廣播給同地形的所有人（含發送者）
-  async editFurn(msg, terrain) {
-    let items = await this.getFurn(terrain);
-    const cell = msg.cell;
-    const validCell = Array.isArray(cell) && cell.length === 2 && Number.isInteger(cell[0]) && Number.isInteger(cell[1]);
-    const defs = await this.getFurnDefs();
-
-    if (msg.t === "place") {
-      const def = defs.get(String(msg.type));
-      if (!def || !validCell || items.length >= MAX_FURN) return;
-      const [x, y] = cell;
-      if (x < 0 || y < 0 || x + def.w > COLS || y + def.h > ROWS) return;
-      for (const it of items) {
-        const d = defs.get(it.type);
-        if (!d) continue;
-        if (x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h) return;
-      }
-      items.push({ type: String(msg.type), cell: [x, y] });
-    } else if (msg.t === "remove") {
-      if (!validCell) return;
-      const i = items.findIndex(it => {
-        const d = defs.get(it.type) || { w: 1, h: 1 };
-        return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
-      });
-      if (i < 0) return;
-      items.splice(i, 1);
-    } else {
-      items = [];
+  // 家具編輯：伺服器是唯一權威。裝飾模式的變動是「草稿」，客戶端按保存才送 commit（一批操作）；
+  // 每個操作各自驗證（不合法的跳過，不影響其他），「清空」只有管理員能做。改完把整份清單廣播給同地形的人
+  async commitFurn(ws, att, ops) {
+    if (!Array.isArray(ops) || !att.terrain) return;
+    const terrain = att.terrain, defs = await this.getFurnDefs();
+    const items = await this.getFurn(terrain);
+    let applied = 0, rejected = 0, denied = false;
+    for (const op of ops.slice(0, MAX_OPS)) {
+      if (!op || typeof op !== "object") { rejected++; continue; }
+      if (op.t === "clear" && !att.admin) { denied = true; continue; }
+      if (applyFurnOp(items, defs, op)) applied++; else rejected++;
     }
-    await this.state.storage.put("furn:" + terrain, items);
-    this.broadcast({ t: "furn", items }, null, terrain);
+    if (applied) {
+      await this.state.storage.put("furn:" + terrain, items);
+      this.broadcast({ t: "furn", items }, null, terrain);
+    }
+    try { ws.send(JSON.stringify({ t: "commit_result", applied, rejected, denied })); } catch { /* 對方已斷線 */ }
   }
 
   async webSocketClose(ws) { this.leave(ws); }

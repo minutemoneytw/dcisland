@@ -125,3 +125,9 @@ body {
   transition: opacity .3s;
 }
 .hidden { display: none !important; }
+
+/* ---------- 裝飾模式：未保存提示 / 確認視窗 ---------- */
+.ff-panel-hint.dirty { color: var(--gold); margin-bottom: 6px; }
+.ff-btn.disabled { opacity: .45; cursor: not-allowed; }
+#confirmBox { left: 50%; top: 36%; transform: translateX(-50%); width: 320px; z-index: 30; }
+#confirmBox .ff-panel-hint { font-size: 12px; color: var(--text); margin: 4px 0 6px; }

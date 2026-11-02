@@ -68,7 +68,10 @@ export function connectNet(S, opts = {}) {
       case 'init':
         net.id = msg.id;
         S.remotes.clear();
+        if (opts.onAdmin) opts.onAdmin(!!msg.admin);        // 重連後先當一般人，hello 驗證成功後 me 會更新
         break;
+      case 'me': if (opts.onAdmin) opts.onAdmin(!!msg.admin); break;
+      case 'commit_result': if (opts.onCommitResult) opts.onCommitResult(msg); break;
       case 'enter': {
         // 進入（或切換到）某地形：每個人各自在自己的地形，只看得到同地形的人
         S.remotes.clear();
@@ -138,11 +141,9 @@ export function connectNet(S, opts = {}) {
   // 宣告自己進入某地形：只有自己過去，同地形的人才看得到你
   net.enter = v => net.connected && send({ t: 'enter', v });
   // 家具編輯：只送意圖，結果以伺服器廣播的 furn 清單為準
-  net.placeFurn = (type, x, y) => net.connected && send({ t: 'place', type, cell: [x, y] });
+  net.commitFurn = ops => net.connected && send({ t: 'commit', ops });       // 裝飾模式保存：一批操作（place/remove/clear）
   // 打可破壞物件：只送意圖（物件編號、圖檔名、所在格），血量由伺服器扣
   net.hitDeco = (i, sprite, cell) => net.connected && send({ t: 'hit', i, sprite, cell });
-  net.removeFurn = (x, y) => net.connected && send({ t: 'remove', cell: [x, y] });
-  net.clearFurn = () => net.connected && send({ t: 'clear' });
 
   return net;
 }

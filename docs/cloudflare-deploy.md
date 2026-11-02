@@ -23,7 +23,11 @@ npx wrangler secret put DISCORD_CLIENT_SECRET
 #    例：node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 npx wrangler secret put SESSION_SECRET
 
-# 4) 部署
+# 4)（選用）管理員：誰可以在裝飾模式「清空」擺設。逗號分隔的 Discord 使用者 ID（開發者模式 → 對自己按右鍵 → 複製使用者 ID）
+#    沒設就沒有管理員。管理員要通過身分驗證，所以第 3 步的 SESSION_SECRET 也要設
+npx wrangler secret put ADMIN_IDS
+
+# 5) 部署
 npx wrangler deploy
 ```
 
