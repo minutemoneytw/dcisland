@@ -148,7 +148,13 @@ function respawnAnimal(id) {
 }
 
 // ---- 攻擊（武器） ----
-const ATK_CD = 0.45, ATK_T = 0.22, ATK_RANGE = 58;
+const ATK_CD = 0.45, ATK_T = 0.22, ATK_RANGE = 58;   // ATK_RANGE：最大怪物（big=5，黃金肥龍）的判定圈半徑，其餘依體型縮小（見 hitRadius）
+// 攻擊判定以「武器尖端」為準、不看人：武器在人臉朝向那一側 WEAPON_REACH 處；怪物腳底中心 + 判定圈（半徑 hitRadius），
+// 武器點進了圈內就打得到，不需要「面向」的扇形限制（背對時武器在另一側，自然要看武器落在哪）
+const WEAPON_REACH = 30;
+const weaponPt = p => ({ x: p.x + (p.dir || 1) * WEAPON_REACH, y: p.y });
+const hitRadius = def => 34 + 6 * ((def?.big || 1) - 1);   // big=1：34（與舊版正前方約 58px 的觸及距離相近）、big=5：58
+const inHit = (p, a) => { const w = weaponPt(p); return Math.hypot(a.x - w.x, a.y - w.y) <= hitRadius(animalDef(a.id)); };
 // 長按自動連擊時，「太遠了」「沒裝備武器」這類提示只在第一下顯示，不要每幀洗版
 let quiet = false;
 const say = (msg, ms) => { if (!quiet) toast(msg, ms); };
@@ -263,9 +269,9 @@ function doAttack(auto) {
     // 島主在揮擊範圍內就優先打牠：採集／座位／NPC 都讓位（島主常駐重生點，旁邊一堆家具，按 F 不該變成坐下）
     const own = S.animals.find(a => {
       const od = animalDef(a.id);
-      return od?.owner && !a.dead && !a.fly && Math.hypot(a.x - p.x, a.y - p.y) <= ATK_RANGE;
+      return od?.owner && !a.dead && !a.fly && inHit(p, a);
     });
-    const ownerFirst = own && ((own.x - p.x) * p.dir) / (Math.hypot(own.x - p.x, own.y - p.y) || 1) >= .15;
+    const ownerFirst = !!own;
     if (!ownerFirst) {
       const d = decoNear(p);
       if (d) { S._hits = 1; useTool(d); return; }
@@ -284,9 +290,7 @@ function doAttack(auto) {
   S.net?.notifyAttack?.();          // M2：讓同島的人看到你的揮擊
   for (const a of S.animals) {
     if (a.dead || a.fly) continue;   // 島主飛在空中打不到
-    const dx = a.x - p.x, dy = a.y - p.y, dist = Math.hypot(dx, dy);
-    if (dist > ATK_RANGE || dist < 1) continue;
-    if ((dx * p.dir) / dist < .15) continue; // 只有前方扇形
+    if (!inHit(p, a)) continue;      // 武器尖端進了怪物的判定圈才算（不看面向）
     S._hits++;
     const crit = Math.random() < .18;
     const dmg = crit ? 2 : 1;
@@ -1500,6 +1504,22 @@ function draw() {
         ctx.drawImage(img, -W / 2, -H, W, H);
         ctx.restore();
         if (a.dead) return;
+        if (def.owner && !a.fly) {   // 島主腳下判定圈：以「武器尖端」為準——武器點（人前方 WEAPON_REACH 處的小圓點）進圈就打得到，不看面向。靠近（約 220px 內）才顯示
+          const me = S.players[0], d = Math.hypot(a.x - me.x, a.y - me.y);
+          if (d < 220 && !me.dead && !me.pose) {
+            const R = hitRadius(def), wp = weaponPt(me), ok = Math.hypot(a.x - wp.x, a.y - wp.y) <= R, bodyIn = d <= R;
+            ctx.save();
+            ctx.beginPath(); ctx.arc(a.x, a.y, R, 0, Math.PI * 2);
+            if (ok) { ctx.fillStyle = 'rgba(120,255,150,.14)'; ctx.fill(); }
+            ctx.strokeStyle = ok ? 'rgba(120,255,150,.95)' : bodyIn ? 'rgba(255,214,90,.7)' : 'rgba(255,255,255,.3)';   // 綠＝武器在圈內（打得到）、黃＝人在圈內但武器在圈外（轉向）、白＝圈外
+            ctx.lineWidth = ok ? 2.5 : 1.5; ctx.setLineDash(ok ? [] : [6, 6]); ctx.stroke(); ctx.setLineDash([]);
+            ctx.fillStyle = ok ? 'rgba(120,255,150,.95)' : 'rgba(255,255,255,.45)';
+            ctx.beginPath(); ctx.arc(a.x, a.y, 2.5, 0, Math.PI * 2); ctx.fill();   // 怪物腳底中心點
+            ctx.strokeStyle = ok ? 'rgba(120,255,150,1)' : 'rgba(255,255,255,.6)'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(wp.x, wp.y - 20, 4, 0, Math.PI * 2); ctx.stroke();   // 武器點（畫在身體高度，方便看）
+            ctx.restore();
+          }
+        }
         const top = a.y - a.z - H - 2;   // 圖的頂端（名牌/驚嘆號/血條貼這條線往下排）
         // 島主預警：龍衝＝金色虛線＝衝刺路徑；石化之瞳＝只有大眼睛（沒有直線，全地圖面向她的人都會石化）
         if (a.cast > 0 && a.castFrom) {
