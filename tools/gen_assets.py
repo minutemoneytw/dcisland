@@ -600,7 +600,7 @@ ANIMAL_MANIFEST = dict(
              line="「大肚蛙」的眼神飄向遠方。"),
         # 島主：terrain.json 的 owner 指定的動物；big=N＝比普通動物大 N 倍；owner=True＝不會被嚇跑、金色名牌
         dict(id="gold_dragon", name="黃金肥龍", sprite="golden_dragon.png", owner=True, big=5,
-             speed=16, flee=110, hp=30,
+             speed=16, flee=110, hp=200,
              line="「黃金肥龍」抖了抖金色的肚皮，打了一個不容小覷的呵欠。"),
     ],
 )

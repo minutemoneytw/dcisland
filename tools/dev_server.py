@@ -1,11 +1,11 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # DC島 本機開發伺服器（M1）
 # 1) 服務 client/ 靜態檔
 # 2) /api/config   -> 從 dev_config.json 讀 client_id
 # 3) /api/token    -> 用 code+secret 向 Discord 兌換 access_token（secret 只在本機/伺服器端）
 # 用法: python tools/dev_server.py  (先填 tools/dev_config.json)
-import json, math, os, re, sys, base64, hashlib, hmac, struct, threading, time, random
+import json, math, os, re, sys, base64, hashlib, hmac, struct, threading, time, random, traceback
 import urllib.request, urllib.parse, urllib.error, http.server, socketserver
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -119,12 +119,19 @@ HIT_CD = 0.3             # 同一條連線兩次打擊最短間隔（秒）
 # 客戶端只負責演出與自己有沒有被撞到的判定；伺服器只送「階段變更」事件，不需要每幀醒著跑。
 OWNER_TERRAIN = "grass"
 D_CAST_MS = 1000         # 島緣鎖定（預警）持續時間
-D_DASH = 460             # 龍衝速度 px/s
+D_DASH = 560             # 龍衝速度 px/s（比仇恨追殺的 180 更快：高速掠過才有威嚇感；與 client 的 OWNER_DASH_SPEED 一致）
 D_REST_MS = 700          # 衝到底落地的停留時間
-D_RAGE_MS = 5000         # 反擊結束後多久內不被再觸發
+D_RAGE_MS = 12000        # 龍衝冷卻：到點才能再觸發龍衝；冷卻期間被打進入仇恨追殺
 D_SAY_MS = 3000          # 被打後先在原地說台詞的時間（說完才瞬移反擊）
 D_RESPAWN_MS = 30000     # 島主被打倒後的重生秒數
-D_HP = 30
+D_HP = 200
+D_REGEN = 18             # 島主每秒回血（用牆鐘 lazy 計算；與 worker/src/index.js 的 D_REGEN 一致）
+D_CHASE = 180.0          # 仇恨追殺速度 px/s（玩家走路 120／跑步 200：走路逃不掉，跑步才能拉開）
+D_CLAW_RANGE = 36        # 爪擊範圍（前方扇形；約黃金肥龍大圖的 1/4）
+D_CLAW_MS = 1000         # 爪擊間隔（每秒一下）
+D_CLAW_DMG = 2           # 爪擊傷害（扣玩家 HP；被打倒由各客戶端自判，伺服器只廣播爪擊事件）
+D_AGGRO_MS = 5000        # 仇恨換人週期：打牠的人有複數時，隨機換下一個攻擊者
+D_DROPOUT = 30000        # 超過這時間沒有人攻擊島主：脫離仇恨回閒晃
 D_RANGE = 70             # 玩家打島主的攻擊距離（客戶端 58，留延遲）
 D_DRIFT_TOLER = 600      # 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 D_CD = 0.3               # 同一條連線兩次打島主的最短間隔（秒）
@@ -178,6 +185,28 @@ def dragon_dash_dest(m, fx, fy, ux, uy):
             break
         lx, ly = x, y
     return [lx * CELL + CELL / 2, ly * CELL + CELL / 2]
+
+
+def dragon_nearest_land(m, x, y):
+    """從 (x,y) 找最近的陸地格中心（卡海自救用）；找不到回 None。"""
+    gx, gy = int(x // CELL), int(y // CELL)
+    if 0 <= gx < COLS and 0 <= gy < ROWS and m[gy * COLS + gx]:
+        return [gx * CELL + CELL / 2, gy * CELL + CELL / 2]
+    for r in range(1, 45):
+        cand = None
+        for dx in range(-r, r + 1):
+            for dy in range(-r, r + 1):
+                if max(abs(dx), abs(dy)) != r:
+                    continue   # 只看外圈
+                nx, ny = gx + dx, gy + dy
+                if 0 <= nx < COLS and 0 <= ny < ROWS and m[ny * COLS + nx]:
+                    cand = [nx * CELL + CELL / 2, ny * CELL + CELL / 2]
+                    break
+            if cand:
+                break
+        if cand:
+            return cand
+    return None
 
 _TARGETS = None
 def deco_targets():
@@ -329,8 +358,85 @@ class Room:
         if self.dragon is None:
             self.dragon = {"hp": D_HP, "st": "idle", "pos": list(D_CENTER), "aim_tms": 0.0, "dead_at": 0.0,
                            "gen": 0, "wander": None, "wander_gen": 0, "cooldown_until": 0.0, "say_until": 0.0,
-                           "warp": [0, 0], "atk": [0, 0], "unit": [0, 0], "dest": [0, 0], "dash_len": 0.0}
+                           "warp": [0, 0], "atk": [0, 0], "unit": [0, 0], "dest": [0, 0], "dash_len": 0.0,
+                           "regen_t": 0.0, "aggro": None, "last_hit_at": 0.0}
         return self.dragon
+
+    def dragon_regen(self, now):
+        """回血：每秒回 D_REGEN 點（用牆鐘 lazy 計算，不需要計時器；滿血或死亡時把錨點重置為現在，
+        扣血後才重新開始累積；與 worker/src/index.js 的 regenDragon 同一套演算法）。"""
+        d = self.dragon
+        if d["st"] == "dead" or d["hp"] >= D_HP:
+            d["regen_t"] = now
+            return
+        n = int((now - d["regen_t"]) // 1000)
+        if n > 0:
+            d["hp"] = min(D_HP, d["hp"] + n * D_REGEN)
+            d["regen_t"] = now if d["hp"] >= D_HP else d["regen_t"] + n * 1000
+
+    # ---- 島主仇恨（龍衝冷卻中的追殺行為）----
+    def aggro_candidates(self, now, win=D_DROPOUT):
+        """D_DROPOUT（20 秒）內在草島打過島主、還在線上沒死的人：回 [(cid, client), ...]。"""
+        out = []
+        for cid, c in self.clients.items():
+            if now - self.dragon_hits.get(cid, 0.0) > win:
+                continue
+            st = c.get("state")
+            if c.get("terrain") == OWNER_TERRAIN and st and not st.get("dead"):
+                out.append((cid, c))
+        return out
+
+    def aggro_target(self, cid):
+        """依連線 id 找仇恨目標（斷線／離開草島／死了就找不到）。"""
+        c = self.clients.get(cid)
+        st = c.get("state") if c else None
+        if c and c.get("terrain") == OWNER_TERRAIN and st and not st.get("dead"):
+            return cid, c
+        return None, None
+
+    def _aggro_start(self, cid, c):
+        """開始/切換追殺：設定狀態並回要廣播的訊息。需在鎖內。"""
+        d = self.dragon
+        d["aggro"] = {"id": cid, "rotate_at": time.time() * 1000 + D_AGGRO_MS,
+                      "claw_at": time.time() * 1000 + D_CLAW_MS}
+        d["wander"] = None
+        print(f"[dragon {time.strftime('%H:%M:%S')}] 仇恨開始 → {cid}", file=sys.stderr, flush=True)
+        return {"t": "dragon", "ev": "aggro", "id": cid,
+                "name": (c.get("state") or {}).get("name") or "玩家"}
+
+    def _aggro_drop(self, chill=True):
+        """脫離仇恨：回要廣播的訊息清單。需在鎖內。"""
+        d = self.dragon
+        d["aggro"] = None
+        return [{"t": "dragon", "ev": "chill"}] if chill else []
+
+    def _aggro_start_leg(self, now, pos, tx, ty):
+        """追殺腿：直線朝目標目前位置（速度 D_CHASE）。需在鎖內；回 wander 訊息。
+        不走海：龍在陸地時，直線前方連續 3 格是水就截在海邊（0.6 秒後的重新瞄準會繼續沿岸繞）；
+        龍本來就在水裡（舊狀態卡海）則不截，直線走回陸地。"""
+        d = self.dragon
+        if self.dragon_map:
+            gx0, gy0 = int(pos[0] // CELL), int(pos[1] // CELL)
+            on_land = 0 <= gx0 < COLS and 0 <= gy0 < ROWS and self.dragon_map[gy0 * COLS + gx0]
+            steps = max(1, math.ceil(math.hypot(tx - pos[0], ty - pos[1]) / CELL))
+            water = 0
+            for s in range(1, steps + 1):
+                t = s / steps
+                sx, sy = pos[0] + (tx - pos[0]) * t, pos[1] + (ty - pos[1]) * t
+                gx, gy = int(sx // CELL), int(sy // CELL)
+                if on_land and (not (0 <= gx < COLS and 0 <= gy < ROWS) or not self.dragon_map[gy * COLS + gx]):
+                    water += 1
+                    if water >= 3:   # 連續 3 格水：截在海邊最後的陸地
+                        t = max(0.0, (s - water) / steps)
+                        tx = pos[0] + (tx - pos[0]) * t
+                        ty = pos[1] + (ty - pos[1]) * t
+                        break
+                else:
+                    water = 0
+        dist = math.hypot(tx - pos[0], ty - pos[1])
+        tms = max(80, int(dist / D_CHASE * 1000))
+        d["wander"] = {"fx": pos[0], "fy": pos[1], "tx": tx, "ty": ty, "tms": tms, "t0": now, "pause": 0}
+        return {"t": "dragon", "ev": "wander", "fx": pos[0], "fy": pos[1], "tx": tx, "ty": ty, "tms": tms}
 
     def dragon_phase(self, now):
         """由 aim_tms 推導現在的階段（aim/dash/rest/gohome/idle/dead），回 (階段, 座標, 剩餘 ms)。"""
@@ -360,7 +466,9 @@ class Room:
 
     def dragon_snapshot(self):
         """給剛進草島的玩家的島主快照（把現在階段包成客戶端能續播的欄位）。呼叫前需持有或取得狀態。"""
-        ph, pos, ms = self.dragon_phase(time.time() * 1000)
+        now_ms = time.time() * 1000
+        self.dragon_regen(now_ms)   # 讀快照前先把該補的血補上（快照帶 hp）
+        ph, pos, ms = self.dragon_phase(now_ms)
         d = self.dragon
         o = {"ph": ph, "x": pos[0], "y": pos[1], "hp": d["hp"]}
         if ph == "aim":
@@ -388,6 +496,13 @@ class Room:
         if ph != "idle":
             return None
         fx, fy = pos[0], pos[1]
+        # 卡海自救（舊狀態）：龍在海裡時先拉回最近的陸地，散步才挑得到路點
+        gx0, gy0 = int(fx // CELL), int(fy // CELL)
+        if not (0 <= gx0 < COLS and 0 <= gy0 < ROWS and self.dragon_map[gy0 * COLS + gx0]):
+            land = dragon_nearest_land(self.dragon_map, fx, fy)
+            if land:
+                fx, fy = land[0], land[1]
+                d["pos"] = [fx, fy]
         for _ in range(24):
             ang = random.random() * math.pi * 2
             dist = (6 + random.random() * 10) * CELL
@@ -406,6 +521,7 @@ class Room:
             tms = max(1500, int(dist / D_WALK * 1000))
             d["wander"] = {"fx": fx, "fy": fy, "tx": gx * CELL + CELL / 2, "ty": gy * CELL + CELL / 2, "tms": tms,
                            "t0": time.time() * 1000, "pause": random.uniform(*D_WANDER_PAUSE) * 1000}
+            print(f"[dragon {time.strftime('%H:%M:%S')}] 散步腿（aggro={'有' if d.get('aggro') else '無'}）fx=({fx:.0f},{fy:.0f}) → ({d['wander']['tx']:.0f},{d['wander']['ty']:.0f})", file=sys.stderr, flush=True)
             return {"t": "dragon", "ev": "wander", "fx": fx, "fy": fy, "tx": d["wander"]["tx"],
                     "ty": d["wander"]["ty"], "tms": tms}
         return None
@@ -423,8 +539,8 @@ class Room:
         t.start()
 
     def _wander_tick(self, gen, seq):
-        """散步狀態機：到期推進路點。序號/代數不符＝被更新的排程或反擊/死亡作廢；草島沒人＝停擺。"""
-        out = None
+        """散步/仇恨狀態機：到期推進路點、或仇恨追殺的每秒 tick。序號/代數不符＝被更新的排程或反擊/死亡作廢；草島沒人＝停擺。"""
+        outs = []
         next_delay = None
         with self.lock:
             d = self.dragon
@@ -433,9 +549,17 @@ class Room:
             if d["st"] == "dead" or not self._has_grass_clients():
                 return
             now = time.time() * 1000
-            if d["say_until"] and now >= d["say_until"]:   # 說完台詞：瞬移島緣，開始反擊循環
-                out = self._dragon_start_cycle(now)
-                next_delay = ((D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS) / 1000 + 0.1) if out else 2.0
+            if d.get("aggro"):   # 仇恨中：追殺＋爪擊（tick 自己排下一次）；掛保險：tick 出錯就清仇恨讓散步接手，不會卡死
+                try:
+                    outs, next_delay = self._aggro_tick_locked(now)
+                except Exception:
+                    traceback.print_exc()
+                    d["aggro"] = None
+                    next_delay = 0.5
+            elif d["say_until"] and now >= d["say_until"]:   # 說完台詞：瞬移島緣，開始反擊循環
+                msg = self._dragon_start_cycle(now)
+                next_delay = ((D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS) / 1000 + 0.1) if msg else 2.0
+                outs = [msg] if msg else []
             elif d["say_until"]:   # 還在說台詞：說完再醒
                 next_delay = (d["say_until"] - now) / 1000 + 0.05
             else:
@@ -452,16 +576,99 @@ class Room:
                         next_delay = (w["t0"] + w["tms"] + w["pause"] - now) / 1000 + 0.05
                     else:
                         out = self._dragon_start_leg()
+                        if out: outs.append(out)
                         next_delay = ((d["wander"]["tms"] + d["wander"]["pause"]) / 1000 + 0.05) if out else 2.0
-        if out:
-            self.broadcast(out, terrain=OWNER_TERRAIN)
+        # 帶傷回血：補血並把變化廣播出去（lazy 回血原本只在被打／快照時結算，血條會卡住不動）
+        if d["st"] != "dead" and d["hp"] < D_HP:
+            before = d["hp"]
+            self.dragon_regen(now)
+            if d["hp"] != before:
+                outs.append({"t": "dragon", "ev": "hp", "hp": d["hp"]})
+        for m in outs:
+            self.broadcast(m, terrain=OWNER_TERRAIN)
         if next_delay is not None:
+            if d["st"] != "dead" and d["hp"] < D_HP:   # 帶傷：下一次醒來提早到「回滿血時刻」，屆時補滿並廣播一次（不用定期輪詢）
+                full_at = d["regen_t"] + math.ceil((D_HP - d["hp"]) / D_REGEN) * 1000
+                next_delay = min(next_delay, max(0.1, (full_at - now) / 1000 + 0.05))
             self._schedule_wander_tick(next_delay, gen)
 
+    def _aggro_tick_locked(self, now):
+        """仇恨狀態的 tick（需在鎖內）：追殺目標（每腿重新瞄準目標目前位置）、進爪擊範圍就站定每秒一抓、
+        目標死了或 5 秒到隨機換攻擊者、龍衝 CD 一到自動放龍衝、超過 D_DROPOUT 沒人打就脫離仇恨回閒晃。
+        回 (要廣播的訊息清單, 下一次 tick 延遲秒數)。"""
+        d = self.dragon
+        ag = d["aggro"]
+        outs = []
+        # 太久沒有人攻擊／沒有島形：脫離仇恨，回閒晃
+        if not self.dragon_map or now - d.get("last_hit_at", 0.0) > D_DROPOUT:
+            print(f"[dragon {time.strftime('%H:%M:%S')}] 脫離仇恨（最後被打在 {now - d.get('last_hit_at', 0.0):.0f}ms 前）", file=sys.stderr, flush=True)
+            outs += self._aggro_drop()
+            return outs, 0.15
+        cid, c = self.aggro_target(ag["id"])
+        if cid is None or now >= ag["rotate_at"]:
+            # 目標死了或 5 秒到：隨機換下一個攻擊者（沒有其他人就維持原目標）
+            cands = [(i, cc) for i, cc in self.aggro_candidates(now) if i != ag["id"]]
+            if cands:
+                cid, c = random.choice(cands)
+                ag["id"] = cid
+                ag["rotate_at"] = now + D_AGGRO_MS
+                ag["claw_at"] = now + D_CLAW_MS
+                print(f"[dragon {time.strftime('%H:%M:%S')}] 仇恨換目標 → {cid}", file=sys.stderr, flush=True)
+                outs.append({"t": "dragon", "ev": "aggro", "id": cid,
+                             "name": (c.get("state") or {}).get("name") or "玩家"})
+            elif cid is None:   # 目標死了又沒有其他人可換：脫離仇恨回閒晃
+                print("[dragon] 目標已死且無人可換：脫離仇恨", file=sys.stderr, flush=True)
+                outs += self._aggro_drop()
+                return outs, 0.15
+        # 龍衝冷卻到了：直接對現在的仇恨目標發動龍衝（瞬移島緣→預警→衝穿牠）；仇恨保持，落地後不用再被打就接著追殺
+        if now >= d["cooldown_until"]:
+            st = c["state"]
+            ph, pos2, _ = self.dragon_phase(now)
+            d["wander"] = None
+            d["pos"] = [pos2[0], pos2[1]]   # 打斷追腿：位置同步到目前插值點（同 say 的理由）
+            d["atk"] = [float(st.get("x", 0)), float(st.get("y", 0))]
+            msg = self._dragon_start_cycle(now)
+            print(f"[dragon {time.strftime('%H:%M:%S')}] 仇恨中 CD 到：自動對目標放龍衝", file=sys.stderr, flush=True)
+            if msg:
+                outs.append(msg)
+            return outs, 0.15
+        ph, pos, _ = self.dragon_phase(now)
+        if ph == "say":   # 還在說台詞：說完（會由鬧鐘接手瞬移島緣）再醒，期間不追不抓
+            return outs, (d["say_until"] - now) / 1000 + 0.08
+        if ph != "idle":   # 預警/龍衝/歇腳中：不追不抓、不發 wander（避免 client 的衝刺演出被 wander 事件打斷瞬移），等循環結束再醒
+            cycle_end = d["aim_tms"] + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS
+            return outs, max(0.1, cycle_end / 1000 - time.time() + 0.08)
+        if d["aim_tms"]:   # 龍衝循環剛結束（仇恨中沒有人清 aim_tms）：落在對岸（dest），清掉讓之後的追腿正常插值
+            d["aim_tms"] = 0.0
+            d["pos"] = list(d["dest"])
+        st = c["state"]
+        tx, ty = float(st.get("x", 0)), float(st.get("y", 0))
+        dist = math.hypot(tx - pos[0], ty - pos[1])
+        if dist <= D_CLAW_RANGE:
+            # 進爪擊範圍：站定連抓（每秒一下）；記下位置，快照不會跳回舊點
+            if now >= ag["claw_at"]:
+                ag["claw_at"] = now + D_CLAW_MS
+                d["wander"] = None
+                d["pos"] = [pos[0], pos[1]]
+                print(f"[dragon {time.strftime('%H:%M:%S')}] 爪擊 → {cid}（距離 {dist:.0f}）", file=sys.stderr, flush=True)
+                outs.append({"t": "dragon", "ev": "claw", "x": pos[0], "y": pos[1], "tx": tx, "ty": ty, "id": cid})
+        else:
+            w = d["wander"]
+            # 腿走完、或走了 0.6 秒就重新瞄準：緊咬目標現在的位置（否則龍只會抓到幾秒前的舊位置＝抓空氣）
+            if not w or now >= w["t0"] + w["tms"] or now >= w["t0"] + 600:
+                print(f"[dragon {time.strftime('%H:%M:%S')}] 追殺腿 → 目標 {cid}（距離 {dist:.0f}）", file=sys.stderr, flush=True)
+                outs.append(self._aggro_start_leg(now, pos, tx, ty))
+        # 下一個醒的時間：腿走完／爪擊／換人／龍衝 CD／脫離時限，取最近
+        ends = [ag["rotate_at"], d["cooldown_until"], d.get("last_hit_at", 0.0) + D_DROPOUT, ag["claw_at"]]
+        w = d["wander"]
+        if w:
+            ends.append(w["t0"] + w["tms"] + 50)
+        return outs, max(0.08, min(ends) / 1000 - time.time() + 0.02)
+
     def dragon_hit(self, cid, msg):
-        """打到島主：扣血；閒置且冷卻過了 → 開始反擊。回傳要廣播的訊息或 None（無效/太遠/飛行中）。"""
+        """打到島主：扣血；閒置且冷卻過了 → 開始反擊；冷卻中 → 納入仇恨。回傳要廣播的訊息清單（空清單＝無效/太遠/飛行中）。"""
         d = self.dragon_state()
-        out = None
+        outs = []
         dead_gen = None
         post_cycle = None
         ph = pos = None
@@ -472,6 +679,7 @@ class Room:
             if d["st"] == "dead":
                 return None
             now = time.time() * 1000
+            self.dragon_regen(now)   # 扣血前先把該補的血補上（之後廣播的 hp 是回血後的值）
             dmg = 2 if msg.get("dmg") == 2 else 1
             ph, pos, _ = self.dragon_phase(now)
             if ph == "dash":
@@ -490,22 +698,30 @@ class Room:
                 near = dist <= D_RANGE
             if not near:
                 return self._drej(f"太遠 dist={dist:.0f}（龍=({pos[0]:.0f},{pos[1]:.0f}) 打擊點=({ax:.0f},{ay:.0f}) ph={ph}）")
+            self.dragon_hits[cid] = now   # 仇恨計時用：D_DROPOUT 內打過就算現役攻擊者
             d["hp"] -= dmg
+            d["last_hit_at"] = now
             if d["hp"] <= 0:
                 d["st"], d["hp"], d["pos"], d["aim_tms"], d["dead_at"] = "dead", 0, list(pos), 0.0, now
                 d["gen"] += 1
                 d["wander"] = None
+                d["aggro"] = None
                 d["wander_gen"] += 1   # 作廢散步 tick
                 dead_gen = d["gen"]
-                out = {"t": "dragon", "ev": "dead", "x": pos[0], "y": pos[1]}
+                outs.append({"t": "dragon", "ev": "dead", "x": pos[0], "y": pos[1]})
             elif ph == "idle" and self.dragon_map and now >= d["cooldown_until"]:
-                # 先在原地說台詞（D_SAY_MS），說完才瞬移島緣反擊（循環由 tick 在說完時接手啟動）
+                # 一被打就先建立仇恨（20 秒從最後一次被打起算）；龍衝照樣先放：說台詞 → 瞬移島緣 → 龍衝，
+                # 落地後不用再被打就馬上接著追殺同一個攻擊者（循環由 tick 在說完/落地時接手啟動）
+                d["aggro"] = {"id": cid, "rotate_at": now + D_AGGRO_MS, "claw_at": now + D_CLAW_MS}
                 d["say_until"] = now + D_SAY_MS
                 d["atk"] = [ax, ay]   # 記住攻擊者位置，說完台詞後龍衝要穿過這裡
                 d["wander"] = None
+                d["pos"] = [pos[0], pos[1]]   # 打斷散步腿：把位置同步到目前插值點（否則之後的追腿會從舊腿起點出發，client 看起來像瞬移）
                 d["wander_gen"] += 1
                 post_cycle = D_SAY_MS / 1000 + 0.1
-                out = {"t": "dragon", "ev": "say", "x": pos[0], "y": pos[1], "ms": D_SAY_MS}
+                outs.append({"t": "dragon", "ev": "aggro", "id": cid,
+                             "name": (c.get("state") or {}).get("name") or "玩家"})
+                outs.append({"t": "dragon", "ev": "say", "x": pos[0], "y": pos[1], "ms": D_SAY_MS})
             else:
                 why = []
                 if ph != "idle":
@@ -515,8 +731,19 @@ class Room:
                 cd_left = d["cooldown_until"] - now
                 if cd_left > 0:
                     why.append(f"怒氣冷卻剩 {cd_left:.0f}ms")
-                print(f"[dragon] 命中但沒反擊: {' / '.join(why) or '未知'}", file=sys.stderr, flush=True)
-                out = {"t": "dragon", "ev": "hp", "hp": d["hp"]}
+                print(f"[dragon] 命中但沒反擊: {' / '.join(why) or '未知'}"
+                      f"（仇恨={'有' if d.get('aggro') else '無'} 現役攻擊者={len(self.aggro_candidates(now))}）",
+                      file=sys.stderr, flush=True)
+                outs.append({"t": "dragon", "ev": "hp", "hp": d["hp"]})
+                # 龍衝冷卻中：把攻擊者納入仇恨（從 D_DROPOUT 內打過牠的人隨機挑一位開始追殺；已有目標時由 tick 負責換人）
+                if not d.get("aggro") and ph == "idle" and cd_left > 0 and self.dragon_map:
+                    cands = self.aggro_candidates(now)
+                    if cands:
+                        rcid, rc = random.choice(cands)
+                        outs.append(self._aggro_start(rcid, rc))
+                        self._schedule_wander_tick(0.1, d["wander_gen"])   # 快點醒來開始追殺
+                    else:
+                        print("[dragon] 冷卻中被打但沒有可用攻擊者：不開仇恨", file=sys.stderr, flush=True)
         if dead_gen is not None:   # 打倒了：重生計時（鎖外，避免 broadcast 卡住其他人）
             t = threading.Timer(D_RESPAWN_MS / 1000, self._dragon_respawn, (dead_gen,))
             t.daemon = True
@@ -524,7 +751,7 @@ class Room:
             t.start()
         elif post_cycle is not None:
             self._schedule_wander_tick(post_cycle, self.dragon["wander_gen"])
-        return out
+        return outs
 
     def _drej(self, why):
         """打擊被拒（暫時性診斷日誌）。"""
@@ -556,7 +783,7 @@ class Room:
             if d["st"] != "dead" or d["gen"] != gen:   # 期間已有別的變動（例如伺服器重啟重建）
                 return
             pos = dragon_edge(self.dragon_map, random.random() * math.pi * 2) if self.dragon_map else list(D_CENTER)
-            d.update(st="idle", hp=D_HP, pos=pos, aim_tms=0.0, atk=[0, 0], wander=None)
+            d.update(st="idle", hp=D_HP, pos=pos, aim_tms=0.0, atk=[0, 0], wander=None, aggro=None)
             d["wander_gen"] += 1   # 作廢舊散步 tick
             out = {"t": "dragon", "ev": "spawn", "x": pos[0], "y": pos[1], "hp": d["hp"]}
             if self._has_grass_clients():
@@ -808,14 +1035,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     land = dragon_land(msg.get("v"))
                     if land:
                         room.dragon_map = land
-                elif t == "dragonHit":   # 打島主：驗證後廣播 hp/aim/dead 事件
+                elif t == "dragonHit":   # 打島主：驗證後廣播 hp/aim/dead/aggro 事件（回傳訊息清單）
                     now = time.time()
                     if now - last_dragon_hit < D_CD:
                         continue
                     res = room.dragon_hit(cid, msg)
                     if res:
                         last_dragon_hit = now
-                        room.broadcast(res, terrain=OWNER_TERRAIN)
+                        for m in res:
+                            room.broadcast(m, terrain=OWNER_TERRAIN)
                 elif t == "dragonSnap":   # 客戶端凍結恢復：回一份島主即時快照（只給這條連線）
                     c2 = room.clients.get(cid)
                     if c2 and c2.get("terrain") == OWNER_TERRAIN:

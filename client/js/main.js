@@ -289,13 +289,24 @@ function doAttack(auto) {
     }
     S.floaters.push({ x: a.x + (Math.random() * 24 - 12), y: a.y - 42, v: String(dmg), life: .8, crit });
     if (od.owner) {   // 打到島主：不逃跑，瞬移到島緣鎖定攻擊者準備龍衝（飛行/預警/歇腳或冷卻中不重觸發；連線時反擊由伺服器觸發）
-      if (!a.proxy && !a.fly && !a.cast && !a.rest && S.t >= (a.rageCd ?? 0)) ownerTakeoff(a, p);
+      if (!a.proxy) {
+        // 單機：記住攻擊者（仇恨換人用）與最後被打時刻；龍衝 CD 中被打是進仇恨追殺
+        a.hitBook = a.hitBook || new Map(); a.hitBook.set(p, S.t);
+        a.lastHitAt = S.t;
+        if (!a.fly && !a.cast && !a.rest && !a.sayPhase && S.t >= (a.rageCd ?? 0)) ownerTakeoff(a, p);
+        else if (!a.aggro && !a.fly && !a.cast && !a.rest && !a.sayPhase && !a.wleg && S.t < (a.rageCd ?? 0)) ownerAggroStart(a, p);
+      }
     } else {
       a.target = fleeTarget(a, od, p.x, p.y, 220);
     }
     if (a.hp <= 0) {
       a.dead = true; a.dieT = .6;
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
+      if (!od.owner) {   // 殺到動物回 1 HP（島主是伺服器權威事件，不算在此）
+        const me = S.players[0];
+        me.hp = Math.min(PLAYER_HP, (me.hp ?? PLAYER_HP) + 1);
+        S.floaters.push({ x: me.x, y: me.y - 50, v: '+1', life: .7 });
+      }
       toast(`${animalDef(a.id).name} 被打倒了！${S.animalsDB.respawn || 30} 秒後重生`, 2200);
     }
   }
@@ -335,8 +346,12 @@ function nearestLand(a) {
 
 // ---- 島主的龍衝反擊（沿用野外動物「刻意不同步」規則）：被打後瞬間消失、在島隨機邊緣現蹤瞄準攻擊者 ----
 // 預警範圍提示 1 秒後，以龍本體直線飛衝過島（攻擊範圍＝龍的大小，被撞到＝KO），衝到對岸落地後飛回地圖中心
-const OWNER_FLY_SPEED = 240, OWNER_DASH_SPEED = 460, OWNER_CAST = 1, OWNER_CD = 5;
+const OWNER_FLY_SPEED = 240, OWNER_DASH_SPEED = 560, OWNER_CAST = 1, OWNER_CD = 12;
 const OWNER_WALK_SPEED = 34, OWNER_LEG_MIN = 1500, OWNER_PAUSE = [1.5, 4];   // 閒晃：路點間散步速度／每腿最短時長／休息範圍（秒）
+const OWNER_REGEN = 18;   // 島主每秒回血（單機本地模擬；連線時血量由伺服器權威，與兩份伺服器的 D_REGEN 一致）
+const OWNER_CHASE_SPEED = 180, OWNER_CLAW_RANGE = 36, OWNER_CLAW_CD = 1, OWNER_CLAW_DMG = 2;   // 仇恨追殺：速度（比玩家走路快、比跑步慢）／爪擊範圍／間隔／傷害（與伺服器 D_* 一致）
+const OWNER_AGGRO_MS = 5, OWNER_DROPOUT = 30;                              // 仇恨換人週期／多久沒被打就脫離仇恨（秒）
+const PLAYER_HP = 10;     // 玩家血量上限：爪擊扣 2（5 下倒地）、龍衝直接倒地、殺一隻動物回 1、復活即滿血
 // 島主被激怒的經典台詞：發動反擊前隨機說一句（不連續重複）
 const OWNER_LINES = ['紅月啊，用你的熾熱燒盡敵人！', '紅月啊，照亮我征服的道路！', '熾熱的通路啊，引導我走向征服！',
                      '皎潔的紅月啊，傾注你的光芒！', '我自高空降臨，將敵人全部擊碎！', '我自高空降臨，重塑這個世界！'];
@@ -360,11 +375,13 @@ function ownerEdgeAt(angle) {
   return { x: last[0] * CELL + CELL / 2, y: last[1] * CELL + CELL / 2 };
 }
 function ownerTakeoff(a, src) {
-  // 被打：先在原地說台詞（3 秒泡泡），說完才瞬移到島緣（ownerStep 的 sayPhase 接手）
+  // 被打：先在原地說台詞（3 秒泡泡），說完才瞬移到島緣（ownerStep 的 sayPhase 接手）。
+  // 一被打就建立仇恨（龍衝照放），落地歇完就接著追殺同一個攻擊者，不用再被打一次
   ownerSay(a);
   a.sayPhase = S.t + 3; a.saySrc = { x: src.x, y: src.y };
   a.target = null; a.idle = 0; a.wleg = null;
-  a.rageCd = S.t + 4;   // 說台詞＋預警期間被打不重觸發（龍衝時會再重設為 5 秒）
+  a.aggro = { target: src, rotateAt: S.t + OWNER_AGGRO_MS, clawAt: 0 };
+  a.rageCd = S.t + 4;   // 說台詞＋預警期間被打不重觸發（龍衝時會再重設為 9 秒）
 }
 function ownerWarp(a, src) {   // 說完台詞：瞬移到島緣鎖定攻擊者，準備龍衝
   const def = animalDef(a.id);
@@ -445,6 +462,83 @@ function ownerDive(a, def) {
   a.flyTo = dest;
   a.dir = u.x < 0 ? -1 : 1;
   toast(`${def.name} 發動龍衝！`, 2000);
+}
+
+// ---- 玩家血量＋島主仇恨（龍衝冷卻中的追殺）----
+// 單機本地模擬在這裡；連線時追殺流程由伺服器權威（aggro/claw/wander 事件），但「自己有沒有被打到」仍是各人自判
+function playerDamage(p, dmg, cause) {
+  if (p.dead) return;
+  p.hp = Math.max(0, (p.hp ?? PLAYER_HP) - dmg);
+  S.floaters.push({ x: p.x + (Math.random() * 20 - 10), y: p.y - 50, v: String(dmg), life: .8, crit: true });
+  if (p.hp <= 0) killPlayer(p, cause);
+}
+// 龍衝 CD 中被打：進入仇恨（單機版；連線版由伺服器廣播 aggro 事件）
+function ownerAggroStart(a, src) {
+  const def = animalDef(a.id);
+  a.aggro = { target: src, rotateAt: S.t + OWNER_AGGRO_MS, clawAt: S.t + OWNER_CLAW_CD };
+  a.wleg = null; a.target = null; a.idle = 0;
+  if (src === S.players[0]) toast(`${def.name} 火冒三丈地追殺你！快跑！`, 2600);
+  else if (!src.npc) toast(`${def.name} 追殺 ${src.name}！`, 2200);
+}
+// 最近打過牠的攻擊者（hitBook：玩家→最後攻擊時刻），仇恨換人從這裡隨機挑
+function ownerAggroPick(a, ag) {
+  const cands = [...(a.hitBook?.entries() || [])]
+    .filter(([p, t]) => S.t - t <= OWNER_DROPOUT && !p.dead && p !== ag.target)
+    .map(([p]) => p);
+  return cands.length ? cands[Math.floor(Math.random() * cands.length)] : null;
+}
+// 仇恨狀態的單機 tick：追（每腿重瞄目標、速度 180）、進範圍就每秒一抓（扣 2 HP）、
+// 目標死了／5 秒到隨機換攻擊者、龍衝 CD 到了自動對目標放龍衝、20 秒沒人打就脫離回閒晃
+function ownerAggroStep(a, dt, def) {
+  const ag = a.aggro;
+  if (S.t - (a.lastHitAt ?? 0) > OWNER_DROPOUT) {   // 太久沒人打：脫離仇恨
+    a.aggro = null; a.idle = .8;
+    toast(`${def.name} 冷靜下來，繼續散步。`, 1600);
+    return;
+  }
+  if (S.t >= (a.rageCd ?? 0)) {   // 龍衝 CD 到了：對現在的仇恨目標自動放龍衝
+    const t = ag.target;
+    a.aggro = null;
+    ownerTakeoff(a, t);
+    return;
+  }
+  let t = ag.target;
+  if (!t || t.dead) {   // 目標死了：隨機換下一個攻擊者；沒有就脫離仇恨
+    const np = ownerAggroPick(a, ag);
+    if (!np) { a.aggro = null; a.idle = .8; toast(`${def.name} 冷靜下來，繼續散步。`, 1600); return; }
+    ag.target = np; ag.rotateAt = S.t + OWNER_AGGRO_MS; ag.clawAt = S.t + OWNER_CLAW_CD;
+    toast(np === S.players[0] ? `${def.name} 換成追殺你！` : `${def.name} 換成追殺 ${np.name}！`, 2200);
+  } else if (ag.rotateAt && S.t >= ag.rotateAt) {   // 5 秒到：複數攻擊者時隨機換目標
+    const np = ownerAggroPick(a, ag);
+    if (np) {
+      ag.target = np; ag.rotateAt = S.t + OWNER_AGGRO_MS; ag.clawAt = S.t + OWNER_CLAW_CD;
+      if (np === S.players[0] && t !== np) toast(`${def.name} 換成追殺你！`, 2200);
+    }
+  }
+  t = ag.target;
+  const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy);
+  if (d <= OWNER_CLAW_RANGE) {   // 爪擊範圍內：站定連抓，每秒一下（前方扇形由範圍貼著目標的方向決定）
+    a.wleg = null; a.z = 0;
+    if (dx) a.dir = Math.sign(dx);
+    if (S.t >= ag.clawAt) {
+      ag.clawAt = S.t + OWNER_CLAW_CD;
+      // 爪擊特效：三道金色抓痕掃向目標（龍與目標之間 45% 處）＋被打者紅色衝擊圈
+      S.floaters.push({ x: a.x + (t.x - a.x) * .45, y: a.y - 30 + (t.y - a.y) * .45,
+                        ang: Math.atan2(t.y - a.y, t.x - a.x), slash: true, life: .45 });
+      if (t.remote) {   // 遠端玩家的血量由對方自己的畫面計算（刻意不同步傷害），這裡只演出
+        S.floaters.push({ x: (a.x + t.x) / 2, y: (a.y + t.y) / 2 - 24, v: '2', life: .8, crit: true });
+        S.floaters.push({ x: t.x, y: t.y - 24, ring: true, life: .35 });
+      } else {
+        playerDamage(t, 2, def.name);
+        S.floaters.push({ x: t.x, y: t.y - 24, ring: true, life: .35 });
+      }
+    }
+    return;
+  }
+  // 追：跟散步同一套腿插值，每腿結束就重新瞄目標目前位置
+  if (a.wleg) { stepOwnerWalk(a, dt); return; }
+  const tms = Math.max(120, Math.round(d / OWNER_CHASE_SPEED * 1000));
+  a.wleg = { fx: a.x, fy: a.y, tx: t.x, ty: t.y, tms, t0ms: Date.now() };
 }
 
 // ---- 島主閒晃：idle 時在島上四處散步（連線時路點由伺服器廣播，單機自己挑；兩邊演算法一致）----
@@ -551,7 +645,7 @@ function applyDragonSnap(o) {
   if (o.ph === 'dead') return;   // 死了就先不生成，等 spawn 事件
   const a = dragonEnsure(o.x, o.y, o.hp);
   if (!a) return;
-  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null;
+  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.aggro = false;
   if (o.ph === 'aim') {   // 島緣鎖定中：還原成循環（扣掉已過的預警時間）
     const total = 1000;
     a.cycle = {
@@ -600,7 +694,7 @@ function onNetDragon(m) {
   }
   if (m.ev === 'dead') {   // 被打倒了：原地死亡；重生等伺服器的 spawn 事件，不排本地重生
     if (a && !a.dead) {
-      a.dead = true; a.dieT = .6; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0; a.wleg = null; a.cycle = null;
+      a.dead = true; a.dieT = .6; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0; a.wleg = null; a.cycle = null; a.aggro = false;
       if (m.x !== undefined) { a.x = m.x; a.y = m.y; }
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
       toast(`${animalDef(a.id).name} 被打倒了！30 秒後重生`, 2200);
@@ -611,7 +705,7 @@ function onNetDragon(m) {
     const na = dragonEnsure(m.x, m.y, m.hp);
     if (na) {
       na.dead = false; na.dieT = 0; na.x = m.x; na.y = m.y; na.hp = m.hp; na.z = 0;
-      na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.idle = 1.2; na.wleg = null; na.cycle = null;
+      na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.idle = 1.2; na.wleg = null; na.cycle = null; na.aggro = false;
     }
     toast(`${animalDef(S.terrains[S.terrain].owner).name} 回來了！`, 1600);
     return;
@@ -649,6 +743,45 @@ function onNetDragon(m) {
     const aimedAtMe = Math.abs(m.tx - me.x) < CELL && Math.abs(m.ty - me.y) < CELL;
     toast(aimedAtMe ? `${animalDef(a.id).name} 瞬間消失，在島緣現出蹤影鎖定了你！`
                     : `${animalDef(a.id).name} 被惹怒了，在島緣鎖定了攻擊者！`, 2400);
+    return;
+  }
+  if (m.ev === 'aggro') {   // 仇恨開始／換人：龍衝冷卻期間改為追殺（id＝被鎖定的連線；追路腿部份照 wander 事件走）
+    const ownerName = () => animalDef(S.terrains[S.terrain]?.owner || a?.id || 'gold_dragon')?.name || '島主';
+    const r = S.remotes.get(m.id);
+    if (a) {
+      a.aggro = true; a.wleg = null; a.cast = 0; a.castFrom = null;
+      a.fly = false; a.dashU = null; a.cycle = null; a.rest = 0; a.retHome = false;
+    }
+    if (m.id === S.net?.id) toast(`${ownerName()} 火冒三丈地追殺你！快跑！`, 2600);
+    else if (r) toast(`${ownerName()} 追殺 ${r.name}！`, 2200);
+    else toast(`${ownerName()} 進入追殺狀態！`, 2200);
+    return;
+  }
+  if (m.ev === 'chill') {   // 脫離仇恨：20 秒沒人打牠了
+    if (a) a.aggro = false;
+    toast(`${animalDef(S.terrains[S.terrain]?.owner || a?.id || 'gold_dragon')?.name || '島主'} 冷靜下來，繼續散步。`, 1800);
+    return;
+  }
+  if (m.ev === 'claw') {   // 島主爪擊（每秒一下）：範圍內＋前方扇形的自己扣 2 HP（與龍衝同源：受害者自判）
+    const na = a || dragonEnsure(m.x, m.y);
+    if (!na) return;
+    na.x = m.x; na.y = m.y; na.fly = false; na.dashU = null; na.cast = 0; na.rest = 0;
+    na.cycle = null; na.wleg = null; na.dead = false; na.dieT = 0;
+    na.dir = m.tx < na.x ? -1 : 1;
+    // 爪擊特效：三道金色抓痕掃向目標（畫在龍與目標之間 45% 處，夠大才看得到）＋被打者紅色衝擊圈
+    S.floaters.push({ x: m.x + (m.tx - m.x) * .45, y: m.y - 30 + (m.ty - m.y) * .45,
+                      ang: Math.atan2(m.ty - m.y, m.tx - m.x), slash: true, life: .45 });
+    const me = S.players[0];
+    const dx = me.x - m.x, dy = me.y - m.y;
+    const dd = Math.hypot(dx, dy) || 1;
+    const to = Math.hypot(m.tx - m.x, m.ty - m.y) || 1;
+    const front = (dx * (m.tx - m.x) / (dd * to)) >= .15;   // 前方扇形（同揮擊判定）
+    // 伺服器已用它的狀態驗證過距離；事件帶 id：抓的是我就結算（含紅圈），否則只看特效
+    if (!me.dead && (m.id === S.net?.id || (dd <= OWNER_CLAW_RANGE && front))) {
+      playerDamage(me, OWNER_CLAW_DMG, animalDef(na.id).name);
+      S.floaters.push({ x: me.x, y: me.y - 24, ring: true, life: .35 });
+    }
+    return;
   }
 }
 
@@ -657,7 +790,14 @@ function stepAnimal(a, dt) {
   // 島主：連線時整個狀態機用牆鐘（與伺服器同軸，webview 節流也不影響）；單機沿用 dt 積分
   if (def.owner) {
     if (a.proxy) { stepOwnerProxy(a, dt, def); return; }
+    // 單機本地模擬：島主每秒回 OWNER_REGEN 血（連線時血量由伺服器權威，本地不補）
+    if (!a.dead && a.hp < a.maxHp) {
+      a.regenAcc = (a.regenAcc || 0) + dt * OWNER_REGEN;
+      const n = Math.floor(a.regenAcc);
+      if (n > 0) { a.regenAcc -= n; a.hp = Math.min(a.maxHp, a.hp + n); }
+    }
     if (a.fly || a.cast || a.rest || a.sayPhase) { ownerStep(a, dt, def); return; }
+    if (a.aggro) { ownerAggroStep(a, dt, def); return; }   // 龍衝 CD 中：仇恨追殺（單機模擬）
     if (a.wleg) { stepOwnerWalk(a, dt); return; }
     if (a.idle > 0) { a.idle -= dt; a.z = 0; return; }
     const leg = ownerPickLeg(a.x, a.y);   // 單機：自己挑路點散步
@@ -786,6 +926,7 @@ function makePlayer(name, opts) {
     target: null, idle: opts?.npc ? 1 : 0,
     swing: 0, lastAtk: 0,
     dead: false, deadAt: 0,       // 死亡（墓碑）：被島主的龍衝打倒倒數復活
+    hp: PLAYER_HP,                // 血量（爪擊扣 2 歸零倒地；殺動物回 1；NPC 不用）
   };
 }
 
@@ -837,12 +978,13 @@ function killPlayer(p, cause) {
   if (p.npc || p.remote || p.dead) return;
   p.dead = true; p.deadAt = S.t;
   p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null;
-  S.floaters.push({ x: p.x, y: p.y - 46, v: '龍衝', life: 1.1, crit: true });
+  S.floaters.push({ x: p.x, y: p.y - 46, v: cause === '龍衝' ? '龍衝' : '倒地', life: 1.1, crit: true });
   toast(`${cause} 把你打倒了！${DEAD_SECONDS} 秒後在出生點復活`, 3200);
 }
 function revivePlayer(p) {
   p.dead = false; p.deadAt = 0;
   p.pose = null; p.seat = null; p.seatType = null;                 // 復活後一定是站著的
+  p.hp = PLAYER_HP;   // 復活即滿血
   const [nx, ny] = landNear((COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL);
   p.x = nx; p.y = ny; p.z = 0; p.vz = 0; p.dir = 1;
   S.floaters.push({ x: p.x, y: p.y - 46, v: '復活！', life: 1.2, crit: true });
@@ -947,6 +1089,12 @@ function drawPerson(p, wi, nameColor) {
   ctx.strokeText(p.name, p.x, nameY);
   ctx.fillStyle = nameColor;
   ctx.fillText(p.name, p.x, nameY);
+  // 血量條（掉血才畫，名牌正下方）：爪擊扣 2、殺動物回 1、龍衝直接倒地
+  if (!p.npc && p.hp != null && p.hp < PLAYER_HP) {
+    const bw = 30, by = nameY + 3;
+    ctx.fillStyle = 'rgba(8,10,14,.72)'; ctx.fillRect(p.x - bw / 2, by, bw, 3);
+    ctx.fillStyle = '#e07a68'; ctx.fillRect(p.x - bw / 2 + 1, by + 1, Math.max(0, (bw - 2) * p.hp / PLAYER_HP), 1.6);
+  }
   if (p.say && S.t < p.say.until) drawBubble(p.x, nameY - 14, p.say.text, Math.min(1, (p.say.until - S.t) / .4));
   else if (p.guide) {   // 嚮導頭上有個會晃動的「？」，提示可以問他
     ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
@@ -1271,7 +1419,22 @@ function draw() {
   // 傷害飄字 / 消失特效
   for (const f of S.floaters) {
     ctx.save(); ctx.translate(f.x, f.y);
-    if (f.poof) {
+    if (f.ring) {   // 被爪擊打中的衝擊圈：紅圈快速擴散淡出
+      const q = 1 - f.life / .35;
+      ctx.strokeStyle = `rgba(255,110,80,${1 - q})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, 6 + q * 26, 0, Math.PI * 2); ctx.stroke();
+    } else if (f.slash) {   // 爪擊特效：三道金色抓痕往目標方向掃過去（0.45 秒內淡出）
+      const q = 1 - f.life / .45;
+      ctx.rotate(f.ang);
+      ctx.lineCap = 'round'; ctx.lineWidth = 4;
+      for (let i = -1; i <= 1; i++) {
+        ctx.strokeStyle = `rgba(255,218,120,${(.95 - Math.abs(i) * .12) * (1 - q)})`;
+        const off = i * 16, x0 = -8 + q * 30;
+        ctx.beginPath(); ctx.moveTo(x0, off + 22);
+        ctx.quadraticCurveTo(x0 + 40, off - 2, x0 + 58, off - 26); ctx.stroke();
+      }
+    } else if (f.poof) {
       const q = 1 - f.life / .55;
       ctx.strokeStyle = `rgba(250,250,240,${1 - q})`;
       ctx.lineWidth = 2;
@@ -1761,7 +1924,8 @@ async function boot() {
       stepDecos(dt); stepDrops(dt);
       for (let i = S.floaters.length - 1; i >= 0; i--) {
         const f = S.floaters[i];
-        f.life -= dt; f.y -= 34 * dt;
+        f.life -= dt;
+        if (!f.slash) f.y -= 34 * dt;   // 爪擊特效固定在龍的位置，不隨飄字上浮
         if (f.life <= 0) S.floaters.splice(i, 1);
       }
       draw();
