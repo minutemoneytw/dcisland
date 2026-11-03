@@ -490,7 +490,7 @@ export class Island {
     } else if (msg.t === "dragonSnap") {   // 客戶端凍結恢復：回一份島主即時快照（只給這條連線，走 dragon 事件的 state）
       if (att.terrain && OWNER_TERRAINS[att.terrain]) {
         await this.getDragon(att.terrain);
-        ws.send(JSON.stringify({ t: "dragon", ev: "state", ...this.dragonSnapshot(att.terrain) }));
+        ws.send(JSON.stringify({ t: "dragon", ev: "state", terrain: att.terrain, ...this.dragonSnapshot(att.terrain) }));
       }
     } else if (msg.t === "dragonHit") {
       await this.dragonHit(ws, att, msg);
@@ -673,6 +673,7 @@ export class Island {
     const [ph, pos, ms] = this.dragonPhase(terrain, now);
     const d = this.dragons.get(terrain);
     const o = { ph, x: pos[0], y: pos[1], hp: d.hp };
+    if (d.aggro) o.aggro = d.aggro.id;   // 仇恨中：附上追殺目標（中途進場的人才知道牠在戰鬥）
     if (ph === "aim") { o.castMs = Math.round(ms); o.tx = d.atk[0]; o.ty = d.atk[1]; o.dx = d.dest[0]; o.dy = d.dest[1]; }
     if (ph === "cast") { o.castMs = Math.round(ms); o.tx = d.atk[0]; o.ty = d.atk[1]; o.bx = d.beam[0]; o.by = d.beam[1]; }   // 石化之瞳：開眼中（直線已鎖定）
     if (ph === "dash") { o.ux = d.unit[0]; o.uy = d.unit[1]; o.dx = d.dest[0]; o.dy = d.dest[1]; }

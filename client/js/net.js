@@ -87,6 +87,8 @@ export function connectNet(S, opts = {}) {
       case 'commit_result': if (opts.onCommitResult) opts.onCommitResult(msg); break;
       case 'enter': {
         // 進入（或切換到）某地形：每個人各自在自己的地形，只看得到同地形的人
+        // 快速連切地形時，舊地形的回應會晚到：不是現在所在的地形就丟掉（之後還會收到新地形的 enter）
+        if (msg.terrain && msg.terrain !== S.terrain) break;
         S.remotes.clear();
         for (const [id, st] of Object.entries(msg.players || {})) {
           const r = upsert(Number(id), st);
@@ -95,7 +97,7 @@ export function connectNet(S, opts = {}) {
         if (opts.onFurn) opts.onFurn(msg.furn || []);
         if (opts.onFloor) opts.onFloor(msg.floor || []);
         if (opts.onDecos) opts.onDecos(msg.terrain, msg.decos || []);   // 在擺設之後（重生判斷要看家具）
-        if (msg.dragon && opts.onDragon) opts.onDragon({ ...msg.dragon, ev: 'state' });   // 進草島時的島主快照
+        if (msg.dragon && opts.onDragon) opts.onDragon({ ...msg.dragon, ev: 'state', terrain: msg.terrain });   // 進有島主的地形時的快照（帶地形，別套到別座島的島主上）
         break;
       }
       case 'deco': if (opts.onDeco) opts.onDeco(msg); break;

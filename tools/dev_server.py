@@ -590,6 +590,8 @@ class Room:
         ph, pos, ms = self.dragon_phase(now_ms, terrain)
         d = self.dragon_state(terrain)
         o = {"ph": ph, "x": pos[0], "y": pos[1], "hp": d["hp"]}
+        if d["aggro"]:   # 仇恨中：附上追殺目標（中途進場的人才知道牠在戰鬥）
+            o["aggro"] = d["aggro"]["id"]
         if ph == "aim":
             o.update(castMs=int(ms), tx=d["atk"][0], ty=d["atk"][1], dx=d["dest"][0], dy=d["dest"][1])
         elif ph == "cast":   # 石化之瞳：開眼中（直線已鎖定）
@@ -1207,7 +1209,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if c2 and c2.get("terrain") in OWNER_TERRAINS:
                         snap = room.dragon_snapshot(c2["terrain"])
                         with c2["send"]:
-                            ws_send(sock, json.dumps({"t": "dragon", "ev": "state", **snap}))
+                            ws_send(sock, json.dumps({"t": "dragon", "ev": "state", "terrain": c2["terrain"], **snap}))
                 elif t in ("commit", "place", "remove", "clear"):
                     # 裝飾模式的變動是草稿，按保存才送 commit（一批操作）；舊客戶端的單一操作也走同一套驗證與權限
                     cur = room.terrain_of(cid)

@@ -748,7 +748,8 @@ function applyDragonSnap(o) {
   if (o.ph === 'dead') return;   // 死了就先不生成，等 spawn 事件
   const a = dragonEnsure(o.x, o.y, o.hp);
   if (!a) return;
-  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null; a.aggro = false;
+  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null;
+  a.aggro = o.aggro != null;   // 快照帶仇恨目標（連線編號）：中途進場也知道牠在追殺（戰鬥中不自動回血、之後會提示冷靜）
   if (o.ph === 'aim') {   // 島緣鎖定中：還原成循環（扣掉已過的預警時間）
     const total = 1000;
     a.cycle = {
