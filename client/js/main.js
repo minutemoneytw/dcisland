@@ -1500,10 +1500,12 @@ function draw() {
     if (!img) continue;
     ctx.drawImage(img, x * CELL, y * CELL, CELL, CELL);
   }
-  // 地板層：蓋在地面上、家具與角色之下
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+  // 地板層：蓋在地面上、家具與角色之下（多格地板從錨點畫整張，錨點在鏡頭左上外也要畫，所以往外多看幾格）
+  for (let y = Math.max(0, y0 - FLOOR_MAX + 1); y <= y1; y++) for (let x = Math.max(0, x0 - FLOOR_MAX + 1); x <= x1; x++) {
     const fid = S.floorMap.get(y * COLS + x), img = fid && S.floorImgs[fid];
-    if (img) ctx.drawImage(img, x * CELL, y * CELL, CELL, CELL);
+    if (!img) continue;
+    const s = floorSize(fid);
+    ctx.drawImage(img, x * CELL, y * CELL, s.w * CELL, s.h * CELL);
   }
   // 裝飾模式半透明格線
   if (S.mode === 'decor') {
@@ -1688,14 +1690,24 @@ function draw() {
 
   // 地板模式 ghost：游標所在格（長按右鍵時顯示拆除）
   if (S.mode === 'decor' && S.decorTab === 'floor' && S.mouseCell) {
-    const [mx, my] = S.mouseCell, ok = floorCellOk(mx, my), del = S.paint === 'del';
-    if (!del && ok && S.selFloor && S.floorImgs[S.selFloor]) {
-      ctx.globalAlpha = .7; ctx.drawImage(S.floorImgs[S.selFloor], mx * CELL, my * CELL, CELL, CELL); ctx.globalAlpha = 1;
+    const [mx, my] = S.mouseCell, del = S.paint === 'del';
+    // 預覽範圍：鋪設＝選中地板的大小（地毯 2×2）；拆除＝游標下那塊地板的整個範圍
+    let rx = mx, ry = my, rw = 1, rh = 1, ok;
+    if (del) {
+      const k = floorAt(S.floorMap, mx, my);
+      ok = floorCellOk(mx, my);
+      if (k >= 0) { const s = floorSize(S.floorMap.get(k)); rx = k % COLS; ry = Math.floor(k / COLS); rw = s.w; rh = s.h; }
+    } else {
+      const s = floorSize(S.selFloor); rw = s.w; rh = s.h;
+      ok = !!S.selFloor && !!floorCovered(S.floorMap, S.selFloor, mx, my);
+      if (ok && S.floorImgs[S.selFloor]) {
+        ctx.globalAlpha = .7; ctx.drawImage(S.floorImgs[S.selFloor], mx * CELL, my * CELL, rw * CELL, rh * CELL); ctx.globalAlpha = 1;
+      }
     }
     ctx.fillStyle = !ok ? 'rgba(220,80,80,.3)' : del ? 'rgba(230,150,60,.3)' : 'rgba(90,220,120,.18)';
-    ctx.fillRect(mx * CELL, my * CELL, CELL, CELL);
+    ctx.fillRect(rx * CELL, ry * CELL, rw * CELL, rh * CELL);
     ctx.strokeStyle = !ok ? 'rgba(255,120,120,.8)' : del ? 'rgba(255,190,90,.9)' : 'rgba(120,255,160,.8)';
-    ctx.strokeRect(mx * CELL + .5, my * CELL + .5, CELL - 1, CELL - 1);
+    ctx.strokeRect(rx * CELL + .5, ry * CELL + .5, rw * CELL - 1, rh * CELL - 1);
   }
   // 裝飾模式 ghost
   if (S.mode === 'decor' && S.decorTab === 'furn' && S.mouseCell && S.sel && S.furnImgs[S.sel]) {
@@ -1812,29 +1824,62 @@ function onNetFloor(items) {
     S.floorMap = applyFloorOps(S.baseFloor, S.draft);
   } else applyFloor(items);
 }
-// 把草稿裡的地板操作套到一份地板上（回傳新 Map；水上的格子略過）
+// 把草稿裡的地板操作套到一份地板上（回傳新 Map；不合法的操作略過）
 function applyFloorOps(base, ops) {
   const m = new Map(base);
   for (const op of ops) if (op.t === 'floor') applyFloorOp(m, op);
   return m;
 }
-function applyFloorOp(m, op) {
-  const [x, y] = op.cell, k = y * COLS + x;
-  if (op.type === null) m.delete(k);
-  else if (S.world.types[k]) m.set(k, op.type);
+// 多格地板（floors.json 標 w/h，例如地毯 2×2）：只在錨點格（左上）存一筆，其餘格子視為被它蓋住。
+// 規則與兩份伺服器的 applyFloorOp 一致：多格地板彼此不重疊、單格地板不能鋪在多格地板上；
+// 鋪多格地板會取代範圍內的單格地板；拆除點到多格地板的任一格就整塊拆掉
+const FLOOR_MAX = 4;   // 多格地板的最大邊長（找「誰蓋住這格」時往左上回找的範圍；與伺服器一致）
+const floorSize = id => S.floorSizes?.get(id) || { w: 1, h: 1 };
+function floorAt(m, x, y) {   // 蓋住 (x,y) 的地板錨點 key（單格地板就是自己），沒有回 -1
+  for (let dy = 0; dy < FLOOR_MAX; dy++) for (let dx = 0; dx < FLOOR_MAX; dx++) {
+    const ax = x - dx, ay = y - dy;
+    if (ax < 0 || ay < 0) continue;
+    const id = m.get(ay * COLS + ax);
+    if (id === undefined) continue;
+    const s = floorSize(id);
+    if (dx < s.w && dy < s.h) return ay * COLS + ax;
+  }
+  return -1;
+}
+// 在 (x,y) 鋪 type 時會被取代的單格地板 key 清單；鋪不下（水上／出界／壓到多格地板）回 null
+function floorCovered(m, type, x, y) {
+  const s = floorSize(type), out = [];
+  for (let dy = 0; dy < s.h; dy++) for (let dx = 0; dx < s.w; dx++) {
+    if (!floorCellOk(x + dx, y + dy)) return null;
+    const k = floorAt(m, x + dx, y + dy);
+    if (k < 0) continue;
+    const t = floorSize(m.get(k));
+    if (t.w * t.h > 1) return null;
+    out.push(k);
+  }
+  return out;
+}
+function applyFloorOp(m, op) {   // 有變動回 true
+  const [x, y] = op.cell;
+  if (op.type === null) { const k = floorAt(m, x, y); return k >= 0 && m.delete(k); }
+  const cov = floorCovered(m, op.type, x, y), s = floorSize(op.type);
+  if (!cov) return false;
+  if (s.w * s.h === 1 && cov.length === 1 && m.get(cov[0]) === op.type) return false;   // 同一種，沒變
+  for (const k of cov) m.delete(k);
+  m.set(y * COLS + x, op.type);
+  return true;
 }
 const floorCellOk = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS && !!S.world.types[y * COLS + x];
-// 長按鋪設/拆除：游標所在格套用目前動作（同一格不會重複記草稿）
+// 長按鋪設/拆除：游標所在格套用目前動作（沒有變化的不記草稿；地毯掃過去會一塊接一塊鋪，不會重疊）
 function paintFloor() {
   if (S.mode !== 'decor' || S.decorTab !== 'floor' || !S.paint || !S.mouseCell || S.players[0].dead) return;
   const [x, y] = S.mouseCell;
-  if (!floorCellOk(x, y)) return;
-  const cur = S.floorMap.get(y * COLS + x), type = S.paint === 'add' ? S.selFloor : null;
+  const type = S.paint === 'add' ? S.selFloor : null;
   if (S.paint === 'add' && !type) return;
-  if ((cur ?? null) === type) return;
+  const op = { t: 'floor', cell: [x, y], type };
   if (S.draft.length >= 1200) { toast('未保存的變動太多了，請先按「完成」保存'); S.paint = null; return; }
-  S.draft.push({ t: 'floor', cell: [x, y], type });
-  applyFloorOp(S.floorMap, S.draft[S.draft.length - 1]);
+  if (!applyFloorOp(S.floorMap, op)) return;
+  S.draft.push(op);
   updateDecorUI();
 }
 
@@ -1897,7 +1942,7 @@ function updateDecorUI() {
 function enterDecor() {
   S.mode = 'decor'; S.draft = []; S.baseFurn = cloneFurn(S.furnItems); S.baseFloor = new Map(S.floorMap); S.paint = null;
   $('btnDecor').classList.add('active'); $('furnPanel').classList.remove('hidden');
-  S.sel = S.sel || S.furn.items.find(it => S.furnImgs[it.id])?.id || null;          // 缺圖的種類不列出、也不預選
+  S.sel = S.sel || S.furn.items.find(it => S.furnImgs[it.id] && !it.legacy)?.id || null;   // 缺圖／legacy 的種類不列出、也不預選
   S.selFloor = S.selFloor || S.floors.items.find(it => S.floorImgs[it.id])?.id || null;
   buildFurnPanel(); updateDecorUI();
   toast('裝飾模式：左鍵放置／右鍵移除（按「完成」才會保存）', 2600);
@@ -2018,7 +2063,7 @@ function buildFurnPanel() {
   }
   for (const it of S.furn.items) {
     const img = S.furnImgs[it.id];
-    if (!img) continue;                    // 缺圖的家具不列出
+    if (!img || it.legacy) continue;       // 缺圖的家具不列出；legacy＝已改成別的東西（例如地毯改為地板），舊存檔照畫但不能再擺
     const div = document.createElement('div');
     div.className = 'fitem' + (S.sel === it.id ? ' sel' : '');
     const cv = document.createElement('canvas');
@@ -2122,6 +2167,7 @@ canvas.addEventListener('mousemove', e => {
   S.mouseClient = [e.clientX, e.clientY];     // 長按左鍵時，鏡頭/角色移動後仍要用最新的游標位置
   const r = canvas.getBoundingClientRect();
   S.mouseCell = [Math.floor((e.clientX - r.left + S.cam.x) / CELL), Math.floor((e.clientY - r.top + S.cam.y) / CELL)];
+  paintFloor();   // 長按鋪地板：滑鼠移動時就套用（不只靠每幀），掉幀時掃過的格子也不會漏
 });
 canvas.addEventListener('mouseleave', () => S.mouseCell = null);
 // 左鍵攻擊（世界座標 wx,wy 是游標指的位置）：先面向游標方向再揮
@@ -2282,6 +2328,7 @@ async function boot() {
   ]);
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
   Object.assign(S, { furn, floors, animalsDB, npcDB, toolsDB, avatar });
+  S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
   if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';
   // 圖片：同樣全部並行（含目前所在地形的圖）。只有角色身體是必要的（缺了畫不出人），其餘缺圖就略過該項
   await Promise.all([

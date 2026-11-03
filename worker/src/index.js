@@ -131,15 +131,40 @@ function applyFurnOp(items, defs, op) {
 }
 
 // 地板層：每格一種地板（鍵＝y*COLS+x，值＝地板 id）。op＝{t:"floor", cell:[x,y], type:"wood"|null}（null＝拆除）
-function applyFloorOp(floor, ids, op) {
+// 多格地板（floors.json 標 w/h，例如地毯 2×2）只在錨點格（左上）存一筆，其餘格子視為被它蓋住：
+// 多格地板彼此不重疊、單格地板不能鋪在多格地板上；鋪多格地板會取代範圍內的單格地板；拆除點到任一格就整塊拆。
+// 規則與 client/js/main.js 的 applyFloorOp、dev_server.py 的 edit_floor 一致（改一邊要改另一邊）
+const FLOOR_MAX = 4;   // 多格地板的最大邊長
+function floorAt(floor, sizes, x, y) {   // 蓋住 (x,y) 的地板錨點 key，沒有回 -1
+  for (let dy = 0; dy < FLOOR_MAX; dy++) for (let dx = 0; dx < FLOOR_MAX; dx++) {
+    const ax = x - dx, ay = y - dy;
+    if (ax < 0 || ay < 0) continue;
+    const id = floor.get(ay * COLS + ax);
+    if (id === undefined) continue;
+    const s = sizes.get(id) || { w: 1, h: 1 };
+    if (dx < s.w && dy < s.h) return ay * COLS + ax;
+  }
+  return -1;
+}
+function applyFloorOp(floor, sizes, op) {
   const cell = op.cell;
   if (!Array.isArray(cell) || cell.length !== 2 || !Number.isInteger(cell[0]) || !Number.isInteger(cell[1])) return false;
   const [x, y] = cell;
   if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return false;
-  const k = y * COLS + x;
-  if (op.type === null) return floor.delete(k);
-  if (typeof op.type !== "string" || !ids.has(op.type) || floor.get(k) === op.type) return false;
-  floor.set(k, op.type);
+  if (op.type === null) { const k = floorAt(floor, sizes, x, y); return k >= 0 && floor.delete(k); }
+  const s = typeof op.type === "string" && sizes.get(op.type);
+  if (!s || x + s.w > COLS || y + s.h > ROWS) return false;
+  const cov = [];
+  for (let dy = 0; dy < s.h; dy++) for (let dx = 0; dx < s.w; dx++) {
+    const k = floorAt(floor, sizes, x + dx, y + dy);
+    if (k < 0) continue;
+    const t = sizes.get(floor.get(k)) || { w: 1, h: 1 };
+    if (t.w * t.h > 1) return false;   // 壓到多格地板（地毯）：不重疊
+    cov.push(k);
+  }
+  if (s.w * s.h === 1 && cov.length === 1 && floor.get(cov[0]) === op.type) return false;   // 同一種，沒變
+  for (const k of cov) floor.delete(k);
+  floor.set(y * COLS + x, op.type);
   return true;
 }
 const floorToList = floor => [...floor].map(([k, id]) => [k % COLS, Math.floor(k / COLS), id]);
@@ -289,7 +314,7 @@ export class Island {
     this.env = env;
     this.rate = new Map();       // ws -> {sec, n}；休眠醒來會重置，無妨
     this.furnDefs = null;        // id -> {w,h}，由 furniture.json 載入
-    this.floorIds = null;        // 地板 id 集合，由 floors.json 載入
+    this.floorDefs = null;       // 地板 id -> {w,h}，由 floors.json 載入
     this.targets = null;         // 可破壞物件定義（tools.json 的 targets）
     this.lastHit = new Map();    // ws -> 上次打擊的時間
     this.dragons = new Map();        // 地形 → 島主狀態（每座有島主的地形各一隻，懒載入 storage）
@@ -354,17 +379,17 @@ export class Island {
     return this.furnDefs;
   }
 
-  // 地板種類取自前端 floors.json
-  async getFloorIds() {
-    if (this.floorIds) return this.floorIds;
+  // 地板種類與大小取自前端 floors.json：id -> {w,h}（沒標的是 1×1）
+  async getFloorDefs() {
+    if (this.floorDefs) return this.floorDefs;
     try {
       const res = await this.env.ASSETS.fetch(new Request("https://assets.local/assets/floors/floors.json"));
-      this.floorIds = new Set((await res.json()).items.map(it => it.id));
+      this.floorDefs = new Map((await res.json()).items.map(it => [it.id, { w: it.w || 1, h: it.h || 1 }]));
     } catch (e) {
       console.log("[floor] manifest 載入失敗", String(e));
-      return new Set();
+      return new Map();
     }
-    return this.floorIds;
+    return this.floorDefs;
   }
 
   async getFloor(terrain) {   // 儲存格式 [[x,y,id],…]；記憶體裡用 Map 方便逐格改
@@ -1048,13 +1073,13 @@ export class Island {
     if (!Array.isArray(ops) || !att.terrain) return;
     const terrain = att.terrain, defs = await this.getFurnDefs();
     const items = await this.getFurn(terrain);
-    let floor = null, floorIds = null, furnApplied = 0, floorApplied = 0;
+    let floor = null, floorDefs = null, furnApplied = 0, floorApplied = 0;
     let applied = 0, rejected = 0, denied = false;
     for (const op of ops.slice(0, MAX_OPS)) {
       if (!op || typeof op !== "object") { rejected++; continue; }
       if (op.t === "floor") {      // 地板層：與家具各自獨立，不看家具、不看身分
-        if (!floor) { floor = await this.getFloor(terrain); floorIds = await this.getFloorIds(); }
-        if (applyFloorOp(floor, floorIds, op)) { applied++; floorApplied++; } else rejected++;
+        if (!floor) { floor = await this.getFloor(terrain); floorDefs = await this.getFloorDefs(); }
+        if (applyFloorOp(floor, floorDefs, op)) { applied++; floorApplied++; } else rejected++;
         continue;
       }
       if (op.t === "clear" && !att.admin) { denied = true; continue; }

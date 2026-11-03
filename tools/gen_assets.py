@@ -659,7 +659,7 @@ FURN_MANIFEST = dict(
         dict(id="table", name="桌子",  w=1, h=1, solid=True,  sprite="table.png"),
         dict(id="chair", name="椅子",  w=1, h=1, solid=True,  sprite="chair.png", use="sit"),
         dict(id="plant", name="植栽",  w=1, h=1, solid=True,  sprite="plant.png"),
-        dict(id="rug",   name="地毯",  w=2, h=2, solid=False, sprite="rug.png"),
+        dict(id="rug",   name="地毯",  w=2, h=2, solid=False, sprite="rug.png", legacy=True),   # 已改為地板（floor_rug）；保留定義讓舊存檔擺著的還看得到、拿得走，但不列在面板
         dict(id="lamp",  name="電燈",  w=1, h=1, solid=True,  sprite="lamp.png"),
         dict(id="tv",    name="電視",  w=1, h=1, solid=True,  sprite="tv.png"),
         dict(id="bed",   name="床",    w=1, h=1, solid=True,  sprite="bed.png", use="sleep", quiltRow=13),
@@ -706,6 +706,7 @@ ANIMALS_BY_TERRAIN = {
 }
 
 # ---------------- 地板（裝飾模式的地板層，16×16 無縫磚，畫在地面與家具之間）----------------
+# 多格地板（manifest 標 w/h，例如地毯 2×2）是一整張圖，從錨點格（左上）畫起；鋪下去會取代範圍內的單格地板，多格地板彼此不重疊
 def floor_wood():
     base, dark, hi = hx("#b98a5a"), hx("#8a6038"), hx("#cfa26e")
     cv = Canvas(16, 16)
@@ -738,6 +739,7 @@ FLOOR_MANIFEST = dict(
     items=[
         dict(id="wood", name="木紋地板", sprite="floor_wood.png"),
         dict(id="stone", name="石製地板", sprite="floor_stone.png"),
+        dict(id="rug", name="地毯", sprite="floor_rug.png", w=2, h=2),   # 多格地板：一次鋪 w×h 格（圖 16w×16h），彼此不重疊
     ],
 )
 
@@ -791,6 +793,7 @@ def main():
     print("== 地板 ==")
     save(floor_wood(), "floor_wood.png", "floors")
     save(floor_stone(), "floor_stone.png", "floors")
+    save(rug(), "floor_rug.png", "floors")            # 地毯：2×2 格（32×32），沿用家具地毯的圖
     json.dump(FLOOR_MANIFEST, open(os.path.join(ASSETS, "floors", "floors.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
     print("  floors/floors.json")

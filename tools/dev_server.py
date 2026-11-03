@@ -291,14 +291,29 @@ def furn_defs():
             _FURN_DEFS = {it["id"]: (it["w"], it["h"]) for it in json.load(f)["items"]}
     return _FURN_DEFS
 
-_FLOOR_IDS = None
-def floor_ids():
-    """地板 id 集合，取自前端 floors.json，用來驗證地板操作。"""
-    global _FLOOR_IDS
-    if _FLOOR_IDS is None:
+_FLOOR_DEFS = None
+def floor_defs():
+    """地板 id -> (w, h)，取自前端 floors.json（沒標的是 1×1），用來驗證地板操作。"""
+    global _FLOOR_DEFS
+    if _FLOOR_DEFS is None:
         with open(os.path.join(CLIENT, "assets", "floors", "floors.json"), encoding="utf-8") as f:
-            _FLOOR_IDS = {it["id"] for it in json.load(f)["items"]}
-    return _FLOOR_IDS
+            _FLOOR_DEFS = {it["id"]: (it.get("w", 1), it.get("h", 1)) for it in json.load(f)["items"]}
+    return _FLOOR_DEFS
+
+FLOOR_MAX = 4   # 多格地板的最大邊長（與 Worker 一致）
+
+def floor_at(floor, x, y):
+    """蓋住 (x,y) 的地板錨點 (ax, ay)，沒有回 None。多格地板（例如地毯 2×2）只在錨點格（左上）存一筆。"""
+    defs = floor_defs()
+    for dy in range(FLOOR_MAX):
+        for dx in range(FLOOR_MAX):
+            a = (x - dx, y - dy)
+            if a[0] < 0 or a[1] < 0 or a not in floor:
+                continue
+            w, h = defs.get(floor[a], (1, 1))
+            if dx < w and dy < h:
+                return a
+    return None
 
 def floor_to_list(floor):
     """地板 {(x,y): id} → [[x,y,id],…]（與 Worker 的儲存/廣播格式相同）。"""
@@ -325,18 +340,38 @@ class Room:
         return self.floor.setdefault(terrain, {})
 
     def edit_floor(self, op, terrain):
-        """地板操作 {"t":"floor","cell":[x,y],"type":id|None}（None＝拆除）。回傳 True 表示有變動。呼叫時需持有 self.lock。"""
+        """地板操作 {"t":"floor","cell":[x,y],"type":id|None}（None＝拆除）。回傳 True 表示有變動。呼叫時需持有 self.lock。
+        多格地板彼此不重疊、單格地板不能鋪在多格地板上；鋪多格地板會取代範圍內的單格地板；拆除點到任一格就整塊拆。
+        規則與 worker/src/index.js、client/js/main.js 的 applyFloorOp 一致（改一邊要改另一邊）。"""
         cell = op.get("cell")
         if not (isinstance(cell, list) and len(cell) == 2 and all(isinstance(v, int) and not isinstance(v, bool) for v in cell)):
             return False
         x, y = cell
         if x < 0 or y < 0 or x >= COLS or y >= ROWS:
             return False
-        floor, typ = self.floor_map(terrain), op.get("type")
+        floor, typ, defs = self.floor_map(terrain), op.get("type"), floor_defs()
         if typ is None:
-            return floor.pop((x, y), None) is not None
-        if not isinstance(typ, str) or typ not in floor_ids() or floor.get((x, y)) == typ:
+            a = floor_at(floor, x, y)
+            return a is not None and floor.pop(a, None) is not None
+        if not isinstance(typ, str) or typ not in defs:
             return False
+        w, h = defs[typ]
+        if x + w > COLS or y + h > ROWS:
+            return False
+        cov = []
+        for dy in range(h):
+            for dx in range(w):
+                a = floor_at(floor, x + dx, y + dy)
+                if a is None:
+                    continue
+                tw, th = defs.get(floor[a], (1, 1))
+                if tw * th > 1:
+                    return False   # 壓到多格地板（地毯）：不重疊
+                cov.append(a)
+        if w * h == 1 and len(cov) == 1 and floor[cov[0]] == typ:
+            return False   # 同一種，沒變
+        for a in cov:
+            floor.pop(a, None)
         floor[(x, y)] = typ
         return True
 
