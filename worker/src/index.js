@@ -206,7 +206,26 @@ function sanitizeState(s, prev) {
     seat: idOr(s.seat, null),
     hp: Math.round(num(s.hp, 0, 20, 10)),
     dead: s.dead ? 1 : 0,
+    // 釣魚：浮標位置與階段（只轉發給同地形的人畫圖；釣到什麼由伺服器的 fish 訊息決定）
+    fish: s.fish && typeof s.fish === "object" && FISH_PHASES.includes(s.fish.ph)
+      ? { x: num(s.fish.x, 0, COLS * CELL, 0), y: num(s.fish.y, 0, ROWS * CELL, 0), ph: s.fish.ph } : null,
   };
+}
+
+// ---- 釣魚（魚類圖鑑）----
+// 釣到什麼由伺服器抽（client/assets/fish/fish.json）；登入（hello 驗證過）的人記進全域 Registry（依 Discord 帳號），訪客只回結果。
+// 演算法與 client/js/main.js 的 rollFish、dev_server.py 的 roll_fish 一致（改一邊要改另一邊）
+const FISH_PHASES = ["wait", "bite", "reel"];
+const FISH_CD_MS = 2500;     // 同一條連線兩次釣魚結果的最短間隔（拋竿到上鉤最快 3 秒）
+function rollFish(db, terrain) {
+  const list = (db.terrains || {})[terrain] || [];
+  if (!list.length || Math.random() < (db.escape || 0)) return { terrain, escaped: true };
+  const rars = Object.entries(db.rarity || {}).filter(([k]) => list.some(f => f.rarity === k));
+  let r = Math.random() * rars.reduce((s, [, v]) => s + v.weight, 0), rar = rars[rars.length - 1][0];
+  for (const [k, v] of rars) { if ((r -= v.weight) < 0) { rar = k; break; } }
+  const cands = list.filter(f => f.rarity === rar), f = cands[Math.floor(Math.random() * cands.length)];
+  const size = Math.round((f.size[0] + (f.size[1] - f.size[0]) * Math.random() ** 1.6) * 10) / 10;
+  return { terrain, id: f.id, size, rarity: rar };
 }
 const SESSION_TTL_MS = 12 * 3600 * 1000;   // 簽章憑證有效期
 
@@ -322,6 +341,8 @@ export class Island {
     this.dragonMaps = new Map();     // 地形 → 陸地位圖（懒載入）——只放記憶體的話 DO 休眠後就沒了，打島主不會反擊
     this.dragonMapLoaded = new Set();
     this.dragonMapRaw = new Map();   // 地形 → storage 裡目前存的島形字串（比對用：內容沒變就不重寫）
+    this.fishDB = null;              // 釣魚：fish.json（懶載入）
+    this.lastFish = new Map();       // ws → 上次釣魚結果的時間（冷卻）
     this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
     this.dragonSavedAt = new Map();  // 地形 → 上次真的寫 storage 的時間（saveDragonLazy 節流用）
     this.dragonDirty = new Set();    // 有變動但還沒寫進 storage 的地形
@@ -395,6 +416,47 @@ export class Island {
 
   async getFloor(terrain) {   // 儲存格式 [[x,y,id],…]；記憶體裡用 Map 方便逐格改
     return new Map(((await this.state.storage.get("floor:" + terrain)) || []).map(([x, y, id]) => [y * COLS + x, id]));
+  }
+
+  // 釣魚：各地形的魚與稀有度取自前端 fish.json
+  async getFishDB() {
+    if (this.fishDB) return this.fishDB;
+    try {
+      const res = await this.env.ASSETS.fetch(new Request("https://assets.local/assets/fish/fish.json"));
+      this.fishDB = await res.json();
+    } catch (e) {
+      console.log("[fish] manifest 載入失敗", String(e));
+      return { terrains: {} };
+    }
+    return this.fishDB;
+  }
+
+  // 呼叫全域 Registry（跨島的玩家資料）；沒有綁定或失敗回 null（釣魚照樣能玩，只是圖鑑存不進伺服器）
+  async registryCall(path, body) {
+    if (!this.env.REGISTRY) return null;
+    try {
+      const stub = this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global"));
+      const res = await stub.fetch("https://registry" + path, { method: "POST", body: JSON.stringify(body) });
+      return res.ok ? await res.json() : null;
+    } catch (e) {
+      console.log("[registry]", path, String(e));
+      return null;
+    }
+  }
+
+  // 釣魚：魚上鉤後拉竿成功 → 伺服器抽一條魚回給這條連線；登入的人同時記進 Registry 的圖鑑（帶回最新紀錄）
+  async fishCatch(ws, att) {
+    const now = Date.now();
+    if (now - (this.lastFish.get(ws) || 0) < FISH_CD_MS) return;
+    this.lastFish.set(ws, now);
+    const res = rollFish(await this.getFishDB(), att.terrain);
+    const out = { t: "fish_result", ...res, saved: false };
+    const user = (ws.deserializeAttachment() || {}).user;   // 重讀：hello 可能剛驗證完
+    if (!res.escaped && user) {
+      const r = await this.registryCall("/catch", { uid: user.id, terrain: res.terrain, id: res.id, size: res.size });
+      if (r && r.entry) Object.assign(out, { saved: true, entry: r.entry, isNew: r.isNew, isRecord: r.isRecord });
+    }
+    try { ws.send(JSON.stringify(out)); } catch { /* 對方已斷線 */ }
   }
 
   async getFurn(terrain) {
@@ -492,6 +554,10 @@ export class Island {
       if (user && cur.state) cur.state = { ...cur.state, name: String(user.name).slice(0, NAME_MAX), uid: user.id };
       ws.serializeAttachment(cur);
       ws.send(JSON.stringify({ t: "me", admin: cur.admin }));
+      if (user) {   // 登入的人：送他存在伺服器的魚類圖鑑
+        const r = await this.registryCall("/dex", { uid: user.id });
+        if (r) try { ws.send(JSON.stringify({ t: "dex", dex: r.dex || {} })); } catch { /* 對方已斷線 */ }
+      }
     } else if (msg.t === "state") {
       const s = sanitizeState(msg.s && typeof msg.s === "object" ? msg.s : {}, att.state);
       // 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）；訪客沒有 uid
@@ -534,6 +600,8 @@ export class Island {
       if (att.terrain) await this.editSign(ws, att, msg);
     } else if (msg.t === "event") {
       if (att.terrain) this.broadcast({ t: "event", id: att.id, kind: msg.kind }, ws, att.terrain);
+    } else if (msg.t === "fish") {   // 釣魚：拉竿成功，伺服器抽魚
+      if (att.terrain) await this.fishCatch(ws, att);
     }
   }
 
@@ -1128,7 +1196,41 @@ export class Island {
     this.rate.delete(ws);
     this.lastHit.delete(ws);
     this.dragonHits.delete(ws);
+    this.lastFish.delete(ws);
     const att = ws.deserializeAttachment() || {};
     if (att.terrain) this.broadcast({ t: "leave", id: att.id }, ws, att.terrain);
+  }
+}
+
+// ============ 全域 Registry（跨島的玩家資料；目前只有魚類圖鑑）============
+// 全站只有一個實例（idFromName("global")），只由 Island 透過 REGISTRY 綁定呼叫，沒有對外的路由。
+// 資料：dex:<Discord 使用者 ID> → { 地形: { 魚id: { max（最大尺寸 cm）, n（釣到次數）, first（第一次釣到的時間） } } }
+// 讀寫在同一個請求裡只 await storage，DO 的 input gate 會擋住其他請求插隊，所以同一人同時送兩筆也不會互相覆蓋
+const UID_RE = /^[0-9A-Za-z_-]{1,40}$/;
+export class Registry {
+  constructor(state) {
+    this.state = state;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    let body = {};
+    try { body = await request.json(); } catch { /* 空 body */ }
+    const uid = String(body.uid || "");
+    if (!UID_RE.test(uid)) return json({ error: "uid" }, 400);
+    const key = "dex:" + uid;
+    if (url.pathname === "/dex") return json({ dex: (await this.state.storage.get(key)) || {} });
+    if (url.pathname === "/catch") {
+      const terrain = String(body.terrain), id = String(body.id), size = Number(body.size);
+      if (!TERRAIN_RE.test(terrain) || !ID_RE.test(id) || !(size > 0 && size < 100000)) return json({ error: "bad" }, 400);
+      const dex = (await this.state.storage.get(key)) || {};
+      const t = dex[terrain] || (dex[terrain] = {});
+      const e = t[id];
+      const isNew = !e, isRecord = !e || size > e.max;
+      t[id] = { max: e ? Math.max(e.max, size) : size, n: (e ? e.n : 0) + 1, first: e ? e.first : Date.now() };
+      await this.state.storage.put(key, dex);
+      return json({ entry: t[id], isNew, isRecord });
+    }
+    return json({ error: "not found" }, 404);
   }
 }

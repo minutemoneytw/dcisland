@@ -133,6 +133,7 @@ def sanitize_state(s, prev):
     look = s.get("look") if isinstance(s.get("look"), dict) else {}
     pl = prev.get("look") or {}
     name = s.get("name")
+    fs = s.get("fish")
     name = "".join(ch for ch in name if ord(ch) >= 32 and ord(ch) != 127)[:NAME_MAX] if isinstance(name, str) else (prev.get("name") or "")
     return {
         "x": _num(s.get("x"), 0, COLS * CELL, prev.get("x", (COLS / 2 - .5) * CELL)),
@@ -153,7 +154,54 @@ def sanitize_state(s, prev):
         "seat": _id_or(s.get("seat"), None),
         "hp": round(_num(s.get("hp"), 0, 20, 10)),
         "dead": 1 if s.get("dead") else 0,
+        # 釣魚：浮標位置與階段（只轉發；釣到什麼由 fish 訊息決定）
+        "fish": {"x": _num(fs.get("x"), 0, COLS * CELL, 0), "y": _num(fs.get("y"), 0, ROWS * CELL, 0), "ph": fs["ph"]}
+                if isinstance(fs, dict) and fs.get("ph") in FISH_PHASES else None,
     }
+
+
+# ---- 釣魚（魚類圖鑑）：與 worker/src/index.js 一致（改一邊要改另一邊）----
+# 釣到什麼由伺服器抽；登入的人記進圖鑑（本機版存在記憶體，重開就清空；正式站存在 Worker 的全域 Registry）
+FISH_PHASES = ("wait", "bite", "reel")
+FISH_CD = 2.5            # 同一條連線兩次釣魚結果的最短間隔（秒）
+_FISH_DB = None
+def fish_db():
+    """fish.json（各地形的魚與稀有度）。"""
+    global _FISH_DB
+    if _FISH_DB is None:
+        with open(os.path.join(CLIENT, "assets", "fish", "fish.json"), encoding="utf-8") as f:
+            _FISH_DB = json.load(f)
+    return _FISH_DB
+
+def roll_fish(terrain):
+    """先脫鉤判定，再依權重抽稀有度，從該地形同稀有度的魚裡平均抽一種；尺寸越大越難（範圍內取 r^1.6）。"""
+    db = fish_db()
+    lst = db.get("terrains", {}).get(terrain) or []
+    if not lst or random.random() < db.get("escape", 0):
+        return {"terrain": terrain, "escaped": True}
+    rars = [(k, v) for k, v in db["rarity"].items() if any(f["rarity"] == k for f in lst)]
+    r, rar = random.random() * sum(v["weight"] for _, v in rars), rars[-1][0]
+    for k, v in rars:
+        r -= v["weight"]
+        if r < 0:
+            rar = k
+            break
+    f = random.choice([f for f in lst if f["rarity"] == rar])
+    size = round((f["size"][0] + (f["size"][1] - f["size"][0]) * random.random() ** 1.6) * 10) / 10
+    return {"terrain": terrain, "id": f["id"], "size": size, "rarity": rar}
+
+FISH_DEX = {}            # Discord 使用者 ID -> {地形: {魚id: {max, n, first}}}（對應 Worker 的 Registry）
+FISH_DEX_LOCK = threading.Lock()
+
+def dex_catch(uid, terrain, fid, size):
+    """記一筆釣到的魚，回 (entry, is_new, is_record)。"""
+    with FISH_DEX_LOCK:
+        t = FISH_DEX.setdefault(uid, {}).setdefault(terrain, {})
+        e = t.get(fid)
+        is_new, is_record = e is None, e is None or size > e["max"]
+        t[fid] = {"max": max(e["max"], size) if e else size, "n": (e["n"] if e else 0) + 1,
+                  "first": e["first"] if e else int(time.time() * 1000)}
+        return dict(t[fid]), is_new, is_record
 
 
 HIT_RANGE = 140          # 打可破壞物件時，玩家離目標最遠幾 px（客戶端範圍 72，留給延遲）
@@ -1149,6 +1197,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         win_sec, win_n = 0, 0
         last_hit = 0.0
         last_dragon_hit = 0.0   # 打島主的每連線冷卻（與 last_hit 同款）
+        last_fish = 0.0         # 釣魚結果的每連線冷卻
         try:
             # 剛連上時還沒進任何地形：看不到也不被看到，等客戶端送 enter
             ws_send(sock, json.dumps({"t": "init", "id": cid, "admin": is_admin(None)}))
@@ -1187,6 +1236,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             c["state"] = {**c["state"], "name": str(c["user"]["name"])[:NAME_MAX], "uid": c["user"]["id"]}
                         with c["send"]:
                             ws_send(sock, json.dumps({"t": "me", "admin": c["admin"]}))
+                            if c["user"]:   # 登入的人：送他的魚類圖鑑
+                                with FISH_DEX_LOCK:
+                                    dex = json.loads(json.dumps(FISH_DEX.get(c["user"]["id"], {})))
+                                ws_send(sock, json.dumps({"t": "dex", "dex": dex}))
                 elif t == "state":
                     c = room.clients.get(cid)
                     st = sanitize_state(msg.get("s") if isinstance(msg.get("s"), dict) else {}, c.get("state") if c else None)
@@ -1269,6 +1322,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     cur = room.terrain_of(cid)
                     if cur:
                         room.broadcast({"t": "event", "id": cid, "kind": msg.get("kind")}, skip=cid, terrain=cur)
+                elif t == "fish":   # 釣魚：拉竿成功，伺服器抽魚（登入的人記進圖鑑）
+                    cur = room.terrain_of(cid)
+                    now = time.time()
+                    if not cur or now - last_fish < FISH_CD:
+                        continue
+                    last_fish = now
+                    res = roll_fish(cur)
+                    out = {"t": "fish_result", **res, "saved": False}
+                    user = (room.clients.get(cid) or {}).get("user")
+                    if not res.get("escaped") and user:
+                        entry, is_new, is_record = dex_catch(user["id"], res["terrain"], res["id"], res["size"])
+                        out.update(saved=True, entry=entry, isNew=is_new, isRecord=is_record)
+                    with (room.clients.get(cid) or {}).get("send") or threading.Lock():
+                        ws_send(sock, json.dumps(out))
         except Exception as e:
             print(f"[ws] !{cid} {e}", file=sys.stderr, flush=True)
         finally:

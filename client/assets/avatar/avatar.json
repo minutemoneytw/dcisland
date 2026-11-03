@@ -117,6 +117,12 @@
    "id": "sword",
    "name": "木劍",
    "sprite": "weapon_sword.png"
+  },
+  {
+   "id": "rod",
+   "name": "釣竿",
+   "sprite": "weapon_rod.png",
+   "fishing": true
   }
  ]
 }

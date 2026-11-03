@@ -583,6 +583,21 @@ def tool_pickaxe():  # 鎬子
     cv.outline((30, 24, 22, 255))
     return cv
 
+def weapon_rod():  # 釣竿（與木劍同方向：竿尖在上、握把在下；轉軸在離底 3 格處）
+    cv = Canvas(6, 26)
+    pole, pole_hi = hx("#8a6238"), hx("#b48a58")
+    cv.vline(3, 1, 18, pole)              # 竿身（上細下粗）
+    cv.vline(2, 9, 18, pole)
+    cv.vline(3, 1, 8, pole_hi)            # 竿尖一段較淺
+    cv.set(3, 1, hx("#e8e0d0"))           # 竿尖
+    for y in (5, 11, 16):                 # 導線環
+        cv.set(4, y, hx("#c9d2d9"))
+    cv.rect(1, 18, 4, 20, hx("#9aa4ad"))  # 捲線器
+    cv.set(4, 19, hx("#dfe6ec"))
+    cv.rect(2, 21, 3, 25, hx("#3a3a44"))  # 握把
+    cv.outline((30, 24, 22, 255))
+    return cv
+
 def tool_axe():  # 斧頭（斧刃在右側＝揮向前方時朝外）
     cv = Canvas(12, 18)
     wood = hx("#8a6238"); wood_d = hx("#5a4028")
@@ -743,6 +758,361 @@ FLOOR_MANIFEST = dict(
     ],
 )
 
+# ---------------- 釣魚：魚類圖鑑（16×16，頭朝右；自製 placeholder）----------------
+# 每座地形 10 種（常見 5／罕見 3／稀有 2），圖由下面幾個參數化的形狀畫出來。
+# 清單與屬性在 FISH_TABLE；產生 client/assets/fish/<id>.png 與 fish.json
+EYE = hx("#1a1418")
+
+def _in_ell(x, y, cx, cy, rx, ry):
+    return ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1.0
+
+def _over(cv, pts, c):   # 只畫在已經有顏色的格子上（條紋、斑點不超出身體）
+    for x, y in pts:
+        if 0 <= x < cv.w and 0 <= y < cv.h and cv.get(x, y)[3]:
+            cv.set(x, y, c)
+
+def fish(body, belly=None, fin=None, L=11, H=6, stripes=(), spots=(), band=None, horn=None,
+         whisker=False, alpha=255, glow=None):
+    cv = Canvas(16, 16)
+    b = hx(body, alpha)
+    f = hx(fin, alpha) if fin else shade(b, .78)
+    cx, cy, rx, ry = 8.5, 8, L / 2, H / 2
+    x0 = math.ceil(cx - rx)
+    for i in range(3):                                   # 尾鰭（越往左越開）
+        cv.vline(x0 - 1 - i, round(cy - 1 - i), round(cy + 1 + i), f)
+    cv.ellipse(cx, cy, rx, ry, b)
+    top = math.ceil(cy - ry)
+    cv.hline(round(cx - 2), round(cx), top - 1, f)       # 背鰭
+    cv.set(round(cx - 1), top - 2, f)
+    if belly:
+        _over(cv, [(x, y) for y in range(round(cy) + 1, 16) for x in range(16) if _in_ell(x, y, cx, cy, rx, ry)], hx(belly, alpha))
+    for sx in stripes:
+        _over(cv, [(sx, y) for y in range(16)], shade(b, .55))
+    if band:
+        _over(cv, [(x, round(cy)) for x in range(x0, 15)], hx(band, alpha))
+    for p in spots:
+        _over(cv, [p], hx(glow or "#ffffff", alpha) if glow else shade(b, .6))
+    hx_ = round(cx + rx)
+    if horn:
+        cv.hline(hx_, 15, round(cy) - 1, hx(horn))
+    if whisker:
+        cv.set(hx_, round(cy) + 1, f); cv.set(hx_ + 1, round(cy) + 2, f)
+    cv.outline((30, 24, 22, alpha))
+    cv.set(hx_ - 2, round(cy) - 1, EYE)
+    return cv
+
+def eel(body, belly, alpha=255):
+    cv = Canvas(16, 16)
+    b, bl = hx(body, alpha), hx(belly, alpha)
+    for x in range(1, 15):
+        y = 8 + round(math.sin(x * .7) * 1.6)
+        cv.vline(x, y - 1, y + 1, b)
+        cv.set(x, y + 1, bl)
+    cv.outline()
+    y = 8 + round(math.sin(14 * .7) * 1.6)
+    cv.set(13, y - 1, EYE)
+    return cv
+
+def shrimp(c):
+    cv = Canvas(16, 16)
+    b = hx(c)
+    for (x, y) in ((4, 10), (6, 8.5), (8, 7.5), (10, 7.5), (12, 8)):
+        cv.ellipse(x, y, 2, 2, b)
+    cv.vline(2, 10, 13, shade(b, .8)); cv.vline(3, 11, 13, shade(b, .8))   # 尾扇
+    for x in (6, 8, 10):                                                     # 腳
+        cv.set(x, 11, shade(b, .7))
+    for i in range(4):                                                       # 觸鬚
+        cv.set(13 + i // 2, 6 - i, shade(b, 1.15))
+    cv.outline()
+    cv.set(12, 7, EYE)
+    return cv
+
+def crab(c, shell=None):
+    cv = Canvas(16, 16)
+    b = hx(c)
+    if shell:                                                                # 寄居蟹：背著螺殼
+        s = hx(shell)
+        cv.ellipse(6, 8, 5, 5, s)
+        for (x, y) in ((6, 8), (7, 7), (5, 7), (5, 9), (7, 10), (8, 9)):
+            cv.set(x, y, shade(s, .65))
+        cv.ellipse(12, 10, 2.5, 2.5, b)
+        cv.ellipse(14, 7, 1.5, 1.5, b)
+        for x in (10, 12): cv.vline(x, 12, 14, shade(b, .8))
+        cv.outline()
+        cv.set(13, 9, EYE)
+        return cv
+    cv.ellipse(8, 9, 5, 3, b)
+    cv.ellipse(2.5, 6, 2, 2, b); cv.ellipse(13.5, 6, 2, 2, b)               # 螯
+    cv.set(4, 8, b); cv.set(12, 8, b)
+    for x in (4, 6, 10, 12): cv.vline(x, 12, 14, shade(b, .8))               # 腳
+    cv.vline(6, 5, 6, b); cv.vline(10, 5, 6, b)                              # 眼柄
+    cv.outline()
+    cv.set(6, 4, EYE); cv.set(10, 4, EYE)
+    return cv
+
+def starfish(c):
+    cv = Canvas(16, 16)
+    b = hx(c)
+    cv.ellipse(8, 8.5, 2.5, 2.5, b)
+    for k in range(5):
+        a = -math.pi / 2 + k * 2 * math.pi / 5
+        for r in range(2, 8):
+            cv.ellipse(8 + math.cos(a) * r, 8.5 + math.sin(a) * r, max(.8, 1.6 - r * .15), max(.8, 1.6 - r * .15), b)
+    for (x, y) in ((8, 8), (7, 10), (9, 10), (6, 8), (10, 8)):
+        cv.set(x, y, shade(b, 1.2))
+    cv.outline()
+    return cv
+
+def octopus(c):
+    cv = Canvas(16, 16)
+    b = hx(c)
+    cv.ellipse(8, 6, 5, 4.5, b)
+    for i, x in enumerate((3, 5, 7, 9, 11, 13)):
+        for y in range(9, 15):
+            cv.set(x + (1 if (y + i) % 4 < 2 else 0), y, b)
+    cv.outline()
+    cv.set(6, 7, EYE); cv.set(10, 7, EYE)
+    return cv
+
+def squid(c):
+    cv = Canvas(16, 16)
+    b = hx(c)
+    cv.ellipse(8, 5.5, 3, 5, b)
+    cv.hline(4, 12, 2, shade(b, .85)); cv.hline(5, 11, 1, shade(b, .85))    # 鰭
+    for x in (5, 7, 9, 11):
+        cv.vline(x, 10, 14, b)
+    cv.vline(6, 10, 15, b); cv.vline(10, 10, 15, b)
+    cv.outline()
+    cv.set(7, 8, EYE); cv.set(9, 8, EYE)
+    return cv
+
+def jelly(c, alpha=210):
+    cv = Canvas(16, 16)
+    b = hx(c, alpha)
+    for y in range(2, 9):
+        for x in range(16):
+            if _in_ell(x, y, 8, 8, 6, 6):
+                cv.set(x, y, b)
+    cv.hline(2, 14, 8, shade(b, 1.2))
+    for i, x in enumerate((4, 6, 8, 10, 12)):
+        for y in range(9, 15):
+            cv.set(x + (1 if (y + i) % 3 == 0 else 0), y, shade(b, .85))
+    cv.outline((30, 24, 22, alpha))
+    return cv
+
+def turtle(shell, skin, spots=None):
+    cv = Canvas(16, 16)
+    s, k = hx(shell), hx(skin)
+    cv.ellipse(4, 12, 2, 1.5, k); cv.ellipse(11, 12.5, 2, 1.5, k)          # 鰭肢
+    cv.ellipse(4, 5, 2, 1.5, k); cv.ellipse(11, 4.5, 2, 1.5, k)
+    cv.ellipse(13.5, 8.5, 2, 1.8, k)                                         # 頭
+    cv.ellipse(7.5, 8.5, 5.5, 4, s)
+    for (x, y) in ((6, 7), (9, 7), (7, 10), (10, 10), (5, 9)):
+        cv.set(x, y, hx(spots) if spots else shade(s, .7))
+    cv.outline()
+    cv.set(14, 8, EYE)
+    return cv
+
+def snail(shell, body):
+    cv = Canvas(16, 16)
+    s, b = hx(shell), hx(body)
+    cv.rect(3, 12, 14, 13, b)
+    cv.vline(13, 9, 12, b); cv.set(14, 8, b); cv.set(12, 8, b)
+    cv.ellipse(7, 8.5, 4.5, 4.5, s)
+    for (x, y) in ((7, 8), (8, 8), (8, 9), (7, 10), (6, 10), (5, 9), (5, 8), (6, 6), (8, 6), (9, 7)):
+        cv.set(x, y, shade(s, .65))
+    cv.outline()
+    return cv
+
+def tadpole(c):
+    cv = Canvas(16, 16)
+    b = hx(c)
+    cv.ellipse(10.5, 8, 3, 2.5, b)
+    for x in range(2, 8):
+        cv.set(x, 8 + round(math.sin(x * 1.1)), b)
+        cv.set(x, 9 + round(math.sin(x * 1.1)), shade(b, .8))
+    cv.outline()
+    cv.set(12, 7, EYE)
+    return cv
+
+def ray(c, belly):
+    cv = Canvas(16, 16)
+    b = hx(c)
+    for y in range(3, 14):
+        w = 6 - abs(y - 8) * 1.1
+        if w > 0:
+            cv.hline(round(9 - w), round(9 + w * .6), y, b)
+    cv.hline(1, 4, 8, shade(b, .8))                                          # 尾
+    cv.outline()
+    for (x, y) in ((8, 6), (10, 9), (7, 10), (11, 6)):
+        cv.set(x, y, hx(belly))
+    cv.set(11, 7, EYE); cv.set(11, 9, EYE)
+    return cv
+
+def angler(c, lure):
+    cv = Canvas(16, 16)
+    b = hx(c)
+    cv.vline(2, 7, 11, shade(b, .8)); cv.vline(1, 6, 12, shade(b, .8))       # 尾
+    cv.ellipse(8.5, 9, 6, 4.5, b)
+    cv.hline(10, 14, 11, hx("#2a1418"))                                      # 大嘴
+    for x in (11, 13): cv.set(x, 10, hx("#f0f0e0"))
+    cv.vline(10, 2, 4, shade(b, .8)); cv.set(11, 2, shade(b, .8))            # 燈籠觸手
+    cv.outline()
+    cv.ellipse(12.5, 2, 1.2, 1.2, hx(lure))
+    cv.set(11, 7, EYE)
+    return cv
+
+def boot(c, sole="#3a2a22"):
+    cv = Canvas(16, 16)
+    b = hx(c)
+    cv.rect(4, 2, 8, 11, b)
+    cv.rect(4, 9, 13, 12, b)
+    cv.rect(12, 10, 13, 12, shade(b, 1.15))
+    cv.rect(3, 13, 13, 13, hx(sole))
+    cv.hline(4, 8, 3, shade(b, .75))
+    for y in (5, 7): cv.set(8, y, hx("#e8dcc4"))                             # 鞋帶
+    cv.set(10, 11, shade(b, .6)); cv.set(6, 6, shade(b, .6))                 # 破洞
+    cv.outline()
+    return cv
+
+def can(c, band):
+    cv = Canvas(16, 16)
+    b = hx(c)
+    cv.rect(4, 4, 11, 13, b)
+    cv.rect(4, 7, 11, 10, hx(band))
+    cv.hline(5, 10, 3, shade(b, 1.2)); cv.hline(5, 10, 14, shade(b, .7))
+    cv.vline(5, 4, 13, shade(b, 1.25))
+    cv.set(10, 8, shade(hx(band), .6)); cv.set(9, 9, shade(hx(band), .6))    # 凹痕
+    cv.outline()
+    return cv
+
+def bottle(c, alpha=200):
+    cv = Canvas(16, 16)
+    b = hx(c, alpha)
+    cv.rect(5, 6, 10, 14, b)
+    cv.rect(7, 2, 8, 5, b)
+    cv.rect(7, 1, 8, 1, hx("#8a6238"))                                       # 軟木塞
+    cv.rect(6, 8, 9, 11, hx("#f0e6c8"))                                      # 裡面的信
+    cv.vline(6, 6, 13, shade(b, 1.3))
+    cv.outline((30, 24, 22, alpha))
+    return cv
+
+def glove(c):
+    cv = Canvas(16, 16)
+    b = hx(c)
+    cv.rect(4, 7, 11, 13, b)
+    for x in (4, 6, 8, 10):
+        cv.vline(x, 3, 7, b)
+    cv.rect(12, 8, 13, 10, b)
+    cv.hline(4, 11, 12, shade(b, .75))                                       # 袖口
+    cv.set(7, 9, hx("#ffffff")); cv.set(9, 10, hx("#ffffff"))                # 雪花
+    cv.outline()
+    return cv
+
+def kelp(c):
+    cv = Canvas(16, 16)
+    b = hx(c)
+    for i, x0 in enumerate((4, 8, 11)):
+        for y in range(2 + i, 15):
+            x = x0 + round(math.sin(y * .8 + i) * 1.2)
+            cv.hline(x, x + 1, y, b if (y + i) % 3 else shade(b, 1.2))
+    cv.outline()
+    return cv
+
+def stick(c, leaf):
+    cv = Canvas(16, 16)
+    b = hx(c)
+    for i in range(12):
+        cv.rect(2 + i, 12 - i, 3 + i, 13 - i, b)
+    cv.rect(7, 4, 7, 7, b); cv.set(6, 3, b)                                  # 分枝
+    cv.ellipse(5, 2.5, 1.5, 1, hx(leaf))
+    cv.outline()
+    return cv
+
+C, U, R = "common", "uncommon", "rare"
+# (地形, id, 名稱, 稀有度, 尺寸 cm 範圍, 畫圖)
+FISH_TABLE = [
+    # 草島：池塘與小溪
+    ("grass", "crucian", "鯽魚", C, (10, 25), lambda: fish("#8a8a52", "#c8c48a", L=10, H=6)),
+    ("grass", "medaka", "青鱂魚", C, (3, 6), lambda: fish("#b8d0c8", "#e8f0e8", L=7, H=3)),
+    ("grass", "river_shrimp", "小河蝦", C, (3, 8), lambda: shrimp("#9ab8a8")),
+    ("grass", "old_boot", "破舊靴子", C, (25, 30), lambda: boot("#6a4a32")),
+    ("grass", "loach", "泥鰍", C, (8, 20), lambda: eel("#7a6a44", "#b8a878")),
+    ("grass", "perch", "鱸魚", U, (30, 80), lambda: fish("#6a8a6a", "#d0d8c0", L=12, H=6, stripes=(6, 9, 12))),
+    ("grass", "green_crab", "綠背蟹", U, (8, 20), lambda: crab("#4a8a4a")),
+    ("grass", "catfish", "鯰魚", U, (30, 100), lambda: fish("#5a5048", "#a89c88", L=13, H=5, whisker=True)),
+    ("grass", "koi", "錦鯉", R, (40, 90), lambda: fish("#f0f0e8", fin="#e86a3a", L=12, H=6, spots=((6, 7), (7, 7), (10, 8), (11, 9), (9, 6)), glow="#e8582a")),
+    ("grass", "meadow_trout", "草原之王鱒", R, (60, 120), lambda: fish("#7aa86a", "#f0e0c0", L=13, H=6, band="#e88aa0", spots=((5, 6), (9, 6), (12, 7)))),
+    # 沙灘：近海
+    ("beach", "sardine", "沙丁魚", C, (10, 20), lambda: fish("#6a8ab8", "#e0e8f0", L=10, H=4)),
+    ("beach", "horse_mackerel", "竹莢魚", C, (15, 35), lambda: fish("#8aa0a8", "#e8e0c8", L=11, H=5, band="#c8b860")),
+    ("beach", "hermit_crab", "寄居蟹", C, (3, 10), lambda: crab("#d8703a", shell="#e8d0a8")),
+    ("beach", "kelp", "海帶", C, (30, 150), lambda: kelp("#5a7a3a")),
+    ("beach", "empty_can", "空罐頭", C, (8, 12), lambda: can("#b8bec6", "#d84a4a")),
+    ("beach", "clownfish", "小丑魚", U, (6, 11), lambda: fish("#f08a2a", L=10, H=6, stripes=(6, 10), fin="#f0f0f0")),
+    ("beach", "octopus", "章魚", U, (30, 90), lambda: octopus("#c8584a")),
+    ("beach", "starfish", "海星", U, (10, 30), lambda: starfish("#e88a4a")),
+    ("beach", "mahi", "鬼頭刀", R, (80, 180), lambda: fish("#4aa86a", "#f0d84a", L=14, H=6, fin="#3a88c8")),
+    ("beach", "golden_turtle", "黃金海龜", R, (60, 120), lambda: turtle("#d8a830", "#a8c870", "#f8e8a0")),
+    # 雪島：冰海
+    ("snow", "cod", "鱈魚", C, (30, 90), lambda: fish("#8a8070", "#e0d8c8", L=12, H=6, spots=((6, 7), (9, 6), (11, 8)))),
+    ("snow", "capelin", "柳葉魚", C, (10, 18), lambda: fish("#9aa8b0", "#f0f0e8", L=10, H=3)),
+    ("snow", "ice_shrimp", "冰晶蝦", C, (3, 8), lambda: shrimp("#a8d8f0")),
+    ("snow", "frozen_glove", "凍僵的手套", C, (20, 25), lambda: glove("#c84a4a")),
+    ("snow", "hairy_crab", "毛蟹", C, (8, 15), lambda: crab("#8a6a4a")),
+    ("snow", "salmon", "鮭魚", U, (50, 100), lambda: fish("#8a98a8", "#f0a080", L=13, H=6, band="#e88870")),
+    ("snow", "icefish", "冰魚", U, (20, 40), lambda: fish("#d8f0f8", "#ffffff", L=12, H=4, alpha=170)),
+    ("snow", "squid", "烏賊", U, (20, 60), lambda: squid("#e8d8e0")),
+    ("snow", "narwhal_calf", "獨角鯨寶寶", R, (100, 200), lambda: fish("#a8b0c0", "#e8ecf0", L=12, H=6, horn="#f8f0d8", spots=((6, 6), (8, 7), (10, 6)))),
+    ("snow", "aurora_trout", "極光鱒", R, (50, 90), lambda: fish("#4ab8a8", "#e0f0f8", L=12, H=6, band="#b88ae8", spots=((6, 6), (9, 6)), glow="#a8f0d8")),
+    # 夜光島：發光的夜海
+    ("night", "lanternfish", "燈籠魚", C, (5, 12), lambda: fish("#3a4a6a", "#6a7aa0", L=9, H=4, spots=((6, 9), (8, 9), (10, 9)), glow="#8af0f0")),
+    ("night", "glow_jelly", "夜光水母", C, (10, 40), lambda: jelly("#8ad8f0")),
+    ("night", "black_bass", "黑鱸", C, (20, 50), lambda: fish("#3a3a48", "#6a6a78", L=11, H=6)),
+    ("night", "message_bottle", "漂流瓶", C, (20, 30), lambda: bottle("#4a9a6a")),
+    ("night", "glow_shrimp", "螢光蝦", C, (3, 8), lambda: shrimp("#7af0b0")),
+    ("night", "moon_eel", "月光鰻", U, (50, 150), lambda: eel("#5a5a8a", "#d8d8f0")),
+    ("night", "star_ray", "星斑魟", U, (40, 120), lambda: ray("#3a4a7a", "#f0e88a")),
+    ("night", "anglerfish", "深海鮟鱇", U, (20, 60), lambda: angler("#4a3a4a", "#f0f08a")),
+    ("night", "ghost_fish", "幽靈魚", R, (30, 70), lambda: fish("#e0e8f0", "#ffffff", L=12, H=6, alpha=140)),
+    ("night", "moon_arowana", "月影龍魚", R, (60, 130), lambda: fish("#b8b0d8", "#f0e8f8", L=14, H=5, whisker=True, fin="#8a6ac8", glow="#f8f0a0", spots=((6, 7), (9, 7), (12, 7)))),
+    # 森林島：林間溪流
+    ("forest", "minnow", "溪哥", C, (8, 15), lambda: fish("#a8b08a", "#e8e8d0", L=9, H=4, band="#d88a6a")),
+    ("forest", "tadpole", "蝌蚪", C, (1, 4), lambda: tadpole("#4a4a3a")),
+    ("forest", "dead_branch", "枯枝", C, (20, 60), lambda: stick("#7a5a3a", "#6a9a4a")),
+    ("forest", "crayfish", "小龍蝦", C, (6, 12), lambda: crab("#c83a2a")),
+    ("forest", "moss_snail", "苔蘚螺", C, (2, 6), lambda: snail("#6a8a4a", "#c8b898")),
+    ("forest", "rainbow_trout", "虹鱒", U, (30, 70), lambda: fish("#8aa878", "#f0e8d8", L=12, H=5, band="#e87a9a", spots=((6, 6), (9, 6), (11, 6)))),
+    ("forest", "softshell_turtle", "甲魚", U, (20, 40), lambda: turtle("#6a7a4a", "#8a9a6a")),
+    ("forest", "largemouth_bass", "大口黑鱸", U, (30, 60), lambda: fish("#5a7a4a", "#d8d8b0", L=12, H=6, band="#3a4a2a")),
+    ("forest", "ancient_fish", "森林古代魚", R, (80, 150), lambda: fish("#4a5a7a", "#8a9ab0", L=14, H=6, fin="#3a4a6a", spots=((5, 7), (7, 6), (9, 8), (11, 6), (12, 9)), glow="#d8e0f0")),
+    ("forest", "jade_carp", "翡翠鯉", R, (40, 90), lambda: fish("#3ab88a", "#c8f0d8", L=12, H=6, whisker=True, fin="#2a8a6a", spots=((7, 6), (10, 6)), glow="#f0f8a0")),
+    # 熔岩島：熱泉與熔岩海
+    ("volcano", "char_fish", "焦炭魚", C, (10, 30), lambda: fish("#3a3030", "#6a5048", L=11, H=5, spots=((7, 8), (10, 7)), glow="#e8582a")),
+    ("volcano", "lava_shrimp", "火山蝦", C, (4, 10), lambda: shrimp("#e86a2a")),
+    ("volcano", "burnt_boot", "烤焦的靴子", C, (25, 30), lambda: boot("#2a2420", "#1a1410")),
+    ("volcano", "magma_snail", "熔岩蝸牛", C, (3, 8), lambda: snail("#5a3a30", "#e8883a")),
+    ("volcano", "ash_goby", "灰燼鰕虎", C, (5, 12), lambda: fish("#8a8080", "#c8c0b8", L=9, H=5, spots=((6, 7), (8, 6), (10, 8)))),
+    ("volcano", "flame_ray", "火焰魟", U, (50, 120), lambda: ray("#c84a2a", "#f8c84a")),
+    ("volcano", "lava_crab", "熔岩蟹", U, (10, 30), lambda: crab("#5a3a3a")),
+    ("volcano", "sulfur_eel", "硫磺鰻", U, (60, 140), lambda: eel("#c8b83a", "#f0e88a")),
+    ("volcano", "phoenix_fish", "鳳凰魚", R, (50, 100), lambda: fish("#e8582a", "#f8d84a", L=12, H=6, fin="#f8a83a", spots=((6, 7), (9, 6)), glow="#fff0a0")),
+    ("volcano", "fire_dragon_carp", "火龍鯉", R, (70, 150), lambda: fish("#c83a3a", "#f0b84a", L=14, H=6, whisker=True, fin="#f0d84a", spots=((6, 6), (8, 6), (10, 6), (12, 7)), glow="#f8e070")),
+]
+
+def fish_manifest():
+    out = dict(
+        _comment="釣魚與魚類圖鑑。由 tools/gen_assets.py 的 FISH_TABLE 產生（改這裡要改產生器再重跑）。稀有度先依 weight 抽，再從該地形同稀有度的魚裡平均抽一種；尺寸在 size 範圍內、越大越難（兩份伺服器與單機模擬一致）。",
+        escape=0.01,
+        rarity=dict(common=dict(name="常見", weight=60, color="#c8d0bc"),
+                    uncommon=dict(name="罕見", weight=35, color="#7ab8f0"),
+                    rare=dict(name="稀有", weight=5, color="#f0c84a")),
+        terrains={},
+    )
+    for t, fid, name, rar, size, _ in FISH_TABLE:
+        out["terrains"].setdefault(t, []).append(dict(id=fid, name=name, rarity=rar, size=list(size), sprite=f"{fid}.png"))
+    return out
+
 def main():
     print("== 地形 ==")
     for t in TERRAINS:
@@ -811,6 +1181,13 @@ def main():
     save(tombstone(), "tombstone.png")
     print("== 武器 ==")
     save(weapon_sword(), "weapon_sword.png", "avatar")
+    save(weapon_rod(), "weapon_rod.png", "avatar")
+    print("== 釣魚：魚類圖鑑 ==")
+    for t, fid, name, rar, size, draw in FISH_TABLE:
+        save(draw(), f"{fid}.png", "fish")
+    json.dump(fish_manifest(), open(os.path.join(ASSETS, "fish", "fish.json"), "w", encoding="utf-8"),
+              ensure_ascii=False, indent=1)
+    print("  fish/fish.json")
     print("== 採集工具（tools.json 為手寫資料，這裡只畫圖）==")
     save(tool_pickaxe(), "tool_pickaxe.png", "tools")
     save(tool_axe(), "tool_axe.png", "tools")
@@ -838,6 +1215,7 @@ def main():
         weapons=[
             dict(id="hands", name="空手", sprite=None),
             dict(id="sword", name="木劍", sprite="weapon_sword.png"),
+            dict(id="rod", name="釣竿", sprite="weapon_rod.png", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
         ],
     ), open(os.path.join(ASSETS, sub, "avatar.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("  avatar/avatar.json")

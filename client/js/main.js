@@ -84,6 +84,10 @@ const S = {
   toolsDB: null,                // 採集工具與可破壞物件（assets/tools/tools.json）
   drops: [],                    // 地上的掉落物 {item,x,y,born}
   inv: lsObj('dcisland.m0.inv', {}),   // 背包：物品id -> 數量
+  fishDB: null, fishImgs: {},          // 釣魚：魚類 manifest（assets/fish/fish.json）與圖
+  dex: lsObj('dcisland.m0.fishdex', {}),   // 魚類圖鑑：地形 -> 魚id -> {max（最大尺寸 cm）, n（釣到次數）}；登入後換成伺服器的
+  dexSource: 'local',                  // 'local'＝訪客／未連線（存本機）；'server'＝伺服器依 Discord 帳號保存
+  dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
 };
 
 // ---------------- 世界生成 ----------------
@@ -270,12 +274,13 @@ function stepDrops(dt) {
   }
 }
 
-function doAttack(auto) {
+function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵沒有）
   const p = S.players[0];
   S._hits = 0;
   if (S.mode !== 'walk') return;
   if (p.dead) return;
   if (S.t < (p.petUntil ?? 0)) { if (!quiet) say('被石化了，動彈不得', 1200); return; }   // 石化：不能揮擊／採集／互動（長按時不重複提示）
+  if (p.fish) { if (!quiet) fishAction(); S._hits = 1; return; }   // 釣魚中：F／點擊＝收竿或拉竿，不做別的事
   if (p.pose) {   // 坐著/睡著不能揮擊；按 F（不是長按的自動重複）就起身
     if (auto && !quiet) { standUp(p); S.holdSkipF = true; }
     return;
@@ -298,6 +303,7 @@ function doAttack(auto) {
       if (npc) { S._hits = 1; talkTo(npc); S.holdSkipF = true; return; }
     }
   }
+  if (isRod()) { S._hits = 1; if (!quiet) fishAction(wx, wy); return; }   // 拿著釣竿：拋竿（不能攻擊）
   if (S.me.weapon === 'hands') { say('先在「造型」裡裝備武器！'); return; }
   if (!S.weaponImgs[S.me.weapon]) return;
   if (S.t - p.lastAtk < ATK_CD) return;
@@ -1114,7 +1120,7 @@ const DEAD_SECONDS = 30;
 function killPlayer(p, cause, label) {   // label：頭上飄字（龍衝撞倒傳 '龍衝'，其餘預設「倒地」）
   if (p.npc || p.remote || p.dead) return;
   p.dead = true; p.deadAt = performance.now();   // 牆鐘毫秒：畫面被凍結（切走 DC）時倒數照樣走
-  p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null;
+  p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null; p.fish = null;
   S.floaters.push({ x: p.x, y: p.y - 46, v: label || '倒地', life: 1.1, crit: true });
   toast(`${cause} 把你打倒了！${DEAD_SECONDS} 秒後在出生點復活`, 3200);
 }
@@ -1153,13 +1159,20 @@ function stepPlayer(p, dt) {
   let dx = 0, dy = 0;
   // 走路與裝飾模式都能移動（裝飾模式要邊走邊擺）；被石化時不能移動（揮擊也不行，在 doAttack／clickAttack 擋）
   const pet = S.t < (p.petUntil ?? 0);
-  if (!pet) {
+  const reeling = p.fish?.ph === 'reel';   // 拉竿的 1 秒拉扯中站定（不能走、不能跳，結果揭曉後才能動）
+  if (!pet && !reeling) {
     if (keys['a'] || keys['arrowleft']) dx -= 1;
     if (keys['d'] || keys['arrowright']) dx += 1;
     if (keys['w'] || keys['arrowup']) dy -= 1;
     if (keys['s'] || keys['arrowdown']) dy += 1;
   }
   p.moving = dx !== 0 || dy !== 0;
+  // 釣魚中（拉扯以外）：可以走、可以跳，離浮標太遠（FISH_LEASH）才收竿；換掉釣竿、進裝飾模式、被石化也會收竿
+  if (p.fish && !reeling) {
+    if (Math.hypot(p.fish.x - p.x, p.fish.y - p.y) > FISH_LEASH) stopFishing(p, '離浮標太遠，收竿了');
+    else if (S.mode !== 'walk' || !isRod() || pet) stopFishing(p);
+  }
+  stepFishing(p);
   if (p.moving) {
     if (S.mode === 'walk' && S.mouseHeld && S.mouseClient) {   // 按住滑鼠攻擊時，面向跟著游標（可以一邊朝右攻擊一邊往左退）
       const wx = S.mouseClient[0] - canvas.getBoundingClientRect().left + S.cam.x;
@@ -1178,12 +1191,16 @@ function stepPlayer(p, dt) {
     if (!blocked(p.x, ny, ig)) p.y = ny;
   }
   // 跳躍（走路與裝飾模式都能跳；石化中不能跳）
-  if (!pet && keys[' '] && p.z === 0 && p.vz === 0) p.vz = 240;
+  if (!pet && !reeling && keys[' '] && p.z === 0 && p.vz === 0) p.vz = 240;
   if (p.z > 0 || p.vz > 0) {
     p.z += p.vz * dt; p.vz -= 780 * dt;
     if (p.z <= 0) { p.z = 0; p.vz = 0; }
   }
   if (p.swing > 0) { p.swing -= dt; p.face = 'side'; }   // 揮擊／採集是朝左右揮，轉成側面
+  if (p.fish) {   // 釣魚中走動：身體一直面向浮標（倒退著走），釣竿才會指著浮標、釣線不會從背後繞過去
+    if (Math.abs(p.fish.x - p.x) > 4) p.dir = Math.sign(p.fish.x - p.x);
+    p.face = 'side';
+  }
   if (p.tool && S.t > p.toolUntil && !(p.swing > 0)) p.tool = null;
   if (p.moving) { p.animT += dt; if (p.animT > .16) { p.animT = 0; p.frame ^= 1; } }
   else p.frame = 0;
@@ -1240,12 +1257,15 @@ function drawPerson(p, wi, nameColor) {
     if (pet) { ctx.save(); ctx.filter = 'grayscale(1) brightness(.92)'; }
     ctx.save(); ctx.translate(p.x, p.y - p.z);
     if (p.dir < 0) ctx.scale(-1, 1);
-    // 武器（背在肩上 / 揮擊時畫在身前）；坐著時不拿
-    if (wi && !pose && !(p.swing > 0)) drawWeaponBack(wi);
+    // 武器（背在肩上 / 揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
+    const fish = wi && !pose && p.fish ? p.fish : null;
+    if (wi && !pose && !fish && !(p.swing > 0)) drawWeaponBack(wi);
     ctx.drawImage(img, -16, -48, 32, 48);
-    if (wi && !pose && p.swing > 0) drawWeaponSwing(wi, p.swing);
+    if (wi && !pose && !fish && p.swing > 0) drawWeaponSwing(wi, p.swing);
+    if (fish) drawRodCast(wi, rodAngle(fish));
     ctx.restore();
     if (pet) ctx.restore();
+    if (fish) drawLineAndBobber(p, wi, fish);
     if (pose) nameY = p.y - 46;
   }
   // 名牌（FFXIV 感：白字黑邊）
@@ -1268,7 +1288,12 @@ function drawPerson(p, wi, nameColor) {
     ctx.strokeText(txt, p.x, ty); ctx.fillText(txt, p.x, ty);
   }
   if (p.say && S.t < p.say.until) drawBubble(p.x, nameY - 14, p.say.text, Math.min(1, (p.say.until - S.t) / .4));
-  else if (p.guide) {   // 嚮導頭上有個會晃動的「？」，提示可以問他
+  else if (p.fish?.ph === 'bite') {   // 魚上鉤：頭上跳動的「!」（同地形的人也看得到）
+    ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+    const yy = nameY - 14 - Math.abs(Math.sin(S.t * 10)) * 4;
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.9)'; ctx.fillStyle = '#ffd84a';
+    ctx.strokeText('!', p.x, yy); ctx.fillText('!', p.x, yy);
+  } else if (p.guide) {   // 嚮導頭上有個會晃動的「？」，提示可以問他
     ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
     const yy = nameY - 14 + Math.sin(S.t * 4) * 2;
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#ffd86b';
@@ -1472,12 +1497,196 @@ function standUp(p) {
   }
 }
 
+// ---------------- 釣魚 ----------------
+// 造型的武器換成釣竿（avatar.json 的 fishing: true）後，面向水邊按 F 或點水面就拋竿：浮標在水面上下飄，
+// 幾秒後魚上鉤（浮標被拉下水、頭上「!」），FISH_BITE 秒內再按一次就拉竿（FISH_REEL 秒的拉扯動畫）釣上來，超過就跑掉。
+// 釣到什麼：連線時由伺服器抽（結果與圖鑑存在伺服器，依 Discord 帳號；訪客只存本機），沒連線才在本機抽（rollFish，與兩份伺服器同演算法）。
+// 浮標位置與階段走 state.fish 同步，同地形的人看得到你在釣魚；釣到的東西只有自己知道
+const FISH_WAIT = [3, 8];        // 拋竿後幾秒魚上鉤（隨機）
+const FISH_BITE = 2;             // 上鉤後幾秒內要拉竿
+const FISH_REEL = 1;             // 拉竿的拉扯動畫秒數
+const FISH_RANGE = [36, 140];    // 浮標離人的距離（px）
+const FISH_LEASH = 5 * CELL;     // 釣魚中可以走動，離浮標超過這個距離（5 格）才自動收竿
+const FISH_RESULT_WAIT = 4;      // 連線時拉竿後，最多再等伺服器結果幾秒
+const isRod = () => !!S.avatar?.weapons.find(w => w.id === S.me.weapon)?.fishing;
+const isWater = (wx, wy) => {
+  const x = Math.floor(wx / CELL), y = Math.floor(wy / CELL);
+  return x >= 0 && y >= 0 && x < COLS && y < ROWS && S.world.types[y * COLS + x] === 0;
+};
+const fishDef = (terrain, id) => S.fishDB?.terrains[terrain]?.find(f => f.id === id);
+// 拋竿落點：點擊＝點的位置（要在範圍內的水面上）；F＝沿面向找範圍內第一片水，再往外一點
+function castPoint(p, wx, wy) {
+  if (wx !== undefined) {
+    const d = Math.hypot(wx - p.x, wy - p.y);
+    if (!isWater(wx, wy) || d > FISH_RANGE[1]) { say('點附近的水面就能拋竿'); return null; }
+    return { x: wx, y: wy };
+  }
+  const [fx, fy] = facingVec(p);
+  for (let r = FISH_RANGE[0]; r <= FISH_RANGE[1]; r += 8) {
+    if (isWater(p.x + fx * r, p.y + fy * r)) {
+      const r2 = isWater(p.x + fx * (r + 20), p.y + fy * (r + 20)) ? r + 20 : r;
+      return { x: p.x + fx * r2, y: p.y + fy * r2 };
+    }
+  }
+  say('前方沒有水，面向水邊再拋竿');
+  return null;
+}
+// 左鍵／F（拿著釣竿時）：沒在釣＝拋竿；等魚中＝收竿；魚上鉤＝拉竿；拉扯中＝不理
+function fishAction(wx, wy) {
+  const p = S.players[0], f = p.fish;
+  if (!f) {
+    if (!S.fishDB?.terrains[S.terrain]?.length) { say('這裡釣不到東西'); return; }
+    const pt = castPoint(p, wx, wy);
+    if (!pt) return;
+    p.fish = { ph: 'wait', x: Math.round(pt.x), y: Math.round(pt.y), t: S.t, biteAt: S.t + FISH_WAIT[0] + Math.random() * (FISH_WAIT[1] - FISH_WAIT[0]) };
+    if (Math.abs(pt.x - p.x) > 4) p.dir = Math.sign(pt.x - p.x);
+    p.face = 'side'; p.tool = null;
+    toast('拋竿了，等魚上鉤…（再按一次收竿）', 1800);
+  } else if (f.ph === 'wait') stopFishing(p, '收竿了');
+  else if (f.ph === 'bite') {
+    f.ph = 'reel'; f.t = S.t; f.result = null;
+    if (netOn()) S.net.fishCatch();            // 伺服器抽魚並記進圖鑑，結果由 fish_result 回來
+    else f.result = rollFish(S.terrain);
+  }
+}
+function stopFishing(p, msg) {
+  if (!p.fish) return;
+  p.fish = null;
+  if (msg) toast(msg, 1800);
+}
+// 每幀：等魚 → 上鉤 → 逾時跑掉；拉扯動畫結束時揭曉結果
+function stepFishing(p) {
+  const f = p.fish;
+  if (!f) return;
+  if (f.ph === 'wait' && S.t >= f.biteAt) { f.ph = 'bite'; f.t = S.t; }
+  else if (f.ph === 'bite' && S.t - f.t > FISH_BITE) stopFishing(p, '魚逃走了…');
+  else if (f.ph === 'reel' && S.t - f.t >= FISH_REEL) {
+    if (f.result) { p.fish = null; showCatch(p, f.result); }
+    else if (S.t - f.t > FISH_REEL + FISH_RESULT_WAIT) stopFishing(p, '連線不穩，魚跑掉了…');
+  }
+}
+// 單機抽魚（與 Worker 的 rollFish、dev_server 的 roll_fish 同演算法）：先脫鉤判定，再依權重抽稀有度，
+// 從該地形同稀有度的魚裡平均抽一種；尺寸越大越難（範圍內取 r^1.6）
+function rollFish(terrain) {
+  const db = S.fishDB, list = db?.terrains[terrain] || [];
+  if (!list.length || Math.random() < db.escape) return { terrain, escaped: true };
+  const rars = Object.entries(db.rarity).filter(([k]) => list.some(f => f.rarity === k));
+  let r = Math.random() * rars.reduce((s, [, v]) => s + v.weight, 0), rar = rars[rars.length - 1][0];
+  for (const [k, v] of rars) { if ((r -= v.weight) < 0) { rar = k; break; } }
+  const cands = list.filter(f => f.rarity === rar), f = cands[Math.floor(Math.random() * cands.length)];
+  const size = Math.round((f.size[0] + (f.size[1] - f.size[0]) * Math.random() ** 1.6) * 10) / 10;
+  return { terrain, id: f.id, size, rarity: rar };
+}
+// 伺服器回來的結果：正在拉扯就等動畫結束再揭曉；其餘情況（例如拉扯中斷線又重連）直接記錄
+function onFishResult(m) {
+  const p = S.players[0];
+  if (p.fish?.ph === 'reel' && !p.fish.result) p.fish.result = m;
+  else showCatch(p, m);
+}
+// 記進圖鑑：伺服器存好的（saved）直接用它回的資料；訪客／單機記在本機 localStorage
+function recordCatch(m) {
+  const dex = S.dex[m.terrain] ||= {};
+  if (m.saved && m.entry) { dex[m.id] = m.entry; return { isNew: !!m.isNew, isRecord: !!m.isRecord }; }
+  const e = dex[m.id], isNew = !e, isRecord = !e || m.size > e.max;
+  dex[m.id] = { max: Math.max(e?.max || 0, m.size), n: (e?.n || 0) + 1 };
+  if (S.dexSource === 'local') lsSet('dcisland.m0.fishdex', S.dex);
+  return { isNew, isRecord };
+}
+function showCatch(p, m) {
+  if (m.escaped) { toast('魚脫鉤逃走了！', 2200); return; }
+  const def = fishDef(m.terrain, m.id), rar = S.fishDB.rarity[m.rarity];
+  if (!def) return;
+  const { isNew, isRecord } = recordCatch(m);
+  if (S.fishImgs[m.id]) S.floaters.push({ x: p.x, y: p.y - 64, fishImg: S.fishImgs[m.id], life: 1.8 });
+  toast(`釣到了 ${def.name}！${m.size} cm（${rar?.name || ''}）${isNew ? ' · 新發現！' : isRecord ? ' · 尺寸新紀錄！' : ''}`, 3400);
+  if (S.dexOpen) buildDex();
+}
+// 釣竿拋出去的姿勢角度（正值＝竿尖往面向那側前傾）：等魚前傾、上鉤被往下拉、拉扯時往後上方甩
+function rodAngle(f) {
+  return f.ph === 'reel' ? -.25 + Math.sin(S.t * 30) * .12 : f.ph === 'bite' ? 1 + Math.sin(S.t * 40) * .08 : .8;
+}
+// 畫拋出去的釣竿（ctx 已 translate 到角色腳底並依 dir 翻轉；轉軸同揮擊＝握把）
+function drawRodCast(wi, a) {
+  ctx.save(); ctx.translate(3, -26); ctx.rotate(a);
+  ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();
+}
+// 釣線與浮標（世界座標）：從竿尖拉到浮標；上鉤時浮標沉下去、水面起漣漪；拉扯時浮標往人這邊收
+function drawLineAndBobber(p, wi, f) {
+  const a = rodAngle(f), L = (wi.height - 3) * 2 - 2, dir = p.dir < 0 ? -1 : 1;
+  const tx = p.x + dir * (3 + L * Math.sin(a)), ty = p.y - p.z - 26 - L * Math.cos(a);
+  let bx = f.x, by = f.y;
+  const since = S.t - (f.t ?? S.t);
+  if (f.ph === 'reel') { const q = Math.min(1, since / FISH_REEL); bx += (p.x - bx) * q * .6; by += (p.y - 10 - by) * q * .6; }
+  else if (f.ph === 'wait') by += Math.sin(S.t * 3) * 1.5;
+  else by += 3;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(240,240,232,.85)'; ctx.lineWidth = 1;
+  const sag = f.ph === 'wait' ? 18 : 4;     // 等魚時線鬆鬆的，上鉤／拉扯時繃緊
+  ctx.beginPath(); ctx.moveTo(tx, ty); ctx.quadraticCurveTo((tx + bx) / 2, Math.max(ty, by) + sag, bx, by - 3); ctx.stroke();
+  if (f.ph !== 'reel') {                   // 水面漣漪
+    const q = (S.t * (f.ph === 'bite' ? 2.5 : .8)) % 1;
+    ctx.strokeStyle = `rgba(230,245,255,${.55 * (1 - q)})`;
+    ctx.beginPath(); ctx.ellipse(f.x, f.y + 1, 4 + q * (f.ph === 'bite' ? 12 : 6), 1.5 + q * (f.ph === 'bite' ? 4 : 2), 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (f.ph === 'bite') {                   // 上鉤：浮標被拉下水，只露出一點紅頂
+    ctx.fillStyle = '#e04a3a'; ctx.beginPath(); ctx.ellipse(bx, by - 2, 2.5, 1.2, 0, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.fillStyle = '#f4f0e6'; ctx.beginPath(); ctx.arc(bx, by - 2, 3, 0, Math.PI); ctx.fill();
+    ctx.fillStyle = '#e04a3a'; ctx.beginPath(); ctx.arc(bx, by - 2, 3, Math.PI, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(30,24,22,.9)'; ctx.beginPath(); ctx.arc(bx, by - 2, 3, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ---- 魚類圖鑑：每個地形一頁，各 10 種；沒釣過的是黑色剪影＋「？？？」，釣過的顯示圖、名稱、稀有度、最大尺寸與次數 ----
+function openDex() {
+  S.dexOpen = true; S.dexTab = S.fishDB?.terrains[S.terrain] ? S.terrain : TERRAIN_IDS[0];
+  buildDex(); $('dexBox').classList.remove('hidden');
+}
+function closeDex() { S.dexOpen = false; $('dexBox').classList.add('hidden'); }
+function buildDex() {
+  const tabs = $('dexTabs'); tabs.innerHTML = '';
+  for (const id of TERRAIN_IDS) {
+    if (!S.fishDB.terrains[id]) continue;
+    const b = document.createElement('button');
+    b.className = 'ff-btn small' + (id === S.dexTab ? ' active' : '');
+    b.textContent = S.terrains[id].name;
+    b.onclick = () => { S.dexTab = id; buildDex(); };
+    tabs.appendChild(b);
+  }
+  const list = S.fishDB.terrains[S.dexTab] || [], seen = S.dex[S.dexTab] || {};
+  const n = list.filter(f => seen[f.id]).length;
+  $('dexHint').textContent = `已發現 ${n}／${list.length}` + (S.dexSource === 'server' ? ' · 以 Discord 帳號保存' : ' · 訪客／未連線：只存在這台電腦');
+  const grid = $('dexGrid'); grid.innerHTML = '';
+  for (const f of list) {
+    const e = seen[f.id], rar = S.fishDB.rarity[f.rarity];
+    const card = document.createElement('div'); card.className = 'dex-card' + (e ? '' : ' unknown');
+    const cv = document.createElement('canvas'); cv.width = 48; cv.height = 48;
+    const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+    const img = S.fishImgs[f.id];
+    if (img) {
+      g.drawImage(img, 0, 0, 48, 48);
+      if (!e) { g.globalCompositeOperation = 'source-in'; g.fillStyle = '#07090c'; g.fillRect(0, 0, 48, 48); }   // 剪影
+    }
+    const nm = document.createElement('div'); nm.className = 'dex-name'; nm.textContent = e ? f.name : '？？？';
+    card.append(cv, nm);
+    if (e) {
+      const r = document.createElement('div'); r.className = 'dex-rar'; r.textContent = rar?.name || ''; r.style.color = rar?.color || '';
+      const s = document.createElement('div'); s.className = 'dex-size'; s.textContent = `最大 ${e.max} cm · ${e.n} 次`;
+      card.append(r, s);
+    }
+    grid.appendChild(card);
+  }
+}
+
 // ---------------- 繪製 ----------------
 // 武器（ctx 已 translate 到角色腳底並依 dir 翻轉）。素材：刀刃在上、握柄在下。
-// 沒揮擊：背在肩後（畫在身體之前，被身體擋住一部分）
+// 沒揮擊：背在肩後（畫在身體之前，被身體擋住一部分）。
+// 以「圖的底端」對齊（木劍 18 格高、畫成 36px 時底端在轉軸下 27px，與以前置中畫法相同）：比較長的武器（釣竿）往上伸出肩頭，不會穿過腳底
+const WEAPON_BACK_BOTTOM = 27;
 function drawWeaponBack(wi) {
   ctx.save(); ctx.translate(-11, -26); ctx.rotate(-.55);
-  ctx.drawImage(wi, -wi.width, -wi.height / 2, wi.width * 2, wi.height * 2); ctx.restore();
+  ctx.drawImage(wi, -wi.width, WEAPON_BACK_BOTTOM - wi.height * 2, wi.width * 2, wi.height * 2); ctx.restore();
 }
 // 揮擊：握住劍柄（以握把為轉軸）、刀刃朝外，由後上方往前下方揮，畫在身體之後（身前）
 function drawWeaponSwing(wi, swing) {
@@ -1742,7 +1951,10 @@ function draw() {
       ctx.restore(); continue;
     }
     ctx.translate(f.x, f.y);
-    if (f.ring) {   // 被爪擊打中的衝擊圈：紅圈快速擴散淡出
+    if (f.fishImg) {   // 釣到的東西：從頭上浮起來再淡出
+      ctx.globalAlpha = Math.min(1, f.life / .5);
+      ctx.drawImage(f.fishImg, -24, -24, 48, 48);
+    } else if (f.ring) {   // 被爪擊打中的衝擊圈：紅圈快速擴散淡出
       const q = 1 - f.life / .35;
       ctx.strokeStyle = `rgba(255,110,80,${1 - q})`;
       ctx.lineWidth = 3;
@@ -2026,6 +2238,7 @@ async function switchTerrain(id) {
     const [nx, ny] = landNear(me.x, me.y);
     me.x = nx; me.y = ny;
     me.petUntil = 0; me.petTick = 0; me.petWas = false;   // 石化判定只在畫面本地，換地形就解除
+    me.fish = null;                                        // 換地形就收竿
     buildTerrainChips();
     toast(`已移動到${S.terrains[id].name}`);
     // M2：只有自己過去；告訴伺服器，讓新地形的人看到你、舊地形的人看不到你
@@ -2154,6 +2367,7 @@ addEventListener('keydown', e => {
   keys[k] = true;
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   if (S.listOpen) { if (k === 'escape' || k === 'l') closeList(); return; }                // 線上列表開著：Esc / L 關閉
+  if (S.dexOpen) { if (k === 'escape') closeDex(); return; }                               // 圖鑑開著：Esc 關閉（仍可走路）
   if (S.helpOpen) { if (k === 'escape' || k === 'enter') closeHelp(); return; }       // 操作說明開著：Esc / Enter 關閉，其他鍵不處理
   if (S.confirmOpen) { if (k === 'escape') closeConfirm(); return; }   // 「要保存嗎？」開著時：Esc＝繼續編輯，其他鍵不處理
   if (k === 'e' && !e.repeat) {
@@ -2178,6 +2392,7 @@ canvas.addEventListener('mousemove', e => {
 canvas.addEventListener('mouseleave', () => S.mouseCell = null);
 // 左鍵攻擊（世界座標 wx,wy 是游標指的位置）：先面向游標方向再揮
 function clickAttack(wx, wy) {
+  if (S.players[0].fish) { doAttack(false); return; }   // 釣魚中：點哪裡都是收竿／拉竿（不會去坐椅子、跟 NPC 說話）
   // 點在島主身上：優先攻擊島主，點擊不讓牠腳下的椅子／NPC 攔走
   const onOwner = S.animals.some(a => {
     const od = animalDef(a.id);
@@ -2203,7 +2418,7 @@ function clickAttack(wx, wy) {
     if (d) { useTool(d); return; }
   }
   if (Math.abs(wx - S.players[0].x) > 6) S.players[0].dir = Math.sign(wx - S.players[0].x);
-  doAttack();
+  doAttack(false, wx, wy);
   // 沒命中但點到了一隻動物 → 牠的致公告告（FF14 點動物 FU）
   if (!S._hits) {
     for (const a of S.animals) {
@@ -2216,7 +2431,8 @@ function clickAttack(wx, wy) {
 }
 // 長按 F 或左鍵：冷卻一到就自動再揮（每幀呼叫；第一下由按下事件負責，之後這裡接手）
 function autoAttack() {
-  if (S.mode !== 'walk' || S.helpOpen || S.listOpen || S.signOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
+  if (S.mode !== 'walk' || S.helpOpen || S.listOpen || S.signOpen || S.dexOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
+  if (isRod() || S.players[0].fish) return;   // 釣竿不連擊：長按不會一直拋竿／收竿
   quiet = true;
   try {
     if (S.mouseHeld && S.mouseClient) {
@@ -2226,7 +2442,7 @@ function autoAttack() {
   } finally { quiet = false; }
 }
 canvas.addEventListener('mousedown', e => {
-  if (S.confirmOpen || S.helpOpen || S.listOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen) return;
   if (S.mode === 'decor' && S.decorTab === 'floor' && (e.button === 0 || e.button === 2)) {   // 地板模式：長按左鍵鋪、長按右鍵拆
     if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
     const r = canvas.getBoundingClientRect();
@@ -2253,7 +2469,7 @@ canvas.addEventListener('mousedown', e => {
 });
 canvas.addEventListener('contextmenu', e => {
   e.preventDefault();
-  if (S.confirmOpen || S.helpOpen || S.listOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen) return;
   if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身
     const r = canvas.getBoundingClientRect();
     const f = furnAtPoint(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y);
@@ -2294,6 +2510,8 @@ $('listClose').onclick = closeList;
 $('btnHelp').onclick = openHelp;       // 右上「操作說明」：和嚮導一樣的操作說明
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => $('avatarPanel').classList.add('hidden');
+$('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑
+$('dexClose').onclick = closeDex;
 
 // ---------------- 資源載入 ----------------
 async function ensureTerrain(id) {
@@ -2323,7 +2541,7 @@ let welcomeUntil = 0;
 async function boot() {
   $('btnDecor').disabled = false;
   // manifest：互不相依，一次全部並行抓（以前是一個接一個，首次進島要等一長串往返）
-  const [tjson, furn, floors, animalsDB, npcDB, toolsDB, avatar] = await Promise.all([
+  const [tjson, furn, floors, animalsDB, npcDB, toolsDB, avatar, fishDB] = await Promise.all([
     Promise.all(TERRAIN_IDS.map(id => loadJSON(`assets/terrain/${id}/terrain.json`))),
     loadJSON('assets/furniture/furniture.json'),
     loadJSON('assets/floors/floors.json'),
@@ -2331,9 +2549,10 @@ async function boot() {
     loadJSON('assets/npcs/npcs.json'),
     loadJSON('assets/tools/tools.json'),        // 採集工具（鎬子/斧頭）：圖放進 weaponImgs，讓繪製與遠端玩家共用同一套武器繪製
     loadJSON('assets/avatar/avatar.json'),
+    loadJSON('assets/fish/fish.json'),          // 釣魚：各地形的魚與稀有度
   ]);
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
-  Object.assign(S, { furn, floors, animalsDB, npcDB, toolsDB, avatar });
+  Object.assign(S, { furn, floors, animalsDB, npcDB, toolsDB, avatar, fishDB });
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
   if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';
   // 圖片：同樣全部並行（含目前所在地形的圖）。只有角色身體是必要的（缺了畫不出人），其餘缺圖就略過該項
@@ -2353,6 +2572,7 @@ async function boot() {
       if (back) S.hairBackImgs[h.id] = back;
     }),
     ...S.avatar.weapons.filter(w => w.sprite).map(async w => S.weaponImgs[w.id] = await optImg(`assets/avatar/${w.sprite}`)),
+    ...Object.values(S.fishDB.terrains).flat().map(async f => S.fishImgs[f.id] = await optImg(`assets/fish/${f.sprite}`)),
     ensureTerrain(S.terrain),
   ]);
 
@@ -2423,6 +2643,8 @@ async function boot() {
     onDecos: onNetDecos,
     onDeco: onNetDeco,
     onDragon: onNetDragon,   // 島主事件（aim/hp/dead/spawn/state 快照）
+    onFishResult,            // 釣魚結果（伺服器抽的魚；登入的人已記進伺服器的圖鑑）
+    onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); },   // 登入後伺服器送來的圖鑑
     onOpen: net => {
       if (performance.now() >= welcomeUntil) toast(`已連上島（${net.room}）`, 2000);
       // 島主同步：連上（或重連）時人在有島主的地形就補傳陸地位圖（新連線重新算「傳過沒」）

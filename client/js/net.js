@@ -36,6 +36,7 @@ export function connectNet(S, opts = {}) {
       seat: p.seatType || null,            // 坐/睡的家具種類（畫圖用）
       hp: p.dead ? 0 : Math.round(p.hp ?? 10),   // 血量（島主爪擊扣 2、殺動物回 1；龍衝直接倒地）
       dead: p.dead ? 1 : 0,                // 死亡（墓碑）：被島主打倒後倒數復活
+      fish: p.fish ? { x: p.fish.x, y: p.fish.y, ph: p.fish.ph } : null,   // 釣魚：浮標位置與階段（wait 等魚／bite 上鉤／reel 拉扯）
     };
   }
 
@@ -58,6 +59,9 @@ export function connectNet(S, opts = {}) {
       r.pose = st.pose === 'sit' || st.pose === 'sleep' ? st.pose : null;
       r.face = st.face === 'up' || st.face === 'side' ? st.face : 'down';
       r.seatType = typeof st.seat === 'string' ? st.seat : null;
+      // 釣魚：浮標位置與階段；階段變了就重新起算（拉扯動畫要知道從什麼時候開始）
+      const fs = st.fish && ['wait', 'bite', 'reel'].includes(st.fish.ph) ? st.fish : null;
+      r.fish = fs ? { x: fs.x, y: fs.y, ph: fs.ph, t: r.fish?.ph === fs.ph ? r.fish.t : S.t } : null;
       const wasDead = !!r.dead;
       r.dead = !!st.dead;                  // 死亡（墓碑）：進出死亡時跟同島的人說一聲
       if (st.hp != null) r.hp = st.hp;     // 血量同步（對方自己算好的）
@@ -85,6 +89,8 @@ export function connectNet(S, opts = {}) {
         break;
       case 'me': if (opts.onAdmin) opts.onAdmin(!!msg.admin); break;
       case 'commit_result': if (opts.onCommitResult) opts.onCommitResult(msg); break;
+      case 'fish_result': if (opts.onFishResult) opts.onFishResult(msg); break;   // 釣魚結果（伺服器抽）
+      case 'dex': if (opts.onDex) opts.onDex(msg.dex); break;                     // 魚類圖鑑（登入後由伺服器送來）
       case 'enter': {
         // 進入（或切換到）某地形：每個人各自在自己的地形，只看得到同地形的人
         // 快速連切地形時，舊地形的回應會晚到：不是現在所在的地形就丟掉（之後還會收到新地形的 enter）
@@ -179,6 +185,8 @@ export function connectNet(S, opts = {}) {
   // 島主：上傳陸地位圖（進草島時）／打到島主時送意圖（座標＋傷害＋我們看到的龍位置），流程由伺服器權威
   net.sendDragonMap = v => net.connected && send({ t: 'dragonMap', v });
   net.dragonHit = (x, y, dmg, ddx, ddy) => net.connected && send({ t: 'dragonHit', x, y, dmg, ddx, ddy });
+  // 釣魚：魚上鉤後拉竿成功，請伺服器抽一條魚（登入的人順便記進伺服器的圖鑑），結果用 fish_result 回來
+  net.fishCatch = () => net.connected && send({ t: 'fish' });
   // 分頁凍結恢復後要島主即時快照（伺服器用 dragon 事件的 state 回這條連線）
   net.requestDragonSnap = () => net.connected && send({ t: 'dragonSnap' });
 
