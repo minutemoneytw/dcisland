@@ -15,7 +15,8 @@
   "palm.png":      { "name": "椰子樹", "tool": "axe", "hp": 4, "respawn": 60, "drops": [] },
   "pine.png":      { "name": "松樹",   "tool": "axe", "hp": 4, "respawn": 60, "drops": [] },
   "mushroom.png":  { "name": "蘑菇",   "tool": "axe", "hp": 2, "respawn": 60, "drops": [] },
-  "glowshroom.png": { "name": "發光蘑菇", "tool": "axe", "hp": 2, "respawn": 60, "drops": [] }
+  "glowshroom.png": { "name": "發光蘑菇", "tool": "axe", "hp": 2, "respawn": 60, "drops": [] },
+  "lantern.png":   { "name": "燈籠",   "tool": "pickaxe", "hp": 2, "respawn": 60, "drops": [] }
  },
  "_drops_format": "drops 每項：{ \"item\": \"物品id（要先在 items 定義）\", \"min\": 1, \"max\": 2, \"chance\": 1 }。items 格式：{ \"物品id\": { \"name\": \"顯示名\", \"color\": \"#rrggbb\" } }。目前全空。"
 }
