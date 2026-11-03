@@ -1256,12 +1256,19 @@ function drawPerson(p, wi, nameColor) {
     const pet = S.t < (p.petUntil ?? 0);   // 石化：身體灰階（自己的石化即時同步；遠端玩家的石化由光束事件就地推斷，純演出）
     if (pet) { ctx.save(); ctx.filter = 'grayscale(1) brightness(.92)'; }
     ctx.save(); ctx.translate(p.x, p.y - p.z);
-    if (p.dir < 0) ctx.scale(-1, 1);
     // 武器（背在肩上 / 揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
     const fish = wi && !pose && p.fish ? p.fish : null;
-    if (wi && !pose && !fish && !(p.swing > 0)) drawWeaponBack(wi);
+    const carry = wi && !pose && !fish && !(p.swing > 0);   // 背在背上
+    const backView = p.face === 'up';                         // 背面（往上走）：背著的武器疊在身體上面，正面／側面則被身體擋住
+    // 背著的武器畫在左右翻轉之外：固定背在同一側，人物轉向時不會跟著換邊
+    if (carry && !backView) drawWeaponBack(wi);
+    ctx.save();
+    if (p.dir < 0) ctx.scale(-1, 1);
     ctx.drawImage(img, -16, -48, 32, 48);
-    if (wi && !pose && !fish && p.swing > 0) drawWeaponSwing(wi, p.swing);
+    ctx.restore();
+    if (carry && backView) drawWeaponBack(wi, true);
+    if (p.dir < 0) ctx.scale(-1, 1);                          // 揮擊、拋竿朝面向那側（要翻轉）
+    if (wi && !pose && !fish && p.swing > 0) drawWeaponSwing(wi, p.swing, p.dir < 0 ? -1 : 1);
     if (fish) drawRodCast(wi, rodAngle(fish));
     ctx.restore();
     if (pet) ctx.restore();
@@ -1685,21 +1692,24 @@ function buildDex() {
 // 以「圖的底端」對齊（木劍 18 格高、畫成 36px 時底端在轉軸下 27px）：比較長的武器（釣竿）往上伸出肩頭，不會穿過腳底。
 // avatar.json 標 back: "hilt" 的（木劍）上下翻過來＝劍柄在肩後（約肩膀高度）、劍身朝下藏在身體後面
 const WEAPON_BACK_BOTTOM = 27, WEAPON_HILT_LIFT = 0;
-function drawWeaponBack(wi) {
-  ctx.save(); ctx.translate(-11, -26); ctx.rotate(-.55);
+// onBack＝背面視角（畫在身體之上）：往背的中間靠，看起來是斜背在背上
+const WEAPON_BACK_X = -11, WEAPON_BACK_X_BACKVIEW = -5;
+function drawWeaponBack(wi, onBack) {
+  ctx.save(); ctx.translate(onBack ? WEAPON_BACK_X_BACKVIEW : WEAPON_BACK_X, -26); ctx.rotate(-.55);
   if (wi.hiltUp) { ctx.scale(1, -1); ctx.drawImage(wi, -wi.width, WEAPON_HILT_LIFT - WEAPON_BACK_BOTTOM, wi.width * 2, wi.height * 2); }
   else ctx.drawImage(wi, -wi.width, WEAPON_BACK_BOTTOM - wi.height * 2, wi.width * 2, wi.height * 2);
   ctx.restore();
 }
 // 揮擊：握住劍柄（以握把為轉軸）、刀刃朝外，由後上方往前下方揮，畫在身體之後（身前）
-// 劍柄朝上背著的（hiltUp）：前 35% 手從肩後的劍柄位置（約 -13,-29，與 drawWeaponBack 的握把一致）移到身前，看起來是從背上拔劍再揮出去
+// 劍柄朝上背著的（hiltUp）：前 35% 手從肩後的劍柄位置（約 -13,-29，與 drawWeaponBack 的握把一致）移到身前，看起來是從背上拔劍再揮出去。
+// 背著的武器不隨人物翻轉（固定在畫面左側），ctx 卻已依面向翻轉，所以起點 x 要乘上 dir 換回同一側
 const SWING_HILT_FROM = [-13, -29], SWING_HILT_DRAW = .35;
-function drawWeaponSwing(wi, swing) {
+function drawWeaponSwing(wi, swing, dir = 1) {
   const q = 1 - swing / ATK_T;
   let px = 3, py = -26;
   if (wi.hiltUp) {
-    const k = Math.min(1, q / SWING_HILT_DRAW);
-    px = SWING_HILT_FROM[0] + (3 - SWING_HILT_FROM[0]) * k; py = SWING_HILT_FROM[1] + (-26 - SWING_HILT_FROM[1]) * k;
+    const k = Math.min(1, q / SWING_HILT_DRAW), fx = SWING_HILT_FROM[0] * dir;
+    px = fx + (3 - fx) * k; py = SWING_HILT_FROM[1] + (-26 - SWING_HILT_FROM[1]) * k;
   }
   ctx.save(); ctx.translate(px, py); ctx.rotate(-.9 + q * 2.8);
   ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();   // 轉軸＝離圖底 3 格的握把
