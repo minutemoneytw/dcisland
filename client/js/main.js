@@ -1084,7 +1084,7 @@ function stepRemote(r, dt) {
 const DEAD_SECONDS = 30;
 function killPlayer(p, cause) {
   if (p.npc || p.remote || p.dead) return;
-  p.dead = true; p.deadAt = S.t;
+  p.dead = true; p.deadAt = performance.now();   // 牆鐘毫秒：畫面被凍結（切走 DC）時倒數照樣走
   p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null;
   S.floaters.push({ x: p.x, y: p.y - 46, v: cause === '龍衝' ? '龍衝' : '倒地', life: 1.1, crit: true });
   toast(`${cause} 把你打倒了！${DEAD_SECONDS} 秒後在出生點復活`, 3200);
@@ -1104,7 +1104,7 @@ function stepPlayer(p, dt) {
   if (p.npc) { stepNPC(p, dt); return; }
   if (p.dead) {   // 死亡：原地長出墓碑，期間不動/不跳/不揮擊
     p.z = 0; p.vz = 0; p.moving = false; p.frame = 0; p.swing = 0;
-    if (S.t - p.deadAt >= DEAD_SECONDS) revivePlayer(p);
+    if (performance.now() - p.deadAt >= DEAD_SECONDS * 1000) revivePlayer(p);
     return;
   }
   if (p.pose) {   // 坐/睡：不動；按移動鍵或跳躍就起身（也會一路走出去），家具被拿走也會起身
@@ -1634,7 +1634,7 @@ function draw() {
     };
   }
   for (const p of S.players) {
-    if (p.dead) { list.push(tombEntry(p.x, p.y, p.name, DEAD_SECONDS - (S.t - p.deadAt))); continue; }   // 死亡：畫墓碑不畫人（NPC 不會死，不受影響）
+    if (p.dead) { list.push(tombEntry(p.x, p.y, p.name, DEAD_SECONDS - (performance.now() - p.deadAt) / 1000)); continue; }   // 死亡：畫墓碑不畫人（NPC 不會死，不受影響）
     list.push({
       y: p.y + (p.pose ? 2 : 0),      // 坐著/睡著的人要畫在自己的椅子/床之後（排序鍵比家具大一點）
       draw: () => {
