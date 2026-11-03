@@ -154,3 +154,8 @@ body {
 #signBox.hidden { display: none !important; }
 #signText { width: 100%; box-sizing: border-box; resize: none; background: #1d2230; color: var(--text); border: 1px solid var(--gold-dim); padding: 6px 8px; font: 13px/1.6 "Microsoft JhengHei", sans-serif; }
 #signText:focus { outline: none; border-color: var(--gold); }
+
+/* ---------- 線上列表 ---------- */
+#listBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 300px; max-height: 420px; display: flex; flex-direction: column; z-index: 31; }
+#listBody { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+#listBody .opt.dead { opacity: .5; }

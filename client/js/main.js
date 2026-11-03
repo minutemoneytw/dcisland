@@ -63,6 +63,7 @@ const S = {
   draft: [],                    // 裝飾模式未保存的操作
   baseFurn: [],                 // 草稿所依據的擺設（進入裝飾模式時、或最近一次伺服器同步）
   confirmOpen: false,           // 「要保存嗎？」視窗是否開著
+  listOpen: false,              // 線上列表視窗是否開著
   helpOpen: false,              // 嚮導的操作說明視窗是否開著
   signOpen: false, signItem: null,   // 看板編輯視窗是否開著／正在編輯哪一塊
   npcDB: null,                  // NPC 對話（assets/npcs/npcs.json）
@@ -1320,6 +1321,37 @@ function openHelp() {
 }
 function closeHelp() { S.helpOpen = false; $('helpBox').classList.add('hidden'); }
 
+// ---- 線上列表（L）：列出同地形的線上玩家，點名字傳送到他的位置（伺服器只告知同地形的人，所以只列得到同一座地形的）----
+function buildPlayerList() {
+  const body = $('listBody');
+  const rs = [...S.remotes.values()];
+  const sig = rs.map(r => r.id + '|' + r.name + '|' + !!r.dead).join(',');
+  if (sig === S.listSig && body.children.length === rs.length) return;   // 名單沒變就不重建，免得點擊到一半元素被換掉
+  S.listSig = sig; body.innerHTML = '';
+  $('listHint').textContent = rs.length ? '點選玩家名字，傳送到他身邊' : '這座島上目前沒有其他玩家';
+  for (const r of rs) {
+    const o = document.createElement('div'); o.className = 'opt name' + (r.dead ? ' dead' : '');
+    o.textContent = (r.name || '玩家') + (r.dead ? '（墓碑）' : '');
+    o.onclick = () => teleportTo(r);
+    body.appendChild(o);
+  }
+}
+function openList() {
+  if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
+  buildPlayerList();
+  S.listOpen = true; $('listBox').classList.remove('hidden');
+  clearInterval(S.listTimer); S.listTimer = setInterval(buildPlayerList, 1000);   // 有人進出時跟著更新
+}
+function closeList() { S.listOpen = false; $('listBox').classList.add('hidden'); clearInterval(S.listTimer); }
+function teleportTo(r) {
+  const me = S.players[0];
+  if (!S.remotes.has(r.id) || me.dead) { buildPlayerList(); return; }
+  standUp(me);
+  me.x = r.x; me.y = r.y; me.z = 0; me.vz = 0;
+  closeList();
+  toast('傳送到 ' + (r.name || '玩家') + ' 身邊', 1800);
+}
+
 // ---- 看板：點它（或旁邊按 F）打開視窗，所有人都能看、都能改；文字由伺服器同步（沒連線時存本機）----
 const SIGN_RANGE = 90;
 function signNear(p) {     // F 鍵：身邊最近的看板
@@ -2030,6 +2062,7 @@ addEventListener('keydown', e => {
   }
   keys[k] = true;
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+  if (S.listOpen) { if (k === 'escape' || k === 'l') closeList(); return; }                // 線上列表開著：Esc / L 關閉
   if (S.helpOpen) { if (k === 'escape' || k === 'enter') closeHelp(); return; }       // 操作說明開著：Esc / Enter 關閉，其他鍵不處理
   if (S.confirmOpen) { if (k === 'escape') closeConfirm(); return; }   // 「要保存嗎？」開著時：Esc＝繼續編輯，其他鍵不處理
   if (k === 'e' && !e.repeat) {
@@ -2037,6 +2070,7 @@ addEventListener('keydown', e => {
     else if (S.mode === 'walk') { if (S.players[0].dead) toast('你在墓碑裡動不了', 1400); else enterDecor(); }
   }
   if (k === 'escape' && S.mode === 'decor') requestExitDecor();     // Esc 也能離開裝飾模式
+  if (k === 'l' && !e.repeat && S.mode === 'walk' && !S.confirmOpen) openList();
   if (k === 'f' && !e.repeat) doAttack(true);
 });
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key.toLowerCase() === 'f') S.holdSkipF = false; });
@@ -2090,7 +2124,7 @@ function clickAttack(wx, wy) {
 }
 // 長按 F 或左鍵：冷卻一到就自動再揮（每幀呼叫；第一下由按下事件負責，之後這裡接手）
 function autoAttack() {
-  if (S.mode !== 'walk' || S.helpOpen || S.signOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
+  if (S.mode !== 'walk' || S.helpOpen || S.listOpen || S.signOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
   quiet = true;
   try {
     if (S.mouseHeld && S.mouseClient) {
@@ -2100,7 +2134,7 @@ function autoAttack() {
   } finally { quiet = false; }
 }
 canvas.addEventListener('mousedown', e => {
-  if (S.confirmOpen || S.helpOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.listOpen) return;
   if (S.mode === 'decor' && S.decorTab === 'floor' && (e.button === 0 || e.button === 2)) {   // 地板模式：長按左鍵鋪、長按右鍵拆
     if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
     const r = canvas.getBoundingClientRect();
@@ -2126,7 +2160,7 @@ canvas.addEventListener('mousedown', e => {
 });
 canvas.addEventListener('contextmenu', e => {
   e.preventDefault();
-  if (S.confirmOpen || S.helpOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.listOpen) return;
   if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身
     const r = canvas.getBoundingClientRect();
     const f = furnAtPoint(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y);
@@ -2163,7 +2197,8 @@ $('furnClear').onclick = () => {
   stageOp({ t: 'clear' }); toast('已清空（按「完成」才會保存，「取消變動」可還原）', 2600);
 };
 
-$('btnHelp').onclick = openHelp;       // 右上「？」：和嚮導一樣的操作說明
+$('listClose').onclick = closeList;
+$('btnHelp').onclick = openHelp;       // 右上「操作說明」：和嚮導一樣的操作說明
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => $('avatarPanel').classList.add('hidden');
 
@@ -2278,7 +2313,7 @@ async function boot() {
   requestAnimationFrame(loop);
   window.S = S; // debug / discord.js 接線用
   window.toast = toast;
-  // 進島只提示歡迎；操作方式看右上「？」或問嚮導
+  // 進島只提示歡迎；操作方式看右上「操作說明」或問嚮導
   const welcomeMs = 3000;
   welcomeUntil = performance.now() + welcomeMs;           // 歡迎訊息顯示期間，不讓「已連上島」把它蓋掉
   toast('歡迎來到 DC島！', welcomeMs);
