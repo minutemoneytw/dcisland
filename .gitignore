@@ -22,5 +22,8 @@ run1.txt
 Thumbs.db
 desktop.ini
 
+# ---- Claude 桌面版的本機預覽設定（各人環境的 Python 路徑不同）----
+.claude/launch.json
+
 # ---- Cloudflare wrangler 本機快取/模擬資料庫 ----
 .wrangler/
