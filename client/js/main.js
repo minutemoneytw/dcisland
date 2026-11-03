@@ -20,6 +20,10 @@ function hashStr(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h
 
 function loadJSON(url) { return fetch(url).then(r => r.json()); }
 function loadImg(url) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error(url)); i.src = url; }); }
+// 非必要的圖（家具/地板/動物/武器/地形點綴…）：缺一張只略過那一樣並回報，不要讓整個遊戲載入失敗
+function optImg(url) {
+  return loadImg(url).catch(() => { console.warn('缺圖:', url); reportError('asset-missing', url); return null; });
+}
 
 let toastTimer = null;
 function toast(msg, ms = 1800) {
@@ -217,7 +221,7 @@ function useTool(d) {
 }
 // 套用一次打擊的結果（本機算的或伺服器廣播的）。mine＝自己打的：只有打壞的人拿掉落物、看到訊息
 function applyDecoHit(d, hp, dead, ttl, mine) {
-  const tgt = decoTarget(d), [bx, by] = decoBase(d), r = decoRect(d);
+  const tgt = decoTarget(d), [bx, by] = decoBase(d), r = decoRect(d) || { y: by - CELL, h: CELL };   // 缺圖時用一格高估位置
   d.hp = hp; d.shake = .25;
   S.floaters.push({ x: bx + (Math.random() * 16 - 8), y: r.y + r.h * .4, v: '1', life: .8, crit: false });
   if (!dead) return;
@@ -1693,7 +1697,7 @@ function draw() {
     ctx.strokeRect(mx * CELL + .5, my * CELL + .5, CELL - 1, CELL - 1);
   }
   // 裝飾模式 ghost
-  if (S.mode === 'decor' && S.decorTab === 'furn' && S.mouseCell && S.sel) {
+  if (S.mode === 'decor' && S.decorTab === 'furn' && S.mouseCell && S.sel && S.furnImgs[S.sel]) {
     const def = furnitureDef(S.sel), img = S.furnImgs[S.sel];
     const [mx, my] = S.mouseCell, w = def.w * CELL, h = def.h * CELL;
     const valid = canPlace(S.sel, mx, my);
@@ -1892,7 +1896,8 @@ function updateDecorUI() {
 function enterDecor() {
   S.mode = 'decor'; S.draft = []; S.baseFurn = cloneFurn(S.furnItems); S.baseFloor = new Map(S.floorMap); S.paint = null;
   $('btnDecor').classList.add('active'); $('furnPanel').classList.remove('hidden');
-  S.sel = S.sel || S.furn.items[0].id; S.selFloor = S.selFloor || S.floors.items[0].id;
+  S.sel = S.sel || S.furn.items.find(it => S.furnImgs[it.id])?.id || null;          // 缺圖的種類不列出、也不預選
+  S.selFloor = S.selFloor || S.floors.items.find(it => S.floorImgs[it.id])?.id || null;
   buildFurnPanel(); updateDecorUI();
   toast('裝飾模式：左鍵放置／右鍵移除（按「完成」才會保存）', 2600);
 }
@@ -1996,6 +2001,7 @@ function buildFurnPanel() {
   const box = $('furnList'); box.innerHTML = '';
   if (floorTab) {
     for (const it of S.floors.items) {
+      if (!S.floorImgs[it.id]) continue;   // 缺圖的地板不列出
       const div = document.createElement('div');
       div.className = 'fitem' + (S.selFloor === it.id ? ' sel' : '');
       const cv = document.createElement('canvas');
@@ -2010,10 +2016,11 @@ function buildFurnPanel() {
     return;
   }
   for (const it of S.furn.items) {
+    const img = S.furnImgs[it.id];
+    if (!img) continue;                    // 缺圖的家具不列出
     const div = document.createElement('div');
     div.className = 'fitem' + (S.sel === it.id ? ' sel' : '');
     const cv = document.createElement('canvas');
-    const img = S.furnImgs[it.id];
     cv.width = 44; cv.height = 40; cv.style.height = '40px';
     const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
     const w = img.width * 2, h = img.height * 2, s2 = Math.min(1, 44 / w, 40 / h);
@@ -2242,7 +2249,7 @@ async function ensureTerrain(id) {
   const files = new Set([man.ground, man.edge, man.water]);
   for (const d of man.deco) files.add(d.sprite);
   const ims = {};
-  await Promise.all([...files].map(async f => ims[f] = await loadImg(`assets/terrain/${id}/${f}`)));
+  await Promise.all([...files].map(async f => ims[f] = await optImg(`assets/terrain/${id}/${f}`)));
   for (const f of [...files]) if (!ims[f]) console.warn('缺地形圖:', id, f);
   S.tImages[id] = ims;
 }
@@ -2275,23 +2282,23 @@ async function boot() {
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
   Object.assign(S, { furn, floors, animalsDB, npcDB, toolsDB, avatar });
   if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';
-  // 圖片：同樣全部並行（含目前所在地形的圖）
+  // 圖片：同樣全部並行（含目前所在地形的圖）。只有角色身體是必要的（缺了畫不出人），其餘缺圖就略過該項
   await Promise.all([
-    ...S.floors.items.map(async f => S.floorImgs[f.id] = await loadImg(`assets/floors/${f.sprite}`)),
-    ...S.animalsDB.animals.map(async a => S.anImgs[a.id] = await loadImg(`assets/animals/${a.sprite}`)),
-    ...S.toolsDB.tools.map(async t => S.weaponImgs[t.id] = await loadImg(`assets/tools/${t.sprite}`)),
-    loadImg('assets/tombstone.png').then(im => S.tombImg = im),   // 死亡墓碑（島主龍衝打倒後原地出現）
-    ...S.furn.items.map(async it => S.furnImgs[it.id] = await loadImg(`assets/furniture/${it.sprite}`)),
+    ...S.floors.items.map(async f => S.floorImgs[f.id] = await optImg(`assets/floors/${f.sprite}`)),
+    ...S.animalsDB.animals.map(async a => S.anImgs[a.id] = await optImg(`assets/animals/${a.sprite}`)),
+    ...S.toolsDB.tools.map(async t => S.weaponImgs[t.id] = await optImg(`assets/tools/${t.sprite}`)),
+    optImg('assets/tombstone.png').then(im => S.tombImg = im),   // 死亡墓碑（島主龍衝打倒後原地出現）
+    ...S.furn.items.map(async it => S.furnImgs[it.id] = await optImg(`assets/furniture/${it.sprite}`)),
     ...S.avatar.skins.map(async s => {
       const [a, b, c] = await Promise.all(['a', 'b', 'sit'].map(k => loadImg(`assets/avatar/body_${s.id}_${k}.png`)));
       S.bodyImgs[s.id] = { a, b, c };
     }),
     ...S.avatar.hair.map(async h => {
-      const [im, back] = await Promise.all([loadImg(`assets/avatar/${h.sprite}`), h.back ? loadImg(`assets/avatar/${h.back}`) : null]);
+      const [im, back] = await Promise.all([optImg(`assets/avatar/${h.sprite}`), h.back ? optImg(`assets/avatar/${h.back}`) : null]);
       S.hairImgs[h.id] = im;
       if (back) S.hairBackImgs[h.id] = back;
     }),
-    ...S.avatar.weapons.filter(w => w.sprite).map(async w => S.weaponImgs[w.id] = await loadImg(`assets/avatar/${w.sprite}`)),
+    ...S.avatar.weapons.filter(w => w.sprite).map(async w => S.weaponImgs[w.id] = await optImg(`assets/avatar/${w.sprite}`)),
     ensureTerrain(S.terrain),
   ]);
 
