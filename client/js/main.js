@@ -475,7 +475,7 @@ function ownerStep(a, dt, def) {
     a.z = 34 + Math.sin(a.bounce * 1.4) * 5;   // 龍衝：貼地高速掠過
     // 攻擊範圍＝龍的大小：路徑上被龍本體撞到（貼太近）就被打倒
     const q = S.players[0];
-    if (!q.dead && Math.hypot(q.x - a.x, q.y - a.y) < 20 * (def.big || 1)) killPlayer(q, def.name);
+    if (!q.dead && Math.hypot(q.x - a.x, q.y - a.y) < 20 * (def.big || 1)) killPlayer(q, def.name, '龍衝');
   } else {
     a.z = 70 + Math.sin(a.bounce) * 7;   // 升空高度
   }
@@ -703,7 +703,7 @@ function stepOwnerProxy(a, dt, def) {
     a.bounce += dt * 14;
     a.z = 34 + Math.sin(a.bounce * 1.4) * 5;
     const q = S.players[0];
-    if (!q.dead && Math.hypot(q.x - a.x, q.y - a.y) < 20 * (def.big || 1)) killPlayer(q, def.name);
+    if (!q.dead && Math.hypot(q.x - a.x, q.y - a.y) < 20 * (def.big || 1)) killPlayer(q, def.name, '龍衝');
     return;
   }
   a.fly = false; a.z = 0;   // 落地歇腳（restMs），之後等伺服器的 wander 事件接續散步
@@ -899,7 +899,7 @@ function onNetDragon(m) {
     const dx = me.x - m.x, dy = me.y - m.y;
     const dd = Math.hypot(dx, dy) || 1;
     const to = Math.hypot(m.tx - m.x, m.ty - m.y) || 1;
-    const front = (dx * (m.tx - m.x) / (dd * to)) >= .15;   // 前方扇形（同揮擊判定）
+    const front = (dx * (m.tx - m.x) + dy * (m.ty - m.y)) / (dd * to) >= .15;   // 前方扇形：到我的方向與到目標的方向夾角小於約 80°
     // 伺服器已用它的狀態驗證過距離；事件帶 id：抓的是我就結算（含紅圈），否則只看特效
     if (!me.dead && (m.id === S.net?.id || (dd <= OWNER_CLAW_RANGE && front))) {
       playerDamage(me, OWNER_CLAW_DMG, animalDef(na.id).name);
@@ -1100,11 +1100,11 @@ function stepRemote(r, dt) {
 
 // ---- 角色死亡：被島主的龍衝撞倒後原地變墓碑，30 秒後復活（NPC／遠端玩家也適用） ----
 const DEAD_SECONDS = 30;
-function killPlayer(p, cause) {
+function killPlayer(p, cause, label) {   // label：頭上飄字（龍衝撞倒傳 '龍衝'，其餘預設「倒地」）
   if (p.npc || p.remote || p.dead) return;
   p.dead = true; p.deadAt = performance.now();   // 牆鐘毫秒：畫面被凍結（切走 DC）時倒數照樣走
   p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null;
-  S.floaters.push({ x: p.x, y: p.y - 46, v: cause === '龍衝' ? '龍衝' : '倒地', life: 1.1, crit: true });
+  S.floaters.push({ x: p.x, y: p.y - 46, v: label || '倒地', life: 1.1, crit: true });
   toast(`${cause} 把你打倒了！${DEAD_SECONDS} 秒後在出生點復活`, 3200);
 }
 function revivePlayer(p) {
@@ -1627,7 +1627,7 @@ function draw() {
           ctx.strokeText('!', a.x, top + 8); ctx.fillText('!', a.x, top + 8);
         }
         // 名牌（島主用金色，與嚮導同色）
-        ctx.font = (bs > 1 ? 'bold 12px ' : '') + '9px "Microsoft JhengHei"'; ctx.textAlign = 'center';
+        ctx.font = (bs > 1 ? 'bold 12px ' : '9px ') + '"Microsoft JhengHei"'; ctx.textAlign = 'center';
         ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.75)';
         ctx.strokeText(def.name, a.x, top);
         ctx.fillStyle = a.startle ? '#e8b2a2' : (def.owner ? '#ffd86b' : '#cfd8c8');
