@@ -1956,7 +1956,7 @@ async function switchTerrain(id) {
     me.x = nx; me.y = ny;
     me.petUntil = 0; me.petTick = 0; me.petWas = false;   // 石化判定只在畫面本地，換地形就解除
     buildTerrainChips();
-    toast(`${S.terrains[id].name} 島上線`);
+    toast(`已移動到${S.terrains[id].name}`);
     // M2：只有自己過去；告訴伺服器，讓新地形的人看到你、舊地形的人看不到你
     S.net?.enter?.(id);
     // 島主同步：進草島就把陸地位圖交給伺服器（島形只有客戶端知道；各人島形相同，重複上傳也無妨）
