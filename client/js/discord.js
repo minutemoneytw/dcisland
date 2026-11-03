@@ -1,6 +1,6 @@
 // DC島 — Discord Embedded App SDK 接線（M1）
 // 三模式：本機 / ?mock=1 / 真Discord(iframe 有 frame_id)
-// SDK 以 esm.sh 免 build 匯入；正式部署時改為自家 bundle 或 niu 移到 server。
+// SDK 優先載入自家託管的單檔 bundle（client/vendor/），失敗才退回 esm.sh（需 Portal 的 /sdk 對應）。
 
 export async function hookDiscord() {
   const S = window.S;

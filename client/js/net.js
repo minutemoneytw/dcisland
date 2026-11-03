@@ -1,6 +1,6 @@
 // DC島 M2 — 多人同步（同語音頻道＝同一座島）
 // 房間鍵：Discord 的 guild_id:channel_id（本機則 local:local，可用 ?room= 指定）
-// 之後搬上 Cloudflare Durable Objects 時，這支的介面不變，只換連線位址。
+// 連到同網域的 /ws：正式站是 Cloudflare Worker（Durable Object，一座島一個實例），本機是 tools/dev_server.py，協定相同。
 
 const SEND_HZ = 12;          // 每秒送幾次自己的位置
 const HEARTBEAT_MS = 1000;   // 狀態沒變時的心跳間隔（必須遠小於 STALE_MS，否則站著不動的人會被當成離線）

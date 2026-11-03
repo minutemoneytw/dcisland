@@ -1,4 +1,4 @@
-// DC島 M0 — 本地單機 demo（將來改成 Durable Objects 同步）
+// DC島 — 遊戲本體（世界生成、移動、繪圖、戰鬥、動物、裝飾、造型、UI）。多人同步在 net.js，連線時以伺服器（Worker／dev_server）為準
 const CELL = 32, COLS = 88, ROWS = 56;   // 島放大：鏡頭跟隨
 const VIEW_W = 29 * 32, VIEW_H = 17 * 32;
 const canvas = document.getElementById('game');
@@ -373,8 +373,8 @@ function nearestLand(a) {
   return null;
 }
 
-// ---- 島主的龍衝反擊（沿用野外動物「刻意不同步」規則）：被打後瞬間消失、在島隨機邊緣現蹤瞄準攻擊者 ----
-// 預警範圍提示 1 秒後，以龍本體直線飛衝過島（攻擊範圍＝龍的大小，被撞到＝KO），衝到對岸落地後飛回地圖中心
+// ---- 島主的龍衝反擊（連線時由伺服器權威同步，這裡是單機模擬與共用演出）：被打後先說台詞，再瞬間消失、在島隨機邊緣現蹤瞄準攻擊者 ----
+// 預警範圍提示 1 秒後，以龍本體直線飛衝過島（攻擊範圍＝龍的大小，被撞到＝KO），衝到對岸落地歇一下後就地繼續散步／追殺
 const OWNER_FLY_SPEED = 240, OWNER_DASH_SPEED = 560, OWNER_CAST = 1, OWNER_CD = 12;
 const OWNER_GAZE_CAST = 2;      // 石化之瞳的開眼預警秒數（與兩份伺服器的 D_GAZE_CAST_MS 一致）
 const OWNER_PETRIFY_MS = 10000; // 石化時長：不能移動＋每秒扣 1 HP（判定在各人自己的畫面，不進同步協定）
@@ -542,7 +542,7 @@ function gazePetrify(a, def) {   // 面向蛇女的玩家石化（全地圖）�
     if (hit(r)) r.petUntil = S.t + OWNER_PETRIFY_MS / 1000;
   }
 }
-function petrifyPlayer(p, cause) {   // 石化：10 秒不能移動／跳躍（揮擊仍可用），每秒扣 1 HP；扣死照既有墓碑機制
+function petrifyPlayer(p, cause) {   // 石化：10 秒不能移動／跳躍／揮擊／採集／F 互動，每秒扣 1 HP；扣死照既有墓碑機制
   if (p.dead) return;
   if (p.pose) standUp(p);
   p.petUntil = S.t + OWNER_PETRIFY_MS / 1000;
@@ -581,7 +581,7 @@ function ownerAggroPick(a, ag) {
   return cands.length ? cands[Math.floor(Math.random() * cands.length)] : null;
 }
 // 仇恨狀態的單機 tick：追（每腿重瞄目標、速度 180）、進範圍就每秒一抓（扣 2 HP）、
-// 目標死了／5 秒到隨機換攻擊者、龍衝 CD 到了自動對目標放龍衝、20 秒沒人打就脫離回閒晃
+// 目標死了／5 秒到隨機換攻擊者、龍衝 CD 到了自動對目標放龍衝、30 秒（OWNER_DROPOUT）沒人打就脫離回閒晃
 function ownerAggroStep(a, dt, def) {
   const ag = a.aggro;
   if (S.t - (a.lastHitAt ?? 0) > OWNER_DROPOUT) {   // 太久沒人打：脫離仇恨
@@ -1151,7 +1151,7 @@ function stepPlayer(p, dt) {
     else { p.moving = false; p.frame = 0; p.z = 0; p.vz = 0; return; }
   }
   let dx = 0, dy = 0;
-  // 走路與裝飾模式都能移動（裝飾模式要邊走邊擺）；被石化時不能移動（揮擊仍可用）
+  // 走路與裝飾模式都能移動（裝飾模式要邊走邊擺）；被石化時不能移動（揮擊也不行，在 doAttack／clickAttack 擋）
   const pet = S.t < (p.petUntil ?? 0);
   if (!pet) {
     if (keys['a'] || keys['arrowleft']) dx -= 1;

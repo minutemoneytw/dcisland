@@ -90,7 +90,7 @@ git push                          # GitHub Actions 自動部署到正式站（�
 
 | 症狀 | 原因 / 解法 |
 |---|---|
-| `python` 跳出 Microsoft Store | 用 `python3`，或用安裝路徑（如 `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`） |
+| `python` 跳出 Microsoft Store | 用 `py -3`（Windows 的 Python 啟動器）或 `python3`，或用安裝路徑（如 `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`） |
 | `wrangler` 跑不動 | Node 版本 < 22；裝 LTS 後開新終端機 |
 | 改了 JS 但畫面沒變 | 本機伺服器已送 `Cache-Control: no-store`；瀏覽器請用新分頁或硬重新整理 |
 | 推不上去 | 先 `git pull`（遠端有別人的提交），解完衝突再推 |

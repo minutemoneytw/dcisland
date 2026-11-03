@@ -51,7 +51,7 @@ https://dcisland.<你的子域>.workers.dev
 
 正式站：**https://dcisland.less78518.workers.dev**
 
-`.github/workflows/deploy.yml` 已設定好：只要有人推版到 `main`，且改動到 `client/**`、`worker/**`，GitHub 就會自動部署。
+`.github/workflows/deploy.yml` 已設定好：只要有人推版到 `main`，且改動到 `client/**`、`worker/**` 或 `.github/workflows/deploy.yml`，GitHub 就會自動部署。
 三個維護者都不需要手動更新伺服器。
 
 需要 repo 的兩把鑰匙（**只設一次**）：
