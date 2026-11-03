@@ -3,6 +3,7 @@
 // 之後搬上 Cloudflare Durable Objects 時，這支的介面不變，只換連線位址。
 
 const SEND_HZ = 12;          // 每秒送幾次自己的位置
+const HEARTBEAT_MS = 1000;   // 狀態沒變時的心跳間隔（必須遠小於 STALE_MS，否則站著不動的人會被當成離線）
 const STALE_MS = 15000;      // 超過這麼久沒收到訊息就當對方離線
 
 export function connectNet(S, opts = {}) {
@@ -127,6 +128,7 @@ export function connectNet(S, opts = {}) {
     ws = new WebSocket(url);
     ws.onopen = () => {
       net.connected = true; backoff = 600;
+      net.resetSent?.();
       net.hello();                          // 先表明身分（有憑證才送）
       send({ t: 'state', s: myState() });   // 先送狀態，別人收到 join 時才知道名字
       net.enter(S.terrain);                 // 再宣告自己在哪個地形（斷線重連也會重進）
@@ -144,9 +146,19 @@ export function connectNet(S, opts = {}) {
   open();
 
   // 定期上報自己的狀態 + 清掉失聯的遠端玩家
+  // 只在狀態有變（位置/動作/血量/死亡…）時送；站著不動只送心跳，省下全島的廣播與伺服器寫入。
+  // 死亡／復活／血量都在 myState() 裡，變了下一個 tick（約 83ms）就會送，不靠心跳。
+  let lastSent = '', lastSentAt = 0;
+  net.resetSent = () => { lastSent = ''; };   // 重連後強制送一次完整狀態
   setInterval(() => {
-    if (net.connected) send({ t: 'state', s: myState() });
     const now = performance.now();
+    if (net.connected) {
+      const st = JSON.stringify(myState());
+      if (st !== lastSent || now - lastSentAt >= HEARTBEAT_MS) {
+        send({ t: 'state', s: JSON.parse(st) });
+        lastSent = st; lastSentAt = now;
+      }
+    }
     for (const [id, r] of S.remotes) if (now - r.seen > STALE_MS) S.remotes.delete(id);
   }, 1000 / SEND_HZ);
 
