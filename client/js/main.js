@@ -1521,22 +1521,37 @@ const isWater = (wx, wy) => {
   return x >= 0 && y >= 0 && x < COLS && y < ROWS && S.world.types[y * COLS + x] === 0;
 };
 const fishDef = (terrain, id) => S.fishDB?.terrains[terrain]?.find(f => f.id === id);
-// 拋竿落點：點擊＝點的位置（要在範圍內的水面上）；F＝沿面向找範圍內第一片水，再往外一點
-function castPoint(p, wx, wy) {
-  if (wx !== undefined) {
-    const d = Math.hypot(wx - p.x, wy - p.y);
-    if (!isWater(wx, wy) || d > FISH_RANGE[1]) { say('點附近的水面就能拋竿'); return null; }
-    return { x: wx, y: wy };
-  }
-  const [fx, fy] = facingVec(p);
+// 沿 (ux,uy) 方向找拋竿範圍內第一片水，再往外一點（外面也是水的話）；沒有回 null
+function castRay(p, ux, uy) {
   for (let r = FISH_RANGE[0]; r <= FISH_RANGE[1]; r += 8) {
-    if (isWater(p.x + fx * r, p.y + fy * r)) {
-      const r2 = isWater(p.x + fx * (r + 20), p.y + fy * (r + 20)) ? r + 20 : r;
-      return { x: p.x + fx * r2, y: p.y + fy * r2 };
+    if (isWater(p.x + ux * r, p.y + uy * r)) {
+      const r2 = r + 20 <= FISH_RANGE[1] && isWater(p.x + ux * (r + 20), p.y + uy * (r + 20)) ? r + 20 : r;
+      return { x: p.x + ux * r2, y: p.y + uy * r2 };
     }
   }
-  say('前方沒有水，面向水邊再拋竿');
   return null;
+}
+// 拋竿落點（只要人在水邊，不必點得很準）：
+// 1) 點擊且點到範圍內的水面 → 就拋到那裡；2) 朝想拋的方向（點擊＝游標方向；F＝面向）找範圍內的水；
+// 3) 那個方向沒有水 → 身邊各方向找，挑最接近想拋方向的水面；都沒有才提示
+function castPoint(p, wx, wy) {
+  const click = wx !== undefined;
+  if (click && isWater(wx, wy) && Math.hypot(wx - p.x, wy - p.y) <= FISH_RANGE[1]) return { x: wx, y: wy };
+  let ux, uy;
+  if (click && Math.hypot(wx - p.x, wy - p.y) > 1) { const d = Math.hypot(wx - p.x, wy - p.y); ux = (wx - p.x) / d; uy = (wy - p.y) / d; }
+  else [ux, uy] = facingVec(p);
+  const hit = castRay(p, ux, uy);
+  if (hit) return hit;
+  const want = Math.atan2(uy, ux);
+  let best = null, bestDiff = Infinity;
+  for (let k = 0; k < 24; k++) {                       // 每 15° 一個方向
+    const a = k * Math.PI / 12, pt = castRay(p, Math.cos(a), Math.sin(a));
+    if (!pt) continue;
+    const diff = Math.abs(Math.atan2(Math.sin(a - want), Math.cos(a - want)));
+    if (diff < bestDiff) { bestDiff = diff; best = pt; }
+  }
+  if (!best) say('附近沒有水，走到水邊再拋竿');
+  return best;
 }
 // 左鍵／F（拿著釣竿時）：沒在釣＝拋竿；等魚中＝收竿；魚上鉤＝拉竿；拉扯中＝不理
 function fishAction(wx, wy) {
