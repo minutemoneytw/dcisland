@@ -1214,7 +1214,7 @@ def main():
         recolor=dict(shirtBase="#d95c68", shirtShadeBase="#aa474f", pantsBase="#4a54a0", pantsShadeBase="#38417c"),
         weapons=[
             dict(id="hands", name="空手", sprite=None),
-            dict(id="sword", name="木劍", sprite="weapon_sword.png"),
+            dict(id="sword", name="木劍", sprite="weapon_sword.png", back="hilt"),   # back: "hilt"＝背在背上時劍柄朝上（沒寫＝頭朝上，例如釣竿）
             dict(id="rod", name="釣竿", sprite="weapon_rod.png", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
         ],
     ), open(os.path.join(ASSETS, sub, "avatar.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)

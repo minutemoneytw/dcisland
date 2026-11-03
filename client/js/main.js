@@ -1682,16 +1682,26 @@ function buildDex() {
 // ---------------- 繪製 ----------------
 // 武器（ctx 已 translate 到角色腳底並依 dir 翻轉）。素材：刀刃在上、握柄在下。
 // 沒揮擊：背在肩後（畫在身體之前，被身體擋住一部分）。
-// 以「圖的底端」對齊（木劍 18 格高、畫成 36px 時底端在轉軸下 27px，與以前置中畫法相同）：比較長的武器（釣竿）往上伸出肩頭，不會穿過腳底
-const WEAPON_BACK_BOTTOM = 27;
+// 以「圖的底端」對齊（木劍 18 格高、畫成 36px 時底端在轉軸下 27px）：比較長的武器（釣竿）往上伸出肩頭，不會穿過腳底。
+// avatar.json 標 back: "hilt" 的（木劍）上下翻過來＝劍柄在肩後（約肩膀高度）、劍身朝下藏在身體後面
+const WEAPON_BACK_BOTTOM = 27, WEAPON_HILT_LIFT = 0;
 function drawWeaponBack(wi) {
   ctx.save(); ctx.translate(-11, -26); ctx.rotate(-.55);
-  ctx.drawImage(wi, -wi.width, WEAPON_BACK_BOTTOM - wi.height * 2, wi.width * 2, wi.height * 2); ctx.restore();
+  if (wi.hiltUp) { ctx.scale(1, -1); ctx.drawImage(wi, -wi.width, WEAPON_HILT_LIFT - WEAPON_BACK_BOTTOM, wi.width * 2, wi.height * 2); }
+  else ctx.drawImage(wi, -wi.width, WEAPON_BACK_BOTTOM - wi.height * 2, wi.width * 2, wi.height * 2);
+  ctx.restore();
 }
 // 揮擊：握住劍柄（以握把為轉軸）、刀刃朝外，由後上方往前下方揮，畫在身體之後（身前）
+// 劍柄朝上背著的（hiltUp）：前 35% 手從肩後的劍柄位置（約 -13,-29，與 drawWeaponBack 的握把一致）移到身前，看起來是從背上拔劍再揮出去
+const SWING_HILT_FROM = [-13, -29], SWING_HILT_DRAW = .35;
 function drawWeaponSwing(wi, swing) {
   const q = 1 - swing / ATK_T;
-  ctx.save(); ctx.translate(3, -26); ctx.rotate(-.9 + q * 2.8);
+  let px = 3, py = -26;
+  if (wi.hiltUp) {
+    const k = Math.min(1, q / SWING_HILT_DRAW);
+    px = SWING_HILT_FROM[0] + (3 - SWING_HILT_FROM[0]) * k; py = SWING_HILT_FROM[1] + (-26 - SWING_HILT_FROM[1]) * k;
+  }
+  ctx.save(); ctx.translate(px, py); ctx.rotate(-.9 + q * 2.8);
   ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();   // 轉軸＝離圖底 3 格的握把
 }
 
@@ -2571,7 +2581,11 @@ async function boot() {
       S.hairImgs[h.id] = im;
       if (back) S.hairBackImgs[h.id] = back;
     }),
-    ...S.avatar.weapons.filter(w => w.sprite).map(async w => S.weaponImgs[w.id] = await optImg(`assets/avatar/${w.sprite}`)),
+    ...S.avatar.weapons.filter(w => w.sprite).map(async w => {
+      const im = await optImg(`assets/avatar/${w.sprite}`);
+      if (im && w.back === 'hilt') im.hiltUp = true;   // 背在背上時劍柄朝上（drawWeaponBack 看這個旗標）
+      S.weaponImgs[w.id] = im;
+    }),
     ...Object.values(S.fishDB.terrains).flat().map(async f => S.fishImgs[f.id] = await optImg(`assets/fish/${f.sprite}`)),
     ensureTerrain(S.terrain),
   ]);
