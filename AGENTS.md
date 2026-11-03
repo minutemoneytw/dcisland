@@ -87,7 +87,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 - `docs/cloudflare-deploy.md` 內含 Cloudflare Account ID；它不是 secret，但新增文件時別再放 token/secret。
 - Discord 活動沙盒有 CSP：外部資源要走 Portal 的 URL Mapping，不可直接引用外部網址；SDK 已自託管於 `client/vendor/`，`/sdk`→esm.sh 只是後備。
 - `tools/dev_server.py` 刻意用 HTTP/1.1 與 `Cache-Control: no-store`（cloudflared 隧道、Discord webview 快取問題），不要改回預設；POST 一律先讀完 body。
-- **草島島主換裝計畫（自製巴哈姆特，素材已暫存）**：使用者已用自製工具 `img2pixel` 做出 6 幀飛行像素圖（88×59/幀＋等寬 sheet），暫存於 `client/assets/external/img2pixel/`（自製授權，見 `docs/assets-license.md`）。**換上島主前必須先把動物渲染改成多幀動畫系統**——`main.js` 目前動物是單張靜態圖（`S.anImgs`），需：`animals.json` 加 sheet＋幀數/fps 欄位、載入時切格、`draw()` 依時間循環取幀（島主龍衝演出吃同一組幀，衝刺時可拉高 fps）。尺寸校準：畫面高＝59×2×big，以 240px 基準 `big ≈ 2.0`（實測微調）；`hitRadius` 需 ≤70 才不必動伺服器 `D_RANGE=100`。幀序要先策展（02c 系列是手改變化幀）。素材是否納入 `gen_assets.py` 產生流程，待使用者與其他開發者討論，暫以獨立資料夾管理。
+- **草島島主換裝計畫（自製巴哈姆特，素材已暫存）**：使用者已用自製工具 `img2pixel` 做出 6 幀飛行像素圖（88×59/幀＋等寬 sheet），暫存於 `client/assets/external/img2pixel/`（自製授權，見 `docs/assets-license.md`）。**分工（2026-11-04 使用者指示）：動物多幀動畫系統由其他開發者實作**（`main.js` 目前動物是單張靜態圖 `S.anImgs`；需 sheet 切格＋依時間循環取幀，島主龍衝演出可吃同一組幀、衝刺時拉高 fps），素材側只負責暫存與提供規格。給實作者：畫面高＝59×2×big，以 240px 基準 `big ≈ 2.0`（實測微調）；`hitRadius` 需 ≤70 才不必動伺服器 `D_RANGE=100`；**幀序已由使用者排定＝sheet 由左至右循環播放**（01→02→02c→02c-2→02c-3→03，02c 系列是手改變化幀、位置即設計順序，不需再挑）。素材是否納入 `gen_assets.py` 產生流程，待使用者與其他開發者討論，暫以獨立資料夾管理。
 
 ## 動手前的檢查
 - 這個改動屬於哪個里程碑？是否在使用者要求範圍內？超出範圍的想法，列在回覆裡，不要順手做。
