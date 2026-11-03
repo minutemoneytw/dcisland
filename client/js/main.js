@@ -368,6 +368,7 @@ const OWNER_WALK_SPEED = 34, OWNER_LEG_MIN = 1500, OWNER_PAUSE = [1.5, 4];   // 
 const OWNER_REGEN = 18;   // 島主每秒回血（單機本地模擬；連線時血量由伺服器權威，與兩份伺服器的 D_REGEN 一致）
 const OWNER_CHASE_SPEED = 180, OWNER_CLAW_RANGE = 36, OWNER_CLAW_CD = 1, OWNER_CLAW_DMG = 2;   // 仇恨追殺：速度（比玩家走路快、比跑步慢）／爪擊範圍／間隔／傷害（與伺服器 D_* 一致）
 const OWNER_AGGRO_MS = 5, OWNER_DROPOUT = 30;                              // 仇恨換人週期／多久沒被打就脫離仇恨（秒）
+const PLAYER_REGEN = 1;   // 玩家脫離戰鬥後每秒回幾點血（場上有島主處於仇恨／攻擊狀態、或自己被石化時不回）
 const PLAYER_HP = 10;     // 玩家血量上限：爪擊扣 2（5 下倒地）、龍衝直接倒地、石化每秒扣 1、殺一隻動物回 1、復活即滿血
 // 島主攻擊樣式（animals.json 的 atk 欄位）：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女）
 const ownerAtk = def => def.atk || 'dash';
@@ -544,6 +545,11 @@ function playerDamage(p, dmg, cause) {
   p.hp = Math.max(0, (p.hp ?? PLAYER_HP) - dmg);
   S.floaters.push({ x: p.x + (Math.random() * 20 - 10), y: p.y - 50, v: String(dmg), life: .8, crit: true });
   if (p.hp <= 0) killPlayer(p, cause);
+}
+// 場上有沒有島主正在戰鬥（仇恨追殺、預警、龍衝、開眼、說台詞、歇腳都算）；連線時這些旗標由伺服器事件驅動
+function ownerEngaged() {
+  return S.animals.some(a => !a.dead && animalDef(a.id)?.owner &&
+    (a.aggro || a.fly || a.cast || a.castFrom || a.rest || a.sayPhase || a.cycle || a.gaze));
 }
 // 龍衝 CD 中被打：進入仇恨（單機版；連線版由伺服器廣播 aggro 事件）
 function ownerAggroStart(a, src) {
@@ -1100,8 +1106,17 @@ function revivePlayer(p) {
   toast('毫髮無傷地復活了！', 1800);
 }
 
+// 脫離戰鬥後自動回血（坐著睡著也算；被石化中不回）
+function regenPlayer(p, dt) {
+  if (p.dead || S.t < (p.petUntil ?? 0) || (p.hp ?? PLAYER_HP) >= PLAYER_HP || ownerEngaged()) { p.regenAcc = 0; return; }
+  p.regenAcc = (p.regenAcc || 0) + dt * PLAYER_REGEN;
+  const n = Math.floor(p.regenAcc);
+  if (n > 0) { p.regenAcc -= n; p.hp = Math.min(PLAYER_HP, (p.hp ?? PLAYER_HP) + n); }
+}
+
 function stepPlayer(p, dt) {
   if (p.npc) { stepNPC(p, dt); return; }
+  regenPlayer(p, dt);
   if (p.dead) {   // 死亡：原地長出墓碑，期間不動/不跳/不揮擊
     p.z = 0; p.vz = 0; p.moving = false; p.frame = 0; p.swing = 0;
     if (performance.now() - p.deadAt >= DEAD_SECONDS * 1000) revivePlayer(p);
