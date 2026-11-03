@@ -27,16 +27,26 @@ function toast(msg, ms = 1800) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add('hidden'), ms);
 }
 
+// localStorage 可能被擋（Discord webview／無痕）或存了壞掉的值：讀寫都不能讓遊戲掛掉
+function lsGet(key, def) {
+  try { const v = localStorage.getItem(key); return v == null ? def : JSON.parse(v); } catch { return def; }
+}
+function lsRaw(key) { try { return localStorage.getItem(key); } catch { return null; } }
+function lsSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* 存不了就算了，不影響遊戲 */ }
+}
+const lsObj = (key, def) => { const v = lsGet(key, null); return v && typeof v === 'object' && !Array.isArray(v) ? v : def; };
+
 // ---------------- 全域狀態 ----------------
 const TERRAIN_IDS = ['grass', 'beach', 'snow', 'night', 'forest', 'volcano'];
 const S = {
-  terrain: localStorage.getItem('dcisland.m0.terrain') || 'grass',
+  terrain: (t => TERRAIN_IDS.includes(t) ? t : 'grass')(lsRaw('dcisland.m0.terrain')),   // 舊資料是純字串（非 JSON）
   terrains: {},                 // id -> manifest
   tImages: {},                  // id -> {file: Image}
   furn: null, furnImgs: {},
   avatar: null, bodyImgs: {}, hairImgs: {}, hairBackImgs: {},
   charCache: new Map(),         // key -> {a: canvas, b: canvas}
-  me: JSON.parse(localStorage.getItem('dcisland.m0.avatar') || 'null') || { skin: 'light', hair: 'hair1', shirt: 0, weapon: 'sword' },
+  me: lsObj('dcisland.m0.avatar', null) || { skin: 'light', hair: 'hair1', shirt: 0, weapon: 'sword' },
   world: null,                  // {types: Uint8Array, decos: []}
   furnItems: [],                // [{type, cell:[x,y]}]
   occ: new Map(),               // "x,y" -> furniture index
@@ -69,7 +79,7 @@ const S = {
   npcDB: null,                  // NPC 對話（assets/npcs/npcs.json）
   toolsDB: null,                // 採集工具與可破壞物件（assets/tools/tools.json）
   drops: [],                    // 地上的掉落物 {item,x,y,born}
-  inv: JSON.parse(localStorage.getItem('dcisland.m0.inv') || '{}'),   // 背包：物品id -> 數量
+  inv: lsObj('dcisland.m0.inv', {}),   // 背包：物品id -> 數量
 };
 
 // ---------------- 世界生成 ----------------
@@ -251,7 +261,7 @@ function stepDrops(dt) {
     if (S.t - dr.born < .5 || Math.hypot(dr.x - p.x, dr.y - p.y) > 24) continue;
     S.drops.splice(i, 1);
     S.inv[dr.item] = (S.inv[dr.item] || 0) + 1;
-    localStorage.setItem('dcisland.m0.inv', JSON.stringify(S.inv));
+    lsSet('dcisland.m0.inv', S.inv);
     toast(`獲得 ${S.toolsDB.items[dr.item].name} ×1（共 ${S.inv[dr.item]}）`, 1600);
   }
 }
@@ -1764,8 +1774,8 @@ function canPlace(typeId, x, y) {
 function netOn() { return !!S.net?.connected; }
 function saveLayout() {
   if (netOn()) return;
-  localStorage.setItem('dcisland.m0.layout.' + S.terrain, JSON.stringify(S.furnItems));
-  localStorage.setItem('dcisland.m0.floor.' + S.terrain, JSON.stringify(floorToList(S.floorMap)));
+  lsSet('dcisland.m0.layout.' + S.terrain, S.furnItems);
+  lsSet('dcisland.m0.floor.' + S.terrain, floorToList(S.floorMap));
 }
 function loadLayout() {
   if (netOn()) { applyFurn(S.netFurn); applyFloor(S.netFloor); return; }
@@ -1945,7 +1955,7 @@ async function switchTerrain(id) {
   try {
     if (S.mode === 'decor') exitDecor(false);
     await ensureTerrain(id);      // 先載好圖，再切地形
-    S.terrain = id; localStorage.setItem('dcisland.m0.terrain', id);
+    S.terrain = id; try { localStorage.setItem('dcisland.m0.terrain', id); } catch { /* 存不了不影響換地形 */ }
     S.remotes.clear();                          // 換了地形，原地形的人都看不到了
     if (netOn()) { S.netFurn = []; S.netFloor = []; }   // 等伺服器送該地形的擺設與地板
     genWorld(id); loadLayout();
@@ -2065,7 +2075,7 @@ function buildAvatarPanel() {
     wp.appendChild(o);
   }
 }
-function saveAvatar() { localStorage.setItem('dcisland.m0.avatar', JSON.stringify(S.me)); }
+function saveAvatar() { lsSet('dcisland.m0.avatar', S.me); }
 
 
 
@@ -2284,7 +2294,7 @@ async function boot() {
   loadLayout();
   buildTerrainChips();
 
-  S.players = [makePlayer('我', { dx: -40, dy: 10 })];
+  S.players = [makePlayer('訪客',{ dx: -40, dy: 10 })];
   spawnNPCs();
 
   fetch('version.json', { cache: 'no-store' }).then(r => r.json()).then(v => { if (v.commit) $('verTag').textContent = v.commit; }).catch(() => {});   // 左上角顯示版本（commit 前 7 碼）
