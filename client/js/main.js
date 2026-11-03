@@ -2257,44 +2257,44 @@ window.addEventListener('unhandledrejection', e => reportError('client-reject', 
 let welcomeUntil = 0;
 async function boot() {
   $('btnDecor').disabled = false;
-  // manifest
-  const tjson = await Promise.all(TERRAIN_IDS.map(id => loadJSON(`assets/terrain/${id}/terrain.json`)));
+  // manifest：互不相依，一次全部並行抓（以前是一個接一個，首次進島要等一長串往返）
+  const [tjson, furn, floors, animalsDB, npcDB, toolsDB, avatar] = await Promise.all([
+    Promise.all(TERRAIN_IDS.map(id => loadJSON(`assets/terrain/${id}/terrain.json`))),
+    loadJSON('assets/furniture/furniture.json'),
+    loadJSON('assets/floors/floors.json'),
+    loadJSON('assets/animals/animals.json'),    // 小動物（FF14 致敬）
+    loadJSON('assets/npcs/npcs.json'),
+    loadJSON('assets/tools/tools.json'),        // 採集工具（鎬子/斧頭）：圖放進 weaponImgs，讓繪製與遠端玩家共用同一套武器繪製
+    loadJSON('assets/avatar/avatar.json'),
+  ]);
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
-  S.furn = await loadJSON('assets/furniture/furniture.json');
-  S.floors = await loadJSON('assets/floors/floors.json');
-  await Promise.all(S.floors.items.map(async f => S.floorImgs[f.id] = await loadImg(`assets/floors/${f.sprite}`)));
-  // 小動物（FF14 致敬）
-  S.animalsDB = await loadJSON('assets/animals/animals.json');
-  await Promise.all(S.animalsDB.animals.map(async a => S.anImgs[a.id] = await loadImg(`assets/animals/${a.sprite}`)));
-  // 採集工具（鎬子/斧頭）：圖放進 weaponImgs，讓繪製與遠端玩家共用同一套武器繪製
-  S.npcDB = await loadJSON('assets/npcs/npcs.json');
-  S.toolsDB = await loadJSON('assets/tools/tools.json');
-  await Promise.all(S.toolsDB.tools.map(async t => S.weaponImgs[t.id] = await loadImg(`assets/tools/${t.sprite}`)));
-  S.tombImg = await loadImg('assets/tombstone.png');   // 死亡墓碑（島主龍衝打倒後原地出現）
-  S.avatar = await loadJSON('assets/avatar/avatar.json');
+  Object.assign(S, { furn, floors, animalsDB, npcDB, toolsDB, avatar });
   if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';
-  // 家具圖
-  await Promise.all(S.furn.items.map(async it => S.furnImgs[it.id] = await loadImg(`assets/furniture/${it.sprite}`)));
-  // 角色圖
-  await Promise.all(S.avatar.skins.map(async s => {
-    S.bodyImgs[s.id] = {
-      a: await loadImg(`assets/avatar/body_${s.id}_a.png`),
-      b: await loadImg(`assets/avatar/body_${s.id}_b.png`),
-      c: await loadImg(`assets/avatar/body_${s.id}_sit.png`),
-    };
-  }));
-  await Promise.all(S.avatar.hair.map(async h => {
-    S.hairImgs[h.id] = await loadImg(`assets/avatar/${h.sprite}`);
-    if (h.back) S.hairBackImgs[h.id] = await loadImg(`assets/avatar/${h.back}`);
-  }));
-  await Promise.all(S.avatar.weapons.filter(w => w.sprite).map(async w => S.weaponImgs[w.id] = await loadImg(`assets/avatar/${w.sprite}`)));
+  // 圖片：同樣全部並行（含目前所在地形的圖）
+  await Promise.all([
+    ...S.floors.items.map(async f => S.floorImgs[f.id] = await loadImg(`assets/floors/${f.sprite}`)),
+    ...S.animalsDB.animals.map(async a => S.anImgs[a.id] = await loadImg(`assets/animals/${a.sprite}`)),
+    ...S.toolsDB.tools.map(async t => S.weaponImgs[t.id] = await loadImg(`assets/tools/${t.sprite}`)),
+    loadImg('assets/tombstone.png').then(im => S.tombImg = im),   // 死亡墓碑（島主龍衝打倒後原地出現）
+    ...S.furn.items.map(async it => S.furnImgs[it.id] = await loadImg(`assets/furniture/${it.sprite}`)),
+    ...S.avatar.skins.map(async s => {
+      const [a, b, c] = await Promise.all(['a', 'b', 'sit'].map(k => loadImg(`assets/avatar/body_${s.id}_${k}.png`)));
+      S.bodyImgs[s.id] = { a, b, c };
+    }),
+    ...S.avatar.hair.map(async h => {
+      const [im, back] = await Promise.all([loadImg(`assets/avatar/${h.sprite}`), h.back ? loadImg(`assets/avatar/${h.back}`) : null]);
+      S.hairImgs[h.id] = im;
+      if (back) S.hairBackImgs[h.id] = back;
+    }),
+    ...S.avatar.weapons.filter(w => w.sprite).map(async w => S.weaponImgs[w.id] = await loadImg(`assets/avatar/${w.sprite}`)),
+    ensureTerrain(S.terrain),
+  ]);
 
-  await ensureTerrain(S.terrain);
   genWorld(S.terrain);
   loadLayout();
   buildTerrainChips();
 
-  S.players = [makePlayer('訪客',{ dx: -40, dy: 10 })];
+  S.players = [makePlayer('訪客', { dx: -40, dy: 10 })];
   spawnNPCs();
 
   fetch('version.json', { cache: 'no-store' }).then(r => r.json()).then(v => { if (v.commit) $('verTag').textContent = v.commit; }).catch(() => {});   // 左上角顯示版本（commit 前 7 碼）
