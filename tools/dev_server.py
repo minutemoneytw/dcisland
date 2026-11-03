@@ -112,6 +112,50 @@ RATE_MAX = 40
 TERRAIN_RE = re.compile(r"^[a-z0-9_-]{1,24}$")
 
 CELL = 32                # 與 client/js/main.js 一致
+
+# ---- 玩家 state 封包白名單（與 worker/src/index.js 的 sanitizeState 一致，改一邊要改另一邊）----
+ID_RE = re.compile(r"^[a-z0-9_-]{1,24}$")
+NAME_MAX = 24
+
+
+def _num(v, lo, hi, fb):
+    if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
+        return min(hi, max(lo, v))
+    return fb
+
+
+def _id_or(v, fb):
+    return v if isinstance(v, str) and ID_RE.match(v) else fb
+
+
+def sanitize_state(s, prev):
+    prev = prev or {}
+    look = s.get("look") if isinstance(s.get("look"), dict) else {}
+    pl = prev.get("look") or {}
+    name = s.get("name")
+    name = "".join(ch for ch in name if ord(ch) >= 32 and ord(ch) != 127)[:NAME_MAX] if isinstance(name, str) else (prev.get("name") or "")
+    return {
+        "x": _num(s.get("x"), 0, COLS * CELL, prev.get("x", (COLS / 2 - .5) * CELL)),
+        "y": _num(s.get("y"), 0, ROWS * CELL, prev.get("y", (ROWS / 2 - .5) * CELL)),
+        "dir": -1 if s.get("dir") == -1 else 1,
+        "moving": bool(s.get("moving")),
+        "z": _num(s.get("z"), 0, 200, 0),
+        "name": name,
+        "look": {
+            "skin": _id_or(look.get("skin"), pl.get("skin", "light")),
+            "hair": _id_or(look.get("hair"), pl.get("hair", "hair1")),
+            "shirt": round(_num(look.get("shirt"), 0, 99, pl.get("shirt", 0))),
+            "pants": round(_num(look.get("pants"), 0, 99, pl.get("pants", 0))),
+        },
+        "weapon": _id_or(s.get("weapon"), "hands"),
+        "pose": s.get("pose") if s.get("pose") in ("sit", "sleep") else None,
+        "face": s.get("face") if s.get("face") in ("up", "side") else "down",
+        "seat": _id_or(s.get("seat"), None),
+        "hp": round(_num(s.get("hp"), 0, 20, 10)),
+        "dead": 1 if s.get("dead") else 0,
+    }
+
+
 HIT_RANGE = 140          # 打可破壞物件時，玩家離目標最遠幾 px（客戶端範圍 72，留給延遲）
 HIT_CD = 0.3             # 同一條連線兩次打擊最短間隔（秒）
 
@@ -912,6 +956,7 @@ class Room:
     def remove(self, cid):
         with self.lock:
             self.clients.pop(cid, None)
+            self.dragon_hits.pop(cid, None)
 
     def terrain_of(self, cid):
         with self.lock:
@@ -1105,13 +1150,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             ws_send(sock, json.dumps({"t": "me", "admin": c["admin"]}))
                 elif t == "state":
                     c = room.clients.get(cid)
-                    st = msg.get("s") if isinstance(msg.get("s"), dict) else {}
-                    # 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）
+                    st = sanitize_state(msg.get("s") if isinstance(msg.get("s"), dict) else {}, c.get("state") if c else None)
+                    # 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）；訪客沒有 uid
                     user = c.get("user") if c else None
                     if user:
-                        st["name"], st["uid"] = user["name"], user["id"]
-                    else:
-                        st.pop("uid", None)
+                        st["name"], st["uid"] = str(user["name"])[:NAME_MAX], user["id"]
                     if c:
                         c["state"] = st
                     cur = room.terrain_of(cid)

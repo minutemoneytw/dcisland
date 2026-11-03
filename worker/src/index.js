@@ -149,6 +149,38 @@ function cellHasFurn(items, defs, cell) {
     return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
   });
 }
+// ---- 玩家 state 封包白名單：伺服器原樣轉發前先過濾（欄位、型別、範圍、長度）----
+// 防灌流量（單則上限 16KB 會被廣播給全島）、防 NaN 座標，也避免超過 DO attachment 的 2KB 上限（寫入會丟例外）。
+// 欄位要與 client/js/net.js 的 myState() 一致（改一邊要改另一邊）；dev_server.py 有同款 sanitize_state
+const ID_RE = /^[a-z0-9_-]{1,24}$/;
+const NAME_MAX = 24;
+const num = (v, lo, hi, fb) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fb);
+const idOr = (v, fb) => (typeof v === "string" && ID_RE.test(v) ? v : fb);
+function sanitizeState(s, prev) {
+  prev = prev || {};
+  const look = s.look && typeof s.look === "object" ? s.look : {};
+  const pl = prev.look || {};
+  return {
+    x: num(s.x, 0, COLS * CELL, prev.x ?? D_CENTER[0]),
+    y: num(s.y, 0, ROWS * CELL, prev.y ?? D_CENTER[1]),
+    dir: s.dir === -1 ? -1 : 1,
+    moving: !!s.moving,
+    z: num(s.z, 0, 200, 0),
+    name: typeof s.name === "string" ? s.name.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, NAME_MAX) : (prev.name || ""),
+    look: {
+      skin: idOr(look.skin, pl.skin || "light"),
+      hair: idOr(look.hair, pl.hair || "hair1"),
+      shirt: Math.round(num(look.shirt, 0, 99, pl.shirt ?? 0)),
+      pants: Math.round(num(look.pants, 0, 99, pl.pants ?? 0)),
+    },
+    weapon: idOr(s.weapon, "hands"),
+    pose: s.pose === "sit" || s.pose === "sleep" ? s.pose : null,
+    face: s.face === "up" || s.face === "side" ? s.face : "down",
+    seat: idOr(s.seat, null),
+    hp: Math.round(num(s.hp, 0, 20, 10)),
+    dead: s.dead ? 1 : 0,
+  };
+}
 const SESSION_TTL_MS = 12 * 3600 * 1000;   // 簽章憑證有效期
 
 // ---- 身分憑證：/api/token 兌換成功後簽發，/ws 的 hello 訊息驗證 ----
@@ -412,14 +444,19 @@ export class Island {
 
     if (msg.t === "hello") {
       // 帶簽章憑證表明身分；驗證失敗就維持訪客
-      att.user = await verifySession(this.env, msg.s);
-      att.admin = !!att.user && isAdminId(this.env, att.user.id);
-      ws.serializeAttachment(att);
-      ws.send(JSON.stringify({ t: "me", admin: att.admin }));
+      const user = await verifySession(this.env, msg.s);
+      // 驗證期間（await）其他訊息（state／enter）可能已改過 attachment：要重讀再合併，
+      // 否則用開頭讀到的舊 att 寫回會蓋掉剛設好的 terrain／state（玩家就會卡在「沒進任何地形」）
+      const cur = ws.deserializeAttachment() || {};
+      cur.user = user;
+      cur.admin = !!user && isAdminId(this.env, user.id);
+      if (user && cur.state) cur.state = { ...cur.state, name: String(user.name).slice(0, NAME_MAX), uid: user.id };
+      ws.serializeAttachment(cur);
+      ws.send(JSON.stringify({ t: "me", admin: cur.admin }));
     } else if (msg.t === "state") {
-      const s = msg.s && typeof msg.s === "object" ? msg.s : {};
-      // 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）
-      if (att.user) { s.name = att.user.name; s.uid = att.user.id; } else delete s.uid;
+      const s = sanitizeState(msg.s && typeof msg.s === "object" ? msg.s : {}, att.state);
+      // 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）；訪客沒有 uid
+      if (att.user) { s.name = String(att.user.name).slice(0, NAME_MAX); s.uid = att.user.id; }
       att.state = s;
       ws.serializeAttachment(att);
       if (att.terrain) this.broadcast({ t: "p", id: att.id, s }, ws, att.terrain);
@@ -882,7 +919,11 @@ export class Island {
       try {
         const wake = await this.stepOwner(terrain, now);
         if (wake !== null && wake !== undefined && (next === null || wake < next)) next = wake;
-      } catch (e) { console.error("[dragon] stepOwner 錯誤：", terrain, e); }
+      } catch (e) {
+        console.error("[dragon] stepOwner 錯誤：", terrain, e);
+        const retry = Date.now() + 5000;   // 出錯的島也要排下一次，否則其他島回 null 時整個鬧鐘就斷了，島主停擺
+        if (next === null || retry < next) next = retry;
+      }
     }
     if (next !== null) await this.state.storage.setAlarm(Math.max(Date.now() + 60, next));
   }
@@ -1002,6 +1043,7 @@ export class Island {
   leave(ws) {
     this.rate.delete(ws);
     this.lastHit.delete(ws);
+    this.dragonHits.delete(ws);
     const att = ws.deserializeAttachment() || {};
     if (att.terrain) this.broadcast({ t: "leave", id: att.id }, ws, att.terrain);
   }
