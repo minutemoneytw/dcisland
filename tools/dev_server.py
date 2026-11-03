@@ -1215,12 +1215,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if cur and isinstance(ops, list):
                         c = room.clients.get(cid) or {}
                         applied, rejected, denied, furn_changed, floor_changed = room.commit_furn(cur, ops, c.get("admin", is_admin(None)))
-                        with c["send"]:
-                            ws_send(sock, json.dumps({"t": "commit_result", "applied": applied, "rejected": rejected, "denied": denied}))
+                        # 與 Worker 一致：先廣播新清單，再回 commit_result（客戶端收到結果時以最新清單為準）
                         if furn_changed:
                             room.broadcast({"t": "furn", "items": list(room.furn_list(cur))}, terrain=cur)
                         if floor_changed:
                             room.broadcast({"t": "floor", "items": floor_to_list(room.floor_map(cur))}, terrain=cur)
+                        with c.get("send") or threading.Lock():
+                            ws_send(sock, json.dumps({"t": "commit_result", "applied": applied, "rejected": rejected, "denied": denied}))
                 elif t == "sign":   # 看板改字（所有人都能改）
                     cur = room.terrain_of(cid)
                     if cur and room.edit_sign(cur, msg.get("cell"), msg.get("text")):

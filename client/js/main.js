@@ -1758,6 +1758,7 @@ function draw() {
   ctx.restore();
 }
 
+const MAX_FURN = 500;   // 每個地形的擺設上限（與兩份伺服器的 MAX_FURN 一致）
 function canPlace(typeId, x, y) {
   const def = furnitureDef(typeId);
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
@@ -1919,6 +1920,9 @@ function requestExitDecor() {
 }
 function closeConfirm() { S.confirmOpen = false; $('confirmBox').classList.add('hidden'); }
 function onCommitResult(m) {
+  // 伺服器先廣播 furn/floor 再回 commit_result：此時 netFurn/netFloor 已是保存後的權威結果。
+  // 一項都沒套用時伺服器不廣播，畫面會停在草稿的樣子（別人看不到），所以這裡一律以伺服器版本為準
+  if (S.mode === 'walk') { applyFurn(S.netFurn); applyFloor(S.netFloor); }
   if (m.denied) toast('清空需要管理員權限，這項已略過' + (m.applied ? `（其他 ${m.applied} 項已保存）` : ''), 3200);
   else if (m.rejected) toast(`已保存（${m.rejected} 項因被別人搶先占用或不合法而未套用）`, 3200);
   else toast('擺設已保存');
@@ -2183,6 +2187,7 @@ canvas.addEventListener('mousedown', e => {
   if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
   const [x, y] = S.mouseCell;
   if (S.draft.length >= 300) { toast('未保存的變動太多了，請先按「完成」保存'); return; }
+  if (S.furnItems.length >= MAX_FURN) { toast(`這個地形的擺設已達上限（${MAX_FURN} 件）`); return; }
   if (canPlace(S.sel, x, y)) { stageOp({ t: 'place', type: S.sel, cell: [x, y] }); toast('放置'); }
   else toast('這裡放不下（水邊／已占用）');
 });
