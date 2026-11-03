@@ -114,6 +114,16 @@
    "id": "sword",
    "name": "木劍",
    "sprite": "weapon_sword.png"
+  },
+  {
+   "id": "shield",
+   "name": "圓盾",
+   "sprite": "weapon_shield.png"
+  },
+  {
+   "id": "staff",
+   "name": "法杖",
+   "sprite": "weapon_staff.png"
   }
  ]
 }

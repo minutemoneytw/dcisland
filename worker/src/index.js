@@ -51,6 +51,8 @@ const D_DROPOUT = 30000;     // 超過這時間沒有人攻擊島主：脫離仇
 const D_RANGE = 70;          // 玩家打島主的攻擊距離（客戶端 58，留延遲）
 const D_DRIFT_TOLER = 600;   // 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 const D_CD_MS = 300;         // 同一條連線兩次打島主的最短間隔
+const D_PROVOKE_CD_MS = 15000;   // 挑釁冷卻（每條連線；與 dev_server.py 的 D_PROVOKE_CD 一致）
+const D_PROVOKE_RANGE = 240;     // 挑釁距離（比攻擊距離寬：把島主拉過來的是「聲東擊西」，不需要貼臉）
 const D_CENTER = [(COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL];
 const jsRound = v => Math.floor(v + .5);   // 與前端 Math.round 同義（明寫以防其他語言實作四捨五入規則不同）
 
@@ -263,6 +265,7 @@ export class Island {
     this.dragonMaps = new Map();     // 地形 → 陸地位圖（懒載入）——只放記憶體的話 DO 休眠後就沒了，打島主不會反擊
     this.dragonMapLoaded = new Set();
     this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
+    this.provokes = new Map();       // ws → {terrain, t}：上次挑釁哪座島的島主（冷卻只在成功出手時計）
   }
 
   // 可破壞物件的血量/重生秒數取自前端 tools.json
@@ -443,6 +446,8 @@ export class Island {
       }
     } else if (msg.t === "dragonHit") {
       await this.dragonHit(ws, att, msg);
+    } else if (msg.t === "provoke") {   // 挑釁（坦職限定，client 的 R 鍵）：把島主的仇恨拉到自己身上
+      await this.provoke(ws, att);
     } else if (msg.t === "commit" || msg.t === "place" || msg.t === "remove" || msg.t === "clear") {
       // 舊客戶端的單一操作（place/remove/clear）也走同一套驗證與權限
       if (att.terrain) await this.commitFurn(ws, att, msg.t === "commit" ? msg.ops : [msg]);
@@ -660,6 +665,55 @@ export class Island {
     await this.saveDragon(terrain);   // 扣血就存（DO 休眠後才不會從上次存檔的血量回復）
     this.broadcast({ t: "dragon", ev: "hp", hp: d.hp }, null, terrain);
     await this.armOwnerAlarm();   // 仇恨開始：快點醒來追殺（下一個醒的時間統一在這裡算）
+  }
+  // 挑釁（R 鍵，坦職限定，玩家自選）：把島主的仇恨拉到自己身上。
+  // 已有仇恨 → 直接換目標；沒有仇恨且 idle → 照「被打」的同一套反擊流程演出（說台詞→反擊，樣式照 OWNER_TERRAINS）。
+  // 伺服器驗證職業（信任 state 的 job 欄位）、距離、每條連線冷卻；不扣血。挑釁者所在地形決定挑釁的是哪座島的島主。
+  async provoke(ws, att) {
+    if (!att.state || !att.terrain) return;
+    const terrain = att.terrain;
+    if (!OWNER_TERRAINS[terrain]) return;
+    const st = att.state;
+    if (st.job !== "tank" || st.dead) return;   // 坦職限定；死了無法挑釁（客戶端會擋 R 鍵，這裡再驗一次）
+    const d = await this.getDragon(terrain);
+    const now = Date.now();
+    if (d.st === "dead") return;
+    const pr = this.provokes.get(ws);
+    if (now - (pr ? pr.t : 0) < D_PROVOKE_CD_MS) return;   // 冷卻中：忽略（冷卻只在成功出手時計）
+    const [ph, pos] = this.dragonPhase(terrain, now);
+    if (Math.hypot(Number(st.x) - pos[0], Number(st.y) - pos[1]) > D_PROVOKE_RANGE) return;   // 離島主太遠
+    this.provokes.set(ws, { terrain, t: now });
+    this.dragonHits.set(ws, { terrain, t: now });   // 挑釁者視同現役攻擊者：進仇恨換人的候選池、並重置脫離計時
+    d.lastHitAt = now;
+    const name = (st && st.name) || "玩家";
+    if (d.aggro) {   // 已在追殺別人（含說台詞中）：仇恨直接轉向挑釁者
+      d.aggro = { id: att.id, rotateAt: now + D_AGGRO_MS, clawAt: now + D_CLAW_MS };
+      if (d.sayUntil && now < d.sayUntil) d.atk = [Number(st.x), Number(st.y)];   // 還在說台詞：反擊目標改成挑釁者位置
+      await this.saveDragon(terrain);
+      this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name }, null, terrain);
+      await this.armOwnerAlarm();   // 快點醒來，追殺改鎖定挑釁者
+      return;
+    }
+    const map = await this.getDragonMap(terrain);
+    if (ph === "idle" && map && now >= (d.cooldownUntil || 0)) {
+      // 沒有仇恨且閒置：照被打的反擊流程——說台詞後反擊（龍衝＝瞬移島緣／石化之瞳＝原地開眼，照 OWNER_TERRAINS 樣式）
+      d.aggro = { id: att.id, rotateAt: now + D_AGGRO_MS, clawAt: now + D_CLAW_MS };
+      d.sayUntil = now + D_SAY_MS;
+      d.atk = [Number(st.x), Number(st.y)];
+      d.wander = null;
+      d.pos = [pos[0], pos[1]];   // 打斷散步腿：位置同步到目前插值點（同 dragonHit 的理由）
+      await this.saveDragon(terrain);
+      this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name }, null, terrain);
+      this.broadcast({ t: "dragon", ev: "say", x: pos[0], y: pos[1], ms: D_SAY_MS }, null, terrain);
+      await this.armOwnerAlarm();
+      return;
+    }
+    if (ph === "idle" && map) {   // 反擊冷卻中且沒有仇恨：直接進入追殺（同 dragonHit 的冷卻路徑）
+      d.pos = [pos[0], pos[1]];
+      this.startAggro(now, att, terrain);
+      await this.saveDragon(terrain);
+      await this.armOwnerAlarm();
+    }
   }
   // 仇恨狀態的 tick（鬧鐘）：追殺目標（每腿重新瞄準目標目前位置）、進爪擊範圍就站定每秒一抓、
   // 目標死了或 5 秒到隨機換攻擊者、反擊 CD 一到自動放招、超過 D_DROPOUT 沒人打就脫離仇恨回閒晃。

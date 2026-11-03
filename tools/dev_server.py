@@ -138,6 +138,8 @@ D_DROPOUT = 30000        # 超過這時間沒有人攻擊島主：脫離仇恨�
 D_RANGE = 70             # 玩家打島主的攻擊距離（客戶端 58，留延遲）
 D_DRIFT_TOLER = 600      # 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 D_CD = 0.3               # 同一條連線兩次打島主的最短間隔（秒）
+D_PROVOKE_CD = 15.0      # 挑釁冷卻（每條連線，秒；與 worker/src/index.js 的 D_PROVOKE_CD_MS 一致）
+D_PROVOKE_RANGE = 240    # 挑釁範圍（比攻擊距離寬：把島主拉過來的是「聲東擊西」，不需要貼臉）
 D_WALK = 34              # 閒晃散步速度 px/s（與 client 的 OWNER_WALK_SPEED 一致）
 D_WANDER_PAUSE = (1.5, 4.0)   # 每個路點之間站著休息的時間範圍（秒）
 D_CENTER = ((COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL)
@@ -273,6 +275,7 @@ class Room:
         self.dragons = {}        # 地形 -> 島主狀態 dict（懒初始化）
         self.dragon_maps = {}    # 地形 -> 陸地位圖 list[int]
         self.dragon_hits = {}    # cid -> (地形, 上次打島主的時刻 ms)
+        self.provokes = {}       # cid -> 上次挑釁的時刻（ms）（挑釁冷卻只在成功出手時計）
         self.dragon_timers = {}  # 地形 -> 重生計時器
         self.wander_tick_seq = {}   # 地形 -> 散步 tick 序號（只讓最新排程生效）
         # 每位玩家各自在某個地形（client["terrain"]）；剛連上時為 None，等 enter
@@ -849,6 +852,70 @@ class Room:
         print(f"[dragon] {terrain} 打擊拒絕: {why}", file=sys.stderr, flush=True)
         return None
 
+    def dragon_provoke(self, cid):
+        """挑釁（R 鍵，坦職限定，玩家自選）：把島主的仇恨拉到自己身上，不扣龍的血。
+        已有仇恨 → 直接轉向；沒有仇恨且閒置 → 照「被打」的同一套反擊流程演出（說台詞→反擊，樣式照 OWNER_TERRAINS）。
+        挑釁者所在地形決定挑釁的是哪座島的島主。
+        回傳要廣播的訊息清單（None＝拒絕：非坦、死了、冷卻中、太遠、龍衝循環中）。"""
+        outs = []
+        post_cycle = None
+        terrain = None
+        with self.lock:
+            c = self.clients.get(cid)
+            if c is None or not c["terrain"] or not c["state"]:
+                return None
+            terrain = c["terrain"]
+            if terrain not in OWNER_TERRAINS:
+                return None
+            st = c["state"]
+            if st.get("job") != "tank" or st.get("dead"):
+                print("[dragon] 挑釁拒絕: 非坦職或已倒地", file=sys.stderr, flush=True)
+                return None
+            d = self.dragon_state(terrain)
+            if d["st"] == "dead":
+                return None
+            now = time.time() * 1000
+            if now - self.provokes.get(cid, 0.0) < D_PROVOKE_CD * 1000:
+                return None   # 冷卻中：忽略（冷卻只在成功出手時計）
+            ph, pos, _ = self.dragon_phase(now, terrain)
+            if ph == "dash" or ph == "aim":
+                return self._drej(terrain, "挑釁拒絕: 龍衝/預警進行中")
+            dist = math.hypot(float(st.get("x") or 0) - pos[0], float(st.get("y") or 0) - pos[1])
+            if dist > D_PROVOKE_RANGE:
+                return self._drej(terrain, f"挑釁拒絕: 太遠 dist={dist:.0f}（島主=({pos[0]:.0f},{pos[1]:.0f}) ph={ph}）")
+            self.provokes[cid] = now
+            self.dragon_hits[cid] = (terrain, now)   # 挑釁者視同現役攻擊者：進仇恨換人的候選池、並重置脫離計時
+            d["last_hit_at"] = now
+            if d.get("aggro"):   # 已在追殺別人（含說台詞中）：仇恨直接轉向挑釁者
+                d["aggro"] = {"id": cid, "rotate_at": now + D_AGGRO_MS, "claw_at": now + D_CLAW_MS}
+                if d["say_until"] and now < d["say_until"]:
+                    d["atk"] = [float(st.get("x") or 0), float(st.get("y") or 0)]   # 還在說台詞：反擊目標改成挑釁者
+                print(f"[dragon {time.strftime('%H:%M:%S')}] {terrain} 挑釁 → 仇恨轉向 {cid}", file=sys.stderr, flush=True)
+                outs.append({"t": "dragon", "ev": "aggro", "id": cid, "name": st.get("name") or "玩家"})
+                self._schedule_wander_tick(0.1, d["wander_gen"], terrain)   # 快點醒來，追殺改鎖定挑釁者
+                return outs
+            if ph == "idle" and self.dragon_maps.get(terrain) and now >= d["cooldown_until"]:
+                # 沒有仇恨且閒置：照被打的反擊流程演出——說台詞後反擊（龍衝＝瞬移島緣／石化之瞳＝原地開眼，照 OWNER_TERRAINS 樣式）
+                d["aggro"] = {"id": cid, "rotate_at": now + D_AGGRO_MS, "claw_at": now + D_CLAW_MS}
+                d["say_until"] = now + D_SAY_MS
+                d["atk"] = [float(st.get("x") or 0), float(st.get("y") or 0)]
+                d["wander"] = None
+                d["pos"] = [pos[0], pos[1]]   # 打斷散步腿：位置同步到目前插值點（同 dragon_hit 的理由）
+                d["wander_gen"] += 1
+                post_cycle = D_SAY_MS / 1000 + 0.1
+                print(f"[dragon {time.strftime('%H:%M:%S')}] {terrain} 挑釁 → 反擊流程（鎖定 {cid}）", file=sys.stderr, flush=True)
+                outs.append({"t": "dragon", "ev": "aggro", "id": cid, "name": st.get("name") or "玩家"})
+                outs.append({"t": "dragon", "ev": "say", "x": pos[0], "y": pos[1], "ms": D_SAY_MS})
+            elif ph == "idle" and self.dragon_maps.get(terrain):
+                # 反擊冷卻中且沒有仇恨：直接進入追殺（同 dragon_hit 的冷卻路徑）
+                d["pos"] = [pos[0], pos[1]]
+                print(f"[dragon {time.strftime('%H:%M:%S')}] {terrain} 挑釁 → 冷卻中直接進仇恨（{cid}）", file=sys.stderr, flush=True)
+                outs.append(self._aggro_start(cid, c, terrain))
+                self._schedule_wander_tick(0.1, d["wander_gen"], terrain)
+        if post_cycle is not None:
+            self._schedule_wander_tick(post_cycle, self.dragon_state(terrain)["wander_gen"], terrain)
+        return outs
+
     def _dragon_start_cycle(self, now, terrain):
         """說完台詞：開始反擊循環。龍衝＝瞬移島緣鎖定 d["atk"] 的攻擊者（預警→衝穿）；
         石化之瞳＝原地開眼，直線朝攻擊者方向射到島緣對岸。需在鎖內；回傳要廣播的訊息。"""
@@ -1148,6 +1215,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     res = room.dragon_hit(cid, msg)
                     if res:
                         last_dragon_hit = now
+                        cur = room.terrain_of(cid)
+                        for m in res:
+                            room.broadcast(m, terrain=cur)
+                elif t == "provoke":   # 挑釁（坦職限定）：把島主的仇恨拉到自己身上（職業/距離/冷卻由伺服器驗證）
+                    res = room.dragon_provoke(cid)
+                    if res:
                         cur = room.terrain_of(cid)
                         for m in res:
                             room.broadcast(m, terrain=cur)

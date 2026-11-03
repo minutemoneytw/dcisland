@@ -540,7 +540,7 @@ def tombstone():  # 死亡墓碑（被島主打倒後原地出現，30 秒後復
     cv.outline((30, 26, 28, 255))
     return cv
 
-def weapon_sword():  # 木劍（M0 武器 1 號）
+def weapon_sword():  # 木劍（M0 武器 1 號；輸出職的專屬武器）
     cv = Canvas(6, 18)
     sv = hx("#c9b98a"); hi = hx("#e8d8a8")
     cv.rect(2, 2, 3, 11, sv)          # 劍刃（第 0 列留給輪廓，第 1 列是劍尖）
@@ -548,6 +548,27 @@ def weapon_sword():  # 木劍（M0 武器 1 號）
     cv.set(2, 1, hi)                  # 劍尖：單點收尖，不是平頭
     cv.rect(0, 12, 5, 12, hx("#8a6238"))   # 護手
     cv.rect(2, 13, 3, 17, hx("#5a4028"))   # 握柄
+    cv.outline((30, 24, 22, 255))
+    return cv
+
+def weapon_shield():  # 圓盾（坦職的專屬武器）：盾面在上、小握把在下（轉軸同其他武器＝離底 3 格）
+    cv = Canvas(12, 14)
+    steel = hx("#7d8ea0"); st_hi = hx("#c9d6de"); boss = hx("#e0b840")
+    cv.ellipse(5.5, 5.5, 5, 5, steel)     # 盾面（圓形）
+    cv.ellipse(4, 4, 2.4, 2.4, st_hi)     # 左上受光反光
+    cv.ellipse(5.5, 5.5, 1.5, 1.5, boss)  # 金色的盾心螺釘
+    cv.ellipse(5.5, 9.5, 3.4, 1.2, hx("#5a6a78"))   # 下緣陰影（立體感）
+    cv.rect(5, 11, 6, 13, hx("#5a4028"))  # 小握把（與劍同款深色握柄）
+    cv.outline((30, 24, 22, 255))
+    return cv
+
+def weapon_staff():  # 法杖（補職的專屬武器）：頂端一顆回復色（綠）寶珠的細杖
+    cv = Canvas(6, 18)
+    wood = hx("#9a6f46"); orb = hx("#7ee2a8"); orb_hi = hx("#d8ffe4")
+    cv.rect(2, 4, 3, 17, wood)            # 杖身
+    cv.rect(2, 15, 2, 17, hx("#6f4a2c"))  # 杖尾陰影
+    cv.ellipse(2.5, 2.5, 2, 2, orb)       # 寶珠（治療綠）
+    cv.set(1, 2, orb_hi); cv.set(2, 1, orb_hi)   # 光點
     cv.outline((30, 24, 22, 255))
     return cv
 
@@ -791,6 +812,8 @@ def main():
     save(tombstone(), "tombstone.png")
     print("== 武器 ==")
     save(weapon_sword(), "weapon_sword.png", "avatar")
+    save(weapon_shield(), "weapon_shield.png", "avatar")   # 坦職
+    save(weapon_staff(), "weapon_staff.png", "avatar")     # 補職
     print("== 採集工具（tools.json 為手寫資料，這裡只畫圖）==")
     save(tool_pickaxe(), "tool_pickaxe.png", "tools")
     save(tool_axe(), "tool_axe.png", "tools")
@@ -817,6 +840,8 @@ def main():
         weapons=[
             dict(id="hands", name="空手", sprite=None),
             dict(id="sword", name="木劍", sprite="weapon_sword.png"),
+            dict(id="shield", name="圓盾", sprite="weapon_shield.png"),
+            dict(id="staff", name="法杖", sprite="weapon_staff.png"),
         ],
     ), open(os.path.join(ASSETS, sub, "avatar.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("  avatar/avatar.json")
