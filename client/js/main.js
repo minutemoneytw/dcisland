@@ -1178,9 +1178,9 @@ function stepPlayer(p, dt) {
       const wx = S.mouseClient[0] - canvas.getBoundingClientRect().left + S.cam.x;
       if (Math.abs(wx - p.x) > 6) p.dir = Math.sign(wx - p.x);
       p.face = 'side';
-    } else {   // 四方向朝向：只往上＝背面、只往下＝正面、有左右分量＝側（dir 左右）；站著不動維持上次的朝向
-      if (dx !== 0) { p.dir = dx; p.face = 'side'; }
-      else p.face = dy < 0 ? 'up' : 'down';
+    } else {   // 朝向：有往上的分量（含斜上）＝背面、只往下＝正面、其餘有左右分量（左右、斜下）＝側（dir 左右）；站著不動維持上次的朝向
+      if (dx !== 0) p.dir = dx;
+      p.face = dy < 0 ? 'up' : dx !== 0 ? 'side' : 'down';
     }
     const len = Math.hypot(dx, dy) || 1, sp = (keys['shift'] ? 200 : 120) * dt;
     const nx = clamp(p.x + dx / len * sp, 8, COLS * CELL - 8);
