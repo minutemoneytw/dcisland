@@ -6,7 +6,7 @@
 # 3) /api/token    -> 用 code+secret 向 Discord 兌換 access_token（secret 只在本機/伺服器端）
 # 用法: python tools/dev_server.py  (先填 tools/dev_config.json)
 import json, math, os, re, sys, base64, hashlib, hmac, struct, threading, time, random, traceback
-import urllib.request, urllib.parse, urllib.error, http.server, socketserver
+import subprocess, urllib.request, urllib.parse, urllib.error, http.server, socketserver
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CLIENT = os.path.join(HERE, "..", "client")
@@ -1030,6 +1030,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if self.path.split("?")[0] == "/version.json":   # 本機：目前 HEAD 的前 7 碼（正式站由 CI 寫成同名靜態檔）
+            try:
+                sha = subprocess.run(["git", "rev-parse", "--short=7", "HEAD"], cwd=HERE, capture_output=True, text=True, timeout=5).stdout.strip()
+            except Exception:
+                sha = ""
+            return self._json({"commit": sha})
         if self.path == "/api/config":
             cfg = config()
             return self._json({"client_id": cfg.get("client_id", "")})

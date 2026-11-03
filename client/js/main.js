@@ -2285,6 +2285,8 @@ async function boot() {
   S.players = [makePlayer('我', { dx: -40, dy: 10 })];
   spawnNPCs();
 
+  fetch('version.json', { cache: 'no-store' }).then(r => r.json()).then(v => { if (v.commit) $('verTag').textContent = v.commit; }).catch(() => {});   // 左上角顯示版本（commit 前 7 碼）
+
   let last = performance.now();
   function loop(now) {
     if (now - last > 2000) S.net?.requestDragonSnap?.();   // 分頁被凍結過（切視窗回來）：要一份島主即時快照，別用舊位置打人
