@@ -321,6 +321,7 @@ export class Island {
     this.dragonLoaded = new Set();   // 已嘗試從 storage 載過的地形
     this.dragonMaps = new Map();     // 地形 → 陸地位圖（懒載入）——只放記憶體的話 DO 休眠後就沒了，打島主不會反擊
     this.dragonMapLoaded = new Set();
+    this.dragonMapRaw = new Map();   // 地形 → storage 裡目前存的島形字串（比對用：內容沒變就不重寫）
     this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
     this.dragonSavedAt = new Map();  // 地形 → 上次真的寫 storage 的時間（saveDragonLazy 節流用）
     this.dragonDirty = new Set();    // 有變動但還沒寫進 storage 的地形
@@ -504,12 +505,19 @@ export class Island {
     } else if (msg.t === "hit") {
       await this.hitDeco(ws, att, msg);
     } else if (msg.t === "dragonMap") {   // 島主：陸地位圖（各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）。上傳者所在地形決定是哪座島的
-      if (att.terrain && OWNER_TERRAINS[att.terrain]) {
+      const t = att.terrain;
+      if (t && OWNER_TERRAINS[t]) {
         const land = dragonLand(msg.v);
         if (land) {
-          this.dragonMaps.set(att.terrain, land);
-          this.dragonMapLoaded.add(att.terrain);
-          await this.state.storage.put("dragonMap:" + att.terrain, msg.v);   // 一定要存：DO 休眠會清空記憶體，沒存的話之後打島主不會反擊
+          this.dragonMaps.set(t, land);
+          this.dragonMapLoaded.add(t);
+          // 一定要存：DO 休眠會清空記憶體，沒存的話之後打島主不會反擊。
+          // 但各客戶端島形相同，絕大多數上傳都是重複的：和已存的內容一樣就不寫（休眠醒來第一次比對要讀一次 storage）
+          if (!this.dragonMapRaw.has(t)) this.dragonMapRaw.set(t, await this.state.storage.get("dragonMap:" + t));
+          if (this.dragonMapRaw.get(t) !== msg.v) {
+            await this.state.storage.put("dragonMap:" + t, msg.v);
+            this.dragonMapRaw.set(t, msg.v);
+          }
         }
       }
     } else if (msg.t === "dragonSnap") {   // 客戶端凍結恢復：回一份島主即時快照（只給這條連線，走 dragon 事件的 state）
@@ -656,6 +664,7 @@ export class Island {
     if (!this.dragonMapLoaded.has(terrain)) {
       this.dragonMapLoaded.add(terrain);
       let v = await this.state.storage.get("dragonMap:" + terrain);
+      if (!this.dragonMapRaw.has(terrain)) this.dragonMapRaw.set(terrain, v);   // 順便記下 storage 現值（上傳時比對用）
       if (v === undefined && terrain === "grass") v = await this.state.storage.get("dragonMap");   // 舊版 key
       this.dragonMaps.set(terrain, typeof v === "string" ? dragonLand(v) : null);
     }

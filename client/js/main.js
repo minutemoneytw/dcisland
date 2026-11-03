@@ -729,6 +729,13 @@ function landRLE() {
   runs.push(run);
   return runs.join(':');
 }
+// 上傳島形：每條連線、每個有島主的地形只傳一次（約 20KB；以前切地形、每次島主快照都重傳，Worker 每次都寫儲存）。
+// S.landSent 記「這條連線已傳過的地形」，重連時（onOpen）清掉
+function uploadLandMap() {
+  if (!netOn() || !S.world || !S.terrains[S.terrain]?.owner || S.landSent === S.terrain) return;
+  S.landSent = S.terrain;
+  S.net.sendDragonMap(landRLE());
+}
 // 取得（或建立）伺服器同步的島主 proxy；單機本地模擬的島主沒有 proxy 旗標
 function dragonEnsure(x, y, hp) {
   const oid = S.terrains[S.terrain]?.owner;
@@ -795,8 +802,7 @@ function onNetDragon(m) {
   if (m.terrain && m.terrain !== S.terrain) return;   // 切地形的空檔還收得到舊島的事件（客戶端先換、伺服器後處理 enter），別套到新島的島主上
   if (m.ev === 'state') {
     applyDragonSnap(m);
-    // 保險：伺服器端的島形若因部署/重啟消失，進草島時補傳（各人島形相同，重複上傳無妨）
-    if (netOn() && S.world) S.net.sendDragonMap(landRLE());
+    uploadLandMap();   // 保險：這條連線在這個地形還沒傳過島形就補傳（已傳過就不重送）
     return;
   }
   const a = S.animals.find(v => v.id === S.terrains[S.terrain].owner);
@@ -2024,8 +2030,8 @@ async function switchTerrain(id) {
     toast(`已移動到${S.terrains[id].name}`);
     // M2：只有自己過去；告訴伺服器，讓新地形的人看到你、舊地形的人看不到你
     S.net?.enter?.(id);
-    // 島主同步：進草島就把陸地位圖交給伺服器（島形只有客戶端知道；各人島形相同，重複上傳也無妨）
-    if (netOn() && S.terrains[id].owner) S.net.sendDragonMap(landRLE());
+    // 島主同步：進有島主的地形就把陸地位圖交給伺服器（島形只有客戶端知道）
+    uploadLandMap();
   } catch (e) {
     // 不要靜默失敗：讓玩家看得到，也回報到伺服器日誌
     toast(`切換${id}失敗：${e.message || e}`, 4000);
@@ -2419,8 +2425,9 @@ async function boot() {
     onDragon: onNetDragon,   // 島主事件（aim/hp/dead/spawn/state 快照）
     onOpen: net => {
       if (performance.now() >= welcomeUntil) toast(`已連上島（${net.room}）`, 2000);
-      // 島主同步：連上（或重連）時人在草島就補傳陸地位圖（伺服器重啟後也靠這個補回來）
-      if (S.terrains[S.terrain].owner) net.sendDragonMap(landRLE());
+      // 島主同步：連上（或重連）時人在有島主的地形就補傳陸地位圖（新連線重新算「傳過沒」）
+      S.landSent = null;
+      uploadLandMap();
     },
   })).catch(err => console.warn('net:', err));
 }
