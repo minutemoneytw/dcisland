@@ -1148,6 +1148,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if c is not None:
                         c["user"] = verify_session(msg.get("s"))
                         c["admin"] = is_admin(c["user"])
+                        if c["user"] and c.get("state"):   # 與 Worker 一致：已送過的狀態立刻改用驗證過的名字與 uid
+                            c["state"] = {**c["state"], "name": str(c["user"]["name"])[:NAME_MAX], "uid": c["user"]["id"]}
                         with c["send"]:
                             ws_send(sock, json.dumps({"t": "me", "admin": c["admin"]}))
                 elif t == "state":
