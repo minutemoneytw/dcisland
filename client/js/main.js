@@ -771,6 +771,7 @@ function applyDragonSnap(o) {
 }
 function onNetDragon(m) {
   if (!S.terrains[S.terrain]?.owner) return;   // 島主事件只跟有島主的地形有關（伺服器只會廣播給同地形的人）
+  if (m.terrain && m.terrain !== S.terrain) return;   // 切地形的空檔還收得到舊島的事件（客戶端先換、伺服器後處理 enter），別套到新島的島主上
   if (m.ev === 'state') {
     applyDragonSnap(m);
     // 保險：伺服器端的島形若因部署/重啟消失，進草島時補傳（各人島形相同，重複上傳無妨）

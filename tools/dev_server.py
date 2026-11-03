@@ -937,6 +937,8 @@ class Room:
 
     # terrain 有給時只送給「目前在該地形」的連線；沒給就是全部
     def broadcast(self, msg, skip=None, terrain=None):
+        if terrain is not None and msg.get("t") == "dragon" and "terrain" not in msg:
+            msg = {**msg, "terrain": terrain}   # 島主事件註明是哪座地形的，客戶端才能擋掉切地形空檔收到的舊島事件
         data = json.dumps(msg)
         with self.lock:
             targets = [(c, v["sock"], v["send"]) for c, v in self.clients.items()

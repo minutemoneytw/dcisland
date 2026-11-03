@@ -355,6 +355,7 @@ export class Island {
 
   // terrain 有給時只送給「目前在該地形」的連線；沒給就是全部
   broadcast(msg, skip, terrain) {
+    if (terrain !== undefined && msg.t === "dragon" && msg.terrain === undefined) msg = { ...msg, terrain };   // 島主事件註明是哪座地形的，客戶端才能擋掉切地形空檔收到的舊島事件
     const data = JSON.stringify(msg);
     for (const ws of this.state.getWebSockets()) {
       if (ws === skip) continue;
