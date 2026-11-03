@@ -869,8 +869,10 @@ function onNetDragon(m) {
     else toast(`${ownerName()} 進入追殺狀態！`, 2200);
     return;
   }
-  if (m.ev === 'chill') {   // 脫離仇恨：20 秒沒人打牠了
+  if (m.ev === 'chill') {   // 脫離仇恨：30 秒沒人打牠了
+    const was = a?.aggro;   // 剛進島時快照不含仇恨狀態（a.aggro 是 false），沒看過牠發怒就不提示冷靜
     if (a) a.aggro = false;
+    if (!was) return;
     toast(`${animalDef(S.terrains[S.terrain]?.owner || a?.id || 'gold_dragon')?.name || '島主'} 冷靜下來，繼續散步。`, 1800);
     return;
   }
