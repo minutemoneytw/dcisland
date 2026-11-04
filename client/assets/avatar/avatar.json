@@ -283,7 +283,12 @@
   {
    "id": "staff",
    "name": "法杖",
-   "sprite": "weapon_staff.png"
+   "sprite": "weapon_staff.png",
+   "ranged": {
+    "range": 320,
+    "cast": 1.2,
+    "dmg": 2
+   }
   },
   {
    "id": "rod",

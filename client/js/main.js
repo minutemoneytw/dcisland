@@ -353,9 +353,10 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
   }
   if (auto) {   // F 鍵：前方有可破壞物件就自動用對應工具
     // 島主在揮擊範圍內就優先打牠：採集／座位／NPC 都讓位（島主常駐重生點，旁邊一堆家具，按 F 不該變成坐下）
+    const rg0 = rangedDef();
     const own = S.animals.find(a => {
       const od = animalDef(a.id);
-      return od?.owner && !a.dead && !a.fly && inHit(p, a);
+      return od?.owner && !a.dead && !a.fly && (rg0 ? inCastRange(p, a, rg0) : inHit(p, a));
     });
     const ownerFirst = !!own;
     if (!ownerFirst) {
@@ -373,19 +374,66 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
   if (S.me.weapon === 'hands') { say('先在「造型」裡裝備武器！'); return; }
   if (!S.weaponImgs[S.me.weapon]) return;
   if (S.t - p.lastAtk < ATK_CD) return;
+  const rg = rangedDef();
+  if (rg) { startCast(p, rg); return; }   // 法杖：遠距詠唱（自動瞄準，讀條完才出傷害）
   p.lastAtk = S.t; p.swing = ATK_T; p.tool = null;
   S.net?.notifyAttack?.();          // M2：讓同島的人看到你的揮擊
   for (const a of S.animals) {
     if (a.dead || a.fly) continue;   // 島主飛在空中打不到
     if (!inHit(p, a)) continue;      // 武器尖端進了怪物的判定圈才算（不看面向）
+    hitAnimal(p, a, false);
+  }
+}
+
+// ---- 法杖：遠距詠唱（自動瞄準）----
+// 武器的 ranged 欄位（avatar.json）：range＝射程 px（算到怪物判定圈邊緣）、cast＝詠唱秒數、dmg＝傷害。
+// 按攻擊就挑射程內的目標（島主優先，否則最近的活動物），頭上出現詠唱倒數條、高舉法杖；
+// 詠唱中目標超出射程（或死亡／飛走）、自己死亡／被石化／坐下／換武器／進裝飾模式就中斷；讀完自動命中目標。
+const rangedDef = () => S.avatar?.weapons.find(w => w.id === S.me.weapon)?.ranged || null;
+const inCastRange = (p, a, rg) => Math.hypot(a.x - p.x, a.y - p.y) - hitRadius(animalDef(a.id)) <= rg.range;
+function pickCastTarget(p, rg) {
+  let best = null, bd = Infinity;
+  for (const a of S.animals) {
+    if (a.dead || a.fly || !inCastRange(p, a, rg)) continue;
+    const od = animalDef(a.id), d = Math.hypot(a.x - p.x, a.y - p.y) - (od.owner ? 1e6 : 0);   // 島主排最前面
+    if (d < bd) { bd = d; best = a; }
+  }
+  return best;
+}
+function startCast(p, rg) {
+  if (p.cast || S.t - p.lastAtk < ATK_CD) return;
+  const a = pickCastTarget(p, rg);
+  if (!a) { say('射程內沒有目標'); return; }
+  p.cast = { t0: S.t, dur: rg.cast, a };
+  p.swing = 0; p.tool = null; S._hits = 1;   // 算有互動，點到動物時不要再跳動物的台詞
+}
+function cancelCast(p, why) { if (!p.cast) return; p.cast = null; if (why) toast(why, 1500); }
+function stepCast(p) {   // 每幀（只有本機玩家）：檢查中斷條件、讀條完就出傷害
+  const c = p.cast, rg = rangedDef();
+  if (!c) return;
+  if (p.dead || S.t < (p.petUntil ?? 0) || p.pose || p.fish || S.mode !== 'walk' || !rg) { cancelCast(p); return; }
+  const a = c.a;
+  if (!S.animals.includes(a) || a.dead || a.fly) { cancelCast(p, '詠唱中斷：目標消失了'); return; }
+  if (!inCastRange(p, a, rg)) { cancelCast(p, '詠唱中斷：目標超出射程'); return; }
+  if (Math.abs(a.x - p.x) > 6) p.dir = Math.sign(a.x - p.x);   // 面向目標
+  if (S.t - c.t0 < c.dur) return;
+  p.cast = null; p.lastAtk = S.t;
+  S.net?.notifyAttack?.();   // 讓同島的人看到你出手
+  S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: a.y - 24 * (animalDef(a.id).big || 1) * .6, life: .22 });
+  hitAnimal(p, a, true);
+}
+
+// 命中一隻動物（近戰揮擊與法杖詠唱完共用）：ranged＝法杖（傷害固定取武器的 dmg、不暴擊）
+function hitAnimal(p, a, ranged) {
+  {
     S._hits++;
-    const crit = Math.random() < .18;
-    let dmg = crit ? 2 : 1;
+    const crit = !ranged && Math.random() < .18;
+    let dmg = ranged ? (rangedDef()?.dmg || 2) : (crit ? 2 : 1);
     const jd = jobOf(p);
     if (jd?.dmgPlus) dmg += jd.dmgPlus;   // 輸出：每擊 +1（連線打島主時送出去的值仍會被伺服器夾回 1～2）
     const od = animalDef(a.id);
     if (od.owner && a.proxy) {   // 島主連線時由伺服器權威：送意圖（座標＋傷害＋我們看到的龍位置），本地不扣血（血量等伺服器廣播）
-      S.net?.dragonHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.min(2, dmg), Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10);
+      S.net?.dragonHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.min(2, dmg), Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10, ranged);
     } else {
       a.hp -= dmg;
       a.startle = 1; a.startleT = 3; a.target = null; a.idle = 0;
@@ -1311,7 +1359,7 @@ const DEAD_SECONDS = 30;
 function killPlayer(p, cause, label) {   // label：頭上飄字（龍衝撞倒傳 '龍衝'，其餘預設「倒地」）
   if (p.npc || p.remote || p.dead) return;
   p.dead = true; p.deadAt = performance.now();   // 牆鐘毫秒：畫面被凍結（切走 DC）時倒數照樣走
-  p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null; p.fish = null;
+  p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null; p.fish = null; p.cast = null;
   S.floaters.push({ x: p.x, y: p.y - 46, v: label || '倒地', life: 1.1, crit: true });
   toast(`${cause} 把你打倒了！${DEAD_SECONDS} 秒後在出生點復活`, 3200);
 }
@@ -1367,6 +1415,7 @@ function stepPlayer(p, dt) {
     else if (S.mode !== 'walk' || !isRod() || pet) stopFishing(p);
   }
   stepFishing(p);
+  if (p === S.players[0]) stepCast(p);
   if (p.moving) {
     if (S.mode === 'walk' && S.mouseHeld && S.mouseClient) {   // 按住滑鼠攻擊時，面向跟著游標（可以一邊朝右攻擊一邊往左退）
       const wx = S.mouseClient[0] - canvas.getBoundingClientRect().left + S.cam.x;
@@ -1452,7 +1501,7 @@ function drawPerson(p, wi, nameColor) {
     ctx.save(); ctx.translate(p.x, p.y - p.z);
     // 武器（背在背上／掛在腰間；揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
     const fish = wi && !pose && p.fish ? p.fish : null;
-    const carry = wi && !pose && !fish && !(p.swing > 0);   // 不拿在手上
+    const carry = wi && !pose && !fish && !(p.swing > 0) && !p.cast;   // 不拿在手上（詠唱中高舉法杖）
     const backView = d8Of(p).startsWith('up');                // 背面（往上、斜上）：背著的武器疊在身體上面，其餘方向被身體擋住
     // 掛著的武器畫在左右翻轉之外：固定在同一側，人物轉向時不會跟著換邊
     const drawCarry = onBack => wi.carry === 'waist' ? drawWeaponWaist(wi) : drawWeaponBack(wi, onBack);
@@ -1465,6 +1514,7 @@ function drawPerson(p, wi, nameColor) {
     if (p.dir < 0) ctx.scale(-1, 1);                          // 揮擊、拋竿朝面向那側（要翻轉）
     if (wi && !pose && !fish && p.swing > 0) drawWeaponSwing(wi, p.swing, p.dir < 0 ? -1 : 1);
     if (fish) drawRodCast(wi, rodAngle(fish));
+    if (wi && !pose && !fish && p.cast) drawStaffRaise(wi, Math.min(1, (S.t - p.cast.t0) / p.cast.dur));
     ctx.restore();
     if (pet) ctx.restore();
     if (fish) drawLineAndBobber(p, wi, fish);
@@ -1477,6 +1527,7 @@ function drawPerson(p, wi, nameColor) {
   ctx.strokeText(p.name, p.x, nameY);
   ctx.fillStyle = nameColor;
   ctx.fillText(p.name, p.x, nameY);
+  if (p.cast) drawCastBar(p.x, nameY - 30, (S.t - p.cast.t0) / p.cast.dur, '詠唱');   // 詠唱倒數條（同島島主的招式條同一個樣式）
   const jd = jobOf(p);
   if (jd) {   // 職業小圓點（FF14 職業徽章的簡化）：名牌左邊一顆角色色圓點
     const px = p.x - ctx.measureText(p.name).width / 2 - 9;
@@ -1848,6 +1899,19 @@ function showCatch(p, m) {
 function rodAngle(f) {
   return f.ph === 'reel' ? -.25 + Math.sin(S.t * 30) * .12 : f.ph === 'bite' ? 1 + Math.sin(S.t * 40) * .08 : .8;
 }
+// 詠唱中：雙手高舉法杖過頭，杖頂的寶珠隨進度聚光（ctx 已 translate 到角色腳底並依 dir 翻轉）
+function drawStaffRaise(wi, q) {
+  const [hx, hy] = charAnch.hand;
+  ctx.save(); ctx.translate(hx, hy - 10); ctx.rotate(Math.sin(S.t * 9) * .05);
+  ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2);
+  const ty = -(wi.height - 3) * 2;   // 杖頂
+  ctx.globalCompositeOperation = 'lighter';
+  const r = 3 + 7 * q + Math.sin(S.t * 24) * 1.2;
+  const g = ctx.createRadialGradient(0, ty, 0, 0, ty, r);
+  g.addColorStop(0, `rgba(190,255,200,${.55 + .4 * q})`); g.addColorStop(1, 'rgba(120,230,160,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, ty, r, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
 // 畫拋出去的釣竿（ctx 已 translate 到角色腳底並依 dir 翻轉；轉軸同揮擊＝握把）
 function drawRodCast(wi, a) {
   ctx.save(); ctx.translate(charAnch.hand[0], charAnch.hand[1]); ctx.rotate(a);
@@ -2218,6 +2282,14 @@ function draw() {
   // 傷害飄字 / 消失特效
   for (const f of S.floaters) {
     ctx.save();
+    if (f.orb) {   // 法杖光球：從杖頂飛向目標（0.22 秒）
+      const q = 1 - f.life / .22, x = f.x1 + (f.x2 - f.x1) * q, y = f.y1 + (f.y2 - f.y1) * q;
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 12);
+      g.addColorStop(0, 'rgba(230,255,235,.95)'); g.addColorStop(.5, 'rgba(120,230,160,.6)'); g.addColorStop(1, 'rgba(120,230,160,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill();
+      ctx.restore(); continue;
+    }
     if (f.beam) {   // 石化之瞳發射：以蛇女為中心的綠白光環快速擴散到全地圖（0.7 秒淡出）
       const q = 1 - f.life / .7;
       ctx.strokeStyle = `rgba(160,255,180,${.9 * (1 - q)})`;
@@ -2541,7 +2613,7 @@ async function switchTerrain(id) {
     const [nx, ny] = landNear(me.x, me.y);
     me.x = nx; me.y = ny;
     me.petUntil = 0; me.petTick = 0; me.petWas = false;   // 石化判定只在畫面本地，換地形就解除
-    me.fish = null;                                        // 換地形就收竿
+    me.fish = null; me.cast = null;                        // 換地形就收竿、中斷詠唱
     buildTerrainChips();
     toast(`已移動到${S.terrains[id].name}`);
     // M2：只有自己過去；告訴伺服器，讓新地形的人看到你、舊地形的人看不到你
@@ -2974,7 +3046,7 @@ async function boot() {
       for (let i = S.floaters.length - 1; i >= 0; i--) {
         const f = S.floaters[i];
         f.life -= dt;
-        if (!f.slash && !f.beam && !f.healPulse) f.y -= 34 * dt;   // 爪擊/光束/綠圈特效固定在原座標，不隨飄字上浮
+        if (!f.slash && !f.beam && !f.healPulse && !f.orb) f.y -= 34 * dt;   // 爪擊/光束/綠圈特效固定在原座標，不隨飄字上浮
         if (f.life <= 0) S.floaters.splice(i, 1);
       }
       draw();

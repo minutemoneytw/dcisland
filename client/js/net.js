@@ -199,7 +199,7 @@ export function connectNet(S, opts = {}) {
   net.hitDeco = (i, sprite, cell) => net.connected && send({ t: 'hit', i, sprite, cell });
   // 島主：上傳陸地位圖（進草島時）／打到島主時送意圖（座標＋傷害＋我們看到的龍位置），流程由伺服器權威
   net.sendDragonMap = v => net.connected && send({ t: 'dragonMap', v });
-  net.dragonHit = (x, y, dmg, ddx, ddy) => net.connected && send({ t: 'dragonHit', x, y, dmg, ddx, ddy });
+  net.dragonHit = (x, y, dmg, ddx, ddy, staff) => net.connected && send({ t: 'dragonHit', x, y, dmg, ddx, ddy, ...(staff ? { staff: 1 } : {}) });   // staff：法杖遠距詠唱（伺服器放寬射程，並核對 state.weapon）
   // 釣魚：魚上鉤後拉竿成功，請伺服器抽一條魚（登入的人順便記進伺服器的圖鑑），結果用 fish_result 回來
   net.fishCatch = () => net.connected && send({ t: 'fish' });
   // 分頁凍結恢復後要島主即時快照（伺服器用 dragon 事件的 state 回這條連線）

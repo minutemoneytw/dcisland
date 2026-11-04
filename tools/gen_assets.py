@@ -1464,7 +1464,7 @@ def main():
             # carry：不拿在手上時掛哪裡（back＝背上、waist＝腰間）；back: "hilt"＝背著時劍柄朝上（沒寫＝頭朝上，例如釣竿）
             dict(id="sword", name="木劍", sprite="weapon_sword.png", carry="back", back="hilt"),
             dict(id="shield", name="圓盾", sprite="weapon_shield.png"),
-            dict(id="staff", name="法杖", sprite="weapon_staff.png"),
+            dict(id="staff", name="法杖", sprite="weapon_staff.png", ranged=dict(range=320, cast=1.2, dmg=2)),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
             dict(id="rod", name="釣竿", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
         ],
     ), open(os.path.join(ASSETS, sub, "avatar.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)

@@ -236,6 +236,7 @@ D_CLAW_MS = 1000         # 爪擊間隔（每秒一下）
 D_CLAW_DMG = 2           # 爪擊傷害（扣玩家 HP；被打倒由各客戶端自判，伺服器只廣播爪擊事件）
 D_AGGRO_MS = 5000        # 仇恨換人週期：打牠的人有複數時，隨機換下一個攻擊者
 D_DROPOUT = 30000        # 超過這時間沒有人攻擊島主：脫離仇恨回閒晃
+D_STAFF_RANGE = 440       # 法杖（遠距詠唱）打島主的最大距離：客戶端射程 320 + 判定圈 58 + 緩衝；只有 state.weapon＝staff 的連線才適用
 D_RANGE = 100            # 玩家打島主的攻擊距離（客戶端以武器尖端為準：判定圈 58 + 武器伸出 30 = 88，留延遲）
 D_DRIFT_TOLER = 600      # 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 D_CD = 0.3               # 同一條連線兩次打島主的最短間隔（秒）
@@ -954,12 +955,13 @@ class Room:
                 return self._drej(terrain, "座標格式壞")
             dist = math.hypot(ax - pos[0], ay - pos[1])
             # 客戶端可能漏接一個路點事件（散步腿落後）：只要它宣稱的島主位置離伺服器的不遠、且玩家貼著宣稱的位置，就接受
+            max_r = D_STAFF_RANGE if (msg.get("staff") and (c["state"] or {}).get("weapon") == "staff") else D_RANGE   # 法杖旗標要配上 state 裡真的拿著法杖才算
             try:
                 cdx, cdy = float(msg.get("ddx")), float(msg.get("ddy"))
-                near = dist <= D_RANGE or (math.hypot(ax - cdx, ay - cdy) <= D_RANGE
-                                           and math.hypot(cdx - pos[0], cdy - pos[1]) <= D_DRIFT_TOLER)
+                near = dist <= max_r or (math.hypot(ax - cdx, ay - cdy) <= max_r
+                                         and math.hypot(cdx - pos[0], cdy - pos[1]) <= D_DRIFT_TOLER)
             except (TypeError, ValueError):
-                near = dist <= D_RANGE
+                near = dist <= max_r
             if not near:
                 return self._drej(terrain, f"太遠 dist={dist:.0f}（島主=({pos[0]:.0f},{pos[1]:.0f}) 打擊點=({ax:.0f},{ay:.0f}) ph={ph}）")
             self.dragon_hits[cid] = (terrain, now)   # 仇恨計時用：D_DROPOUT 內打過就算現役攻擊者

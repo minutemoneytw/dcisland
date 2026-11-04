@@ -55,6 +55,7 @@ const D_AGGRO_MS = 5000;     // 仇恨換人週期：打牠的人有複數時，
 const D_DROPOUT = 30000;     // 超過這時間沒有人攻擊島主：脫離仇恨回閒晃
 const D_RANGE = 100;         // 玩家打島主的攻擊距離（客戶端以武器尖端為準：判定圈 58 + 武器伸出 30 = 88，留延遲）
 const D_DRIFT_TOLER = 600;   // 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
+const D_STAFF_RANGE = 440;   // 法杖（遠距詠唱）打島主的最大距離：客戶端射程 320 + 判定圈 58 + 緩衝；只有 state.weapon＝staff 的連線才適用
 const D_CD_MS = 300;         // 同一條連線兩次打島主的最短間隔
 const D_PROVOKE_CD_MS = 15000;   // 挑釁冷卻（每條連線；與 dev_server.py 的 D_PROVOKE_CD 一致）
 const D_PROVOKE_RANGE = 240;     // 挑釁距離（比攻擊距離寬：把島主拉過來的是「聲東擊西」，不需要貼臉）
@@ -854,9 +855,10 @@ export class Island {
     // 客戶端可能漏接一個路點事件（散步腿落後）：只要它宣稱的島主位置離伺服器的不遠、且玩家貼著宣稱的位置，就接受
     const distSrv = Math.hypot(Number(msg.x) - pos[0], Number(msg.y) - pos[1]);
     const cdx = Number(msg.ddx), cdy = Number(msg.ddy);
-    let near = distSrv <= D_RANGE;
+    const maxR = msg.staff && att.state.weapon === "staff" ? D_STAFF_RANGE : D_RANGE;   // 法杖旗標要配上 state 裡真的拿著法杖才算
+    let near = distSrv <= maxR;
     if (!near && Number.isFinite(cdx) && Number.isFinite(cdy)) {
-      near = Math.hypot(Number(msg.x) - cdx, Number(msg.y) - cdy) <= D_RANGE
+      near = Math.hypot(Number(msg.x) - cdx, Number(msg.y) - cdy) <= maxR
           && Math.hypot(cdx - pos[0], cdy - pos[1]) <= D_DRIFT_TOLER;
     }
     if (!near) return;
