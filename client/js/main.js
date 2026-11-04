@@ -1906,13 +1906,14 @@ function drawCastBar(cx, y, frac, name) {
 function drawBubble(x, y, text, alpha) {
   ctx.save(); ctx.globalAlpha = alpha;
   ctx.font = '11px "Microsoft JhengHei"'; ctx.textAlign = 'center';
-  const w = Math.ceil(ctx.measureText(text).width) + 14, h = 18, bx = Math.round(x - w / 2), by = Math.round(y - h);
+  const rows = String(text).split(String.fromCharCode(10));   // 台詞裡的換行字元＝泡泡內換行（島主的長台詞用）；單行跟以前一樣
+  const w = Math.ceil(Math.max(...rows.map(r => ctx.measureText(r).width))) + 14, h = 5 + rows.length * 13, bx = Math.round(x - w / 2), by = Math.round(y - h);
   ctx.fillStyle = 'rgba(252,250,242,.96)'; ctx.strokeStyle = 'rgba(30,24,22,.9)'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.roundRect(bx, by, w, h, 5); ctx.fill(); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x - 4, by + h); ctx.lineTo(x, by + h + 5); ctx.lineTo(x + 4, by + h); ctx.closePath();
   ctx.fill(); ctx.stroke();
   ctx.fillStyle = 'rgba(252,250,242,.96)'; ctx.fillRect(x - 3, by + h - 1, 6, 2);       // 蓋掉尾巴與泡泡相接的線
-  ctx.fillStyle = '#2a2420'; ctx.fillText(text, x, by + 13);
+  ctx.fillStyle = '#2a2420'; rows.forEach((r, i) => ctx.fillText(r, x, by + 13 + i * 13));
   ctx.restore();
 }
 
