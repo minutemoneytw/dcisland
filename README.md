@@ -90,9 +90,9 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 - **島主＝範本**：之後其他島的島主照這套做；攻擊方式可不同（在 `OWNER_TERRAINS`（兩份伺服器）與 `animals.json` 的 `atk` 登記新樣式），框架（伺服器權威狀態機＋事件廣播）共用。
 
 ### 新增其他島的島主（照範本，4 步）
-1. **造型**：`tools/gen_assets.py` 畫該島主的正面圖＋重跑（記得用 `git checkout` 還原不相干素材），並在 `client/assets/animals/animals.json` 加條目：`"owner": true`、`"big"` 放大倍率、`"hp"`（目標約 8 人擊殺）、`"atk"`（攻擊樣式：`dash`／`gaze`）、`"line"`（點擊台詞）
+1. **造型**：`tools/gen_assets.py` 畫該島主的正面圖＋重跑（記得用 `git checkout` 還原不相干素材），並在 `client/assets/animals/animals.json` 加條目：`"owner": true`、`"big"` 放大倍率、`"hp"`（目標約 8 人擊殺）、`"atk"`（攻擊樣式：`dash`／`gaze`）、`"line"`（點擊時的描述）、`"ownerLines"`（被激怒的台詞，見第 3 步）
 2. **指定**：該島 `client/assets/terrain/<id>/terrain.json` 加 `"owner": "<動物id>"`（一張地圖一隻），並在兩份伺服器的 `OWNER_TERRAINS` 登記該地形的攻擊樣式
-3. **台詞**：`client/js/main.js` 的 `OWNER_LINES`（**per 島主 id 的字典**）加該島主的專屬台詞（被打觸發反擊前，隨機泡泡說一句）
+3. **台詞**：`animals.json` 該島主條目的 `"ownerLines"`（字串陣列；被打觸發反擊前，隨機泡泡說一句；沒寫就不說話）。`animals.json` 由產生器管理，要寫進 `tools/gen_assets.py` 的 `ANIMAL_MANIFEST`，否則下次重跑會被蓋掉
 4. **完成**——說台詞、預警、攻擊（照 `atk` 分岔）、歇腳、全島散步、仇恨追殺＋爪擊、死亡重生、泡泡、優先攻擊全部由共用框架處理（伺服器權威；`worker/src/index.js` 與 `tools/dev_server.py` 兩份實作已就緒）
 
 ## 機密與安全

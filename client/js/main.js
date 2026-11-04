@@ -458,21 +458,11 @@ const PLAYER_REGEN = 1;   // 玩家脫離戰鬥後每秒回幾點血（場上有
 const PLAYER_HP = 10;     // 玩家血量上限：爪擊扣 2（5 下倒地）、龍衝直接倒地、石化每秒扣 1、殺一隻動物回 1、復活即滿血
 // 島主攻擊樣式（animals.json 的 atk 欄位）：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女）
 const ownerAtk = def => def.atk || 'dash';
-// 島主被激怒的台詞（per 島主 id）：發動反擊前隨機說一句（不連續重複）
-const OWNER_LINES = {
-  // 黃金肥龍：暫時代用（說這些台詞的本人還沒做）。正式翻譯版本；每句之後會對應一個招式，關鍵字對照見 docs/notes.md「島主與戰鬥」
-  gold_dragon: ['我降臨於此對月長嘯！　召喚星降之夜！', '我自月而來降臨於此，　召喚星降之夜！',
-                '鋼鐵燃燒吧！　成為我降臨於此的刀劍吧！', '鋼鐵成為我降臨於此的燃燒之劍！',
-                '我自月而來降臨於此，　踏過熾熱之地！', '我自月而來攜鋼鐵降臨於此！',
-                '超新星啊，更加閃耀吧！　在星降之夜，稱讚紅月！', '超新星啊，更加閃耀吧！　照亮紅月下熾熱之地！',
-                '我降臨於此，　對月長嘯！', '我降臨於此，　征戰鐵血霸道！',
-                '熾熱燃燒！　給予我月亮的祝福！', '被熾熱灼燒過的軌跡　乃成鐵血霸道！',
-                '月光啊！　照亮鐵血霸道！', '月光啊！　用你的熾熱燒盡敵人！'],
-  snake_queen: ['石化之瞳啊，睜開吧！', '蠢貨們，在我的面前化為石像吧！', '美，就該凝固在最完美的一刻！',
-                '蛇髮的詛咒啊，貫穿眼前的一切！', '別亂動喔……一動就變石頭了。', '乖乖站好，這可是你最後一次能動了。'],
-};
+// 島主被激怒的台詞：animals.json 該島主條目的 ownerLines（由 gen_assets.py 的 ANIMAL_MANIFEST 產生）。
+// 發動反擊前隨機說一句（不連續重複）；沒寫台詞的島主就不說話
 function ownerSay(a) {
-  const lines = OWNER_LINES[a.id] || OWNER_LINES.gold_dragon;
+  const lines = animalDef(a.id)?.ownerLines;
+  if (!Array.isArray(lines) || !lines.length) return;
   let line;
   do { line = lines[Math.floor(Math.random() * lines.length)]; } while (lines.length > 1 && line === a.lastLine);
   a.lastLine = line;
