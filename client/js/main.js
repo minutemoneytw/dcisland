@@ -1881,7 +1881,7 @@ function drawLineAndBobber(p, wi, f) {
   ctx.restore();
 }
 
-// ---- 魚類圖鑑：每個地形一頁，各 10 種；沒釣過的是黑色剪影＋「？？？」，釣過的顯示圖、名稱、稀有度、最大尺寸與次數 ----
+// ---- 魚類圖鑑：每個地形一頁，各 30 種；沒釣過的是黑色剪影＋「？？？」，釣過的顯示圖、名稱、稀有度、最大尺寸與次數 ----
 function openDex() {
   S.dexOpen = true; S.dexTab = S.fishDB?.terrains[S.terrain] ? S.terrain : TERRAIN_IDS[0];
   buildDex(); $('dexBox').classList.remove('hidden');
