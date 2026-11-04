@@ -32,17 +32,20 @@
   {
    "id": "hair1",
    "name": "短髮",
-   "sprite": "hair1.png"
+   "sprite": "hair1.png",
+   "back": "hair1_back.png"
   },
   {
    "id": "hair2",
    "name": "披髮",
-   "sprite": "hair2.png"
+   "sprite": "hair2.png",
+   "back": "hair2_back.png"
   },
   {
    "id": "hair3",
    "name": "蓬鬆",
-   "sprite": "hair3.png"
+   "sprite": "hair3.png",
+   "back": "hair3_back.png"
   }
  ],
  "hairColor": "#4a3428",

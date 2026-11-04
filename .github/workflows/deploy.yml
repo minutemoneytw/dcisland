@@ -21,6 +21,11 @@ jobs:
         with:
           node-version: 20
 
+      - name: 寫入版本號（左上角顯示 commit 前 7 碼）
+        run: |
+          printf '{"commit": "%s"}' "${GITHUB_SHA::7}" > client/version.json
+          cat client/version.json
+
       - name: 部署 Worker 與前端
         working-directory: worker
         env:

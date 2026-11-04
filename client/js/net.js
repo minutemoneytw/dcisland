@@ -3,6 +3,7 @@
 // 之後搬上 Cloudflare Durable Objects 時，這支的介面不變，只換連線位址。
 
 const SEND_HZ = 12;          // 每秒送幾次自己的位置
+const HEARTBEAT_MS = 1000;   // 狀態沒變時的心跳間隔（必須遠小於 STALE_MS，否則站著不動的人會被當成離線）
 const STALE_MS = 15000;      // 超過這麼久沒收到訊息就當對方離線
 
 export function connectNet(S, opts = {}) {
@@ -32,6 +33,7 @@ export function connectNet(S, opts = {}) {
       job: S.me.job,                       // 職業（坦/補/輸出）：伺服器原樣轉發，各畫面用 jobOf() 解讀
       weapon: p.tool || S.me.weapon,       // 手上拿的（打石頭/樹木時是工具）
       pose: p.pose || null,                // 'sit' | 'sleep'（坐/睡在家具上）
+      face: p.face || 'down',              // 四方向朝向：'up'（背面）| 'down'（正面）| 'side'（側，dir 決定左右）
       seat: p.seatType || null,            // 坐/睡的家具種類（畫圖用）
       hp: p.dead ? 0 : Math.round(p.hp ?? 10),   // 血量（島主爪擊扣 2、殺動物回 1；龍衝直接倒地）
       dead: p.dead ? 1 : 0,                // 死亡（墓碑）：被島主打倒後倒數復活
@@ -55,13 +57,14 @@ export function connectNet(S, opts = {}) {
       if (st.look) r.look = st.look;
       r.weapon = st.weapon || r.weapon;
       r.pose = st.pose === 'sit' || st.pose === 'sleep' ? st.pose : null;
+      r.face = st.face === 'up' || st.face === 'side' ? st.face : 'down';
       r.seatType = typeof st.seat === 'string' ? st.seat : null;
       const wasDead = !!r.dead;
       r.dead = !!st.dead;                  // 死亡（墓碑）：進出死亡時跟同島的人說一聲
       if (st.hp != null) r.hp = st.hp;     // 血量同步（對方自己算好的）
       if (st.job) r.job = st.job;          // 職業（坦/補/輸出）：只收字串，main.js 的 jobOf() 會做白名單解讀
       if (!r.dead) {                       // 死亡時位置凍結（墓碑不會被推著走）
-        r.tx = st.x; r.ty = st.y; r.dir = st.dir ?? r.dir; r.z = st.z ?? r.z;
+        r.tx = st.x; r.ty = st.y; r.dir = st.dir ?? r.dir; r.tz = st.z ?? r.tz;   // 高度只設目標，由 stepRemote 平滑追上（直接覆蓋會每次封包都彈回 0 → 跳躍抽動）
         r.moving = !!st.moving;
       } else r.moving = false;
       if (r.dead && !wasDead) r.deadAt = performance.now();   // 復活倒數的起點（本地時鐘）
@@ -128,6 +131,7 @@ export function connectNet(S, opts = {}) {
     ws = new WebSocket(url);
     ws.onopen = () => {
       net.connected = true; backoff = 600;
+      net.resetSent?.();
       net.hello();                          // 先表明身分（有憑證才送）
       send({ t: 'state', s: myState() });   // 先送狀態，別人收到 join 時才知道名字
       net.enter(S.terrain);                 // 再宣告自己在哪個地形（斷線重連也會重進）
@@ -145,9 +149,19 @@ export function connectNet(S, opts = {}) {
   open();
 
   // 定期上報自己的狀態 + 清掉失聯的遠端玩家
+  // 只在狀態有變（位置/動作/血量/死亡…）時送；站著不動只送心跳，省下全島的廣播與伺服器寫入。
+  // 死亡／復活／血量都在 myState() 裡，變了下一個 tick（約 83ms）就會送，不靠心跳。
+  let lastSent = '', lastSentAt = 0;
+  net.resetSent = () => { lastSent = ''; };   // 重連後強制送一次完整狀態
   setInterval(() => {
-    if (net.connected) send({ t: 'state', s: myState() });
     const now = performance.now();
+    if (net.connected) {
+      const st = JSON.stringify(myState());
+      if (st !== lastSent || now - lastSentAt >= HEARTBEAT_MS) {
+        send({ t: 'state', s: JSON.parse(st) });
+        lastSent = st; lastSentAt = now;
+      }
+    }
     for (const [id, r] of S.remotes) if (now - r.seen > STALE_MS) S.remotes.delete(id);
   }, 1000 / SEND_HZ);
 

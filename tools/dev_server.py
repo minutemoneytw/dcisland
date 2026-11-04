@@ -6,7 +6,7 @@
 # 3) /api/token    -> 用 code+secret 向 Discord 兌換 access_token（secret 只在本機/伺服器端）
 # 用法: python tools/dev_server.py  (先填 tools/dev_config.json)
 import json, math, os, re, sys, base64, hashlib, hmac, struct, threading, time, random, traceback
-import urllib.request, urllib.parse, urllib.error, http.server, socketserver
+import subprocess, urllib.request, urllib.parse, urllib.error, http.server, socketserver
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CLIENT = os.path.join(HERE, "..", "client")
@@ -112,6 +112,51 @@ RATE_MAX = 40
 TERRAIN_RE = re.compile(r"^[a-z0-9_-]{1,24}$")
 
 CELL = 32                # 與 client/js/main.js 一致
+
+# ---- 玩家 state 封包白名單（與 worker/src/index.js 的 sanitizeState 一致，改一邊要改另一邊）----
+ID_RE = re.compile(r"^[a-z0-9_-]{1,24}$")
+NAME_MAX = 24
+
+
+def _num(v, lo, hi, fb):
+    if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v):
+        return min(hi, max(lo, v))
+    return fb
+
+
+def _id_or(v, fb):
+    return v if isinstance(v, str) and ID_RE.match(v) else fb
+
+
+def sanitize_state(s, prev):
+    prev = prev or {}
+    look = s.get("look") if isinstance(s.get("look"), dict) else {}
+    pl = prev.get("look") or {}
+    name = s.get("name")
+    name = "".join(ch for ch in name if ord(ch) >= 32 and ord(ch) != 127)[:NAME_MAX] if isinstance(name, str) else (prev.get("name") or "")
+    return {
+        "x": _num(s.get("x"), 0, COLS * CELL, prev.get("x", (COLS / 2 - .5) * CELL)),
+        "y": _num(s.get("y"), 0, ROWS * CELL, prev.get("y", (ROWS / 2 - .5) * CELL)),
+        "dir": -1 if s.get("dir") == -1 else 1,
+        "moving": bool(s.get("moving")),
+        "z": _num(s.get("z"), 0, 200, 0),
+        "name": name,
+        "look": {
+            "skin": _id_or(look.get("skin"), pl.get("skin", "light")),
+            "hair": _id_or(look.get("hair"), pl.get("hair", "hair1")),
+            "shirt": round(_num(look.get("shirt"), 0, 99, pl.get("shirt", 0))),
+            "pants": round(_num(look.get("pants"), 0, 99, pl.get("pants", 0))),
+        },
+        "weapon": _id_or(s.get("weapon"), "hands"),
+        "pose": s.get("pose") if s.get("pose") in ("sit", "sleep") else None,
+        "face": s.get("face") if s.get("face") in ("up", "side") else "down",
+        "seat": _id_or(s.get("seat"), None),
+        "job": s.get("job") if s.get("job") in ("tank", "healer") else "dps",   # 職業（坦/補/輸出）：白名單解讀，不合法的值當輸出（挑釁驗證靠這欄）
+        "hp": round(_num(s.get("hp"), 0, 20, 10)),
+        "dead": 1 if s.get("dead") else 0,
+    }
+
+
 HIT_RANGE = 140          # 打可破壞物件時，玩家離目標最遠幾 px（客戶端範圍 72，留給延遲）
 HIT_CD = 0.3             # 同一條連線兩次打擊最短間隔（秒）
 
@@ -135,7 +180,7 @@ D_CLAW_MS = 1000         # 爪擊間隔（每秒一下）
 D_CLAW_DMG = 2           # 爪擊傷害（扣玩家 HP；被打倒由各客戶端自判，伺服器只廣播爪擊事件）
 D_AGGRO_MS = 5000        # 仇恨換人週期：打牠的人有複數時，隨機換下一個攻擊者
 D_DROPOUT = 30000        # 超過這時間沒有人攻擊島主：脫離仇恨回閒晃
-D_RANGE = 70             # 玩家打島主的攻擊距離（客戶端 58，留延遲）
+D_RANGE = 100            # 玩家打島主的攻擊距離（客戶端以武器尖端為準：判定圈 58 + 武器伸出 30 = 88，留延遲）
 D_DRIFT_TOLER = 600      # 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 D_CD = 0.3               # 同一條連線兩次打島主的最短間隔（秒）
 D_PROVOKE_CD = 15.0      # 挑釁冷卻（每條連線，秒；與 worker/src/index.js 的 D_PROVOKE_CD_MS 一致）
@@ -979,6 +1024,7 @@ class Room:
     def remove(self, cid):
         with self.lock:
             self.clients.pop(cid, None)
+            self.dragon_hits.pop(cid, None)
 
     def terrain_of(self, cid):
         with self.lock:
@@ -1004,6 +1050,8 @@ class Room:
 
     # terrain 有給時只送給「目前在該地形」的連線；沒給就是全部
     def broadcast(self, msg, skip=None, terrain=None):
+        if terrain is not None and msg.get("t") == "dragon" and "terrain" not in msg:
+            msg = {**msg, "terrain": terrain}   # 島主事件註明是哪座地形的，客戶端才能擋掉切地形空檔收到的舊島事件
         data = json.dumps(msg)
         with self.lock:
             targets = [(c, v["sock"], v["send"]) for c, v in self.clients.items()
@@ -1095,6 +1143,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if self.path.split("?")[0] == "/version.json":   # 本機：目前 HEAD 的前 7 碼（正式站由 CI 寫成同名靜態檔）
+            try:
+                sha = subprocess.run(["git", "rev-parse", "--short=7", "HEAD"], cwd=HERE, capture_output=True, text=True, timeout=5).stdout.strip()
+            except Exception:
+                sha = ""
+            return self._json({"commit": sha})
         if self.path == "/api/config":
             cfg = config()
             return self._json({"client_id": cfg.get("client_id", "")})
@@ -1164,13 +1218,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             ws_send(sock, json.dumps({"t": "me", "admin": c["admin"]}))
                 elif t == "state":
                     c = room.clients.get(cid)
-                    st = msg.get("s") if isinstance(msg.get("s"), dict) else {}
-                    # 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）
+                    st = sanitize_state(msg.get("s") if isinstance(msg.get("s"), dict) else {}, c.get("state") if c else None)
+                    # 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）；訪客沒有 uid
                     user = c.get("user") if c else None
                     if user:
-                        st["name"], st["uid"] = user["name"], user["id"]
-                    else:
-                        st.pop("uid", None)
+                        st["name"], st["uid"] = str(user["name"])[:NAME_MAX], user["id"]
                     if c:
                         c["state"] = st
                     cur = room.terrain_of(cid)

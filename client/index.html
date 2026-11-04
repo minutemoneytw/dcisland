@@ -12,13 +12,13 @@
   <div id="topbar">
     <div class="tb-left">
       <span class="tb-title">DC島</span>
-      <span class="tb-sub">M0 本地測試</span>
+      <span class="tb-sub" id="verTag">—</span>
     </div>
     <div class="tb-center" id="terrainChips"></div>
     <div class="tb-right">
-      <button id="btnHelp" class="ff-btn" title="操作說明">?</button>
+      <button id="btnHelp" class="ff-btn" title="操作說明">操作說明</button>
       <button id="btnAvatar" class="ff-btn">造型</button>
-      <button id="btnDecor" class="ff-btn">裝飾模式</button>
+      <button id="btnDecor" class="ff-btn" style="display:none">裝飾模式</button>
     </div>
   </div>
 
@@ -64,6 +64,14 @@
     <div id="helpTitle" class="ff-panel-title"></div>
     <div id="helpBody"></div>
     <div class="ff-panel-foot"><button id="helpClose" class="ff-btn small">知道了</button></div>
+  </div>
+
+  <!-- 線上列表（L） -->
+  <div id="listBox" class="ff-panel hidden">
+    <div class="ff-panel-title">線上列表</div>
+    <div id="listHint" class="ff-panel-hint"></div>
+    <div id="listBody"></div>
+    <div class="ff-panel-foot"><button id="listClose" class="ff-btn small">關閉</button></div>
   </div>
 
   <!-- 看板：所有人都看得到、都能改 -->

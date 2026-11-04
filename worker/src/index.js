@@ -48,11 +48,13 @@ const D_CLAW_MS = 1000;      // 爪擊間隔（每秒一下）
 const D_CLAW_DMG = 2;        // 爪擊傷害（扣玩家 HP；被打倒由各客戶端自判，伺服器只廣播爪擊事件）
 const D_AGGRO_MS = 5000;     // 仇恨換人週期：打牠的人有複數時，隨機換下一個攻擊者
 const D_DROPOUT = 30000;     // 超過這時間沒有人攻擊島主：脫離仇恨回閒晃
-const D_RANGE = 70;          // 玩家打島主的攻擊距離（客戶端 58，留延遲）
+const D_RANGE = 100;         // 玩家打島主的攻擊距離（客戶端以武器尖端為準：判定圈 58 + 武器伸出 30 = 88，留延遲）
 const D_DRIFT_TOLER = 600;   // 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 const D_CD_MS = 300;         // 同一條連線兩次打島主的最短間隔
 const D_PROVOKE_CD_MS = 15000;   // 挑釁冷卻（每條連線；與 dev_server.py 的 D_PROVOKE_CD 一致）
 const D_PROVOKE_RANGE = 240;     // 挑釁距離（比攻擊距離寬：把島主拉過來的是「聲東擊西」，不需要貼臉）
+const D_SAVE_MS = 2000;      // 熱路徑（被打／爪擊／追腿／回血）寫 storage 的最短間隔；其餘變動標 dirty，由鬧鐘補寫
+const SEQ_BLOCK = 50;        // 連線編號一次預留幾個再寫 storage（不必每次連線都寫）
 const D_CENTER = [(COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL];
 const jsRound = v => Math.floor(v + .5);   // 與前端 Math.round 同義（明寫以防其他語言實作四捨五入規則不同）
 
@@ -150,6 +152,39 @@ function cellHasFurn(items, defs, cell) {
     const d = defs.get(it.type) || { w: 1, h: 1 };
     return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
   });
+}
+// ---- 玩家 state 封包白名單：伺服器原樣轉發前先過濾（欄位、型別、範圍、長度）----
+// 防灌流量（單則上限 16KB 會被廣播給全島）、防 NaN 座標，也避免超過 DO attachment 的 2KB 上限（寫入會丟例外）。
+// 欄位要與 client/js/net.js 的 myState() 一致（改一邊要改另一邊）；dev_server.py 有同款 sanitize_state
+const ID_RE = /^[a-z0-9_-]{1,24}$/;
+const NAME_MAX = 24;
+const num = (v, lo, hi, fb) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fb);
+const idOr = (v, fb) => (typeof v === "string" && ID_RE.test(v) ? v : fb);
+function sanitizeState(s, prev) {
+  prev = prev || {};
+  const look = s.look && typeof s.look === "object" ? s.look : {};
+  const pl = prev.look || {};
+  return {
+    x: num(s.x, 0, COLS * CELL, prev.x ?? D_CENTER[0]),
+    y: num(s.y, 0, ROWS * CELL, prev.y ?? D_CENTER[1]),
+    dir: s.dir === -1 ? -1 : 1,
+    moving: !!s.moving,
+    z: num(s.z, 0, 200, 0),
+    name: typeof s.name === "string" ? s.name.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, NAME_MAX) : (prev.name || ""),
+    look: {
+      skin: idOr(look.skin, pl.skin || "light"),
+      hair: idOr(look.hair, pl.hair || "hair1"),
+      shirt: Math.round(num(look.shirt, 0, 99, pl.shirt ?? 0)),
+      pants: Math.round(num(look.pants, 0, 99, pl.pants ?? 0)),
+    },
+    weapon: idOr(s.weapon, "hands"),
+    pose: s.pose === "sit" || s.pose === "sleep" ? s.pose : null,
+    face: s.face === "up" || s.face === "side" ? s.face : "down",
+    seat: idOr(s.seat, null),
+    job: s.job === "tank" || s.job === "healer" ? s.job : "dps",   // 職業（坦/補/輸出）：白名單解讀，不合法的值當輸出（挑釁驗證靠這欄）
+    hp: Math.round(num(s.hp, 0, 20, 10)),
+    dead: s.dead ? 1 : 0,
+  };
 }
 const SESSION_TTL_MS = 12 * 3600 * 1000;   // 簽章憑證有效期
 
@@ -266,6 +301,14 @@ export class Island {
     this.dragonMapLoaded = new Set();
     this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
     this.provokes = new Map();       // ws → {terrain, t}：上次挑釁哪座島的島主（冷卻只在成功出手時計）
+    this.dragonSavedAt = new Map();  // 地形 → 上次真的寫 storage 的時間（saveDragonLazy 節流用）
+    this.dragonDirty = new Set();    // 有變動但還沒寫進 storage 的地形
+    this.alarmAt = null;             // 目前排著的鬧鐘時間（記憶體；醒來後重置，只用來略過重複的 setAlarm）
+    this.seq = 0; this.seqCeil = 0;  // 連線編號：記憶體遞增，storage 只存「預留上限」，重啟後從上限接續，不會重複
+    state.blockConcurrencyWhile(async () => {
+      this.seqCeil = (await state.storage.get("seq")) || 0;
+      this.seq = this.seqCeil;
+    });
   }
 
   // 可破壞物件的血量/重生秒數取自前端 tools.json
@@ -345,8 +388,11 @@ export class Island {
     const server = pair[1];
 
     // 連線編號（島內遞增）
-    const seq = ((await this.state.storage.get("seq")) || 0) + 1;
-    await this.state.storage.put("seq", seq);
+    const seq = ++this.seq;
+    if (seq > this.seqCeil) {   // 用完預留的編號才寫一次 storage（舊資料存的是「最後用掉的編號」，語意相容）
+      this.seqCeil = seq + SEQ_BLOCK;
+      await this.state.storage.put("seq", this.seqCeil);
+    }
     server.serializeAttachment({ id: seq });
 
     this.state.acceptWebSocket(server);
@@ -358,6 +404,7 @@ export class Island {
 
   // terrain 有給時只送給「目前在該地形」的連線；沒給就是全部
   broadcast(msg, skip, terrain) {
+    if (terrain !== undefined && msg.t === "dragon" && msg.terrain === undefined) msg = { ...msg, terrain };   // 島主事件註明是哪座地形的，客戶端才能擋掉切地形空檔收到的舊島事件
     const data = JSON.stringify(msg);
     for (const ws of this.state.getWebSockets()) {
       if (ws === skip) continue;
@@ -414,14 +461,19 @@ export class Island {
 
     if (msg.t === "hello") {
       // 帶簽章憑證表明身分；驗證失敗就維持訪客
-      att.user = await verifySession(this.env, msg.s);
-      att.admin = !!att.user && isAdminId(this.env, att.user.id);
-      ws.serializeAttachment(att);
-      ws.send(JSON.stringify({ t: "me", admin: att.admin }));
+      const user = await verifySession(this.env, msg.s);
+      // 驗證期間（await）其他訊息（state／enter）可能已改過 attachment：要重讀再合併，
+      // 否則用開頭讀到的舊 att 寫回會蓋掉剛設好的 terrain／state（玩家就會卡在「沒進任何地形」）
+      const cur = ws.deserializeAttachment() || {};
+      cur.user = user;
+      cur.admin = !!user && isAdminId(this.env, user.id);
+      if (user && cur.state) cur.state = { ...cur.state, name: String(user.name).slice(0, NAME_MAX), uid: user.id };
+      ws.serializeAttachment(cur);
+      ws.send(JSON.stringify({ t: "me", admin: cur.admin }));
     } else if (msg.t === "state") {
-      const s = msg.s && typeof msg.s === "object" ? msg.s : {};
-      // 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）
-      if (att.user) { s.name = att.user.name; s.uid = att.user.id; } else delete s.uid;
+      const s = sanitizeState(msg.s && typeof msg.s === "object" ? msg.s : {}, att.state);
+      // 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）；訪客沒有 uid
+      if (att.user) { s.name = String(att.user.name).slice(0, NAME_MAX); s.uid = att.user.id; }
       att.state = s;
       ws.serializeAttachment(att);
       if (att.terrain) this.broadcast({ t: "p", id: att.id, s }, ws, att.terrain);
@@ -510,7 +562,36 @@ export class Island {
     if (d.lastHitAt === undefined) d.lastHitAt = 0;
     return d;
   }
-  saveDragon(terrain) { return this.state.storage.put("dragon:" + terrain, this.dragons.get(terrain)); }
+  saveDragon(terrain) {
+    this.dragonDirty.delete(terrain);
+    this.dragonSavedAt.set(terrain, Date.now());
+    return this.state.storage.put("dragon:" + terrain, this.dragons.get(terrain));
+  }
+  // 熱路徑（每次被打、爪擊、追腿、回血都會呼叫）：D_SAVE_MS 內只標 dirty，不重複寫 storage。
+  // 關鍵轉換（死亡、重生、開招、仇恨開始／結束）仍用 saveDragon 立即寫；dirty 的由 flushDragons 補寫
+  saveDragonLazy(terrain) {
+    if (Date.now() - (this.dragonSavedAt.get(terrain) || 0) >= D_SAVE_MS) return this.saveDragon(terrain);
+    this.dragonDirty.add(terrain);
+    return Promise.resolve();
+  }
+  // 把 dirty 且已超過節流間隔的寫掉（force＝全部寫）；回傳還沒到期的 dirty 最早要補寫的時間（沒有則 null），讓鬧鐘排得進去
+  async flushDragons(force = false) {
+    let wake = null;
+    for (const terrain of [...this.dragonDirty]) {
+      const due = (this.dragonSavedAt.get(terrain) || 0) + D_SAVE_MS;
+      if (force || due <= Date.now()) await this.saveDragon(terrain);
+      else if (wake === null || due < wake) wake = due;
+    }
+    return wake;
+  }
+  // 唯一設定鬧鐘的地方：已經有更早（或同時）的鬧鐘就不重複寫；醒來時會重算，所以不會漏
+  async setOwnerAlarm(at) {
+    const now = Date.now();
+    at = Math.max(now + 60, at);
+    if (this.alarmAt && this.alarmAt > now && this.alarmAt <= at) return;
+    this.alarmAt = at;
+    await this.state.storage.setAlarm(at);
+  }
   // ---- 島主仇恨（反擊冷卻期間的追殺行為；client 的演出在 ownerAggro 系列）----
   // D_DROPOUT（30 秒）內在該地形打過島主、還在線上沒死的連線名單（仇恨換人從這裡隨機挑）
   aggroCandidates(now, terrain, win = D_DROPOUT) {
@@ -662,7 +743,7 @@ export class Island {
       const cands = this.aggroCandidates(now, terrain);
       if (cands.length) this.startAggro(now, cands[Math.floor(Math.random() * cands.length)], terrain);
     }
-    await this.saveDragon(terrain);   // 扣血就存（DO 休眠後才不會從上次存檔的血量回復）
+    await this.saveDragonLazy(terrain);   // 扣血：節流存（多人圍毆每秒會打很多下；漏掉的最多 D_SAVE_MS 內的血量，由 dirty 補寫）
     this.broadcast({ t: "dragon", ev: "hp", hp: d.hp }, null, terrain);
     await this.armOwnerAlarm();   // 仇恨開始：快點醒來追殺（下一個醒的時間統一在這裡算）
   }
@@ -771,7 +852,7 @@ export class Island {
       d.wander = null;
       if (now >= ag.clawAt) {
         ag.clawAt = now + D_CLAW_MS;
-        await this.saveDragon(terrain);
+        await this.saveDragonLazy(terrain);
         this.broadcast({ t: "dragon", ev: "claw", x: pos[0], y: pos[1], tx: att.state.x, ty: att.state.y, id: att.id }, null, terrain);
       }
     } else {   // 追殺腿：接着上一腿走完就重新瞄準目標目前位置（ev: wander 重用同一套客户端插值）
@@ -801,7 +882,7 @@ export class Island {
         }
         const tms = Math.max(80, Math.round(Math.hypot(tx - pos[0], ty - pos[1]) / D_CHASE * 1000));
         d.wander = { fx: pos[0], fy: pos[1], tx, ty, tms, t0: now, pause: 0 };
-        await this.saveDragon(terrain);
+        await this.saveDragonLazy(terrain);
         this.broadcast({ t: "dragon", ev: "wander", fx: pos[0], fy: pos[1], tx, ty, tms }, null, terrain);
       }
     }
@@ -818,7 +899,7 @@ export class Island {
     const before = d.hp;
     this.regenDragon(terrain, now);
     if (d.hp !== before) {
-      await this.saveDragon(terrain);
+      await this.saveDragonLazy(terrain);
       this.broadcast({ t: "dragon", ev: "hp", hp: d.hp }, null, terrain);
       return true;
     }
@@ -930,14 +1011,21 @@ export class Island {
   // 沒有人在線的島停擺（回 null），等有人進該地形的 enter 再恢復。
   async alarm() {
     const now = Date.now();
+    this.alarmAt = null;   // 這個鬧鐘已觸發；之後 setOwnerAlarm 才會真的重排
     let next = null;
     for (const terrain of Object.keys(OWNER_TERRAINS)) {
       try {
         const wake = await this.stepOwner(terrain, now);
         if (wake !== null && wake !== undefined && (next === null || wake < next)) next = wake;
-      } catch (e) { console.error("[dragon] stepOwner 錯誤：", terrain, e); }
+      } catch (e) {
+        console.error("[dragon] stepOwner 錯誤：", terrain, e);
+        const retry = Date.now() + 5000;   // 出錯的島也要排下一次，否則其他島回 null 時整個鬧鐘就斷了，島主停擺
+        if (next === null || retry < next) next = retry;
+      }
     }
-    if (next !== null) await this.state.storage.setAlarm(Math.max(Date.now() + 60, next));
+    const dirtyWake = await this.flushDragons();   // 節流中沒寫的變動：到期的現在補寫，沒到期的把鬧鐘排進去
+    if (dirtyWake !== null && (next === null || dirtyWake < next)) next = dirtyWake;
+    if (next !== null) await this.setOwnerAlarm(next);
   }
   // 推進某座島的島主一步，回傳該島下一個要醒的時間（null＝停擺／不用排）
   async stepOwner(terrain, now) {
@@ -1001,7 +1089,11 @@ export class Island {
       else wake = this.wanderWake(terrain);
       if (next === null || wake < next) next = wake;
     }
-    if (next !== null) await this.state.storage.setAlarm(Math.max(now + 60, next));
+    for (const terrain of this.dragonDirty) {   // 有節流中沒寫的變動：最晚到期時要醒來補寫
+      const due = (this.dragonSavedAt.get(terrain) || 0) + D_SAVE_MS;
+      if (next === null || due < next) next = due;
+    }
+    if (next !== null) await this.setOwnerAlarm(next);
   }
 
   // 家具編輯：伺服器是唯一權威。裝飾模式的變動是「草稿」，客戶端按保存才送 commit（一批操作）；
@@ -1049,12 +1141,13 @@ export class Island {
     this.broadcast({ t: "furn", items }, null, att.terrain);
   }
 
-  async webSocketClose(ws) { this.leave(ws); }
-  async webSocketError(ws) { this.leave(ws); }
+  async webSocketClose(ws) { this.leave(ws); await this.flushDragons(true); }   // 有人離線就把節流中的島主狀態全部寫掉（之後可能沒人了，DO 隨時會休眠）
+  async webSocketError(ws) { this.leave(ws); await this.flushDragons(true); }
 
   leave(ws) {
     this.rate.delete(ws);
     this.lastHit.delete(ws);
+    this.dragonHits.delete(ws);
     const att = ws.deserializeAttachment() || {};
     if (att.terrain) this.broadcast({ t: "leave", id: att.id }, ws, att.terrain);
   }
