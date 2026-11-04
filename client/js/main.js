@@ -375,7 +375,7 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
   if (!S.weaponImgs[S.me.weapon]) return;
   if (S.t - p.lastAtk < ATK_CD) return;
   const rg = rangedDef();
-  if (rg) { startCast(p, rg); return; }   // 法杖：遠距詠唱（自動瞄準，讀條完才出傷害）
+  if (rg) { startCast(p, rg, wx, wy); return; }   // 法杖：遠距詠唱（以滑鼠瞄準，讀條完才出傷害）
   p.lastAtk = S.t; p.swing = ATK_T; p.tool = null;
   S.net?.notifyAttack?.();          // M2：讓同島的人看到你的揮擊
   for (const a of S.animals) {
@@ -391,18 +391,47 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
 // 詠唱中目標超出射程（或死亡／飛走）、自己死亡／被石化／坐下／換武器／進裝飾模式就中斷；讀完自動命中目標。
 const rangedDef = () => S.avatar?.weapons.find(w => w.id === S.me.weapon)?.ranged || null;
 const inCastRange = (p, a, rg) => Math.hypot(a.x - p.x, a.y - p.y) - hitRadius(animalDef(a.id)) <= rg.range;
-function pickCastTarget(p, rg) {
+// 瞄準點（世界座標）：左鍵點擊的位置；F 鍵就用游標目前的位置（游標不在畫面上＝沒有瞄準點）
+function castAim(wx, wy) {
+  if (wx != null) return [wx, wy];
+  if (S.mouseCell && S.mouseClient) { const r = canvas.getBoundingClientRect(); return [S.mouseClient[0] - r.left + S.cam.x, S.mouseClient[1] - r.top + S.cam.y]; }
+  return null;
+}
+// 游標正指著的動物（以身體範圍判斷：島主很大隻，點身體任何地方都算）
+function animalUnder(wx, wy) {
   let best = null, bd = Infinity;
   for (const a of S.animals) {
-    if (a.dead || a.fly || !inCastRange(p, a, rg)) continue;
-    const od = animalDef(a.id), d = Math.hypot(a.x - p.x, a.y - p.y) - (od.owner ? 1e6 : 0);   // 島主排最前面
+    if (a.dead || a.fly) continue;
+    const big = animalDef(a.id).big || 1;
+    if (Math.abs(wx - a.x) > 30 * big || wy > a.y + 12 || wy < a.y - 48 * big) continue;
+    const d = Math.hypot(wx - a.x, wy - a.y);
     if (d < bd) { bd = d; best = a; }
   }
   return best;
 }
-function startCast(p, rg) {
+// 沒有直接點到目標時挑誰：有瞄準點就挑「最接近游標方向」的（夾角最小），沒有就島主優先、再最近的
+function pickCastTarget(p, rg, aim) {
+  const ax = aim ? aim[0] - p.x : 0, ay = aim ? aim[1] - p.y : 0, useAim = !!aim && Math.hypot(ax, ay) > 8;
+  let best = null, bs = Infinity;
+  for (const a of S.animals) {
+    if (a.dead || a.fly || !inCastRange(p, a, rg)) continue;
+    const dx = a.x - p.x, dy = a.y - p.y, d = Math.hypot(dx, dy);
+    const score = useAim ? Math.abs(Math.atan2(ax * dy - ay * dx, ax * dx + ay * dy)) + d / 1e5
+                         : d - (animalDef(a.id).owner ? 1e6 : 0);
+    if (score < bs) { bs = score; best = a; }
+  }
+  return best;
+}
+function startCast(p, rg, wx, wy) {
   if (p.cast || S.t - p.lastAtk < ATK_CD) return;
-  const a = pickCastTarget(p, rg);
+  if (p.moving || p.z > 0) { say('站定才能詠唱'); return; }   // 詠唱時不能移動（移動會中斷）
+  const aim = castAim(wx, wy);
+  let a = null;
+  const under = aim ? animalUnder(aim[0], aim[1]) : null;   // 游標點在動物身上：就打牠（超出射程不改選別的）
+  if (under) {
+    if (!inCastRange(p, under, rg)) { say('目標超出射程'); return; }
+    a = under;
+  } else a = pickCastTarget(p, rg, aim);
   if (!a) { say('射程內沒有目標'); return; }
   p.cast = { t0: S.t, dur: rg.cast, a };
   p.swing = 0; p.tool = null; S._hits = 1;   // 算有互動，點到動物時不要再跳動物的台詞
@@ -413,6 +442,7 @@ function stepCast(p) {   // 每幀（只有本機玩家）：檢查中斷條件�
   if (!c) return;
   if (p.dead || S.t < (p.petUntil ?? 0) || p.pose || p.fish || S.mode !== 'walk' || !rg) { cancelCast(p); return; }
   const a = c.a;
+  if (p.moving || p.z > 0 || p.vz > 0) { cancelCast(p, '詠唱中斷：移動了'); return; }   // 詠唱時不能移動（跳躍也算）
   if (!S.animals.includes(a) || a.dead || a.fly) { cancelCast(p, '詠唱中斷：目標消失了'); return; }
   if (!inCastRange(p, a, rg)) { cancelCast(p, '詠唱中斷：目標超出射程'); return; }
   if (Math.abs(a.x - p.x) > 6) p.dir = Math.sign(a.x - p.x);   // 面向目標
@@ -2200,7 +2230,7 @@ function draw() {
         if (a.dead) return;
         if (def.owner && !a.fly) {   // 島主腳下判定圈：以「武器尖端」為準——武器點（人前方 WEAPON_REACH 處的小圓點）進圈就打得到，不看面向。靠近（約 220px 內）才顯示
           const me = S.players[0], d = Math.hypot(a.x - me.x, a.y - me.y);
-          if (d < 220 && !me.dead && !me.pose && S.me.weapon !== 'hands') {   // 空手（沒裝備武器）不顯示
+          if (d < 220 && !me.dead && !me.pose && S.me.weapon !== 'hands' && !rangedDef()) {   // 空手（沒裝備武器）、拿法杖（遠距詠唱，沒有近戰判定）不顯示
             const R = hitRadius(def), wp = weaponPt(me), ok = Math.hypot(a.x - wp.x, a.y - wp.y) <= R, bodyIn = d <= R;
             ctx.save();
             ctx.beginPath(); ctx.arc(a.x, a.y, R, 0, Math.PI * 2);
