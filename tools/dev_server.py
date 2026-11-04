@@ -211,6 +211,9 @@ def dex_catch(uid, terrain, fid, size):
 
 HIT_RANGE = 140          # 打可破壞物件時，玩家離目標最遠幾 px（客戶端範圍 72，留給延遲）
 HIT_CD = 0.3             # 同一條連線兩次打擊最短間隔（秒）
+SIGN_CD = 1.0            # 同一條連線兩次改看板的最短間隔（秒；與 Worker 的 SIGN_CD_MS 一致）
+COMMIT_BURST = 20        # 保存擺設的令牌桶：一次可連發幾批（客戶端一次保存最多約 19 批；與 Worker 一致）
+COMMIT_REFILL = 0.5      # 每幾秒回一批（與 Worker 的 COMMIT_REFILL_MS 一致）
 
 # ---- 島主（伺服器端同步；與 worker/src/index.js 的常數與演算法保持一致，改一邊要改另一邊）----
 # 被打 → 說台詞 → 反擊（樣式照 OWNER_TERRAINS：dash＝瞬移島緣＋龍衝；gaze＝原地開眼＋石化直線）→ 仇恨追殺 → 冷靜回閒晃。
@@ -1203,6 +1206,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         last_hit = 0.0
         last_dragon_hit = 0.0   # 打島主的每連線冷卻（與 last_hit 同款）
         last_fish = 0.0         # 釣魚結果的每連線冷卻
+        last_sign = 0.0         # 改看板的每連線冷卻
+        commit_tokens, commit_t = float(COMMIT_BURST), time.time()   # 保存擺設的令牌桶
         try:
             # 剛連上時還沒進任何地形：看不到也不被看到，等客戶端送 enter
             ws_send(sock, json.dumps({"t": "init", "id": cid, "admin": is_admin(None)}))
@@ -1240,7 +1245,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         if c["user"] and c.get("state"):   # 與 Worker 一致：已送過的狀態立刻改用驗證過的名字與 uid
                             c["state"] = {**c["state"], "name": str(c["user"]["name"])[:NAME_MAX], "uid": c["user"]["id"]}
                         with c["send"]:
-                            ws_send(sock, json.dumps({"t": "me", "admin": c["admin"]}))
+                            ws_send(sock, json.dumps({"t": "me", "admin": c["admin"], "auth": bool(c["user"])}))   # auth＝憑證驗證成功；失敗客戶端會重新授權
                             if c["user"]:   # 登入的人：送他的魚類圖鑑
                                 with FISH_DEX_LOCK:
                                     dex = json.loads(json.dumps(FISH_DEX.get(c["user"]["id"], {})))
@@ -1311,6 +1316,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     ops = msg.get("ops") if t == "commit" else [msg]
                     if cur and isinstance(ops, list):
                         c = room.clients.get(cid) or {}
+                        now = time.time()
+                        commit_tokens = min(float(COMMIT_BURST), commit_tokens + (now - commit_t) / COMMIT_REFILL)
+                        commit_t = now
+                        if commit_tokens < 1:   # 保存太頻繁：整批不處理，回報給客戶端（與 Worker 一致）
+                            with c.get("send") or threading.Lock():
+                                ws_send(sock, json.dumps({"t": "commit_result", "applied": 0, "rejected": min(len(ops), MAX_OPS), "denied": False, "limited": True}))
+                            continue
+                        commit_tokens -= 1
                         applied, rejected, denied, furn_changed, floor_changed = room.commit_furn(cur, ops, c.get("admin", is_admin(None)))
                         # 與 Worker 一致：先廣播新清單，再回 commit_result（客戶端收到結果時以最新清單為準）
                         if furn_changed:
@@ -1321,7 +1334,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             ws_send(sock, json.dumps({"t": "commit_result", "applied": applied, "rejected": rejected, "denied": denied}))
                 elif t == "sign":   # 看板改字（所有人都能改）
                     cur = room.terrain_of(cid)
-                    if cur and room.edit_sign(cur, msg.get("cell"), msg.get("text")):
+                    now = time.time()
+                    if not cur or now - last_sign < SIGN_CD:
+                        continue
+                    last_sign = now
+                    if room.edit_sign(cur, msg.get("cell"), msg.get("text")):
                         room.broadcast({"t": "furn", "items": list(room.furn_list(cur))}, terrain=cur)
                 elif t == "event":   # 揮擊等瞬時事件
                     cur = room.terrain_of(cid)

@@ -91,7 +91,11 @@ export function connectNet(S, opts = {}) {
         S.remotes.clear();
         if (opts.onAdmin) opts.onAdmin(!!msg.admin);        // 重連後先當一般人，hello 驗證成功後 me 會更新
         break;
-      case 'me': if (opts.onAdmin) opts.onAdmin(!!msg.admin); break;
+      case 'me':
+        if (opts.onAdmin) opts.onAdmin(!!msg.admin);
+        // 有憑證卻驗證失敗（12 小時過期等）：請 discord.js 重新授權拿新憑證，拿到後會自動再送 hello（舊伺服器沒有 auth 欄位就不動作）
+        if (S.session && msg.auth === false) S.reauth?.();
+        break;
       case 'commit_result': if (opts.onCommitResult) opts.onCommitResult(msg); break;
       case 'fish_result': if (opts.onFishResult) opts.onFishResult(msg); break;   // 釣魚結果（伺服器抽）
       case 'dex': if (opts.onDex) opts.onDex(msg.dex); break;                     // 魚類圖鑑（登入後由伺服器送來）

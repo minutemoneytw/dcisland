@@ -80,8 +80,8 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
   - `avatar.json` 之後加 `accessories` 類別與 `access: "free" | "granted"`；伺服器要檢查玩家送來的造型，沒擁有的受限品要剝除，不可只靠前端。
   - 儲存計畫：全域 Registry Durable Object（SQLite），不用 D1（現有 CI 即可部署）。**`Registry` 已建立**（`wrangler.toml` 的 `REGISTRY` 綁定、migration `v2`；目前只存魚類圖鑑），配發資料之後加在同一個實例。配發者面板放遊戲內；審核 bot 留到 M3。
   - 進度：**步驟 1「身分驗證」已完成**（見下）；Registry、裝飾品類別、造型檢查、配發面板**尚未做**。
-- **身分驗證**：`/api/token` 成功後簽發 12 小時的 HMAC 憑證（`session`，密鑰為 Worker secret `SESSION_SECRET`；本機為 `dev_config.json` 的 `session_secret`，沒填則每次啟動隨機）。客戶端連 `/ws` 後送 `hello` 出示；驗證成功的連線，`state` 裡的 `name`/`uid` 由伺服器覆寫，訪客的 `uid` 會被拿掉。**沒設 `SESSION_SECRET` 時不簽發、全員視為訪客，行為與以前相同。** 房間鍵（guild:channel）仍來自 URL 參數，尚無法驗證。
-- `/ws` 已有基本防護（訊息 ≤16KB、每連線 ≤40 則/秒、一島 ≤64 人、擺設 ≤500 件、地形名白名單）。一般家具編輯不看身分（刻意開放），只有清空要管理員。
+- **身分驗證**：`/api/token` 成功後簽發 12 小時的 HMAC 憑證（`session`，密鑰為 Worker secret `SESSION_SECRET`；本機為 `dev_config.json` 的 `session_secret`，沒填則每次啟動隨機）。客戶端連 `/ws` 後送 `hello` 出示；驗證成功的連線，`state` 裡的 `name`/`uid` 由伺服器覆寫，訪客的 `uid` 會被拿掉。伺服器回的 `me` 帶 `auth`（憑證驗證成功與否）；客戶端有憑證卻收到 `auth:false`（例如 12 小時過期後重連）時，`net.js` 會呼叫 `discord.js` 設的 `S.reauth()`，以 `prompt: 'none'` 無感重新授權拿新憑證再送 `hello`（同時只跑一次、失敗 60 秒內不重試，失敗會提示重開活動）。**沒設 `SESSION_SECRET` 時不簽發、全員視為訪客，行為與以前相同。** 房間鍵（guild:channel）仍來自 URL 參數，尚無法驗證。
+- `/ws` 已有基本防護（訊息 ≤16KB、每連線 ≤40 則/秒、一島 ≤64 人、擺設 ≤500 件、地形名白名單）。改看板每連線 1 秒冷卻（`SIGN_CD_MS`）；保存擺設是令牌桶（`COMMIT_BURST`＝20 批、每 `COMMIT_REFILL_MS`＝500ms 回一批，涵蓋客戶端一次保存最多約 19 批），超過時整批不處理、回 `commit_result {limited: true}`。兩份伺服器常數要一致。一般家具編輯不看身分（刻意開放），只有清空要管理員。
 - 本機若 `python` 指向 Windows 商店空殼，請用 `py -3` 或 `python3`（或實際安裝路徑）；本機 Node 版本若 <22 則跑不了 `wrangler dev`，Worker 改動需另找環境驗證。
 - Worker 的 `Island` 在連線關閉時只廣播 `leave`；進場計數 `seq` 每次連線都寫儲存，之後若量大要留意。
 - `docs/cloudflare-deploy.md` 內含 Cloudflare Account ID；它不是 secret，但新增文件時別再放 token/secret。

@@ -23,6 +23,11 @@ const TERRAIN_RE = /^[a-z0-9_-]{1,24}$/;
 const CELL = 32;             // 與 client/js/main.js 一致
 const HIT_RANGE = 140;       // 打可破壞物件時，玩家離目標最遠幾 px（客戶端範圍 72，留給延遲）
 const HIT_CD_MS = 300;       // 同一條連線兩次打擊最短間隔
+const SIGN_CD_MS = 1000;     // 同一條連線兩次改看板的最短間隔（每次都寫 storage＋廣播整份擺設）
+// 保存擺設的令牌桶：每次 commit 都寫 storage＋廣播整份清單。客戶端一次保存最多分成約 19 批（草稿上限 1500 項／每批 80），
+// 所以容許一次連發 COMMIT_BURST 批，之後每 COMMIT_REFILL_MS 回一批。dev_server.py 有同款（改一邊要改另一邊）
+const COMMIT_BURST = 20;
+const COMMIT_REFILL_MS = 500;
 
 // ---- 島主（伺服器端同步）----
 // 野外動物維持刻意不同步；島主會打死人，流程必須全島一致，由伺服器權威模擬：
@@ -341,6 +346,8 @@ export class Island {
     this.floorDefs = null;       // 地板 id -> {w,h}，由 floors.json 載入
     this.targets = null;         // 可破壞物件定義（tools.json 的 targets）
     this.lastHit = new Map();    // ws -> 上次打擊的時間
+    this.lastSign = new Map();   // ws -> 上次改看板的時間
+    this.commitBucket = new Map();   // ws -> {n（剩幾批）, t（上次結算時間）}：保存擺設的令牌桶
     this.dragons = new Map();        // 地形 → 島主狀態（每座有島主的地形各一隻，懒載入 storage）
     this.dragonLoaded = new Set();   // 已嘗試從 storage 載過的地形
     this.dragonMaps = new Map();     // 地形 → 陸地位圖（懒載入）——只放記憶體的話 DO 休眠後就沒了，打島主不會反擊
@@ -558,7 +565,7 @@ export class Island {
       cur.admin = !!user && isAdminId(this.env, user.id);
       if (user && cur.state) cur.state = { ...cur.state, name: String(user.name).slice(0, NAME_MAX), uid: user.id };
       ws.serializeAttachment(cur);
-      ws.send(JSON.stringify({ t: "me", admin: cur.admin }));
+      ws.send(JSON.stringify({ t: "me", admin: cur.admin, auth: !!user }));   // auth＝憑證驗證成功；失敗（例如 12 小時過期）客戶端會重新授權
       if (user) {   // 登入的人：送他存在伺服器的魚類圖鑑
         const r = await this.registryCall("/dex", { uid: user.id });
         if (r) try { ws.send(JSON.stringify({ t: "dex", dex: r.dex || {} })); } catch { /* 對方已斷線 */ }
@@ -1153,6 +1160,16 @@ export class Island {
   // 每個操作各自驗證（不合法的跳過，不影響其他），「清空」只有管理員能做。改完把整份清單廣播給同地形的人
   async commitFurn(ws, att, ops) {
     if (!Array.isArray(ops) || !att.terrain) return;
+    const now = Date.now();
+    let b = this.commitBucket.get(ws) || { n: COMMIT_BURST, t: now };
+    b = { n: Math.min(COMMIT_BURST, b.n + (now - b.t) / COMMIT_REFILL_MS), t: now };
+    if (b.n < 1) {   // 保存太頻繁：整批不處理，回報給客戶端（畫面會退回伺服器版本）
+      this.commitBucket.set(ws, b);
+      try { ws.send(JSON.stringify({ t: "commit_result", applied: 0, rejected: Math.min(ops.length, MAX_OPS), denied: false, limited: true })); } catch { /* 對方已斷線 */ }
+      return;
+    }
+    b.n -= 1;
+    this.commitBucket.set(ws, b);
     const terrain = att.terrain, defs = await this.getFurnDefs();
     const items = await this.getFurn(terrain);
     let floor = null, floorDefs = null, furnApplied = 0, floorApplied = 0;
@@ -1182,6 +1199,9 @@ export class Island {
   async editSign(ws, att, msg) {
     const cell = msg.cell;
     if (!Array.isArray(cell) || cell.length !== 2 || !Number.isInteger(cell[0]) || !Number.isInteger(cell[1])) return;
+    const now = Date.now();
+    if (now - (this.lastSign.get(ws) || 0) < SIGN_CD_MS) return;
+    this.lastSign.set(ws, now);
     const defs = await this.getFurnDefs(), items = await this.getFurn(att.terrain);
     const it = items.find(o => {
       const d = defs.get(o.type);
@@ -1200,6 +1220,8 @@ export class Island {
   leave(ws) {
     this.rate.delete(ws);
     this.lastHit.delete(ws);
+    this.lastSign.delete(ws);
+    this.commitBucket.delete(ws);
     this.dragonHits.delete(ws);
     this.lastFish.delete(ws);
     const att = ws.deserializeAttachment() || {};

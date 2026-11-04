@@ -1869,10 +1869,14 @@ function draw() {
   }
 
   // 收集繪製項目（y 排序）
+  // 畫面外的點綴物／家具不收：圖以「格子底邊」往上畫，所以用圖的實際範圍判斷（pad＝受擊抖動、看板文字的餘裕）
+  const vx0 = S.cam.x, vy0 = S.cam.y, vx1 = vx0 + canvas.width, vy1 = vy0 + canvas.height;
+  const offView = (left, bottom, w, h, pad) => left + w + pad < vx0 || left - pad > vx1 || bottom + pad < vy0 || bottom - h - pad > vy1;
   const list = [];
   for (const d of S.world.decos) {
     if (d.dead) continue;
     const img = ims[d.sprite]; if (!img) continue;
+    if (offView(d.cell[0] * CELL, (d.cell[1] + 1) * CELL, img.width * SC, img.height * SC, 4)) continue;
     list.push({
       y: (d.cell[1] + 1) * CELL,
       draw: () => {
@@ -1900,6 +1904,7 @@ function draw() {
   }
   S.furnItems.forEach((it, idx) => {
     const def = furnitureDef(it.type), img = S.furnImgs[it.type]; if (!img) return;
+    if (offView(it.cell[0] * CELL, (it.cell[1] + def.h) * CELL, Math.max(def.w * CELL, img.width * SC), img.height * SC, def.text ? 90 : 4)) return;
     list.push({
       y: (it.cell[1] + def.h) * CELL - 1,
       draw: () => {
@@ -2334,7 +2339,8 @@ function onCommitResult(m) {
   // 伺服器先廣播 furn/floor 再回 commit_result：此時 netFurn/netFloor 已是保存後的權威結果。
   // 一項都沒套用時伺服器不廣播，畫面會停在草稿的樣子（別人看不到），所以這裡一律以伺服器版本為準
   if (S.mode === 'walk') { applyFurn(S.netFurn); applyFloor(S.netFloor); }
-  if (m.denied) toast('清空需要管理員權限，這項已略過' + (m.applied ? `（其他 ${m.applied} 項已保存）` : ''), 3200);
+  if (m.limited) toast('保存太頻繁，這批變動沒有保存，請稍等幾秒再試', 3200);
+  else if (m.denied) toast('清空需要管理員權限，這項已略過' + (m.applied ? `（其他 ${m.applied} 項已保存）` : ''), 3200);
   else if (m.rejected) toast(`已保存（${m.rejected} 項因被別人搶先占用或不合法而未套用）`, 3200);
   else toast('擺設已保存');
 }
