@@ -83,7 +83,7 @@ git push                          # GitHub Actions 自動部署到正式站（�
 
 ## 5. 給這台電腦的 AI agent
 
-開新對話時請它先讀：`AGENTS.md`（協作規範與地雷）→ `README.md` → `docs/spec.md`。
+`AGENTS.md`（協作規範，Claude Code 會透過 `CLAUDE.md` 自動載入）會告訴它改到某功能前要讀 `docs/notes.md` 的哪一段（各功能的細節與地雷）。
 `AGENTS.md` 會告訴它：同步協定有兩份實作要一起改、推版等於上線、機密不准進 repo 等。
 
 ## 常見地雷
