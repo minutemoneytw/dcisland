@@ -560,13 +560,17 @@ const PLAYER_HP = 10;     // 玩家血量上限：爪擊扣 2（5 下倒地）�
 // 所以職業效果全在客戶端生效，不用改兩份伺服器。島主傷害仍由伺服器夾 1～2（職業對島主的
 // 加成要到放寬兩份伺服器的 dmg 夾擊值那步再做，見 AGENTS.md「職業」條目）。
 const JOBS = {
-  tank:   { name: '坦克', color: '#7cc0ff', hpMax: 20, takenHalf: true, provoke: true,
-            desc: '血量上限 20、被打傷害減半；按 R 挑釁把島主拉到自己身上（龍衝仍直接倒地）' },
-  healer: { name: '補師', color: '#8fe08a', hpMax: 10, healHit: 1, healAoE: 2, groupHeal: true,
-            desc: '揮擊命中動物吸回自己 1、打倒動物補 3 格內所有人 2；按 R 群療周遭 3 格內所有人 2（含自己）' },
+  // weapons：這個職業能用的武器（空手與釣竿所有職業都能用，不用列；沒寫＝不限制）；defaultWeapon：轉職時目前的武器不能用就換成它
+  tank:   { name: '坦克', color: '#7cc0ff', hpMax: 20, takenHalf: true, provoke: true, weapons: ['sword', 'shield'], defaultWeapon: 'sword',
+            desc: '只能用木劍／圓盾；血量上限 20、被打傷害減半；按 R 挑釁把島主拉到自己身上（龍衝仍直接倒地）' },
+  healer: { name: '補師', color: '#8fe08a', hpMax: 10, healHit: 1, healAoE: 2, groupHeal: true, weapons: ['staff'], defaultWeapon: 'staff',
+            desc: '只能用法杖；揮擊命中動物吸回自己 1、打倒動物補 3 格內所有人 2；按 R 群療周遭 3 格內所有人 2（含自己）' },
   dps:    { name: '輸出', color: '#ff9a8a', hpMax: 8, dmgPlus: 1,
-            desc: '每擊額外 +1 傷害（變 2～3）；血量上限 8' },
+            desc: '武器不限；每擊額外 +1 傷害（變 2～3）；血量上限 8' },
 };
+const ALWAYS_WEAPONS = ['hands', 'rod'];   // 所有職業都能用的武器（空手、釣竿）
+const weaponAllowed = (job, id) => { const jd = JOBS[job]; return !jd?.weapons || ALWAYS_WEAPONS.includes(id) || jd.weapons.includes(id); };
+const allowedWeapons = () => S.avatar.weapons.filter(w => weaponAllowed(S.me.job, w.id));   // 目前職業能用的武器（依 avatar.json 的順序）
 const HEAL_RADIUS = 96;   // 補師打倒動物／群療時的治療半徑（3 格）
 // 自己看「造型」面板選的職業（S.me.job）；別人看 state 封包同步的 job；NPC 沒有職業（回 null）
 const jobOf = p => JOBS[p === S.players[0] ? S.me.job : p.job] || null;
@@ -2935,9 +2939,9 @@ function saveAvatar() { lsSet('dcisland.m0.avatar', S.me); }
 let weaponBarKey = '';
 function updateWeaponBar() {
   const bar = $('weaponBar'); if (!S.avatar) return;
-  const key = S.me.weapon; if (key === weaponBarKey && bar.childElementCount) return;
+  const key = S.me.weapon + '|' + S.me.job; if (key === weaponBarKey && bar.childElementCount) return;   // 武器或職業變了就重畫
   weaponBarKey = key; bar.innerHTML = '';
-  for (const w of S.avatar.weapons) {
+  for (const w of allowedWeapons()) {
     const row = document.createElement('div'); row.className = 'wrow' + (w.id === S.me.weapon ? ' cur' : '');
     const im = w.sprite && S.weaponImgs[w.id];
     if (im) { const cv = document.createElement('canvas'); cv.width = cv.height = 24; const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; const sc = Math.min(24 / im.width, 24 / im.height); g.drawImage(im, (24 - im.width * sc) / 2, (24 - im.height * sc) / 2, im.width * sc, im.height * sc); row.appendChild(cv); }
@@ -2949,11 +2953,11 @@ function updateWeaponBar() {
   bar.classList.remove('hidden');
 }
 function setWeapon(id) {
-  if (S.me.weapon === id || !S.avatar.weapons.some(w => w.id === id)) return;
+  if (S.me.weapon === id || !allowedWeapons().some(w => w.id === id)) return;   // 只能換成這個職業能用的武器
   S.me.weapon = id; saveAvatar(); updateWeaponBar();
 }
 function cycleWeapon(step) {
-  const ws = S.avatar.weapons, i = Math.max(0, ws.findIndex(w => w.id === S.me.weapon));
+  const ws = allowedWeapons(), i = Math.max(0, ws.findIndex(w => w.id === S.me.weapon));
   setWeapon(ws[(i + step + ws.length) % ws.length].id);
 }
 let wheelAcc = 0, wheelAt = 0;
@@ -2976,8 +2980,13 @@ function setJob(id) {
   S.me.job = id;
   const p = S.players[0];
   if (p) p.hp = Math.min(p.hp ?? Infinity, hpCap(p));
+  let swapped = '';
+  if (!weaponAllowed(id, S.me.weapon)) {   // 手上的武器這個職業不能用：換成職業的預設武器
+    const w = S.avatar.weapons.find(v => v.id === (JOBS[id].defaultWeapon || 'hands'));
+    S.me.weapon = w?.id || 'hands'; swapped = `（武器換成${w?.name || '空手'}）`;
+  }
   saveAvatar(); buildAvatarPanel();
-  toast(`轉職「${JOBS[id].name}」— ${JOBS[id].desc}`, 3400);
+  toast(`轉職「${JOBS[id].name}」${swapped}— ${JOBS[id].desc}`, 3600);
 }
 
 
@@ -3189,6 +3198,7 @@ async function boot() {
   Object.assign(S, { furn, floors, animalsDB, npcDB, toolsDB, avatar, fishDB, skillsDB });
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
   if (!JOBS[S.me.job]) S.me.job = 'dps';   // 舊存檔沒有職業欄（或值不合法）：當輸出
+  if (!weaponAllowed(S.me.job, S.me.weapon)) S.me.weapon = JOBS[S.me.job].defaultWeapon || 'hands';   // 舊存檔的武器這個職業不能用：換成預設武器
   if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';   // 舊存檔沒武器欄：給第一款有圖的武器
   // 圖片：同樣全部並行（含目前所在地形的圖）。只有角色身體是必要的（缺了畫不出人），其餘缺圖就略過該項
   await Promise.all([
