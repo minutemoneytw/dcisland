@@ -794,6 +794,65 @@ function tryGroupHeal() {
   me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + amt);
   S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + amt, life: .75 });
 }
+// ---------------- 職業技能列（畫面底部正中間，R 鍵技能的圖示＋冷卻倒數）----------------
+// 只有有 R 技能的職業顯示（坦＝挑釁、補＝群療；輸出沒有，整列隱藏）。冷卻用順時針退去的暗色扇形（conic-gradient）＋秒數，
+// 冷卻結束閃一下。冷卻時間取本地計時（provokeCd／groupHealCd），伺服器端另有自己的冷卻，這裡顯示的是本地的。
+const SKILL_BAR = {
+  tank:   { name: '挑釁', total: () => OWNER_PROVOKE_CD, until: () => provokeCd, run: () => tryProvoke(),
+            usable() {   // 回 null＝可以放；字串＝不能放的原因（圖示變暗）
+              const a = S.animals.find(v => !v.dead && animalDef(v.id).owner);
+              if (!a) return '這裡沒有島主';
+              return Math.hypot(S.players[0].x - a.x, S.players[0].y - a.y) > OWNER_PROVOKE_RANGE ? '離島主太遠' : null;
+            } },
+  healer: { name: '群療', total: () => GROUP_HEAL_CD, until: () => groupHealCd, run: () => tryGroupHeal(), usable: () => null },
+};
+const skillUI = { job: null, cdLeft: 0, dim: null, num: '', flashT: 0, ready: null };
+function drawSkillIcon(job) {   // 40×40 簡單圖示（placeholder）：挑釁＝藍盾加驚嘆號與衝擊波、群療＝綠十字加光圈
+  const c = $('skillIcon'), g = c.getContext('2d');
+  g.clearRect(0, 0, 40, 40);
+  if (job === 'tank') {
+    g.fillStyle = '#1d2a44'; g.fillRect(0, 0, 40, 40);
+    g.strokeStyle = 'rgba(160,210,255,.75)'; g.lineWidth = 2;
+    for (const r of [13, 18]) { g.beginPath(); g.arc(20, 21, r, -.9, .9); g.stroke(); g.beginPath(); g.arc(20, 21, r, Math.PI - .9, Math.PI + .9); g.stroke(); }   // 兩側衝擊波
+    g.fillStyle = '#6fb4ff'; g.beginPath(); g.moveTo(11, 9); g.lineTo(29, 9); g.lineTo(29, 22); g.quadraticCurveTo(29, 31, 20, 35); g.quadraticCurveTo(11, 31, 11, 22); g.closePath(); g.fill();   // 盾
+    g.strokeStyle = '#0e1626'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = '#fff'; g.fillRect(18.5, 13, 3, 11); g.fillRect(18.5, 27, 3, 3);   // 驚嘆號
+  } else {
+    g.fillStyle = '#16301f'; g.fillRect(0, 0, 40, 40);
+    g.strokeStyle = 'rgba(150,240,160,.7)'; g.lineWidth = 2; g.beginPath(); g.arc(20, 20, 16, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#7ee08a'; g.fillRect(16.5, 7, 7, 26); g.fillRect(7, 16.5, 26, 7);   // 十字
+    g.strokeStyle = '#0e2616'; g.lineWidth = 1.5; g.strokeRect(16.5, 7, 7, 26); g.strokeRect(7, 16.5, 26, 7);
+    g.fillStyle = '#e8ffe8'; g.fillRect(18.5, 12, 3, 16); g.fillRect(12, 18.5, 16, 3);
+  }
+}
+function updateSkillBar() {   // 每幀：依職業顯示／隱藏、更新冷卻扇形與秒數（只在值變了才改 DOM）
+  const bar = $('skillBar'), sk = SKILL_BAR[S.me.job];
+  if (!sk) { if (skillUI.job !== '') { skillUI.job = ''; bar.classList.add('hidden'); $('app').classList.remove('has-skill'); } return; }
+  if (skillUI.job !== S.me.job) {
+    skillUI.job = S.me.job; skillUI.cdLeft = 0; skillUI.dim = skillUI.ready = null; skillUI.num = '';
+    drawSkillIcon(S.me.job); $('skillName').textContent = sk.name;
+    $('skillBtn').onclick = () => sk.run();
+    bar.classList.remove('hidden'); $('app').classList.add('has-skill');
+  }
+  const me = S.players[0], total = sk.total(), left = Math.max(0, sk.until() - S.t);
+  const why = (me.dead || S.t < (me.petUntil ?? 0) || S.mode !== 'walk') ? '現在不能使用' : sk.usable();
+  const btn = $('skillBtn');
+  if (left > 0) {   // 冷卻中：暗色扇形從 12 點鐘順時針退去（已過的角度透明、剩下的暗）
+    const deg = Math.min(360, (1 - left / total) * 360);
+    $('skillCd').style.background = `conic-gradient(rgba(0,0,0,0) 0deg ${deg.toFixed(1)}deg, rgba(8,10,14,.72) ${deg.toFixed(1)}deg 360deg)`;
+    const num = left < 1 ? left.toFixed(1) : String(Math.ceil(left));
+    if (num !== skillUI.num) { $('skillNum').textContent = num; skillUI.num = num; }
+  } else if (skillUI.cdLeft > 0 || skillUI.num) {
+    $('skillCd').style.background = 'none'; $('skillNum').textContent = ''; skillUI.num = '';
+    if (skillUI.cdLeft > 0 && skillUI.job === S.me.job) { btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash'); }   // 冷卻結束閃一下
+  }
+  skillUI.cdLeft = left;
+  const dim = !!why, ready = !why && left <= 0;
+  if (dim !== skillUI.dim) { btn.classList.toggle('dim', dim); skillUI.dim = dim; }
+  if (ready !== skillUI.ready) { btn.classList.toggle('ready', ready); skillUI.ready = ready; }
+  btn.title = `${sk.name}（R）` + (why ? ` — ${why}` : '');
+}
+
 // 仇恨狀態的單機 tick：追（每腿重瞄目標、速度 180）、進範圍就每秒一抓（扣 2 HP）、
 // 目標死了／5 秒到隨機換攻擊者、龍衝 CD 到了自動對目標放龍衝、30 秒（OWNER_DROPOUT）沒人打就脫離回閒晃
 function ownerAggroStep(a, dt, def) {
@@ -3049,6 +3108,7 @@ async function boot() {
         if (!f.slash && !f.beam && !f.healPulse && !f.orb) f.y -= 34 * dt;   // 爪擊/光束/綠圈特效固定在原座標，不隨飄字上浮
         if (f.life <= 0) S.floaters.splice(i, 1);
       }
+      updateSkillBar();
       draw();
     } catch (e) { console.error('loop:', e); }
     requestAnimationFrame(loop);
