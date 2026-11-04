@@ -68,7 +68,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 | 家具 | `client/assets/furniture/furniture.json` 加條目 + png |
 | 地板 | `client/assets/floors/floors.json` 加條目 + 16×16 無縫磚 png（`gen_assets.py` 的 `FLOOR_MANIFEST`）；多格地板（如地毯 2×2）加 `"w"`/`"h"`，圖為 16w×16h，邊長最多 4 |
 | 動物 | `client/assets/animals/animals.json` 加條目 + png，並在各地形 `terrain.json` 的 `animals` 指定；會游泳/兩棲/會飛的加 `"swim": true`（才能逃到海上）；要多幀動畫就加 `"anim"`（等寬水平 sheet，由左至右循環：`sheet`／`frames`／`fps`／`dashFps`／`scale`／`keyBg`，見 `gen_assets.py` 的 `ANIMAL_MANIFEST` 註解） |
-| 造型 | `client/assets/avatar/avatar.json`（＋對應 png） |
+| 造型 | `client/assets/avatar/avatar.json`（＋對應 png）。人物分五層（軀幹＞褲子＞衣服＞頭髮＞帽子，由下往上疊），每層一張照**標準排列**畫的 sheet：每幀 24×24，8 方向（下、右下、右、右上、上、左上、左、左下）×〔待機 4 幀＋走路 4 幀〕＋最後 1 幀坐姿，共 65 幀（幀表在 `avatar.json` 的 `frames`）。換素材＝照排列畫好覆蓋同名檔；加衣服／褲子／帽子款式＝`tops`／`bottoms`／`hats` 加一項（可另設 `recolor` 換色）。產生器在 `gen_assets.py` 的 `char_*` |
 | NPC／嚮導／台詞／操作說明 | `client/assets/npcs/npcs.json`（`terrains.<地圖>` 每張地圖各自的 NPC，`help` 是嚮導的說明視窗） |
 | 魚（釣魚／圖鑑） | `tools/gen_assets.py` 的 `FISH_TABLE` 加一列（地形、id、名稱、稀有度 `common`/`uncommon`/`rare`、尺寸 cm 範圍、畫圖）再重跑，產生 `client/assets/fish/<id>.png` 與 `fish.json`；稀有度權重與脫鉤率在 `fish_manifest()` |
 | 可破壞物件／採集工具／掉落物 | `client/assets/tools/tools.json`（key＝地形 deco 的圖檔名；掉落物目前為空） |

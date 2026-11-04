@@ -116,6 +116,7 @@ CELL = 32                # 與 client/js/main.js 一致
 # ---- 玩家 state 封包白名單（與 worker/src/index.js 的 sanitizeState 一致，改一邊要改另一邊）----
 ID_RE = re.compile(r"^[a-z0-9_-]{1,24}$")
 NAME_MAX = 24
+D8 = ("down", "down_right", "right", "up_right", "up", "up_left", "left", "down_left")   # 與 client 的 CHAR_DIR8 一致
 
 
 def _num(v, lo, hi, fb):
@@ -147,7 +148,11 @@ def sanitize_state(s, prev):
             "hair": _id_or(look.get("hair"), pl.get("hair", "hair1")),
             "shirt": round(_num(look.get("shirt"), 0, 99, pl.get("shirt", 0))),
             "pants": round(_num(look.get("pants"), 0, 99, pl.get("pants", 0))),
+            "hat": _id_or(look.get("hat"), None),        # 帽子 id（None＝沒戴）
+            "top": _id_or(look.get("top"), None),        # 上衣款式 id（None＝預設款）
+            "bottom": _id_or(look.get("bottom"), None),  # 褲子款式 id（None＝預設款）
         },
+        "d8": s.get("d8") if s.get("d8") in D8 else None,   # 畫面用的 8 方向朝向（只轉發；玩法看 face）
         "weapon": _id_or(s.get("weapon"), "hands"),
         "pose": s.get("pose") if s.get("pose") in ("sit", "sleep") else None,
         "face": s.get("face") if s.get("face") in ("up", "side") else "down",

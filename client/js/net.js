@@ -5,6 +5,7 @@
 const SEND_HZ = 12;          // 每秒送幾次自己的位置
 const HEARTBEAT_MS = 1000;   // 狀態沒變時的心跳間隔（必須遠小於 STALE_MS，否則站著不動的人會被當成離線）
 const STALE_MS = 15000;      // 超過這麼久沒收到訊息就當對方離線
+const D8 = ['down', 'down_right', 'right', 'up_right', 'up', 'up_left', 'left', 'down_left'];   // 與 main.js 的 CHAR_DIR8、兩份伺服器一致
 
 export function connectNet(S, opts = {}) {
   const q = new URLSearchParams(location.search);
@@ -29,7 +30,9 @@ export function connectNet(S, opts = {}) {
       moving: p.moving,
       z: Math.round(p.z),
       name: p.name,
-      look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt, pants: S.me.pants || 0 },
+      look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt, pants: S.me.pants || 0,
+              hat: S.me.hat || null, top: S.me.top || null, bottom: S.me.bottom || null },   // 帽子／上衣款式／褲子款式（null＝沒戴／用預設款）
+      d8: p.d8 || null,                    // 畫面用的 8 方向朝向（down/down_right/right/…；玩法仍看 face）
       weapon: p.tool || S.me.weapon,       // 手上拿的（打石頭/樹木時是工具）
       pose: p.pose || null,                // 'sit' | 'sleep'（坐/睡在家具上）
       face: p.face || 'down',              // 四方向朝向：'up'（背面）| 'down'（正面）| 'side'（側，dir 決定左右）
@@ -58,6 +61,7 @@ export function connectNet(S, opts = {}) {
       r.weapon = st.weapon || r.weapon;
       r.pose = st.pose === 'sit' || st.pose === 'sleep' ? st.pose : null;
       r.face = st.face === 'up' || st.face === 'side' ? st.face : 'down';
+      r.d8 = D8.includes(st.d8) ? st.d8 : null;   // 舊客戶端沒送就從 face＋dir 推
       r.seatType = typeof st.seat === 'string' ? st.seat : null;
       // 釣魚：浮標位置與階段；階段變了就重新起算（拉扯動畫要知道從什麼時候開始）
       const fs = st.fish && ['wait', 'bite', 'reel'].includes(st.fish.ph) ? st.fish : null;

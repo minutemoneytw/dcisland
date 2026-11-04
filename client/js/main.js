@@ -48,8 +48,10 @@ const S = {
   terrains: {},                 // id -> manifest
   tImages: {},                  // id -> {file: Image}
   furn: null, furnImgs: {},
-  avatar: null, bodyImgs: {}, hairImgs: {}, hairBackImgs: {},
-  charCache: new Map(),         // key -> {a: canvas, b: canvas}
+  avatar: null,
+  charImgs: {},                 // 人物分層 sheet：檔名 -> Image（軀幹／頭髮／衣服／褲子／帽子）
+  charCache: new Map(),         // (造型, 幀號) -> 合成好的一幀
+  recolorCache: new Map(),      // (sheet, 顏色) -> 換好色的整張 sheet
   me: lsObj('dcisland.m0.avatar', null) || { skin: 'light', hair: 'hair1', shirt: 0, weapon: 'sword' },
   world: null,                  // {types: Uint8Array, decos: []}
   furnItems: [],                // [{type, cell:[x,y]}]
@@ -1081,45 +1083,75 @@ function blocked(px, py, ignoreFurn) { // 像素座標（腳底）；ignoreFurn�
 // ---------------- 造型合成 ----------------
 function hexRGB(h) { const s = h.replace('#', ''); return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)]; }
 
-function charSprite(skin, hairId, shirtIdx, frame, pantsIdx) {   // frame：0/1 走路兩幀、2 坐姿、3/4 背面（往上走）的站/走
-  // 索引超出範圍（舊存檔/別人送來的怪值）就用 0 號，避免畫圖當掉
-  const shirtHex = S.avatar.shirtColors[shirtIdx] ?? S.avatar.shirtColors[0];
-  const pantsHex = S.avatar.pantsColors[pantsIdx || 0] ?? S.avatar.pantsColors[0];
-  const k = `${skin}|${hairId}|${shirtHex}|${pantsHex}`;
-  let entry = S.charCache.get(k);
-  if (!entry) entry = {};
-  const fk = 'abcde'[frame] || 'a';
-  if (entry[fk]) return entry[fk];
-  const src = S.bodyImgs[skin][fk === 'd' ? 'a' : fk === 'e' ? 'b' : fk];   // 背面沿用正面的身體，頭髮整顆蓋住臉
-  const cv = document.createElement('canvas'); cv.width = 16; cv.height = 24;
-  const g = cv.getContext('2d');
-  // 上衣換色
-  g.drawImage(src, 0, 0);
-  const d = g.getImageData(0, 0, 16, 24), p = d.data;
-  const [br, bg, bb] = hexRGB(S.avatar.recolor.shirtBase);
-  const [sr, sg, sb] = hexRGB(S.avatar.recolor.shirtShadeBase);
-  const [tr, tg, tb] = hexRGB(shirtHex);
-  const [pbr, pbg, pbb] = hexRGB(S.avatar.recolor.pantsBase);
-  const [psr, psg, psb] = hexRGB(S.avatar.recolor.pantsShadeBase);
-  const [ptr, ptg, ptb] = hexRGB(pantsHex);
+// 人物＝五層由下往上疊：軀幹（膚色）→ 褲子 → 衣服 → 頭髮 → 帽子。每層一張 sheet，排列＝avatar.json 的 frames（所有層共用同一套幀號，同步切換）
+// look：{skin, hair, hat（null＝沒戴）, top／bottom（衣服／褲子款式 id）, shirt／pants（衣服／褲子顏色編號）}；缺的欄位用各類第一項
+const CHAR_DIR8 = ['down', 'down_right', 'right', 'up_right', 'up', 'up_left', 'left', 'down_left'];
+const CHAR_MIRROR = { left: 'right', up_left: 'up_right', down_left: 'down_right', right: 'left', up_right: 'up_left', down_right: 'down_left' };
+const lookItem = (list, id) => list?.find(it => it.id === id) || null;
+// 換色：把圖上 recolor.base／shade 的像素換成所選顏色（shade 用 78%），結果依 (層, 款式, 顏色) 快取整張 sheet
+function recolorSheet(img, rc, hex) {
+  const key = img.src + '|' + hex;
+  let cv = S.recolorCache.get(key);
+  if (cv) return cv;
+  cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+  const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, cv.width, cv.height), p = d.data;
+  const [br, bg, bb] = hexRGB(rc.base), [sr, sg, sb] = rc.shade ? hexRGB(rc.shade) : [-1, -1, -1], [tr, tg, tb] = hexRGB(hex);
   for (let i = 0; i < p.length; i += 4) {
-    const r = p[i], gg = p[i + 1], b = p[i + 2], a = p[i + 3];
-    if (a === 0) continue;
-    if (r === br && gg === bg && b === bb) { p[i] = tr; p[i + 1] = tg; p[i + 2] = tb; }
-    else if (r === sr && gg === sg && b === sb) {
-      p[i] = tr * .78 | 0; p[i + 1] = tg * .78 | 0; p[i + 2] = tb * .78 | 0;
-    } else if (r === pbr && gg === pbg && b === pbb) { p[i] = ptr; p[i + 1] = ptg; p[i + 2] = ptb; }      // 褲子
-    else if (r === psr && gg === psg && b === psb) {
-      p[i] = ptr * .78 | 0; p[i + 1] = ptg * .78 | 0; p[i + 2] = ptb * .78 | 0;
-    }
+    if (!p[i + 3]) continue;
+    if (p[i] === br && p[i + 1] === bg && p[i + 2] === bb) { p[i] = tr; p[i + 1] = tg; p[i + 2] = tb; }
+    else if (p[i] === sr && p[i + 1] === sg && p[i + 2] === sb) { p[i] = tr * .78 | 0; p[i + 1] = tg * .78 | 0; p[i + 2] = tb * .78 | 0; }
   }
   g.putImageData(d, 0, 0);
-  const back = fk === 'd' || fk === 'e';
-  const hair = (back ? S.hairBackImgs[hairId] : null) || S.hairImgs[hairId];
-  if (hair) g.drawImage(hair, 0, fk === 'c' ? 3 : 0);   // 坐姿的頭整體下移 3 列，頭髮跟著下移；背面用整顆蓋住的頭髮
-  entry[fk] = cv;
-  S.charCache.set(k, entry);
+  S.recolorCache.set(key, cv);
   return cv;
+}
+// 合成一幀（24×24 之類，大小看 frames.w/h），依 (造型, 幀號) 快取
+function charSprite(look, fi) {
+  const A = S.avatar, F = A.frames;
+  // 索引超出範圍（舊存檔/別人送來的怪值）就用 0 號，避免畫圖當掉
+  const shirtHex = A.shirtColors[look.shirt] ?? A.shirtColors[0], pantsHex = A.pantsColors[look.pants || 0] ?? A.pantsColors[0];
+  const skin = lookItem(A.skins, look.skin) || A.skins[0], hair = lookItem(A.hair, look.hair) || A.hair[0];
+  const top = lookItem(A.tops, look.top) || A.tops?.[0], bottom = lookItem(A.bottoms, look.bottom) || A.bottoms?.[0];
+  const hat = lookItem(A.hats, look.hat);
+  const k = [skin.id, hair.id, hat?.id || '', top?.id, shirtHex, bottom?.id, pantsHex, fi].join('|');
+  let cv = S.charCache.get(k);
+  if (cv) return cv;
+  cv = document.createElement('canvas'); cv.width = F.w; cv.height = F.h;
+  const g = cv.getContext('2d');
+  // 由下往上：軀幹 → 褲子 → 衣服 → 頭髮 → 帽子（帽子也可以有 recolor，顏色暫用衣服的）
+  for (const [it, hex] of [[skin], [bottom, pantsHex], [top, shirtHex], [hair], [hat, shirtHex]]) {
+    const img = it && S.charImgs[it.sheet];
+    if (!img || (fi + 1) * F.w > img.width) continue;   // 缺圖／這張 sheet 沒有這一幀：這層略過
+    const src = it.recolor && hex ? recolorSheet(img, it.recolor, hex) : img;
+    g.drawImage(src, fi * F.w, 0, F.w, F.h, 0, 0, F.w, F.h);
+  }
+  S.charCache.set(k, cv);
+  return cv;
+}
+// 8 方向視覺朝向：移動時依 (dx, dy) 的角度取最近的方向（鍵盤 8 向剛好一一對應）；玩法（石化等）仍看 face
+function dir8Of(dx, dy) {
+  const s = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));   // 扇區：0＝右、2＝下、-2＝上、±4＝左（畫面 y 向下）
+  return CHAR_DIR8[((2 - s) % 8 + 8) % 8];
+}
+// 沒有 d8（舊客戶端／NPC 剛生成）時，從 face＋dir 推
+const d8Of = p => p.d8 || (p.face === 'up' ? 'up' : p.face === 'side' ? (p.dir < 0 ? 'left' : 'right') : 'down');
+// 這個人現在該畫哪一幀：坐／睡＝sit；否則「朝向_待機或走路」，依遊戲時間循環（每人有自己的起始相位）。
+// 幀表沒有這個狀態時：左右對稱的方向改用另一邊再左右翻轉（mirror）；再沒有就退回正上／正下
+function charFrame(p) {
+  const F = S.avatar.frames, st = F.states;
+  if (p.pose) return { fi: (st.sit || st.down_idle)[0], mirror: false };
+  const mode = p.moving ? 'walk' : 'idle', d = d8Of(p);
+  let list = st[`${d}_${mode}`], mirror = false;
+  if (!list && CHAR_MIRROR[d]) { list = st[`${CHAR_MIRROR[d]}_${mode}`]; mirror = !!list; }
+  if (!list) list = st[`${d.startsWith('up') ? 'up' : 'down'}_${mode}`] || st.down_idle;
+  p.animPhase ??= Math.random() * 4;
+  return { fi: list[Math.floor((S.t + p.animPhase) * (F.fps?.[mode] || 6)) % list.length], mirror };
+}
+// 武器掛點（back／backView／waist／hand）換成相對腳底的畫面座標（2 倍）；frameAnchors 可逐幀覆寫
+function charAnchor(fi, kind) {
+  const F = S.avatar.frames, a = F.frameAnchors?.[fi]?.[kind] || F.anchors[kind];
+  return [(a[0] - F.w / 2) * 2, (a[1] - F.h) * 2];
 }
 
 // ---------------- 玩家 ----------------
@@ -1160,21 +1192,17 @@ function spawnNPCs() {
   S.players = [S.players[0], ...out];
 }
 
-function playerSpriteDiv(p, frame) {
+function playerSpriteDiv(p, fi) {
   // NPC 與遠端玩家都有自己的 look；自己（players[0]）則用當前造型
-  if (p.look) return charSprite(p.look.skin, p.look.hair, p.look.shirt, frame, p.look.pants);
-  return charSprite(S.me.skin, S.me.hair, S.me.shirt, frame, S.me.pants);
+  return charSprite(p.look || S.me, fi);
 }
 
 // ---- M2：遠端玩家（位置用內插，避免網路抖動造成瞬移）----
 function stepRemote(r, dt) {
-  if (r.pose) r.frame = 0;
   const k = Math.min(1, dt * 14);
   const dx = r.tx - r.x, dy = r.ty - r.y;
   r.x += dx * k; r.y += dy * k;
-  r.moving = Math.hypot(dx, dy) > 1.5;
-  if (r.moving) { r.animT += dt; if (r.animT > .16) { r.animT = 0; r.frame ^= 1; } }
-  else r.frame = 0;
+  r.moving = Math.hypot(dx, dy) > 1.5;   // 走路／待機的幀由 charFrame 依時間取
   if (r.swing > 0) r.swing -= dt;
   r.z += ((r.tz ?? r.z) - r.z) * Math.min(1, dt * 22);   // 跳躍高度追目標（封包 12Hz，這個速度追得上又夠平滑）
 }
@@ -1194,7 +1222,7 @@ function revivePlayer(p) {
   p.hp = PLAYER_HP;   // 復活即滿血
   p.petUntil = 0; p.petTick = 0; p.petWas = false;   // 復活順便清石化（石化時長比死亡短，正常輪不到）
   const [nx, ny] = landNear((COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL);
-  p.x = nx; p.y = ny; p.z = 0; p.vz = 0; p.dir = 1;
+  p.x = nx; p.y = ny; p.z = 0; p.vz = 0; p.dir = 1; p.d8 = 'down';
   S.floaters.push({ x: p.x, y: p.y - 46, v: '復活！', life: 1.2, crit: true });
   toast('毫髮無傷地復活了！', 1800);
 }
@@ -1241,10 +1269,11 @@ function stepPlayer(p, dt) {
     if (S.mode === 'walk' && S.mouseHeld && S.mouseClient) {   // 按住滑鼠攻擊時，面向跟著游標（可以一邊朝右攻擊一邊往左退）
       const wx = S.mouseClient[0] - canvas.getBoundingClientRect().left + S.cam.x;
       if (Math.abs(wx - p.x) > 6) p.dir = Math.sign(wx - p.x);
-      p.face = 'side';
+      p.face = 'side'; p.d8 = p.dir < 0 ? 'left' : 'right';
     } else {   // 朝向：有往上的分量（含斜上）＝背面、只往下＝正面、其餘有左右分量（左右、斜下）＝側（dir 左右）；站著不動維持上次的朝向
       if (dx !== 0) p.dir = dx;
       p.face = dy < 0 ? 'up' : dx !== 0 ? 'side' : 'down';
+      p.d8 = dir8Of(dx, dy);   // 畫面用的 8 方向（玩法仍看 face）
     }
     const len = Math.hypot(dx, dy) || 1, sp = (keys['shift'] ? 200 : 120) * dt;
     const nx = clamp(p.x + dx / len * sp, 8, COLS * CELL - 8);
@@ -1260,14 +1289,12 @@ function stepPlayer(p, dt) {
     p.z += p.vz * dt; p.vz -= 780 * dt;
     if (p.z <= 0) { p.z = 0; p.vz = 0; }
   }
-  if (p.swing > 0) { p.swing -= dt; p.face = 'side'; }   // 揮擊／採集是朝左右揮，轉成側面
+  if (p.swing > 0) { p.swing -= dt; p.face = 'side'; p.d8 = p.dir < 0 ? 'left' : 'right'; }   // 揮擊／採集是朝左右揮，轉成側面
   if (p.fish) {   // 釣魚中走動：身體一直面向浮標（倒退著走），釣竿才會指著浮標、釣線不會從背後繞過去
     if (Math.abs(p.fish.x - p.x) > 4) p.dir = Math.sign(p.fish.x - p.x);
-    p.face = 'side';
+    p.face = 'side'; p.d8 = p.dir < 0 ? 'left' : 'right';
   }
   if (p.tool && S.t > p.toolUntil && !(p.swing > 0)) p.tool = null;
-  if (p.moving) { p.animT += dt; if (p.animT > .16) { p.animT = 0; p.frame ^= 1; } }
-  else p.frame = 0;
   if (pet && S.t >= (p.petTick ?? 0)) {   // 石化每秒扣 1 HP（死者走既有墓碑機制）
     p.petTick = S.t + 1;
     playerDamage(p, 1, p.petCause || '石化');
@@ -1296,10 +1323,10 @@ function stepNPC(p, dt) {
   p.moving = true;
   const dx = p.target.x - p.x, dy = p.target.y - p.y, len = Math.hypot(dx, dy) || 1, sp = 55 * dt;
   if (dx) p.dir = Math.sign(dx);
+  p.d8 = dir8Of(dx, dy);   // NPC 也用 8 方向的幀（往上走會看到背面）
   const nx = clamp(p.x + dx / len * sp, 8, COLS * CELL - 8), ny = clamp(p.y + dy / len * sp, 8, ROWS * CELL - 8);
   if (!blocked(nx, p.y)) p.x = nx;
   if (!blocked(p.x, ny)) p.y = ny;
-  p.animT += dt; if (p.animT > .18) { p.animT = 0; p.frame ^= 1; }
   if (Math.random() < .002) p.idle = .8 + Math.random() * 1.6;
 }
 
@@ -1316,21 +1343,23 @@ function drawPerson(p, wi, nameColor) {
       ctx.fillStyle = `rgba(10,14,20,${.32 * shs + .04})`;
       ctx.beginPath(); ctx.ellipse(p.x, p.y + 1, 11 * shs, 4 * shs, 0, 0, Math.PI * 2); ctx.fill();
     }
-    const img = playerSpriteDiv(p, pose ? 2 : p.face === 'up' ? (p.frame === 1 ? 4 : 3) : (p.frame === 1 ? 1 : 0));   // 往上走＝背面
+    const cf = charFrame(p), img = playerSpriteDiv(p, cf.fi), F = S.avatar.frames;   // 方向已畫在幀裡，只有借用另一邊的幀時才左右翻轉
+    charAnch = { back: charAnchor(cf.fi, 'back'), backView: charAnchor(cf.fi, 'backView'), waist: charAnchor(cf.fi, 'waist'), hand: charAnchor(cf.fi, 'hand') };
     const pet = S.t < (p.petUntil ?? 0);   // 石化：身體灰階（自己的石化即時同步；遠端玩家的石化由光束事件就地推斷，純演出）
     if (pet) { ctx.save(); ctx.filter = 'grayscale(1) brightness(.92)'; }
     ctx.save(); ctx.translate(p.x, p.y - p.z);
-    // 武器（背在肩上 / 揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
+    // 武器（背在背上／掛在腰間；揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
     const fish = wi && !pose && p.fish ? p.fish : null;
-    const carry = wi && !pose && !fish && !(p.swing > 0);   // 背在背上
-    const backView = p.face === 'up';                         // 背面（往上走）：背著的武器疊在身體上面，正面／側面則被身體擋住
-    // 背著的武器畫在左右翻轉之外：固定背在同一側，人物轉向時不會跟著換邊
-    if (carry && !backView) drawWeaponBack(wi);
+    const carry = wi && !pose && !fish && !(p.swing > 0);   // 不拿在手上
+    const backView = d8Of(p).startsWith('up');                // 背面（往上、斜上）：背著的武器疊在身體上面，其餘方向被身體擋住
+    // 掛著的武器畫在左右翻轉之外：固定在同一側，人物轉向時不會跟著換邊
+    const drawCarry = onBack => wi.carry === 'waist' ? drawWeaponWaist(wi) : drawWeaponBack(wi, onBack);
+    if (carry && !backView) drawCarry(false);
     ctx.save();
-    if (p.dir < 0) ctx.scale(-1, 1);
-    ctx.drawImage(img, -16, -48, 32, 48);
+    if (cf.mirror) ctx.scale(-1, 1);
+    ctx.drawImage(img, -F.w, -F.h * 2, F.w * 2, F.h * 2);   // 錨點＝腳底中央，畫 2 倍
     ctx.restore();
-    if (carry && backView) drawWeaponBack(wi, true);
+    if (carry && backView) drawCarry(true);
     if (p.dir < 0) ctx.scale(-1, 1);                          // 揮擊、拋竿朝面向那側（要翻轉）
     if (wi && !pose && !fish && p.swing > 0) drawWeaponSwing(wi, p.swing, p.dir < 0 ? -1 : 1);
     if (fish) drawRodCast(wi, rodAngle(fish));
@@ -1385,8 +1414,8 @@ function drawGazeEye(x, y, r, pul) {
 }
 // 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）
 function drawSleeper(p) {
-  const img = playerSpriteDiv(p, 0);
-  ctx.drawImage(img, 0, 2, 16, 11, p.x - 16, p.y - 33, 32, 22);   // 頭的水平中心對準枕頭（單人床中央）
+  const F = S.avatar.frames, img = playerSpriteDiv(p, (F.states.down_idle || [0])[0]);   // 用正面待機的第 1 幀切出頭與肩膀
+  ctx.drawImage(img, F.w / 2 - 8, 2, 16, 11, p.x - 16, p.y - 33, 32, 22);   // 頭的水平中心對準枕頭（單人床中央）
   const def = furnitureDef(p.seatType || 'bed'), bed = S.furnImgs[p.seatType || 'bed'];
   if (bed && def?.quiltRow) {   // 被子：從床的「同一幀」切出被子那幾列蓋回去（床有動畫時才對得上）
     const rows = bed.height - def.quiltRow, fi = sprFrame(bed, p.seat ? cellPhase(p.seat.cell[0], p.seat.cell[1]) : 0);
@@ -1436,6 +1465,7 @@ function talkTo(n) {
   n.say = { text: line, until: S.t + db.duration };
   n.idle = db.duration + .5; n.moving = false; n.target = null;      // 停下來說話，面向玩家
   if (Math.abs(me.x - n.x) > 6) n.dir = Math.sign(me.x - n.x);
+  n.d8 = n.dir < 0 ? 'left' : 'right';   // 轉向玩家
   if (n.guide) {                              // 嚮導：先說一句話，讓台詞看得到，約 1.5 秒後再跳出簡易操作說明
     clearTimeout(S.helpTimer);
     S.helpTimer = setTimeout(() => { if (S.players.includes(n) && !S.helpOpen && !S.confirmOpen) openHelp(); }, 1500);
@@ -1554,7 +1584,7 @@ function usePose(it) {
   if (Math.hypot(cx - p.x, cy - p.y) > 80) { say(`靠近一點再${def.use === 'sit' ? '坐' : '躺'}`); return; }
   const sx = cx, sy = (it.cell[1] + def.h) * CELL - (def.use === 'sit' ? 2 : 0);
   for (const r of S.remotes.values()) if (r.pose && Math.abs(r.x - sx) < 10 && Math.abs(r.y - sy) < 10) { say('這裡有人了'); return; }
-  p.pose = def.use; p.seat = { type: it.type, cell: [it.cell[0], it.cell[1]] }; p.seatType = it.type; p.face = 'down';
+  p.pose = def.use; p.seat = { type: it.type, cell: [it.cell[0], it.cell[1]] }; p.seatType = it.type; p.face = 'down'; p.d8 = 'down';
   p.x = sx; p.y = sy; p.z = 0; p.vz = 0; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null;
   say(def.use === 'sit' ? '坐下了（移動、F 或再點一次起身）' : '晚安～（移動、F 或再點一次起身）', 1800);
 }
@@ -1693,13 +1723,13 @@ function rodAngle(f) {
 }
 // 畫拋出去的釣竿（ctx 已 translate 到角色腳底並依 dir 翻轉；轉軸同揮擊＝握把）
 function drawRodCast(wi, a) {
-  ctx.save(); ctx.translate(3, -26); ctx.rotate(a);
+  ctx.save(); ctx.translate(charAnch.hand[0], charAnch.hand[1]); ctx.rotate(a);
   ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();
 }
 // 釣線與浮標（世界座標）：從竿尖拉到浮標；上鉤時浮標沉下去、水面起漣漪；拉扯時浮標往人這邊收
 function drawLineAndBobber(p, wi, f) {
   const a = rodAngle(f), L = (wi.height - 3) * 2 - 2, dir = p.dir < 0 ? -1 : 1;
-  const tx = p.x + dir * (3 + L * Math.sin(a)), ty = p.y - p.z - 26 - L * Math.cos(a);
+  const tx = p.x + dir * (charAnch.hand[0] + L * Math.sin(a)), ty = p.y - p.z + charAnch.hand[1] - L * Math.cos(a);
   let bx = f.x, by = f.y;
   const since = S.t - (f.t ?? S.t);
   if (f.ph === 'reel') { const q = Math.min(1, since / FISH_REEL); bx += (p.x - bx) * q * .6; by += (p.y - 10 - by) * q * .6; }
@@ -1771,24 +1801,34 @@ function buildDex() {
 // 以「圖的底端」對齊（木劍 18 格高、畫成 36px 時底端在轉軸下 27px）：比較長的武器（釣竿）往上伸出肩頭，不會穿過腳底。
 // avatar.json 標 back: "hilt" 的（木劍）上下翻過來＝劍柄在肩後（約肩膀高度）、劍身朝下藏在身體後面
 const WEAPON_BACK_BOTTOM = 27, WEAPON_HILT_LIFT = 0;
-// onBack＝背面視角（畫在身體之上）：往背的中間靠，看起來是斜背在背上
-const WEAPON_BACK_X = -11, WEAPON_BACK_X_BACKVIEW = -5;
+// 武器掛點（畫面座標，相對腳底）：drawPerson 依這一幀的 avatar.json frames.anchors（可逐幀覆寫）算好放這裡；
+// 預設值＝以前寫死的常數（背上 -11,-26／背面 -5,-26／腰 -8,-18／手 3,-26）
+let charAnch = { back: [-11, -26], backView: [-5, -26], waist: [-8, -18], hand: [3, -26] };
+// onBack＝背面視角（畫在身體之上）：用 backView 掛點（往背的中間靠，看起來是斜背在背上）
 function drawWeaponBack(wi, onBack) {
-  ctx.save(); ctx.translate(onBack ? WEAPON_BACK_X_BACKVIEW : WEAPON_BACK_X, -26); ctx.rotate(-.55);
+  const [ax, ay] = onBack ? charAnch.backView : charAnch.back;
+  ctx.save(); ctx.translate(ax, ay); ctx.rotate(-.55);
   if (wi.hiltUp) { ctx.scale(1, -1); ctx.drawImage(wi, -wi.width, WEAPON_HILT_LIFT - WEAPON_BACK_BOTTOM, wi.width * 2, wi.height * 2); }
   else ctx.drawImage(wi, -wi.width, WEAPON_BACK_BOTTOM - wi.height * 2, wi.width * 2, wi.height * 2);
   ctx.restore();
 }
+// 掛在腰間（avatar.json 的 carry: "waist"）：握把在腰的掛點，武器頭朝下、往身後斜（劍柄朝上，像插在腰帶上）
+function drawWeaponWaist(wi) {
+  const [ax, ay] = charAnch.waist;
+  ctx.save(); ctx.translate(ax, ay); ctx.rotate(Math.PI + .45);
+  ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();   // 轉軸＝離圖底 3 格的握把
+}
 // 揮擊：握住劍柄（以握把為轉軸）、刀刃朝外，由後上方往前下方揮，畫在身體之後（身前）
-// 劍柄朝上背著的（hiltUp）：前 35% 手從肩後的劍柄位置（約 -13,-29，與 drawWeaponBack 的握把一致）移到身前，看起來是從背上拔劍再揮出去。
-// 背著的武器不隨人物翻轉（固定在畫面左側），ctx 卻已依面向翻轉，所以起點 x 要乘上 dir 換回同一側
-const SWING_HILT_FROM = [-13, -29], SWING_HILT_DRAW = .35;
+// 劍柄朝上背著的（hiltUp）或掛腰間的：前 35% 手從掛著的位置（背上劍柄＝back 掛點往左上 2,3；腰間＝waist 掛點）移到手的掛點，看起來是拔出來再揮。
+// 掛著的武器不隨人物翻轉（固定在畫面左側），ctx 卻已依面向翻轉，所以起點 x 要乘上 dir 換回同一側
+const SWING_HILT_DRAW = .35;
 function drawWeaponSwing(wi, swing, dir = 1) {
   const q = 1 - swing / ATK_T;
-  let px = 3, py = -26;
-  if (wi.hiltUp) {
-    const k = Math.min(1, q / SWING_HILT_DRAW), fx = SWING_HILT_FROM[0] * dir;
-    px = fx + (3 - fx) * k; py = SWING_HILT_FROM[1] + (-26 - SWING_HILT_FROM[1]) * k;
+  let [px, py] = charAnch.hand;
+  if (wi.hiltUp || wi.carry === 'waist') {
+    const from = wi.carry === 'waist' ? charAnch.waist : [charAnch.back[0] - 2, charAnch.back[1] - 3];
+    const k = Math.min(1, q / SWING_HILT_DRAW), fx = from[0] * dir;
+    px = fx + (px - fx) * k; py = from[1] + (py - from[1]) * k;
   }
   ctx.save(); ctx.translate(px, py); ctx.rotate(-.9 + q * 2.8);
   ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();   // 轉軸＝離圖底 3 格的握把
@@ -2428,6 +2468,23 @@ function buildAvatarPanel() {
     o.onclick = () => { S.me.hair = h.id; saveAvatar(); buildAvatarPanel(); };
     hr.appendChild(o);
   }
+  // 帽子／上衣款式／褲子款式：avatar.json 的 hats／tops／bottoms；可選的不到 2 種（帽子：沒有任何一頂）就不顯示那一列
+  const styleRow = (grp, box, list, field, none) => {
+    const opts = none ? [{ id: null, name: '無' }, ...(list || [])] : (list || []);
+    $(grp).classList.toggle('hidden', opts.length < 2);
+    const el = $(box); el.innerHTML = '';
+    const cur = S.me[field] ?? (none ? null : opts[0]?.id);
+    for (const it of opts) {
+      const o = document.createElement('div');
+      o.className = 'opt name' + (cur === it.id ? ' sel' : '');
+      o.textContent = it.name;
+      o.onclick = () => { S.me[field] = it.id; saveAvatar(); buildAvatarPanel(); };
+      el.appendChild(o);
+    }
+  };
+  styleRow('hatGrp', 'hatOpts', S.avatar.hats, 'hat', true);
+  styleRow('topGrp', 'topOpts', S.avatar.tops, 'top', false);
+  styleRow('bottomGrp', 'bottomOpts', S.avatar.bottoms, 'bottom', false);
   const pn = $('pantsOpts'); pn.innerHTML = '';
   swatchOrder(S.avatar.pantsColors).forEach(i => {
     const hex = S.avatar.pantsColors[i], o = document.createElement('div');
@@ -2670,18 +2727,14 @@ async function boot() {
     ...S.toolsDB.tools.map(async t => S.weaponImgs[t.id] = await optImg(`assets/tools/${t.sprite}`)),
     optImg('assets/tombstone.png').then(im => S.tombImg = im),   // 死亡墓碑（島主龍衝打倒後原地出現）
     ...S.furn.items.map(async it => S.furnImgs[it.id] = await loadSpr(`assets/furniture/${it.sprite}`, it.anim)),
-    ...S.avatar.skins.map(async s => {
-      const [a, b, c] = await Promise.all(['a', 'b', 'sit'].map(k => loadImg(`assets/avatar/body_${s.id}_${k}.png`)));
-      S.bodyImgs[s.id] = { a, b, c };
-    }),
-    ...S.avatar.hair.map(async h => {
-      const [im, back] = await Promise.all([optImg(`assets/avatar/${h.sprite}`), h.back ? optImg(`assets/avatar/${h.back}`) : null]);
-      S.hairImgs[h.id] = im;
-      if (back) S.hairBackImgs[h.id] = back;
-    }),
+    // 人物分層 sheet：軀幹（膚色）是必要的（缺了畫不出人），頭髮／衣服／褲子／帽子缺圖就略過那一層
+    ...S.avatar.skins.map(async s => S.charImgs[s.sheet] = await loadImg(`assets/avatar/${s.sheet}`)),
+    ...[...S.avatar.hair, ...(S.avatar.tops || []), ...(S.avatar.bottoms || []), ...(S.avatar.hats || [])]
+      .map(async it => S.charImgs[it.sheet] = await optImg(`assets/avatar/${it.sheet}`)),
     ...S.avatar.weapons.filter(w => w.sprite).map(async w => {
       const im = await optImg(`assets/avatar/${w.sprite}`);
       if (im && w.back === 'hilt') im.hiltUp = true;   // 背在背上時劍柄朝上（drawWeaponBack 看這個旗標）
+      if (im) im.carry = w.carry === 'waist' ? 'waist' : 'back';   // 不拿在手上時掛哪裡
       S.weaponImgs[w.id] = im;
     }),
     ...Object.values(S.fishDB.terrains).flat().map(async f => S.fishImgs[f.id] = await optImg(`assets/fish/${f.sprite}`)),

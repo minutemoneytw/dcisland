@@ -181,6 +181,7 @@ function cellHasFurn(items, defs, cell) {
 // 欄位要與 client/js/net.js 的 myState() 一致（改一邊要改另一邊）；dev_server.py 有同款 sanitize_state
 const ID_RE = /^[a-z0-9_-]{1,24}$/;
 const NAME_MAX = 24;
+const D8 = ["down", "down_right", "right", "up_right", "up", "up_left", "left", "down_left"];   // 與 client 的 CHAR_DIR8 一致
 const num = (v, lo, hi, fb) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fb);
 const idOr = (v, fb) => (typeof v === "string" && ID_RE.test(v) ? v : fb);
 function sanitizeState(s, prev) {
@@ -199,7 +200,11 @@ function sanitizeState(s, prev) {
       hair: idOr(look.hair, pl.hair || "hair1"),
       shirt: Math.round(num(look.shirt, 0, 99, pl.shirt ?? 0)),
       pants: Math.round(num(look.pants, 0, 99, pl.pants ?? 0)),
+      hat: idOr(look.hat, null),          // 帽子 id（null＝沒戴）
+      top: idOr(look.top, null),          // 上衣款式 id（null＝預設款）
+      bottom: idOr(look.bottom, null),    // 褲子款式 id（null＝預設款）
     },
+    d8: D8.includes(s.d8) ? s.d8 : null,  // 畫面用的 8 方向朝向（只轉發；玩法看 face）
     weapon: idOr(s.weapon, "hands"),
     pose: s.pose === "sit" || s.pose === "sleep" ? s.pose : null,
     face: s.face === "up" || s.face === "side" ? s.face : "down",

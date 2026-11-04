@@ -283,6 +283,74 @@ def hair_back(style):
         cv.vline(8, 4, 9, shade(hh, 0.85))
     return cv
 
+# ---------------- 人物分層 sheet（client 由下往上疊：軀幹 → 褲子 → 衣服 → 頭髮 → 帽子）----------------
+# 每一層都是同一個標準排列的水平 sheet（CHAR_FRAMES 幀、每幀 CHAR_FW×CHAR_FH），所有層幀號一致、同步切換：
+#   8 個方向（CHAR_DIRS 順序）× [待機 4 幀, 走路 4 幀] ＝ 64 幀，最後 1 幀坐姿（共 65 幀）
+# 之後換成正式素材只要照這個排列畫、覆蓋同名檔案；排列寫在 avatar.json 的 frames（client 依它取幀）。
+# 這裡先用現有的 16×24 圖轉出 placeholder（置中放進 24×24，左右各留 4px 給寬帽子）：
+#   軀幹／衣服／褲子＝把 body() 依顏色拆開（SHIRT、PANTS 的顏色歸衣服、褲子，其餘含輪廓歸軀幹）；
+#   還沒有圖的方向沿用舊規則：上、斜上＝背面頭髮；其餘＝正面；左邊幾個方向＝右邊左右翻轉；待機 4 幀＝同一張；走路＝a,b,a,b
+CHAR_FW, CHAR_FH = 24, 24
+CHAR_DIRS = ["down", "down_right", "right", "up_right", "up", "up_left", "left", "down_left"]
+CHAR_FRAMES = len(CHAR_DIRS) * 8 + 1
+CHAR_SIT = len(CHAR_DIRS) * 8
+
+def char_states():
+    st = {}
+    for i, d in enumerate(CHAR_DIRS):
+        st[f"{d}_idle"] = [i * 8 + k for k in range(4)]
+        st[f"{d}_walk"] = [i * 8 + 4 + k for k in range(4)]
+    st["sit"] = [CHAR_SIT]
+    return st
+
+def _split(cv, part):
+    """把 16×24 的 body 依顏色拆層：part＝'torso'|'top'|'bottom'。"""
+    out = Canvas(cv.w, cv.h)
+    for y in range(cv.h):
+        for x in range(cv.w):
+            c = cv.get(x, y)
+            if not c[3]:
+                continue
+            kind = "top" if c in SHIRT else "bottom" if c in PANTS else "torso"
+            if kind == part:
+                out.set(x, y, c)
+    return out
+
+def char_sheet(draw):
+    """draw(back, walk_frame, sit) → 16×24 Canvas（或 None＝該層這幀沒東西），排成標準排列的 sheet。"""
+    sheet = Canvas(CHAR_FW * CHAR_FRAMES, CHAR_FH)
+    ox = (CHAR_FW - 16) // 2
+    def blit(cv, fi, mirror=False):
+        if cv is None:
+            return
+        for y in range(min(cv.h, CHAR_FH)):
+            for x in range(cv.w):
+                c = cv.get(x, y)
+                if c[3]:
+                    sheet.set(fi * CHAR_FW + ox + ((cv.w - 1 - x) if mirror else x), y + CHAR_FH - cv.h, c)
+    for i, d in enumerate(CHAR_DIRS):
+        back, mirror = d.startswith("up"), "left" in d
+        for k in range(4):
+            blit(draw(back, 0, False), i * 8 + k, mirror)              # 待機
+            blit(draw(back, k % 2, False), i * 8 + 4 + k, mirror)      # 走路 a,b,a,b
+    blit(draw(False, 0, True), CHAR_SIT)
+    return sheet
+
+def char_body_sheet(skin, part):
+    return char_sheet(lambda back, f, sit: _split(body_sit(skin) if sit else body(skin, f), part))
+
+def char_hair_sheet(style):
+    def draw(back, f, sit):
+        src = hair_back(style) if back else hair(style)
+        if not sit:
+            return src
+        cv = Canvas(16, 24)                                            # 坐姿：頭整體下移 3 列
+        for y in range(24 - 3):
+            for x in range(16):
+                cv.set(x, y + 3, src.get(x, y))
+        return cv
+    return char_sheet(draw)
+
 # ---------------- 家具 ----------------
 def sofa():
     r = hx("#c9544f"); rd = shade(r, 0.72)
@@ -1198,30 +1266,40 @@ def main():
     save(tool_pickaxe(), "tool_pickaxe.png", "tools")
     save(tool_axe(), "tool_axe.png", "tools")
 
-    print("== 角色 ==")
+    print("== 角色（分層 sheet）==")
     sub = "avatar"
     for key, skin in SKINS.items():
-        save(body(skin, 0), f"body_{key}_a.png", sub)
-        save(body(skin, 1), f"body_{key}_b.png", sub)
-        save(body_sit(skin), f"body_{key}_sit.png", sub)
+        save(char_body_sheet(skin, "torso"), f"char_body_{key}.png", sub)
+    save(char_body_sheet(SKINS["light"], "top"), "char_top_basic.png", sub)        # 衣服、褲子的形狀與膚色無關，只出一張
+    save(char_body_sheet(SKINS["light"], "bottom"), "char_bottom_basic.png", sub)
     for i, st in enumerate(["short", "side", "fluffy"]):
-        save(hair(st), f"hair{i + 1}.png", sub)
-        save(hair_back(st), f"hair{i + 1}_back.png", sub)
+        save(char_hair_sheet(st), f"char_hair{i + 1}.png", sub)
     json.dump(dict(
-        scale=2, px=16, py=24,
-        skins=[dict(id=k, name=n, base=SKINS[k][0], shade=SKINS[k][1])
+        scale=2,
+        # 人物分層的幀表（所有層共用）：w×h＝每幀大小；states＝狀態 → 幀號（8 方向 × idle/walk，加 sit）；fps＝待機／走路每秒幾幀；
+        # anchors＝武器掛點（sheet 像素座標，腳底中心＝(w/2, h)）：back 背上、backView 背面時背上、waist 腰間、hand 手（揮擊／拋竿轉軸）；
+        # frameAnchors＝{幀號: {掛點: [x, y]}} 逐幀覆寫（素材有上下晃時讓武器跟著動）。碰撞與點擊判定都看腳底，與幀大小無關
+        frames=dict(w=CHAR_FW, h=CHAR_FH, count=CHAR_FRAMES, dirs=CHAR_DIRS, states=char_states(),
+                    fps=dict(idle=4, walk=6),
+                    anchors=dict(back=[6.5, 11], backView=[9.5, 11], waist=[8, 15], hand=[13.5, 11]),
+                    frameAnchors={}),
+        skins=[dict(id=k, name=n, base=SKINS[k][0], shade=SKINS[k][1], sheet=f"char_body_{k}.png")
                for k, n in [("pale", "白皙"), ("light", "自然"), ("tan", "小麥"), ("deep", "深膚")]],
-        hair=[dict(id="hair1", name="短髮", sprite="hair1.png", back="hair1_back.png"),
-              dict(id="hair2", name="披髮", sprite="hair2.png", back="hair2_back.png"),
-              dict(id="hair3", name="蓬鬆", sprite="hair3.png", back="hair3_back.png")],
+        hair=[dict(id="hair1", name="短髮", sheet="char_hair1.png"),
+              dict(id="hair2", name="披髮", sheet="char_hair2.png"),
+              dict(id="hair3", name="蓬鬆", sheet="char_hair3.png")],
+        # 衣服／褲子／帽子：每款一張 sheet；有 recolor 就能再換色（base／shade＝圖上要被換掉的顏色，shade 換成所選顏色的 78%）
+        tops=[dict(id="basic", name="基本", sheet="char_top_basic.png", recolor=dict(base="#d95c68", shade="#aa474f"))],
+        bottoms=[dict(id="basic", name="基本", sheet="char_bottom_basic.png", recolor=dict(base="#4a54a0", shade="#38417c"))],
+        hats=[],
         hairColor="#4a3428",
         shirtColors=['#d95c68', '#4a90d9', '#4aa564', '#c9a227', '#8a5cc9', '#e0e0e0', '#4a4a52', '#d97a3a', '#f2a1b5', '#b5303f', '#f0c93a', '#8fd0e8', '#2e5fa8', '#3a3f8c', '#6fcfc0', '#2f8a78', '#8fc455', '#3e6b3a', '#b48be0', '#6a3f9a', '#8a5a3a', '#c8b08a', '#9aa0aa', '#f4ede0'],
         pantsColors=['#4a54a0', '#2f3548', '#4a4a52', '#8a8f99', '#d8d4c8', '#8a6a46', '#c8b08a', '#5a4a3a', '#3e6b3a', '#6a8a4a', '#2f8a78', '#3a78c8', '#2e5fa8', '#7aa8d8', '#6a3f9a', '#a63d4a', '#d97a3a', '#e0b840', '#e8a0b8', '#b5303f', '#1f1f26', '#f0f0f0', '#6fcfc0', '#b48be0'],
-        recolor=dict(shirtBase="#d95c68", shirtShadeBase="#aa474f", pantsBase="#4a54a0", pantsShadeBase="#38417c"),
         weapons=[
             dict(id="hands", name="空手", sprite=None),
-            dict(id="sword", name="木劍", sprite="weapon_sword.png", back="hilt"),   # back: "hilt"＝背在背上時劍柄朝上（沒寫＝頭朝上，例如釣竿）
-            dict(id="rod", name="釣竿", sprite="weapon_rod.png", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
+            # carry：不拿在手上時掛哪裡（back＝背上、waist＝腰間）；back: "hilt"＝背著時劍柄朝上（沒寫＝頭朝上，例如釣竿）
+            dict(id="sword", name="木劍", sprite="weapon_sword.png", carry="back", back="hilt"),
+            dict(id="rod", name="釣竿", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
         ],
     ), open(os.path.join(ASSETS, sub, "avatar.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print("  avatar/avatar.json")
