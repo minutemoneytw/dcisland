@@ -2,6 +2,7 @@
  "_comment": "島主招式設定（手寫，不由 gen_assets.py 產生）。key＝animals.json 島主的 atk 攻擊樣式。name＝招式名稱（顯示在倒數條右上角）；bar＝放招預警期間在島主頭上顯示黃色倒數條（由左往右填），填滿就放招；say＝放招前先原地講台詞 3 秒（animals.json 的 ownerLines），false＝被打就直接開始預警。兩份伺服器（worker/src/index.js、tools/dev_server.py）也讀 say。改這個檔不用改程式。",
  "skills": {
   "dash": { "name": "龍衝", "bar": false, "say": true },
-  "gaze": { "name": "石化", "bar": true, "say": false }
+  "gaze": { "name": "石化", "bar": true, "say": false },
+  "beam": { "name": "波動砲", "bar": true, "say": true }
  }
 }

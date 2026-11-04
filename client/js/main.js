@@ -545,6 +545,8 @@ function nearestLand(a) {
 // 預警範圍提示 1 秒後，以龍本體直線飛衝過島（攻擊範圍＝龍的大小，被撞到＝KO），衝到對岸落地歇一下後就地繼續散步／追殺
 const OWNER_FLY_SPEED = 240, OWNER_DASH_SPEED = 560, OWNER_CAST = 1, OWNER_CD = 12;
 const OWNER_GAZE_CAST = 2;      // 石化之瞳的開眼預警秒數（與兩份伺服器的 D_GAZE_CAST_MS 一致）
+const OWNER_BEAM_CAST = 2;      // 波動砲的讀條秒數（與兩份伺服器的 D_BEAM_CAST_MS 一致）
+const OWNER_BEAM_DMG = 4;       // 波動砲命中的扣血（比爪擊重、非即死；與伺服器一樣是各客戶端自判）
 const OWNER_PETRIFY_MS = 10000; // 石化時長：不能移動＋每秒扣 1 HP（判定在各人自己的畫面，不進同步協定）
 const OWNER_WALK_SPEED = 34, OWNER_LEG_MIN = 1500, OWNER_PAUSE = [1.5, 4];   // 閒晃：路點間散步速度／每腿最短時長／休息範圍（秒）
 const OWNER_REGEN = 18;   // 島主每秒回血（單機本地模擬；連線時血量由伺服器權威，與兩份伺服器的 D_REGEN 一致）
@@ -570,12 +572,14 @@ const HEAL_RADIUS = 96;   // 補師打倒動物／群療時的治療半徑（3 �
 const jobOf = p => JOBS[p === S.players[0] ? S.me.job : p.job] || null;
 // 血量上限：有職業用職業的上限，沒有（NPC／未設定）就 PLAYER_HP
 const hpCap = p => jobOf(p)?.hpMax ?? PLAYER_HP;
-// 島主攻擊樣式（animals.json 的 atk 欄位）：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女）
+// 島主攻擊樣式（animals.json 的 atk 欄位）：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女）、beam＝波動砲（蓋老師）
+// gaze／beam 都是「原地施放」（不瞬移），dash 會瞬移到島緣再衝
 const ownerAtk = def => def.atk || 'dash';
+const ownerStationary = def => ownerAtk(def) === 'gaze' || ownerAtk(def) === 'beam';
 // 島主招式設定：assets/skills/skills.json（key＝攻擊樣式）。name＝招式名稱、bar＝預警時頭上畫黃色倒數條、say＝放招前先講台詞
 // （false＝被打直接開始預警；兩份伺服器也讀同一個檔決定要不要跳過說話階段）
 const ownerSkill = def => S.skillsDB?.skills?.[ownerAtk(def)] || {};
-const ownerCastTotal = def => ownerAtk(def) === 'gaze' ? OWNER_GAZE_CAST : OWNER_CAST;   // 預警總秒數（倒數條的分母）
+const ownerCastTotal = def => ownerAtk(def) === 'gaze' ? OWNER_GAZE_CAST : ownerAtk(def) === 'beam' ? OWNER_BEAM_CAST : OWNER_CAST;   // 預警總秒數（倒數條的分母）
 // 島主被激怒的台詞：animals.json 該島主條目的 ownerLines（由 gen_assets.py 的 ANIMAL_MANIFEST 產生）。
 // 發動反擊前隨機說一句（不連續重複）；沒寫台詞的島主就不說話
 function ownerSay(a) {
@@ -621,19 +625,21 @@ function ownerWarp(a, src) {   // 說完台詞：瞬移到島緣鎖定攻擊者�
   toast(`${def.name} 瞬間消失，在島緣現出蹤影鎖定了你！`, 2400);
 }
 function ownerStep(a, dt, def) {
-  if (a.sayPhase) {   // 說台詞：原地不動（泡泡顯示中），說完照攻擊樣式接手（龍衝＝瞬移島緣；蛇女＝原地開眼）
+  if (a.sayPhase) {   // 說台詞：原地不動（泡泡顯示中），說完照攻擊樣式接手（龍衝＝瞬移島緣；蛇女／蓋老師＝原地施放）
     if (S.t < a.sayPhase) { a.z = 0; return; }
     const src = a.saySrc;
     a.sayPhase = 0; a.saySrc = null;
     if (ownerAtk(def) === 'gaze') ownerGazeCast(a, src);
+    else if (ownerAtk(def) === 'beam') ownerBeamCast(a, src);
     else ownerWarp(a, src);
     return;
   }
   if (a.cast) {
-    a.cast -= dt;   // 預警：龍衝＝金色虛線鎖定攻擊範圍；石化之瞳＝大眼睛＋綠色虛線
+    a.cast -= dt;   // 預警：龍衝＝金色虛線鎖定攻擊範圍；石化之瞳＝大眼睛；波動砲＝光波帶狀預警
     if (a.cast <= 0) {
       a.cast = 0;
       if (ownerAtk(def) === 'gaze') gazeFire(a, def);
+      else if (ownerAtk(def) === 'beam') beamFire(a, def);
       else ownerDive(a, def);
     }
     return;
@@ -739,6 +745,42 @@ function petrifyPlayer(p, cause) {   // 石化：10 秒不能移動／跳躍／�
   toast(`被 ${cause} 石化了！${OWNER_PETRIFY_MS / 1000} 秒動彈不得（每秒扣 1 HP）`, 3000);
 }
 
+// ---- 波動砲（蓋老師的攻擊，atk: "beam"）：不瞬移，原地讀條 2 秒 → 朝攻擊者發射一道跟島主一樣寬的直線光波 ----
+// 光波沿讀條時鎖定的方向直射出去；「站在光波帶狀範圍內」（與光束中線的垂直距離 < 島主一半寬）的人受傷。
+// 命中由各客戶端自判（跟龍衝／石化同源）；伺服器只負責階段與方向
+function ownerSize(a, def) {   // 島主畫面上的寬高（光波跟島主一樣寬）；有動畫看 anim.scale，否則看圖大小 ×2×big
+  const an = S.anAnims[a.id];
+  if (an) return { W: an.fw * an.scale, H: an.fh * an.scale };
+  const im = S.anImgs[a.id];
+  return { W: (im?.width || 24) * 2 * (def.big || 1), H: (im?.height || 24) * 2 * (def.big || 1) };
+}
+function ownerBeamCast(a, src) {   // 說完台詞：原地讀條（光波預警），蓋老師轉向攻擊者
+  const def = animalDef(a.id);
+  a.cast = OWNER_BEAM_CAST; a.castFrom = { x: src.x, y: src.y };
+  a.wleg = null; a.z = 0; a.fly = false;
+  a.dir = src.x < a.x ? -1 : 1;
+  toast(`${def.name} 開始凝聚波動砲——別站在砲口前面！`, 2600);
+}
+// 這個人是不是站在光波裡：把 (q - 島主) 投影到光束方向，只要在前方、離中線的垂直距離 < 半寬就算
+function inBeam(q, ax, ay, ux, uy, half) {
+  const dx = q.x - ax, dy = q.y - ay;
+  if (dx * ux + dy * uy < -half * .5) return false;   // 在島主背後（留一點餘裕）
+  return Math.abs(ux * dy - uy * dx) <= half;
+}
+function beamFire(a, def) {   // 讀條結束：發射直線光波（方向＝讀條時鎖定的攻擊者方向），判定在各人自己的畫面
+  const cf = a.castFrom;
+  let ux = cf ? cf.x - a.x : (a.dir || 1), uy = cf ? cf.y - a.y : 0;
+  const ul = Math.hypot(ux, uy) || 1; ux /= ul; uy /= ul;
+  a.castFrom = null; a.rageCd = S.t + OWNER_CD;
+  const { W, H } = ownerSize(a, def), half = W / 2;
+  S.floaters.push({ beamLine: true, x: a.x, y: a.y - H * .5, ang: Math.atan2(uy, ux), len: 1700, wid: W, life: .5 });   // 光波特效：射到畫面外
+  const hit = q => !q.dead && inBeam(q, a.x, a.y, ux, uy, half);
+  const me = S.players[0];
+  if (hit(me)) { playerDamage(me, OWNER_BEAM_DMG, def.name); S.floaters.push({ x: me.x, y: me.y - 24, ring: true, life: .35 }); }
+  for (const r of S.remotes.values()) if (hit(r)) S.floaters.push({ x: r.x, y: r.y - 24, ring: true, life: .35 });   // 遠端由對方自判，這裡只演出
+  toast(`${def.name} 的波動砲發射了！`, 2000);
+}
+
 // ---- 玩家血量＋島主仇恨（龍衝冷卻中的追殺）----
 // 單機本地模擬在這裡；連線時追殺流程由伺服器權威（aggro/claw/wander 事件），但「自己有沒有被打到」仍是各人自判
 function playerDamage(p, dmg, cause) {
@@ -764,7 +806,7 @@ function onNetHeal(healerId) {
 // 場上有沒有島主正在戰鬥（仇恨追殺、預警、龍衝、開眼、說台詞、歇腳都算）；連線時這些旗標由伺服器事件驅動
 function ownerEngaged() {
   return S.animals.some(a => !a.dead && animalDef(a.id)?.owner &&
-    (a.aggro || a.fly || a.cast || a.castFrom || a.rest || a.sayPhase || a.cycle || a.gaze));
+    (a.aggro || a.fly || a.cast || a.castFrom || a.rest || a.sayPhase || a.cycle || a.gaze || a.beam));
 }
 // 龍衝 CD 中被打：進入仇恨（單機版；連線版由伺服器廣播 aggro 事件）
 function ownerAggroStart(a, src) {
@@ -983,6 +1025,16 @@ function stepOwnerProxy(a, dt, def) {
     }
     return;
   }
+  if (a.beam) {   // 波動砲：原地讀條（牆鐘與伺服器同軸），castMs 到就本地發射（光波＋命中判定，受害者自判）
+    const b = a.beam, el = Date.now() - b.t0ms;
+    a.x = b.x; a.y = b.y; a.z = 0; a.fly = false;
+    a.cast = Math.max(0, (b.castMs - el) / 1000); a.castFrom = b.from;
+    if (el >= b.castMs) {
+      a.beam = null; a.cast = 0; a.castFrom = null;
+      beamFire(a, def);
+    }
+    return;
+  }
   const c = a.cycle;
   if (!c) {   // 沒有進行中的反擊循環：散步或站著等伺服器
     if (a.wleg) { stepOwnerWalk(a, dt); return; }
@@ -1059,7 +1111,7 @@ function applyDragonSnap(o) {
   if (o.ph === 'dead') return;   // 死了就先不生成，等 spawn 事件
   const a = dragonEnsure(o.x, o.y, o.hp);
   if (!a) return;
-  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null;
+  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null; a.beam = null;
   a.aggro = o.aggro != null;   // 快照帶仇恨目標（連線編號）：中途進場也知道牠在追殺（戰鬥中不自動回血、之後會提示冷靜）
   if (o.ph === 'aim') {   // 島緣鎖定中：還原成循環（扣掉已過的預警時間）
     const total = 1000;
@@ -1085,11 +1137,13 @@ function applyDragonSnap(o) {
     a.cycle = null; a.wleg = null;
     a.x = o.x; a.y = o.y; a.z = 0; a.fly = false;
     if (ownerSkill(animalDef(a.id)).say !== false) ownerSay(a);
-  } else if (o.ph === 'cast') {   // 石化之瞳開眼中：原地站定，接續剩餘的開眼時間後本地發射
+  } else if (o.ph === 'cast') {   // 原地施放中（石化之瞳開眼／波動砲讀條）：站定，接續剩餘時間後本地發射
     a.cycle = null; a.wleg = null;
-    const total = 2000, remain = Math.max(0, Math.min(total, o.castMs || total));
-    a.gaze = { t0ms: Date.now() - (total - remain), castMs: total,
-               from: { x: o.tx, y: o.ty }, x: o.x, y: o.y, bx: o.bx, by: o.by };
+    const beam = ownerAtk(animalDef(a.id)) === 'beam';
+    const total = (beam ? OWNER_BEAM_CAST : OWNER_GAZE_CAST) * 1000, remain = Math.max(0, Math.min(total, o.castMs || total));
+    const st = { t0ms: Date.now() - (total - remain), castMs: total,
+                 from: { x: o.tx, y: o.ty }, x: o.x, y: o.y, bx: o.bx, by: o.by };
+    if (beam) a.beam = st; else a.gaze = st;
     a.x = o.x; a.y = o.y; a.z = 0; a.fly = false;
     a.dir = o.tx < a.x ? -1 : 1;
   } else if (o.ph === 'gohome') {   // 舊伺服器相容：當作在當地站著
@@ -1116,7 +1170,7 @@ function onNetDragon(m) {
   }
   if (m.ev === 'dead') {   // 被打倒了：原地死亡；重生等伺服器的 spawn 事件，不排本地重生
     if (a && !a.dead) {
-      a.dead = true; a.dieT = .6; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0; a.wleg = null; a.cycle = null; a.gaze = null; a.aggro = false;
+      a.dead = true; a.dieT = .6; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0; a.wleg = null; a.cycle = null; a.gaze = null; a.beam = null; a.aggro = false;
       if (m.x !== undefined) { a.x = m.x; a.y = m.y; }
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
       toast(`${animalDef(a.id).name} 被打倒了！30 秒後重生`, 2200);
@@ -1127,7 +1181,7 @@ function onNetDragon(m) {
     const na = dragonEnsure(m.x, m.y, m.hp);
     if (na) {
       na.dead = false; na.dieT = 0; na.x = m.x; na.y = m.y; na.hp = m.hp; na.z = 0;
-      na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.idle = 1.2; na.wleg = null; na.cycle = null; na.gaze = null; na.aggro = false;
+      na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.idle = 1.2; na.wleg = null; na.cycle = null; na.gaze = null; na.beam = null; na.aggro = false;
     }
     toast(`${animalDef(S.terrains[S.terrain].owner).name} 回來了！`, 1600);
     return;
@@ -1135,7 +1189,7 @@ function onNetDragon(m) {
   if (m.ev === 'say') {   // 島主被激怒：先在原地說台詞（泡泡 3 秒），說完才反擊（龍衝＝瞬移島緣；蛇女＝原地開眼）
     const na = a || dragonEnsure(m.x, m.y);
     if (!na) return;
-    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.wleg = null;
+    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.beam = null; na.wleg = null;
     na.x = m.x; na.y = m.y;
     ownerSay(na);
     return;
@@ -1155,10 +1209,22 @@ function onNetDragon(m) {
                  : `${animalDef(na.id).name} 睜開了石化之瞳——別面向她！`, 2600);
     return;
   }
+  if (m.ev === 'beam') {   // 蓋老師凝聚波動砲：原地讀條（castMs 後本地發射；站在光波帶狀範圍裡的人受傷）
+    const na = a || dragonEnsure(m.x, m.y);
+    if (!na) return;
+    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.wleg = null;
+    na.x = m.x; na.y = m.y; na.z = 0;
+    if (m.hp != null) na.hp = m.hp;
+    na.dir = m.tx < na.x ? -1 : 1;
+    na.beam = { t0ms: Date.now(), castMs: m.castMs || OWNER_BEAM_CAST * 1000,
+                from: { x: m.tx, y: m.ty }, x: m.x, y: m.y, bx: m.bx, by: m.by };
+    toast(`${animalDef(na.id).name} 凝聚波動砲——別站在砲口前面！`, 2600);
+    return;
+  }
   if (m.ev === 'wander') {   // 島主往新路點散步（伺服器帶路；插值與伺服器一致，凍結恢復也正確）
     const na = a || dragonEnsure(m.fx, m.fy);
     if (!na) return;
-    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null;
+    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.beam = null;
     na.wleg = { fx: m.fx, fy: m.fy, tx: m.tx, ty: m.ty, tms: m.tms, t0ms: Date.now() };
     na.legEndedAt = 0;
     na.x = m.fx; na.y = m.fy; na.dir = m.tx < m.fx ? -1 : 1;
@@ -1187,7 +1253,7 @@ function onNetDragon(m) {
     const r = S.remotes.get(m.id);
     if (a) {
       a.aggro = true; a.wleg = null; a.cast = 0; a.castFrom = null;
-      a.fly = false; a.dashU = null; a.cycle = null; a.gaze = null; a.rest = 0; a.retHome = false;
+      a.fly = false; a.dashU = null; a.cycle = null; a.gaze = null; a.beam = null; a.rest = 0; a.retHome = false;
     }
     if (m.id === S.net?.id) toast(`${ownerName()} 火冒三丈地追殺你！快跑！`, 2600);
     else if (r) toast(`${ownerName()} 追殺 ${r.name}！`, 2200);
@@ -1649,6 +1715,22 @@ function drawPerson(p, wi, nameColor) {
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#ffd86b';
     ctx.strokeText('?', p.x, yy); ctx.fillText('?', p.x, yy);
   }
+}
+// 波動砲的預警：從島主朝攻擊者方向畫一道跟島主同寬的帶狀範圍（讀條越滿越亮）；砲口有充能亮核
+function drawBeamWarn(cx, cy, ux, uy, L, W, frac, pul) {
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.atan2(uy, ux));
+  const half = W / 2, grow = .35 + .65 * frac;
+  ctx.fillStyle = `rgba(120,200,255,${(.06 + .12 * frac) * (.75 + .25 * pul)})`;
+  ctx.fillRect(0, -half, L, half * 2);
+  ctx.strokeStyle = `rgba(190,240,255,${.25 + .45 * frac})`;
+  ctx.lineWidth = 1.5; ctx.setLineDash([14, 12]);
+  ctx.beginPath(); ctx.moveTo(0, -half); ctx.lineTo(L, -half); ctx.moveTo(0, half); ctx.lineTo(L, half); ctx.stroke();
+  ctx.setLineDash([]);
+  const ch = L * .28 * grow, grd = ctx.createLinearGradient(0, 0, ch, 0);
+  grd.addColorStop(0, `rgba(255,255,255,${.15 + .7 * frac})`);
+  grd.addColorStop(1, 'rgba(150,220,255,0)');
+  ctx.fillStyle = grd; ctx.fillRect(0, -half * .5, ch, half);
+  ctx.restore();
 }
 // 石化之瞳的預警大眼睛：暗紅眼眶＋紅虹膜＋直瞳，疊在蛇女身上；pul＝脈動（越接近發射越亮）
 function drawGazeEye(x, y, r, pul) {
@@ -2245,13 +2327,15 @@ function draw() {
           }
         }
         const top = a.y - a.z - H - 2;   // 圖的頂端（名牌/驚嘆號/血條貼這條線往下排）
-        // 島主預警：龍衝＝金色虛線＝衝刺路徑；石化之瞳＝只有大眼睛（沒有直線，全地圖面向她的人都會石化）
+        // 島主預警：龍衝＝金色虛線＝衝刺路徑；石化之瞳＝大眼睛（全地圖面向她的人石化）；波動砲＝光波帶狀範圍
         if (a.cast > 0 && a.castFrom) {
           const cf = a.castFrom, L = 1700;
           const ux = cf.x - a.x, uy = cf.y - a.y, ul = Math.hypot(ux, uy) || 1;
           const pul = Math.sin(S.t * 12) * .5 + .5;
-          const gaze = ownerAtk(def) === 'gaze';
-          if (!gaze) {
+          const atk = ownerAtk(def);
+          if (atk === 'gaze') drawGazeEye(a.x, a.y - H * .62, 9 * bs + 6 * (1 - a.cast / OWNER_GAZE_CAST), pul);
+          else if (atk === 'beam') drawBeamWarn(a.x, a.y - H * .5, ux / ul, uy / ul, L, W, 1 - a.cast / OWNER_BEAM_CAST, pul);
+          else {
             ctx.save();
             ctx.strokeStyle = `rgba(255,214,90,${.28 + .34 * pul})`;
             ctx.lineWidth = 2 + 2 * pul; ctx.setLineDash([10, 12]);
@@ -2259,7 +2343,6 @@ function draw() {
             ctx.lineTo(a.x + ux / ul * L, a.y - H * .5 + uy / ul * L);
             ctx.stroke(); ctx.setLineDash([]); ctx.restore();
           }
-          if (gaze) drawGazeEye(a.x, a.y - H * .62, 9 * bs + 6 * (1 - a.cast / OWNER_GAZE_CAST), pul);
         }
         // HP 小條（受過傷才顯示；島主加寬）
         if (a.hp < a.maxHp) {
@@ -2387,6 +2470,15 @@ function draw() {
       ctx.strokeStyle = `rgba(255,255,240,${.7 * (1 - q)})`;
       ctx.lineWidth = 8 * (1 - q) + 1;
       ctx.beginPath(); ctx.arc(f.x1, f.y1, 40 + q * 2200, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore(); continue;
+    }
+    if (f.beamLine) {   // 波動砲：從島主沿光束方向射出的帶狀光波（0.5 秒淡出）
+      const q = 1 - f.life / .5;
+      ctx.translate(f.x, f.y); ctx.rotate(f.ang);
+      ctx.fillStyle = `rgba(150,215,255,${.55 * (1 - q)})`;
+      ctx.fillRect(0, -f.wid / 2, f.len, f.wid);
+      ctx.fillStyle = `rgba(255,255,255,${.85 * (1 - q)})`;
+      ctx.fillRect(0, -f.wid * .13, f.len, f.wid * .26);
       ctx.restore(); continue;
     }
     ctx.translate(f.x, f.y);
@@ -3101,7 +3193,7 @@ async function boot() {
   // 圖片：同樣全部並行（含目前所在地形的圖）。只有角色身體是必要的（缺了畫不出人），其餘缺圖就略過該項
   await Promise.all([
     ...S.floors.items.map(async f => S.floorImgs[f.id] = await loadSpr(`assets/floors/${f.sprite}`, f.anim)),
-    ...S.animalsDB.animals.map(async a => S.anImgs[a.id] = await optImg(`assets/animals/${a.sprite}`)),
+    ...S.animalsDB.animals.filter(a => a.sprite).map(async a => S.anImgs[a.id] = await optImg(`assets/animals/${a.sprite}`)),   // 外部素材為主的島主可以沒有 sprite（沒有圖可退回）
     ...S.animalsDB.animals.filter(a => a.anim?.sheet).map(async a => {   // 多幀動畫：sheet 載入失敗就退回單張 sprite
       const sh = await optImg(`assets/${a.anim.sheet}`);
       if (sh) S.anAnims[a.id] = loadAnim(sh, a.anim);
@@ -3166,7 +3258,7 @@ async function boot() {
       for (let i = S.floaters.length - 1; i >= 0; i--) {
         const f = S.floaters[i];
         f.life -= dt;
-        if (!f.slash && !f.beam && !f.healPulse && !f.orb) f.y -= 34 * dt;   // 爪擊/光束/綠圈特效固定在原座標，不隨飄字上浮
+        if (!f.slash && !f.beam && !f.beamLine && !f.healPulse && !f.orb) f.y -= 34 * dt;   // 爪擊/光束/綠圈特效固定在原座標，不隨飄字上浮
         if (f.life <= 0) S.floaters.splice(i, 1);
       }
       updateSkillBar();

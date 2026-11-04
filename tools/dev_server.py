@@ -217,12 +217,13 @@ COMMIT_BURST = 20        # 保存擺設的令牌桶：一次可連發幾批（�
 COMMIT_REFILL = 0.5      # 每幾秒回一批（與 Worker 的 COMMIT_REFILL_MS 一致）
 
 # ---- 島主（伺服器端同步；與 worker/src/index.js 的常數與演算法保持一致，改一邊要改另一邊）----
-# 被打 → 說台詞 → 反擊（樣式照 OWNER_TERRAINS：dash＝瞬移島緣＋龍衝；gaze＝原地開眼＋石化直線）→ 仇恨追殺 → 冷靜回閒晃。
+# 被打 → 說台詞 → 反擊（樣式照 OWNER_TERRAINS：dash＝瞬移島緣＋龍衝；gaze＝原地開眼＋石化；beam＝原地讀條＋波動砲直線）→ 仇恨追殺 → 冷靜回閒晃。
 # 客戶端只負責演出與自己有沒有被打到的判定；伺服器只送「階段變更」事件，不需要每幀醒著跑。
 # 每座地形各自的島主（地形 → 攻擊樣式；要與 client assets 的 terrain.json owner／animals.json atk 一致）
-OWNER_TERRAINS = {"grass": "dash", "night": "gaze"}
+OWNER_TERRAINS = {"grass": "dash", "night": "gaze", "volcano": "beam"}
 D_CAST_MS = 1000         # 龍衝的島緣鎖定（預警）持續時間
 D_GAZE_CAST_MS = 2000    # 石化之瞳的開眼預警持續時間（與 client 的 OWNER_GAZE_CAST 一致）
+D_BEAM_CAST_MS = 2000    # 波動砲的讀條持續時間（與 client 的 OWNER_BEAM_CAST 一致）
 D_DASH = 560             # 龍衝速度 px/s（比仇恨追殺的 180 更快：高速掠過才有威嚇感；與 client 的 OWNER_DASH_SPEED 一致）
 D_REST_MS = 700          # 衝到底落地的停留時間
 D_RAGE_MS = 12000        # 龍衝冷卻：到點才能再觸發龍衝；冷卻期間被打進入仇恨追殺
@@ -693,10 +694,12 @@ class Room:
             w = d["wander"]
             t = max(0.0, min(1.0, (now - w["t0"]) / w["tms"]))
             return "idle", [w["fx"] + (w["tx"] - w["fx"]) * t, w["fy"] + (w["ty"] - w["fy"]) * t], 0
-        if OWNER_TERRAINS.get(terrain) == "gaze":   # 石化之瞳：原地開眼（不瞬移不移動），開完就地回 idle
+        style = OWNER_TERRAINS.get(terrain)
+        if style in ("gaze", "beam"):   # 原地施放（石化之瞳開眼／波動砲讀條）：不瞬移不移動，放完就地回 idle
+            cast_ms = D_GAZE_CAST_MS if style == "gaze" else D_BEAM_CAST_MS
             dt = now - d["aim_tms"]
-            if dt < D_GAZE_CAST_MS:
-                return "cast", list(d["pos"]), int(D_GAZE_CAST_MS - dt)
+            if dt < cast_ms:
+                return "cast", list(d["pos"]), int(cast_ms - dt)
             return "idle", list(d["pos"]), 0
         dt = now - d["aim_tms"]
         if dt < D_CAST_MS:
@@ -809,8 +812,11 @@ class Room:
                     next_delay = 0.5
             elif d["say_until"] and now >= d["say_until"]:   # 說完台詞：開始反擊循環
                 msg = self._dragon_start_cycle(now, terrain)
-                if OWNER_TERRAINS.get(terrain) == "gaze":
+                style = OWNER_TERRAINS.get(terrain)
+                if style == "gaze":
                     next_delay = (D_GAZE_CAST_MS / 1000 + 0.1) if msg else 2.0
+                elif style == "beam":
+                    next_delay = (D_BEAM_CAST_MS / 1000 + 0.1) if msg else 2.0
                 else:
                     next_delay = ((D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS) / 1000 + 0.1) if msg else 2.0
                 outs = [msg] if msg else []
@@ -821,9 +827,9 @@ class Room:
                 if ph != "idle":   # 反擊循環中：循環結束時再續
                     next_delay = max(0.1, self._cycle_end(terrain, now) / 1000 - time.time() + 0.1)
                 else:
-                    if d["aim_tms"]:   # 反擊循環剛結束：龍衝落在對岸（dest）；石化之瞳留在原地。清 aim_tms 讓散步插值生效
+                    if d["aim_tms"]:   # 反擊循環剛結束：龍衝落在對岸（dest）；石化之瞳／波動砲留在原地。清 aim_tms 讓散步插值生效
                         d["aim_tms"] = 0.0
-                        if OWNER_TERRAINS.get(terrain) != "gaze":
+                        if OWNER_TERRAINS.get(terrain) not in ("gaze", "beam"):
                             d["pos"] = list(d["dest"])
                     w = d["wander"]
                     if w and now < w["t0"] + w["tms"] + w["pause"]:
@@ -849,8 +855,11 @@ class Room:
     def _cycle_end(self, terrain, now):
         """反擊循環（aim_tms 起算）結束的絕對時間 ms。"""
         d = self.dragon_state(terrain)
-        if OWNER_TERRAINS.get(terrain) == "gaze":
+        style = OWNER_TERRAINS.get(terrain)
+        if style == "gaze":
             return d["aim_tms"] + D_GAZE_CAST_MS
+        if style == "beam":
+            return d["aim_tms"] + D_BEAM_CAST_MS
         return d["aim_tms"] + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS
 
     def _aggro_tick_locked(self, now, terrain):
@@ -900,7 +909,7 @@ class Room:
             return outs, max(0.1, self._cycle_end(terrain, now) / 1000 - time.time() + 0.08)
         if d["aim_tms"]:   # 反擊循環剛結束（仇恨中沒有人清 aim_tms）：清掉讓之後的追腿正常插值
             d["aim_tms"] = 0.0
-            if OWNER_TERRAINS.get(terrain) != "gaze":
+            if OWNER_TERRAINS.get(terrain) not in ("gaze", "beam"):
                 d["pos"] = list(d["dest"])
         st = c["state"]
         tx, ty = float(st.get("x", 0)), float(st.get("y", 0))
@@ -994,8 +1003,11 @@ class Room:
                     cyc = self._dragon_start_cycle(now, terrain)
                     if cyc:
                         outs.append(cyc)
-                    if OWNER_TERRAINS.get(terrain) == "gaze":
+                    style = OWNER_TERRAINS.get(terrain)
+                    if style == "gaze":
                         post_cycle = (D_GAZE_CAST_MS / 1000 + 0.1) if cyc else 2.0
+                    elif style == "beam":
+                        post_cycle = (D_BEAM_CAST_MS / 1000 + 0.1) if cyc else 2.0
                     else:
                         post_cycle = ((D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS) / 1000 + 0.1) if cyc else 2.0
             else:
@@ -1107,15 +1119,17 @@ class Room:
             return None
         d["say_until"] = 0.0
         ax, ay = d["atk"][0], d["atk"][1]
-        if OWNER_TERRAINS.get(terrain) == "gaze":
+        style = OWNER_TERRAINS.get(terrain)
+        if style in ("gaze", "beam"):   # 原地施放：石化之瞳開眼／波動砲讀條；直線朝攻擊者方向鎖到島緣對岸（光束幾何）
             ux, uy = ax - d["pos"][0], ay - d["pos"][1]
             ul = math.hypot(ux, uy) or 1
             d["unit"] = [ux / ul, uy / ul]
             d["beam"] = dragon_dash_dest(m, d["pos"][0], d["pos"][1], d["unit"][0], d["unit"][1])
             d["aim_tms"] = now
-            d["cooldown_until"] = now + D_GAZE_CAST_MS + D_RAGE_MS
-            return {"t": "dragon", "ev": "gaze", "x": d["pos"][0], "y": d["pos"][1], "tx": ax, "ty": ay,
-                    "bx": d["beam"][0], "by": d["beam"][1], "castMs": D_GAZE_CAST_MS, "hp": d["hp"]}
+            cast_ms = D_GAZE_CAST_MS if style == "gaze" else D_BEAM_CAST_MS
+            d["cooldown_until"] = now + cast_ms + D_RAGE_MS
+            return {"t": "dragon", "ev": ("gaze" if style == "gaze" else "beam"), "x": d["pos"][0], "y": d["pos"][1],
+                    "tx": ax, "ty": ay, "bx": d["beam"][0], "by": d["beam"][1], "castMs": cast_ms, "hp": d["hp"]}
         warp = dragon_edge(m, random.random() * math.pi * 2)
         ux, uy = ax - warp[0], ay - warp[1]
         ul = math.hypot(ux, uy) or 1
@@ -1406,7 +1420,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         land = dragon_land(msg.get("v"))
                         if land:
                             room.dragon_maps[cur] = land
-                elif t == "dragonHit":   # 打島主：驗證後廣播 hp/aim/gaze/dead/aggro 事件（回傳訊息清單）
+                elif t == "dragonHit":   # 打島主：驗證後廣播 hp/aim/gaze/beam/dead/aggro 事件（回傳訊息清單）
                     now = time.time()
                     if now - last_dragon_hit < D_CD:
                         continue

@@ -93,6 +93,29 @@
     "別亂動喔……一動就變石頭了。",
     "乖乖站好，這可是你最後一次能動了。"
    ]
+  },
+  {
+   "id": "ultima_weapon",
+   "name": "蓋老師",
+   "owner": true,
+   "big": 5,
+   "atk": "beam",
+   "speed": 16,
+   "flee": 110,
+   "hp": 200,
+   "anim": {
+    "sheet": "external/img2pixel/ultima_weapon_sheet.png",
+    "frames": 6,
+    "fps": 8,
+    "scale": 3,
+    "keyBg": false
+   },
+   "line": "「蓋老師」的裝甲縫隙透出紅光，發出低沉的機械運轉聲。",
+   "ownerLines": [
+    "冒險者，你是為了什麼而戰鬥的？",
+    "那我倒想問你，你認為這裡存在真實嗎？",
+    "英雄……也只是虛偽的偶像。就由我來打破！只有在我的鐵腕統治之下，這裡才會獲得新生！"
+   ]
   }
  ]
 }
