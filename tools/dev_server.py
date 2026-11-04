@@ -347,6 +347,20 @@ def furn_defs():
             _FURN_DEFS = {it["id"]: (it["w"], it["h"]) for it in json.load(f)["items"]}
     return _FURN_DEFS
 
+_SKILL_DEFS = None
+def owner_says(terrain):
+    """這座島的島主放招前要不要先講台詞：取自前端 skills.json（key＝攻擊樣式），say:false 就被打直接開始預警。
+    與 Worker 的 ownerSays 一致；檔案讀不到就當作要講（與以前行為相同）。"""
+    global _SKILL_DEFS
+    if _SKILL_DEFS is None:
+        try:
+            with open(os.path.join(CLIENT, "assets", "skills", "skills.json"), encoding="utf-8") as f:
+                _SKILL_DEFS = json.load(f).get("skills", {})
+        except (OSError, ValueError):
+            return True
+    sk = _SKILL_DEFS.get(OWNER_TERRAINS.get(terrain))
+    return not sk or sk.get("say") is not False
+
 _FLOOR_DEFS = None
 def floor_defs():
     """地板 id -> (w, h)，取自前端 floors.json（沒標的是 1×1），用來驗證地板操作。"""
@@ -958,16 +972,26 @@ class Room:
             elif ph == "idle" and self.dragon_maps.get(terrain) and now >= d["cooldown_until"]:
                 # 一被打就先建立仇恨（30 秒從最後一次被打起算）；反擊照樣先放：說台詞 →（龍衝＝瞬移島緣／蛇女＝原地開眼），
                 # 放完不用再被打就馬上接著追殺同一個攻擊者（循環由 tick 在說完/放完時接手啟動）
+                says = owner_says(terrain)   # skills.json 的 say:false＝不講台詞，直接開始預警
                 d["aggro"] = {"id": cid, "rotate_at": now + D_AGGRO_MS, "claw_at": now + D_CLAW_MS}
-                d["say_until"] = now + D_SAY_MS
+                d["say_until"] = now + D_SAY_MS if says else 0.0
                 d["atk"] = [ax, ay]   # 記住攻擊者位置：龍衝要穿過這裡／石化之瞳要朝這裡射
                 d["wander"] = None
                 d["pos"] = [pos[0], pos[1]]   # 打斷散步腿：把位置同步到目前插值點（否則之後的追腿會從舊腿起點出發，client 看起來像瞬移）
                 d["wander_gen"] += 1
-                post_cycle = D_SAY_MS / 1000 + 0.1
                 outs.append({"t": "dragon", "ev": "aggro", "id": cid,
                              "name": (c.get("state") or {}).get("name") or "玩家"})
-                outs.append({"t": "dragon", "ev": "say", "x": pos[0], "y": pos[1], "ms": D_SAY_MS})
+                if says:
+                    post_cycle = D_SAY_MS / 1000 + 0.1
+                    outs.append({"t": "dragon", "ev": "say", "x": pos[0], "y": pos[1], "ms": D_SAY_MS})
+                else:   # 直接開始反擊循環；放完再醒（與 tick 裡「說完台詞」那段同樣的醒來時間）
+                    cyc = self._dragon_start_cycle(now, terrain)
+                    if cyc:
+                        outs.append(cyc)
+                    if OWNER_TERRAINS.get(terrain) == "gaze":
+                        post_cycle = (D_GAZE_CAST_MS / 1000 + 0.1) if cyc else 2.0
+                    else:
+                        post_cycle = ((D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS) / 1000 + 0.1) if cyc else 2.0
             else:
                 why = []
                 if ph != "idle":

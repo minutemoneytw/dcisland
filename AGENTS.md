@@ -51,7 +51,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 
 ## 慣例
 1. **加內容走 manifest，不改程式**：新家具/動物/造型＝manifest 加條目＋圖檔。新地形＝`assets/terrain/<id>/` 資料夾＋在 `main.js` 的 `TERRAIN_IDS` 登記（見 README「內容擴充」）。
-2. **素材先改 `gen_assets.py` 再重跑**，不要手改 PNG。⚠️ 整支重跑會連帶改到三十幾個不相干的既有素材；只想更新單一素材時，重跑後用 `git checkout` 還原其他檔案。`assets/tools/tools.json` 是手寫資料，不由產生器產生。
+2. **素材先改 `gen_assets.py` 再重跑**，不要手改 PNG。⚠️ 整支重跑會連帶改到三十幾個不相干的既有素材；只想更新單一素材時，重跑後用 `git checkout` 還原其他檔案。`assets/tools/tools.json`、`assets/skills/skills.json` 是手寫資料，不由產生器產生。
 3. **引入外部素材必須在 `docs/assets-license.md` 補記錄**；不得使用 SE/FFXIV 的素材、圖示、字體或商標（HUD 僅風格參考）。
 4. **地形是「每位玩家各自在哪」**，不是房間共用狀態；廣播只給同地形的連線（細節見 `docs/notes.md`「同步協定與伺服器」）。
 5. Discord 授權 scope **只有 `identify`**。多加 scope 會讓每次啟動都跳授權畫面，要加先問使用者。

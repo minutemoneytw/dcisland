@@ -72,6 +72,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 | NPC／嚮導／台詞／操作說明 | `client/assets/npcs/npcs.json`（`terrains.<地圖>` 每張地圖各自的 NPC，`help` 是嚮導的說明視窗） |
 | 魚（釣魚／圖鑑） | `tools/gen_assets.py` 的 `FISH_TABLE` 加一列（地形、id、名稱、稀有度 `common`/`uncommon`/`rare`、尺寸 cm 範圍、畫圖）再重跑，產生 `client/assets/fish/<id>.png` 與 `fish.json`；稀有度權重與脫鉤率在 `fish_manifest()` |
 | 可破壞物件／採集工具／掉落物 | `client/assets/tools/tools.json`（key＝地形 deco 的圖檔名；掉落物目前為空） |
+| 島主招式（倒數條／招式名／放招前要不要講台詞） | `client/assets/skills/skills.json`（手寫；key＝`animals.json` 的 `atk` 攻擊樣式）：`name` 招式名稱、`bar: true` 預警時在島主頭上顯示黃色倒數條（右上角是招式名稱）、`say: false` 被打不講台詞直接開始預警。兩份伺服器也讀 `say` |
 | 島主 | `terrain.json` 加 `"owner": "<動物id>"`（一張地圖一隻）；動物本體照上面的「動物」方式加，`"owner": true`＋`"big"` 放大倍率。機制見下方「島主」 |
 | 動畫（把任何單張圖換成多幀） | 準備**等寬水平排列**的 sheet（由左至右循環），在該圖的 manifest 加 `anim`：`{"sheet": "相對 client/assets/ 的路徑", "frames": 幀數, "fps": 8, "keyBg": false, "stagger": false}`。地形磚／點綴物寫在 `terrain.json` 的 `"anims": {"<檔名>": anim}`（例：`"water.png"`、`"tree.png"`）；家具、地板、動物寫在各自條目的 `"anim"`（動物另有 `dashFps`、`scale`）。不寫 `sheet` 時，原本的 `sprite` 檔本身就當 sheet；sheet 載入失敗會退回單張圖。地形磚／地板預設整張地圖同步換幀，`stagger: true` 各格錯開；點綴物與家具依格子自動錯開。`keyBg` 給不是透明底的素材（從圖邊去背）。由產生器管理的 manifest 要寫進 `gen_assets.py` 對應的表（`TERRAINS` 該地形的 `anims`、`FURN_MANIFEST`／`FLOOR_MANIFEST`／`ANIMAL_MANIFEST` 條目的 `anim`）再重跑，否則下次重跑會被蓋掉。只影響畫面，不用改程式、也不動伺服器 |
 
@@ -79,7 +80,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 
 - 每座地形可以有自己的島主（`terrain.json` 的 `owner` 指定動物）。目前：**草島＝黃金肥龍**（FF14 巴哈姆特致敬的正面金龍，`big: 5`、HP 200；外觀是使用者自製的 6 幀飛行動畫 `client/assets/external/img2pixel/`，龍衝時拍翅加快）、**夜光島＝笨蛋蛇女**（FF14 T7 蛇女致敬的正面蛇女，紫膚蛇髮金甲蛇尾，`big: 4`、HP 200）。
 - **黃金肥龍（攻擊樣式 `atk: "dash"`）**：打牠 → 瞬間消失 → 在島**隨機邊緣**現蹤鎖定攻擊者 → **預警 1 秒**（金色虛線）→ 龍本體以 560 px/s 直線飛衝過島（被撞到的玩家角色倒地變墓碑，**30 秒**後在出生點復活）→ 衝到對岸落地停 0.7 秒 → 就地接續散步（不回中心）。
-- **笨蛋蛇女（攻擊樣式 `atk: "gaze"`）**：不瞬移。打她 → **原地說台詞** → 身上浮出**大眼睛 2 秒**（沒有直線、全地圖判定）→ 發射瞬間**臉朝著蛇女的玩家**（四方向朝向：往上走＝背面、往下走＝正面、左右＝側面；朝向與「到蛇女的方向」夾角小於約 80° 就算面對）**石化 10 秒**（不能移動／跳躍，也不能揮擊／採集／F 互動）且**每秒扣 1 HP**；**背對她／看向另一邊就安全**，距離不影響（扣死照墓碑機制）→ 放完直接接仇恨追殺。
+- **笨蛋蛇女（攻擊樣式 `atk: "gaze"`）**：不瞬移、**不講台詞**。打她 → 身上浮出**大眼睛 2 秒**，頭上同時出現**黃色倒數條**（由左往右填，右上角寫「石化」；她的頭超出畫面時貼齊畫面上緣），填滿就發射（沒有直線、全地圖判定）→ 發射瞬間**臉朝著蛇女的玩家**（四方向朝向：往上走＝背面、往下走＝正面、左右＝側面；朝向與「到蛇女的方向」夾角小於約 80° 就算面對）**石化 10 秒**（不能移動／跳躍，也不能揮擊／採集／F 互動）且**每秒扣 1 HP**；**背對她／看向另一邊就安全**，距離不影響（扣死照墓碑機制）→ 放完直接接仇恨追殺。
 - **閒晃**：島主會在島上四處散步（附近 6～16 格的隨機陸地路點、直線不抄水、走完歇 1.5～4 秒），路點由伺服器挑並廣播，客戶端用牆鐘插值跟著走；沒有人在線時散步停擺省資源，有人進來自動恢復。
 - **流程由伺服器權威同步**（`worker/src/index.js` 與 `tools/dev_server.py` 各一份，改流程或常數要兩邊＋`main.js` 一起改）：每座地形的島主狀態、島形位圖（RLE）、被打冷卻、仇恨名單**各自一份**（storage key 帶地形後綴 `dragon:<地形>`／`dragonMap:<地形>`，DO 只有一個鬧鐘、由 `armOwnerAlarm` 統一取最早的醒來時間）。島形位圖由客戶端上傳，每條連線每個地形只傳一次；內容和已存的一樣時 Worker 不重寫儲存。瞬移點與龍衝終點／石化直線的終點由伺服器計算並廣播事件；客戶端只負責演出與「自己有沒有被打到」的判定——所以攻擊可以害死同島的其他玩家（誰被打到誰把自己的死亡寫進 `state.dead`）。石化目前是純客戶端判定（各人在發射瞬間自判「是否面向蛇女」），不進同步協定。
 - 打島主：F 鍵與滑鼠點擊都**優先攻擊島主**（勝過腳下的座位／NPC——島主常駐重生點，旁邊常有一堆家具）；判定以**武器尖端**為準（人臉朝向那側 30px 處進了島主腳下的判定圈就打得到，黃金肥龍圈半徑 58、蛇女 52；靠近時腳下會畫出判定圈）；傷害 1～2（暴擊 2），每連線 300ms 冷卻，伺服器驗證距離 ≤100px（`D_RANGE`，涵蓋判定圈＋武器伸出並留延遲），龍衝飛行中打不到。
@@ -92,7 +93,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 ### 新增其他島的島主（照範本，4 步）
 1. **造型**：`tools/gen_assets.py` 畫該島主的正面圖＋重跑（記得用 `git checkout` 還原不相干素材），並在 `client/assets/animals/animals.json` 加條目：`"owner": true`、`"big"` 放大倍率、`"hp"`（目標約 8 人擊殺）、`"atk"`（攻擊樣式：`dash`／`gaze`）、`"line"`（點擊時的描述）、`"ownerLines"`（被激怒的台詞，見第 3 步）
 2. **指定**：該島 `client/assets/terrain/<id>/terrain.json` 加 `"owner": "<動物id>"`（一張地圖一隻），並在兩份伺服器的 `OWNER_TERRAINS` 登記該地形的攻擊樣式
-3. **台詞**：`animals.json` 該島主條目的 `"ownerLines"`（字串陣列；被打觸發反擊前，隨機泡泡說一句；沒寫就不說話）。`animals.json` 由產生器管理，要寫進 `tools/gen_assets.py` 的 `ANIMAL_MANIFEST`，否則下次重跑會被蓋掉
+3. **台詞與招式**：`client/assets/skills/skills.json` 設定該攻擊樣式的招式名稱、要不要倒數條（`bar`）、要不要先講台詞（`say`）；要講台詞的話寫在 `animals.json` 該島主條目的 `"ownerLines"`（字串陣列；被打觸發反擊前，隨機泡泡說一句；沒寫就不說話）。`animals.json` 由產生器管理，要寫進 `tools/gen_assets.py` 的 `ANIMAL_MANIFEST`，否則下次重跑會被蓋掉
 4. **完成**——說台詞、預警、攻擊（照 `atk` 分岔）、歇腳、全島散步、仇恨追殺＋爪擊、死亡重生、泡泡、優先攻擊全部由共用框架處理（伺服器權威；`worker/src/index.js` 與 `tools/dev_server.py` 兩份實作已就緒）
 
 ## 機密與安全

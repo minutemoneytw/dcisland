@@ -427,6 +427,24 @@ export class Island {
     return this.furnDefs;
   }
 
+  // 島主招式設定取自前端 skills.json（key＝攻擊樣式 dash/gaze）。目前伺服器只用 say：false＝被打不講台詞、直接開始預警。
+  // 載入失敗就當作全部都要講台詞（與以前行為相同），下次再試
+  async getSkillDefs() {
+    if (this.skillDefs) return this.skillDefs;
+    try {
+      const res = await this.env.ASSETS.fetch(new Request("https://assets.local/assets/skills/skills.json"));
+      this.skillDefs = (await res.json()).skills || {};
+    } catch (e) {
+      console.log("[skill] manifest 載入失敗", String(e));
+      return {};
+    }
+    return this.skillDefs;
+  }
+  async ownerSays(terrain) {   // 這座島的島主放招前要不要先講台詞
+    const sk = (await this.getSkillDefs())[OWNER_TERRAINS[terrain]];
+    return !sk || sk.say !== false;
+  }
+
   // 地板種類與大小取自前端 floors.json：id -> {w,h}（沒標的是 1×1）
   async getFloorDefs() {
     if (this.floorDefs) return this.floorDefs;
@@ -847,17 +865,19 @@ export class Island {
       return;
     }
     // 反擊：閒置且冷卻過了才觸發。一被打就先建立仇恨（30 秒從最後一次被打起算）；
-    // 反擊照樣先放：說台詞 →（龍衝＝瞬移島緣／石化之瞳＝原地開眼），放完不用再被打就馬上接著追殺同一個攻擊者
+    // 反擊照樣先放：說台詞（skills.json 的 say:false 就跳過）→（龍衝＝瞬移島緣／石化之瞳＝原地開眼），放完不用再被打就馬上接著追殺同一個攻擊者
     const map = await this.getDragonMap(terrain);
     if (ph === "idle" && map && now >= (d.cooldownUntil || 0)) {
+      const says = await this.ownerSays(terrain);
       d.aggro = { id: att.id, rotateAt: now + D_AGGRO_MS, clawAt: now + D_CLAW_MS };
-      d.sayUntil = now + D_SAY_MS;
+      d.sayUntil = says ? now + D_SAY_MS : 0;
       d.atk = [Number(msg.x), Number(msg.y)];   // 記住攻擊者位置：龍衝要穿過這裡／石化之瞳要朝這裡射
       d.wander = null;
       d.pos = [pos[0], pos[1]];   // 打斷散步腿：把位置同步到目前插值點（否則之後的追腿會從舊腿起點出發，client 看起來像瞬移）
       await this.saveDragon(terrain);
       this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name: (att.state && att.state.name) || "玩家" }, null, terrain);
-      this.broadcast({ t: "dragon", ev: "say", x: pos[0], y: pos[1], ms: D_SAY_MS }, null, terrain);
+      if (says) this.broadcast({ t: "dragon", ev: "say", x: pos[0], y: pos[1], ms: D_SAY_MS }, null, terrain);
+      else await this.startCycle(now, terrain);   // 不講台詞：直接開始預警（會自己存檔並廣播 aim/gaze）
       await this.armOwnerAlarm();
       return;
     }

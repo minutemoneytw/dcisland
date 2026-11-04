@@ -458,6 +458,10 @@ const PLAYER_REGEN = 1;   // 玩家脫離戰鬥後每秒回幾點血（場上有
 const PLAYER_HP = 10;     // 玩家血量上限：爪擊扣 2（5 下倒地）、龍衝直接倒地、石化每秒扣 1、殺一隻動物回 1、復活即滿血
 // 島主攻擊樣式（animals.json 的 atk 欄位）：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女）
 const ownerAtk = def => def.atk || 'dash';
+// 島主招式設定：assets/skills/skills.json（key＝攻擊樣式）。name＝招式名稱、bar＝預警時頭上畫黃色倒數條、say＝放招前先講台詞
+// （false＝被打直接開始預警；兩份伺服器也讀同一個檔決定要不要跳過說話階段）
+const ownerSkill = def => S.skillsDB?.skills?.[ownerAtk(def)] || {};
+const ownerCastTotal = def => ownerAtk(def) === 'gaze' ? OWNER_GAZE_CAST : OWNER_CAST;   // 預警總秒數（倒數條的分母）
 // 島主被激怒的台詞：animals.json 該島主條目的 ownerLines（由 gen_assets.py 的 ANIMAL_MANIFEST 產生）。
 // 發動反擊前隨機說一句（不連續重複）；沒寫台詞的島主就不說話
 function ownerSay(a) {
@@ -482,10 +486,11 @@ function ownerEdgeAt(angle) {
   return { x: last[0] * CELL + CELL / 2, y: last[1] * CELL + CELL / 2 };
 }
 function ownerTakeoff(a, src) {
-  // 被打：先在原地說台詞（3 秒泡泡），說完才瞬移到島緣（ownerStep 的 sayPhase 接手）。
+  // 被打：先在原地說台詞（3 秒泡泡），說完才瞬移到島緣（ownerStep 的 sayPhase 接手）；skills.json 的 say:false 就不講、直接開始預警。
   // 一被打就建立仇恨（龍衝照放），落地歇完就接著追殺同一個攻擊者，不用再被打一次
-  ownerSay(a);
-  a.sayPhase = S.t + 3; a.saySrc = { x: src.x, y: src.y };
+  const says = ownerSkill(animalDef(a.id)).say !== false;
+  if (says) ownerSay(a);
+  a.sayPhase = says ? S.t + 3 : S.t; a.saySrc = { x: src.x, y: src.y };
   a.target = null; a.idle = 0; a.wleg = null;
   a.aggro = { target: src, rotateAt: S.t + OWNER_AGGRO_MS, clawAt: 0 };
   a.rageCd = S.t + 4;   // 說台詞＋開眼/預警期間被打不重觸發（發射時會再設為 OWNER_CD）
@@ -849,7 +854,7 @@ function applyDragonSnap(o) {
   } else if (o.ph === 'say') {   // 說台詞中：站在原地（說完才會收到 aim/gaze 事件）
     a.cycle = null; a.wleg = null;
     a.x = o.x; a.y = o.y; a.z = 0; a.fly = false;
-    ownerSay(a);
+    if (ownerSkill(animalDef(a.id)).say !== false) ownerSay(a);
   } else if (o.ph === 'cast') {   // 石化之瞳開眼中：原地站定，接續剩餘的開眼時間後本地發射
     a.cycle = null; a.wleg = null;
     const total = 2000, remain = Math.max(0, Math.min(total, o.castMs || total));
@@ -1552,6 +1557,23 @@ function saveSign() {
   closeSign(); toast(text ? '看板已更新' : '看板已清空', 1600);
 }
 // 對話泡泡（畫在名牌上方）
+// 放招倒數條：中心 (cx, y)（條的上緣），frac＝進度（0→1，黃色由左往右填，填滿就放招），name＝右上角的招式名稱
+function drawCastBar(cx, y, frac, name) {
+  const w = 72, h = 6, x = Math.round(cx - w / 2);
+  frac = Math.max(0, Math.min(1, frac));
+  ctx.save();
+  ctx.fillStyle = 'rgba(8,10,14,.78)'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);   // 底
+  ctx.fillStyle = '#f3c93e'; ctx.fillRect(x, y, w * frac, h);                      // 黃色倒數
+  ctx.fillStyle = 'rgba(255,246,200,.55)'; ctx.fillRect(x, y, w * frac, 2);        // 上緣亮線
+  ctx.strokeStyle = 'rgba(214,180,96,.9)'; ctx.lineWidth = 1; ctx.strokeRect(x - .5, y - .5, w + 1, h + 1);   // 細金邊
+  if (name) {
+    ctx.font = 'bold 11px "Microsoft JhengHei"'; ctx.textAlign = 'right';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)';
+    ctx.strokeText(name, x + w, y - 3);
+    ctx.fillStyle = '#ffe08a'; ctx.fillText(name, x + w, y - 3);
+  }
+  ctx.restore();
+}
 function drawBubble(x, y, text, alpha) {
   ctx.save(); ctx.globalAlpha = alpha;
   ctx.font = '11px "Microsoft JhengHei"'; ctx.textAlign = 'center';
@@ -2004,6 +2026,10 @@ function draw() {
         ctx.fillText(def.name, a.x, top);
         // 島主的台詞泡泡（被打反擊前隨機一句；與 NPC 泡泡同款，畫在名牌上方）
         if (a.say && S.t < a.say.until) drawBubble(a.x, top - 8, a.say.text, Math.min(1, (a.say.until - S.t) / .4));
+        // 島主放招倒數條（skills.json 標 bar 的招式）：預警期間畫在名牌上方，黃色由左往右填，填滿就放招；右上角是招式名稱。
+        // 島主很高，人站在牠腳邊時頭會超出畫面上緣：倒數條貼齊畫面上緣，不會看不到
+        if (def.owner && a.cast > 0 && ownerSkill(def).bar)
+          drawCastBar(a.x, Math.max(top - 16, S.cam.y + 20), 1 - a.cast / ownerCastTotal(def), ownerSkill(def).name);
       }
     });
   }
@@ -2725,7 +2751,7 @@ let welcomeUntil = 0;
 async function boot() {
   $('btnDecor').disabled = false;
   // manifest：互不相依，一次全部並行抓（以前是一個接一個，首次進島要等一長串往返）
-  const [tjson, furn, floors, animalsDB, npcDB, toolsDB, avatar, fishDB] = await Promise.all([
+  const [tjson, furn, floors, animalsDB, npcDB, toolsDB, avatar, fishDB, skillsDB] = await Promise.all([
     Promise.all(TERRAIN_IDS.map(id => loadJSON(`assets/terrain/${id}/terrain.json`))),
     loadJSON('assets/furniture/furniture.json'),
     loadJSON('assets/floors/floors.json'),
@@ -2734,9 +2760,10 @@ async function boot() {
     loadJSON('assets/tools/tools.json'),        // 採集工具（鎬子/斧頭）：圖放進 weaponImgs，讓繪製與遠端玩家共用同一套武器繪製
     loadJSON('assets/avatar/avatar.json'),
     loadJSON('assets/fish/fish.json'),          // 釣魚：各地形的魚與稀有度
+    loadJSON('assets/skills/skills.json').catch(() => ({ skills: {} })),   // 島主招式（倒數條／招式名／要不要講台詞）；讀不到就照舊
   ]);
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
-  Object.assign(S, { furn, floors, animalsDB, npcDB, toolsDB, avatar, fishDB });
+  Object.assign(S, { furn, floors, animalsDB, npcDB, toolsDB, avatar, fishDB, skillsDB });
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
   if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';
   // 圖片：同樣全部並行（含目前所在地形的圖）。只有角色身體是必要的（缺了畫不出人），其餘缺圖就略過該項

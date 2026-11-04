@@ -38,6 +38,7 @@ client/assets/
   animals/animals.json        野外動物與島主
   npcs/npcs.json              各地圖 NPC、台詞、簡易說明
   tools/tools.json            採集工具與可破壞物件
+  skills/skills.json          島主招式：招式名稱、頭上倒數條、放招前要不要講台詞
 ```
 
 - 預設 6 地形：草島、沙灘、雪島、夜光島、森林島、熔岩島
