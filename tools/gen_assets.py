@@ -782,6 +782,8 @@ ANIMAL_MANIFEST = dict(
                          "月光啊！　照亮鐵血霸道！", "月光啊！　用你的熾熱燒盡敵人！"]),
         dict(id="snake_queen", name="笨蛋蛇女", sprite="snake_queen.png", owner=True, big=4, atk="gaze",
              speed=16, flee=110, hp=200,
+             # 外觀是使用者自製的 4 幀（88×85，透明底），external/ 不由產生器畫；重跑不會動到那張 sheet
+             anim=dict(sheet="external/img2pixel/snake_queen_sheet.png", frames=4, fps=8, scale=3, keyBg=False),
              line="「笨蛋蛇女」半閉著眼，慢半拍地捲了一下蛇尾。",
              ownerLines=["石化之瞳啊，睜開吧！", "蠢貨們，在我的面前化為石像吧！", "美，就該凝固在最完美的一刻！",
                          "蛇髮的詛咒啊，貫穿眼前的一切！", "別亂動喔……一動就變石頭了。", "乖乖站好，這可是你最後一次能動了。"]),

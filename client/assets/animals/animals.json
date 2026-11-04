@@ -77,6 +77,13 @@
    "speed": 16,
    "flee": 110,
    "hp": 200,
+   "anim": {
+    "sheet": "external/img2pixel/snake_queen_sheet.png",
+    "frames": 4,
+    "fps": 8,
+    "scale": 3,
+    "keyBg": false
+   },
    "line": "「笨蛋蛇女」半閉著眼，慢半拍地捲了一下蛇尾。",
    "ownerLines": [
     "石化之瞳啊，睜開吧！",
