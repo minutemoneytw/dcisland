@@ -104,8 +104,9 @@ function isAdminId(env, id) {
   return !!id && String(env.ADMIN_IDS || "").split(",").map(s => s.trim()).filter(Boolean).includes(String(id));
 }
 
-// 對一份擺設清單套用單一操作（place / remove / clear），成功回 true。清空的權限在呼叫端檢查
-function applyFurnOp(items, defs, op) {
+// 對一份擺設清單套用單一操作（place / remove / clear），成功回 true。清空的權限在呼叫端檢查。
+// ground(x,y)＝那格能不能放東西（陸地，或水上鋪了地板）；規則與 client/js/main.js 的 canPlaceIn、dev_server.py 的 apply_furn_op 一致
+function applyFurnOp(items, defs, op, ground) {
   const cell = op.cell;
   const validCell = Array.isArray(cell) && cell.length === 2 && Number.isInteger(cell[0]) && Number.isInteger(cell[1]);
   if (op.t === "place") {
@@ -113,6 +114,7 @@ function applyFurnOp(items, defs, op) {
     if (!def || !validCell || items.length >= MAX_FURN) return false;
     const [x, y] = cell;
     if (x < 0 || y < 0 || x + def.w > COLS || y + def.h > ROWS) return false;
+    if (ground) for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) if (!ground(x + dx, y + dy)) return false;   // 水上要有地板
     for (const it of items) {
       const d = defs.get(it.type);
       if (!d) continue;
@@ -138,6 +140,7 @@ function applyFurnOp(items, defs, op) {
 // 地板層：每格一種地板（鍵＝y*COLS+x，值＝地板 id）。op＝{t:"floor", cell:[x,y], type:"wood"|null}（null＝拆除）
 // 多格地板（floors.json 標 w/h，例如地毯 2×2）只在錨點格（左上）存一筆，其餘格子視為被它蓋住：
 // 多格地板彼此不重疊、單格地板不能鋪在多格地板上；鋪多格地板會取代範圍內的單格地板；拆除點到任一格就整塊拆。
+// 地板可以鋪在水上；水上那格有家具時不能拆（要先拿走家具），陸地上的地板不受限制。
 // 規則與 client/js/main.js 的 applyFloorOp、dev_server.py 的 edit_floor 一致（改一邊要改另一邊）
 const FLOOR_MAX = 4;   // 多格地板的最大邊長
 function floorAt(floor, sizes, x, y) {   // 蓋住 (x,y) 的地板錨點 key，沒有回 -1
@@ -151,12 +154,23 @@ function floorAt(floor, sizes, x, y) {   // 蓋住 (x,y) 的地板錨點 key，�
   }
   return -1;
 }
-function applyFloorOp(floor, sizes, op) {
+function applyFloorOp(floor, sizes, op, items, defs, land) {   // land＝島形位圖（1＝陸地），沒有就不檢查水上家具
   const cell = op.cell;
   if (!Array.isArray(cell) || cell.length !== 2 || !Number.isInteger(cell[0]) || !Number.isInteger(cell[1])) return false;
   const [x, y] = cell;
   if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return false;
-  if (op.type === null) { const k = floorAt(floor, sizes, x, y); return k >= 0 && floor.delete(k); }
+  if (op.type === null) {
+    const k = floorAt(floor, sizes, x, y);
+    if (k < 0) return false;
+    if (land && items) {   // 拆掉後水上那格會沒有地板：上面有家具就不能拆
+      const ax = k % COLS, ay = Math.floor(k / COLS), s = sizes.get(floor.get(k)) || { w: 1, h: 1 };
+      for (let dy = 0; dy < s.h; dy++) for (let dx = 0; dx < s.w; dx++) {
+        const cx = ax + dx, cy = ay + dy;
+        if (cx < COLS && cy < ROWS && !land[cy * COLS + cx] && cellHasFurn(items, defs, [cx, cy])) return false;
+      }
+    }
+    return floor.delete(k);
+  }
   const s = typeof op.type === "string" && sizes.get(op.type);
   if (!s || x + s.w > COLS || y + s.h > ROWS) return false;
   const cov = [];
@@ -582,14 +596,14 @@ export class Island {
       await this.enter(ws, att, String(msg.v));
     } else if (msg.t === "hit") {
       await this.hitDeco(ws, att, msg);
-    } else if (msg.t === "dragonMap") {   // 島主：陸地位圖（各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）。上傳者所在地形決定是哪座島的
+    } else if (msg.t === "dragonMap") {   // 陸地位圖（島主路徑＋擺設的水邊驗證；各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）。上傳者所在地形決定是哪座島的
       const t = att.terrain;
-      if (t && OWNER_TERRAINS[t]) {
+      if (t) {
         const land = dragonLand(msg.v);
         if (land) {
           this.dragonMaps.set(t, land);
           this.dragonMapLoaded.add(t);
-          // 一定要存：DO 休眠會清空記憶體，沒存的話之後打島主不會反擊。
+          // 一定要存：DO 休眠會清空記憶體，沒存的話之後打島主不會反擊、擺設也驗不到水邊。
           // 但各客戶端島形相同，絕大多數上傳都是重複的：和已存的內容一樣就不寫（休眠醒來第一次比對要讀一次 storage）
           if (!this.dragonMapRaw.has(t)) this.dragonMapRaw.set(t, await this.state.storage.get("dragonMap:" + t));
           if (this.dragonMapRaw.get(t) !== msg.v) {
@@ -739,7 +753,7 @@ export class Island {
       d.regenT = d.hp >= D_HP ? now : d.regenT + n * 1000;
     }
   }
-  // 島形位圖：玩家上傳後存 storage（懒載入）。各客戶端的島相同，誰上傳都一樣
+  // 島形位圖：玩家上傳後存 storage（懒載入）。各客戶端的島相同，誰上傳都一樣。所有地形都有（島主＋擺設的水邊驗證）
   async getDragonMap(terrain) {
     if (!this.dragonMapLoaded.has(terrain)) {
       this.dragonMapLoaded.add(terrain);
@@ -1172,17 +1186,19 @@ export class Island {
     this.commitBucket.set(ws, b);
     const terrain = att.terrain, defs = await this.getFurnDefs();
     const items = await this.getFurn(terrain);
-    let floor = null, floorDefs = null, furnApplied = 0, floorApplied = 0;
+    // 水邊：家具在水上的格子要有地板；水上有家具的地板不能拆。還沒收到島形時不檢查（退回只靠客戶端擋）
+    const floor = await this.getFloor(terrain), floorDefs = await this.getFloorDefs(), land = await this.getDragonMap(terrain);
+    const ground = land ? (x, y) => !!land[y * COLS + x] || floorAt(floor, floorDefs, x, y) >= 0 : null;
+    let furnApplied = 0, floorApplied = 0;
     let applied = 0, rejected = 0, denied = false;
     for (const op of ops.slice(0, MAX_OPS)) {
       if (!op || typeof op !== "object") { rejected++; continue; }
-      if (op.t === "floor") {      // 地板層：與家具各自獨立，不看家具、不看身分
-        if (!floor) { floor = await this.getFloor(terrain); floorDefs = await this.getFloorDefs(); }
-        if (applyFloorOp(floor, floorDefs, op)) { applied++; floorApplied++; } else rejected++;
+      if (op.t === "floor") {      // 地板層：不看身分；水上有家具的地板不能拆
+        if (applyFloorOp(floor, floorDefs, op, items, defs, land)) { applied++; floorApplied++; } else rejected++;
         continue;
       }
       if (op.t === "clear" && !att.admin) { denied = true; continue; }
-      if (applyFurnOp(items, defs, op)) { applied++; furnApplied++; } else rejected++;
+      if (applyFurnOp(items, defs, op, ground)) { applied++; furnApplied++; } else rejected++;
     }
     if (furnApplied) {
       await this.state.storage.put("furn:" + terrain, items);

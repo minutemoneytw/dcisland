@@ -788,7 +788,7 @@ function stepOwnerProxy(a, dt, def) {
 
 // ---- 島主的伺服器同步：連線時島主本體與流程由伺服器權威，客戶端只負責演出和自己有沒有被打到 ----
 // 事件：aim（龍衝：瞬移島緣鎖定攻擊者）/ gaze（石化之瞳：原地開眼鎖定直線）/ hp（扣血）/ dead（被打倒）/ spawn（重生）/ state（進有島主的地形時的快照）
-// 陸地位圖：世界由前端種子生成，伺服器不知道島形；進有島主的地形時上傳（RLE，1＝陸地，與 ownerEdgeAt 的判定一致：types!==0）
+// 陸地位圖：世界由前端種子生成，伺服器不知道島形；進每個地形時上傳（島主路徑＋擺設的水邊驗證）（RLE，1＝陸地，與 ownerEdgeAt 的判定一致：types!==0）
 function landRLE() {
   const t = S.world.types, n = COLS * ROWS;
   const runs = [t[0] !== 0 ? 1 : 0];   // 第一個值是起始值，之後交替
@@ -801,10 +801,11 @@ function landRLE() {
   runs.push(run);
   return runs.join(':');
 }
-// 上傳島形：每條連線、每個有島主的地形只傳一次（約 20KB；以前切地形、每次島主快照都重傳，Worker 每次都寫儲存）。
+// 上傳島形：每條連線、每個地形只傳一次（約 20KB；以前切地形、每次島主快照都重傳，Worker 每次都寫儲存）。
+// 所有地形都傳：島主用它算路徑，擺設用它驗證水邊（水上要有地板才能放家具）。
 // S.landSent 記「這條連線已傳過的地形」，重連時（onOpen）清掉
 function uploadLandMap() {
-  if (!netOn() || !S.world || !S.terrains[S.terrain]?.owner || S.landSent === S.terrain) return;
+  if (!netOn() || !S.world || S.landSent === S.terrain) return;
   S.landSent = S.terrain;
   S.net.sendDragonMap(landRLE());
 }
@@ -1066,11 +1067,14 @@ function rebuildOcc() {
 function furnitureDef(id) { return S.furn.items.find(f => f.id ===id); }
 
 // ---------------- 遮擋 / 碰撞 ----------------
+// 格子能不能站人／放家具：陸地，或水上鋪了地板（m＝要看的地板，預設目前畫面上的）
+function groundAt(x, y, m = S.floorMap) {
+  return !!S.world.types[y * COLS + x] || (!!m && floorAt(m, x, y) >= 0);
+}
 function blocked(px, py, ignoreFurn) { // 像素座標（腳底）；ignoreFurn＝只看地形（水邊），不管家具
   const x = Math.floor(px / CELL), y = Math.floor(py / CELL);
   if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return true;
-  const type = S.world.types[y * COLS + x];
-  if (type === 0) return true;
+  if (!groundAt(x, y)) return true;   // 水（水上鋪了地板的可以走）
   if (ignoreFurn) return false;
   const fi = S.occ.get(key(x, y));
   if (fi !== undefined) {
@@ -1248,6 +1252,8 @@ function stepPlayer(p, dt) {
     if (!seatItem(p) || wantsMove) standUp(p);
     else { p.moving = false; p.frame = 0; p.z = 0; p.vz = 0; return; }
   }
+  // 腳下的水上地板被拆掉（自己或別人）：挪到最近能站的地方，不會泡在水裡動不了
+  if (p === S.players[0] && blocked(p.x, p.y, true)) [p.x, p.y] = landNear(p.x, p.y);
   let dx = 0, dy = 0;
   // 走路與裝飾模式都能移動（裝飾模式要邊走邊擺）；被石化時不能移動（揮擊也不行，在 doAttack／clickAttack 擋）
   const pet = S.t < (p.petUntil ?? 0);
@@ -1612,7 +1618,7 @@ const FISH_RESULT_WAIT = 4;      // 連線時拉竿後，最多再等伺服器�
 const isRod = () => !!S.avatar?.weapons.find(w => w.id === S.me.weapon)?.fishing;
 const isWater = (wx, wy) => {
   const x = Math.floor(wx / CELL), y = Math.floor(wy / CELL);
-  return x >= 0 && y >= 0 && x < COLS && y < ROWS && S.world.types[y * COLS + x] === 0;
+  return x >= 0 && y >= 0 && x < COLS && y < ROWS && S.world.types[y * COLS + x] === 0 && !(S.floorMap && floorAt(S.floorMap, x, y) >= 0);   // 鋪了地板的水面不能拋竿
 };
 const fishDef = (terrain, id) => S.fishDB?.terrains[terrain]?.find(f => f.id === id);
 // 沿 (ux,uy) 方向找拋竿範圍內第一片水，再往外一點（外面也是水的話）；沒有回 null
@@ -2146,7 +2152,7 @@ function canPlace(typeId, x, y) {
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
     if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS) return false;
-    if (!S.world.types[yy * COLS + xx]) return false;
+    if (!groundAt(xx, yy)) return false;   // 水上要先鋪地板
     if (S.occ.get(key(xx, yy)) !== undefined) return false;
   }
   return true;
@@ -2184,20 +2190,25 @@ function applyFloor(items) { S.floorMap = listToFloor(items); }
 function onNetFloor(items) {
   S.netFloor = items;
   if (!S.floors) return;
-  if (S.mode === 'decor') {      // 別人保存了新的地板：以它為底，把我的地板草稿重新疊上去
+  if (S.mode === 'decor') {      // 別人保存了新的地板：以它為底，把我的草稿重新疊上去
     S.baseFloor = listToFloor(items);
-    S.floorMap = applyFloorOps(S.baseFloor, S.draft);
+    replayDraft(); updateDecorUI();
   } else applyFloor(items);
 }
-// 把草稿裡的地板操作套到一份地板上（回傳新 Map；不合法的操作略過）
-function applyFloorOps(base, ops) {
-  const m = new Map(base);
-  for (const op of ops) if (op.t === 'floor') applyFloorOp(m, op);
-  return m;
+// 以 S.baseFurn／S.baseFloor 為底，依原順序重播整份草稿（家具與地板互相影響：水上家具要有地板、有家具的水上地板不能拆；
+// 順序與伺服器逐一驗證時相同）。不合法的操作略過
+function replayDraft() {
+  const furn = cloneFurn(S.baseFurn), floor = new Map(S.baseFloor);
+  for (const op of S.draft) {
+    if (op.t === 'floor') applyFloorOp(floor, op, furn);
+    else applyFurnOpTo(furn, op, floor);
+  }
+  S.furnItems = furn; S.floorMap = floor; rebuildOcc();
 }
 // 多格地板（floors.json 標 w/h，例如地毯 2×2）：只在錨點格（左上）存一筆，其餘格子視為被它蓋住。
 // 規則與兩份伺服器的 applyFloorOp 一致：多格地板彼此不重疊、單格地板不能鋪在多格地板上；
-// 鋪多格地板會取代範圍內的單格地板；拆除點到多格地板的任一格就整塊拆掉
+// 鋪多格地板會取代範圍內的單格地板；拆除點到多格地板的任一格就整塊拆掉。
+// 地板可以鋪在水上；水上那格有家具時不能拆（要先拿走家具），陸地上的地板不受限制
 const FLOOR_MAX = 4;   // 多格地板的最大邊長（找「誰蓋住這格」時往左上回找的範圍；與伺服器一致）
 const floorSize = id => S.floorSizes?.get(id) || { w: 1, h: 1 };
 function floorAt(m, x, y) {   // 蓋住 (x,y) 的地板錨點 key（單格地板就是自己），沒有回 -1
@@ -2224,9 +2235,18 @@ function floorCovered(m, type, x, y) {
   }
   return out;
 }
-function applyFloorOp(m, op) {   // 有變動回 true
+// 拆掉錨點 k 的地板後，水上會不會有家具懸空（items＝要看的擺設清單）
+function floorHoldsFurn(m, k, items) {
+  const s = floorSize(m.get(k)), ax = k % COLS, ay = Math.floor(k / COLS);
+  for (let dy = 0; dy < s.h; dy++) for (let dx = 0; dx < s.w; dx++) {
+    const cx = ax + dx, cy = ay + dy;
+    if (cx < COLS && cy < ROWS && !S.world.types[cy * COLS + cx] && items.some(it => furnCovers(it, [cx, cy]))) return true;
+  }
+  return false;
+}
+function applyFloorOp(m, op, items = S.furnItems) {   // 有變動回 true
   const [x, y] = op.cell;
-  if (op.type === null) { const k = floorAt(m, x, y); return k >= 0 && m.delete(k); }
+  if (op.type === null) { const k = floorAt(m, x, y); return k >= 0 && !floorHoldsFurn(m, k, items) && m.delete(k); }
   const cov = floorCovered(m, op.type, x, y), s = floorSize(op.type);
   if (!cov) return false;
   if (s.w * s.h === 1 && cov.length === 1 && m.get(cov[0]) === op.type) return false;   // 同一種，沒變
@@ -2234,7 +2254,7 @@ function applyFloorOp(m, op) {   // 有變動回 true
   m.set(y * COLS + x, op.type);
   return true;
 }
-const floorCellOk = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS && !!S.world.types[y * COLS + x];
+const floorCellOk = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;   // 地板可以鋪在水上
 // 長按鋪設/拆除：游標所在格套用目前動作（沒有變化的不記草稿；地毯掃過去會一塊接一塊鋪，不會重疊）
 function paintFloor() {
   if (S.mode !== 'decor' || S.decorTab !== 'floor' || !S.paint || !S.mouseCell || S.players[0].dead) return;
@@ -2243,7 +2263,10 @@ function paintFloor() {
   if (S.paint === 'add' && !type) return;
   const op = { t: 'floor', cell: [x, y], type };
   if (S.draft.length >= 1200) { toast('未保存的變動太多了，請先按「完成」保存'); S.paint = null; return; }
-  if (!applyFloorOp(S.floorMap, op)) return;
+  if (!applyFloorOp(S.floorMap, op)) {
+    if (!type) { const k = floorAt(S.floorMap, x, y); if (k >= 0 && floorHoldsFurn(S.floorMap, k, S.furnItems)) toast('水上的地板有家具，先拿走家具才能拆', 1600); }
+    return;
+  }
   S.draft.push(op);
   updateDecorUI();
 }
@@ -2258,7 +2281,7 @@ function onNetFurn(items) {
   if (!S.furn) return;
   if (S.mode === 'decor') {      // 別人保存了新的擺設：以它為底，把我的草稿重新疊上去
     S.baseFurn = cloneFurn(items.filter(it => it && furnitureDef(it.type) && Array.isArray(it.cell)));
-    S.furnItems = applyOps(S.baseFurn, S.draft); rebuildOcc(); updateDecorUI();
+    replayDraft(); updateDecorUI();
   } else applyFurn(items);
 }
 
@@ -2271,29 +2294,27 @@ const furnCovers = (it, cell) => {
   const d = furnitureDef(it.type) || { w: 1, h: 1 };
   return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
 };
-// 在指定清單上能不能放（範圍、水邊、與清單內家具重疊）
-function canPlaceIn(list, typeId, x, y) {
+// 在指定清單上能不能放（範圍、水邊〔水上要有地板 floor〕、與清單內家具重疊）；規則與兩份伺服器一致
+function canPlaceIn(list, typeId, x, y, floor = S.floorMap) {
   const def = furnitureDef(typeId); if (!def) return false;
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
-    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !S.world.types[yy * COLS + xx]) return false;
+    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor)) return false;
   }
   return !list.some(it => { const d = furnitureDef(it.type) || { w: 1, h: 1 };
     return x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h; });
 }
-// 把一串操作套到一份清單上（回傳新清單；不合法的操作略過）
-function applyOps(base, ops) {
-  const list = cloneFurn(base);
-  for (const op of ops) {
-    if (op.t === 'clear') list.length = 0;
-    else if (op.t === 'remove') { const i = list.findIndex(it => furnCovers(it, op.cell)); if (i >= 0) list.splice(i, 1); }
-    else if (op.t === 'place' && canPlaceIn(list, op.type, op.cell[0], op.cell[1])) list.push({ type: op.type, cell: [op.cell[0], op.cell[1]] });
-  }
-  return list;
+// 把一個家具操作套到清單上（直接改 list；不合法的略過）
+function applyFurnOpTo(list, op, floor = S.floorMap) {
+  if (op.t === 'clear') list.length = 0;
+  else if (op.t === 'remove') { const i = list.findIndex(it => furnCovers(it, op.cell)); if (i >= 0) list.splice(i, 1); }
+  else if (op.t === 'place' && canPlaceIn(list, op.type, op.cell[0], op.cell[1], floor)) list.push({ type: op.type, cell: [op.cell[0], op.cell[1]] });
 }
 function stageOp(op) {
   S.draft.push(op);
-  S.furnItems = applyOps(S.furnItems, [op]);
+  const list = cloneFurn(S.furnItems);
+  applyFurnOpTo(list, op);
+  S.furnItems = list;
   rebuildOcc(); updateDecorUI();
 }
 const canClear = () => !netOn() || S.admin;      // 連線時要管理員；沒連線（單機）自己的島自己清
@@ -2391,7 +2412,7 @@ async function switchTerrain(id) {
     toast(`已移動到${S.terrains[id].name}`);
     // M2：只有自己過去；告訴伺服器，讓新地形的人看到你、舊地形的人看不到你
     S.net?.enter?.(id);
-    // 島主同步：進有島主的地形就把陸地位圖交給伺服器（島形只有客戶端知道）
+    // 把陸地位圖交給伺服器（島形只有客戶端知道；島主路徑與擺設的水邊驗證都要用）
     uploadLandMap();
   } catch (e) {
     // 不要靜默失敗：讓玩家看得到，也回報到伺服器日誌
@@ -2631,7 +2652,7 @@ canvas.addEventListener('mousedown', e => {
   if (S.draft.length >= 300) { toast('未保存的變動太多了，請先按「完成」保存'); return; }
   if (S.furnItems.length >= MAX_FURN) { toast(`這個地形的擺設已達上限（${MAX_FURN} 件）`); return; }
   if (canPlace(S.sel, x, y)) { stageOp({ t: 'place', type: S.sel, cell: [x, y] }); toast('放置'); }
-  else toast('這裡放不下（水邊／已占用）');
+  else toast('這裡放不下（水上要先鋪地板／已占用）');
 });
 canvas.addEventListener('contextmenu', e => {
   e.preventDefault();
@@ -2818,7 +2839,7 @@ async function boot() {
     onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); },   // 登入後伺服器送來的圖鑑
     onOpen: net => {
       if (performance.now() >= welcomeUntil) toast(`已連上島（${net.room}）`, 2000);
-      // 島主同步：連上（或重連）時人在有島主的地形就補傳陸地位圖（新連線重新算「傳過沒」）
+      // 連上（或重連）時補傳目前地形的陸地位圖（新連線重新算「傳過沒」）
       S.landSent = null;
       uploadLandMap();
     },

@@ -398,6 +398,7 @@ class Room:
     def edit_floor(self, op, terrain):
         """地板操作 {"t":"floor","cell":[x,y],"type":id|None}（None＝拆除）。回傳 True 表示有變動。呼叫時需持有 self.lock。
         多格地板彼此不重疊、單格地板不能鋪在多格地板上；鋪多格地板會取代範圍內的單格地板；拆除點到任一格就整塊拆。
+        地板可以鋪在水上；水上那格有家具時不能拆（要先拿走家具），陸地上的地板不受限制（還沒收到島形時不檢查）。
         規則與 worker/src/index.js、client/js/main.js 的 applyFloorOp 一致（改一邊要改另一邊）。"""
         cell = op.get("cell")
         if not (isinstance(cell, list) and len(cell) == 2 and all(isinstance(v, int) and not isinstance(v, bool) for v in cell)):
@@ -408,7 +409,17 @@ class Room:
         floor, typ, defs = self.floor_map(terrain), op.get("type"), floor_defs()
         if typ is None:
             a = floor_at(floor, x, y)
-            return a is not None and floor.pop(a, None) is not None
+            if a is None:
+                return False
+            land, items = self.dragon_maps.get(terrain), self.furn_list(terrain)
+            if land:   # 拆掉後水上那格會沒有地板：上面有家具就不能拆
+                w, h = defs.get(floor[a], (1, 1))
+                for dy in range(h):
+                    for dx in range(w):
+                        cx, cy = a[0] + dx, a[1] + dy
+                        if cx < COLS and cy < ROWS and not land[cy * COLS + cx] and cell_has_furn(items, [cx, cy]):
+                            return False
+            return floor.pop(a, None) is not None
         if not isinstance(typ, str) or typ not in defs:
             return False
         w, h = defs[typ]
@@ -495,6 +506,13 @@ class Room:
             x, y = cell
             if x < 0 or y < 0 or x + d[0] > COLS or y + d[1] > ROWS:
                 return False
+            land = self.dragon_maps.get(terrain)
+            if land:   # 水上的格子要有地板（與 Worker 的 applyFurnOp、main.js 的 canPlaceIn 一致；還沒收到島形時不檢查）
+                floor = self.floor_map(terrain)
+                for dy in range(d[1]):
+                    for dx in range(d[0]):
+                        if not land[(y + dy) * COLS + x + dx] and floor_at(floor, x + dx, y + dy) is None:
+                            return False
             for it in items:
                 w, h = defs.get(it["type"], (1, 1))
                 if x < it["cell"][0] + w and it["cell"][0] < x + d[0] and y < it["cell"][1] + h and it["cell"][1] < y + d[1]:
@@ -541,7 +559,7 @@ class Room:
             for op in ops[:MAX_OPS]:
                 if not isinstance(op, dict):
                     rejected += 1
-                elif op.get("t") == "floor":   # 地板層：與家具各自獨立，不看身分
+                elif op.get("t") == "floor":   # 地板層：不看身分；水上有家具的地板不能拆
                     if self.edit_floor(op, terrain):
                         applied += 1; floor_changed = True
                     else:
@@ -1287,10 +1305,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if res:
                         last_hit = now
                         room.broadcast(res[1], terrain=res[0])
-                elif t == "dragonMap":   # 島主：陸地位圖（各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）。上傳者所在地形決定是哪座島的
+                elif t == "dragonMap":   # 陸地位圖（島主路徑＋擺設的水邊驗證；各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）。上傳者所在地形決定是哪座島的
                     c3 = room.clients.get(cid)
                     cur = c3.get("terrain") if c3 else None
-                    if cur in OWNER_TERRAINS:
+                    if cur:
                         land = dragon_land(msg.get("v"))
                         if land:
                             room.dragon_maps[cur] = land
