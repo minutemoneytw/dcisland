@@ -32,7 +32,7 @@ export function connectNet(S, opts = {}) {
       name: p.name,
       look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt, pants: S.me.pants || 0,
               hat: S.me.hat || null, top: S.me.top || null, bottom: S.me.bottom || null },   // 帽子／上衣款式／褲子款式（null＝沒戴／用預設款）
-      job: S.me.job,                       // 職業（坦/補/輸出）：伺服器原樣轉發，各畫面用 jobOf() 解讀
+      job: S.me.job,                       // 職業（坦克/補師/輸出）：伺服器原樣轉發，各畫面用 jobOf() 解讀
       d8: p.d8 || null,                    // 畫面用的 8 方向朝向（down/down_right/right/…；玩法仍看 face）
       weapon: p.tool || S.me.weapon,       // 手上拿的（打石頭/樹木時是工具）
       pose: p.pose || null,                // 'sit' | 'sleep'（坐/睡在家具上）
@@ -70,7 +70,7 @@ export function connectNet(S, opts = {}) {
       const wasDead = !!r.dead;
       r.dead = !!st.dead;                  // 死亡（墓碑）：進出死亡時跟同島的人說一聲
       if (st.hp != null) r.hp = st.hp;     // 血量同步（對方自己算好的）
-      if (st.job) r.job = st.job;          // 職業（坦/補/輸出）：只收字串，main.js 的 jobOf() 會做白名單解讀
+      if (st.job) r.job = st.job;          // 職業（坦克/補師/輸出）：只收字串，main.js 的 jobOf() 會做白名單解讀
       if (!r.dead) {                       // 死亡時位置凍結（墓碑不會被推著走）
         r.tx = st.x; r.ty = st.y; r.dir = st.dir ?? r.dir; r.tz = st.z ?? r.tz;   // 高度只設目標，由 stepRemote 平滑追上（直接覆蓋會每次封包都彈回 0 → 跳躍抽動）
         r.moving = !!st.moving;
@@ -187,7 +187,7 @@ export function connectNet(S, opts = {}) {
   net.notifyAttack = () => net.connected && send({ t: 'event', kind: 'attack' });
   // 補師打倒動物／發動群療時的群補廣播（泛型 event：kind: 'heal'，兩份伺服器都會原樣轉發）
   net.heal = () => net.connected && send({ t: 'event', kind: 'heal' });
-  // 挑釁（坦職限定，main.js 的 R 鍵會呼叫）：伺服器驗證職業/範圍/冷卻後轉向或觸發反擊
+  // 挑釁（坦克限定，main.js 的 R 鍵會呼叫）：伺服器驗證職業/範圍/冷卻後轉向或觸發反擊
   net.provoke = () => net.connected && send({ t: 'provoke' });
   // 宣告自己進入某地形：只有自己過去，同地形的人才看得到你
   net.enter = v => net.connected && send({ t: 'enter', v });

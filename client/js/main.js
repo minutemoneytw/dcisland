@@ -553,14 +553,14 @@ const OWNER_AGGRO_MS = 5, OWNER_DROPOUT = 30;                              // �
 const OWNER_PROVOKE_RANGE = 240, OWNER_PROVOKE_CD = 15;                    // 挑釁：有效距離／冷卻（秒；與伺服器 D_PROVOKE_* 一致）
 const PLAYER_REGEN = 1;   // 玩家脫離戰鬥後每秒回幾點血（場上有島主處於仇恨／攻擊狀態、或自己被石化時不回）
 const PLAYER_HP = 10;     // 玩家血量上限：爪擊扣 2（5 下倒地）、龍衝直接倒地、石化每秒扣 1、殺一隻動物回 1、復活即滿血
-// ---------------- 職業（純客戶端 MVP：坦／補／輸出；改數值／說明只動這組常數） ----------------
+// ---------------- 職業（純客戶端 MVP：坦克／補師／輸出；改數值／說明只動這組常數） ----------------
 // 理由：打野外動物與「自己被扣血」都是各畫面自算（野外動物刻意不同步、爪擊是受害者自判），
 // 所以職業效果全在客戶端生效，不用改兩份伺服器。島主傷害仍由伺服器夾 1～2（職業對島主的
 // 加成要到放寬兩份伺服器的 dmg 夾擊值那步再做，見 AGENTS.md「職業」條目）。
 const JOBS = {
-  tank:   { name: '坦',   color: '#7cc0ff', hpMax: 20, takenHalf: true, provoke: true,
+  tank:   { name: '坦克', color: '#7cc0ff', hpMax: 20, takenHalf: true, provoke: true,
             desc: '血量上限 20、被打傷害減半；按 R 挑釁把島主拉到自己身上（龍衝仍直接倒地）' },
-  healer: { name: '補',   color: '#8fe08a', hpMax: 10, healHit: 1, healAoE: 2, groupHeal: true,
+  healer: { name: '補師', color: '#8fe08a', hpMax: 10, healHit: 1, healAoE: 2, groupHeal: true,
             desc: '揮擊命中動物吸回自己 1、打倒動物補 3 格內所有人 2；按 R 群療周遭 3 格內所有人 2（含自己）' },
   dps:    { name: '輸出', color: '#ff9a8a', hpMax: 8, dmgPlus: 1,
             desc: '每擊額外 +1 傷害（變 2～3）；血量上限 8' },
@@ -743,7 +743,7 @@ function petrifyPlayer(p, cause) {   // 石化：10 秒不能移動／跳躍／�
 // 單機本地模擬在這裡；連線時追殺流程由伺服器權威（aggro/claw/wander 事件），但「自己有沒有被打到」仍是各人自判
 function playerDamage(p, dmg, cause) {
   if (p.dead) return;
-  if (jobOf(p)?.takenHalf) dmg = Math.ceil(dmg / 2);   // 坦：被打傷害減半（無條件進位，2 → 1）
+  if (jobOf(p)?.takenHalf) dmg = Math.ceil(dmg / 2);   // 坦克：被打傷害減半（無條件進位，2 → 1）
   p.hp = Math.max(0, (p.hp ?? hpCap(p)) - dmg);
   S.floaters.push({ x: p.x + (Math.random() * 20 - 10), y: p.y - 50, v: String(dmg), life: .8, crit: true });
   if (p.hp <= 0) killPlayer(p, cause);
@@ -782,13 +782,13 @@ function ownerAggroPick(a, ag) {
   return cands.length ? cands[Math.floor(Math.random() * cands.length)] : null;
 }
 
-// ---------------- 挑釁（R 鍵，坦職限定，玩家自選）----------------
+// ---------------- 挑釁（R 鍵，坦克限定，玩家自選）----------------
 let provokeCd = 0;   // 本地冷卻（連線時真正的冷卻在伺服器，這裡擋連打；成功請求也照計）
 // 挑釁：把島主的仇恨拉到自己身上。連線時送 provoke 給伺服器（職業/距離/冷卻由伺服器驗證，
 // 結果走既有 aggro/say/aim 事件廣播）；單機退回本地模擬，行為與伺服器一致。
 function tryProvoke() {
   const me = S.players[0];
-  if (S.mode !== 'walk' || me.dead || S.t < (me.petUntil ?? 0) || !JOBS[S.me.job]?.provoke) return;   // 坦職限定（其他職業按了沒反應）；石化中不能放
+  if (S.mode !== 'walk' || me.dead || S.t < (me.petUntil ?? 0) || !JOBS[S.me.job]?.provoke) return;   // 坦克限定（其他職業按了沒反應）；石化中不能放
   if (S.t < provokeCd) return;
   const a = S.animals.find(v => !v.dead && animalDef(v.id).owner);
   if (!a) return;   // 沒有島主（不在有島主的地形）
@@ -825,7 +825,7 @@ function tryGroupHeal() {
   S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + amt, life: .75 });
 }
 // ---------------- 職業技能列（畫面底部正中間，R 鍵技能的圖示＋冷卻倒數）----------------
-// 只有有 R 技能的職業顯示（坦＝挑釁、補＝群療；輸出沒有，整列隱藏）。冷卻用順時針退去的暗色扇形（conic-gradient）＋秒數，
+// 只有有 R 技能的職業顯示（坦克＝挑釁、補師＝群療；輸出沒有，整列隱藏）。冷卻用順時針退去的暗色扇形（conic-gradient）＋秒數，
 // 冷卻結束閃一下。冷卻時間取本地計時（provokeCd／groupHealCd），伺服器端另有自己的冷卻，這裡顯示的是本地的。
 const SKILL_BAR = {
   tank:   { name: '挑釁', total: () => OWNER_PROVOKE_CD, until: () => provokeCd, run: () => tryProvoke(),
@@ -2774,7 +2774,7 @@ function swatchOrder(colors) {
 }
 
 function buildAvatarPanel() {
-  // 職業（坦／補／輸出）：純客戶端數值，常數在 main.js 的 JOBS
+  // 職業（坦克／補師／輸出）：純客戶端數值，常數在 main.js 的 JOBS
   const jb = $('jobOpts'); jb.innerHTML = '';
   for (const id of Object.keys(JOBS)) {
     const o = document.createElement('div');
@@ -2912,7 +2912,7 @@ addEventListener('keydown', e => {
   if (k === 'escape' && S.mode === 'decor') requestExitDecor();     // Esc 也能離開裝飾模式
   if (k === 'l' && !e.repeat && S.mode === 'walk' && !S.confirmOpen) openList();
   if (k === 'f' && !e.repeat) doAttack(true);
-  if (k === 'r' && !e.repeat) {   // R：職業技能（坦＝挑釁拉島主仇恨；補＝群療補周遭玩家）
+  if (k === 'r' && !e.repeat) {   // R：職業技能（坦克＝挑釁拉島主仇恨；補師＝群療補周遭玩家）
     const jd = JOBS[S.me.job];
     if (jd?.provoke) tryProvoke();
     else if (jd?.groupHeal) tryGroupHeal();
