@@ -625,7 +625,7 @@ def tombstone():  # 死亡墓碑（被島主打倒後原地出現，30 秒後復
     cv.outline((30, 26, 28, 255))
     return cv
 
-def weapon_sword():  # 木劍（M0 武器 1 號）
+def weapon_sword():  # 木劍（M0 武器 1 號；輸出職的專屬武器）
     cv = Canvas(6, 18)
     sv = hx("#c9b98a"); hi = hx("#e8d8a8")
     cv.rect(2, 2, 3, 11, sv)          # 劍刃（第 0 列留給輪廓，第 1 列是劍尖）
@@ -633,6 +633,27 @@ def weapon_sword():  # 木劍（M0 武器 1 號）
     cv.set(2, 1, hi)                  # 劍尖：單點收尖，不是平頭
     cv.rect(0, 12, 5, 12, hx("#8a6238"))   # 護手
     cv.rect(2, 13, 3, 17, hx("#5a4028"))   # 握柄
+    cv.outline((30, 24, 22, 255))
+    return cv
+
+def weapon_shield():  # 圓盾（坦職的專屬武器）：盾面在上、小握把在下（轉軸同其他武器＝離底 3 格）
+    cv = Canvas(12, 14)
+    steel = hx("#7d8ea0"); st_hi = hx("#c9d6de"); boss = hx("#e0b840")
+    cv.ellipse(5.5, 5.5, 5, 5, steel)     # 盾面（圓形）
+    cv.ellipse(4, 4, 2.4, 2.4, st_hi)     # 左上受光反光
+    cv.ellipse(5.5, 5.5, 1.5, 1.5, boss)  # 金色的盾心螺釘
+    cv.ellipse(5.5, 9.5, 3.4, 1.2, hx("#5a6a78"))   # 下緣陰影（立體感）
+    cv.rect(5, 11, 6, 13, hx("#5a4028"))  # 小握把（與劍同款深色握柄）
+    cv.outline((30, 24, 22, 255))
+    return cv
+
+def weapon_staff():  # 法杖（補職的專屬武器）：頂端一顆回復色（綠）寶珠的細杖
+    cv = Canvas(6, 18)
+    wood = hx("#9a6f46"); orb = hx("#7ee2a8"); orb_hi = hx("#d8ffe4")
+    cv.rect(2, 4, 3, 17, wood)            # 杖身
+    cv.rect(2, 15, 2, 17, hx("#6f4a2c"))  # 杖尾陰影
+    cv.ellipse(2.5, 2.5, 2, 2, orb)       # 寶珠（治療綠）
+    cv.set(1, 2, orb_hi); cv.set(2, 1, orb_hi)   # 光點
     cv.outline((30, 24, 22, 255))
     return cv
 
@@ -857,7 +878,7 @@ FLOOR_MANIFEST = dict(
 )
 
 # ---------------- 釣魚：魚類圖鑑（16×16，頭朝右；自製 placeholder）----------------
-# 每座地形 10 種（常見 5／罕見 3／稀有 2），圖由下面幾個參數化的形狀畫出來。
+# 每座地形 30 種（常見 15／罕見 9／稀有 6），圖由下面幾個參數化的形狀畫出來。
 # 清單與屬性在 FISH_TABLE；產生 client/assets/fish/<id>.png 與 fish.json
 FISH_EYE = hx("#1a1418")   # 魚的眼睛（不要叫 EYE：會蓋掉人物用的同名常數）
 
@@ -1196,6 +1217,133 @@ FISH_TABLE = [
     ("volcano", "sulfur_eel", "硫磺鰻", U, (60, 140), lambda: eel("#c8b83a", "#f0e88a")),
     ("volcano", "phoenix_fish", "鳳凰魚", R, (50, 100), lambda: fish("#e8582a", "#f8d84a", L=12, H=6, fin="#f8a83a", spots=((6, 7), (9, 6)), glow="#fff0a0")),
     ("volcano", "fire_dragon_carp", "火龍鯉", R, (70, 150), lambda: fish("#c83a3a", "#f0b84a", L=14, H=6, whisker=True, fin="#f0d84a", spots=((6, 6), (8, 6), (10, 6), (12, 7)), glow="#f8e070")),
+    # ---- 第二批（每座地形再加 20 種：常見 10／罕見 6／稀有 4，合計每座 30 種）----
+    # 草島：池塘與小溪
+    ("grass", "pond_snail", "田螺", C, (2, 6), lambda: snail("#7a6a4a", "#a89878")),
+    ("grass", "pond_weed", "水草", C, (20, 80), lambda: kelp("#4a8a3a")),
+    ("grass", "bluegill", "太陽魚", C, (8, 20), lambda: fish("#5a8aa8", "#e8c868", L=8, H=7, stripes=(6, 9), fin="#e88a3a")),
+    ("grass", "bitterling", "鱊魚", C, (4, 9), lambda: fish("#a8b8a0", "#e8d8e0", L=8, H=4, band="#d86a8a")),
+    ("grass", "stickleback", "刺魚", C, (4, 8), lambda: fish("#8a8a60", "#d8d0a0", L=8, H=3, spots=((7, 8), (9, 8)))),
+    ("grass", "old_flask", "舊水壺", C, (15, 25), lambda: bottle("#6a8ab8")),
+    ("grass", "marsh_crab", "沼澤蟹", C, (4, 10), lambda: crab("#7a6a4a")),
+    ("grass", "rusty_can", "生鏽鐵罐", C, (8, 12), lambda: can("#8a6a4a", "#a88a68")),
+    ("grass", "rice_shrimp", "米蝦", C, (2, 5), lambda: shrimp("#c8b898")),
+    ("grass", "grass_carp", "草魚", C, (30, 80), lambda: fish("#7a9a6a", "#e0e0c0", L=12, H=5)),
+    ("grass", "paddy_eel", "黃鱔", U, (30, 80), lambda: eel("#c8a850", "#e8d898")),
+    ("grass", "pond_slider", "巴西龜", U, (15, 30), lambda: turtle("#5a7a3a", "#8aa85a", "#d8e078")),
+    ("grass", "carp", "鯉魚", U, (30, 90), lambda: fish("#c8a850", "#f0e0b0", L=12, H=6, whisker=True)),
+    ("grass", "mandarin_fish", "鱖魚", U, (25, 50), lambda: fish("#b8a860", "#e8e0a8", L=11, H=6, stripes=(5, 8, 11), fin="#8a7a3a")),
+    ("grass", "black_carp", "青魚", U, (40, 100), lambda: fish("#4a5a5a", "#a8b0a8", L=13, H=5)),
+    ("grass", "silver_carp", "白鰱", U, (40, 100), lambda: fish("#b8c0c8", "#f0f4f8", L=13, H=6, fin="#a0a8b0")),
+    ("grass", "goldfish_king", "金魚王", R, (25, 45), lambda: fish("#f08a2a", "#f8d878", L=11, H=7, fin="#f8a850", spots=((6, 7), (8, 8), (10, 7)), glow="#fff0a0")),
+    ("grass", "platinum_koi", "白金錦鯉", R, (50, 100), lambda: fish("#f8f8f0", "#ffffff", L=13, H=6, fin="#d8e0f0", spots=((6, 7), (9, 8), (11, 7)), glow="#a8d8f8")),
+    ("grass", "marsh_sturgeon", "沼澤守護鱘", R, (100, 220), lambda: fish("#5a6a5a", "#c8d0b8", L=14, H=4, horn="#a8b098", spots=((6, 7), (8, 7), (10, 7)))),
+    ("grass", "amber_trout", "琥珀鱒", R, (50, 90), lambda: fish("#d8a030", "#f8e0a0", L=12, H=6, band="#a86020", spots=((6, 6), (9, 6), (11, 7)), glow="#fff0b0")),
+    # 沙灘：近海
+    ("beach", "conch", "海螺", C, (3, 10), lambda: snail("#e8c8a0", "#c8a880")),
+    ("beach", "sand_crab", "沙蟹", C, (3, 8), lambda: crab("#d8c898")),
+    ("beach", "anchovy", "鯷魚", C, (5, 12), lambda: fish("#8a9ab0", "#e8f0f8", L=9, H=3)),
+    ("beach", "flounder", "比目魚", C, (20, 50), lambda: fish("#a89870", "#d8d0b0", L=12, H=7, spots=((6, 7), (9, 6), (11, 8)))),
+    ("beach", "sea_lettuce", "海萵苣", C, (10, 40), lambda: kelp("#2a6a4a")),
+    ("beach", "plastic_bottle", "寶特瓶", C, (20, 30), lambda: bottle("#a8d8e8")),
+    ("beach", "sand_shrimp", "沙蝦", C, (3, 8), lambda: shrimp("#e8d8b8")),
+    ("beach", "mullet", "烏魚", C, (30, 70), lambda: fish("#8a9aa8", "#e0e4e8", L=12, H=5)),
+    ("beach", "beach_sandal", "海灘拖鞋", C, (20, 28), lambda: boot("#d8b878", "#a88858")),
+    ("beach", "moon_jelly", "海月水母", C, (10, 30), lambda: jelly("#e8d0f0")),
+    ("beach", "pufferfish", "河豚", U, (15, 40), lambda: fish("#d8c880", "#f8f0d0", L=8, H=8, spots=((6, 7), (8, 6), (10, 8)))),
+    ("beach", "seahorse", "海馬", U, (8, 20), lambda: fish("#e8a838", "#f8d878", L=5, H=9, fin="#f8c850")),
+    ("beach", "grouper", "石斑魚", U, (30, 100), lambda: fish("#a8584a", "#d8a898", L=13, H=7, spots=((5, 7), (8, 6), (10, 8), (12, 7)))),
+    ("beach", "black_porgy", "黑鯛", U, (25, 50), lambda: fish("#4a5058", "#a8acb0", L=11, H=7, stripes=(7,))),
+    ("beach", "stingray", "魟魚", U, (40, 120), lambda: ray("#8a7a5a", "#e8d8a8")),
+    ("beach", "lobster", "龍蝦", U, (20, 50), lambda: shrimp("#c84a3a")),
+    ("beach", "sailfish", "旗魚", R, (150, 300), lambda: fish("#3a5aa8", "#d8e0f0", L=14, H=5, horn="#8aa0d0", fin="#2a4a98")),
+    ("beach", "pearl_starfish", "珍珠海星", R, (10, 30), lambda: starfish("#f8e8f0")),
+    ("beach", "rainbow_wrasse", "彩虹隆頭魚", R, (20, 50), lambda: fish("#4ad8a8", "#f8e870", L=11, H=6, band="#f87aa8", glow="#fff8c0", spots=((6, 6), (9, 6)))),
+    ("beach", "leafy_sea_dragon", "葉海龍", R, (20, 40), lambda: fish("#a8c838", "#e0f088", L=9, H=7, whisker=True, fin="#78a820", spots=((6, 7), (8, 8)), glow="#f8ffa8")),
+    # 雪島：冰海
+    ("snow", "smelt", "胡瓜魚", C, (10, 20), lambda: fish("#b8c8d0", "#f0f4f8", L=9, H=3)),
+    ("snow", "herring", "鯡魚", C, (20, 35), lambda: fish("#7a8aa0", "#e0e8f0", L=10, H=4)),
+    ("snow", "pollock", "狹鱈", C, (30, 60), lambda: fish("#8a8a68", "#d8d8c0", L=11, H=5, band="#b8b898")),
+    ("snow", "frost_snail", "霜螺", C, (2, 6), lambda: snail("#c8d8e8", "#a8b8c8")),
+    ("snow", "ice_kelp", "冰藻", C, (20, 100), lambda: kelp("#6aa8a8")),
+    ("snow", "iced_bottle", "冰封瓶", C, (18, 28), lambda: bottle("#a8d0e8")),
+    ("snow", "wool_glove", "毛線手套", C, (20, 25), lambda: glove("#4a7ac8")),
+    ("snow", "arctic_shrimp", "北極蝦", C, (4, 10), lambda: shrimp("#f0a8a0")),
+    ("snow", "sculpin", "杜父魚", C, (8, 20), lambda: fish("#6a6a58", "#b8b498", L=9, H=6, spots=((6, 7), (8, 8), (10, 7)))),
+    ("snow", "icicle", "冰柱", C, (20, 50), lambda: stick("#c8e8f8", "#a8d8e8")),
+    ("snow", "halibut", "大比目魚", U, (60, 150), lambda: fish("#8a8068", "#e8e0d0", L=13, H=7, spots=((6, 7), (9, 6), (11, 8)))),
+    ("snow", "arctic_char", "北極紅點鮭", U, (40, 80), lambda: fish("#6a7a88", "#f0c8a8", L=12, H=5, spots=((6, 6), (9, 6), (11, 7)), band="#e8a078")),
+    ("snow", "wolffish", "狼魚", U, (60, 120), lambda: fish("#5a6a78", "#a0acb8", L=13, H=5, whisker=True)),
+    ("snow", "ice_octopus", "冰章魚", U, (30, 80), lambda: octopus("#a8c8e8")),
+    ("snow", "king_crab", "帝王蟹", U, (15, 40), lambda: crab("#c8584a")),
+    ("snow", "snowflake_jelly", "雪花水母", U, (10, 40), lambda: jelly("#e8f4ff")),
+    ("snow", "beluga_calf", "白鯨幼崽", R, (150, 250), lambda: fish("#f0f4f8", "#ffffff", L=13, H=7, fin="#d0d8e8", glow="#b8e0ff")),
+    ("snow", "crystal_fish", "水晶魚", R, (30, 60), lambda: fish("#c8f0ff", "#ffffff", L=11, H=6, alpha=130, glow="#e8f8ff", spots=((6, 7), (9, 7)))),
+    ("snow", "frost_dragon_eel", "霜龍鰻", R, (100, 250), lambda: eel("#6ab8d8", "#e8f8ff")),
+    ("snow", "glacier_turtle", "冰川龜", R, (60, 120), lambda: turtle("#a8c8e0", "#c8e0f0", "#f0f8ff")),
+    # 夜光島：發光的夜海
+    ("night", "glow_snail", "螢光螺", C, (2, 6), lambda: snail("#6ad8c8", "#2a4a6a")),
+    ("night", "night_crab", "夜蟹", C, (5, 15), lambda: crab("#4a4a8a")),
+    ("night", "moon_kelp", "月藻", C, (20, 100), lambda: kelp("#4a8aa8")),
+    ("night", "spark_minnow", "螢光小魚", C, (3, 8), lambda: fish("#4a6aa8", "#8ad8f0", L=8, H=3, glow="#a8f8f8", spots=((6, 8), (9, 8)))),
+    ("night", "dusk_perch", "暮鱸", C, (20, 45), lambda: fish("#4a4a78", "#8a8ab8", L=11, H=6, stripes=(6, 9))),
+    ("night", "drift_can", "漂流罐", C, (8, 12), lambda: can("#6a7a9a", "#a8d8e8")),
+    ("night", "star_shrimp", "星蝦", C, (3, 8), lambda: shrimp("#a8a8f0")),
+    ("night", "firefly_squid", "螢烏賊", C, (5, 12), lambda: squid("#8af0d8")),
+    ("night", "midnight_crucian", "午夜鯽", C, (15, 30), lambda: fish("#2a3a5a", "#5a6a8a", L=10, H=6)),
+    ("night", "lost_boot", "遺落的靴子", C, (25, 30), lambda: boot("#3a3a5a", "#2a2a3a")),
+    ("night", "vampire_squid", "吸血烏賊", U, (15, 30), lambda: squid("#5a2a4a")),
+    ("night", "comet_eel", "彗星鰻", U, (60, 160), lambda: eel("#3a5aa8", "#a8d8f8")),
+    ("night", "dream_ray", "夢魘魟", U, (50, 130), lambda: ray("#4a2a7a", "#e8a8f8")),
+    ("night", "opah", "月魚", U, (80, 180), lambda: fish("#c85a6a", "#f8c8c8", L=11, H=8, fin="#e88a8a", spots=((6, 7), (8, 6), (10, 8), (9, 9)))),
+    ("night", "lamp_octopus", "燈籠章魚", U, (30, 70), lambda: octopus("#6a5ac8")),
+    ("night", "abyss_crab", "深淵蟹", U, (15, 40), lambda: crab("#3a3a6a")),
+    ("night", "starlight_whale", "星光鯨幼體", R, (150, 300), lambda: fish("#2a3a8a", "#6a8ad8", L=14, H=7, spots=((5, 7), (7, 6), (9, 8), (11, 6), (12, 8)), glow="#fff8b0")),
+    ("night", "aurora_jelly", "極光水母", R, (20, 60), lambda: jelly("#a8f0c8", 190)),
+    ("night", "shadow_angler", "影子鮟鱇", R, (40, 100), lambda: angler("#1a1a2a", "#a8f8f8")),
+    ("night", "comet_arowana", "彗尾龍魚", R, (70, 140), lambda: fish("#7a5ac8", "#f8e8ff", L=14, H=5, whisker=True, fin="#c8a8f8", glow="#fff8c8", spots=((6, 7), (9, 7), (12, 7)))),
+    # 森林島：林間溪流
+    ("forest", "creek_chub", "石斑溪魚", C, (8, 16), lambda: fish("#8a9a6a", "#d8d8b8", L=9, H=4, spots=((6, 7), (8, 8), (10, 7)))),
+    ("forest", "pine_twig", "松枝", C, (15, 40), lambda: stick("#8a6a3a", "#4a7a3a")),
+    ("forest", "mud_snail", "泥螺", C, (2, 5), lambda: snail("#6a5a3a", "#a8987a")),
+    ("forest", "water_cress", "水芹", C, (10, 40), lambda: kelp("#5a9a4a")),
+    ("forest", "brook_crab", "溪蟹", C, (3, 8), lambda: crab("#6a5a3a")),
+    ("forest", "glass_shrimp", "透明蝦", C, (2, 5), lambda: shrimp("#d8e8d0")),
+    ("forest", "spring_bottle", "山泉瓶", C, (15, 25), lambda: bottle("#8ac8a8")),
+    ("forest", "moss_carp", "苔鯉", C, (20, 40), lambda: fish("#6a8a5a", "#b8c898", L=11, H=6)),
+    ("forest", "hiking_boot", "登山靴", C, (25, 30), lambda: boot("#5a6a4a", "#3a3a2a")),
+    ("forest", "birch_fish", "樺葉魚", C, (8, 15), lambda: fish("#a8b858", "#e0e8a0", L=10, H=3)),
+    ("forest", "mountain_char", "山女鮭", U, (30, 60), lambda: fish("#6a8a7a", "#e8c8b0", L=12, H=5, band="#e8a078", spots=((6, 6), (9, 6)))),
+    ("forest", "giant_salamander", "大鯢", U, (60, 150), lambda: eel("#7a6a4a", "#b8a888")),
+    ("forest", "pike", "白斑狗魚", U, (60, 120), lambda: fish("#5a7a4a", "#d8d8a8", L=14, H=4, spots=((5, 7), (7, 7), (9, 7), (11, 7)))),
+    ("forest", "forest_turtle", "森林龜", U, (20, 40), lambda: turtle("#5a6a3a", "#7a8a4a", "#c8d868")),
+    ("forest", "rock_crab", "岩蟹", U, (5, 12), lambda: crab("#8a5a3a")),
+    ("forest", "river_eel", "河鰻", U, (50, 120), lambda: eel("#4a5a3a", "#b8c8a0")),
+    ("forest", "emerald_salamander", "翡翠蠑螈", R, (25, 50), lambda: eel("#3aa86a", "#d8f0a8")),
+    ("forest", "spirit_trout", "精靈鱒", R, (50, 100), lambda: fish("#a8d8b8", "#f0fff0", L=12, H=6, alpha=200, glow="#e8ffc0", spots=((6, 6), (9, 6), (11, 7)))),
+    ("forest", "elder_pike", "古木狗魚", R, (90, 160), lambda: fish("#4a5a3a", "#9aa878", L=14, H=5, whisker=True, fin="#6a7a4a", glow="#c8e090", spots=((5, 7), (8, 7), (11, 7)))),
+    ("forest", "moss_dragon_turtle", "苔龍龜", R, (60, 120), lambda: turtle("#4a8a5a", "#6aa870", "#d8f0a8")),
+    # 熔岩島：熱泉與熔岩海
+    ("volcano", "cinder_snail", "灰燼螺", C, (3, 8), lambda: snail("#6a5a58", "#a89890")),
+    ("volcano", "steam_shrimp", "溫泉蝦", C, (3, 8), lambda: shrimp("#e89a6a")),
+    ("volcano", "obsidian_crab", "黑曜蟹", C, (5, 12), lambda: crab("#2a2a3a")),
+    ("volcano", "hot_spring_fish", "溫泉魚", C, (5, 12), lambda: fish("#d8a878", "#f8e0c8", L=9, H=4)),
+    ("volcano", "soot_loach", "煤灰鰍", C, (10, 25), lambda: eel("#4a4040", "#8a7a70")),
+    ("volcano", "ember_goby", "餘燼鰕虎", C, (4, 9), lambda: fish("#8a4a3a", "#d8886a", L=8, H=4, glow="#f8a03a", spots=((6, 8), (8, 7)))),
+    ("volcano", "scorched_can", "燒焦的罐頭", C, (8, 12), lambda: can("#4a4040", "#8a3a2a")),
+    ("volcano", "basalt_carp", "玄武鯽", C, (15, 30), lambda: fish("#4a4a50", "#8a8a90", L=10, H=6)),
+    ("volcano", "sulfur_kelp", "硫磺藻", C, (10, 50), lambda: kelp("#b8a83a")),
+    ("volcano", "melted_bottle", "熔化的瓶子", C, (15, 25), lambda: bottle("#d88a3a", 220)),
+    ("volcano", "magma_eel", "熔岩鰻", U, (60, 150), lambda: eel("#a83a2a", "#f8a83a")),
+    ("volcano", "ash_octopus", "灰燼章魚", U, (30, 80), lambda: octopus("#6a5a58")),
+    ("volcano", "cinder_squid", "餘燼烏賊", U, (20, 50), lambda: squid("#c8583a")),
+    ("volcano", "fire_bass", "烈焰鱸", U, (30, 70), lambda: fish("#c8483a", "#f8b878", L=12, H=6, stripes=(6, 9), fin="#f8883a")),
+    ("volcano", "ember_turtle", "餘燼龜", U, (30, 60), lambda: turtle("#6a4038", "#8a5a48", "#f8883a")),
+    ("volcano", "caldera_angler", "火口鮟鱇", U, (30, 80), lambda: angler("#5a2a2a", "#f8d83a")),
+    ("volcano", "magma_dragon", "熔岩龍魚", R, (100, 200), lambda: fish("#b82a2a", "#f8a03a", L=14, H=5, whisker=True, fin="#f8d83a", glow="#fff0a0", spots=((6, 7), (9, 7), (12, 7)))),
+    ("volcano", "obsidian_ray", "黑曜魟", R, (70, 150), lambda: ray("#1a1a2a", "#f84a3a")),
+    ("volcano", "sun_koi", "烈日錦鯉", R, (50, 100), lambda: fish("#f8c83a", "#fff0b0", L=12, H=6, fin="#f87a2a", glow="#fff8d0", spots=((6, 7), (9, 8), (11, 7)))),
+    ("volcano", "salamander_fish", "火蠑魚", R, (40, 90), lambda: eel("#f84a2a", "#f8d870")),
 ]
 
 def fish_manifest():
@@ -1281,6 +1429,8 @@ def main():
     save(tombstone(), "tombstone.png")
     print("== 武器 ==")
     save(weapon_sword(), "weapon_sword.png", "avatar")
+    save(weapon_shield(), "weapon_shield.png", "avatar")
+    save(weapon_staff(), "weapon_staff.png", "avatar")
     save(weapon_rod(), "weapon_rod.png", "avatar")
     print("== 釣魚：魚類圖鑑 ==")
     for t, fid, name, rar, size, draw in FISH_TABLE:
@@ -1325,6 +1475,8 @@ def main():
             dict(id="hands", name="空手", sprite=None),
             # carry：不拿在手上時掛哪裡（back＝背上、waist＝腰間）；back: "hilt"＝背著時劍柄朝上（沒寫＝頭朝上，例如釣竿）
             dict(id="sword", name="木劍", sprite="weapon_sword.png", carry="back", back="hilt"),
+            dict(id="shield", name="圓盾", sprite="weapon_shield.png"),
+            dict(id="staff", name="法杖", sprite="weapon_staff.png", ranged=dict(range=320, cast=1.2, dmg=2)),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
             dict(id="rod", name="釣竿", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
         ],
     ), open(os.path.join(ASSETS, sub, "avatar.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)

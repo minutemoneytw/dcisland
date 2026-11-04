@@ -32,6 +32,7 @@ export function connectNet(S, opts = {}) {
       name: p.name,
       look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt, pants: S.me.pants || 0,
               hat: S.me.hat || null, top: S.me.top || null, bottom: S.me.bottom || null },   // 帽子／上衣款式／褲子款式（null＝沒戴／用預設款）
+      job: S.me.job,                       // 職業（坦/補/輸出）：伺服器原樣轉發，各畫面用 jobOf() 解讀
       d8: p.d8 || null,                    // 畫面用的 8 方向朝向（down/down_right/right/…；玩法仍看 face）
       weapon: p.tool || S.me.weapon,       // 手上拿的（打石頭/樹木時是工具）
       pose: p.pose || null,                // 'sit' | 'sleep'（坐/睡在家具上）
@@ -69,6 +70,7 @@ export function connectNet(S, opts = {}) {
       const wasDead = !!r.dead;
       r.dead = !!st.dead;                  // 死亡（墓碑）：進出死亡時跟同島的人說一聲
       if (st.hp != null) r.hp = st.hp;     // 血量同步（對方自己算好的）
+      if (st.job) r.job = st.job;          // 職業（坦/補/輸出）：只收字串，main.js 的 jobOf() 會做白名單解讀
       if (!r.dead) {                       // 死亡時位置凍結（墓碑不會被推著走）
         r.tx = st.x; r.ty = st.y; r.dir = st.dir ?? r.dir; r.tz = st.z ?? r.tz;   // 高度只設目標，由 stepRemote 平滑追上（直接覆蓋會每次封包都彈回 0 → 跳躍抽動）
         r.moving = !!st.moving;
@@ -135,6 +137,7 @@ export function connectNet(S, opts = {}) {
       case 'event': {
         const r = S.remotes.get(msg.id);
         if (r && msg.kind === 'attack') r.swing = 0.22;
+        else if (r && msg.kind === 'heal' && opts.onHeal) opts.onHeal(msg.id);   // 補師的群補：每個收到的人自判自己是否被補到
         break;
       }
     }
@@ -182,6 +185,10 @@ export function connectNet(S, opts = {}) {
   net.hello = () => { if (S.session) send({ t: 'hello', s: S.session }); };
   // 攻擊等瞬時事件（doAttack 會呼叫）
   net.notifyAttack = () => net.connected && send({ t: 'event', kind: 'attack' });
+  // 補師打倒動物／發動群療時的群補廣播（泛型 event：kind: 'heal'，兩份伺服器都會原樣轉發）
+  net.heal = () => net.connected && send({ t: 'event', kind: 'heal' });
+  // 挑釁（坦職限定，main.js 的 R 鍵會呼叫）：伺服器驗證職業/範圍/冷卻後轉向或觸發反擊
+  net.provoke = () => net.connected && send({ t: 'provoke' });
   // 宣告自己進入某地形：只有自己過去，同地形的人才看得到你
   net.enter = v => net.connected && send({ t: 'enter', v });
   // 家具編輯：只送意圖，結果以伺服器廣播的 furn 清單為準
@@ -192,7 +199,7 @@ export function connectNet(S, opts = {}) {
   net.hitDeco = (i, sprite, cell) => net.connected && send({ t: 'hit', i, sprite, cell });
   // 島主：上傳陸地位圖（進草島時）／打到島主時送意圖（座標＋傷害＋我們看到的龍位置），流程由伺服器權威
   net.sendDragonMap = v => net.connected && send({ t: 'dragonMap', v });
-  net.dragonHit = (x, y, dmg, ddx, ddy) => net.connected && send({ t: 'dragonHit', x, y, dmg, ddx, ddy });
+  net.dragonHit = (x, y, dmg, ddx, ddy, staff) => net.connected && send({ t: 'dragonHit', x, y, dmg, ddx, ddy, ...(staff ? { staff: 1 } : {}) });   // staff：法杖遠距詠唱（伺服器放寬射程，並核對 state.weapon）
   // 釣魚：魚上鉤後拉竿成功，請伺服器抽一條魚（登入的人順便記進伺服器的圖鑑），結果用 fish_result 回來
   net.fishCatch = () => net.connected && send({ t: 'fish' });
   // 分頁凍結恢復後要島主即時快照（伺服器用 dragon 事件的 state 回這條連線）

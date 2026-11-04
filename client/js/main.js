@@ -353,9 +353,10 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
   }
   if (auto) {   // F 鍵：前方有可破壞物件就自動用對應工具
     // 島主在揮擊範圍內就優先打牠：採集／座位／NPC 都讓位（島主常駐重生點，旁邊一堆家具，按 F 不該變成坐下）
+    const rg0 = rangedDef();
     const own = S.animals.find(a => {
       const od = animalDef(a.id);
-      return od?.owner && !a.dead && !a.fly && inHit(p, a);
+      return od?.owner && !a.dead && !a.fly && (rg0 ? inCastRange(p, a, rg0) : inHit(p, a));
     });
     const ownerFirst = !!own;
     if (!ownerFirst) {
@@ -373,20 +374,77 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
   if (S.me.weapon === 'hands') { say('先在「造型」裡裝備武器！'); return; }
   if (!S.weaponImgs[S.me.weapon]) return;
   if (S.t - p.lastAtk < ATK_CD) return;
+  const rg = rangedDef();
+  if (rg) { startCast(p, rg); return; }   // 法杖：遠距詠唱（自動瞄準，讀條完才出傷害）
   p.lastAtk = S.t; p.swing = ATK_T; p.tool = null;
   S.net?.notifyAttack?.();          // M2：讓同島的人看到你的揮擊
   for (const a of S.animals) {
     if (a.dead || a.fly) continue;   // 島主飛在空中打不到
     if (!inHit(p, a)) continue;      // 武器尖端進了怪物的判定圈才算（不看面向）
+    hitAnimal(p, a, false);
+  }
+}
+
+// ---- 法杖：遠距詠唱（自動瞄準）----
+// 武器的 ranged 欄位（avatar.json）：range＝射程 px（算到怪物判定圈邊緣）、cast＝詠唱秒數、dmg＝傷害。
+// 按攻擊就挑射程內的目標（島主優先，否則最近的活動物），頭上出現詠唱倒數條、高舉法杖；
+// 詠唱中目標超出射程（或死亡／飛走）、自己死亡／被石化／坐下／換武器／進裝飾模式就中斷；讀完自動命中目標。
+const rangedDef = () => S.avatar?.weapons.find(w => w.id === S.me.weapon)?.ranged || null;
+const inCastRange = (p, a, rg) => Math.hypot(a.x - p.x, a.y - p.y) - hitRadius(animalDef(a.id)) <= rg.range;
+function pickCastTarget(p, rg) {
+  let best = null, bd = Infinity;
+  for (const a of S.animals) {
+    if (a.dead || a.fly || !inCastRange(p, a, rg)) continue;
+    const od = animalDef(a.id), d = Math.hypot(a.x - p.x, a.y - p.y) - (od.owner ? 1e6 : 0);   // 島主排最前面
+    if (d < bd) { bd = d; best = a; }
+  }
+  return best;
+}
+function startCast(p, rg) {
+  if (p.cast || S.t - p.lastAtk < ATK_CD) return;
+  const a = pickCastTarget(p, rg);
+  if (!a) { say('射程內沒有目標'); return; }
+  p.cast = { t0: S.t, dur: rg.cast, a };
+  p.swing = 0; p.tool = null; S._hits = 1;   // 算有互動，點到動物時不要再跳動物的台詞
+}
+function cancelCast(p, why) { if (!p.cast) return; p.cast = null; if (why) toast(why, 1500); }
+function stepCast(p) {   // 每幀（只有本機玩家）：檢查中斷條件、讀條完就出傷害
+  const c = p.cast, rg = rangedDef();
+  if (!c) return;
+  if (p.dead || S.t < (p.petUntil ?? 0) || p.pose || p.fish || S.mode !== 'walk' || !rg) { cancelCast(p); return; }
+  const a = c.a;
+  if (!S.animals.includes(a) || a.dead || a.fly) { cancelCast(p, '詠唱中斷：目標消失了'); return; }
+  if (!inCastRange(p, a, rg)) { cancelCast(p, '詠唱中斷：目標超出射程'); return; }
+  if (Math.abs(a.x - p.x) > 6) p.dir = Math.sign(a.x - p.x);   // 面向目標
+  if (S.t - c.t0 < c.dur) return;
+  p.cast = null; p.lastAtk = S.t;
+  S.net?.notifyAttack?.();   // 讓同島的人看到你出手
+  S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: a.y - 24 * (animalDef(a.id).big || 1) * .6, life: .22 });
+  hitAnimal(p, a, true);
+}
+
+// 命中一隻動物（近戰揮擊與法杖詠唱完共用）：ranged＝法杖（傷害固定取武器的 dmg、不暴擊）
+function hitAnimal(p, a, ranged) {
+  {
     S._hits++;
-    const crit = Math.random() < .18;
-    const dmg = crit ? 2 : 1;
+    const crit = !ranged && Math.random() < .18;
+    let dmg = ranged ? (rangedDef()?.dmg || 2) : (crit ? 2 : 1);
+    const jd = jobOf(p);
+    if (jd?.dmgPlus) dmg += jd.dmgPlus;   // 輸出：每擊 +1（連線打島主時送出去的值仍會被伺服器夾回 1～2）
     const od = animalDef(a.id);
     if (od.owner && a.proxy) {   // 島主連線時由伺服器權威：送意圖（座標＋傷害＋我們看到的龍位置），本地不扣血（血量等伺服器廣播）
-      S.net?.dragonHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, dmg, Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10);
+      S.net?.dragonHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.min(2, dmg), Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10, ranged);
     } else {
       a.hp -= dmg;
       a.startle = 1; a.startleT = 3; a.target = null; a.idle = 0;
+    }
+    // 補師：揮擊命中動物就吸回自己一點血（血量走既有 state 封包同步）
+    if (jd?.healHit) {
+      const cap = hpCap(p) ?? PLAYER_HP;
+      if (p.hp < cap) {
+        p.hp = Math.min(cap, p.hp + jd.healHit);
+        S.floaters.push({ x: p.x + (Math.random() * 16 - 8), y: p.y - 50, v: '+' + jd.healHit, life: .7 });
+      }
     }
     S.floaters.push({ x: a.x + (Math.random() * 24 - 12), y: a.y - 42, v: String(dmg), life: .8, crit });
     if (od.owner) {   // 打到島主：不逃跑，觸發反擊（龍衝＝瞬移島緣、蛇女＝原地開眼；飛行/預警/歇腳或冷卻中不重觸發；連線時反擊由伺服器觸發）
@@ -405,8 +463,16 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
       if (!od.owner) {   // 殺到動物回 1 HP（島主是伺服器權威事件，不算在此）
         const me = S.players[0];
-        me.hp = Math.min(PLAYER_HP, (me.hp ?? PLAYER_HP) + 1);
+        me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + 1);
         S.floaters.push({ x: me.x, y: me.y - 50, v: '+1', life: .7 });
+        // 補師：打倒動物補周遭 3 格內所有人 2。遠端玩家的血量由對方自己的畫面計算（與爪擊
+        // 「受害者自判」同一原則），所以只廣播 heal 事件，各客戶端收到後自判是否在半徑內。
+        if (jd?.healAoE) {
+          S.net?.heal?.();
+          S.floaters.push({ x: me.x, y: me.y - 24, healPulse: true, life: .35 });
+          me.hp = Math.min(hpCap(me), me.hp + jd.healAoE);
+          S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + jd.healAoE, life: .75 });
+        }
       }
       toast(`${animalDef(a.id).name} 被打倒了！${S.animalsDB.respawn || 30} 秒後重生`, 2200);
     }
@@ -456,8 +522,26 @@ const OWNER_WALK_SPEED = 34, OWNER_LEG_MIN = 1500, OWNER_PAUSE = [1.5, 4];   // 
 const OWNER_REGEN = 18;   // 島主每秒回血（單機本地模擬；連線時血量由伺服器權威，與兩份伺服器的 D_REGEN 一致）
 const OWNER_CHASE_SPEED = 180, OWNER_CLAW_RANGE = 36, OWNER_CLAW_CD = 1, OWNER_CLAW_DMG = 2;   // 仇恨追殺：速度（比玩家走路快、比跑步慢）／爪擊範圍／間隔／傷害（與伺服器 D_* 一致）
 const OWNER_AGGRO_MS = 5, OWNER_DROPOUT = 30;                              // 仇恨換人週期／多久沒被打就脫離仇恨（秒）
+const OWNER_PROVOKE_RANGE = 240, OWNER_PROVOKE_CD = 15;                    // 挑釁：有效距離／冷卻（秒；與伺服器 D_PROVOKE_* 一致）
 const PLAYER_REGEN = 1;   // 玩家脫離戰鬥後每秒回幾點血（場上有島主處於仇恨／攻擊狀態、或自己被石化時不回）
 const PLAYER_HP = 10;     // 玩家血量上限：爪擊扣 2（5 下倒地）、龍衝直接倒地、石化每秒扣 1、殺一隻動物回 1、復活即滿血
+// ---------------- 職業（純客戶端 MVP：坦／補／輸出；改數值／說明只動這組常數） ----------------
+// 理由：打野外動物與「自己被扣血」都是各畫面自算（野外動物刻意不同步、爪擊是受害者自判），
+// 所以職業效果全在客戶端生效，不用改兩份伺服器。島主傷害仍由伺服器夾 1～2（職業對島主的
+// 加成要到放寬兩份伺服器的 dmg 夾擊值那步再做，見 AGENTS.md「職業」條目）。
+const JOBS = {
+  tank:   { name: '坦',   color: '#7cc0ff', hpMax: 20, takenHalf: true, provoke: true,
+            desc: '血量上限 20、被打傷害減半；按 R 挑釁把島主拉到自己身上（龍衝仍直接倒地）' },
+  healer: { name: '補',   color: '#8fe08a', hpMax: 10, healHit: 1, healAoE: 2, groupHeal: true,
+            desc: '揮擊命中動物吸回自己 1、打倒動物補 3 格內所有人 2；按 R 群療周遭 3 格內所有人 2（含自己）' },
+  dps:    { name: '輸出', color: '#ff9a8a', hpMax: 8, dmgPlus: 1,
+            desc: '每擊額外 +1 傷害（變 2～3）；血量上限 8' },
+};
+const HEAL_RADIUS = 96;   // 補師打倒動物／群療時的治療半徑（3 格）
+// 自己看「造型」面板選的職業（S.me.job）；別人看 state 封包同步的 job；NPC 沒有職業（回 null）
+const jobOf = p => JOBS[p === S.players[0] ? S.me.job : p.job] || null;
+// 血量上限：有職業用職業的上限，沒有（NPC／未設定）就 PLAYER_HP
+const hpCap = p => jobOf(p)?.hpMax ?? PLAYER_HP;
 // 島主攻擊樣式（animals.json 的 atk 欄位）：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女）、beam＝波動砲（蓋老師）
 // gaze／beam 都是「原地施放」（不瞬移），dash 會瞬移到島緣再衝
 const ownerAtk = def => def.atk || 'dash';
@@ -671,9 +755,23 @@ function beamFire(a, def) {   // 讀條結束：發射直線光波（方向＝�
 // 單機本地模擬在這裡；連線時追殺流程由伺服器權威（aggro/claw/wander 事件），但「自己有沒有被打到」仍是各人自判
 function playerDamage(p, dmg, cause) {
   if (p.dead) return;
-  p.hp = Math.max(0, (p.hp ?? PLAYER_HP) - dmg);
+  if (jobOf(p)?.takenHalf) dmg = Math.ceil(dmg / 2);   // 坦：被打傷害減半（無條件進位，2 → 1）
+  p.hp = Math.max(0, (p.hp ?? hpCap(p)) - dmg);
   S.floaters.push({ x: p.x + (Math.random() * 20 - 10), y: p.y - 50, v: String(dmg), life: .8, crit: true });
   if (p.hp <= 0) killPlayer(p, cause);
+}
+// 補師打倒動物／發動群療時的群體補血（heal 事件）：每個收到的人自判「我在不在補師周遭半徑內」再補自己，
+// 與爪擊「受害者自判」同一原則；來源不是補師（舊客戶端／不可能值）就忽略
+function onNetHeal(healerId) {
+  const me = S.players[0];
+  if (me.dead) return;
+  const src = S.remotes.get(healerId);
+  const ao = src && JOBS[src.job]?.healAoE;
+  if (!ao) return;
+  if (Math.hypot(me.x - src.x, me.y - src.y) <= HEAL_RADIUS) {
+    me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + ao);
+    S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + ao, life: .75 });
+  }
 }
 // 場上有沒有島主正在戰鬥（仇恨追殺、預警、龍衝、開眼、說台詞、歇腳都算）；連線時這些旗標由伺服器事件驅動
 function ownerEngaged() {
@@ -695,6 +793,108 @@ function ownerAggroPick(a, ag) {
     .map(([p]) => p);
   return cands.length ? cands[Math.floor(Math.random() * cands.length)] : null;
 }
+
+// ---------------- 挑釁（R 鍵，坦職限定，玩家自選）----------------
+let provokeCd = 0;   // 本地冷卻（連線時真正的冷卻在伺服器，這裡擋連打；成功請求也照計）
+// 挑釁：把島主的仇恨拉到自己身上。連線時送 provoke 給伺服器（職業/距離/冷卻由伺服器驗證，
+// 結果走既有 aggro/say/aim 事件廣播）；單機退回本地模擬，行為與伺服器一致。
+function tryProvoke() {
+  const me = S.players[0];
+  if (S.mode !== 'walk' || me.dead || S.t < (me.petUntil ?? 0) || !JOBS[S.me.job]?.provoke) return;   // 坦職限定（其他職業按了沒反應）；石化中不能放
+  if (S.t < provokeCd) return;
+  const a = S.animals.find(v => !v.dead && animalDef(v.id).owner);
+  if (!a) return;   // 沒有島主（不在有島主的地形）
+  if (Math.hypot(me.x - a.x, me.y - a.y) > OWNER_PROVOKE_RANGE) { toast('離島主太遠了，靠近一點再挑釁', 1800); return; }
+  provokeCd = S.t + OWNER_PROVOKE_CD;
+  if (S.net?.connected) { S.net.provoke(); return; }   // 成敗由伺服器廣播；冷卻中也會被伺服器擋下
+  if (a.proxy) return;   // 連線中島主由伺服器帶（proxy 不做本地模擬）
+  // ---- 以下單機本地模擬（與 worker/dev_server 的 dragon_provoke 同一套流程）----
+  if (a.fly || a.cast || a.rest || a.sayPhase) { provokeCd = 0; return; }   // 反擊循環中：不打斷（不消耗冷卻）
+  a.hitBook = a.hitBook || new Map(); a.hitBook.set(me, S.t);   // 挑釁者視同現役攻擊者
+  a.lastHitAt = S.t;
+  if (a.aggro) {   // 已在追殺別人（含說台詞中）：仇恨轉向挑釁者
+    ownerAggroStart(a, me);
+    return;
+  }
+  if (S.t >= (a.rageCd ?? 0)) ownerTakeoff(a, me);   // 閒置且冷卻過了：照被打的反擊流程（說台詞→攻擊）
+  else ownerAggroStart(a, me);                       // 反擊冷卻中：直接進入追殺
+}
+
+// ---------------- 群療（R 鍵，補職限定，玩家自選）----------------
+const GROUP_HEAL_CD = 8;   // 群療冷卻（秒；目前純客戶端，要加伺服器驗證時與兩份實作一起對齊）
+let groupHealCd = 0;       // 本地冷卻（純客戶端，這裡擋連打）
+// 群療：補周遭 3 格內所有人 2（含自己）。重用打倒動物群補的 `event kind:'heal'` 廣播（net.heal），
+// 遠端玩家收到後各自自判是否在 HEAL_RADIUS 內（onNetHeal）；沒連線時只有自己補得到。
+function tryGroupHeal() {
+  const me = S.players[0];
+  if (S.mode !== 'walk' || me.dead || S.t < (me.petUntil ?? 0) || !JOBS[S.me.job]?.groupHeal) return;   // 補職限定（其他職業按了沒反應）；石化中不能放
+  if (S.t < groupHealCd) { toast(`群療還要 ${Math.ceil(groupHealCd - S.t)} 秒`, 1200); return; }
+  groupHealCd = S.t + GROUP_HEAL_CD;
+  S.net?.heal?.();   // 同島的人（不含自己：對方畫面自補，走 onNetHeal）
+  const amt = JOBS[S.me.job].healAoE || 2;
+  S.floaters.push({ x: me.x, y: me.y - 24, healPulse: true, life: .35 });   // 綠圈從腳下擴散
+  me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + amt);
+  S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + amt, life: .75 });
+}
+// ---------------- 職業技能列（畫面底部正中間，R 鍵技能的圖示＋冷卻倒數）----------------
+// 只有有 R 技能的職業顯示（坦＝挑釁、補＝群療；輸出沒有，整列隱藏）。冷卻用順時針退去的暗色扇形（conic-gradient）＋秒數，
+// 冷卻結束閃一下。冷卻時間取本地計時（provokeCd／groupHealCd），伺服器端另有自己的冷卻，這裡顯示的是本地的。
+const SKILL_BAR = {
+  tank:   { name: '挑釁', total: () => OWNER_PROVOKE_CD, until: () => provokeCd, run: () => tryProvoke(),
+            usable() {   // 回 null＝可以放；字串＝不能放的原因（圖示變暗）
+              const a = S.animals.find(v => !v.dead && animalDef(v.id).owner);
+              if (!a) return '這裡沒有島主';
+              return Math.hypot(S.players[0].x - a.x, S.players[0].y - a.y) > OWNER_PROVOKE_RANGE ? '離島主太遠' : null;
+            } },
+  healer: { name: '群療', total: () => GROUP_HEAL_CD, until: () => groupHealCd, run: () => tryGroupHeal(), usable: () => null },
+};
+const skillUI = { job: null, cdLeft: 0, dim: null, num: '', flashT: 0, ready: null };
+function drawSkillIcon(job) {   // 40×40 簡單圖示（placeholder）：挑釁＝藍盾加驚嘆號與衝擊波、群療＝綠十字加光圈
+  const c = $('skillIcon'), g = c.getContext('2d');
+  g.clearRect(0, 0, 40, 40);
+  if (job === 'tank') {
+    g.fillStyle = '#1d2a44'; g.fillRect(0, 0, 40, 40);
+    g.strokeStyle = 'rgba(160,210,255,.75)'; g.lineWidth = 2;
+    for (const r of [13, 18]) { g.beginPath(); g.arc(20, 21, r, -.9, .9); g.stroke(); g.beginPath(); g.arc(20, 21, r, Math.PI - .9, Math.PI + .9); g.stroke(); }   // 兩側衝擊波
+    g.fillStyle = '#6fb4ff'; g.beginPath(); g.moveTo(11, 9); g.lineTo(29, 9); g.lineTo(29, 22); g.quadraticCurveTo(29, 31, 20, 35); g.quadraticCurveTo(11, 31, 11, 22); g.closePath(); g.fill();   // 盾
+    g.strokeStyle = '#0e1626'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = '#fff'; g.fillRect(18.5, 13, 3, 11); g.fillRect(18.5, 27, 3, 3);   // 驚嘆號
+  } else {
+    g.fillStyle = '#16301f'; g.fillRect(0, 0, 40, 40);
+    g.strokeStyle = 'rgba(150,240,160,.7)'; g.lineWidth = 2; g.beginPath(); g.arc(20, 20, 16, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#7ee08a'; g.fillRect(16.5, 7, 7, 26); g.fillRect(7, 16.5, 26, 7);   // 十字
+    g.strokeStyle = '#0e2616'; g.lineWidth = 1.5; g.strokeRect(16.5, 7, 7, 26); g.strokeRect(7, 16.5, 26, 7);
+    g.fillStyle = '#e8ffe8'; g.fillRect(18.5, 12, 3, 16); g.fillRect(12, 18.5, 16, 3);
+  }
+}
+function updateSkillBar() {   // 每幀：依職業顯示／隱藏、更新冷卻扇形與秒數（只在值變了才改 DOM）
+  const bar = $('skillBar'), sk = SKILL_BAR[S.me.job];
+  if (!sk) { if (skillUI.job !== '') { skillUI.job = ''; bar.classList.add('hidden'); $('app').classList.remove('has-skill'); } return; }
+  if (skillUI.job !== S.me.job) {
+    skillUI.job = S.me.job; skillUI.cdLeft = 0; skillUI.dim = skillUI.ready = null; skillUI.num = '';
+    drawSkillIcon(S.me.job); $('skillName').textContent = sk.name;
+    $('skillBtn').onclick = () => sk.run();
+    bar.classList.remove('hidden'); $('app').classList.add('has-skill');
+  }
+  const me = S.players[0], total = sk.total(), left = Math.max(0, sk.until() - S.t);
+  const why = (me.dead || S.t < (me.petUntil ?? 0) || S.mode !== 'walk') ? '現在不能使用' : sk.usable();
+  const btn = $('skillBtn');
+  if (left > 0) {   // 冷卻中：暗色扇形從 12 點鐘順時針退去（已過的角度透明、剩下的暗）
+    const deg = Math.min(360, (1 - left / total) * 360);
+    $('skillCd').style.background = `conic-gradient(rgba(0,0,0,0) 0deg ${deg.toFixed(1)}deg, rgba(8,10,14,.72) ${deg.toFixed(1)}deg 360deg)`;
+    const num = left < 1 ? left.toFixed(1) : String(Math.ceil(left));
+    if (num !== skillUI.num) { $('skillNum').textContent = num; skillUI.num = num; }
+  } else if (skillUI.cdLeft > 0 || skillUI.num) {
+    $('skillCd').style.background = 'none'; $('skillNum').textContent = ''; skillUI.num = '';
+    if (skillUI.cdLeft > 0 && skillUI.job === S.me.job) { btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash'); }   // 冷卻結束閃一下
+  }
+  skillUI.cdLeft = left;
+  const dim = !!why, ready = !why && left <= 0;
+  if (dim !== skillUI.dim) { btn.classList.toggle('dim', dim); skillUI.dim = dim; }
+  if (ready !== skillUI.ready) { btn.classList.toggle('ready', ready); skillUI.ready = ready; }
+  btn.title = `${sk.name}（R）` + (why ? ` — ${why}` : '');
+}
+
 // 仇恨狀態的單機 tick：追（每腿重瞄目標、速度 180）、進範圍就每秒一抓（扣 2 HP）、
 // 目標死了／5 秒到隨機換攻擊者、龍衝 CD 到了自動對目標放龍衝、30 秒（OWNER_DROPOUT）沒人打就脫離回閒晃
 function ownerAggroStep(a, dt, def) {
@@ -1126,6 +1326,7 @@ function rebuildOcc() {
   S.occ.clear();
   S.furnItems.forEach((it, idx) => {
     const def = S.furn.items.find(f => f.id === it.type);
+    if (!def || !Array.isArray(it.cell)) return;   // manifest 沒有的種類／壞格子：略過（本地舊存檔可能有，別讓 boot 當掉）
     for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++)
       S.occ.set(key(it.cell[0] + dx, it.cell[1] + dy), idx);
   });
@@ -1236,7 +1437,7 @@ function makePlayer(name, opts) {
     target: null, idle: opts?.npc ? 1 : 0,
     swing: 0, lastAtk: 0,
     dead: false, deadAt: 0,       // 死亡（墓碑）：被島主的龍衝打倒倒數復活
-    hp: PLAYER_HP,                // 血量（爪擊扣 2 歸零倒地；殺動物回 1；NPC 不用）
+    hp: opts?.npc ? PLAYER_HP : (JOBS[S.me.job]?.hpMax ?? PLAYER_HP),   // 血量上限隨職業（NPC 沒有職業用 PLAYER_HP）                // 血量（爪擊扣 2 歸零倒地；殺動物回 1；NPC 不用）
   };
 }
 
@@ -1283,14 +1484,14 @@ const DEAD_SECONDS = 30;
 function killPlayer(p, cause, label) {   // label：頭上飄字（龍衝撞倒傳 '龍衝'，其餘預設「倒地」）
   if (p.npc || p.remote || p.dead) return;
   p.dead = true; p.deadAt = performance.now();   // 牆鐘毫秒：畫面被凍結（切走 DC）時倒數照樣走
-  p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null; p.fish = null;
+  p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null; p.fish = null; p.cast = null;
   S.floaters.push({ x: p.x, y: p.y - 46, v: label || '倒地', life: 1.1, crit: true });
   toast(`${cause} 把你打倒了！${DEAD_SECONDS} 秒後在出生點復活`, 3200);
 }
 function revivePlayer(p) {
   p.dead = false; p.deadAt = 0;
   p.pose = null; p.seat = null; p.seatType = null;                 // 復活後一定是站著的
-  p.hp = PLAYER_HP;   // 復活即滿血
+  p.hp = hpCap(p);   // 復活即滿血（上限隨職業）
   p.petUntil = 0; p.petTick = 0; p.petWas = false;   // 復活順便清石化（石化時長比死亡短，正常輪不到）
   const [nx, ny] = landNear((COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL);
   p.x = nx; p.y = ny; p.z = 0; p.vz = 0; p.dir = 1; p.d8 = 'down';
@@ -1298,12 +1499,13 @@ function revivePlayer(p) {
   toast('毫髮無傷地復活了！', 1800);
 }
 
-// 脫離戰鬥後自動回血（坐著睡著也算；被石化中不回）
+// 脫離戰鬥後自動回血（坐著睡著也算；被石化中不回；回血上限隨職業）
 function regenPlayer(p, dt) {
-  if (p.dead || S.t < (p.petUntil ?? 0) || (p.hp ?? PLAYER_HP) >= PLAYER_HP || ownerEngaged()) { p.regenAcc = 0; return; }
+  const capHp = hpCap(p);
+  if (p.dead || S.t < (p.petUntil ?? 0) || (p.hp ?? capHp) >= capHp || ownerEngaged()) { p.regenAcc = 0; return; }
   p.regenAcc = (p.regenAcc || 0) + dt * PLAYER_REGEN;
   const n = Math.floor(p.regenAcc);
-  if (n > 0) { p.regenAcc -= n; p.hp = Math.min(PLAYER_HP, (p.hp ?? PLAYER_HP) + n); }
+  if (n > 0) { p.regenAcc -= n; p.hp = Math.min(capHp, (p.hp ?? capHp) + n); }
 }
 
 function stepPlayer(p, dt) {
@@ -1338,6 +1540,7 @@ function stepPlayer(p, dt) {
     else if (S.mode !== 'walk' || !isRod() || pet) stopFishing(p);
   }
   stepFishing(p);
+  if (p === S.players[0]) stepCast(p);
   if (p.moving) {
     if (S.mode === 'walk' && S.mouseHeld && S.mouseClient) {   // 按住滑鼠攻擊時，面向跟著游標（可以一邊朝右攻擊一邊往左退）
       const wx = S.mouseClient[0] - canvas.getBoundingClientRect().left + S.cam.x;
@@ -1423,7 +1626,7 @@ function drawPerson(p, wi, nameColor) {
     ctx.save(); ctx.translate(p.x, p.y - p.z);
     // 武器（背在背上／掛在腰間；揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
     const fish = wi && !pose && p.fish ? p.fish : null;
-    const carry = wi && !pose && !fish && !(p.swing > 0);   // 不拿在手上
+    const carry = wi && !pose && !fish && !(p.swing > 0) && !p.cast;   // 不拿在手上（詠唱中高舉法杖）
     const backView = d8Of(p).startsWith('up');                // 背面（往上、斜上）：背著的武器疊在身體上面，其餘方向被身體擋住
     // 掛著的武器畫在左右翻轉之外：固定在同一側，人物轉向時不會跟著換邊
     const drawCarry = onBack => wi.carry === 'waist' ? drawWeaponWaist(wi) : drawWeaponBack(wi, onBack);
@@ -1436,6 +1639,7 @@ function drawPerson(p, wi, nameColor) {
     if (p.dir < 0) ctx.scale(-1, 1);                          // 揮擊、拋竿朝面向那側（要翻轉）
     if (wi && !pose && !fish && p.swing > 0) drawWeaponSwing(wi, p.swing, p.dir < 0 ? -1 : 1);
     if (fish) drawRodCast(wi, rodAngle(fish));
+    if (wi && !pose && !fish && p.cast) drawStaffRaise(wi, Math.min(1, (S.t - p.cast.t0) / p.cast.dur));
     ctx.restore();
     if (pet) ctx.restore();
     if (fish) drawLineAndBobber(p, wi, fish);
@@ -1448,14 +1652,23 @@ function drawPerson(p, wi, nameColor) {
   ctx.strokeText(p.name, p.x, nameY);
   ctx.fillStyle = nameColor;
   ctx.fillText(p.name, p.x, nameY);
-  // 血量條（掉血才畫，名牌正下方）：爪擊扣 2、殺動物回 1、龍衝直接倒地
-  if (!p.npc && p.hp != null && p.hp < PLAYER_HP) {
+  if (p.cast) drawCastBar(p.x, nameY - 30, (S.t - p.cast.t0) / p.cast.dur, '詠唱');   // 詠唱倒數條（同島島主的招式條同一個樣式）
+  const jd = jobOf(p);
+  if (jd) {   // 職業小圓點（FF14 職業徽章的簡化）：名牌左邊一顆角色色圓點
+    const px = p.x - ctx.measureText(p.name).width / 2 - 9;
+    ctx.beginPath(); ctx.arc(px, nameY - 3, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = jd.color; ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(8,10,14,.8)'; ctx.stroke();
+  }
+  // 血量條（掉血才畫，名牌正下方）：爪擊扣 2、殺動物回 1、龍衝直接倒地（上限隨職業）
+  const capHp = (!p.npc && p.hp != null) ? hpCap(p) : 0;
+  if (capHp && p.hp < capHp) {
     const bw = 30, by = nameY + 3;
     ctx.fillStyle = 'rgba(8,10,14,.72)'; ctx.fillRect(p.x - bw / 2, by, bw, 3);
-    ctx.fillStyle = '#e07a68'; ctx.fillRect(p.x - bw / 2 + 1, by + 1, Math.max(0, (bw - 2) * p.hp / PLAYER_HP), 1.6);
+    ctx.fillStyle = '#e07a68'; ctx.fillRect(p.x - bw / 2 + 1, by + 1, Math.max(0, (bw - 2) * p.hp / capHp), 1.6);
   }
   if (S.t < (p.petUntil ?? 0)) {   // 石化倒數：名牌（與血條）下方顯示還剩幾秒
-    const ty = nameY + (!p.npc && p.hp != null && p.hp < PLAYER_HP ? 16 : 12), txt = `石化 ${Math.ceil(p.petUntil - S.t)}`;
+    const ty = nameY + (!p.npc && p.hp != null && p.hp < hpCap(p) ? 16 : 12), txt = `石化 ${Math.ceil(p.petUntil - S.t)}`;
     ctx.font = 'bold 10px "Microsoft JhengHei"'; ctx.textAlign = 'center';
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#9ff0b4';
     ctx.strokeText(txt, p.x, ty); ctx.fillText(txt, p.x, ty);
@@ -1827,6 +2040,19 @@ function showCatch(p, m) {
 function rodAngle(f) {
   return f.ph === 'reel' ? -.25 + Math.sin(S.t * 30) * .12 : f.ph === 'bite' ? 1 + Math.sin(S.t * 40) * .08 : .8;
 }
+// 詠唱中：雙手高舉法杖過頭，杖頂的寶珠隨進度聚光（ctx 已 translate 到角色腳底並依 dir 翻轉）
+function drawStaffRaise(wi, q) {
+  const [hx, hy] = charAnch.hand;
+  ctx.save(); ctx.translate(hx, hy - 10); ctx.rotate(Math.sin(S.t * 9) * .05);
+  ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2);
+  const ty = -(wi.height - 3) * 2;   // 杖頂
+  ctx.globalCompositeOperation = 'lighter';
+  const r = 3 + 7 * q + Math.sin(S.t * 24) * 1.2;
+  const g = ctx.createRadialGradient(0, ty, 0, 0, ty, r);
+  g.addColorStop(0, `rgba(190,255,200,${.55 + .4 * q})`); g.addColorStop(1, 'rgba(120,230,160,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, ty, r, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
 // 畫拋出去的釣竿（ctx 已 translate 到角色腳底並依 dir 翻轉；轉軸同揮擊＝握把）
 function drawRodCast(wi, a) {
   ctx.save(); ctx.translate(charAnch.hand[0], charAnch.hand[1]); ctx.rotate(a);
@@ -1860,7 +2086,7 @@ function drawLineAndBobber(p, wi, f) {
   ctx.restore();
 }
 
-// ---- 魚類圖鑑：每個地形一頁，各 10 種；沒釣過的是黑色剪影＋「？？？」，釣過的顯示圖、名稱、稀有度、最大尺寸與次數 ----
+// ---- 魚類圖鑑：每個地形一頁，各 30 種；沒釣過的是黑色剪影＋「？？？」，釣過的顯示圖、名稱、稀有度、最大尺寸與次數 ----
 function openDex() {
   S.dexOpen = true; S.dexTab = S.fishDB?.terrains[S.terrain] ? S.terrain : TERRAIN_IDS[0];
   buildDex(); $('dexBox').classList.remove('hidden');
@@ -2198,6 +2424,14 @@ function draw() {
   // 傷害飄字 / 消失特效
   for (const f of S.floaters) {
     ctx.save();
+    if (f.orb) {   // 法杖光球：從杖頂飛向目標（0.22 秒）
+      const q = 1 - f.life / .22, x = f.x1 + (f.x2 - f.x1) * q, y = f.y1 + (f.y2 - f.y1) * q;
+      ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 12);
+      g.addColorStop(0, 'rgba(230,255,235,.95)'); g.addColorStop(.5, 'rgba(120,230,160,.6)'); g.addColorStop(1, 'rgba(120,230,160,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill();
+      ctx.restore(); continue;
+    }
     if (f.beam) {   // 石化之瞳發射：以蛇女為中心的綠白光環快速擴散到全地圖（0.7 秒淡出）
       const q = 1 - f.life / .7;
       ctx.strokeStyle = `rgba(160,255,180,${.9 * (1 - q)})`;
@@ -2236,6 +2470,11 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(x0, off + 22);
         ctx.quadraticCurveTo(x0 + 40, off - 2, x0 + 58, off - 26); ctx.stroke();
       }
+    } else if (f.healPulse) {   // 補師的補血脈衝：綠圈從補師腳下擴散淡出
+      const q = 1 - f.life / .35;
+      ctx.strokeStyle = `rgba(130,224,138,${1 - q})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, 8 + q * (HEAL_RADIUS - 8), 0, Math.PI * 2); ctx.stroke();
     } else if (f.poof) {
       const q = 1 - f.life / .55;
       ctx.strokeStyle = `rgba(250,250,240,${1 - q})`;
@@ -2282,8 +2521,12 @@ function saveLayout() {
 }
 function loadLayout() {
   if (netOn()) { applyFurn(S.netFurn); applyFloor(S.netFloor); return; }
-  try { S.furnItems = JSON.parse(localStorage.getItem('dcisland.m0.layout.' + S.terrain)) || []; }
-  catch { S.furnItems = []; }
+  // 沒連線才走 localStorage：套用與 applyFurn 同一層過濾（manifest 沒有的種類直接略過，
+  // 不讓舊存檔裡的殘留家具在 boot 的 rebuildOcc 時炸掉整個遊戲——正式站黑畫面就是這條路徑炸的）
+  let items = [];
+  try { items = JSON.parse(localStorage.getItem('dcisland.m0.layout.' + S.terrain)) || []; }
+  catch { items = []; }
+  S.furnItems = items.filter(it => it && furnitureDef(it.type) && Array.isArray(it.cell));
   rebuildOcc();
   try { applyFloor(JSON.parse(localStorage.getItem('dcisland.m0.floor.' + S.terrain)) || []); }
   catch { applyFloor([]); }
@@ -2521,7 +2764,7 @@ async function switchTerrain(id) {
     const [nx, ny] = landNear(me.x, me.y);
     me.x = nx; me.y = ny;
     me.petUntil = 0; me.petTick = 0; me.petWas = false;   // 石化判定只在畫面本地，換地形就解除
-    me.fish = null;                                        // 換地形就收竿
+    me.fish = null; me.cast = null;                        // 換地形就收竿、中斷詠唱
     buildTerrainChips();
     toast(`已移動到${S.terrains[id].name}`);
     // M2：只有自己過去；告訴伺服器，讓新地形的人看到你、舊地形的人看不到你
@@ -2593,6 +2836,18 @@ function swatchOrder(colors) {
 }
 
 function buildAvatarPanel() {
+  // 職業（坦／補／輸出）：純客戶端數值，常數在 main.js 的 JOBS
+  const jb = $('jobOpts'); jb.innerHTML = '';
+  for (const id of Object.keys(JOBS)) {
+    const o = document.createElement('div');
+    o.className = 'opt name' + (S.me.job === id ? ' sel' : '');
+    o.textContent = JOBS[id].name; o.title = JOBS[id].desc;
+    const dot = document.createElement('span');
+    dot.style.color = JOBS[id].color; dot.style.marginRight = '4px'; dot.textContent = '●';
+    o.prepend(dot);
+    o.onclick = () => setJob(id);
+    jb.appendChild(o);
+  }
   const sk = $('skinOpts'); sk.innerHTML = '';
   for (const s of S.avatar.skins) {
     const o = document.createElement('div');
@@ -2642,7 +2897,7 @@ function buildAvatarPanel() {
     o.onclick = () => { S.me.shirt = i; saveAvatar(); buildAvatarPanel(); };
     sh.appendChild(o);
   });
-  // 武器（影響攻擊）
+  // 武器（含職業的圓盾／法杖／木劍與釣竿）：自由選擇；職業不強制換武器
   const wp = $('weaponOpts'); wp.innerHTML = '';
   for (const w of S.avatar.weapons) {
     const o = document.createElement('div');
@@ -2653,6 +2908,16 @@ function buildAvatarPanel() {
   }
 }
 function saveAvatar() { lsSet('dcisland.m0.avatar', S.me); }
+
+// 換職業：特性立即生效（血量截到新上限，不回滿，避免換職業當補血用）；武器照玩家自己的選擇不動；存檔沿用 dcisland.m0.avatar 這支 key
+function setJob(id) {
+  if (!JOBS[id] || S.me.job === id) return;
+  S.me.job = id;
+  const p = S.players[0];
+  if (p) p.hp = Math.min(p.hp ?? Infinity, hpCap(p));
+  saveAvatar(); buildAvatarPanel();
+  toast(`轉職「${JOBS[id].name}」— ${JOBS[id].desc}`, 3400);
+}
 
 
 
@@ -2678,6 +2943,11 @@ addEventListener('keydown', e => {
   if (k === 'escape' && S.mode === 'decor') requestExitDecor();     // Esc 也能離開裝飾模式
   if (k === 'l' && !e.repeat && S.mode === 'walk' && !S.confirmOpen) openList();
   if (k === 'f' && !e.repeat) doAttack(true);
+  if (k === 'r' && !e.repeat) {   // R：職業技能（坦＝挑釁拉島主仇恨；補＝群療補周遭玩家）
+    const jd = JOBS[S.me.job];
+    if (jd?.provoke) tryProvoke();
+    else if (jd?.groupHeal) tryGroupHeal();
+  }
 });
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key.toLowerCase() === 'f') S.holdSkipF = false; });
 // 切走視窗時放開所有按住的鍵，避免卡住一直揮擊/走路
@@ -2857,7 +3127,8 @@ async function boot() {
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
   Object.assign(S, { furn, floors, animalsDB, npcDB, toolsDB, avatar, fishDB, skillsDB });
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
-  if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';
+  if (!JOBS[S.me.job]) S.me.job = 'dps';   // 舊存檔沒有職業欄（或值不合法）：當輸出
+  if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';   // 舊存檔沒武器欄：給第一款有圖的武器
   // 圖片：同樣全部並行（含目前所在地形的圖）。只有角色身體是必要的（缺了畫不出人），其餘缺圖就略過該項
   await Promise.all([
     ...S.floors.items.map(async f => S.floorImgs[f.id] = await loadSpr(`assets/floors/${f.sprite}`, f.anim)),
@@ -2926,9 +3197,10 @@ async function boot() {
       for (let i = S.floaters.length - 1; i >= 0; i--) {
         const f = S.floaters[i];
         f.life -= dt;
-        if (!f.slash && !f.beam && !f.beamLine) f.y -= 34 * dt;   // 爪擊/光束特效固定在原座標，不隨飄字上浮
+        if (!f.slash && !f.beam && !f.beamLine && !f.healPulse && !f.orb) f.y -= 34 * dt;   // 爪擊/光束/綠圈特效固定在原座標，不隨飄字上浮
         if (f.life <= 0) S.floaters.splice(i, 1);
       }
+      updateSkillBar();
       draw();
     } catch (e) { console.error('loop:', e); }
     requestAnimationFrame(loop);
@@ -2945,6 +3217,7 @@ async function boot() {
   import('./net.js').then(m => m.connectNet(S, {
     onFurn: onNetFurn,
     onFloor: onNetFloor,
+    onHeal: onNetHeal,       // 補師的群補事件（各客戶端自判自己是否在半徑內）
     onAdmin: v => { S.admin = !!v; updateDecorUI(); },
     onCommitResult: onCommitResult,
     onDecos: onNetDecos,

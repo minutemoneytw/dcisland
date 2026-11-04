@@ -52,6 +52,7 @@
   <!-- 造型面板 -->
   <div id="avatarPanel" class="ff-panel hidden">
     <div class="ff-panel-title">造型設定</div>
+    <div class="grp"><label>職業</label><div id="jobOpts"></div></div>
     <div class="grp"><label>膚色</label><div id="skinOpts"></div></div>
     <div class="grp"><label>髮型</label><div id="hairOpts"></div></div>
     <div class="grp" id="hatGrp"><label>帽子</label><div id="hatOpts"></div></div>
@@ -96,6 +97,17 @@
       <button id="signSave" class="ff-btn small">儲存</button>
       <button id="signCancel" class="ff-btn small">取消</button>
     </div>
+  </div>
+
+  <!-- 職業技能列（R 鍵）：畫面底部正中間，冷卻時有順時針退去的暗色扇形與秒數 -->
+  <div id="skillBar" class="hidden">
+    <div id="skillBtn" title="職業技能（R）">
+      <canvas id="skillIcon" width="40" height="40"></canvas>
+      <div id="skillCd"></div>
+      <div id="skillNum"></div>
+      <span id="skillKey">R</span>
+    </div>
+    <div id="skillName"></div>
   </div>
 
   <div id="toast" class="hidden"></div>

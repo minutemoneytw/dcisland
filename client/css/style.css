@@ -171,3 +171,17 @@ body {
 .dex-name { font-size: 12px; color: var(--text); letter-spacing: 1px; }
 .dex-rar { font-size: 10px; margin-top: 2px; letter-spacing: 1px; }
 .dex-size { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+
+/* ---------- 職業技能列（R 鍵）---------- */
+#skillBar { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 15; display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
+#skillBtn { position: relative; width: 48px; height: 48px; box-sizing: border-box; border: 2px solid var(--gold-dim); background: var(--panel); cursor: pointer; pointer-events: auto; }
+#skillBtn canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+#skillBtn.dim canvas { filter: grayscale(1) brightness(.55); }
+#skillBtn.ready { border-color: var(--gold); }
+#skillCd { position: absolute; inset: 0; pointer-events: none; }
+#skillNum { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: bold 18px "Microsoft JhengHei", sans-serif; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000, 1px 1px 0 #000; pointer-events: none; }
+#skillKey { position: absolute; right: 2px; bottom: 0; font: bold 10px "Microsoft JhengHei", sans-serif; color: #ffe9a8; text-shadow: 0 0 2px #000, 1px 1px 0 #000; pointer-events: none; }
+#skillName { font-size: 11px; letter-spacing: 2px; color: var(--text); text-shadow: 0 0 3px #000, 1px 1px 0 #000; }
+#skillBtn.flash { animation: skillFlash .55s ease-out; }
+@keyframes skillFlash { 0% { box-shadow: 0 0 0 0 rgba(255, 236, 150, .95); } 100% { box-shadow: 0 0 16px 12px rgba(255, 236, 150, 0); } }
+#app.has-skill #toast { bottom: 92px; }   /* 技能列顯示時，提示往上讓出位置 */
