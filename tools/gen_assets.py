@@ -814,6 +814,7 @@ ANIMAL_MANIFEST = dict(
         dict(id="ultima_weapon", name="蓋老師", owner=True, big=5, atk="beam",
              speed=16, flee=110, hp=200,
              anim=dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fps=8, scale=3, keyBg=False),
+             shadow=dict(rx=100, ry=20, dx=3, dy=-12),   # 影子：素材的腳印很寬（約 190px）、貼近畫面底，預設的 big 影子又小又偏下，看起來飄在空中
              line="「蓋老師」的裝甲縫隙透出紅光，發出低沉的機械運轉聲。",
              # 台詞由使用者提供，字句照原文（含原文的用字與標點，不要自行潤飾）；一句裡的換行是泡泡裡的換行（\n）；
              # 發動反擊前隨機說一句（泡泡 3 秒）

@@ -2311,8 +2311,11 @@ function draw() {
         // big=N＝比普通動物大 N 倍（判定圈等玩法也看它）；有多幀動畫時畫面大小改看 anim.scale。錨點在腳底中央
         const bs = def.big || 1, W = an ? an.fw * an.scale : img.width * 2 * bs, H = an ? an.fh * an.scale : img.height * 2 * bs;
         const shs = 1 - Math.min(.5, a.z / 60);
+        // 影子：預設依 big 算大小、貼在腳底中央；素材的腳印寬度與 big 不成比例、或腳不在正中央時（例如蓋老師），
+        // animals.json 可寫 shadow:{rx, ry, dx, dy}（px，ry/rx 是半徑，dx/dy 是相對腳底中央的位移，dy 負＝往上）
+        const sd = def.shadow;
         ctx.fillStyle = `rgba(10,14,20,${.26 * shs + .03})`;
-        ctx.beginPath(); ctx.ellipse(a.x, a.y + 1, 9 * bs * shs, 3 * shs * Math.max(1, bs * .6), 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(a.x + (sd?.dx || 0), a.y + (sd ? sd.dy : 1), (sd ? sd.rx : 9 * bs) * shs, (sd ? sd.ry : 3 * Math.max(1, bs * .6)) * shs, 0, 0, Math.PI * 2); ctx.fill();
         ctx.save(); ctx.translate(a.x, a.y - a.z);
         if (a.dead) {  // 死亡：縮小旋轉淡出
           const q = 1 - a.dieT / .6;
