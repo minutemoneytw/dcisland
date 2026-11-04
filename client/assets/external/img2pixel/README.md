@@ -12,6 +12,18 @@
 - 已接線：`animals.json` 的 `snake_queen.anim`（8 fps、`scale: 3`）
 - 授權：**自製，無授權限制**（記錄於 `docs/assets-license.md`）
 
+## 蓋老師（熔岩島島主，已接線）
+
+| 檔案 | 說明 |
+|---|---|
+| `ultima_weapon_sheet.png` | 6 幀水平 sprite sheet（528×74，每幀 88×74，由左至右循環） |
+
+- 透明背景、1x 真實像素，不需要 `keyBg`
+- 已接線：`animals.json` 的 `ultima_weapon.anim`（8 fps、`scale: 3`、`big: 5`）
+- 攻擊樣式 `beam`（波動砲）：光波寬度＝這張圖的畫面寬（264px）
+- 這個島主**沒有 `sprite`**（純外部素材）：`main.js` 載入島主圖時會跳過沒有 `sprite` 的條目
+- 授權：**自製，無授權限制**（記錄於 `docs/assets-license.md`）
+
 ## 巴哈姆特飛行（草島島主，已接線）
 
 `client/assets/animals/animals.json` 的 `gold_dragon.anim` 指向 `bahamut_fly_sheet.png`（6 幀、8 fps、龍衝 16 fps、畫面上 1 像素畫 4px＝352×236）；判定圈、龍衝碰撞等玩法仍看 `big: 5`，沒有改。

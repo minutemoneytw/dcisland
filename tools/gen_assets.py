@@ -762,7 +762,8 @@ ANIMAL_MANIFEST = dict(
         dict(id="frog",  name="大肚蛙", sprite="frog.png",  swim=True, speed=26, flee=70, hp=3,
              line="「大肚蛙」的眼神飄向遠方。"),
         # 島主：terrain.json 的 owner 指定的動物；big=N＝比普通動物大 N 倍；owner=True＝不會被嚇跑、金色名牌
-        # atk＝攻擊樣式：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女：開眼 2 秒→全地圖、面向她的人石化，背對就安全）
+        # atk＝攻擊樣式：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女：開眼 2 秒→全地圖、面向她的人石化，背對就安全）、
+        #   beam＝波動砲（蓋老師：原地讀條 2 秒→朝攻擊者發射一道跟島主同寬的直線光波，站在光波裡的人受傷）
         # ownerLines＝被激怒的台詞：發動反擊前隨機說一句（不連續重複），泡泡 3 秒；line 則是平常點牠時的描述
         # anim＝多幀動畫（有它就用 sheet 畫，sprite 只在 sheet 載入失敗時當備用）：
         #   sheet＝相對 client/assets/ 的路徑（等寬水平排列，由左至右循環）、frames＝幀數、fps／dashFps＝平常／龍衝時每秒幾幀、
@@ -787,6 +788,16 @@ ANIMAL_MANIFEST = dict(
              line="「笨蛋蛇女」半閉著眼，慢半拍地捲了一下蛇尾。",
              ownerLines=["石化之瞳啊，睜開吧！", "蠢貨們，在我的面前化為石像吧！", "美，就該凝固在最完美的一刻！",
                          "蛇髮的詛咒啊，貫穿眼前的一切！", "別亂動喔……一動就變石頭了。", "乖乖站好，這可是你最後一次能動了。"]),
+        # 蓋老師（究極神兵）：外觀是使用者自製的 6 幀走路圖（88×74，透明底），external/ 不由產生器畫，
+        # 所以它沒有 sprite（沒有圖檔可退回）；被打先講台詞（skills.json 的 beam.say:true）再原地讀條放波動砲
+        dict(id="ultima_weapon", name="蓋老師", owner=True, big=5, atk="beam",
+             speed=16, flee=110, hp=200,
+             anim=dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fps=8, scale=3, keyBg=False),
+             line="「蓋老師」的裝甲縫隙透出紅光，發出低沉的機械運轉聲。",
+             # 台詞由使用者提供，字句照原文；發動反擊前隨機說一句（泡泡 3 秒）
+             ownerLines=["冒險者，你是為了什麼而戰鬥的？",
+                         "那我倒想問你，你認為這裡存在真實嗎？",
+                         "英雄……也只是虛偽的偶像。就由我來打破！只有在我的鐵腕統治之下，這裡才會獲得新生！"]),
     ],
 )
 
@@ -794,6 +805,7 @@ ANIMAL_MANIFEST = dict(
 OWNER_BY_TERRAIN = {
     "grass": "gold_dragon",
     "night": "snake_queen",
+    "volcano": "ultima_weapon",
 }
 
 # 各地形出現的小動物（id=權重）

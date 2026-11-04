@@ -31,13 +31,14 @@ const COMMIT_REFILL_MS = 500;
 
 // ---- 島主（伺服器端同步）----
 // 野外動物維持刻意不同步；島主會打死人，流程必須全島一致，由伺服器權威模擬：
-// 被打 → 說台詞 → 反擊（樣式照 OWNER_TERRAINS：dash＝瞬移島緣＋龍衝；gaze＝原地開眼＋石化直線）→ 仇恨追殺 → 冷靜回閒晃。
+// 被打 → 說台詞 → 反擊（樣式照 OWNER_TERRAINS：dash＝瞬移島緣＋龍衝；gaze＝原地開眼＋石化；beam＝原地讀條＋波動砲直線）→ 仇恨追殺 → 冷靜回閒晃。
 // 客戶端只負責演出（移動插值、預警虛線）和自己有沒有被打到的判定（受害者自己死／自己石化，走既有 state.dead 同步）。
 // 伺服器本來不知道島的形狀（世界由前端種子生成），由玩家上傳陸地位圖（RLE）；各客戶端的島相同，誰上傳都一樣。
 // 每座地形各自的島主（地形 → 攻擊樣式；要與 client assets 的 terrain.json owner／animals.json atk 一致）：
-const OWNER_TERRAINS = { grass: "dash", night: "gaze" };
+const OWNER_TERRAINS = { grass: "dash", night: "gaze", volcano: "beam" };
 const D_CAST_MS = 1000;      // 龍衝的島緣鎖定（預警）持續時間
 const D_GAZE_CAST_MS = 2000; // 石化之瞳的開眼預警持續時間（與 client 的 OWNER_GAZE_CAST 一致）
+const D_BEAM_CAST_MS = 2000; // 波動砲的讀條持續時間（與 client 的 OWNER_BEAM_CAST 一致）
 const D_DASH = 560;          // 龍衝速度 px/s（比仇恨追殺的 180 更快：高速掠過才有威嚇感）
 const D_REST_MS = 700;       // 衝到底落地的停留時間
 const D_WALK = 34;           // 閒晃散步速度 px/s（與 client 的 OWNER_WALK_SPEED 一致）
@@ -792,9 +793,11 @@ export class Island {
       const t = Math.min(1, Math.max(0, (now - d.wander.t0) / d.wander.tms));
       return ["idle", [d.wander.fx + (d.wander.tx - d.wander.fx) * t, d.wander.fy + (d.wander.ty - d.wander.fy) * t], 0];
     }
-    if (OWNER_TERRAINS[terrain] === "gaze") {   // 石化之瞳：原地開眼（不瞬移不移動），開完就地回 idle
+    const style = OWNER_TERRAINS[terrain];
+    if (style === "gaze" || style === "beam") {   // 原地施放（石化之瞳開眼／波動砲讀條）：不瞬移不移動，放完就地回 idle
+      const castMs = style === "gaze" ? D_GAZE_CAST_MS : D_BEAM_CAST_MS;
       const dt = now - d.aimTms;
-      if (dt < D_GAZE_CAST_MS) return ["cast", d.pos, D_GAZE_CAST_MS - dt];
+      if (dt < castMs) return ["cast", d.pos, castMs - dt];
       return ["idle", d.pos, 0];
     }
     let dt = now - d.aimTms;
@@ -810,7 +813,9 @@ export class Island {
   dragonIdleAt(terrain) {
     const d = this.dragons.get(terrain);
     if (!d.aimTms) return 0;
-    if (OWNER_TERRAINS[terrain] === "gaze") return d.aimTms + D_GAZE_CAST_MS;
+    const style = OWNER_TERRAINS[terrain];
+    if (style === "gaze") return d.aimTms + D_GAZE_CAST_MS;
+    if (style === "beam") return d.aimTms + D_BEAM_CAST_MS;
     return d.aimTms + D_CAST_MS + d.dashLen / D_DASH * 1000 + D_REST_MS;
   }
   dragonSnapshot(terrain) {
@@ -937,7 +942,8 @@ export class Island {
     }
     if (d.aimTms) {   // 反擊循環剛結束（仇恨中沒有人清 aimTms）：清掉讓之後的追腿正常插值
       d.aimTms = 0;
-      if (OWNER_TERRAINS[terrain] !== "gaze") d.pos = [...d.dest];   // 龍衝落在對岸；石化之瞳沒有位移，留在原地
+      const st2 = OWNER_TERRAINS[terrain];
+      if (st2 !== "gaze" && st2 !== "beam") d.pos = [...d.dest];   // 龍衝落在對岸；石化之瞳／波動砲沒有位移，留在原地
       await this.saveDragon(terrain);
     }
     const dist = Math.hypot(att.state.x - pos[0], att.state.y - pos[1]);
@@ -1077,15 +1083,17 @@ export class Island {
     if (d.st === "dead" || !map) return false;
     d.sayUntil = 0;
     const ax = d.atk[0], ay = d.atk[1];
-    if (OWNER_TERRAINS[terrain] === "gaze") {   // 石化之瞳：不瞬移，原地開眼；直線朝攻擊者方向射到島緣對岸
+    const style = OWNER_TERRAINS[terrain];
+    if (style === "gaze" || style === "beam") {   // 原地施放：石化之瞳開眼／波動砲讀條；直線朝攻擊者方向鎖到島緣對岸（光束幾何）
       const ux = ax - d.pos[0], uy = ay - d.pos[1];
       const ul = Math.hypot(ux, uy) || 1;
       d.unit = [ux / ul, uy / ul];
       d.beam = dragonDashDest(map, d.pos[0], d.pos[1], d.unit[0], d.unit[1]);
       d.aimTms = now;
-      d.cooldownUntil = now + D_GAZE_CAST_MS + D_RAGE_MS;
+      const castMs = style === "gaze" ? D_GAZE_CAST_MS : D_BEAM_CAST_MS;
+      d.cooldownUntil = now + castMs + D_RAGE_MS;
       await this.saveDragon(terrain);
-      this.broadcast({ t: "dragon", ev: "gaze", x: d.pos[0], y: d.pos[1], tx: ax, ty: ay, bx: d.beam[0], by: d.beam[1], castMs: D_GAZE_CAST_MS, hp: d.hp }, null, terrain);
+      this.broadcast({ t: "dragon", ev: style === "gaze" ? "gaze" : "beam", x: d.pos[0], y: d.pos[1], tx: ax, ty: ay, bx: d.beam[0], by: d.beam[1], castMs, hp: d.hp }, null, terrain);
       return true;
     }
     const warp = dragonEdge(map, Math.random() * Math.PI * 2);
@@ -1153,7 +1161,8 @@ export class Island {
       }
       if (d.aimTms) {   // 反擊循環剛結束：龍衝落在對岸（dest）清掉 aimTms 讓散步插值生效；石化之瞳留在原地
         d.aimTms = 0;
-        if (OWNER_TERRAINS[terrain] !== "gaze") d.pos = [...d.dest];
+        const style = OWNER_TERRAINS[terrain];
+        if (style !== "gaze" && style !== "beam") d.pos = [...d.dest];
       }
       // 帶傷回血：補血（滿血那一刻醒來廣播一次的事由 wanderWake 的提前量處理，不用定期輪詢）
       const damaged = d.st !== "dead" && d.hp < D_HP;
