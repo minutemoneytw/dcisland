@@ -695,8 +695,12 @@ ANIMAL_MANIFEST = dict(
              line="「大肚蛙」的眼神飄向遠方。"),
         # 島主：terrain.json 的 owner 指定的動物；big=N＝比普通動物大 N 倍；owner=True＝不會被嚇跑、金色名牌
         # atk＝攻擊樣式：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女：開眼 2 秒→面前直線石化）
+        # anim＝多幀動畫（有它就用 sheet 畫，sprite 只在 sheet 載入失敗時當備用）：
+        #   sheet＝相對 client/assets/ 的路徑（等寬水平排列，由左至右循環）、frames＝幀數、fps／dashFps＝平常／龍衝時每秒幾幀、
+        #   scale＝畫面上 1 個 sheet 像素畫幾 px（只管外觀；判定圈、龍衝碰撞等玩法仍看 big）、keyBg＝把從圖邊連進來的背景色去掉（素材不是透明底時用）
         dict(id="gold_dragon", name="黃金肥龍", sprite="golden_dragon.png", owner=True, big=5, atk="dash",
              speed=16, flee=110, hp=200,
+             anim=dict(sheet="external/img2pixel/bahamut_fly_sheet.png", frames=6, fps=8, dashFps=16, scale=4, keyBg=True),
              line="「黃金肥龍」抖了抖金色的肚皮，打了一個不容小覷的呵欠。"),
         dict(id="snake_queen", name="笨蛋蛇女", sprite="snake_queen.png", owner=True, big=4, atk="gaze",
              speed=16, flee=110, hp=200,

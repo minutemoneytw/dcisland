@@ -41,6 +41,14 @@
    "speed": 16,
    "flee": 110,
    "hp": 200,
+   "anim": {
+    "sheet": "external/img2pixel/bahamut_fly_sheet.png",
+    "frames": 6,
+    "fps": 8,
+    "dashFps": 16,
+    "scale": 4,
+    "keyBg": true
+   },
    "line": "「黃金肥龍」抖了抖金色的肚皮，打了一個不容小覷的呵欠。"
   },
   {
