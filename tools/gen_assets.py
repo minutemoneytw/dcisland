@@ -1146,6 +1146,8 @@ def main():
                   uiColor=t["ui"])
         if t["id"] in OWNER_BY_TERRAIN:
             td["owner"] = OWNER_BY_TERRAIN[t["id"]]
+        if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉
+            td["anims"] = t["anims"]
         json.dump(td, open(os.path.join(ASSETS, sub, "terrain.json"), "w", encoding="utf-8"),
                   ensure_ascii=False, indent=1)
         print(f"  terrain/{t['id']}/terrain.json")

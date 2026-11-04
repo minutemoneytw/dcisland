@@ -67,12 +67,13 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 | 地形 | `client/assets/terrain/<id>/` 加資料夾 + `terrain.json`，並在 `main.js` 的 `TERRAIN_IDS` 登記 |
 | 家具 | `client/assets/furniture/furniture.json` 加條目 + png |
 | 地板 | `client/assets/floors/floors.json` 加條目 + 16×16 無縫磚 png（`gen_assets.py` 的 `FLOOR_MANIFEST`）；多格地板（如地毯 2×2）加 `"w"`/`"h"`，圖為 16w×16h，邊長最多 4 |
-| 動物 | `client/assets/animals/animals.json` 加條目 + png，並在各地形 `terrain.json` 的 `animals` 指定；會游泳/兩棲/會飛的加 `"swim": true`（才能逃到海上） |
+| 動物 | `client/assets/animals/animals.json` 加條目 + png，並在各地形 `terrain.json` 的 `animals` 指定；會游泳/兩棲/會飛的加 `"swim": true`（才能逃到海上）；要多幀動畫就加 `"anim"`（等寬水平 sheet，由左至右循環：`sheet`／`frames`／`fps`／`dashFps`／`scale`／`keyBg`，見 `gen_assets.py` 的 `ANIMAL_MANIFEST` 註解） |
 | 造型 | `client/assets/avatar/avatar.json`（＋對應 png） |
 | NPC／嚮導／台詞／操作說明 | `client/assets/npcs/npcs.json`（`terrains.<地圖>` 每張地圖各自的 NPC，`help` 是嚮導的說明視窗） |
 | 魚（釣魚／圖鑑） | `tools/gen_assets.py` 的 `FISH_TABLE` 加一列（地形、id、名稱、稀有度 `common`/`uncommon`/`rare`、尺寸 cm 範圍、畫圖）再重跑，產生 `client/assets/fish/<id>.png` 與 `fish.json`；稀有度權重與脫鉤率在 `fish_manifest()` |
 | 可破壞物件／採集工具／掉落物 | `client/assets/tools/tools.json`（key＝地形 deco 的圖檔名；掉落物目前為空） |
 | 島主 | `terrain.json` 加 `"owner": "<動物id>"`（一張地圖一隻）；動物本體照上面的「動物」方式加，`"owner": true`＋`"big"` 放大倍率。機制見下方「島主」 |
+| 動畫（把任何單張圖換成多幀） | 準備**等寬水平排列**的 sheet（由左至右循環），在該圖的 manifest 加 `anim`：`{"sheet": "相對 client/assets/ 的路徑", "frames": 幀數, "fps": 8, "keyBg": false, "stagger": false}`。地形磚／點綴物寫在 `terrain.json` 的 `"anims": {"<檔名>": anim}`（例：`"water.png"`、`"tree.png"`）；家具、地板、動物寫在各自條目的 `"anim"`（動物另有 `dashFps`、`scale`）。不寫 `sheet` 時，原本的 `sprite` 檔本身就當 sheet；sheet 載入失敗會退回單張圖。地形磚／地板預設整張地圖同步換幀，`stagger: true` 各格錯開；點綴物與家具依格子自動錯開。`keyBg` 給不是透明底的素材（從圖邊去背）。由產生器管理的 manifest 要寫進 `gen_assets.py` 對應的表（`TERRAINS` 該地形的 `anims`、`FURN_MANIFEST`／`FLOOR_MANIFEST`／`ANIMAL_MANIFEST` 條目的 `anim`）再重跑，否則下次重跑會被蓋掉。只影響畫面，不用改程式、也不動伺服器 |
 
 ## 島主（各島的島主）
 

@@ -57,6 +57,7 @@ const S = {
   players: [],
   animals: [],                  // FF14 致敬小動物
   animalsDB: null, anImgs: {},
+  anAnims: {},                  // 多幀動畫（animals.json 的 anim）：id -> {img, frames, fps, dashFps, scale, fw, fh}
   mode: 'walk', sel: null,
   mouseCell: null,
   t: 0,
@@ -119,6 +120,69 @@ function genWorld(id) {
 
 // ---- FF14 致敬野生動物 ----
 function animalDef(id) { return S.animalsDB.animals.find(x => x.id === id); }
+
+// ---- 可動畫的圖（sprite 描述）：地形磚、點綴物、家具、地板、動物共用 ----
+// 每種圖都可以在 manifest 加 anim（等寬水平 sheet，由左至右循環）：
+//   sheet（相對 client/assets/）、frames（幀數）、fps（每秒幾幀，預設 8）、keyBg（從圖邊去掉背景色，給不是透明底的素材）、
+//   stagger（地形磚／地板：各格錯開不同幀，預設整張地圖同步）；動物另有 dashFps、scale（見 loadAnim）
+// 沒有 anim＝單張圖＝1 幀的 sheet，畫法完全相同；之後只要準備 sheet、在 manifest 加 anim，不用改程式。
+// 描述物件：{img, frames, fps, stagger, fw, fh, width, height}；width/height＝單幀大小（讓原本讀「圖片大小」的程式不用改）
+function makeSpr(img, spec) {
+  const frames = Math.max(1, (spec && spec.frames | 0) || 1), fw = Math.floor(img.width / frames), fh = img.height;
+  return { img: spec?.keyBg ? keyBackground(img) : img, frames, fps: spec?.fps || 8, stagger: !!spec?.stagger, fw, fh, width: fw, height: fh };
+}
+// 載入一張可動畫的圖：manifest 有 anim.sheet 就載 sheet（失敗退回單張 url），否則載單張
+async function loadSpr(url, spec) {
+  if (spec?.sheet) {
+    const sh = await optImg(`assets/${spec.sheet}`);
+    if (sh) return makeSpr(sh, spec);
+  }
+  const im = await optImg(url);
+  return im ? makeSpr(im, spec?.sheet ? null : spec) : null;
+}
+// 第幾幀：依遊戲時間循環；phase＝起始相位（秒），讓同種的東西不會一起動；fps 可覆寫（動物龍衝時）
+function sprFrame(s, phase = 0, fps = s.fps) {
+  return s.frames > 1 ? Math.floor((S.t + phase) * fps) % s.frames : 0;
+}
+// 畫第 fi 幀（ctx 座標）
+function drawSpr(s, fi, dx, dy, dw = s.fw, dh = s.fh) {
+  ctx.drawImage(s.img, fi * s.fw, 0, s.fw, s.fh, dx, dy, dw, dh);
+}
+// 依格子決定的固定相位（地形點綴物、家具：各自錯開，但每個人畫面一樣、重新整理也不變）
+const cellPhase = (x, y) => ((x * 7 + y * 13) % 29) * .137;
+
+// 動物多幀動畫（animals.json 的 anim）：除了共通欄位，還有 dashFps（龍衝／飛行時）與 scale（1 個 sheet 像素畫幾 px，只管外觀）
+function loadAnim(sheet, spec) {
+  return { ...makeSpr(sheet, spec), dashFps: spec.dashFps || spec.fps || 8, scale: spec.scale || 2 };
+}
+// 去背：素材不是透明底時，從圖的四邊開始，把和角落顏色相近且連在一起的像素變透明（被輪廓線圍住的亮色不會被吃掉）
+function keyBackground(img) {
+  const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+  const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+  const W = cv.width, H = cv.height, im = g.getImageData(0, 0, W, H), d = im.data;
+  const kr = d[0], kg = d[1], kb = d[2], TOL = 28;
+  const isBg = i => d[i + 3] === 0 || (Math.abs(d[i] - kr) <= TOL && Math.abs(d[i + 1] - kg) <= TOL && Math.abs(d[i + 2] - kb) <= TOL);
+  const seen = new Uint8Array(W * H), stack = [];
+  for (let x = 0; x < W; x++) stack.push(x, (H - 1) * W + x);
+  for (let y = 0; y < H; y++) stack.push(y * W, y * W + W - 1);
+  while (stack.length) {
+    const p = stack.pop();
+    if (seen[p] || !isBg(p * 4)) continue;
+    seen[p] = 1; d[p * 4 + 3] = 0;
+    const x = p % W;
+    if (x > 0) stack.push(p - 1);
+    if (x < W - 1) stack.push(p + 1);
+    if (p >= W) stack.push(p - W);
+    if (p < W * (H - 1)) stack.push(p + W);
+  }
+  g.putImageData(im, 0, 0);
+  return cv;
+}
+// 現在該畫第幾幀：依遊戲時間循環；龍衝／飛行中用 dashFps（拍得比較快）。每隻動物有自己的起始相位，不會整群同步拍動
+function animFrame(a, an) {
+  a.animPhase ??= Math.random() * 10;
+  return sprFrame(an, a.animPhase, a.fly ? an.dashFps : an.fps);
+}
 
 function spawnAnimals() {
   S.animals = [];
@@ -1324,9 +1388,9 @@ function drawSleeper(p) {
   const img = playerSpriteDiv(p, 0);
   ctx.drawImage(img, 0, 2, 16, 11, p.x - 16, p.y - 33, 32, 22);   // 頭的水平中心對準枕頭（單人床中央）
   const def = furnitureDef(p.seatType || 'bed'), bed = S.furnImgs[p.seatType || 'bed'];
-  if (bed && def?.quiltRow) {
-    const rows = bed.height - def.quiltRow;
-    ctx.drawImage(bed, 0, def.quiltRow, bed.width, rows, p.x - bed.width, p.y - rows * 2, bed.width * 2, rows * 2);
+  if (bed && def?.quiltRow) {   // 被子：從床的「同一幀」切出被子那幾列蓋回去（床有動畫時才對得上）
+    const rows = bed.height - def.quiltRow, fi = sprFrame(bed, p.seat ? cellPhase(p.seat.cell[0], p.seat.cell[1]) : 0);
+    ctx.drawImage(bed.img, fi * bed.fw, def.quiltRow, bed.fw, rows, p.x - bed.width, p.y - rows * 2, bed.width * 2, rows * 2);
   }
   // Zzz 飄字
   const ph = (S.t * 1.2) % 1;
@@ -1743,19 +1807,19 @@ function draw() {
   const y1 = Math.min(ROWS - 1, Math.ceil((S.cam.y + canvas.height) / CELL));
   ctx.save();
   ctx.translate(-S.cam.x, -S.cam.y);
-  // 底：水
+  // 底：地面／岸邊／水（可動畫：每種磚這一幀先算好，整張地圖同步；stagger 的各格再錯開）
+  const tiles = [ims[tMan.water], ims[tMan.edge], ims[tMan.ground]], tileFi = tiles.map(s => s ? sprFrame(s) : 0);
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-    const t = S.world.types[y * COLS + x];
-    const img = t === 2 ? ims[tMan.ground] : t === 1 ? ims[tMan.edge] : ims[tMan.water];
-    if (!img) continue;
-    ctx.drawImage(img, x * CELL, y * CELL, CELL, CELL);
+    const t = S.world.types[y * COLS + x], spr = tiles[t];
+    if (!spr) continue;
+    drawSpr(spr, spr.stagger ? (tileFi[t] + x * 7 + y * 13) % spr.frames : tileFi[t], x * CELL, y * CELL, CELL, CELL);
   }
   // 地板層：蓋在地面上、家具與角色之下（多格地板從錨點畫整張，錨點在鏡頭左上外也要畫，所以往外多看幾格）
   for (let y = Math.max(0, y0 - FLOOR_MAX + 1); y <= y1; y++) for (let x = Math.max(0, x0 - FLOOR_MAX + 1); x <= x1; x++) {
-    const fid = S.floorMap.get(y * COLS + x), img = fid && S.floorImgs[fid];
-    if (!img) continue;
+    const fid = S.floorMap.get(y * COLS + x), spr = fid && S.floorImgs[fid];
+    if (!spr) continue;
     const s = floorSize(fid);
-    ctx.drawImage(img, x * CELL, y * CELL, s.w * CELL, s.h * CELL);
+    drawSpr(spr, sprFrame(spr, spr.stagger ? cellPhase(x, y) : 0), x * CELL, y * CELL, s.w * CELL, s.h * CELL);
   }
   // 裝飾模式半透明格線
   if (S.mode === 'decor') {
@@ -1772,12 +1836,12 @@ function draw() {
     list.push({
       y: (d.cell[1] + 1) * CELL,
       draw: () => {
-        const w = img.width * SC, h = img.height * SC;
+        const w = img.width * SC, h = img.height * SC, fi = sprFrame(img, cellPhase(d.cell[0], d.cell[1]));   // 點綴物可動畫：依格子錯開相位
         const sx = d.shake > 0 ? Math.sin(S.t * 70) * 2 * (d.shake / .25) : 0;   // 受擊抖動
         if (d.flip) {
           ctx.save(); ctx.translate(d.cell[0] * CELL + w + sx, (d.cell[1] + 1) * CELL - h); ctx.scale(-1, 1);
-          ctx.drawImage(img, 0, 0, w, h); ctx.restore();
-        } else ctx.drawImage(img, d.cell[0] * CELL + sx, (d.cell[1] + 1) * CELL - h, w, h);
+          drawSpr(img, fi, 0, 0, w, h); ctx.restore();
+        } else drawSpr(img, fi, d.cell[0] * CELL + sx, (d.cell[1] + 1) * CELL - h, w, h);
       }
     });
   }
@@ -1801,7 +1865,7 @@ function draw() {
       draw: () => {
         ctx.save();
         if (idx === S.pickedIdx) ctx.globalAlpha = .5;
-        ctx.drawImage(img, it.cell[0] * CELL, (it.cell[1] + def.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
+        drawSpr(img, sprFrame(img, cellPhase(it.cell[0], it.cell[1])), it.cell[0] * CELL, (it.cell[1] + def.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
         if (def.text && it.text) {   // 看板的字：走近（約 4 格內）才顯示在上方，只顯示第一行前 16 字，點開看全文
           const me = S.players[0], cx = (it.cell[0] + def.w / 2) * CELL, cy = (it.cell[1] + def.h) * CELL;
           if (Math.hypot(cx - me.x, cy - me.y) < 130) {
@@ -1818,12 +1882,13 @@ function draw() {
   });
   // 小動物
   for (const a of S.animals) {
-    const img = S.anImgs[a.id]; if (!img) continue;
+    const img = S.anImgs[a.id], an = S.anAnims[a.id]; if (!img && !an) continue;
     const def = animalDef(a.id);
     list.push({
       y: a.y - (a.z ? .5 : 1),
       draw: () => {
-        const bs = def.big || 1, W = img.width * 2 * bs, H = img.height * 2 * bs;   // big=N＝比普通動物大 N 倍；錨點在腳底中央
+        // big=N＝比普通動物大 N 倍（判定圈等玩法也看它）；有多幀動畫時畫面大小改看 anim.scale。錨點在腳底中央
+        const bs = def.big || 1, W = an ? an.fw * an.scale : img.width * 2 * bs, H = an ? an.fh * an.scale : img.height * 2 * bs;
         const shs = 1 - Math.min(.5, a.z / 60);
         ctx.fillStyle = `rgba(10,14,20,${.26 * shs + .03})`;
         ctx.beginPath(); ctx.ellipse(a.x, a.y + 1, 9 * bs * shs, 3 * shs * Math.max(1, bs * .6), 0, 0, Math.PI * 2); ctx.fill();
@@ -1834,7 +1899,8 @@ function draw() {
           ctx.rotate(q * 1.1); ctx.scale(1 - q * .3, 1 - q * .3);
         }
         if (a.dir < 0) ctx.scale(-1, 1);
-        ctx.drawImage(img, -W / 2, -H, W, H);
+        if (an) drawSpr(an, animFrame(a, an), -W / 2, -H, W, H);
+        else ctx.drawImage(img, -W / 2, -H, W, H);
         ctx.restore();
         if (a.dead) return;
         if (def.owner && !a.fly) {   // 島主腳下判定圈：以「武器尖端」為準——武器點（人前方 WEAPON_REACH 處的小圓點）進圈就打得到，不看面向。靠近（約 220px 內）才顯示
@@ -1951,7 +2017,8 @@ function draw() {
       const s = floorSize(S.selFloor); rw = s.w; rh = s.h;
       ok = !!S.selFloor && !!floorCovered(S.floorMap, S.selFloor, mx, my);
       if (ok && S.floorImgs[S.selFloor]) {
-        ctx.globalAlpha = .7; ctx.drawImage(S.floorImgs[S.selFloor], mx * CELL, my * CELL, rw * CELL, rh * CELL); ctx.globalAlpha = 1;
+        const fs = S.floorImgs[S.selFloor];
+        ctx.globalAlpha = .7; drawSpr(fs, sprFrame(fs), mx * CELL, my * CELL, rw * CELL, rh * CELL); ctx.globalAlpha = 1;
       }
     }
     ctx.fillStyle = !ok ? 'rgba(220,80,80,.3)' : del ? 'rgba(230,150,60,.3)' : 'rgba(90,220,120,.18)';
@@ -1967,7 +2034,7 @@ function draw() {
     ctx.fillStyle = valid ? 'rgba(90,220,120,.28)' : 'rgba(220,80,80,.3)';
     ctx.fillRect(mx * CELL, my * CELL, w, h);
     ctx.globalAlpha = .75;
-    ctx.drawImage(img, mx * CELL, (my + def.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
+    drawSpr(img, sprFrame(img), mx * CELL, (my + def.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
     ctx.globalAlpha = 1;
     ctx.strokeStyle = valid ? 'rgba(120,255,160,.8)' : 'rgba(255,120,120,.8)';
     ctx.strokeRect(mx * CELL + .5, my * CELL + .5, w - 1, h - 1);
@@ -2307,7 +2374,8 @@ function buildFurnPanel() {
       const cv = document.createElement('canvas');
       cv.width = 44; cv.height = 40; cv.style.height = '40px';
       const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
-      g.drawImage(S.floorImgs[it.id], 6, 4, 32, 32);
+      const fs = S.floorImgs[it.id];
+      g.drawImage(fs.img, 0, 0, fs.fw, fs.fh, 6, 4, 32, 32);   // 面板縮圖：第 1 幀
       const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = it.name;
       div.appendChild(cv); div.appendChild(nm);
       div.onclick = () => { S.selFloor = it.id; buildFurnPanel(); };
@@ -2324,7 +2392,7 @@ function buildFurnPanel() {
     cv.width = 44; cv.height = 40; cv.style.height = '40px';
     const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
     const w = img.width * 2, h = img.height * 2, s2 = Math.min(1, 44 / w, 40 / h);
-    g.drawImage(img, (44 - w * s2) / 2, 40 - h * s2, w * s2, h * s2);
+    g.drawImage(img.img, 0, 0, img.fw, img.fh, (44 - w * s2) / 2, 40 - h * s2, w * s2, h * s2);   // 面板縮圖：第 1 幀
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = it.name;
     div.appendChild(cv); div.appendChild(nm);
     div.onclick = () => { S.sel = it.id; buildFurnPanel(); };
@@ -2555,7 +2623,8 @@ async function ensureTerrain(id) {
   const files = new Set([man.ground, man.edge, man.water]);
   for (const d of man.deco) files.add(d.sprite);
   const ims = {};
-  await Promise.all([...files].map(async f => ims[f] = await optImg(`assets/terrain/${id}/${f}`)));
+  // terrain.json 的 anims：{ 檔名: anim }，地面／岸邊／水／點綴物都可以各自設定動畫（沒設＝單張圖）
+  await Promise.all([...files].map(async f => ims[f] = await loadSpr(`assets/terrain/${id}/${f}`, man.anims?.[f])));
   for (const f of [...files]) if (!ims[f]) console.warn('缺地形圖:', id, f);
   S.tImages[id] = ims;
 }
@@ -2592,11 +2661,15 @@ async function boot() {
   if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';
   // 圖片：同樣全部並行（含目前所在地形的圖）。只有角色身體是必要的（缺了畫不出人），其餘缺圖就略過該項
   await Promise.all([
-    ...S.floors.items.map(async f => S.floorImgs[f.id] = await optImg(`assets/floors/${f.sprite}`)),
+    ...S.floors.items.map(async f => S.floorImgs[f.id] = await loadSpr(`assets/floors/${f.sprite}`, f.anim)),
     ...S.animalsDB.animals.map(async a => S.anImgs[a.id] = await optImg(`assets/animals/${a.sprite}`)),
+    ...S.animalsDB.animals.filter(a => a.anim?.sheet).map(async a => {   // 多幀動畫：sheet 載入失敗就退回單張 sprite
+      const sh = await optImg(`assets/${a.anim.sheet}`);
+      if (sh) S.anAnims[a.id] = loadAnim(sh, a.anim);
+    }),
     ...S.toolsDB.tools.map(async t => S.weaponImgs[t.id] = await optImg(`assets/tools/${t.sprite}`)),
     optImg('assets/tombstone.png').then(im => S.tombImg = im),   // 死亡墓碑（島主龍衝打倒後原地出現）
-    ...S.furn.items.map(async it => S.furnImgs[it.id] = await optImg(`assets/furniture/${it.sprite}`)),
+    ...S.furn.items.map(async it => S.furnImgs[it.id] = await loadSpr(`assets/furniture/${it.sprite}`, it.anim)),
     ...S.avatar.skins.map(async s => {
       const [a, b, c] = await Promise.all(['a', 'b', 'sit'].map(k => loadImg(`assets/avatar/body_${s.id}_${k}.png`)));
       S.bodyImgs[s.id] = { a, b, c };
