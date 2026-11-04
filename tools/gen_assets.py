@@ -765,7 +765,7 @@ FLOOR_MANIFEST = dict(
 # ---------------- 釣魚：魚類圖鑑（16×16，頭朝右；自製 placeholder）----------------
 # 每座地形 10 種（常見 5／罕見 3／稀有 2），圖由下面幾個參數化的形狀畫出來。
 # 清單與屬性在 FISH_TABLE；產生 client/assets/fish/<id>.png 與 fish.json
-EYE = hx("#1a1418")
+FISH_EYE = hx("#1a1418")   # 魚的眼睛（不要叫 EYE：會蓋掉人物用的同名常數）
 
 def _in_ell(x, y, cx, cy, rx, ry):
     return ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1.0
@@ -802,7 +802,7 @@ def fish(body, belly=None, fin=None, L=11, H=6, stripes=(), spots=(), band=None,
     if whisker:
         cv.set(hx_, round(cy) + 1, f); cv.set(hx_ + 1, round(cy) + 2, f)
     cv.outline((30, 24, 22, alpha))
-    cv.set(hx_ - 2, round(cy) - 1, EYE)
+    cv.set(hx_ - 2, round(cy) - 1, FISH_EYE)
     return cv
 
 def eel(body, belly, alpha=255):
@@ -814,7 +814,7 @@ def eel(body, belly, alpha=255):
         cv.set(x, y + 1, bl)
     cv.outline()
     y = 8 + round(math.sin(14 * .7) * 1.6)
-    cv.set(13, y - 1, EYE)
+    cv.set(13, y - 1, FISH_EYE)
     return cv
 
 def shrimp(c):
@@ -828,7 +828,7 @@ def shrimp(c):
     for i in range(4):                                                       # 觸鬚
         cv.set(13 + i // 2, 6 - i, shade(b, 1.15))
     cv.outline()
-    cv.set(12, 7, EYE)
+    cv.set(12, 7, FISH_EYE)
     return cv
 
 def crab(c, shell=None):
@@ -843,7 +843,7 @@ def crab(c, shell=None):
         cv.ellipse(14, 7, 1.5, 1.5, b)
         for x in (10, 12): cv.vline(x, 12, 14, shade(b, .8))
         cv.outline()
-        cv.set(13, 9, EYE)
+        cv.set(13, 9, FISH_EYE)
         return cv
     cv.ellipse(8, 9, 5, 3, b)
     cv.ellipse(2.5, 6, 2, 2, b); cv.ellipse(13.5, 6, 2, 2, b)               # 螯
@@ -851,7 +851,7 @@ def crab(c, shell=None):
     for x in (4, 6, 10, 12): cv.vline(x, 12, 14, shade(b, .8))               # 腳
     cv.vline(6, 5, 6, b); cv.vline(10, 5, 6, b)                              # 眼柄
     cv.outline()
-    cv.set(6, 4, EYE); cv.set(10, 4, EYE)
+    cv.set(6, 4, FISH_EYE); cv.set(10, 4, FISH_EYE)
     return cv
 
 def starfish(c):
@@ -875,7 +875,7 @@ def octopus(c):
         for y in range(9, 15):
             cv.set(x + (1 if (y + i) % 4 < 2 else 0), y, b)
     cv.outline()
-    cv.set(6, 7, EYE); cv.set(10, 7, EYE)
+    cv.set(6, 7, FISH_EYE); cv.set(10, 7, FISH_EYE)
     return cv
 
 def squid(c):
@@ -887,7 +887,7 @@ def squid(c):
         cv.vline(x, 10, 14, b)
     cv.vline(6, 10, 15, b); cv.vline(10, 10, 15, b)
     cv.outline()
-    cv.set(7, 8, EYE); cv.set(9, 8, EYE)
+    cv.set(7, 8, FISH_EYE); cv.set(9, 8, FISH_EYE)
     return cv
 
 def jelly(c, alpha=210):
@@ -914,7 +914,7 @@ def turtle(shell, skin, spots=None):
     for (x, y) in ((6, 7), (9, 7), (7, 10), (10, 10), (5, 9)):
         cv.set(x, y, hx(spots) if spots else shade(s, .7))
     cv.outline()
-    cv.set(14, 8, EYE)
+    cv.set(14, 8, FISH_EYE)
     return cv
 
 def snail(shell, body):
@@ -936,7 +936,7 @@ def tadpole(c):
         cv.set(x, 8 + round(math.sin(x * 1.1)), b)
         cv.set(x, 9 + round(math.sin(x * 1.1)), shade(b, .8))
     cv.outline()
-    cv.set(12, 7, EYE)
+    cv.set(12, 7, FISH_EYE)
     return cv
 
 def ray(c, belly):
@@ -950,7 +950,7 @@ def ray(c, belly):
     cv.outline()
     for (x, y) in ((8, 6), (10, 9), (7, 10), (11, 6)):
         cv.set(x, y, hx(belly))
-    cv.set(11, 7, EYE); cv.set(11, 9, EYE)
+    cv.set(11, 7, FISH_EYE); cv.set(11, 9, FISH_EYE)
     return cv
 
 def angler(c, lure):
@@ -963,7 +963,7 @@ def angler(c, lure):
     cv.vline(10, 2, 4, shade(b, .8)); cv.set(11, 2, shade(b, .8))            # 燈籠觸手
     cv.outline()
     cv.ellipse(12.5, 2, 1.2, 1.2, hx(lure))
-    cv.set(11, 7, EYE)
+    cv.set(11, 7, FISH_EYE)
     return cv
 
 def boot(c, sole="#3a2a22"):
