@@ -2694,7 +2694,7 @@ $('furnClear').onclick = () => {
 };
 
 $('listClose').onclick = closeList;
-$('btnHelp').onclick = openHelp;       // 右上「操作說明」：和嚮導一樣的操作說明
+$('btnHelp').onclick = () => { if (S.helpOpen) closeHelp(); else openHelp(); };   // 右上「操作說明」：和嚮導一樣的操作說明；開著時再按就關閉（同「圖鑑」）
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => $('avatarPanel').classList.add('hidden');
 $('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑
