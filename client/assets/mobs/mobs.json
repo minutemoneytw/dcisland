@@ -1,7 +1,7 @@
 {
  "scale": 2,
  "respawn": 30,
- "animals": [
+ "mobs": [
   {
    "id": "bird",
    "name": "圓喙鳥",
@@ -110,6 +110,12 @@
     "scale": 3,
     "keyBg": false
    },
+   "shadow": {
+    "rx": 100,
+    "ry": 20,
+    "dx": 3,
+    "dy": -12
+   },
    "line": "「蓋老師」的裝甲縫隙透出紅光，發出低沉的機械運轉聲。",
    "ownerLines": [
     "冒險者，你是為了什麼而戰鬥的？",
@@ -131,13 +137,7 @@
     "只有在我的鐵腕統治之下，\n艾奧傑亞才會獲得新生！",
     "英雄……也只是虛偽的偶像。\n就由我來打破！"
    ],
-   "ownerLinesSeq": true,
-   "shadow": {
-    "rx": 100,
-    "ry": 20,
-    "dx": 3,
-    "dy": -12
-   }
+   "ownerLinesSeq": true
   }
  ]
 }

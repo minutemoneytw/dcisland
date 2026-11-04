@@ -9,7 +9,7 @@
 | `snake_queen_sheet.png` | 4 幀水平 sprite sheet（352×85，每幀 88×85，由左至右循環） |
 
 - 透明背景、1x 真實像素，不需要 `keyBg`
-- 已接線：`animals.json` 的 `snake_queen.anim`（8 fps、`scale: 3`）
+- 已接線：`mobs.json` 的 `snake_queen.anim`（8 fps、`scale: 3`）
 - 授權：**自製，無授權限制**（記錄於 `docs/assets-license.md`）
 
 ## 蓋老師（熔岩島島主，已接線）
@@ -19,7 +19,7 @@
 | `ultima_weapon_sheet.png` | 6 幀水平 sprite sheet（528×74，每幀 88×74，由左至右循環） |
 
 - 透明背景、1x 真實像素，不需要 `keyBg`
-- 已接線：`animals.json` 的 `ultima_weapon.anim`（8 fps、`scale: 3`、`big: 5`）
+- 已接線：`mobs.json` 的 `ultima_weapon.anim`（8 fps、`scale: 3`、`big: 5`）
 - 攻擊樣式 `beam`（波動砲）：光波寬度＝這張圖的畫面寬（264px）
 - 這個島主**沒有 `sprite`**（純外部素材）：`main.js` 載入島主圖時會跳過沒有 `sprite` 的條目
 - 2026-11-05 修圖：第 0、2、4 幀的上緣（x＝81～84、y＝0）原本有一條 4 像素的灰色孤立線，其他幀沒有，播放時會閃爍；已移除（只動這 12 個像素，其餘不變）
@@ -27,7 +27,7 @@
 
 ## 巴哈姆特飛行（草島島主，已接線）
 
-`client/assets/animals/animals.json` 的 `gold_dragon.anim` 指向 `bahamut_fly_sheet.png`（6 幀、8 fps、龍衝 16 fps、畫面上 1 像素畫 4px＝352×236）；判定圈、龍衝碰撞等玩法仍看 `big: 5`，沒有改。
+`client/assets/mobs/mobs.json` 的 `gold_dragon.anim` 指向 `bahamut_fly_sheet.png`（6 幀、8 fps、龍衝 16 fps、畫面上 1 像素畫 4px＝352×236）；判定圈、龍衝碰撞等玩法仍看 `big: 5`，沒有改。
 
 ## 內容
 

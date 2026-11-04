@@ -34,7 +34,7 @@ const COMMIT_REFILL_MS = 500;
 // 被打 → 說台詞 → 反擊（樣式照 OWNER_TERRAINS：dash＝瞬移島緣＋龍衝；gaze＝原地開眼＋石化；beam＝原地讀條＋波動砲直線）→ 仇恨追殺 → 冷靜回閒晃。
 // 客戶端只負責演出（移動插值、預警虛線）和自己有沒有被打到的判定（受害者自己死／自己石化，走既有 state.dead 同步）。
 // 伺服器本來不知道島的形狀（世界由前端種子生成），由玩家上傳陸地位圖（RLE）；各客戶端的島相同，誰上傳都一樣。
-// 每座地形各自的島主（地形 → 攻擊樣式；要與 client assets 的 terrain.json owner／animals.json atk 一致）：
+// 每座地形各自的島主（地形 → 攻擊樣式；要與 client assets 的 terrain.json owner／mobs.json atk 一致）：
 const OWNER_TERRAINS = { grass: "dash", night: "gaze", volcano: "beam" };
 const D_CAST_MS = 1000;      // 龍衝的島緣鎖定（預警）持續時間
 const D_GAZE_CAST_MS = 2000; // 石化之瞳的開眼預警持續時間（與 client 的 OWNER_GAZE_CAST 一致）

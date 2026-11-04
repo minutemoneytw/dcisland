@@ -57,9 +57,9 @@ const S = {
   furnItems: [],                // [{type, cell:[x,y]}]
   occ: new Map(),               // "x,y" -> furniture index
   players: [],
-  animals: [],                  // FF14 致敬小動物
-  animalsDB: null, anImgs: {},
-  anAnims: {},                  // 多幀動畫（animals.json 的 anim）：id -> {img, frames, fps, dashFps, scale, fw, fh}
+  mobs: [],                     // 會動的非玩家生物（mobs）：FF14 致敬小動物、各島島主；資料在 assets/mobs/mobs.json
+  mobsDB: null, mobImgs: {},
+  mobAnims: {},                  // 多幀動畫（mobs.json 的 anim）：id -> {img, frames, fps, dashFps, scale, fw, fh}
   mode: 'walk', sel: null,
   mouseCell: null,
   t: 0,
@@ -118,11 +118,11 @@ function genWorld(id) {
   }
   S.world = { types, decos };
   S.drops = [];
-  spawnAnimals();
+  spawnMobs();
 }
 
 // ---- FF14 致敬野生動物 ----
-function animalDef(id) { return S.animalsDB.animals.find(x => x.id === id); }
+function mobDef(id) { return S.mobsDB.mobs.find(x => x.id === id); }
 
 // ---- 可動畫的圖（sprite 描述）：地形磚、點綴物、家具、地板、動物共用 ----
 // 每種圖都可以在 manifest 加 anim（等寬水平 sheet，由左至右循環）：
@@ -154,7 +154,7 @@ function drawSpr(s, fi, dx, dy, dw = s.fw, dh = s.fh) {
 // 依格子決定的固定相位（地形點綴物、家具：各自錯開，但每個人畫面一樣、重新整理也不變）
 const cellPhase = (x, y) => ((x * 7 + y * 13) % 29) * .137;
 
-// 動物多幀動畫（animals.json 的 anim）：除了共通欄位，還有 dashFps（龍衝／飛行時）與 scale（1 個 sheet 像素畫幾 px，只管外觀）
+// 動物多幀動畫（mobs.json 的 anim）：除了共通欄位，還有 dashFps（龍衝／飛行時）與 scale（1 個 sheet 像素畫幾 px，只管外觀）
 function loadAnim(sheet, spec) {
   return { ...makeSpr(sheet, spec), dashFps: spec.dashFps || spec.fps || 8, scale: spec.scale || 2 };
 }
@@ -187,12 +187,12 @@ function animFrame(a, an) {
   return sprFrame(an, a.animPhase, a.fly ? an.dashFps : an.fps);
 }
 
-function spawnAnimals() {
-  S.animals = [];
+function spawnMobs() {
+  S.mobs = [];
   const td = S.terrains[S.terrain];
-  if (!S.animalsDB || !td.animals?.length) return;
+  if (!S.mobsDB || !td.mobs?.length) return;
   const pool = [];
-  for (const a of td.animals) for (let i = 0; i < a.weight; i++) pool.push(a.id);
+  for (const a of td.mobs) for (let i = 0; i < a.weight; i++) pool.push(a.id);
   const cx = COLS / 2 - .5, cy = ROWS / 2 - .5;
   for (let n = 0; n < 6; n++) {
     const id = pool[Math.floor(Math.random() * pool.length)];
@@ -201,32 +201,32 @@ function spawnAnimals() {
       if (S.world.types[y * COLS + x] !== 2) continue;
       if (Math.abs(x - cx) < 2 && Math.abs(y - cy) < 2) continue;
       if (S.occ.get(key(x, y)) !== undefined) continue;
-      S.animals.push({ id, x: x * CELL + CELL / 2, y: y * CELL + CELL / 2, dir: 1, target: null, idle: Math.random() * 2, startle: 0, z: 0, bounce: 0,
-                       hp: animalDef(id).hp, maxHp: animalDef(id).hp, dead: false, dieT: 0 });
+      S.mobs.push({ id, x: x * CELL + CELL / 2, y: y * CELL + CELL / 2, dir: 1, target: null, idle: Math.random() * 2, startle: 0, z: 0, bounce: 0,
+                       hp: mobDef(id).hp, maxHp: mobDef(id).hp, dead: false, dieT: 0 });
       break;
     }
   }
-  // 島主：terrain.json 的 owner 指定的動物，每座地形固定一隻（不會被嚇跑、被打倒會重生；攻擊方式照 animals.json 的 atk）
+  // 島主：terrain.json 的 owner 指定的動物，每座地形固定一隻（不會被嚇跑、被打倒會重生；攻擊方式照 mobs.json 的 atk）
   // 連線時島主由伺服器同步（進場快照與事件），只在單機時本地生成
-  const odef = td.owner && animalDef(td.owner);
+  const odef = td.owner && mobDef(td.owner);
   if (odef && !netOn()) for (let tries = 0; tries < 40; tries++) {
     const x = Math.floor(Math.random() * COLS), y = Math.floor(Math.random() * ROWS);
     if (S.world.types[y * COLS + x] !== 2) continue;
     if (Math.abs(x - cx) < 5 && Math.abs(y - cy) < 4) continue;   // 大隻的，出生點周圍留空
     if (S.occ.get(key(x, y)) !== undefined) continue;
-    S.animals.push({ id: td.owner, x: x * CELL + CELL / 2, y: y * CELL + CELL / 2, dir: 1, target: null, idle: Math.random(), startle: 0, z: 0, bounce: 0,
+    S.mobs.push({ id: td.owner, x: x * CELL + CELL / 2, y: y * CELL + CELL / 2, dir: 1, target: null, idle: Math.random(), startle: 0, z: 0, bounce: 0,
                      hp: odef.hp, maxHp: odef.hp, dead: false, dieT: 0 });
     break;
   }
 }
 
-function respawnAnimal(id) {
-  const def = animalDef(id);
+function respawnMob(id) {
+  const def = mobDef(id);
   for (let tries = 0; tries < 60; tries++) {
     const x = Math.floor(Math.random() * COLS), y = Math.floor(Math.random() * ROWS);
     if (S.world.types[y * COLS + x] !== 2) continue;
     if (Math.hypot(x * CELL - S.players[0].x, y * CELL - S.players[0].y) < 8 * CELL) continue; // 離玩家遠一點
-    S.animals.push({ id, x: x * CELL + CELL / 2, y: y * CELL + CELL / 2, dir: 1, target: null, idle: 1.2, startle: 0, z: 0, bounce: 0,
+    S.mobs.push({ id, x: x * CELL + CELL / 2, y: y * CELL + CELL / 2, dir: 1, target: null, idle: 1.2, startle: 0, z: 0, bounce: 0,
                      hp: def.hp, maxHp: def.hp, dead: false, dieT: 0 });
     toast(`${def.name} 回來了！`, 1600);
     return;
@@ -240,7 +240,7 @@ const ATK_CD = 0.45, ATK_T = 0.22, ATK_RANGE = 58;   // ATK_RANGE：最大怪物
 const WEAPON_REACH = 30;
 const weaponPt = p => ({ x: p.x + (p.dir || 1) * WEAPON_REACH, y: p.y });
 const hitRadius = def => 34 + 6 * ((def?.big || 1) - 1);   // big=1：34（與舊版正前方約 58px 的觸及距離相近）、big=5：58
-const inHit = (p, a) => { const w = weaponPt(p); return Math.hypot(a.x - w.x, a.y - w.y) <= hitRadius(animalDef(a.id)); };
+const inHit = (p, a) => { const w = weaponPt(p); return Math.hypot(a.x - w.x, a.y - w.y) <= hitRadius(mobDef(a.id)); };
 // 長按自動連擊時，「太遠了」「沒裝備武器」這類提示只在第一下顯示，不要每幀洗版
 let quiet = false;
 const say = (msg, ms) => { if (!quiet) toast(msg, ms); };
@@ -355,8 +355,8 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
   if (auto) {   // F 鍵：前方有可破壞物件就自動用對應工具
     // 島主在揮擊範圍內就優先打牠：採集／座位／NPC 都讓位（島主常駐重生點，旁邊一堆家具，按 F 不該變成坐下）
     const rg0 = rangedDef();
-    const own = S.animals.find(a => {
-      const od = animalDef(a.id);
+    const own = S.mobs.find(a => {
+      const od = mobDef(a.id);
       return od?.owner && !a.dead && !a.fly && (rg0 ? inCastRange(p, a, rg0) : inHit(p, a));
     });
     const ownerFirst = !!own;
@@ -379,10 +379,10 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
   if (rg) { startCast(p, rg, wx, wy); return; }   // 法杖：遠距詠唱（以滑鼠瞄準，讀條完才出傷害）
   p.lastAtk = S.t; p.swing = ATK_T; p.tool = null;
   S.net?.notifyAttack?.();          // M2：讓同島的人看到你的揮擊
-  for (const a of S.animals) {
+  for (const a of S.mobs) {
     if (a.dead || a.fly) continue;   // 島主飛在空中打不到
     if (!inHit(p, a)) continue;      // 武器尖端進了怪物的判定圈才算（不看面向）
-    hitAnimal(p, a, false);
+    hitMob(p, a, false);
   }
 }
 
@@ -391,7 +391,7 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
 // 按攻擊就挑射程內的目標（島主優先，否則最近的活動物），頭上出現詠唱倒數條、高舉法杖；
 // 詠唱中目標超出射程（或死亡／飛走）、自己死亡／被石化／坐下／換武器／進裝飾模式就中斷；讀完自動命中目標。
 const rangedDef = () => S.avatar?.weapons.find(w => w.id === S.me.weapon)?.ranged || null;
-const inCastRange = (p, a, rg) => Math.hypot(a.x - p.x, a.y - p.y) - hitRadius(animalDef(a.id)) <= rg.range;
+const inCastRange = (p, a, rg) => Math.hypot(a.x - p.x, a.y - p.y) - hitRadius(mobDef(a.id)) <= rg.range;
 // 瞄準點（世界座標）：左鍵點擊的位置；F 鍵就用游標目前的位置（游標不在畫面上＝沒有瞄準點）
 function castAim(wx, wy) {
   if (wx != null) return [wx, wy];
@@ -399,11 +399,11 @@ function castAim(wx, wy) {
   return null;
 }
 // 游標正指著的動物（以身體範圍判斷：島主很大隻，點身體任何地方都算）
-function animalUnder(wx, wy) {
+function mobUnder(wx, wy) {
   let best = null, bd = Infinity;
-  for (const a of S.animals) {
+  for (const a of S.mobs) {
     if (a.dead || a.fly) continue;
-    const big = animalDef(a.id).big || 1;
+    const big = mobDef(a.id).big || 1;
     if (Math.abs(wx - a.x) > 30 * big || wy > a.y + 12 || wy < a.y - 48 * big) continue;
     const d = Math.hypot(wx - a.x, wy - a.y);
     if (d < bd) { bd = d; best = a; }
@@ -414,11 +414,11 @@ function animalUnder(wx, wy) {
 function pickCastTarget(p, rg, aim) {
   const ax = aim ? aim[0] - p.x : 0, ay = aim ? aim[1] - p.y : 0, useAim = !!aim && Math.hypot(ax, ay) > 8;
   let best = null, bs = Infinity;
-  for (const a of S.animals) {
+  for (const a of S.mobs) {
     if (a.dead || a.fly || !inCastRange(p, a, rg)) continue;
     const dx = a.x - p.x, dy = a.y - p.y, d = Math.hypot(dx, dy);
     const score = useAim ? Math.abs(Math.atan2(ax * dy - ay * dx, ax * dx + ay * dy)) + d / 1e5
-                         : d - (animalDef(a.id).owner ? 1e6 : 0);
+                         : d - (mobDef(a.id).owner ? 1e6 : 0);
     if (score < bs) { bs = score; best = a; }
   }
   return best;
@@ -428,7 +428,7 @@ function startCast(p, rg, wx, wy) {
   if (p.moving || p.z > 0) { say('站定才能詠唱'); return; }   // 詠唱時不能移動（移動會中斷）
   const aim = castAim(wx, wy);
   let a = null;
-  const under = aim ? animalUnder(aim[0], aim[1]) : null;   // 游標點在動物身上：就打牠（超出射程不改選別的）
+  const under = aim ? mobUnder(aim[0], aim[1]) : null;   // 游標點在動物身上：就打牠（超出射程不改選別的）
   if (under) {
     if (!inCastRange(p, under, rg)) { say('目標超出射程'); return; }
     a = under;
@@ -444,25 +444,25 @@ function stepCast(p) {   // 每幀（只有本機玩家）：檢查中斷條件�
   if (p.dead || S.t < (p.petUntil ?? 0) || p.pose || p.fish || S.mode !== 'walk' || !rg) { cancelCast(p); return; }
   const a = c.a;
   if (p.moving || p.z > 0 || p.vz > 0) { cancelCast(p, '詠唱中斷：移動了'); return; }   // 詠唱時不能移動（跳躍也算）
-  if (!S.animals.includes(a) || a.dead || a.fly) { cancelCast(p, '詠唱中斷：目標消失了'); return; }
+  if (!S.mobs.includes(a) || a.dead || a.fly) { cancelCast(p, '詠唱中斷：目標消失了'); return; }
   if (!inCastRange(p, a, rg)) { cancelCast(p, '詠唱中斷：目標超出射程'); return; }
   if (Math.abs(a.x - p.x) > 6) p.dir = Math.sign(a.x - p.x);   // 面向目標
   if (S.t - c.t0 < c.dur) return;
   p.cast = null; p.lastAtk = S.t;
   S.net?.notifyAttack?.();   // 讓同島的人看到你出手
-  S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: a.y - 24 * (animalDef(a.id).big || 1) * .6, life: .22 });
-  hitAnimal(p, a, true);
+  S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: a.y - 24 * (mobDef(a.id).big || 1) * .6, life: .22 });
+  hitMob(p, a, true);
 }
 
 // 命中一隻動物（近戰揮擊與法杖詠唱完共用）：ranged＝法杖（傷害固定取武器的 dmg、不暴擊）
-function hitAnimal(p, a, ranged) {
+function hitMob(p, a, ranged) {
   {
     S._hits++;
     const crit = !ranged && Math.random() < .18;
     let dmg = ranged ? (rangedDef()?.dmg || 2) : (crit ? 2 : 1);
     const jd = jobOf(p);
     if (jd?.dmgPlus) dmg += jd.dmgPlus;   // 輸出：每擊 +1（連線打島主時送出去的值仍會被伺服器夾回 1～2）
-    const od = animalDef(a.id);
+    const od = mobDef(a.id);
     if (od.owner && a.proxy) {   // 島主連線時由伺服器權威：送意圖（座標＋傷害＋我們看到的龍位置），本地不扣血（血量等伺服器廣播）
       S.net?.dragonHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.min(2, dmg), Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10, ranged);
     } else {
@@ -505,13 +505,13 @@ function hitAnimal(p, a, ranged) {
           S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + jd.healAoE, life: .75 });
         }
       }
-      toast(`${animalDef(a.id).name} 被打倒了！${S.animalsDB.respawn || 30} 秒後重生`, 2200);
+      toast(`${mobDef(a.id).name} 被打倒了！${S.mobsDB.respawn || 30} 秒後重生`, 2200);
     }
   }
 }
 
-// ---- 動物的可站位置：只有會游泳的（animals.json 的 swim:true，例如蛙）能進海，其餘只在陸地/岸邊 ----
-function animalCanStand(def, x, y) {
+// ---- 動物的可站位置：只有會游泳的（mobs.json 的 swim:true，例如蛙）能進海，其餘只在陸地/岸邊 ----
+function mobCanStand(def, x, y) {
   const gx = Math.floor(x / CELL), gy = Math.floor(y / CELL);
   if (gx < 1 || gy < 1 || gx > COLS - 1 || gy > ROWS - 1) return false;
   return !!def.swim || S.world.types[gy * COLS + gx] !== 0;
@@ -523,7 +523,7 @@ function fleeTarget(a, def, srcX, srcY, dist) {
   for (const off of [0, .6, -.6, 1.2, -1.2, 1.8, -1.8]) {
     const cx = Math.cos(base + off), cy = Math.sin(base + off);
     let r = 0;
-    while (r < dist && animalCanStand(def, a.x + cx * (r + 8), a.y + cy * (r + 8))) r += 8;
+    while (r < dist && mobCanStand(def, a.x + cx * (r + 8), a.y + cy * (r + 8))) r += 8;
     if (r > bestR + 8) { best = { x: a.x + cx * r, y: a.y + cy * r }; bestR = r; }   // 偏好正前方，別的方向要明顯更遠才換
   }
   return { x: best.x, y: best.y, flee: true };
@@ -577,7 +577,7 @@ const HEAL_RADIUS = 96;   // 補師打倒動物／群療時的治療半徑（3 �
 const jobOf = p => JOBS[p === S.players[0] ? S.me.job : p.job] || null;
 // 血量上限：有職業用職業的上限，沒有（NPC／未設定）就 PLAYER_HP
 const hpCap = p => jobOf(p)?.hpMax ?? PLAYER_HP;
-// 島主攻擊樣式（animals.json 的 atk 欄位）：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女）、beam＝波動砲（蓋老師）
+// 島主攻擊樣式（mobs.json 的 atk 欄位）：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女）、beam＝波動砲（蓋老師）
 // gaze／beam 都是「原地施放」（不瞬移），dash 會瞬移到島緣再衝
 const ownerAtk = def => def.atk || 'dash';
 const ownerStationary = def => ownerAtk(def) === 'gaze' || ownerAtk(def) === 'beam';
@@ -585,13 +585,13 @@ const ownerStationary = def => ownerAtk(def) === 'gaze' || ownerAtk(def) === 'be
 // （false＝被打直接開始預警；兩份伺服器也讀同一個檔決定要不要跳過說話階段）
 const ownerSkill = def => S.skillsDB?.skills?.[ownerAtk(def)] || {};
 const ownerCastTotal = def => ownerAtk(def) === 'gaze' ? OWNER_GAZE_CAST : ownerAtk(def) === 'beam' ? OWNER_BEAM_CAST : OWNER_CAST;   // 預警總秒數（倒數條的分母）
-// 島主被激怒的台詞：animals.json 該島主條目的 ownerLines（由 gen_assets.py 的 ANIMAL_MANIFEST 產生）。
+// 島主被激怒的台詞：mobs.json 該島主條目的 ownerLines（由 gen_assets.py 的 MOB_MANIFEST 產生）。
 // 發動反擊前隨機說一句（不連續重複）；沒寫台詞的島主就不說話。
-// 例外：animals.json 標了 ownerLinesSeq（目前只有蓋老師）的島主照順序一句一句說，說完一輪回到第一句。
+// 例外：mobs.json 標了 ownerLinesSeq（目前只有蓋老師）的島主照順序一句一句說，說完一輪回到第一句。
 // 順序號記在 S.ownerSayIdx（key＝島主 id，不跟島主物件走，物件重建、換地形後再回來都接著說）；
 // 純客戶端計數，沒有同步——每個畫面各自從頭數，中途才進來的人看到的句子可能和別人差幾句
 function ownerSay(a) {
-  const def = animalDef(a.id), lines = def?.ownerLines;
+  const def = mobDef(a.id), lines = def?.ownerLines;
   if (!Array.isArray(lines) || !lines.length) return;
   let line;
   if (def.ownerLinesSeq) {
@@ -619,7 +619,7 @@ function ownerEdgeAt(angle) {
 function ownerTakeoff(a, src) {
   // 被打：先在原地說台詞（3 秒泡泡），說完才瞬移到島緣（ownerStep 的 sayPhase 接手）；skills.json 的 say:false 就不講、直接開始預警。
   // 一被打就建立仇恨（龍衝照放），落地歇完就接著追殺同一個攻擊者，不用再被打一次
-  const says = ownerSkill(animalDef(a.id)).say !== false;
+  const says = ownerSkill(mobDef(a.id)).say !== false;
   if (says) ownerSay(a);
   a.sayPhase = says ? S.t + 3 : S.t; a.saySrc = { x: src.x, y: src.y };
   a.target = null; a.idle = 0; a.wleg = null;
@@ -627,7 +627,7 @@ function ownerTakeoff(a, src) {
   a.rageCd = S.t + 4;   // 說台詞＋開眼/預警期間被打不重觸發（發射時會再設為 OWNER_CD）
 }
 function ownerWarp(a, src) {   // 說完台詞：瞬移到島緣鎖定攻擊者，準備龍衝
-  const def = animalDef(a.id);
+  const def = mobDef(a.id);
   S.floaters.push({ x: a.x, y: a.y - 40, poof: true, life: .55 });   // 原地消失
   const to = ownerEdgeAt(Math.random() * Math.PI * 2);               // 島隨機邊緣現蹤
   a.x = to.x; a.y = to.y; a.z = 0; a.target = null; a.idle = 0; a.bounce = 0;
@@ -718,7 +718,7 @@ function ownerDive(a, def) {
 // 沒有直線、不看距離：發射瞬間臉朝向蛇女的人（左右朝向）都會石化，背對她／看向另一邊就安全。
 // 石化由各客戶端自判（跟龍衝的受害者自判同源）；伺服器仍會帶光束幾何（舊協定），客戶端不再用它判定
 function ownerGazeCast(a, src) {   // 說完台詞：原地開眼（大眼睛預警），蛇女轉向攻擊者
-  const def = animalDef(a.id);
+  const def = mobDef(a.id);
   a.cast = OWNER_GAZE_CAST; a.castFrom = { x: src.x, y: src.y };
   a.wleg = null; a.z = 0; a.fly = false;
   a.dir = src.x < a.x ? -1 : 1;
@@ -762,13 +762,13 @@ function petrifyPlayer(p, cause) {   // 石化：10 秒不能移動／跳躍／�
 // 光波沿讀條時鎖定的方向直射出去；「站在光波帶狀範圍內」（與光束中線的垂直距離 < 島主一半寬）的人受傷。
 // 命中由各客戶端自判（跟龍衝／石化同源）；伺服器只負責階段與方向
 function ownerSize(a, def) {   // 島主畫面上的寬高（光波跟島主一樣寬）；有動畫看 anim.scale，否則看圖大小 ×2×big
-  const an = S.anAnims[a.id];
+  const an = S.mobAnims[a.id];
   if (an) return { W: an.fw * an.scale, H: an.fh * an.scale };
-  const im = S.anImgs[a.id];
+  const im = S.mobImgs[a.id];
   return { W: (im?.width || 24) * 2 * (def.big || 1), H: (im?.height || 24) * 2 * (def.big || 1) };
 }
 function ownerBeamCast(a, src) {   // 說完台詞：原地讀條（光波預警），蓋老師轉向攻擊者
-  const def = animalDef(a.id);
+  const def = mobDef(a.id);
   a.cast = OWNER_BEAM_CAST; a.castFrom = { x: src.x, y: src.y };
   a.wleg = null; a.z = 0; a.fly = false;
   a.dir = src.x < a.x ? -1 : 1;
@@ -818,12 +818,12 @@ function onNetHeal(healerId) {
 }
 // 場上有沒有島主正在戰鬥（仇恨追殺、預警、龍衝、開眼、說台詞、歇腳都算）；連線時這些旗標由伺服器事件驅動
 function ownerEngaged() {
-  return S.animals.some(a => !a.dead && animalDef(a.id)?.owner &&
+  return S.mobs.some(a => !a.dead && mobDef(a.id)?.owner &&
     (a.aggro || a.fly || a.cast || a.castFrom || a.rest || a.sayPhase || a.cycle || a.gaze || a.beam));
 }
 // 龍衝 CD 中被打：進入仇恨（單機版；連線版由伺服器廣播 aggro 事件）
 function ownerAggroStart(a, src) {
-  const def = animalDef(a.id);
+  const def = mobDef(a.id);
   a.aggro = { target: src, rotateAt: S.t + OWNER_AGGRO_MS, clawAt: S.t + OWNER_CLAW_CD };
   a.wleg = null; a.target = null; a.idle = 0;
   if (src === S.players[0]) toast(`${def.name} 火冒三丈地追殺你！快跑！`, 2600);
@@ -845,7 +845,7 @@ function tryProvoke() {
   const me = S.players[0];
   if (S.mode !== 'walk' || me.dead || S.t < (me.petUntil ?? 0) || !JOBS[S.me.job]?.provoke) return;   // 坦克限定（其他職業按了沒反應）；石化中不能放
   if (S.t < provokeCd) return;
-  const a = S.animals.find(v => !v.dead && animalDef(v.id).owner);
+  const a = S.mobs.find(v => !v.dead && mobDef(v.id).owner);
   if (!a) return;   // 沒有島主（不在有島主的地形）
   if (Math.hypot(me.x - a.x, me.y - a.y) > OWNER_PROVOKE_RANGE) { toast('離島主太遠了，靠近一點再挑釁', 1800); return; }
   provokeCd = S.t + OWNER_PROVOKE_CD;
@@ -885,7 +885,7 @@ function tryGroupHeal() {
 const SKILL_BAR = {
   tank:   { name: '挑釁', total: () => OWNER_PROVOKE_CD, until: () => provokeCd, run: () => tryProvoke(),
             usable() {   // 回 null＝可以放；字串＝不能放的原因（圖示變暗）
-              const a = S.animals.find(v => !v.dead && animalDef(v.id).owner);
+              const a = S.mobs.find(v => !v.dead && mobDef(v.id).owner);
               if (!a) return '這裡沒有島主';
               return Math.hypot(S.players[0].x - a.x, S.players[0].y - a.y) > OWNER_PROVOKE_RANGE ? '離島主太遠' : null;
             } },
@@ -1109,12 +1109,12 @@ function uploadLandMap() {
 function dragonEnsure(x, y, hp) {
   const oid = S.terrains[S.terrain]?.owner;
   if (!oid) return null;
-  let a = S.animals.find(v => v.id === oid);
+  let a = S.mobs.find(v => v.id === oid);
   if (!a) {
-    const def = animalDef(oid);
+    const def = mobDef(oid);
     a = { id: oid, x, y, dir: 1, target: null, idle: 0, startle: 0, z: 0, bounce: 0,
           hp: hp ?? def.hp, maxHp: def.hp, dead: false, dieT: 0, proxy: true };
-    S.animals.push(a);
+    S.mobs.push(a);
   }
   a.proxy = true;   // 開機時（還沒連線）可能已本地生成了島主，接手時補上 proxy 旗標改為伺服器同步
   return a;
@@ -1149,10 +1149,10 @@ function applyDragonSnap(o) {
   } else if (o.ph === 'say') {   // 說台詞中：站在原地（說完才會收到 aim/gaze 事件）
     a.cycle = null; a.wleg = null;
     a.x = o.x; a.y = o.y; a.z = 0; a.fly = false;
-    if (ownerSkill(animalDef(a.id)).say !== false) ownerSay(a);
+    if (ownerSkill(mobDef(a.id)).say !== false) ownerSay(a);
   } else if (o.ph === 'cast') {   // 原地施放中（石化之瞳開眼／波動砲讀條）：站定，接續剩餘時間後本地發射
     a.cycle = null; a.wleg = null;
-    const beam = ownerAtk(animalDef(a.id)) === 'beam';
+    const beam = ownerAtk(mobDef(a.id)) === 'beam';
     const total = (beam ? OWNER_BEAM_CAST : OWNER_GAZE_CAST) * 1000, remain = Math.max(0, Math.min(total, o.castMs || total));
     const st = { t0ms: Date.now() - (total - remain), castMs: total,
                  from: { x: o.tx, y: o.ty }, x: o.x, y: o.y, bx: o.bx, by: o.by };
@@ -1176,7 +1176,7 @@ function onNetDragon(m) {
     uploadLandMap();   // 保險：這條連線在這個地形還沒傳過島形就補傳（已傳過就不重送）
     return;
   }
-  const a = S.animals.find(v => v.id === S.terrains[S.terrain].owner);
+  const a = S.mobs.find(v => v.id === S.terrains[S.terrain].owner);
   if (m.ev === 'hp') {   // 別人（或自己）打到牠：更新血條
     if (a) a.hp = m.hp;
     return;
@@ -1186,7 +1186,7 @@ function onNetDragon(m) {
       a.dead = true; a.dieT = .6; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0; a.wleg = null; a.cycle = null; a.gaze = null; a.beam = null; a.aggro = false;
       if (m.x !== undefined) { a.x = m.x; a.y = m.y; }
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
-      toast(`${animalDef(a.id).name} 被打倒了！30 秒後重生`, 2200);
+      toast(`${mobDef(a.id).name} 被打倒了！30 秒後重生`, 2200);
     }
     return;
   }
@@ -1196,7 +1196,7 @@ function onNetDragon(m) {
       na.dead = false; na.dieT = 0; na.x = m.x; na.y = m.y; na.hp = m.hp; na.z = 0;
       na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.idle = 1.2; na.wleg = null; na.cycle = null; na.gaze = null; na.beam = null; na.aggro = false;
     }
-    toast(`${animalDef(S.terrains[S.terrain].owner).name} 回來了！`, 1600);
+    toast(`${mobDef(S.terrains[S.terrain].owner).name} 回來了！`, 1600);
     return;
   }
   if (m.ev === 'say') {   // 島主被激怒：先在原地說台詞（泡泡 3 秒），說完才反擊（龍衝＝瞬移島緣；蛇女＝原地開眼）
@@ -1218,8 +1218,8 @@ function onNetDragon(m) {
                 from: { x: m.tx, y: m.ty }, x: m.x, y: m.y, bx: m.bx, by: m.by };
     const me = S.players[0];
     const facing = !me.dead && facingGazer(me, na);
-    toast(facing ? `${animalDef(na.id).name} 睜開了石化之瞳——你正面對她，快轉身背對她！`
-                 : `${animalDef(na.id).name} 睜開了石化之瞳——別面向她！`, 2600);
+    toast(facing ? `${mobDef(na.id).name} 睜開了石化之瞳——你正面對她，快轉身背對她！`
+                 : `${mobDef(na.id).name} 睜開了石化之瞳——別面向她！`, 2600);
     return;
   }
   if (m.ev === 'beam') {   // 蓋老師凝聚波動砲：原地讀條（castMs 後本地發射；站在光波帶狀範圍裡的人受傷）
@@ -1231,7 +1231,7 @@ function onNetDragon(m) {
     na.dir = m.tx < na.x ? -1 : 1;
     na.beam = { t0ms: Date.now(), castMs: m.castMs || OWNER_BEAM_CAST * 1000,
                 from: { x: m.tx, y: m.ty }, x: m.x, y: m.y, bx: m.bx, by: m.by };
-    toast(`${animalDef(na.id).name} 凝聚波動砲——別站在砲口前面！`, 2600);
+    toast(`${mobDef(na.id).name} 凝聚波動砲——別站在砲口前面！`, 2600);
     return;
   }
   if (m.ev === 'wander') {   // 島主往新路點散步（伺服器帶路；插值與伺服器一致，凍結恢復也正確）
@@ -1257,12 +1257,12 @@ function onNetDragon(m) {
     a.dir = m.tx < a.x ? -1 : 1;
     const me = S.players[0];
     const aimedAtMe = Math.abs(m.tx - me.x) < CELL && Math.abs(m.ty - me.y) < CELL;
-    toast(aimedAtMe ? `${animalDef(a.id).name} 瞬間消失，在島緣現出蹤影鎖定了你！`
-                    : `${animalDef(a.id).name} 被惹怒了，在島緣鎖定了攻擊者！`, 2400);
+    toast(aimedAtMe ? `${mobDef(a.id).name} 瞬間消失，在島緣現出蹤影鎖定了你！`
+                    : `${mobDef(a.id).name} 被惹怒了，在島緣鎖定了攻擊者！`, 2400);
     return;
   }
   if (m.ev === 'aggro') {   // 仇恨開始／換人：龍衝冷卻期間改為追殺（id＝被鎖定的連線；追路腿部份照 wander 事件走）
-    const ownerName = () => animalDef(S.terrains[S.terrain]?.owner || a?.id || 'gold_dragon')?.name || '島主';
+    const ownerName = () => mobDef(S.terrains[S.terrain]?.owner || a?.id || 'gold_dragon')?.name || '島主';
     const r = S.remotes.get(m.id);
     if (a) {
       a.aggro = true; a.wleg = null; a.cast = 0; a.castFrom = null;
@@ -1277,7 +1277,7 @@ function onNetDragon(m) {
     const was = a?.aggro;   // 剛進島時快照不含仇恨狀態（a.aggro 是 false），沒看過牠發怒就不提示冷靜
     if (a) a.aggro = false;
     if (!was) return;
-    toast(`${animalDef(S.terrains[S.terrain]?.owner || a?.id || 'gold_dragon')?.name || '島主'} 冷靜下來，繼續散步。`, 1800);
+    toast(`${mobDef(S.terrains[S.terrain]?.owner || a?.id || 'gold_dragon')?.name || '島主'} 冷靜下來，繼續散步。`, 1800);
     return;
   }
   if (m.ev === 'claw') {   // 島主爪擊（每秒一下）：範圍內＋前方扇形的自己扣 2 HP（與龍衝同源：受害者自判）
@@ -1296,15 +1296,15 @@ function onNetDragon(m) {
     const front = (dx * (m.tx - m.x) + dy * (m.ty - m.y)) / (dd * to) >= .15;   // 前方扇形：到我的方向與到目標的方向夾角小於約 80°
     // 伺服器已用它的狀態驗證過距離；事件帶 id：抓的是我就結算（含紅圈），否則只看特效
     if (!me.dead && (m.id === S.net?.id || (dd <= OWNER_CLAW_RANGE && front))) {
-      playerDamage(me, OWNER_CLAW_DMG, animalDef(na.id).name);
+      playerDamage(me, OWNER_CLAW_DMG, mobDef(na.id).name);
       S.floaters.push({ x: me.x, y: me.y - 24, ring: true, life: .35 });
     }
     return;
   }
 }
 
-function stepAnimal(a, dt) {
-  const def = animalDef(a.id);
+function stepMob(a, dt) {
+  const def = mobDef(a.id);
   // 島主：連線時整個狀態機用牆鐘（與伺服器同軸，webview 節流也不影響）；單機沿用 dt 積分
   if (def.owner) {
     if (a.proxy) { stepOwnerProxy(a, dt, def); return; }
@@ -1356,8 +1356,8 @@ function stepAnimal(a, dt) {
   if (dx) a.dir = Math.sign(dx);
   const nx = clamp(a.x + dx / len * sp, CELL, (COLS - 1) * CELL), ny = clamp(a.y + dy / len * sp, CELL, (ROWS - 1) * CELL);
   const ox = a.x, oy = a.y;
-  if (animalCanStand(def, nx, a.y)) a.x = nx;
-  if (animalCanStand(def, a.x, ny)) a.y = ny;
+  if (mobCanStand(def, nx, a.y)) a.x = nx;
+  if (mobCanStand(def, a.x, ny)) a.y = ny;
   if (Math.hypot(a.x - ox, a.y - oy) < sp * .2) { a.target = null; a.idle = .5; a.z = 0; return; }   // 被海擋住：停下，不要一直頂
   // 贊跳感：走動時上下彈
   const rate = a.startle ? 16 : 8;
@@ -2302,9 +2302,9 @@ function draw() {
     });
   });
   // 小動物
-  for (const a of S.animals) {
-    const img = S.anImgs[a.id], an = S.anAnims[a.id]; if (!img && !an) continue;
-    const def = animalDef(a.id);
+  for (const a of S.mobs) {
+    const img = S.mobImgs[a.id], an = S.mobAnims[a.id]; if (!img && !an) continue;
+    const def = mobDef(a.id);
     list.push({
       y: a.y - (a.z ? .5 : 1),
       draw: () => {
@@ -2312,7 +2312,7 @@ function draw() {
         const bs = def.big || 1, W = an ? an.fw * an.scale : img.width * 2 * bs, H = an ? an.fh * an.scale : img.height * 2 * bs;
         const shs = 1 - Math.min(.5, a.z / 60);
         // 影子：預設依 big 算大小、貼在腳底中央；素材的腳印寬度與 big 不成比例、或腳不在正中央時（例如蓋老師），
-        // animals.json 可寫 shadow:{rx, ry, dx, dy}（px，ry/rx 是半徑，dx/dy 是相對腳底中央的位移，dy 負＝往上）
+        // mobs.json 可寫 shadow:{rx, ry, dx, dy}（px，ry/rx 是半徑，dx/dy 是相對腳底中央的位移，dy 負＝往上）
         const sd = def.shadow;
         ctx.fillStyle = `rgba(10,14,20,${.26 * shs + .03})`;
         ctx.beginPath(); ctx.ellipse(a.x + (sd?.dx || 0), a.y + (sd ? sd.dy : 1), (sd ? sd.rx : 9 * bs) * shs, (sd ? sd.ry : 3 * Math.max(1, bs * .6)) * shs, 0, 0, Math.PI * 2); ctx.fill();
@@ -3048,8 +3048,8 @@ canvas.addEventListener('mouseleave', () => S.mouseCell = null);
 function clickAttack(wx, wy) {
   if (S.players[0].fish) { doAttack(false); return; }   // 釣魚中：點哪裡都是收竿／拉竿（不會去坐椅子、跟 NPC 說話）
   // 點在島主身上：優先攻擊島主，點擊不讓牠腳下的椅子／NPC 攔走
-  const onOwner = S.animals.some(a => {
-    const od = animalDef(a.id);
+  const onOwner = S.mobs.some(a => {
+    const od = mobDef(a.id);
     return od?.owner && !a.dead && Math.hypot(a.x - wx, a.y - wy) < 30 * (od.big || 1);
   });
   // 點到可坐/可睡的家具（椅子、沙發、床）→ 坐下/躺下；再點一次起身。長按自動連擊時不處理，避免反覆切換
@@ -3067,7 +3067,7 @@ function clickAttack(wx, wy) {
   }
   if (S.t < (S.players[0].petUntil ?? 0)) { if (!quiet) say('被石化了，動彈不得', 1200); return; }   // 石化：不能打動物／採集
   // 點到可破壞物件（且那裡沒有動物）→ 自動換工具去打它
-  if (!S.animals.some(a => !a.dead && Math.hypot(a.x - wx, a.y - wy) < 30 * (animalDef(a.id).big || 1))) {
+  if (!S.mobs.some(a => !a.dead && Math.hypot(a.x - wx, a.y - wy) < 30 * (mobDef(a.id).big || 1))) {
     const d = decoAt(wx, wy);
     if (d) { useTool(d); return; }
   }
@@ -3075,9 +3075,9 @@ function clickAttack(wx, wy) {
   doAttack(false, wx, wy);
   // 沒命中但點到了一隻動物 → 牠的致公告告（FF14 點動物 FU）
   if (!S._hits) {
-    for (const a of S.animals) {
-      if (!a.dead && Math.hypot(a.x - wx, a.y - wy) < 30 * (animalDef(a.id).big || 1)) {   // 島主很大隻：點擊範圍跟著放大
-        say(animalDef(a.id).line, 2200);
+    for (const a of S.mobs) {
+      if (!a.dead && Math.hypot(a.x - wx, a.y - wy) < 30 * (mobDef(a.id).big || 1)) {   // 島主很大隻：點擊範圍跟著放大
+        say(mobDef(a.id).line, 2200);
         break;
       }
     }
@@ -3196,11 +3196,11 @@ let welcomeUntil = 0;
 async function boot() {
   $('btnDecor').disabled = false;
   // manifest：互不相依，一次全部並行抓（以前是一個接一個，首次進島要等一長串往返）
-  const [tjson, furn, floors, animalsDB, npcDB, toolsDB, avatar, fishDB, skillsDB] = await Promise.all([
+  const [tjson, furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB] = await Promise.all([
     Promise.all(TERRAIN_IDS.map(id => loadJSON(`assets/terrain/${id}/terrain.json`))),
     loadJSON('assets/furniture/furniture.json'),
     loadJSON('assets/floors/floors.json'),
-    loadJSON('assets/animals/animals.json'),    // 小動物（FF14 致敬）
+    loadJSON('assets/mobs/mobs.json'),    // 小動物（FF14 致敬）
     loadJSON('assets/npcs/npcs.json'),
     loadJSON('assets/tools/tools.json'),        // 採集工具（鎬子/斧頭）：圖放進 weaponImgs，讓繪製與遠端玩家共用同一套武器繪製
     loadJSON('assets/avatar/avatar.json'),
@@ -3208,7 +3208,7 @@ async function boot() {
     loadJSON('assets/skills/skills.json').catch(() => ({ skills: {} })),   // 島主招式（倒數條／招式名／要不要講台詞）；讀不到就照舊
   ]);
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
-  Object.assign(S, { furn, floors, animalsDB, npcDB, toolsDB, avatar, fishDB, skillsDB });
+  Object.assign(S, { furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB });
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
   if (!JOBS[S.me.job]) S.me.job = 'dps';   // 舊存檔沒有職業欄（或值不合法）：當輸出
   if (!weaponAllowed(S.me.job, S.me.weapon)) S.me.weapon = JOBS[S.me.job].defaultWeapon || 'hands';   // 舊存檔的武器這個職業不能用：換成預設武器
@@ -3216,10 +3216,10 @@ async function boot() {
   // 圖片：同樣全部並行（含目前所在地形的圖）。只有角色身體是必要的（缺了畫不出人），其餘缺圖就略過該項
   await Promise.all([
     ...S.floors.items.map(async f => S.floorImgs[f.id] = await loadSpr(`assets/floors/${f.sprite}`, f.anim)),
-    ...S.animalsDB.animals.filter(a => a.sprite).map(async a => S.anImgs[a.id] = await optImg(`assets/animals/${a.sprite}`)),   // 外部素材為主的島主可以沒有 sprite（沒有圖可退回）
-    ...S.animalsDB.animals.filter(a => a.anim?.sheet).map(async a => {   // 多幀動畫：sheet 載入失敗就退回單張 sprite
+    ...S.mobsDB.mobs.filter(a => a.sprite).map(async a => S.mobImgs[a.id] = await optImg(`assets/mobs/${a.sprite}`)),   // 外部素材為主的島主可以沒有 sprite（沒有圖可退回）
+    ...S.mobsDB.mobs.filter(a => a.anim?.sheet).map(async a => {   // 多幀動畫：sheet 載入失敗就退回單張 sprite
       const sh = await optImg(`assets/${a.anim.sheet}`);
-      if (sh) S.anAnims[a.id] = loadAnim(sh, a.anim);
+      if (sh) S.mobAnims[a.id] = loadAnim(sh, a.anim);
     }),
     ...S.toolsDB.tools.map(async t => S.weaponImgs[t.id] = await optImg(`assets/tools/${t.sprite}`)),
     optImg('assets/tombstone.png').then(im => S.tombImg = im),   // 死亡墓碑（島主龍衝打倒後原地出現）
@@ -3261,21 +3261,21 @@ async function boot() {
       }
       paintFloor();                            // 地板模式長按中：游標掃過的格子持續鋪/拆
       for (const r of S.remotes.values()) stepRemote(r, dt);
-      for (let i = S.animals.length - 1; i >= 0; i--) {
-        const a = S.animals[i];
+      for (let i = S.mobs.length - 1; i >= 0; i--) {
+        const a = S.mobs[i];
         if (a.dead) {
           a.dieT -= dt;
           if (a.dieT <= 0) {
-            S.animals.splice(i, 1);
-            if (!a.proxy) S.respawn.push({ id: a.id, at: S.t + (S.animalsDB.respawn || 30) });   // 島主（proxy）重生由伺服器的 spawn 事件驅動
+            S.mobs.splice(i, 1);
+            if (!a.proxy) S.respawn.push({ id: a.id, at: S.t + (S.mobsDB.respawn || 30) });   // 島主（proxy）重生由伺服器的 spawn 事件驅動
           }
           continue;
         }
-        stepAnimal(a, dt);
+        stepMob(a, dt);
       }
       for (let i = S.respawn.length - 1; i >= 0; i--) {
         const r = S.respawn[i];
-        if (S.t >= r.at) { S.respawn.splice(i, 1); respawnAnimal(r.id); }
+        if (S.t >= r.at) { S.respawn.splice(i, 1); respawnMob(r.id); }
       }
       stepDecos(dt); stepDrops(dt);
       for (let i = S.floaters.length - 1; i >= 0; i--) {

@@ -773,9 +773,9 @@ FURN_MANIFEST = dict(
 )
 
 # FF14 致敬野生動物（三種）＋各地形島主 + 各地形出現組合
-ANIMAL_MANIFEST = dict(
+MOB_MANIFEST = dict(
     scale=2, respawn=30,
-    animals=[
+    mobs=[
         dict(id="bird",  name="圓喙鳥", sprite="bird.png",  swim=True, speed=42, flee=95, hp=3,
              line="「圓喙鳥」用圓圓的眼神看著你。"),
         dict(id="sheep", name="波波羊", sprite="sheep.png", speed=30, flee=80, hp=4,
@@ -840,7 +840,7 @@ ANIMAL_MANIFEST = dict(
     ],
 )
 
-# 每座地形的島主（id＝animals.json 裡的動物 id；沒列的就是還沒有島主）
+# 每座地形的島主（id＝mobs.json 裡的動物 id；沒列的就是還沒有島主）
 OWNER_BY_TERRAIN = {
     "grass": "gold_dragon",
     "night": "snake_queen",
@@ -848,7 +848,7 @@ OWNER_BY_TERRAIN = {
 }
 
 # 各地形出現的小動物（id=權重）
-ANIMALS_BY_TERRAIN = {
+MOBS_BY_TERRAIN = {
     "grass":   [("sheep", 2), ("bird", 1), ("frog", 1)],
     "beach":   [("bird", 2), ("frog", 1)],
     "snow":    [("sheep", 2), ("bird", 1)],
@@ -1406,7 +1406,7 @@ def main():
         td = dict(id=t["id"], name=t["name"], scale=2, tile=TILE,
                   ground="ground.png", edge="edge.png", water="water.png",
                   deco=[dict(sprite=s, weight=w) for s, w in t["deco"]],
-                  animals=[dict(id=i, weight=w) for i, w in ANIMALS_BY_TERRAIN.get(t["id"], [])],
+                  mobs=[dict(id=i, weight=w) for i, w in MOBS_BY_TERRAIN.get(t["id"], [])],
                   uiColor=t["ui"])
         if t["id"] in OWNER_BY_TERRAIN:
             td["owner"] = OWNER_BY_TERRAIN[t["id"]]
@@ -1435,13 +1435,13 @@ def main():
     print("  floors/floors.json")
 
     print("== 小動物（FF14 致敬）==")
-    adir = os.path.join(ASSETS, "animals")
+    adir = os.path.join(ASSETS, "mobs")
     for fn, cv in [("bird", bird()), ("sheep", sheep()), ("frog", frog()), ("golden_dragon", golden_dragon()),
                    ("snake_queen", snake_queen())]:
-        save(cv, fn + ".png", "animals")
-    json.dump(ANIMAL_MANIFEST, open(os.path.join(adir, "animals.json"), "w", encoding="utf-8"),
+        save(cv, fn + ".png", "mobs")
+    json.dump(MOB_MANIFEST, open(os.path.join(adir, "mobs.json"), "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
-    print("  animals/animals.json")
+    print("  mobs/mobs.json")
 
     print("== 一般素材 ==")
     save(tombstone(), "tombstone.png")

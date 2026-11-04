@@ -3,9 +3,9 @@
 | 來源 | 範圍 | 授權 | 備註 |
 |---|---|---|---|
 | `tools/gen_assets.py` 產出（本 repo 全部 `client/assets/**`） | 地形 tile、樹/石/貝殼等點綴、家具、角色分層 | 自製，無授權限制 | placeholder 品質，之後逐步換成外部素材包 |
-| `client/assets/external/`（使用者自製素材暫存區） | 巴哈姆特飛行 6 幀（88×59/幀＋sheet，img2pixel 工具製作） | 自製，無授權限制 | 2026-11-04 引入；已接線為草島島主 `gold_dragon` 的飛行動畫（`bahamut_fly_sheet.png`，`animals.json` 的 `anim`）。素材背景為不透明白色，靠 `keyBg` 去背 |
-| `client/assets/external/img2pixel/snake_queen_sheet.png` | 笨蛋蛇女 4 幀（88×85/幀，水平 sheet 352×85） | 自製，無授權限制 | 2026-11-04 引入；已接線為夜光島島主 `snake_queen` 的動畫（`animals.json` 的 `anim`，8 fps、`scale: 3`）。素材是透明底，不需要 `keyBg` |
-| `client/assets/external/img2pixel/ultima_weapon_sheet.png` | 蓋老師（究極神兵）6 幀走路圖（88×74/幀，水平 sheet 528×74） | 自製，無授權限制 | 2026-11-05 引入；已接線為熔岩島島主 `ultima_weapon` 的動畫（`animals.json` 的 `anim`，8 fps、`scale: 3`）。素材是透明底，不需要 `keyBg`；此島主沒有 `sprite`（純外部素材） |
+| `client/assets/external/`（使用者自製素材暫存區） | 巴哈姆特飛行 6 幀（88×59/幀＋sheet，img2pixel 工具製作） | 自製，無授權限制 | 2026-11-04 引入；已接線為草島島主 `gold_dragon` 的飛行動畫（`bahamut_fly_sheet.png`，`mobs.json` 的 `anim`）。素材背景為不透明白色，靠 `keyBg` 去背 |
+| `client/assets/external/img2pixel/snake_queen_sheet.png` | 笨蛋蛇女 4 幀（88×85/幀，水平 sheet 352×85） | 自製，無授權限制 | 2026-11-04 引入；已接線為夜光島島主 `snake_queen` 的動畫（`mobs.json` 的 `anim`，8 fps、`scale: 3`）。素材是透明底，不需要 `keyBg` |
+| `client/assets/external/img2pixel/ultima_weapon_sheet.png` | 蓋老師（究極神兵）6 幀走路圖（88×74/幀，水平 sheet 528×74） | 自製，無授權限制 | 2026-11-05 引入；已接線為熔岩島島主 `ultima_weapon` 的動畫（`mobs.json` 的 `anim`，8 fps、`scale: 3`）。素材是透明底，不需要 `keyBg`；此島主沒有 `sprite`（純外部素材） |
 | FFXIV 風 HUD（`client/css/style.css`） | UI 色彩/面板語言 | 風格參考 | 不使用任何 SE 素材、圖示、字體或商標 |
 
 ## 之後計畫引入的外部素材包（引入時補記錄）
