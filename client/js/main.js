@@ -67,6 +67,7 @@ const S = {
   respawn: [],                  // 動物重生佇列 [{id, at}]
   floaters: [],                 // 傷害飄字 {x,y,v,life,poof}
   weaponImgs: {},
+  ownerSayIdx: {},              // 照順序說台詞的島主（ownerLinesSeq）目前說到第幾句，key＝島主 id
   remotes: new Map(),           // M2：同島的其他玩家（id -> player-like）
   net: null,                    // M2：連線物件（net.js）
   netFurn: [],                  // 伺服器端目前地形的擺設（連線時以此為準）
@@ -585,12 +586,20 @@ const ownerStationary = def => ownerAtk(def) === 'gaze' || ownerAtk(def) === 'be
 const ownerSkill = def => S.skillsDB?.skills?.[ownerAtk(def)] || {};
 const ownerCastTotal = def => ownerAtk(def) === 'gaze' ? OWNER_GAZE_CAST : ownerAtk(def) === 'beam' ? OWNER_BEAM_CAST : OWNER_CAST;   // 預警總秒數（倒數條的分母）
 // 島主被激怒的台詞：animals.json 該島主條目的 ownerLines（由 gen_assets.py 的 ANIMAL_MANIFEST 產生）。
-// 發動反擊前隨機說一句（不連續重複）；沒寫台詞的島主就不說話
+// 發動反擊前隨機說一句（不連續重複）；沒寫台詞的島主就不說話。
+// 例外：animals.json 標了 ownerLinesSeq（目前只有蓋老師）的島主照順序一句一句說，說完一輪回到第一句。
+// 順序號記在 S.ownerSayIdx（key＝島主 id，不跟島主物件走，物件重建、換地形後再回來都接著說）；
+// 純客戶端計數，沒有同步——每個畫面各自從頭數，中途才進來的人看到的句子可能和別人差幾句
 function ownerSay(a) {
-  const lines = animalDef(a.id)?.ownerLines;
+  const def = animalDef(a.id), lines = def?.ownerLines;
   if (!Array.isArray(lines) || !lines.length) return;
   let line;
-  do { line = lines[Math.floor(Math.random() * lines.length)]; } while (lines.length > 1 && line === a.lastLine);
+  if (def.ownerLinesSeq) {
+    const idx = (S.ownerSayIdx[a.id] ||= 0);
+    line = lines[idx % lines.length]; S.ownerSayIdx[a.id] = idx + 1;
+  } else {
+    do { line = lines[Math.floor(Math.random() * lines.length)]; } while (lines.length > 1 && line === a.lastLine);
+  }
   a.lastLine = line;
   a.say = { text: line, until: S.t + 3 };
 }
