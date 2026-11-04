@@ -10,6 +10,13 @@
    "id": "stone",
    "name": "石製地板",
    "sprite": "floor_stone.png"
+  },
+  {
+   "id": "rug",
+   "name": "地毯",
+   "sprite": "floor_rug.png",
+   "w": 2,
+   "h": 2
   }
  ]
 }

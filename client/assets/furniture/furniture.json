@@ -42,7 +42,8 @@
    "w": 2,
    "h": 2,
    "solid": false,
-   "sprite": "rug.png"
+   "sprite": "rug.png",
+   "legacy": true
   },
   {
    "id": "lamp",

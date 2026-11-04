@@ -1,0 +1,635 @@
+{
+ "_comment": "釣魚與魚類圖鑑。由 tools/gen_assets.py 的 FISH_TABLE 產生（改這裡要改產生器再重跑）。稀有度先依 weight 抽，再從該地形同稀有度的魚裡平均抽一種；尺寸在 size 範圍內、越大越難（兩份伺服器與單機模擬一致）。",
+ "escape": 0.01,
+ "rarity": {
+  "common": {
+   "name": "常見",
+   "weight": 60,
+   "color": "#c8d0bc"
+  },
+  "uncommon": {
+   "name": "罕見",
+   "weight": 35,
+   "color": "#7ab8f0"
+  },
+  "rare": {
+   "name": "稀有",
+   "weight": 5,
+   "color": "#f0c84a"
+  }
+ },
+ "terrains": {
+  "grass": [
+   {
+    "id": "crucian",
+    "name": "鯽魚",
+    "rarity": "common",
+    "size": [
+     10,
+     25
+    ],
+    "sprite": "crucian.png"
+   },
+   {
+    "id": "medaka",
+    "name": "青鱂魚",
+    "rarity": "common",
+    "size": [
+     3,
+     6
+    ],
+    "sprite": "medaka.png"
+   },
+   {
+    "id": "river_shrimp",
+    "name": "小河蝦",
+    "rarity": "common",
+    "size": [
+     3,
+     8
+    ],
+    "sprite": "river_shrimp.png"
+   },
+   {
+    "id": "old_boot",
+    "name": "破舊靴子",
+    "rarity": "common",
+    "size": [
+     25,
+     30
+    ],
+    "sprite": "old_boot.png"
+   },
+   {
+    "id": "loach",
+    "name": "泥鰍",
+    "rarity": "common",
+    "size": [
+     8,
+     20
+    ],
+    "sprite": "loach.png"
+   },
+   {
+    "id": "perch",
+    "name": "鱸魚",
+    "rarity": "uncommon",
+    "size": [
+     30,
+     80
+    ],
+    "sprite": "perch.png"
+   },
+   {
+    "id": "green_crab",
+    "name": "綠背蟹",
+    "rarity": "uncommon",
+    "size": [
+     8,
+     20
+    ],
+    "sprite": "green_crab.png"
+   },
+   {
+    "id": "catfish",
+    "name": "鯰魚",
+    "rarity": "uncommon",
+    "size": [
+     30,
+     100
+    ],
+    "sprite": "catfish.png"
+   },
+   {
+    "id": "koi",
+    "name": "錦鯉",
+    "rarity": "rare",
+    "size": [
+     40,
+     90
+    ],
+    "sprite": "koi.png"
+   },
+   {
+    "id": "meadow_trout",
+    "name": "草原之王鱒",
+    "rarity": "rare",
+    "size": [
+     60,
+     120
+    ],
+    "sprite": "meadow_trout.png"
+   }
+  ],
+  "beach": [
+   {
+    "id": "sardine",
+    "name": "沙丁魚",
+    "rarity": "common",
+    "size": [
+     10,
+     20
+    ],
+    "sprite": "sardine.png"
+   },
+   {
+    "id": "horse_mackerel",
+    "name": "竹莢魚",
+    "rarity": "common",
+    "size": [
+     15,
+     35
+    ],
+    "sprite": "horse_mackerel.png"
+   },
+   {
+    "id": "hermit_crab",
+    "name": "寄居蟹",
+    "rarity": "common",
+    "size": [
+     3,
+     10
+    ],
+    "sprite": "hermit_crab.png"
+   },
+   {
+    "id": "kelp",
+    "name": "海帶",
+    "rarity": "common",
+    "size": [
+     30,
+     150
+    ],
+    "sprite": "kelp.png"
+   },
+   {
+    "id": "empty_can",
+    "name": "空罐頭",
+    "rarity": "common",
+    "size": [
+     8,
+     12
+    ],
+    "sprite": "empty_can.png"
+   },
+   {
+    "id": "clownfish",
+    "name": "小丑魚",
+    "rarity": "uncommon",
+    "size": [
+     6,
+     11
+    ],
+    "sprite": "clownfish.png"
+   },
+   {
+    "id": "octopus",
+    "name": "章魚",
+    "rarity": "uncommon",
+    "size": [
+     30,
+     90
+    ],
+    "sprite": "octopus.png"
+   },
+   {
+    "id": "starfish",
+    "name": "海星",
+    "rarity": "uncommon",
+    "size": [
+     10,
+     30
+    ],
+    "sprite": "starfish.png"
+   },
+   {
+    "id": "mahi",
+    "name": "鬼頭刀",
+    "rarity": "rare",
+    "size": [
+     80,
+     180
+    ],
+    "sprite": "mahi.png"
+   },
+   {
+    "id": "golden_turtle",
+    "name": "黃金海龜",
+    "rarity": "rare",
+    "size": [
+     60,
+     120
+    ],
+    "sprite": "golden_turtle.png"
+   }
+  ],
+  "snow": [
+   {
+    "id": "cod",
+    "name": "鱈魚",
+    "rarity": "common",
+    "size": [
+     30,
+     90
+    ],
+    "sprite": "cod.png"
+   },
+   {
+    "id": "capelin",
+    "name": "柳葉魚",
+    "rarity": "common",
+    "size": [
+     10,
+     18
+    ],
+    "sprite": "capelin.png"
+   },
+   {
+    "id": "ice_shrimp",
+    "name": "冰晶蝦",
+    "rarity": "common",
+    "size": [
+     3,
+     8
+    ],
+    "sprite": "ice_shrimp.png"
+   },
+   {
+    "id": "frozen_glove",
+    "name": "凍僵的手套",
+    "rarity": "common",
+    "size": [
+     20,
+     25
+    ],
+    "sprite": "frozen_glove.png"
+   },
+   {
+    "id": "hairy_crab",
+    "name": "毛蟹",
+    "rarity": "common",
+    "size": [
+     8,
+     15
+    ],
+    "sprite": "hairy_crab.png"
+   },
+   {
+    "id": "salmon",
+    "name": "鮭魚",
+    "rarity": "uncommon",
+    "size": [
+     50,
+     100
+    ],
+    "sprite": "salmon.png"
+   },
+   {
+    "id": "icefish",
+    "name": "冰魚",
+    "rarity": "uncommon",
+    "size": [
+     20,
+     40
+    ],
+    "sprite": "icefish.png"
+   },
+   {
+    "id": "squid",
+    "name": "烏賊",
+    "rarity": "uncommon",
+    "size": [
+     20,
+     60
+    ],
+    "sprite": "squid.png"
+   },
+   {
+    "id": "narwhal_calf",
+    "name": "獨角鯨寶寶",
+    "rarity": "rare",
+    "size": [
+     100,
+     200
+    ],
+    "sprite": "narwhal_calf.png"
+   },
+   {
+    "id": "aurora_trout",
+    "name": "極光鱒",
+    "rarity": "rare",
+    "size": [
+     50,
+     90
+    ],
+    "sprite": "aurora_trout.png"
+   }
+  ],
+  "night": [
+   {
+    "id": "lanternfish",
+    "name": "燈籠魚",
+    "rarity": "common",
+    "size": [
+     5,
+     12
+    ],
+    "sprite": "lanternfish.png"
+   },
+   {
+    "id": "glow_jelly",
+    "name": "夜光水母",
+    "rarity": "common",
+    "size": [
+     10,
+     40
+    ],
+    "sprite": "glow_jelly.png"
+   },
+   {
+    "id": "black_bass",
+    "name": "黑鱸",
+    "rarity": "common",
+    "size": [
+     20,
+     50
+    ],
+    "sprite": "black_bass.png"
+   },
+   {
+    "id": "message_bottle",
+    "name": "漂流瓶",
+    "rarity": "common",
+    "size": [
+     20,
+     30
+    ],
+    "sprite": "message_bottle.png"
+   },
+   {
+    "id": "glow_shrimp",
+    "name": "螢光蝦",
+    "rarity": "common",
+    "size": [
+     3,
+     8
+    ],
+    "sprite": "glow_shrimp.png"
+   },
+   {
+    "id": "moon_eel",
+    "name": "月光鰻",
+    "rarity": "uncommon",
+    "size": [
+     50,
+     150
+    ],
+    "sprite": "moon_eel.png"
+   },
+   {
+    "id": "star_ray",
+    "name": "星斑魟",
+    "rarity": "uncommon",
+    "size": [
+     40,
+     120
+    ],
+    "sprite": "star_ray.png"
+   },
+   {
+    "id": "anglerfish",
+    "name": "深海鮟鱇",
+    "rarity": "uncommon",
+    "size": [
+     20,
+     60
+    ],
+    "sprite": "anglerfish.png"
+   },
+   {
+    "id": "ghost_fish",
+    "name": "幽靈魚",
+    "rarity": "rare",
+    "size": [
+     30,
+     70
+    ],
+    "sprite": "ghost_fish.png"
+   },
+   {
+    "id": "moon_arowana",
+    "name": "月影龍魚",
+    "rarity": "rare",
+    "size": [
+     60,
+     130
+    ],
+    "sprite": "moon_arowana.png"
+   }
+  ],
+  "forest": [
+   {
+    "id": "minnow",
+    "name": "溪哥",
+    "rarity": "common",
+    "size": [
+     8,
+     15
+    ],
+    "sprite": "minnow.png"
+   },
+   {
+    "id": "tadpole",
+    "name": "蝌蚪",
+    "rarity": "common",
+    "size": [
+     1,
+     4
+    ],
+    "sprite": "tadpole.png"
+   },
+   {
+    "id": "dead_branch",
+    "name": "枯枝",
+    "rarity": "common",
+    "size": [
+     20,
+     60
+    ],
+    "sprite": "dead_branch.png"
+   },
+   {
+    "id": "crayfish",
+    "name": "小龍蝦",
+    "rarity": "common",
+    "size": [
+     6,
+     12
+    ],
+    "sprite": "crayfish.png"
+   },
+   {
+    "id": "moss_snail",
+    "name": "苔蘚螺",
+    "rarity": "common",
+    "size": [
+     2,
+     6
+    ],
+    "sprite": "moss_snail.png"
+   },
+   {
+    "id": "rainbow_trout",
+    "name": "虹鱒",
+    "rarity": "uncommon",
+    "size": [
+     30,
+     70
+    ],
+    "sprite": "rainbow_trout.png"
+   },
+   {
+    "id": "softshell_turtle",
+    "name": "甲魚",
+    "rarity": "uncommon",
+    "size": [
+     20,
+     40
+    ],
+    "sprite": "softshell_turtle.png"
+   },
+   {
+    "id": "largemouth_bass",
+    "name": "大口黑鱸",
+    "rarity": "uncommon",
+    "size": [
+     30,
+     60
+    ],
+    "sprite": "largemouth_bass.png"
+   },
+   {
+    "id": "ancient_fish",
+    "name": "森林古代魚",
+    "rarity": "rare",
+    "size": [
+     80,
+     150
+    ],
+    "sprite": "ancient_fish.png"
+   },
+   {
+    "id": "jade_carp",
+    "name": "翡翠鯉",
+    "rarity": "rare",
+    "size": [
+     40,
+     90
+    ],
+    "sprite": "jade_carp.png"
+   }
+  ],
+  "volcano": [
+   {
+    "id": "char_fish",
+    "name": "焦炭魚",
+    "rarity": "common",
+    "size": [
+     10,
+     30
+    ],
+    "sprite": "char_fish.png"
+   },
+   {
+    "id": "lava_shrimp",
+    "name": "火山蝦",
+    "rarity": "common",
+    "size": [
+     4,
+     10
+    ],
+    "sprite": "lava_shrimp.png"
+   },
+   {
+    "id": "burnt_boot",
+    "name": "烤焦的靴子",
+    "rarity": "common",
+    "size": [
+     25,
+     30
+    ],
+    "sprite": "burnt_boot.png"
+   },
+   {
+    "id": "magma_snail",
+    "name": "熔岩蝸牛",
+    "rarity": "common",
+    "size": [
+     3,
+     8
+    ],
+    "sprite": "magma_snail.png"
+   },
+   {
+    "id": "ash_goby",
+    "name": "灰燼鰕虎",
+    "rarity": "common",
+    "size": [
+     5,
+     12
+    ],
+    "sprite": "ash_goby.png"
+   },
+   {
+    "id": "flame_ray",
+    "name": "火焰魟",
+    "rarity": "uncommon",
+    "size": [
+     50,
+     120
+    ],
+    "sprite": "flame_ray.png"
+   },
+   {
+    "id": "lava_crab",
+    "name": "熔岩蟹",
+    "rarity": "uncommon",
+    "size": [
+     10,
+     30
+    ],
+    "sprite": "lava_crab.png"
+   },
+   {
+    "id": "sulfur_eel",
+    "name": "硫磺鰻",
+    "rarity": "uncommon",
+    "size": [
+     60,
+     140
+    ],
+    "sprite": "sulfur_eel.png"
+   },
+   {
+    "id": "phoenix_fish",
+    "name": "鳳凰魚",
+    "rarity": "rare",
+    "size": [
+     50,
+     100
+    ],
+    "sprite": "phoenix_fish.png"
+   },
+   {
+    "id": "fire_dragon_carp",
+    "name": "火龍鯉",
+    "rarity": "rare",
+    "size": [
+     70,
+     150
+    ],
+    "sprite": "fire_dragon_carp.png"
+   }
+  ]
+ }
+}

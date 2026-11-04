@@ -159,3 +159,15 @@ body {
 #listBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 300px; max-height: 420px; display: flex; flex-direction: column; z-index: 31; }
 #listBody { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
 #listBody .opt.dead { opacity: .5; }
+
+/* ---------- 魚類圖鑑 ---------- */
+#dexBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 560px; max-height: 500px; display: flex; flex-direction: column; z-index: 31; }
+#dexBox.hidden { display: none !important; }
+#dexTabs .ff-btn { padding: 3px 0; letter-spacing: 1px; }
+#dexGrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; overflow-y: auto; margin: 2px 0 8px; }
+.dex-card { background: rgba(255, 255, 255, .04); border: 1px solid var(--gold-dim); padding: 6px 4px; text-align: center; }
+.dex-card.unknown { opacity: .8; border-style: dashed; }
+.dex-card canvas { width: 48px; height: 48px; image-rendering: pixelated; display: block; margin: 0 auto 4px; }
+.dex-name { font-size: 12px; color: var(--text); letter-spacing: 1px; }
+.dex-rar { font-size: 10px; margin-top: 2px; letter-spacing: 1px; }
+.dex-size { font-size: 10px; color: var(--text-dim); margin-top: 2px; }

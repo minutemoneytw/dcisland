@@ -1,4 +1,4 @@
-// DC島 M0 — 本地單機 demo（將來改成 Durable Objects 同步）
+// DC島 — 遊戲本體（世界生成、移動、繪圖、戰鬥、動物、裝飾、造型、UI）。多人同步在 net.js，連線時以伺服器（Worker／dev_server）為準
 const CELL = 32, COLS = 88, ROWS = 56;   // 島放大：鏡頭跟隨
 const VIEW_W = 29 * 32, VIEW_H = 17 * 32;
 const canvas = document.getElementById('game');
@@ -20,6 +20,10 @@ function hashStr(s) { let h = 1779033703; for (let i = 0; i < s.length; i++) { h
 
 function loadJSON(url) { return fetch(url).then(r => r.json()); }
 function loadImg(url) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error(url)); i.src = url; }); }
+// 非必要的圖（家具/地板/動物/武器/地形點綴…）：缺一張只略過那一樣並回報，不要讓整個遊戲載入失敗
+function optImg(url) {
+  return loadImg(url).catch(() => { console.warn('缺圖:', url); reportError('asset-missing', url); return null; });
+}
 
 let toastTimer = null;
 function toast(msg, ms = 1800) {
@@ -44,8 +48,10 @@ const S = {
   terrains: {},                 // id -> manifest
   tImages: {},                  // id -> {file: Image}
   furn: null, furnImgs: {},
-  avatar: null, bodyImgs: {}, hairImgs: {}, hairBackImgs: {},
-  charCache: new Map(),         // key -> {a: canvas, b: canvas}
+  avatar: null,
+  charImgs: {},                 // 人物分層 sheet：檔名 -> Image（軀幹／頭髮／衣服／褲子／帽子）
+  charCache: new Map(),         // (造型, 幀號) -> 合成好的一幀
+  recolorCache: new Map(),      // (sheet, 顏色) -> 換好色的整張 sheet
   me: lsObj('dcisland.m0.avatar', null) || { skin: 'light', hair: 'hair1', shirt: 0, weapon: 'sword' },
   world: null,                  // {types: Uint8Array, decos: []}
   furnItems: [],                // [{type, cell:[x,y]}]
@@ -53,6 +59,7 @@ const S = {
   players: [],
   animals: [],                  // FF14 致敬小動物
   animalsDB: null, anImgs: {},
+  anAnims: {},                  // 多幀動畫（animals.json 的 anim）：id -> {img, frames, fps, dashFps, scale, fw, fh}
   mode: 'walk', sel: null,
   mouseCell: null,
   t: 0,
@@ -80,6 +87,10 @@ const S = {
   toolsDB: null,                // 採集工具與可破壞物件（assets/tools/tools.json）
   drops: [],                    // 地上的掉落物 {item,x,y,born}
   inv: lsObj('dcisland.m0.inv', {}),   // 背包：物品id -> 數量
+  fishDB: null, fishImgs: {},          // 釣魚：魚類 manifest（assets/fish/fish.json）與圖
+  dex: lsObj('dcisland.m0.fishdex', {}),   // 魚類圖鑑：地形 -> 魚id -> {max（最大尺寸 cm）, n（釣到次數）}；登入後換成伺服器的
+  dexSource: 'local',                  // 'local'＝訪客／未連線（存本機）；'server'＝伺服器依 Discord 帳號保存
+  dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
 };
 
 // ---------------- 世界生成 ----------------
@@ -111,6 +122,69 @@ function genWorld(id) {
 
 // ---- FF14 致敬野生動物 ----
 function animalDef(id) { return S.animalsDB.animals.find(x => x.id === id); }
+
+// ---- 可動畫的圖（sprite 描述）：地形磚、點綴物、家具、地板、動物共用 ----
+// 每種圖都可以在 manifest 加 anim（等寬水平 sheet，由左至右循環）：
+//   sheet（相對 client/assets/）、frames（幀數）、fps（每秒幾幀，預設 8）、keyBg（從圖邊去掉背景色，給不是透明底的素材）、
+//   stagger（地形磚／地板：各格錯開不同幀，預設整張地圖同步）；動物另有 dashFps、scale（見 loadAnim）
+// 沒有 anim＝單張圖＝1 幀的 sheet，畫法完全相同；之後只要準備 sheet、在 manifest 加 anim，不用改程式。
+// 描述物件：{img, frames, fps, stagger, fw, fh, width, height}；width/height＝單幀大小（讓原本讀「圖片大小」的程式不用改）
+function makeSpr(img, spec) {
+  const frames = Math.max(1, (spec && spec.frames | 0) || 1), fw = Math.floor(img.width / frames), fh = img.height;
+  return { img: spec?.keyBg ? keyBackground(img) : img, frames, fps: spec?.fps || 8, stagger: !!spec?.stagger, fw, fh, width: fw, height: fh };
+}
+// 載入一張可動畫的圖：manifest 有 anim.sheet 就載 sheet（失敗退回單張 url），否則載單張
+async function loadSpr(url, spec) {
+  if (spec?.sheet) {
+    const sh = await optImg(`assets/${spec.sheet}`);
+    if (sh) return makeSpr(sh, spec);
+  }
+  const im = await optImg(url);
+  return im ? makeSpr(im, spec?.sheet ? null : spec) : null;
+}
+// 第幾幀：依遊戲時間循環；phase＝起始相位（秒），讓同種的東西不會一起動；fps 可覆寫（動物龍衝時）
+function sprFrame(s, phase = 0, fps = s.fps) {
+  return s.frames > 1 ? Math.floor((S.t + phase) * fps) % s.frames : 0;
+}
+// 畫第 fi 幀（ctx 座標）
+function drawSpr(s, fi, dx, dy, dw = s.fw, dh = s.fh) {
+  ctx.drawImage(s.img, fi * s.fw, 0, s.fw, s.fh, dx, dy, dw, dh);
+}
+// 依格子決定的固定相位（地形點綴物、家具：各自錯開，但每個人畫面一樣、重新整理也不變）
+const cellPhase = (x, y) => ((x * 7 + y * 13) % 29) * .137;
+
+// 動物多幀動畫（animals.json 的 anim）：除了共通欄位，還有 dashFps（龍衝／飛行時）與 scale（1 個 sheet 像素畫幾 px，只管外觀）
+function loadAnim(sheet, spec) {
+  return { ...makeSpr(sheet, spec), dashFps: spec.dashFps || spec.fps || 8, scale: spec.scale || 2 };
+}
+// 去背：素材不是透明底時，從圖的四邊開始，把和角落顏色相近且連在一起的像素變透明（被輪廓線圍住的亮色不會被吃掉）
+function keyBackground(img) {
+  const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+  const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+  const W = cv.width, H = cv.height, im = g.getImageData(0, 0, W, H), d = im.data;
+  const kr = d[0], kg = d[1], kb = d[2], TOL = 28;
+  const isBg = i => d[i + 3] === 0 || (Math.abs(d[i] - kr) <= TOL && Math.abs(d[i + 1] - kg) <= TOL && Math.abs(d[i + 2] - kb) <= TOL);
+  const seen = new Uint8Array(W * H), stack = [];
+  for (let x = 0; x < W; x++) stack.push(x, (H - 1) * W + x);
+  for (let y = 0; y < H; y++) stack.push(y * W, y * W + W - 1);
+  while (stack.length) {
+    const p = stack.pop();
+    if (seen[p] || !isBg(p * 4)) continue;
+    seen[p] = 1; d[p * 4 + 3] = 0;
+    const x = p % W;
+    if (x > 0) stack.push(p - 1);
+    if (x < W - 1) stack.push(p + 1);
+    if (p >= W) stack.push(p - W);
+    if (p < W * (H - 1)) stack.push(p + W);
+  }
+  g.putImageData(im, 0, 0);
+  return cv;
+}
+// 現在該畫第幾幀：依遊戲時間循環；龍衝／飛行中用 dashFps（拍得比較快）。每隻動物有自己的起始相位，不會整群同步拍動
+function animFrame(a, an) {
+  a.animPhase ??= Math.random() * 10;
+  return sprFrame(an, a.animPhase, a.fly ? an.dashFps : an.fps);
+}
 
 function spawnAnimals() {
   S.animals = [];
@@ -217,7 +291,7 @@ function useTool(d) {
 }
 // 套用一次打擊的結果（本機算的或伺服器廣播的）。mine＝自己打的：只有打壞的人拿掉落物、看到訊息
 function applyDecoHit(d, hp, dead, ttl, mine) {
-  const tgt = decoTarget(d), [bx, by] = decoBase(d), r = decoRect(d);
+  const tgt = decoTarget(d), [bx, by] = decoBase(d), r = decoRect(d) || { y: by - CELL, h: CELL };   // 缺圖時用一格高估位置
   d.hp = hp; d.shake = .25;
   S.floaters.push({ x: bx + (Math.random() * 16 - 8), y: r.y + r.h * .4, v: '1', life: .8, crit: false });
   if (!dead) return;
@@ -266,12 +340,13 @@ function stepDrops(dt) {
   }
 }
 
-function doAttack(auto) {
+function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵沒有）
   const p = S.players[0];
   S._hits = 0;
   if (S.mode !== 'walk') return;
   if (p.dead) return;
   if (S.t < (p.petUntil ?? 0)) { if (!quiet) say('被石化了，動彈不得', 1200); return; }   // 石化：不能揮擊／採集／互動（長按時不重複提示）
+  if (p.fish) { if (!quiet) fishAction(); S._hits = 1; return; }   // 釣魚中：F／點擊＝收竿或拉竿，不做別的事
   if (p.pose) {   // 坐著/睡著不能揮擊；按 F（不是長按的自動重複）就起身
     if (auto && !quiet) { standUp(p); S.holdSkipF = true; }
     return;
@@ -294,7 +369,8 @@ function doAttack(auto) {
       if (npc) { S._hits = 1; talkTo(npc); S.holdSkipF = true; return; }
     }
   }
-  if (S.me.weapon === 'hands') { say('轉職後才有專屬武器！'); return; }
+  if (isRod()) { S._hits = 1; if (!quiet) fishAction(wx, wy); return; }   // 拿著釣竿：拋竿（不能攻擊）
+  if (S.me.weapon === 'hands') { say('先在「造型」裡裝備武器！'); return; }
   if (!S.weaponImgs[S.me.weapon]) return;
   if (S.t - p.lastAtk < ATK_CD) return;
   p.lastAtk = S.t; p.swing = ATK_T; p.tool = null;
@@ -387,8 +463,8 @@ function nearestLand(a) {
   return null;
 }
 
-// ---- 島主的龍衝反擊（沿用野外動物「刻意不同步」規則）：被打後瞬間消失、在島隨機邊緣現蹤瞄準攻擊者 ----
-// 預警範圍提示 1 秒後，以龍本體直線飛衝過島（攻擊範圍＝龍的大小，被撞到＝KO），衝到對岸落地後飛回地圖中心
+// ---- 島主的龍衝反擊（連線時由伺服器權威同步，這裡是單機模擬與共用演出）：被打後先說台詞，再瞬間消失、在島隨機邊緣現蹤瞄準攻擊者 ----
+// 預警範圍提示 1 秒後，以龍本體直線飛衝過島（攻擊範圍＝龍的大小，被撞到＝KO），衝到對岸落地歇一下後就地繼續散步／追殺
 const OWNER_FLY_SPEED = 240, OWNER_DASH_SPEED = 560, OWNER_CAST = 1, OWNER_CD = 12;
 const OWNER_GAZE_CAST = 2;      // 石化之瞳的開眼預警秒數（與兩份伺服器的 D_GAZE_CAST_MS 一致）
 const OWNER_PETRIFY_MS = 10000; // 石化時長：不能移動＋每秒扣 1 HP（判定在各人自己的畫面，不進同步協定）
@@ -404,11 +480,11 @@ const PLAYER_HP = 10;     // 玩家血量上限：爪擊扣 2（5 下倒地）�
 // 所以職業效果全在客戶端生效，不用改兩份伺服器。島主傷害仍由伺服器夾 1～2（職業對島主的
 // 加成要到放寬兩份伺服器的 dmg 夾擊值那步再做，見 AGENTS.md「職業」條目）。
 const JOBS = {
-  tank:   { name: '坦',   color: '#7cc0ff', hpMax: 20, takenHalf: true, provoke: true, weapon: 'shield',
+  tank:   { name: '坦',   color: '#7cc0ff', hpMax: 20, takenHalf: true, provoke: true,
             desc: '血量上限 20、被打傷害減半；按 R 挑釁把島主拉到自己身上（龍衝仍直接倒地）' },
-  healer: { name: '補',   color: '#8fe08a', hpMax: 10, healHit: 1, healAoE: 2, groupHeal: true, weapon: 'staff',
+  healer: { name: '補',   color: '#8fe08a', hpMax: 10, healHit: 1, healAoE: 2, groupHeal: true,
             desc: '揮擊命中動物吸回自己 1、打倒動物補 3 格內所有人 2；按 R 群療周遭 3 格內所有人 2（含自己）' },
-  dps:    { name: '輸出', color: '#ff9a8a', hpMax: 8, dmgPlus: 1, weapon: 'sword',
+  dps:    { name: '輸出', color: '#ff9a8a', hpMax: 8, dmgPlus: 1,
             desc: '每擊額外 +1 傷害（變 2～3）；血量上限 8' },
 };
 const HEAL_RADIUS = 96;   // 補師打倒動物／群療時的治療半徑（3 格）
@@ -418,15 +494,15 @@ const jobOf = p => JOBS[p === S.players[0] ? S.me.job : p.job] || null;
 const hpCap = p => jobOf(p)?.hpMax ?? PLAYER_HP;
 // 島主攻擊樣式（animals.json 的 atk 欄位）：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女）
 const ownerAtk = def => def.atk || 'dash';
-// 島主被激怒的台詞（per 島主 id）：發動反擊前隨機說一句（不連續重複）
-const OWNER_LINES = {
-  gold_dragon: ['紅月啊，用你的熾熱燒盡敵人！', '紅月啊，照亮我征服的道路！', '熾熱的通路啊，引導我走向征服！',
-                '皎潔的紅月啊，傾注你的光芒！', '我自高空降臨，將敵人全部擊碎！', '我自高空降臨，重塑這個世界！'],
-  snake_queen: ['石化之瞳啊，睜開吧！', '蠢貨們，在我的面前化為石像吧！', '美，就該凝固在最完美的一刻！',
-                '蛇髮的詛咒啊，貫穿眼前的一切！', '別亂動喔……一動就變石頭了。', '乖乖站好，這可是你最後一次能動了。'],
-};
+// 島主招式設定：assets/skills/skills.json（key＝攻擊樣式）。name＝招式名稱、bar＝預警時頭上畫黃色倒數條、say＝放招前先講台詞
+// （false＝被打直接開始預警；兩份伺服器也讀同一個檔決定要不要跳過說話階段）
+const ownerSkill = def => S.skillsDB?.skills?.[ownerAtk(def)] || {};
+const ownerCastTotal = def => ownerAtk(def) === 'gaze' ? OWNER_GAZE_CAST : OWNER_CAST;   // 預警總秒數（倒數條的分母）
+// 島主被激怒的台詞：animals.json 該島主條目的 ownerLines（由 gen_assets.py 的 ANIMAL_MANIFEST 產生）。
+// 發動反擊前隨機說一句（不連續重複）；沒寫台詞的島主就不說話
 function ownerSay(a) {
-  const lines = OWNER_LINES[a.id] || OWNER_LINES.gold_dragon;
+  const lines = animalDef(a.id)?.ownerLines;
+  if (!Array.isArray(lines) || !lines.length) return;
   let line;
   do { line = lines[Math.floor(Math.random() * lines.length)]; } while (lines.length > 1 && line === a.lastLine);
   a.lastLine = line;
@@ -446,10 +522,11 @@ function ownerEdgeAt(angle) {
   return { x: last[0] * CELL + CELL / 2, y: last[1] * CELL + CELL / 2 };
 }
 function ownerTakeoff(a, src) {
-  // 被打：先在原地說台詞（3 秒泡泡），說完才瞬移到島緣（ownerStep 的 sayPhase 接手）。
+  // 被打：先在原地說台詞（3 秒泡泡），說完才瞬移到島緣（ownerStep 的 sayPhase 接手）；skills.json 的 say:false 就不講、直接開始預警。
   // 一被打就建立仇恨（龍衝照放），落地歇完就接著追殺同一個攻擊者，不用再被打一次
-  ownerSay(a);
-  a.sayPhase = S.t + 3; a.saySrc = { x: src.x, y: src.y };
+  const says = ownerSkill(animalDef(a.id)).say !== false;
+  if (says) ownerSay(a);
+  a.sayPhase = says ? S.t + 3 : S.t; a.saySrc = { x: src.x, y: src.y };
   a.target = null; a.idle = 0; a.wleg = null;
   a.aggro = { target: src, rotateAt: S.t + OWNER_AGGRO_MS, clawAt: 0 };
   a.rageCd = S.t + 4;   // 說台詞＋開眼/預警期間被打不重觸發（發射時會再設為 OWNER_CD）
@@ -511,7 +588,7 @@ function ownerStep(a, dt, def) {
     a.z = 34 + Math.sin(a.bounce * 1.4) * 5;   // 龍衝：貼地高速掠過
     // 攻擊範圍＝龍的大小：路徑上被龍本體撞到（貼太近）就被打倒
     const q = S.players[0];
-    if (!q.dead && Math.hypot(q.x - a.x, q.y - a.y) < 20 * (def.big || 1)) killPlayer(q, def.name);
+    if (!q.dead && Math.hypot(q.x - a.x, q.y - a.y) < 20 * (def.big || 1)) killPlayer(q, def.name, '龍衝');
   } else {
     a.z = 70 + Math.sin(a.bounce) * 7;   // 升空高度
   }
@@ -574,7 +651,7 @@ function gazePetrify(a, def) {   // 面向蛇女的玩家石化（全地圖）�
     if (hit(r)) r.petUntil = S.t + OWNER_PETRIFY_MS / 1000;
   }
 }
-function petrifyPlayer(p, cause) {   // 石化：10 秒不能移動／跳躍（揮擊仍可用），每秒扣 1 HP；扣死照既有墓碑機制
+function petrifyPlayer(p, cause) {   // 石化：10 秒不能移動／跳躍／揮擊／採集／F 互動，每秒扣 1 HP；扣死照既有墓碑機制
   if (p.dead) return;
   if (p.pose) standUp(p);
   p.petUntil = S.t + OWNER_PETRIFY_MS / 1000;
@@ -670,7 +747,7 @@ function tryGroupHeal() {
   S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + amt, life: .75 });
 }
 // 仇恨狀態的單機 tick：追（每腿重瞄目標、速度 180）、進範圍就每秒一抓（扣 2 HP）、
-// 目標死了／5 秒到隨機換攻擊者、龍衝 CD 到了自動對目標放龍衝、20 秒沒人打就脫離回閒晃
+// 目標死了／5 秒到隨機換攻擊者、龍衝 CD 到了自動對目標放龍衝、30 秒（OWNER_DROPOUT）沒人打就脫離回閒晃
 function ownerAggroStep(a, dt, def) {
   const ag = a.aggro;
   if (S.t - (a.lastHitAt ?? 0) > OWNER_DROPOUT) {   // 太久沒人打：脫離仇恨
@@ -796,7 +873,7 @@ function stepOwnerProxy(a, dt, def) {
     a.bounce += dt * 14;
     a.z = 34 + Math.sin(a.bounce * 1.4) * 5;
     const q = S.players[0];
-    if (!q.dead && Math.hypot(q.x - a.x, q.y - a.y) < 20 * (def.big || 1)) killPlayer(q, def.name);
+    if (!q.dead && Math.hypot(q.x - a.x, q.y - a.y) < 20 * (def.big || 1)) killPlayer(q, def.name, '龍衝');
     return;
   }
   a.fly = false; a.z = 0;   // 落地歇腳（restMs），之後等伺服器的 wander 事件接續散步
@@ -805,7 +882,7 @@ function stepOwnerProxy(a, dt, def) {
 
 // ---- 島主的伺服器同步：連線時島主本體與流程由伺服器權威，客戶端只負責演出和自己有沒有被打到 ----
 // 事件：aim（龍衝：瞬移島緣鎖定攻擊者）/ gaze（石化之瞳：原地開眼鎖定直線）/ hp（扣血）/ dead（被打倒）/ spawn（重生）/ state（進有島主的地形時的快照）
-// 陸地位圖：世界由前端種子生成，伺服器不知道島形；進有島主的地形時上傳（RLE，1＝陸地，與 ownerEdgeAt 的判定一致：types!==0）
+// 陸地位圖：世界由前端種子生成，伺服器不知道島形；進每個地形時上傳（島主路徑＋擺設的水邊驗證）（RLE，1＝陸地，與 ownerEdgeAt 的判定一致：types!==0）
 function landRLE() {
   const t = S.world.types, n = COLS * ROWS;
   const runs = [t[0] !== 0 ? 1 : 0];   // 第一個值是起始值，之後交替
@@ -817,6 +894,14 @@ function landRLE() {
   }
   runs.push(run);
   return runs.join(':');
+}
+// 上傳島形：每條連線、每個地形只傳一次（約 20KB；以前切地形、每次島主快照都重傳，Worker 每次都寫儲存）。
+// 所有地形都傳：島主用它算路徑，擺設用它驗證水邊（水上要有地板才能放家具）。
+// S.landSent 記「這條連線已傳過的地形」，重連時（onOpen）清掉
+function uploadLandMap() {
+  if (!netOn() || !S.world || S.landSent === S.terrain) return;
+  S.landSent = S.terrain;
+  S.net.sendDragonMap(landRLE());
 }
 // 取得（或建立）伺服器同步的島主 proxy；單機本地模擬的島主沒有 proxy 旗標
 function dragonEnsure(x, y, hp) {
@@ -837,7 +922,8 @@ function applyDragonSnap(o) {
   if (o.ph === 'dead') return;   // 死了就先不生成，等 spawn 事件
   const a = dragonEnsure(o.x, o.y, o.hp);
   if (!a) return;
-  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null; a.aggro = false;
+  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null;
+  a.aggro = o.aggro != null;   // 快照帶仇恨目標（連線編號）：中途進場也知道牠在追殺（戰鬥中不自動回血、之後會提示冷靜）
   if (o.ph === 'aim') {   // 島緣鎖定中：還原成循環（扣掉已過的預警時間）
     const total = 1000;
     a.cycle = {
@@ -861,7 +947,7 @@ function applyDragonSnap(o) {
   } else if (o.ph === 'say') {   // 說台詞中：站在原地（說完才會收到 aim/gaze 事件）
     a.cycle = null; a.wleg = null;
     a.x = o.x; a.y = o.y; a.z = 0; a.fly = false;
-    ownerSay(a);
+    if (ownerSkill(animalDef(a.id)).say !== false) ownerSay(a);
   } else if (o.ph === 'cast') {   // 石化之瞳開眼中：原地站定，接續剩餘的開眼時間後本地發射
     a.cycle = null; a.wleg = null;
     const total = 2000, remain = Math.max(0, Math.min(total, o.castMs || total));
@@ -883,8 +969,7 @@ function onNetDragon(m) {
   if (m.terrain && m.terrain !== S.terrain) return;   // 切地形的空檔還收得到舊島的事件（客戶端先換、伺服器後處理 enter），別套到新島的島主上
   if (m.ev === 'state') {
     applyDragonSnap(m);
-    // 保險：伺服器端的島形若因部署/重啟消失，進草島時補傳（各人島形相同，重複上傳無妨）
-    if (netOn() && S.world) S.net.sendDragonMap(landRLE());
+    uploadLandMap();   // 保險：這條連線在這個地形還沒傳過島形就補傳（已傳過就不重送）
     return;
   }
   const a = S.animals.find(v => v.id === S.terrains[S.terrain].owner);
@@ -992,7 +1077,7 @@ function onNetDragon(m) {
     const dx = me.x - m.x, dy = me.y - m.y;
     const dd = Math.hypot(dx, dy) || 1;
     const to = Math.hypot(m.tx - m.x, m.ty - m.y) || 1;
-    const front = (dx * (m.tx - m.x) / (dd * to)) >= .15;   // 前方扇形（同揮擊判定）
+    const front = (dx * (m.tx - m.x) + dy * (m.ty - m.y)) / (dd * to) >= .15;   // 前方扇形：到我的方向與到目標的方向夾角小於約 80°
     // 伺服器已用它的狀態驗證過距離；事件帶 id：抓的是我就結算（含紅圈），否則只看特效
     if (!me.dead && (m.id === S.net?.id || (dd <= OWNER_CLAW_RANGE && front))) {
       playerDamage(me, OWNER_CLAW_DMG, animalDef(na.id).name);
@@ -1077,11 +1162,14 @@ function rebuildOcc() {
 function furnitureDef(id) { return S.furn.items.find(f => f.id ===id); }
 
 // ---------------- 遮擋 / 碰撞 ----------------
+// 格子能不能站人／放家具：陸地，或水上鋪了地板（m＝要看的地板，預設目前畫面上的）
+function groundAt(x, y, m = S.floorMap) {
+  return !!S.world.types[y * COLS + x] || (!!m && floorAt(m, x, y) >= 0);
+}
 function blocked(px, py, ignoreFurn) { // 像素座標（腳底）；ignoreFurn＝只看地形（水邊），不管家具
   const x = Math.floor(px / CELL), y = Math.floor(py / CELL);
   if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return true;
-  const type = S.world.types[y * COLS + x];
-  if (type === 0) return true;
+  if (!groundAt(x, y)) return true;   // 水（水上鋪了地板的可以走）
   if (ignoreFurn) return false;
   const fi = S.occ.get(key(x, y));
   if (fi !== undefined) {
@@ -1094,45 +1182,75 @@ function blocked(px, py, ignoreFurn) { // 像素座標（腳底）；ignoreFurn�
 // ---------------- 造型合成 ----------------
 function hexRGB(h) { const s = h.replace('#', ''); return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)]; }
 
-function charSprite(skin, hairId, shirtIdx, frame, pantsIdx) {   // frame：0/1 走路兩幀、2 坐姿、3/4 背面（往上走）的站/走
-  // 索引超出範圍（舊存檔/別人送來的怪值）就用 0 號，避免畫圖當掉
-  const shirtHex = S.avatar.shirtColors[shirtIdx] ?? S.avatar.shirtColors[0];
-  const pantsHex = S.avatar.pantsColors[pantsIdx || 0] ?? S.avatar.pantsColors[0];
-  const k = `${skin}|${hairId}|${shirtHex}|${pantsHex}`;
-  let entry = S.charCache.get(k);
-  if (!entry) entry = {};
-  const fk = 'abcde'[frame] || 'a';
-  if (entry[fk]) return entry[fk];
-  const src = S.bodyImgs[skin][fk === 'd' ? 'a' : fk === 'e' ? 'b' : fk];   // 背面沿用正面的身體，頭髮整顆蓋住臉
-  const cv = document.createElement('canvas'); cv.width = 16; cv.height = 24;
-  const g = cv.getContext('2d');
-  // 上衣換色
-  g.drawImage(src, 0, 0);
-  const d = g.getImageData(0, 0, 16, 24), p = d.data;
-  const [br, bg, bb] = hexRGB(S.avatar.recolor.shirtBase);
-  const [sr, sg, sb] = hexRGB(S.avatar.recolor.shirtShadeBase);
-  const [tr, tg, tb] = hexRGB(shirtHex);
-  const [pbr, pbg, pbb] = hexRGB(S.avatar.recolor.pantsBase);
-  const [psr, psg, psb] = hexRGB(S.avatar.recolor.pantsShadeBase);
-  const [ptr, ptg, ptb] = hexRGB(pantsHex);
+// 人物＝五層由下往上疊：軀幹（膚色）→ 褲子 → 衣服 → 頭髮 → 帽子。每層一張 sheet，排列＝avatar.json 的 frames（所有層共用同一套幀號，同步切換）
+// look：{skin, hair, hat（null＝沒戴）, top／bottom（衣服／褲子款式 id）, shirt／pants（衣服／褲子顏色編號）}；缺的欄位用各類第一項
+const CHAR_DIR8 = ['down', 'down_right', 'right', 'up_right', 'up', 'up_left', 'left', 'down_left'];
+const CHAR_MIRROR = { left: 'right', up_left: 'up_right', down_left: 'down_right', right: 'left', up_right: 'up_left', down_right: 'down_left' };
+const lookItem = (list, id) => list?.find(it => it.id === id) || null;
+// 換色：把圖上 recolor.base／shade 的像素換成所選顏色（shade 用 78%），結果依 (層, 款式, 顏色) 快取整張 sheet
+function recolorSheet(img, rc, hex) {
+  const key = img.src + '|' + hex;
+  let cv = S.recolorCache.get(key);
+  if (cv) return cv;
+  cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+  const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, cv.width, cv.height), p = d.data;
+  const [br, bg, bb] = hexRGB(rc.base), [sr, sg, sb] = rc.shade ? hexRGB(rc.shade) : [-1, -1, -1], [tr, tg, tb] = hexRGB(hex);
   for (let i = 0; i < p.length; i += 4) {
-    const r = p[i], gg = p[i + 1], b = p[i + 2], a = p[i + 3];
-    if (a === 0) continue;
-    if (r === br && gg === bg && b === bb) { p[i] = tr; p[i + 1] = tg; p[i + 2] = tb; }
-    else if (r === sr && gg === sg && b === sb) {
-      p[i] = tr * .78 | 0; p[i + 1] = tg * .78 | 0; p[i + 2] = tb * .78 | 0;
-    } else if (r === pbr && gg === pbg && b === pbb) { p[i] = ptr; p[i + 1] = ptg; p[i + 2] = ptb; }      // 褲子
-    else if (r === psr && gg === psg && b === psb) {
-      p[i] = ptr * .78 | 0; p[i + 1] = ptg * .78 | 0; p[i + 2] = ptb * .78 | 0;
-    }
+    if (!p[i + 3]) continue;
+    if (p[i] === br && p[i + 1] === bg && p[i + 2] === bb) { p[i] = tr; p[i + 1] = tg; p[i + 2] = tb; }
+    else if (p[i] === sr && p[i + 1] === sg && p[i + 2] === sb) { p[i] = tr * .78 | 0; p[i + 1] = tg * .78 | 0; p[i + 2] = tb * .78 | 0; }
   }
   g.putImageData(d, 0, 0);
-  const back = fk === 'd' || fk === 'e';
-  const hair = (back ? S.hairBackImgs[hairId] : null) || S.hairImgs[hairId];
-  if (hair) g.drawImage(hair, 0, fk === 'c' ? 3 : 0);   // 坐姿的頭整體下移 3 列，頭髮跟著下移；背面用整顆蓋住的頭髮
-  entry[fk] = cv;
-  S.charCache.set(k, entry);
+  S.recolorCache.set(key, cv);
   return cv;
+}
+// 合成一幀（24×24 之類，大小看 frames.w/h），依 (造型, 幀號) 快取
+function charSprite(look, fi) {
+  const A = S.avatar, F = A.frames;
+  // 索引超出範圍（舊存檔/別人送來的怪值）就用 0 號，避免畫圖當掉
+  const shirtHex = A.shirtColors[look.shirt] ?? A.shirtColors[0], pantsHex = A.pantsColors[look.pants || 0] ?? A.pantsColors[0];
+  const skin = lookItem(A.skins, look.skin) || A.skins[0], hair = lookItem(A.hair, look.hair) || A.hair[0];
+  const top = lookItem(A.tops, look.top) || A.tops?.[0], bottom = lookItem(A.bottoms, look.bottom) || A.bottoms?.[0];
+  const hat = lookItem(A.hats, look.hat);
+  const k = [skin.id, hair.id, hat?.id || '', top?.id, shirtHex, bottom?.id, pantsHex, fi].join('|');
+  let cv = S.charCache.get(k);
+  if (cv) return cv;
+  cv = document.createElement('canvas'); cv.width = F.w; cv.height = F.h;
+  const g = cv.getContext('2d');
+  // 由下往上：軀幹 → 褲子 → 衣服 → 頭髮 → 帽子（帽子也可以有 recolor，顏色暫用衣服的）
+  for (const [it, hex] of [[skin], [bottom, pantsHex], [top, shirtHex], [hair], [hat, shirtHex]]) {
+    const img = it && S.charImgs[it.sheet];
+    if (!img || (fi + 1) * F.w > img.width) continue;   // 缺圖／這張 sheet 沒有這一幀：這層略過
+    const src = it.recolor && hex ? recolorSheet(img, it.recolor, hex) : img;
+    g.drawImage(src, fi * F.w, 0, F.w, F.h, 0, 0, F.w, F.h);
+  }
+  S.charCache.set(k, cv);
+  return cv;
+}
+// 8 方向視覺朝向：移動時依 (dx, dy) 的角度取最近的方向（鍵盤 8 向剛好一一對應）；玩法（石化等）仍看 face
+function dir8Of(dx, dy) {
+  const s = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));   // 扇區：0＝右、2＝下、-2＝上、±4＝左（畫面 y 向下）
+  return CHAR_DIR8[((2 - s) % 8 + 8) % 8];
+}
+// 沒有 d8（舊客戶端／NPC 剛生成）時，從 face＋dir 推
+const d8Of = p => p.d8 || (p.face === 'up' ? 'up' : p.face === 'side' ? (p.dir < 0 ? 'left' : 'right') : 'down');
+// 這個人現在該畫哪一幀：坐／睡＝sit；否則「朝向_待機或走路」，依遊戲時間循環（每人有自己的起始相位）。
+// 幀表沒有這個狀態時：左右對稱的方向改用另一邊再左右翻轉（mirror）；再沒有就退回正上／正下
+function charFrame(p) {
+  const F = S.avatar.frames, st = F.states;
+  if (p.pose) return { fi: (st.sit || st.down_idle)[0], mirror: false };
+  const mode = p.moving ? 'walk' : 'idle', d = d8Of(p);
+  let list = st[`${d}_${mode}`], mirror = false;
+  if (!list && CHAR_MIRROR[d]) { list = st[`${CHAR_MIRROR[d]}_${mode}`]; mirror = !!list; }
+  if (!list) list = st[`${d.startsWith('up') ? 'up' : 'down'}_${mode}`] || st.down_idle;
+  p.animPhase ??= Math.random() * 4;
+  return { fi: list[Math.floor((S.t + p.animPhase) * (F.fps?.[mode] || 6)) % list.length], mirror };
+}
+// 武器掛點（back／backView／waist／hand）換成相對腳底的畫面座標（2 倍）；frameAnchors 可逐幀覆寫
+function charAnchor(fi, kind) {
+  const F = S.avatar.frames, a = F.frameAnchors?.[fi]?.[kind] || F.anchors[kind];
+  return [(a[0] - F.w / 2) * 2, (a[1] - F.h) * 2];
 }
 
 // ---------------- 玩家 ----------------
@@ -1173,32 +1291,28 @@ function spawnNPCs() {
   S.players = [S.players[0], ...out];
 }
 
-function playerSpriteDiv(p, frame) {
+function playerSpriteDiv(p, fi) {
   // NPC 與遠端玩家都有自己的 look；自己（players[0]）則用當前造型
-  if (p.look) return charSprite(p.look.skin, p.look.hair, p.look.shirt, frame, p.look.pants);
-  return charSprite(S.me.skin, S.me.hair, S.me.shirt, frame, S.me.pants);
+  return charSprite(p.look || S.me, fi);
 }
 
 // ---- M2：遠端玩家（位置用內插，避免網路抖動造成瞬移）----
 function stepRemote(r, dt) {
-  if (r.pose) r.frame = 0;
   const k = Math.min(1, dt * 14);
   const dx = r.tx - r.x, dy = r.ty - r.y;
   r.x += dx * k; r.y += dy * k;
-  r.moving = Math.hypot(dx, dy) > 1.5;
-  if (r.moving) { r.animT += dt; if (r.animT > .16) { r.animT = 0; r.frame ^= 1; } }
-  else r.frame = 0;
+  r.moving = Math.hypot(dx, dy) > 1.5;   // 走路／待機的幀由 charFrame 依時間取
   if (r.swing > 0) r.swing -= dt;
   r.z += ((r.tz ?? r.z) - r.z) * Math.min(1, dt * 22);   // 跳躍高度追目標（封包 12Hz，這個速度追得上又夠平滑）
 }
 
 // ---- 角色死亡：被島主的龍衝撞倒後原地變墓碑，30 秒後復活（NPC／遠端玩家也適用） ----
 const DEAD_SECONDS = 30;
-function killPlayer(p, cause) {
+function killPlayer(p, cause, label) {   // label：頭上飄字（龍衝撞倒傳 '龍衝'，其餘預設「倒地」）
   if (p.npc || p.remote || p.dead) return;
   p.dead = true; p.deadAt = performance.now();   // 牆鐘毫秒：畫面被凍結（切走 DC）時倒數照樣走
-  p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null;
-  S.floaters.push({ x: p.x, y: p.y - 46, v: cause === '龍衝' ? '龍衝' : '倒地', life: 1.1, crit: true });
+  p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null; p.fish = null;
+  S.floaters.push({ x: p.x, y: p.y - 46, v: label || '倒地', life: 1.1, crit: true });
   toast(`${cause} 把你打倒了！${DEAD_SECONDS} 秒後在出生點復活`, 3200);
 }
 function revivePlayer(p) {
@@ -1207,7 +1321,7 @@ function revivePlayer(p) {
   p.hp = hpCap(p);   // 復活即滿血（上限隨職業）
   p.petUntil = 0; p.petTick = 0; p.petWas = false;   // 復活順便清石化（石化時長比死亡短，正常輪不到）
   const [nx, ny] = landNear((COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL);
-  p.x = nx; p.y = ny; p.z = 0; p.vz = 0; p.dir = 1;
+  p.x = nx; p.y = ny; p.z = 0; p.vz = 0; p.dir = 1; p.d8 = 'down';
   S.floaters.push({ x: p.x, y: p.y - 46, v: '復活！', life: 1.2, crit: true });
   toast('毫髮無傷地復活了！', 1800);
 }
@@ -1234,24 +1348,34 @@ function stepPlayer(p, dt) {
     if (!seatItem(p) || wantsMove) standUp(p);
     else { p.moving = false; p.frame = 0; p.z = 0; p.vz = 0; return; }
   }
+  // 腳下的水上地板被拆掉（自己或別人）：挪到最近能站的地方，不會泡在水裡動不了
+  if (p === S.players[0] && blocked(p.x, p.y, true)) [p.x, p.y] = landNear(p.x, p.y);
   let dx = 0, dy = 0;
-  // 走路與裝飾模式都能移動（裝飾模式要邊走邊擺）；被石化時不能移動（揮擊仍可用）
+  // 走路與裝飾模式都能移動（裝飾模式要邊走邊擺）；被石化時不能移動（揮擊也不行，在 doAttack／clickAttack 擋）
   const pet = S.t < (p.petUntil ?? 0);
-  if (!pet) {
+  const reeling = p.fish?.ph === 'reel';   // 拉竿的 1 秒拉扯中站定（不能走、不能跳，結果揭曉後才能動）
+  if (!pet && !reeling) {
     if (keys['a'] || keys['arrowleft']) dx -= 1;
     if (keys['d'] || keys['arrowright']) dx += 1;
     if (keys['w'] || keys['arrowup']) dy -= 1;
     if (keys['s'] || keys['arrowdown']) dy += 1;
   }
   p.moving = dx !== 0 || dy !== 0;
+  // 釣魚中（拉扯以外）：可以走、可以跳，離浮標太遠（FISH_LEASH）才收竿；換掉釣竿、進裝飾模式、被石化也會收竿
+  if (p.fish && !reeling) {
+    if (Math.hypot(p.fish.x - p.x, p.fish.y - p.y) > FISH_LEASH) stopFishing(p, '離浮標太遠，收竿了');
+    else if (S.mode !== 'walk' || !isRod() || pet) stopFishing(p);
+  }
+  stepFishing(p);
   if (p.moving) {
     if (S.mode === 'walk' && S.mouseHeld && S.mouseClient) {   // 按住滑鼠攻擊時，面向跟著游標（可以一邊朝右攻擊一邊往左退）
       const wx = S.mouseClient[0] - canvas.getBoundingClientRect().left + S.cam.x;
       if (Math.abs(wx - p.x) > 6) p.dir = Math.sign(wx - p.x);
-      p.face = 'side';
-    } else {   // 四方向朝向：只往上＝背面、只往下＝正面、有左右分量＝側（dir 左右）；站著不動維持上次的朝向
-      if (dx !== 0) { p.dir = dx; p.face = 'side'; }
-      else p.face = dy < 0 ? 'up' : 'down';
+      p.face = 'side'; p.d8 = p.dir < 0 ? 'left' : 'right';
+    } else {   // 朝向：有往上的分量（含斜上）＝背面、只往下＝正面、其餘有左右分量（左右、斜下）＝側（dir 左右）；站著不動維持上次的朝向
+      if (dx !== 0) p.dir = dx;
+      p.face = dy < 0 ? 'up' : dx !== 0 ? 'side' : 'down';
+      p.d8 = dir8Of(dx, dy);   // 畫面用的 8 方向（玩法仍看 face）
     }
     const len = Math.hypot(dx, dy) || 1, sp = (keys['shift'] ? 200 : 120) * dt;
     const nx = clamp(p.x + dx / len * sp, 8, COLS * CELL - 8);
@@ -1262,15 +1386,17 @@ function stepPlayer(p, dt) {
     if (!blocked(p.x, ny, ig)) p.y = ny;
   }
   // 跳躍（走路與裝飾模式都能跳；石化中不能跳）
-  if (!pet && keys[' '] && p.z === 0 && p.vz === 0) p.vz = 240;
+  if (!pet && !reeling && keys[' '] && p.z === 0 && p.vz === 0) p.vz = 240;
   if (p.z > 0 || p.vz > 0) {
     p.z += p.vz * dt; p.vz -= 780 * dt;
     if (p.z <= 0) { p.z = 0; p.vz = 0; }
   }
-  if (p.swing > 0) { p.swing -= dt; p.face = 'side'; }   // 揮擊／採集是朝左右揮，轉成側面
+  if (p.swing > 0) { p.swing -= dt; p.face = 'side'; p.d8 = p.dir < 0 ? 'left' : 'right'; }   // 揮擊／採集是朝左右揮，轉成側面
+  if (p.fish) {   // 釣魚中走動：身體一直面向浮標（倒退著走），釣竿才會指著浮標、釣線不會從背後繞過去
+    if (Math.abs(p.fish.x - p.x) > 4) p.dir = Math.sign(p.fish.x - p.x);
+    p.face = 'side'; p.d8 = p.dir < 0 ? 'left' : 'right';
+  }
   if (p.tool && S.t > p.toolUntil && !(p.swing > 0)) p.tool = null;
-  if (p.moving) { p.animT += dt; if (p.animT > .16) { p.animT = 0; p.frame ^= 1; } }
-  else p.frame = 0;
   if (pet && S.t >= (p.petTick ?? 0)) {   // 石化每秒扣 1 HP（死者走既有墓碑機制）
     p.petTick = S.t + 1;
     playerDamage(p, 1, p.petCause || '石化');
@@ -1299,10 +1425,10 @@ function stepNPC(p, dt) {
   p.moving = true;
   const dx = p.target.x - p.x, dy = p.target.y - p.y, len = Math.hypot(dx, dy) || 1, sp = 55 * dt;
   if (dx) p.dir = Math.sign(dx);
+  p.d8 = dir8Of(dx, dy);   // NPC 也用 8 方向的幀（往上走會看到背面）
   const nx = clamp(p.x + dx / len * sp, 8, COLS * CELL - 8), ny = clamp(p.y + dy / len * sp, 8, ROWS * CELL - 8);
   if (!blocked(nx, p.y)) p.x = nx;
   if (!blocked(p.x, ny)) p.y = ny;
-  p.animT += dt; if (p.animT > .18) { p.animT = 0; p.frame ^= 1; }
   if (Math.random() < .002) p.idle = .8 + Math.random() * 1.6;
 }
 
@@ -1319,17 +1445,29 @@ function drawPerson(p, wi, nameColor) {
       ctx.fillStyle = `rgba(10,14,20,${.32 * shs + .04})`;
       ctx.beginPath(); ctx.ellipse(p.x, p.y + 1, 11 * shs, 4 * shs, 0, 0, Math.PI * 2); ctx.fill();
     }
-    const img = playerSpriteDiv(p, pose ? 2 : p.face === 'up' ? (p.frame === 1 ? 4 : 3) : (p.frame === 1 ? 1 : 0));   // 往上走＝背面
+    const cf = charFrame(p), img = playerSpriteDiv(p, cf.fi), F = S.avatar.frames;   // 方向已畫在幀裡，只有借用另一邊的幀時才左右翻轉
+    charAnch = { back: charAnchor(cf.fi, 'back'), backView: charAnchor(cf.fi, 'backView'), waist: charAnchor(cf.fi, 'waist'), hand: charAnchor(cf.fi, 'hand') };
     const pet = S.t < (p.petUntil ?? 0);   // 石化：身體灰階（自己的石化即時同步；遠端玩家的石化由光束事件就地推斷，純演出）
     if (pet) { ctx.save(); ctx.filter = 'grayscale(1) brightness(.92)'; }
     ctx.save(); ctx.translate(p.x, p.y - p.z);
-    if (p.dir < 0) ctx.scale(-1, 1);
-    // 武器（背在肩上 / 揮擊時畫在身前）；坐著時不拿
-    if (wi && !pose && !(p.swing > 0)) drawWeaponBack(wi);
-    ctx.drawImage(img, -16, -48, 32, 48);
-    if (wi && !pose && p.swing > 0) drawWeaponSwing(wi, p.swing);
+    // 武器（背在背上／掛在腰間；揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
+    const fish = wi && !pose && p.fish ? p.fish : null;
+    const carry = wi && !pose && !fish && !(p.swing > 0);   // 不拿在手上
+    const backView = d8Of(p).startsWith('up');                // 背面（往上、斜上）：背著的武器疊在身體上面，其餘方向被身體擋住
+    // 掛著的武器畫在左右翻轉之外：固定在同一側，人物轉向時不會跟著換邊
+    const drawCarry = onBack => wi.carry === 'waist' ? drawWeaponWaist(wi) : drawWeaponBack(wi, onBack);
+    if (carry && !backView) drawCarry(false);
+    ctx.save();
+    if (cf.mirror) ctx.scale(-1, 1);
+    ctx.drawImage(img, -F.w, -F.h * 2, F.w * 2, F.h * 2);   // 錨點＝腳底中央，畫 2 倍
+    ctx.restore();
+    if (carry && backView) drawCarry(true);
+    if (p.dir < 0) ctx.scale(-1, 1);                          // 揮擊、拋竿朝面向那側（要翻轉）
+    if (wi && !pose && !fish && p.swing > 0) drawWeaponSwing(wi, p.swing, p.dir < 0 ? -1 : 1);
+    if (fish) drawRodCast(wi, rodAngle(fish));
     ctx.restore();
     if (pet) ctx.restore();
+    if (fish) drawLineAndBobber(p, wi, fish);
     if (pose) nameY = p.y - 46;
   }
   // 名牌（FFXIV 感：白字黑邊）
@@ -1360,7 +1498,12 @@ function drawPerson(p, wi, nameColor) {
     ctx.strokeText(txt, p.x, ty); ctx.fillText(txt, p.x, ty);
   }
   if (p.say && S.t < p.say.until) drawBubble(p.x, nameY - 14, p.say.text, Math.min(1, (p.say.until - S.t) / .4));
-  else if (p.guide) {   // 嚮導頭上有個會晃動的「？」，提示可以問他
+  else if (p.fish?.ph === 'bite') {   // 魚上鉤：頭上跳動的「!」（同地形的人也看得到）
+    ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+    const yy = nameY - 14 - Math.abs(Math.sin(S.t * 10)) * 4;
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.9)'; ctx.fillStyle = '#ffd84a';
+    ctx.strokeText('!', p.x, yy); ctx.fillText('!', p.x, yy);
+  } else if (p.guide) {   // 嚮導頭上有個會晃動的「？」，提示可以問他
     ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
     const yy = nameY - 14 + Math.sin(S.t * 4) * 2;
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#ffd86b';
@@ -1381,12 +1524,12 @@ function drawGazeEye(x, y, r, pul) {
 }
 // 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）
 function drawSleeper(p) {
-  const img = playerSpriteDiv(p, 0);
-  ctx.drawImage(img, 0, 2, 16, 11, p.x - 16, p.y - 33, 32, 22);   // 頭的水平中心對準枕頭（單人床中央）
+  const F = S.avatar.frames, img = playerSpriteDiv(p, (F.states.down_idle || [0])[0]);   // 用正面待機的第 1 幀切出頭與肩膀
+  ctx.drawImage(img, F.w / 2 - 8, 2, 16, 11, p.x - 16, p.y - 33, 32, 22);   // 頭的水平中心對準枕頭（單人床中央）
   const def = furnitureDef(p.seatType || 'bed'), bed = S.furnImgs[p.seatType || 'bed'];
-  if (bed && def?.quiltRow) {
-    const rows = bed.height - def.quiltRow;
-    ctx.drawImage(bed, 0, def.quiltRow, bed.width, rows, p.x - bed.width, p.y - rows * 2, bed.width * 2, rows * 2);
+  if (bed && def?.quiltRow) {   // 被子：從床的「同一幀」切出被子那幾列蓋回去（床有動畫時才對得上）
+    const rows = bed.height - def.quiltRow, fi = sprFrame(bed, p.seat ? cellPhase(p.seat.cell[0], p.seat.cell[1]) : 0);
+    ctx.drawImage(bed.img, fi * bed.fw, def.quiltRow, bed.fw, rows, p.x - bed.width, p.y - rows * 2, bed.width * 2, rows * 2);
   }
   // Zzz 飄字
   const ph = (S.t * 1.2) % 1;
@@ -1432,6 +1575,7 @@ function talkTo(n) {
   n.say = { text: line, until: S.t + db.duration };
   n.idle = db.duration + .5; n.moving = false; n.target = null;      // 停下來說話，面向玩家
   if (Math.abs(me.x - n.x) > 6) n.dir = Math.sign(me.x - n.x);
+  n.d8 = n.dir < 0 ? 'left' : 'right';   // 轉向玩家
   if (n.guide) {                              // 嚮導：先說一句話，讓台詞看得到，約 1.5 秒後再跳出簡易操作說明
     clearTimeout(S.helpTimer);
     S.helpTimer = setTimeout(() => { if (S.players.includes(n) && !S.helpOpen && !S.confirmOpen) openHelp(); }, 1500);
@@ -1516,6 +1660,23 @@ function saveSign() {
   closeSign(); toast(text ? '看板已更新' : '看板已清空', 1600);
 }
 // 對話泡泡（畫在名牌上方）
+// 放招倒數條：中心 (cx, y)（條的上緣），frac＝進度（0→1，黃色由左往右填，填滿就放招），name＝右上角的招式名稱
+function drawCastBar(cx, y, frac, name) {
+  const w = 72, h = 6, x = Math.round(cx - w / 2);
+  frac = Math.max(0, Math.min(1, frac));
+  ctx.save();
+  ctx.fillStyle = 'rgba(8,10,14,.78)'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);   // 底
+  ctx.fillStyle = '#f3c93e'; ctx.fillRect(x, y, w * frac, h);                      // 黃色倒數
+  ctx.fillStyle = 'rgba(255,246,200,.55)'; ctx.fillRect(x, y, w * frac, 2);        // 上緣亮線
+  ctx.strokeStyle = 'rgba(214,180,96,.9)'; ctx.lineWidth = 1; ctx.strokeRect(x - .5, y - .5, w + 1, h + 1);   // 細金邊
+  if (name) {
+    ctx.font = 'bold 11px "Microsoft JhengHei"'; ctx.textAlign = 'right';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)';
+    ctx.strokeText(name, x + w, y - 3);
+    ctx.fillStyle = '#ffe08a'; ctx.fillText(name, x + w, y - 3);
+  }
+  ctx.restore();
+}
 function drawBubble(x, y, text, alpha) {
   ctx.save(); ctx.globalAlpha = alpha;
   ctx.font = '11px "Microsoft JhengHei"'; ctx.textAlign = 'center';
@@ -1550,7 +1711,7 @@ function usePose(it) {
   if (Math.hypot(cx - p.x, cy - p.y) > 80) { say(`靠近一點再${def.use === 'sit' ? '坐' : '躺'}`); return; }
   const sx = cx, sy = (it.cell[1] + def.h) * CELL - (def.use === 'sit' ? 2 : 0);
   for (const r of S.remotes.values()) if (r.pose && Math.abs(r.x - sx) < 10 && Math.abs(r.y - sy) < 10) { say('這裡有人了'); return; }
-  p.pose = def.use; p.seat = { type: it.type, cell: [it.cell[0], it.cell[1]] }; p.seatType = it.type; p.face = 'down';
+  p.pose = def.use; p.seat = { type: it.type, cell: [it.cell[0], it.cell[1]] }; p.seatType = it.type; p.face = 'down'; p.d8 = 'down';
   p.x = sx; p.y = sy; p.z = 0; p.vz = 0; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null;
   say(def.use === 'sit' ? '坐下了（移動、F 或再點一次起身）' : '晚安～（移動、F 或再點一次起身）', 1800);
 }
@@ -1564,17 +1725,239 @@ function standUp(p) {
   }
 }
 
+// ---------------- 釣魚 ----------------
+// 造型的武器換成釣竿（avatar.json 的 fishing: true）後，面向水邊按 F 或點水面就拋竿：浮標在水面上下飄，
+// 幾秒後魚上鉤（浮標被拉下水、頭上「!」），FISH_BITE 秒內再按一次就拉竿（FISH_REEL 秒的拉扯動畫）釣上來，超過就跑掉。
+// 釣到什麼：連線時由伺服器抽（結果與圖鑑存在伺服器，依 Discord 帳號；訪客只存本機），沒連線才在本機抽（rollFish，與兩份伺服器同演算法）。
+// 浮標位置與階段走 state.fish 同步，同地形的人看得到你在釣魚；釣到的東西只有自己知道
+const FISH_WAIT = [3, 8];        // 拋竿後幾秒魚上鉤（隨機）
+const FISH_BITE = 2;             // 上鉤後幾秒內要拉竿
+const FISH_REEL = 1;             // 拉竿的拉扯動畫秒數
+const FISH_RANGE = [36, 140];    // 浮標離人的距離（px）
+const FISH_LEASH = 5 * CELL;     // 釣魚中可以走動，離浮標超過這個距離（5 格）才自動收竿
+const FISH_RESULT_WAIT = 4;      // 連線時拉竿後，最多再等伺服器結果幾秒
+const isRod = () => !!S.avatar?.weapons.find(w => w.id === S.me.weapon)?.fishing;
+const isWater = (wx, wy) => {
+  const x = Math.floor(wx / CELL), y = Math.floor(wy / CELL);
+  return x >= 0 && y >= 0 && x < COLS && y < ROWS && S.world.types[y * COLS + x] === 0 && !(S.floorMap && floorAt(S.floorMap, x, y) >= 0);   // 鋪了地板的水面不能拋竿
+};
+const fishDef = (terrain, id) => S.fishDB?.terrains[terrain]?.find(f => f.id === id);
+// 沿 (ux,uy) 方向找拋竿範圍內第一片水，再往外一點（外面也是水的話）；沒有回 null
+function castRay(p, ux, uy) {
+  for (let r = FISH_RANGE[0]; r <= FISH_RANGE[1]; r += 8) {
+    if (isWater(p.x + ux * r, p.y + uy * r)) {
+      const r2 = r + 20 <= FISH_RANGE[1] && isWater(p.x + ux * (r + 20), p.y + uy * (r + 20)) ? r + 20 : r;
+      return { x: p.x + ux * r2, y: p.y + uy * r2 };
+    }
+  }
+  return null;
+}
+// 拋竿落點（只要人在水邊，不必點得很準）：
+// 1) 點擊且點到範圍內的水面 → 就拋到那裡；2) 朝想拋的方向（點擊＝游標方向；F＝面向）找範圍內的水；
+// 3) 那個方向沒有水 → 身邊各方向找，挑最接近想拋方向的水面；都沒有才提示
+function castPoint(p, wx, wy) {
+  const click = wx !== undefined;
+  if (click && isWater(wx, wy) && Math.hypot(wx - p.x, wy - p.y) <= FISH_RANGE[1]) return { x: wx, y: wy };
+  let ux, uy;
+  if (click && Math.hypot(wx - p.x, wy - p.y) > 1) { const d = Math.hypot(wx - p.x, wy - p.y); ux = (wx - p.x) / d; uy = (wy - p.y) / d; }
+  else [ux, uy] = facingVec(p);
+  const hit = castRay(p, ux, uy);
+  if (hit) return hit;
+  const want = Math.atan2(uy, ux);
+  let best = null, bestDiff = Infinity;
+  for (let k = 0; k < 24; k++) {                       // 每 15° 一個方向
+    const a = k * Math.PI / 12, pt = castRay(p, Math.cos(a), Math.sin(a));
+    if (!pt) continue;
+    const diff = Math.abs(Math.atan2(Math.sin(a - want), Math.cos(a - want)));
+    if (diff < bestDiff) { bestDiff = diff; best = pt; }
+  }
+  if (!best) say('附近沒有水，走到水邊再拋竿');
+  return best;
+}
+// 左鍵／F（拿著釣竿時）：沒在釣＝拋竿；等魚中＝收竿；魚上鉤＝拉竿；拉扯中＝不理
+function fishAction(wx, wy) {
+  const p = S.players[0], f = p.fish;
+  if (!f) {
+    if (!S.fishDB?.terrains[S.terrain]?.length) { say('這裡釣不到東西'); return; }
+    const pt = castPoint(p, wx, wy);
+    if (!pt) return;
+    p.fish = { ph: 'wait', x: Math.round(pt.x), y: Math.round(pt.y), t: S.t, biteAt: S.t + FISH_WAIT[0] + Math.random() * (FISH_WAIT[1] - FISH_WAIT[0]) };
+    if (Math.abs(pt.x - p.x) > 4) p.dir = Math.sign(pt.x - p.x);
+    p.face = 'side'; p.tool = null;
+    toast('拋竿了，等魚上鉤…（再按一次收竿）', 1800);
+  } else if (f.ph === 'wait') stopFishing(p, '收竿了');
+  else if (f.ph === 'bite') {
+    f.ph = 'reel'; f.t = S.t; f.result = null;
+    if (netOn()) S.net.fishCatch();            // 伺服器抽魚並記進圖鑑，結果由 fish_result 回來
+    else f.result = rollFish(S.terrain);
+  }
+}
+function stopFishing(p, msg) {
+  if (!p.fish) return;
+  p.fish = null;
+  if (msg) toast(msg, 1800);
+}
+// 每幀：等魚 → 上鉤 → 逾時跑掉；拉扯動畫結束時揭曉結果
+function stepFishing(p) {
+  const f = p.fish;
+  if (!f) return;
+  if (f.ph === 'wait' && S.t >= f.biteAt) { f.ph = 'bite'; f.t = S.t; }
+  else if (f.ph === 'bite' && S.t - f.t > FISH_BITE) stopFishing(p, '魚逃走了…');
+  else if (f.ph === 'reel' && S.t - f.t >= FISH_REEL) {
+    if (f.result) { p.fish = null; showCatch(p, f.result); }
+    else if (S.t - f.t > FISH_REEL + FISH_RESULT_WAIT) stopFishing(p, '連線不穩，魚跑掉了…');
+  }
+}
+// 單機抽魚（與 Worker 的 rollFish、dev_server 的 roll_fish 同演算法）：先脫鉤判定，再依權重抽稀有度，
+// 從該地形同稀有度的魚裡平均抽一種；尺寸越大越難（範圍內取 r^1.6）
+function rollFish(terrain) {
+  const db = S.fishDB, list = db?.terrains[terrain] || [];
+  if (!list.length || Math.random() < db.escape) return { terrain, escaped: true };
+  const rars = Object.entries(db.rarity).filter(([k]) => list.some(f => f.rarity === k));
+  let r = Math.random() * rars.reduce((s, [, v]) => s + v.weight, 0), rar = rars[rars.length - 1][0];
+  for (const [k, v] of rars) { if ((r -= v.weight) < 0) { rar = k; break; } }
+  const cands = list.filter(f => f.rarity === rar), f = cands[Math.floor(Math.random() * cands.length)];
+  const size = Math.round((f.size[0] + (f.size[1] - f.size[0]) * Math.random() ** 1.6) * 10) / 10;
+  return { terrain, id: f.id, size, rarity: rar };
+}
+// 伺服器回來的結果：正在拉扯就等動畫結束再揭曉；其餘情況（例如拉扯中斷線又重連）直接記錄
+function onFishResult(m) {
+  const p = S.players[0];
+  if (p.fish?.ph === 'reel' && !p.fish.result) p.fish.result = m;
+  else showCatch(p, m);
+}
+// 記進圖鑑：伺服器存好的（saved）直接用它回的資料；訪客／單機記在本機 localStorage
+function recordCatch(m) {
+  const dex = S.dex[m.terrain] ||= {};
+  if (m.saved && m.entry) { dex[m.id] = m.entry; return { isNew: !!m.isNew, isRecord: !!m.isRecord }; }
+  const e = dex[m.id], isNew = !e, isRecord = !e || m.size > e.max;
+  dex[m.id] = { max: Math.max(e?.max || 0, m.size), n: (e?.n || 0) + 1 };
+  if (S.dexSource === 'local') lsSet('dcisland.m0.fishdex', S.dex);
+  return { isNew, isRecord };
+}
+function showCatch(p, m) {
+  if (m.escaped) { toast('魚脫鉤逃走了！', 2200); return; }
+  const def = fishDef(m.terrain, m.id), rar = S.fishDB.rarity[m.rarity];
+  if (!def) return;
+  const { isNew, isRecord } = recordCatch(m);
+  if (S.fishImgs[m.id]) S.floaters.push({ x: p.x, y: p.y - 64, fishImg: S.fishImgs[m.id], life: 1.8 });
+  toast(`釣到了 ${def.name}！${m.size} cm（${rar?.name || ''}）${isNew ? ' · 新發現！' : isRecord ? ' · 尺寸新紀錄！' : ''}`, 3400);
+  if (S.dexOpen) buildDex();
+}
+// 釣竿拋出去的姿勢角度（正值＝竿尖往面向那側前傾）：等魚前傾、上鉤被往下拉、拉扯時往後上方甩
+function rodAngle(f) {
+  return f.ph === 'reel' ? -.25 + Math.sin(S.t * 30) * .12 : f.ph === 'bite' ? 1 + Math.sin(S.t * 40) * .08 : .8;
+}
+// 畫拋出去的釣竿（ctx 已 translate 到角色腳底並依 dir 翻轉；轉軸同揮擊＝握把）
+function drawRodCast(wi, a) {
+  ctx.save(); ctx.translate(charAnch.hand[0], charAnch.hand[1]); ctx.rotate(a);
+  ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();
+}
+// 釣線與浮標（世界座標）：從竿尖拉到浮標；上鉤時浮標沉下去、水面起漣漪；拉扯時浮標往人這邊收
+function drawLineAndBobber(p, wi, f) {
+  const a = rodAngle(f), L = (wi.height - 3) * 2 - 2, dir = p.dir < 0 ? -1 : 1;
+  const tx = p.x + dir * (charAnch.hand[0] + L * Math.sin(a)), ty = p.y - p.z + charAnch.hand[1] - L * Math.cos(a);
+  let bx = f.x, by = f.y;
+  const since = S.t - (f.t ?? S.t);
+  if (f.ph === 'reel') { const q = Math.min(1, since / FISH_REEL); bx += (p.x - bx) * q * .6; by += (p.y - 10 - by) * q * .6; }
+  else if (f.ph === 'wait') by += Math.sin(S.t * 3) * 1.5;
+  else by += 3;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(240,240,232,.85)'; ctx.lineWidth = 1;
+  const sag = f.ph === 'wait' ? 18 : 4;     // 等魚時線鬆鬆的，上鉤／拉扯時繃緊
+  ctx.beginPath(); ctx.moveTo(tx, ty); ctx.quadraticCurveTo((tx + bx) / 2, Math.max(ty, by) + sag, bx, by - 3); ctx.stroke();
+  if (f.ph !== 'reel') {                   // 水面漣漪
+    const q = (S.t * (f.ph === 'bite' ? 2.5 : .8)) % 1;
+    ctx.strokeStyle = `rgba(230,245,255,${.55 * (1 - q)})`;
+    ctx.beginPath(); ctx.ellipse(f.x, f.y + 1, 4 + q * (f.ph === 'bite' ? 12 : 6), 1.5 + q * (f.ph === 'bite' ? 4 : 2), 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (f.ph === 'bite') {                   // 上鉤：浮標被拉下水，只露出一點紅頂
+    ctx.fillStyle = '#e04a3a'; ctx.beginPath(); ctx.ellipse(bx, by - 2, 2.5, 1.2, 0, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.fillStyle = '#f4f0e6'; ctx.beginPath(); ctx.arc(bx, by - 2, 3, 0, Math.PI); ctx.fill();
+    ctx.fillStyle = '#e04a3a'; ctx.beginPath(); ctx.arc(bx, by - 2, 3, Math.PI, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(30,24,22,.9)'; ctx.beginPath(); ctx.arc(bx, by - 2, 3, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ---- 魚類圖鑑：每個地形一頁，各 10 種；沒釣過的是黑色剪影＋「？？？」，釣過的顯示圖、名稱、稀有度、最大尺寸與次數 ----
+function openDex() {
+  S.dexOpen = true; S.dexTab = S.fishDB?.terrains[S.terrain] ? S.terrain : TERRAIN_IDS[0];
+  buildDex(); $('dexBox').classList.remove('hidden');
+}
+function closeDex() { S.dexOpen = false; $('dexBox').classList.add('hidden'); }
+function buildDex() {
+  const tabs = $('dexTabs'); tabs.innerHTML = '';
+  for (const id of TERRAIN_IDS) {
+    if (!S.fishDB.terrains[id]) continue;
+    const b = document.createElement('button');
+    b.className = 'ff-btn small' + (id === S.dexTab ? ' active' : '');
+    b.textContent = S.terrains[id].name;
+    b.onclick = () => { S.dexTab = id; buildDex(); };
+    tabs.appendChild(b);
+  }
+  const list = S.fishDB.terrains[S.dexTab] || [], seen = S.dex[S.dexTab] || {};
+  const n = list.filter(f => seen[f.id]).length;
+  $('dexHint').textContent = `已發現 ${n}／${list.length}` + (S.dexSource === 'server' ? ' · 以 Discord 帳號保存' : ' · 訪客／未連線：只存在這台電腦');
+  const grid = $('dexGrid'); grid.innerHTML = '';
+  for (const f of list) {
+    const e = seen[f.id], rar = S.fishDB.rarity[f.rarity];
+    const card = document.createElement('div'); card.className = 'dex-card' + (e ? '' : ' unknown');
+    const cv = document.createElement('canvas'); cv.width = 48; cv.height = 48;
+    const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+    const img = S.fishImgs[f.id];
+    if (img) {
+      g.drawImage(img, 0, 0, 48, 48);
+      if (!e) { g.globalCompositeOperation = 'source-in'; g.fillStyle = '#07090c'; g.fillRect(0, 0, 48, 48); }   // 剪影
+    }
+    const nm = document.createElement('div'); nm.className = 'dex-name'; nm.textContent = e ? f.name : '？？？';
+    card.append(cv, nm);
+    if (e) {
+      const r = document.createElement('div'); r.className = 'dex-rar'; r.textContent = rar?.name || ''; r.style.color = rar?.color || '';
+      const s = document.createElement('div'); s.className = 'dex-size'; s.textContent = `最大 ${e.max} cm · ${e.n} 次`;
+      card.append(r, s);
+    }
+    grid.appendChild(card);
+  }
+}
+
 // ---------------- 繪製 ----------------
 // 武器（ctx 已 translate 到角色腳底並依 dir 翻轉）。素材：刀刃在上、握柄在下。
-// 沒揮擊：背在肩後（畫在身體之前，被身體擋住一部分）
-function drawWeaponBack(wi) {
-  ctx.save(); ctx.translate(-11, -26); ctx.rotate(-.55);
-  ctx.drawImage(wi, -wi.width, -wi.height / 2, wi.width * 2, wi.height * 2); ctx.restore();
+// 沒揮擊：背在肩後（畫在身體之前，被身體擋住一部分）。
+// 以「圖的底端」對齊（木劍 18 格高、畫成 36px 時底端在轉軸下 27px）：比較長的武器（釣竿）往上伸出肩頭，不會穿過腳底。
+// avatar.json 標 back: "hilt" 的（木劍）上下翻過來＝劍柄在肩後（約肩膀高度）、劍身朝下藏在身體後面
+const WEAPON_BACK_BOTTOM = 27, WEAPON_HILT_LIFT = 0;
+// 武器掛點（畫面座標，相對腳底）：drawPerson 依這一幀的 avatar.json frames.anchors（可逐幀覆寫）算好放這裡；
+// 預設值＝以前寫死的常數（背上 -11,-26／背面 -5,-26／腰 -8,-18／手 3,-26）
+let charAnch = { back: [-11, -26], backView: [-5, -26], waist: [-8, -18], hand: [3, -26] };
+// onBack＝背面視角（畫在身體之上）：用 backView 掛點（往背的中間靠，看起來是斜背在背上）
+function drawWeaponBack(wi, onBack) {
+  const [ax, ay] = onBack ? charAnch.backView : charAnch.back;
+  ctx.save(); ctx.translate(ax, ay); ctx.rotate(-.55);
+  if (wi.hiltUp) { ctx.scale(1, -1); ctx.drawImage(wi, -wi.width, WEAPON_HILT_LIFT - WEAPON_BACK_BOTTOM, wi.width * 2, wi.height * 2); }
+  else ctx.drawImage(wi, -wi.width, WEAPON_BACK_BOTTOM - wi.height * 2, wi.width * 2, wi.height * 2);
+  ctx.restore();
+}
+// 掛在腰間（avatar.json 的 carry: "waist"）：握把在腰的掛點，武器頭朝下、往身後斜（劍柄朝上，像插在腰帶上）
+function drawWeaponWaist(wi) {
+  const [ax, ay] = charAnch.waist;
+  ctx.save(); ctx.translate(ax, ay); ctx.rotate(Math.PI + .45);
+  ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();   // 轉軸＝離圖底 3 格的握把
 }
 // 揮擊：握住劍柄（以握把為轉軸）、刀刃朝外，由後上方往前下方揮，畫在身體之後（身前）
-function drawWeaponSwing(wi, swing) {
+// 劍柄朝上背著的（hiltUp）或掛腰間的：前 35% 手從掛著的位置（背上劍柄＝back 掛點往左上 2,3；腰間＝waist 掛點）移到手的掛點，看起來是拔出來再揮。
+// 掛著的武器不隨人物翻轉（固定在畫面左側），ctx 卻已依面向翻轉，所以起點 x 要乘上 dir 換回同一側
+const SWING_HILT_DRAW = .35;
+function drawWeaponSwing(wi, swing, dir = 1) {
   const q = 1 - swing / ATK_T;
-  ctx.save(); ctx.translate(3, -26); ctx.rotate(-.9 + q * 2.8);
+  let [px, py] = charAnch.hand;
+  if (wi.hiltUp || wi.carry === 'waist') {
+    const from = wi.carry === 'waist' ? charAnch.waist : [charAnch.back[0] - 2, charAnch.back[1] - 3];
+    const k = Math.min(1, q / SWING_HILT_DRAW), fx = from[0] * dir;
+    px = fx + (px - fx) * k; py = from[1] + (py - from[1]) * k;
+  }
+  ctx.save(); ctx.translate(px, py); ctx.rotate(-.9 + q * 2.8);
   ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();   // 轉軸＝離圖底 3 格的握把
 }
 
@@ -1591,17 +1974,19 @@ function draw() {
   const y1 = Math.min(ROWS - 1, Math.ceil((S.cam.y + canvas.height) / CELL));
   ctx.save();
   ctx.translate(-S.cam.x, -S.cam.y);
-  // 底：水
+  // 底：地面／岸邊／水（可動畫：每種磚這一幀先算好，整張地圖同步；stagger 的各格再錯開）
+  const tiles = [ims[tMan.water], ims[tMan.edge], ims[tMan.ground]], tileFi = tiles.map(s => s ? sprFrame(s) : 0);
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-    const t = S.world.types[y * COLS + x];
-    const img = t === 2 ? ims[tMan.ground] : t === 1 ? ims[tMan.edge] : ims[tMan.water];
-    if (!img) continue;
-    ctx.drawImage(img, x * CELL, y * CELL, CELL, CELL);
+    const t = S.world.types[y * COLS + x], spr = tiles[t];
+    if (!spr) continue;
+    drawSpr(spr, spr.stagger ? (tileFi[t] + x * 7 + y * 13) % spr.frames : tileFi[t], x * CELL, y * CELL, CELL, CELL);
   }
-  // 地板層：蓋在地面上、家具與角色之下
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-    const fid = S.floorMap.get(y * COLS + x), img = fid && S.floorImgs[fid];
-    if (img) ctx.drawImage(img, x * CELL, y * CELL, CELL, CELL);
+  // 地板層：蓋在地面上、家具與角色之下（多格地板從錨點畫整張，錨點在鏡頭左上外也要畫，所以往外多看幾格）
+  for (let y = Math.max(0, y0 - FLOOR_MAX + 1); y <= y1; y++) for (let x = Math.max(0, x0 - FLOOR_MAX + 1); x <= x1; x++) {
+    const fid = S.floorMap.get(y * COLS + x), spr = fid && S.floorImgs[fid];
+    if (!spr) continue;
+    const s = floorSize(fid);
+    drawSpr(spr, sprFrame(spr, spr.stagger ? cellPhase(x, y) : 0), x * CELL, y * CELL, s.w * CELL, s.h * CELL);
   }
   // 裝飾模式半透明格線
   if (S.mode === 'decor') {
@@ -1611,19 +1996,23 @@ function draw() {
   }
 
   // 收集繪製項目（y 排序）
+  // 畫面外的點綴物／家具不收：圖以「格子底邊」往上畫，所以用圖的實際範圍判斷（pad＝受擊抖動、看板文字的餘裕）
+  const vx0 = S.cam.x, vy0 = S.cam.y, vx1 = vx0 + canvas.width, vy1 = vy0 + canvas.height;
+  const offView = (left, bottom, w, h, pad) => left + w + pad < vx0 || left - pad > vx1 || bottom + pad < vy0 || bottom - h - pad > vy1;
   const list = [];
   for (const d of S.world.decos) {
     if (d.dead) continue;
     const img = ims[d.sprite]; if (!img) continue;
+    if (offView(d.cell[0] * CELL, (d.cell[1] + 1) * CELL, img.width * SC, img.height * SC, 4)) continue;
     list.push({
       y: (d.cell[1] + 1) * CELL,
       draw: () => {
-        const w = img.width * SC, h = img.height * SC;
+        const w = img.width * SC, h = img.height * SC, fi = sprFrame(img, cellPhase(d.cell[0], d.cell[1]));   // 點綴物可動畫：依格子錯開相位
         const sx = d.shake > 0 ? Math.sin(S.t * 70) * 2 * (d.shake / .25) : 0;   // 受擊抖動
         if (d.flip) {
           ctx.save(); ctx.translate(d.cell[0] * CELL + w + sx, (d.cell[1] + 1) * CELL - h); ctx.scale(-1, 1);
-          ctx.drawImage(img, 0, 0, w, h); ctx.restore();
-        } else ctx.drawImage(img, d.cell[0] * CELL + sx, (d.cell[1] + 1) * CELL - h, w, h);
+          drawSpr(img, fi, 0, 0, w, h); ctx.restore();
+        } else drawSpr(img, fi, d.cell[0] * CELL + sx, (d.cell[1] + 1) * CELL - h, w, h);
       }
     });
   }
@@ -1642,12 +2031,13 @@ function draw() {
   }
   S.furnItems.forEach((it, idx) => {
     const def = furnitureDef(it.type), img = S.furnImgs[it.type]; if (!img) return;
+    if (offView(it.cell[0] * CELL, (it.cell[1] + def.h) * CELL, Math.max(def.w * CELL, img.width * SC), img.height * SC, def.text ? 90 : 4)) return;
     list.push({
       y: (it.cell[1] + def.h) * CELL - 1,
       draw: () => {
         ctx.save();
         if (idx === S.pickedIdx) ctx.globalAlpha = .5;
-        ctx.drawImage(img, it.cell[0] * CELL, (it.cell[1] + def.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
+        drawSpr(img, sprFrame(img, cellPhase(it.cell[0], it.cell[1])), it.cell[0] * CELL, (it.cell[1] + def.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
         if (def.text && it.text) {   // 看板的字：走近（約 4 格內）才顯示在上方，只顯示第一行前 16 字，點開看全文
           const me = S.players[0], cx = (it.cell[0] + def.w / 2) * CELL, cy = (it.cell[1] + def.h) * CELL;
           if (Math.hypot(cx - me.x, cy - me.y) < 130) {
@@ -1664,12 +2054,13 @@ function draw() {
   });
   // 小動物
   for (const a of S.animals) {
-    const img = S.anImgs[a.id]; if (!img) continue;
+    const img = S.anImgs[a.id], an = S.anAnims[a.id]; if (!img && !an) continue;
     const def = animalDef(a.id);
     list.push({
       y: a.y - (a.z ? .5 : 1),
       draw: () => {
-        const bs = def.big || 1, W = img.width * 2 * bs, H = img.height * 2 * bs;   // big=N＝比普通動物大 N 倍；錨點在腳底中央
+        // big=N＝比普通動物大 N 倍（判定圈等玩法也看它）；有多幀動畫時畫面大小改看 anim.scale。錨點在腳底中央
+        const bs = def.big || 1, W = an ? an.fw * an.scale : img.width * 2 * bs, H = an ? an.fh * an.scale : img.height * 2 * bs;
         const shs = 1 - Math.min(.5, a.z / 60);
         ctx.fillStyle = `rgba(10,14,20,${.26 * shs + .03})`;
         ctx.beginPath(); ctx.ellipse(a.x, a.y + 1, 9 * bs * shs, 3 * shs * Math.max(1, bs * .6), 0, 0, Math.PI * 2); ctx.fill();
@@ -1680,7 +2071,8 @@ function draw() {
           ctx.rotate(q * 1.1); ctx.scale(1 - q * .3, 1 - q * .3);
         }
         if (a.dir < 0) ctx.scale(-1, 1);
-        ctx.drawImage(img, -W / 2, -H, W, H);
+        if (an) drawSpr(an, animFrame(a, an), -W / 2, -H, W, H);
+        else ctx.drawImage(img, -W / 2, -H, W, H);
         ctx.restore();
         if (a.dead) return;
         if (def.owner && !a.fly) {   // 島主腳下判定圈：以「武器尖端」為準——武器點（人前方 WEAPON_REACH 處的小圓點）進圈就打得到，不看面向。靠近（約 220px 內）才顯示
@@ -1730,13 +2122,17 @@ function draw() {
           ctx.strokeText('!', a.x, top + 8); ctx.fillText('!', a.x, top + 8);
         }
         // 名牌（島主用金色，與嚮導同色）
-        ctx.font = (bs > 1 ? 'bold 12px ' : '') + '9px "Microsoft JhengHei"'; ctx.textAlign = 'center';
+        ctx.font = (bs > 1 ? 'bold 12px ' : '9px ') + '"Microsoft JhengHei"'; ctx.textAlign = 'center';
         ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.75)';
         ctx.strokeText(def.name, a.x, top);
         ctx.fillStyle = a.startle ? '#e8b2a2' : (def.owner ? '#ffd86b' : '#cfd8c8');
         ctx.fillText(def.name, a.x, top);
         // 島主的台詞泡泡（被打反擊前隨機一句；與 NPC 泡泡同款，畫在名牌上方）
         if (a.say && S.t < a.say.until) drawBubble(a.x, top - 8, a.say.text, Math.min(1, (a.say.until - S.t) / .4));
+        // 島主放招倒數條（skills.json 標 bar 的招式）：預警期間畫在名牌上方，黃色由左往右填，填滿就放招；右上角是招式名稱。
+        // 島主很高，人站在牠腳邊時頭會超出畫面上緣：倒數條貼齊畫面上緣，不會看不到
+        if (def.owner && a.cast > 0 && ownerSkill(def).bar)
+          drawCastBar(a.x, Math.max(top - 16, S.cam.y + 20), 1 - a.cast / ownerCastTotal(def), ownerSkill(def).name);
       }
     });
   }
@@ -1786,24 +2182,35 @@ function draw() {
 
   // 地板模式 ghost：游標所在格（長按右鍵時顯示拆除）
   if (S.mode === 'decor' && S.decorTab === 'floor' && S.mouseCell) {
-    const [mx, my] = S.mouseCell, ok = floorCellOk(mx, my), del = S.paint === 'del';
-    if (!del && ok && S.selFloor && S.floorImgs[S.selFloor]) {
-      ctx.globalAlpha = .7; ctx.drawImage(S.floorImgs[S.selFloor], mx * CELL, my * CELL, CELL, CELL); ctx.globalAlpha = 1;
+    const [mx, my] = S.mouseCell, del = S.paint === 'del';
+    // 預覽範圍：鋪設＝選中地板的大小（地毯 2×2）；拆除＝游標下那塊地板的整個範圍
+    let rx = mx, ry = my, rw = 1, rh = 1, ok;
+    if (del) {
+      const k = floorAt(S.floorMap, mx, my);
+      ok = floorCellOk(mx, my);
+      if (k >= 0) { const s = floorSize(S.floorMap.get(k)); rx = k % COLS; ry = Math.floor(k / COLS); rw = s.w; rh = s.h; }
+    } else {
+      const s = floorSize(S.selFloor); rw = s.w; rh = s.h;
+      ok = !!S.selFloor && !!floorCovered(S.floorMap, S.selFloor, mx, my);
+      if (ok && S.floorImgs[S.selFloor]) {
+        const fs = S.floorImgs[S.selFloor];
+        ctx.globalAlpha = .7; drawSpr(fs, sprFrame(fs), mx * CELL, my * CELL, rw * CELL, rh * CELL); ctx.globalAlpha = 1;
+      }
     }
     ctx.fillStyle = !ok ? 'rgba(220,80,80,.3)' : del ? 'rgba(230,150,60,.3)' : 'rgba(90,220,120,.18)';
-    ctx.fillRect(mx * CELL, my * CELL, CELL, CELL);
+    ctx.fillRect(rx * CELL, ry * CELL, rw * CELL, rh * CELL);
     ctx.strokeStyle = !ok ? 'rgba(255,120,120,.8)' : del ? 'rgba(255,190,90,.9)' : 'rgba(120,255,160,.8)';
-    ctx.strokeRect(mx * CELL + .5, my * CELL + .5, CELL - 1, CELL - 1);
+    ctx.strokeRect(rx * CELL + .5, ry * CELL + .5, rw * CELL - 1, rh * CELL - 1);
   }
   // 裝飾模式 ghost
-  if (S.mode === 'decor' && S.decorTab === 'furn' && S.mouseCell && S.sel) {
+  if (S.mode === 'decor' && S.decorTab === 'furn' && S.mouseCell && S.sel && S.furnImgs[S.sel]) {
     const def = furnitureDef(S.sel), img = S.furnImgs[S.sel];
     const [mx, my] = S.mouseCell, w = def.w * CELL, h = def.h * CELL;
     const valid = canPlace(S.sel, mx, my);
     ctx.fillStyle = valid ? 'rgba(90,220,120,.28)' : 'rgba(220,80,80,.3)';
     ctx.fillRect(mx * CELL, my * CELL, w, h);
     ctx.globalAlpha = .75;
-    ctx.drawImage(img, mx * CELL, (my + def.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
+    drawSpr(img, sprFrame(img), mx * CELL, (my + def.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
     ctx.globalAlpha = 1;
     ctx.strokeStyle = valid ? 'rgba(120,255,160,.8)' : 'rgba(255,120,120,.8)';
     ctx.strokeRect(mx * CELL + .5, my * CELL + .5, w - 1, h - 1);
@@ -1822,7 +2229,10 @@ function draw() {
       ctx.restore(); continue;
     }
     ctx.translate(f.x, f.y);
-    if (f.ring) {   // 被爪擊打中的衝擊圈：紅圈快速擴散淡出
+    if (f.fishImg) {   // 釣到的東西：從頭上浮起來再淡出
+      ctx.globalAlpha = Math.min(1, f.life / .5);
+      ctx.drawImage(f.fishImg, -24, -24, 48, 48);
+    } else if (f.ring) {   // 被爪擊打中的衝擊圈：紅圈快速擴散淡出
       const q = 1 - f.life / .35;
       ctx.strokeStyle = `rgba(255,110,80,${1 - q})`;
       ctx.lineWidth = 3;
@@ -1866,12 +2276,13 @@ function draw() {
   ctx.restore();
 }
 
+const MAX_FURN = 500;   // 每個地形的擺設上限（與兩份伺服器的 MAX_FURN 一致）
 function canPlace(typeId, x, y) {
   const def = furnitureDef(typeId);
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
     if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS) return false;
-    if (!S.world.types[yy * COLS + xx]) return false;
+    if (!groundAt(xx, yy)) return false;   // 水上要先鋪地板
     if (S.occ.get(key(xx, yy)) !== undefined) return false;
   }
   return true;
@@ -1913,34 +2324,84 @@ function applyFloor(items) { S.floorMap = listToFloor(items); }
 function onNetFloor(items) {
   S.netFloor = items;
   if (!S.floors) return;
-  if (S.mode === 'decor') {      // 別人保存了新的地板：以它為底，把我的地板草稿重新疊上去
+  if (S.mode === 'decor') {      // 別人保存了新的地板：以它為底，把我的草稿重新疊上去
     S.baseFloor = listToFloor(items);
-    S.floorMap = applyFloorOps(S.baseFloor, S.draft);
+    replayDraft(); updateDecorUI();
   } else applyFloor(items);
 }
-// 把草稿裡的地板操作套到一份地板上（回傳新 Map；水上的格子略過）
-function applyFloorOps(base, ops) {
-  const m = new Map(base);
-  for (const op of ops) if (op.t === 'floor') applyFloorOp(m, op);
-  return m;
+// 以 S.baseFurn／S.baseFloor 為底，依原順序重播整份草稿（家具與地板互相影響：水上家具要有地板、有家具的水上地板不能拆；
+// 順序與伺服器逐一驗證時相同）。不合法的操作略過
+function replayDraft() {
+  const furn = cloneFurn(S.baseFurn), floor = new Map(S.baseFloor);
+  for (const op of S.draft) {
+    if (op.t === 'floor') applyFloorOp(floor, op, furn);
+    else applyFurnOpTo(furn, op, floor);
+  }
+  S.furnItems = furn; S.floorMap = floor; rebuildOcc();
 }
-function applyFloorOp(m, op) {
-  const [x, y] = op.cell, k = y * COLS + x;
-  if (op.type === null) m.delete(k);
-  else if (S.world.types[k]) m.set(k, op.type);
+// 多格地板（floors.json 標 w/h，例如地毯 2×2）：只在錨點格（左上）存一筆，其餘格子視為被它蓋住。
+// 規則與兩份伺服器的 applyFloorOp 一致：多格地板彼此不重疊、單格地板不能鋪在多格地板上；
+// 鋪多格地板會取代範圍內的單格地板；拆除點到多格地板的任一格就整塊拆掉。
+// 地板可以鋪在水上；水上那格有家具時不能拆（要先拿走家具），陸地上的地板不受限制
+const FLOOR_MAX = 4;   // 多格地板的最大邊長（找「誰蓋住這格」時往左上回找的範圍；與伺服器一致）
+const floorSize = id => S.floorSizes?.get(id) || { w: 1, h: 1 };
+function floorAt(m, x, y) {   // 蓋住 (x,y) 的地板錨點 key（單格地板就是自己），沒有回 -1
+  for (let dy = 0; dy < FLOOR_MAX; dy++) for (let dx = 0; dx < FLOOR_MAX; dx++) {
+    const ax = x - dx, ay = y - dy;
+    if (ax < 0 || ay < 0) continue;
+    const id = m.get(ay * COLS + ax);
+    if (id === undefined) continue;
+    const s = floorSize(id);
+    if (dx < s.w && dy < s.h) return ay * COLS + ax;
+  }
+  return -1;
 }
-const floorCellOk = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS && !!S.world.types[y * COLS + x];
-// 長按鋪設/拆除：游標所在格套用目前動作（同一格不會重複記草稿）
+// 在 (x,y) 鋪 type 時會被取代的單格地板 key 清單；鋪不下（水上／出界／壓到多格地板）回 null
+function floorCovered(m, type, x, y) {
+  const s = floorSize(type), out = [];
+  for (let dy = 0; dy < s.h; dy++) for (let dx = 0; dx < s.w; dx++) {
+    if (!floorCellOk(x + dx, y + dy)) return null;
+    const k = floorAt(m, x + dx, y + dy);
+    if (k < 0) continue;
+    const t = floorSize(m.get(k));
+    if (t.w * t.h > 1) return null;
+    out.push(k);
+  }
+  return out;
+}
+// 拆掉錨點 k 的地板後，水上會不會有家具懸空（items＝要看的擺設清單）
+function floorHoldsFurn(m, k, items) {
+  const s = floorSize(m.get(k)), ax = k % COLS, ay = Math.floor(k / COLS);
+  for (let dy = 0; dy < s.h; dy++) for (let dx = 0; dx < s.w; dx++) {
+    const cx = ax + dx, cy = ay + dy;
+    if (cx < COLS && cy < ROWS && !S.world.types[cy * COLS + cx] && items.some(it => furnCovers(it, [cx, cy]))) return true;
+  }
+  return false;
+}
+function applyFloorOp(m, op, items = S.furnItems) {   // 有變動回 true
+  const [x, y] = op.cell;
+  if (op.type === null) { const k = floorAt(m, x, y); return k >= 0 && !floorHoldsFurn(m, k, items) && m.delete(k); }
+  const cov = floorCovered(m, op.type, x, y), s = floorSize(op.type);
+  if (!cov) return false;
+  if (s.w * s.h === 1 && cov.length === 1 && m.get(cov[0]) === op.type) return false;   // 同一種，沒變
+  for (const k of cov) m.delete(k);
+  m.set(y * COLS + x, op.type);
+  return true;
+}
+const floorCellOk = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;   // 地板可以鋪在水上
+// 長按鋪設/拆除：游標所在格套用目前動作（沒有變化的不記草稿；地毯掃過去會一塊接一塊鋪，不會重疊）
 function paintFloor() {
   if (S.mode !== 'decor' || S.decorTab !== 'floor' || !S.paint || !S.mouseCell || S.players[0].dead) return;
   const [x, y] = S.mouseCell;
-  if (!floorCellOk(x, y)) return;
-  const cur = S.floorMap.get(y * COLS + x), type = S.paint === 'add' ? S.selFloor : null;
+  const type = S.paint === 'add' ? S.selFloor : null;
   if (S.paint === 'add' && !type) return;
-  if ((cur ?? null) === type) return;
+  const op = { t: 'floor', cell: [x, y], type };
   if (S.draft.length >= 1200) { toast('未保存的變動太多了，請先按「完成」保存'); S.paint = null; return; }
-  S.draft.push({ t: 'floor', cell: [x, y], type });
-  applyFloorOp(S.floorMap, S.draft[S.draft.length - 1]);
+  if (!applyFloorOp(S.floorMap, op)) {
+    if (!type) { const k = floorAt(S.floorMap, x, y); if (k >= 0 && floorHoldsFurn(S.floorMap, k, S.furnItems)) toast('水上的地板有家具，先拿走家具才能拆', 1600); }
+    return;
+  }
+  S.draft.push(op);
   updateDecorUI();
 }
 
@@ -1954,7 +2415,7 @@ function onNetFurn(items) {
   if (!S.furn) return;
   if (S.mode === 'decor') {      // 別人保存了新的擺設：以它為底，把我的草稿重新疊上去
     S.baseFurn = cloneFurn(items.filter(it => it && furnitureDef(it.type) && Array.isArray(it.cell)));
-    S.furnItems = applyOps(S.baseFurn, S.draft); rebuildOcc(); updateDecorUI();
+    replayDraft(); updateDecorUI();
   } else applyFurn(items);
 }
 
@@ -1967,29 +2428,27 @@ const furnCovers = (it, cell) => {
   const d = furnitureDef(it.type) || { w: 1, h: 1 };
   return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
 };
-// 在指定清單上能不能放（範圍、水邊、與清單內家具重疊）
-function canPlaceIn(list, typeId, x, y) {
+// 在指定清單上能不能放（範圍、水邊〔水上要有地板 floor〕、與清單內家具重疊）；規則與兩份伺服器一致
+function canPlaceIn(list, typeId, x, y, floor = S.floorMap) {
   const def = furnitureDef(typeId); if (!def) return false;
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
-    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !S.world.types[yy * COLS + xx]) return false;
+    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor)) return false;
   }
   return !list.some(it => { const d = furnitureDef(it.type) || { w: 1, h: 1 };
     return x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h; });
 }
-// 把一串操作套到一份清單上（回傳新清單；不合法的操作略過）
-function applyOps(base, ops) {
-  const list = cloneFurn(base);
-  for (const op of ops) {
-    if (op.t === 'clear') list.length = 0;
-    else if (op.t === 'remove') { const i = list.findIndex(it => furnCovers(it, op.cell)); if (i >= 0) list.splice(i, 1); }
-    else if (op.t === 'place' && canPlaceIn(list, op.type, op.cell[0], op.cell[1])) list.push({ type: op.type, cell: [op.cell[0], op.cell[1]] });
-  }
-  return list;
+// 把一個家具操作套到清單上（直接改 list；不合法的略過）
+function applyFurnOpTo(list, op, floor = S.floorMap) {
+  if (op.t === 'clear') list.length = 0;
+  else if (op.t === 'remove') { const i = list.findIndex(it => furnCovers(it, op.cell)); if (i >= 0) list.splice(i, 1); }
+  else if (op.t === 'place' && canPlaceIn(list, op.type, op.cell[0], op.cell[1], floor)) list.push({ type: op.type, cell: [op.cell[0], op.cell[1]] });
 }
 function stageOp(op) {
   S.draft.push(op);
-  S.furnItems = applyOps(S.furnItems, [op]);
+  const list = cloneFurn(S.furnItems);
+  applyFurnOpTo(list, op);
+  S.furnItems = list;
   rebuildOcc(); updateDecorUI();
 }
 const canClear = () => !netOn() || S.admin;      // 連線時要管理員；沒連線（單機）自己的島自己清
@@ -2003,7 +2462,8 @@ function updateDecorUI() {
 function enterDecor() {
   S.mode = 'decor'; S.draft = []; S.baseFurn = cloneFurn(S.furnItems); S.baseFloor = new Map(S.floorMap); S.paint = null;
   $('btnDecor').classList.add('active'); $('furnPanel').classList.remove('hidden');
-  S.sel = S.sel || S.furn.items[0].id; S.selFloor = S.selFloor || S.floors.items[0].id;
+  S.sel = S.sel || S.furn.items.find(it => S.furnImgs[it.id] && !it.legacy)?.id || null;   // 缺圖／legacy 的種類不列出、也不預選
+  S.selFloor = S.selFloor || S.floors.items.find(it => S.floorImgs[it.id])?.id || null;
   buildFurnPanel(); updateDecorUI();
   toast('裝飾模式：左鍵放置／右鍵移除（按「完成」才會保存）', 2600);
 }
@@ -2031,7 +2491,11 @@ function requestExitDecor() {
 }
 function closeConfirm() { S.confirmOpen = false; $('confirmBox').classList.add('hidden'); }
 function onCommitResult(m) {
-  if (m.denied) toast('清空需要管理員權限，這項已略過' + (m.applied ? `（其他 ${m.applied} 項已保存）` : ''), 3200);
+  // 伺服器先廣播 furn/floor 再回 commit_result：此時 netFurn/netFloor 已是保存後的權威結果。
+  // 一項都沒套用時伺服器不廣播，畫面會停在草稿的樣子（別人看不到），所以這裡一律以伺服器版本為準
+  if (S.mode === 'walk') { applyFurn(S.netFurn); applyFloor(S.netFloor); }
+  if (m.limited) toast('保存太頻繁，這批變動沒有保存，請稍等幾秒再試', 3200);
+  else if (m.denied) toast('清空需要管理員權限，這項已略過' + (m.applied ? `（其他 ${m.applied} 項已保存）` : ''), 3200);
   else if (m.rejected) toast(`已保存（${m.rejected} 項因被別人搶先占用或不合法而未套用）`, 3200);
   else toast('擺設已保存');
 }
@@ -2077,12 +2541,13 @@ async function switchTerrain(id) {
     const [nx, ny] = landNear(me.x, me.y);
     me.x = nx; me.y = ny;
     me.petUntil = 0; me.petTick = 0; me.petWas = false;   // 石化判定只在畫面本地，換地形就解除
+    me.fish = null;                                        // 換地形就收竿
     buildTerrainChips();
     toast(`已移動到${S.terrains[id].name}`);
     // M2：只有自己過去；告訴伺服器，讓新地形的人看到你、舊地形的人看不到你
     S.net?.enter?.(id);
-    // 島主同步：進草島就把陸地位圖交給伺服器（島形只有客戶端知道；各人島形相同，重複上傳也無妨）
-    if (netOn() && S.terrains[id].owner) S.net.sendDragonMap(landRLE());
+    // 把陸地位圖交給伺服器（島形只有客戶端知道；島主路徑與擺設的水邊驗證都要用）
+    uploadLandMap();
   } catch (e) {
     // 不要靜默失敗：讓玩家看得到，也回報到伺服器日誌
     toast(`切換${id}失敗：${e.message || e}`, 4000);
@@ -2104,12 +2569,14 @@ function buildFurnPanel() {
   const box = $('furnList'); box.innerHTML = '';
   if (floorTab) {
     for (const it of S.floors.items) {
+      if (!S.floorImgs[it.id]) continue;   // 缺圖的地板不列出
       const div = document.createElement('div');
       div.className = 'fitem' + (S.selFloor === it.id ? ' sel' : '');
       const cv = document.createElement('canvas');
       cv.width = 44; cv.height = 40; cv.style.height = '40px';
       const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
-      g.drawImage(S.floorImgs[it.id], 6, 4, 32, 32);
+      const fs = S.floorImgs[it.id];
+      g.drawImage(fs.img, 0, 0, fs.fw, fs.fh, 6, 4, 32, 32);   // 面板縮圖：第 1 幀
       const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = it.name;
       div.appendChild(cv); div.appendChild(nm);
       div.onclick = () => { S.selFloor = it.id; buildFurnPanel(); };
@@ -2118,14 +2585,15 @@ function buildFurnPanel() {
     return;
   }
   for (const it of S.furn.items) {
+    const img = S.furnImgs[it.id];
+    if (!img || it.legacy) continue;       // 缺圖的家具不列出；legacy＝已改成別的東西（例如地毯改為地板），舊存檔照畫但不能再擺
     const div = document.createElement('div');
     div.className = 'fitem' + (S.sel === it.id ? ' sel' : '');
     const cv = document.createElement('canvas');
-    const img = S.furnImgs[it.id];
     cv.width = 44; cv.height = 40; cv.style.height = '40px';
     const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
     const w = img.width * 2, h = img.height * 2, s2 = Math.min(1, 44 / w, 40 / h);
-    g.drawImage(img, (44 - w * s2) / 2, 40 - h * s2, w * s2, h * s2);
+    g.drawImage(img.img, 0, 0, img.fw, img.fh, (44 - w * s2) / 2, 40 - h * s2, w * s2, h * s2);   // 面板縮圖：第 1 幀
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = it.name;
     div.appendChild(cv); div.appendChild(nm);
     div.onclick = () => { S.sel = it.id; buildFurnPanel(); };
@@ -2173,6 +2641,23 @@ function buildAvatarPanel() {
     o.onclick = () => { S.me.hair = h.id; saveAvatar(); buildAvatarPanel(); };
     hr.appendChild(o);
   }
+  // 帽子／上衣款式／褲子款式：avatar.json 的 hats／tops／bottoms；可選的不到 2 種（帽子：沒有任何一頂）就不顯示那一列
+  const styleRow = (grp, box, list, field, none) => {
+    const opts = none ? [{ id: null, name: '無' }, ...(list || [])] : (list || []);
+    $(grp).classList.toggle('hidden', opts.length < 2);
+    const el = $(box); el.innerHTML = '';
+    const cur = S.me[field] ?? (none ? null : opts[0]?.id);
+    for (const it of opts) {
+      const o = document.createElement('div');
+      o.className = 'opt name' + (cur === it.id ? ' sel' : '');
+      o.textContent = it.name;
+      o.onclick = () => { S.me[field] = it.id; saveAvatar(); buildAvatarPanel(); };
+      el.appendChild(o);
+    }
+  };
+  styleRow('hatGrp', 'hatOpts', S.avatar.hats, 'hat', true);
+  styleRow('topGrp', 'topOpts', S.avatar.tops, 'top', false);
+  styleRow('bottomGrp', 'bottomOpts', S.avatar.bottoms, 'bottom', false);
   const pn = $('pantsOpts'); pn.innerHTML = '';
   swatchOrder(S.avatar.pantsColors).forEach(i => {
     const hex = S.avatar.pantsColors[i], o = document.createElement('div');
@@ -2189,17 +2674,24 @@ function buildAvatarPanel() {
     o.onclick = () => { S.me.shirt = i; saveAvatar(); buildAvatarPanel(); };
     sh.appendChild(o);
   });
-  // 武器不放在面板：由職業決定（坦＝盾、補＝杖、輸出＝木劍），見 JOBS 的 weapon 欄
+  // 武器（含職業的圓盾／法杖／木劍與釣竿）：自由選擇；職業不強制換武器
+  const wp = $('weaponOpts'); wp.innerHTML = '';
+  for (const w of S.avatar.weapons) {
+    const o = document.createElement('div');
+    o.className = 'opt name' + (S.me.weapon === w.id ? ' sel' : '');
+    o.textContent = w.name;
+    o.onclick = () => { S.me.weapon = w.id; saveAvatar(); buildAvatarPanel(); };
+    wp.appendChild(o);
+  }
 }
 function saveAvatar() { lsSet('dcisland.m0.avatar', S.me); }
 
-// 換職業：特性立即生效＋武器隨職業更換（盾/杖/劍）；當前血量截到新上限（不回滿，避免換職業當補血用）；存檔沿用 dcisland.m0.avatar 這支 key
+// 換職業：特性立即生效（血量截到新上限，不回滿，避免換職業當補血用）；武器照玩家自己的選擇不動；存檔沿用 dcisland.m0.avatar 這支 key
 function setJob(id) {
   if (!JOBS[id] || S.me.job === id) return;
   S.me.job = id;
   const p = S.players[0];
   if (p) p.hp = Math.min(p.hp ?? Infinity, hpCap(p));
-  S.me.weapon = JOBS[id].weapon || S.me.weapon;
   saveAvatar(); buildAvatarPanel();
   toast(`轉職「${JOBS[id].name}」— ${JOBS[id].desc}`, 3400);
 }
@@ -2218,6 +2710,7 @@ addEventListener('keydown', e => {
   keys[k] = true;
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   if (S.listOpen) { if (k === 'escape' || k === 'l') closeList(); return; }                // 線上列表開著：Esc / L 關閉
+  if (S.dexOpen) { if (k === 'escape') closeDex(); return; }                               // 圖鑑開著：Esc 關閉（仍可走路）
   if (S.helpOpen) { if (k === 'escape' || k === 'enter') closeHelp(); return; }       // 操作說明開著：Esc / Enter 關閉，其他鍵不處理
   if (S.confirmOpen) { if (k === 'escape') closeConfirm(); return; }   // 「要保存嗎？」開著時：Esc＝繼續編輯，其他鍵不處理
   if (k === 'e' && !e.repeat) {
@@ -2242,10 +2735,12 @@ canvas.addEventListener('mousemove', e => {
   S.mouseClient = [e.clientX, e.clientY];     // 長按左鍵時，鏡頭/角色移動後仍要用最新的游標位置
   const r = canvas.getBoundingClientRect();
   S.mouseCell = [Math.floor((e.clientX - r.left + S.cam.x) / CELL), Math.floor((e.clientY - r.top + S.cam.y) / CELL)];
+  paintFloor();   // 長按鋪地板：滑鼠移動時就套用（不只靠每幀），掉幀時掃過的格子也不會漏
 });
 canvas.addEventListener('mouseleave', () => S.mouseCell = null);
 // 左鍵攻擊（世界座標 wx,wy 是游標指的位置）：先面向游標方向再揮
 function clickAttack(wx, wy) {
+  if (S.players[0].fish) { doAttack(false); return; }   // 釣魚中：點哪裡都是收竿／拉竿（不會去坐椅子、跟 NPC 說話）
   // 點在島主身上：優先攻擊島主，點擊不讓牠腳下的椅子／NPC 攔走
   const onOwner = S.animals.some(a => {
     const od = animalDef(a.id);
@@ -2271,7 +2766,7 @@ function clickAttack(wx, wy) {
     if (d) { useTool(d); return; }
   }
   if (Math.abs(wx - S.players[0].x) > 6) S.players[0].dir = Math.sign(wx - S.players[0].x);
-  doAttack();
+  doAttack(false, wx, wy);
   // 沒命中但點到了一隻動物 → 牠的致公告告（FF14 點動物 FU）
   if (!S._hits) {
     for (const a of S.animals) {
@@ -2284,7 +2779,8 @@ function clickAttack(wx, wy) {
 }
 // 長按 F 或左鍵：冷卻一到就自動再揮（每幀呼叫；第一下由按下事件負責，之後這裡接手）
 function autoAttack() {
-  if (S.mode !== 'walk' || S.helpOpen || S.listOpen || S.signOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
+  if (S.mode !== 'walk' || S.helpOpen || S.listOpen || S.signOpen || S.dexOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
+  if (isRod() || S.players[0].fish) return;   // 釣竿不連擊：長按不會一直拋竿／收竿
   quiet = true;
   try {
     if (S.mouseHeld && S.mouseClient) {
@@ -2294,7 +2790,7 @@ function autoAttack() {
   } finally { quiet = false; }
 }
 canvas.addEventListener('mousedown', e => {
-  if (S.confirmOpen || S.helpOpen || S.listOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen) return;
   if (S.mode === 'decor' && S.decorTab === 'floor' && (e.button === 0 || e.button === 2)) {   // 地板模式：長按左鍵鋪、長按右鍵拆
     if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
     const r = canvas.getBoundingClientRect();
@@ -2315,12 +2811,13 @@ canvas.addEventListener('mousedown', e => {
   if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
   const [x, y] = S.mouseCell;
   if (S.draft.length >= 300) { toast('未保存的變動太多了，請先按「完成」保存'); return; }
+  if (S.furnItems.length >= MAX_FURN) { toast(`這個地形的擺設已達上限（${MAX_FURN} 件）`); return; }
   if (canPlace(S.sel, x, y)) { stageOp({ t: 'place', type: S.sel, cell: [x, y] }); toast('放置'); }
-  else toast('這裡放不下（水邊／已占用）');
+  else toast('這裡放不下（水上要先鋪地板／已占用）');
 });
 canvas.addEventListener('contextmenu', e => {
   e.preventDefault();
-  if (S.confirmOpen || S.helpOpen || S.listOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen) return;
   if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身
     const r = canvas.getBoundingClientRect();
     const f = furnAtPoint(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y);
@@ -2358,9 +2855,11 @@ $('furnClear').onclick = () => {
 };
 
 $('listClose').onclick = closeList;
-$('btnHelp').onclick = openHelp;       // 右上「操作說明」：和嚮導一樣的操作說明
+$('btnHelp').onclick = () => { if (S.helpOpen) closeHelp(); else openHelp(); };   // 右上「操作說明」：和嚮導一樣的操作說明；開著時再按就關閉（同「圖鑑」）
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => $('avatarPanel').classList.add('hidden');
+$('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑
+$('dexClose').onclick = closeDex;
 
 // ---------------- 資源載入 ----------------
 async function ensureTerrain(id) {
@@ -2369,7 +2868,8 @@ async function ensureTerrain(id) {
   const files = new Set([man.ground, man.edge, man.water]);
   for (const d of man.deco) files.add(d.sprite);
   const ims = {};
-  await Promise.all([...files].map(async f => ims[f] = await loadImg(`assets/terrain/${id}/${f}`)));
+  // terrain.json 的 anims：{ 檔名: anim }，地面／岸邊／水／點綴物都可以各自設定動畫（沒設＝單張圖）
+  await Promise.all([...files].map(async f => ims[f] = await loadSpr(`assets/terrain/${id}/${f}`, man.anims?.[f])));
   for (const f of [...files]) if (!ims[f]) console.warn('缺地形圖:', id, f);
   S.tImages[id] = ims;
 }
@@ -2390,7 +2890,7 @@ let welcomeUntil = 0;
 async function boot() {
   $('btnDecor').disabled = false;
   // manifest：互不相依，一次全部並行抓（以前是一個接一個，首次進島要等一長串往返）
-  const [tjson, furn, floors, animalsDB, npcDB, toolsDB, avatar] = await Promise.all([
+  const [tjson, furn, floors, animalsDB, npcDB, toolsDB, avatar, fishDB, skillsDB] = await Promise.all([
     Promise.all(TERRAIN_IDS.map(id => loadJSON(`assets/terrain/${id}/terrain.json`))),
     loadJSON('assets/furniture/furniture.json'),
     loadJSON('assets/floors/floors.json'),
@@ -2398,12 +2898,38 @@ async function boot() {
     loadJSON('assets/npcs/npcs.json'),
     loadJSON('assets/tools/tools.json'),        // 採集工具（鎬子/斧頭）：圖放進 weaponImgs，讓繪製與遠端玩家共用同一套武器繪製
     loadJSON('assets/avatar/avatar.json'),
+    loadJSON('assets/fish/fish.json'),          // 釣魚：各地形的魚與稀有度
+    loadJSON('assets/skills/skills.json').catch(() => ({ skills: {} })),   // 島主招式（倒數條／招式名／要不要講台詞）；讀不到就照舊
   ]);
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
-  Object.assign(S, { furn, floors, animalsDB, npcDB, toolsDB, avatar });
+  Object.assign(S, { furn, floors, animalsDB, npcDB, toolsDB, avatar, fishDB, skillsDB });
+  S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
   if (!JOBS[S.me.job]) S.me.job = 'dps';   // 舊存檔沒有職業欄（或值不合法）：當輸出
-  S.me.weapon = JOBS[S.me.job]?.weapon || 'hands';   // 武器由職業決定（坦＝盾、補＝杖、輸出＝木劍），不再由造型面板選
-  // 圖片：同樣全部並行（含目前所在地形的圖）
+  if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';   // 舊存檔沒武器欄：給第一款有圖的武器
+  // 圖片：同樣全部並行（含目前所在地形的圖）。只有角色身體是必要的（缺了畫不出人），其餘缺圖就略過該項
+  await Promise.all([
+    ...S.floors.items.map(async f => S.floorImgs[f.id] = await loadSpr(`assets/floors/${f.sprite}`, f.anim)),
+    ...S.animalsDB.animals.map(async a => S.anImgs[a.id] = await optImg(`assets/animals/${a.sprite}`)),
+    ...S.animalsDB.animals.filter(a => a.anim?.sheet).map(async a => {   // 多幀動畫：sheet 載入失敗就退回單張 sprite
+      const sh = await optImg(`assets/${a.anim.sheet}`);
+      if (sh) S.anAnims[a.id] = loadAnim(sh, a.anim);
+    }),
+    ...S.toolsDB.tools.map(async t => S.weaponImgs[t.id] = await optImg(`assets/tools/${t.sprite}`)),
+    optImg('assets/tombstone.png').then(im => S.tombImg = im),   // 死亡墓碑（島主龍衝打倒後原地出現）
+    ...S.furn.items.map(async it => S.furnImgs[it.id] = await loadSpr(`assets/furniture/${it.sprite}`, it.anim)),
+    // 人物分層 sheet：軀幹（膚色）是必要的（缺了畫不出人），頭髮／衣服／褲子／帽子缺圖就略過那一層
+    ...S.avatar.skins.map(async s => S.charImgs[s.sheet] = await loadImg(`assets/avatar/${s.sheet}`)),
+    ...[...S.avatar.hair, ...(S.avatar.tops || []), ...(S.avatar.bottoms || []), ...(S.avatar.hats || [])]
+      .map(async it => S.charImgs[it.sheet] = await optImg(`assets/avatar/${it.sheet}`)),
+    ...S.avatar.weapons.filter(w => w.sprite).map(async w => {
+      const im = await optImg(`assets/avatar/${w.sprite}`);
+      if (im && w.back === 'hilt') im.hiltUp = true;   // 背在背上時劍柄朝上（drawWeaponBack 看這個旗標）
+      if (im) im.carry = w.carry === 'waist' ? 'waist' : 'back';   // 不拿在手上時掛哪裡
+      S.weaponImgs[w.id] = im;
+    }),
+    ...Object.values(S.fishDB.terrains).flat().map(async f => S.fishImgs[f.id] = await optImg(`assets/fish/${f.sprite}`)),
+    ensureTerrain(S.terrain),
+  ]);
 
   genWorld(S.terrain);
   loadLayout();
@@ -2473,10 +2999,13 @@ async function boot() {
     onDecos: onNetDecos,
     onDeco: onNetDeco,
     onDragon: onNetDragon,   // 島主事件（aim/hp/dead/spawn/state 快照）
+    onFishResult,            // 釣魚結果（伺服器抽的魚；登入的人已記進伺服器的圖鑑）
+    onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); },   // 登入後伺服器送來的圖鑑
     onOpen: net => {
       if (performance.now() >= welcomeUntil) toast(`已連上島（${net.room}）`, 2000);
-      // 島主同步：連上（或重連）時人在草島就補傳陸地位圖（伺服器重啟後也靠這個補回來）
-      if (S.terrains[S.terrain].owner) net.sendDragonMap(landRLE());
+      // 連上（或重連）時補傳目前地形的陸地位圖（新連線重新算「傳過沒」）
+      S.landSent = null;
+      uploadLandMap();
     },
   })).catch(err => console.warn('net:', err));
 }

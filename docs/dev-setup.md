@@ -83,14 +83,14 @@ git push                          # GitHub Actions 自動部署到正式站（�
 
 ## 5. 給這台電腦的 AI agent
 
-開新對話時請它先讀：`AGENTS.md`（協作規範與地雷）→ `README.md` → `docs/spec.md`。
+`AGENTS.md`（協作規範，Claude Code 會透過 `CLAUDE.md` 自動載入）會告訴它改到某功能前要讀 `docs/notes.md` 的哪一段（各功能的細節與地雷）。
 `AGENTS.md` 會告訴它：同步協定有兩份實作要一起改、推版等於上線、機密不准進 repo 等。
 
 ## 常見地雷
 
 | 症狀 | 原因 / 解法 |
 |---|---|
-| `python` 跳出 Microsoft Store | 用 `python3`，或用安裝路徑（如 `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`） |
+| `python` 跳出 Microsoft Store | 用 `py -3`（Windows 的 Python 啟動器）或 `python3`，或用安裝路徑（如 `%LOCALAPPDATA%\Programs\Python\Python312\python.exe`） |
 | `wrangler` 跑不動 | Node 版本 < 22；裝 LTS 後開新終端機 |
 | 改了 JS 但畫面沒變 | 本機伺服器已送 `Cache-Control: no-store`；瀏覽器請用新分頁或硬重新整理 |
 | 推不上去 | 先 `git pull`（遠端有別人的提交），解完衝突再推 |

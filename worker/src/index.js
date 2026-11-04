@@ -23,6 +23,11 @@ const TERRAIN_RE = /^[a-z0-9_-]{1,24}$/;
 const CELL = 32;             // 與 client/js/main.js 一致
 const HIT_RANGE = 140;       // 打可破壞物件時，玩家離目標最遠幾 px（客戶端範圍 72，留給延遲）
 const HIT_CD_MS = 300;       // 同一條連線兩次打擊最短間隔
+const SIGN_CD_MS = 1000;     // 同一條連線兩次改看板的最短間隔（每次都寫 storage＋廣播整份擺設）
+// 保存擺設的令牌桶：每次 commit 都寫 storage＋廣播整份清單。客戶端一次保存最多分成約 19 批（草稿上限 1500 項／每批 80），
+// 所以容許一次連發 COMMIT_BURST 批，之後每 COMMIT_REFILL_MS 回一批。dev_server.py 有同款（改一邊要改另一邊）
+const COMMIT_BURST = 20;
+const COMMIT_REFILL_MS = 500;
 
 // ---- 島主（伺服器端同步）----
 // 野外動物維持刻意不同步；島主會打死人，流程必須全島一致，由伺服器權威模擬：
@@ -101,8 +106,9 @@ function isAdminId(env, id) {
   return !!id && String(env.ADMIN_IDS || "").split(",").map(s => s.trim()).filter(Boolean).includes(String(id));
 }
 
-// 對一份擺設清單套用單一操作（place / remove / clear），成功回 true。清空的權限在呼叫端檢查
-function applyFurnOp(items, defs, op) {
+// 對一份擺設清單套用單一操作（place / remove / clear），成功回 true。清空的權限在呼叫端檢查。
+// ground(x,y)＝那格能不能放東西（陸地，或水上鋪了地板）；規則與 client/js/main.js 的 canPlaceIn、dev_server.py 的 apply_furn_op 一致
+function applyFurnOp(items, defs, op, ground) {
   const cell = op.cell;
   const validCell = Array.isArray(cell) && cell.length === 2 && Number.isInteger(cell[0]) && Number.isInteger(cell[1]);
   if (op.t === "place") {
@@ -110,6 +116,7 @@ function applyFurnOp(items, defs, op) {
     if (!def || !validCell || items.length >= MAX_FURN) return false;
     const [x, y] = cell;
     if (x < 0 || y < 0 || x + def.w > COLS || y + def.h > ROWS) return false;
+    if (ground) for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) if (!ground(x + dx, y + dy)) return false;   // 水上要有地板
     for (const it of items) {
       const d = defs.get(it.type);
       if (!d) continue;
@@ -133,15 +140,52 @@ function applyFurnOp(items, defs, op) {
 }
 
 // 地板層：每格一種地板（鍵＝y*COLS+x，值＝地板 id）。op＝{t:"floor", cell:[x,y], type:"wood"|null}（null＝拆除）
-function applyFloorOp(floor, ids, op) {
+// 多格地板（floors.json 標 w/h，例如地毯 2×2）只在錨點格（左上）存一筆，其餘格子視為被它蓋住：
+// 多格地板彼此不重疊、單格地板不能鋪在多格地板上；鋪多格地板會取代範圍內的單格地板；拆除點到任一格就整塊拆。
+// 地板可以鋪在水上；水上那格有家具時不能拆（要先拿走家具），陸地上的地板不受限制。
+// 規則與 client/js/main.js 的 applyFloorOp、dev_server.py 的 edit_floor 一致（改一邊要改另一邊）
+const FLOOR_MAX = 4;   // 多格地板的最大邊長
+function floorAt(floor, sizes, x, y) {   // 蓋住 (x,y) 的地板錨點 key，沒有回 -1
+  for (let dy = 0; dy < FLOOR_MAX; dy++) for (let dx = 0; dx < FLOOR_MAX; dx++) {
+    const ax = x - dx, ay = y - dy;
+    if (ax < 0 || ay < 0) continue;
+    const id = floor.get(ay * COLS + ax);
+    if (id === undefined) continue;
+    const s = sizes.get(id) || { w: 1, h: 1 };
+    if (dx < s.w && dy < s.h) return ay * COLS + ax;
+  }
+  return -1;
+}
+function applyFloorOp(floor, sizes, op, items, defs, land) {   // land＝島形位圖（1＝陸地），沒有就不檢查水上家具
   const cell = op.cell;
   if (!Array.isArray(cell) || cell.length !== 2 || !Number.isInteger(cell[0]) || !Number.isInteger(cell[1])) return false;
   const [x, y] = cell;
   if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return false;
-  const k = y * COLS + x;
-  if (op.type === null) return floor.delete(k);
-  if (typeof op.type !== "string" || !ids.has(op.type) || floor.get(k) === op.type) return false;
-  floor.set(k, op.type);
+  if (op.type === null) {
+    const k = floorAt(floor, sizes, x, y);
+    if (k < 0) return false;
+    if (land && items) {   // 拆掉後水上那格會沒有地板：上面有家具就不能拆
+      const ax = k % COLS, ay = Math.floor(k / COLS), s = sizes.get(floor.get(k)) || { w: 1, h: 1 };
+      for (let dy = 0; dy < s.h; dy++) for (let dx = 0; dx < s.w; dx++) {
+        const cx = ax + dx, cy = ay + dy;
+        if (cx < COLS && cy < ROWS && !land[cy * COLS + cx] && cellHasFurn(items, defs, [cx, cy])) return false;
+      }
+    }
+    return floor.delete(k);
+  }
+  const s = typeof op.type === "string" && sizes.get(op.type);
+  if (!s || x + s.w > COLS || y + s.h > ROWS) return false;
+  const cov = [];
+  for (let dy = 0; dy < s.h; dy++) for (let dx = 0; dx < s.w; dx++) {
+    const k = floorAt(floor, sizes, x + dx, y + dy);
+    if (k < 0) continue;
+    const t = sizes.get(floor.get(k)) || { w: 1, h: 1 };
+    if (t.w * t.h > 1) return false;   // 壓到多格地板（地毯）：不重疊
+    cov.push(k);
+  }
+  if (s.w * s.h === 1 && cov.length === 1 && floor.get(cov[0]) === op.type) return false;   // 同一種，沒變
+  for (const k of cov) floor.delete(k);
+  floor.set(y * COLS + x, op.type);
   return true;
 }
 const floorToList = floor => [...floor].map(([k, id]) => [k % COLS, Math.floor(k / COLS), id]);
@@ -158,6 +202,7 @@ function cellHasFurn(items, defs, cell) {
 // 欄位要與 client/js/net.js 的 myState() 一致（改一邊要改另一邊）；dev_server.py 有同款 sanitize_state
 const ID_RE = /^[a-z0-9_-]{1,24}$/;
 const NAME_MAX = 24;
+const D8 = ["down", "down_right", "right", "up_right", "up", "up_left", "left", "down_left"];   // 與 client 的 CHAR_DIR8 一致
 const num = (v, lo, hi, fb) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fb);
 const idOr = (v, fb) => (typeof v === "string" && ID_RE.test(v) ? v : fb);
 function sanitizeState(s, prev) {
@@ -176,7 +221,11 @@ function sanitizeState(s, prev) {
       hair: idOr(look.hair, pl.hair || "hair1"),
       shirt: Math.round(num(look.shirt, 0, 99, pl.shirt ?? 0)),
       pants: Math.round(num(look.pants, 0, 99, pl.pants ?? 0)),
+      hat: idOr(look.hat, null),          // 帽子 id（null＝沒戴）
+      top: idOr(look.top, null),          // 上衣款式 id（null＝預設款）
+      bottom: idOr(look.bottom, null),    // 褲子款式 id（null＝預設款）
     },
+    d8: D8.includes(s.d8) ? s.d8 : null,  // 畫面用的 8 方向朝向（只轉發；玩法看 face）
     weapon: idOr(s.weapon, "hands"),
     pose: s.pose === "sit" || s.pose === "sleep" ? s.pose : null,
     face: s.face === "up" || s.face === "side" ? s.face : "down",
@@ -184,7 +233,26 @@ function sanitizeState(s, prev) {
     job: s.job === "tank" || s.job === "healer" ? s.job : "dps",   // 職業（坦/補/輸出）：白名單解讀，不合法的值當輸出（挑釁驗證靠這欄）
     hp: Math.round(num(s.hp, 0, 20, 10)),
     dead: s.dead ? 1 : 0,
+    // 釣魚：浮標位置與階段（只轉發給同地形的人畫圖；釣到什麼由伺服器的 fish 訊息決定）
+    fish: s.fish && typeof s.fish === "object" && FISH_PHASES.includes(s.fish.ph)
+      ? { x: num(s.fish.x, 0, COLS * CELL, 0), y: num(s.fish.y, 0, ROWS * CELL, 0), ph: s.fish.ph } : null,
   };
+}
+
+// ---- 釣魚（魚類圖鑑）----
+// 釣到什麼由伺服器抽（client/assets/fish/fish.json）；登入（hello 驗證過）的人記進全域 Registry（依 Discord 帳號），訪客只回結果。
+// 演算法與 client/js/main.js 的 rollFish、dev_server.py 的 roll_fish 一致（改一邊要改另一邊）
+const FISH_PHASES = ["wait", "bite", "reel"];
+const FISH_CD_MS = 2500;     // 同一條連線兩次釣魚結果的最短間隔（拋竿到上鉤最快 3 秒）
+function rollFish(db, terrain) {
+  const list = (db.terrains || {})[terrain] || [];
+  if (!list.length || Math.random() < (db.escape || 0)) return { terrain, escaped: true };
+  const rars = Object.entries(db.rarity || {}).filter(([k]) => list.some(f => f.rarity === k));
+  let r = Math.random() * rars.reduce((s, [, v]) => s + v.weight, 0), rar = rars[rars.length - 1][0];
+  for (const [k, v] of rars) { if ((r -= v.weight) < 0) { rar = k; break; } }
+  const cands = list.filter(f => f.rarity === rar), f = cands[Math.floor(Math.random() * cands.length)];
+  const size = Math.round((f.size[0] + (f.size[1] - f.size[0]) * Math.random() ** 1.6) * 10) / 10;
+  return { terrain, id: f.id, size, rarity: rar };
 }
 const SESSION_TTL_MS = 12 * 3600 * 1000;   // 簽章憑證有效期
 
@@ -292,13 +360,18 @@ export class Island {
     this.env = env;
     this.rate = new Map();       // ws -> {sec, n}；休眠醒來會重置，無妨
     this.furnDefs = null;        // id -> {w,h}，由 furniture.json 載入
-    this.floorIds = null;        // 地板 id 集合，由 floors.json 載入
+    this.floorDefs = null;       // 地板 id -> {w,h}，由 floors.json 載入
     this.targets = null;         // 可破壞物件定義（tools.json 的 targets）
     this.lastHit = new Map();    // ws -> 上次打擊的時間
+    this.lastSign = new Map();   // ws -> 上次改看板的時間
+    this.commitBucket = new Map();   // ws -> {n（剩幾批）, t（上次結算時間）}：保存擺設的令牌桶
     this.dragons = new Map();        // 地形 → 島主狀態（每座有島主的地形各一隻，懒載入 storage）
     this.dragonLoaded = new Set();   // 已嘗試從 storage 載過的地形
     this.dragonMaps = new Map();     // 地形 → 陸地位圖（懒載入）——只放記憶體的話 DO 休眠後就沒了，打島主不會反擊
     this.dragonMapLoaded = new Set();
+    this.dragonMapRaw = new Map();   // 地形 → storage 裡目前存的島形字串（比對用：內容沒變就不重寫）
+    this.fishDB = null;              // 釣魚：fish.json（懶載入）
+    this.lastFish = new Map();       // ws → 上次釣魚結果的時間（冷卻）
     this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
     this.provokes = new Map();       // ws → {terrain, t}：上次挑釁哪座島的島主（冷卻只在成功出手時計）
     this.dragonSavedAt = new Map();  // 地形 → 上次真的寫 storage 的時間（saveDragonLazy 節流用）
@@ -358,21 +431,80 @@ export class Island {
     return this.furnDefs;
   }
 
-  // 地板種類取自前端 floors.json
-  async getFloorIds() {
-    if (this.floorIds) return this.floorIds;
+  // 島主招式設定取自前端 skills.json（key＝攻擊樣式 dash/gaze）。目前伺服器只用 say：false＝被打不講台詞、直接開始預警。
+  // 載入失敗就當作全部都要講台詞（與以前行為相同），下次再試
+  async getSkillDefs() {
+    if (this.skillDefs) return this.skillDefs;
+    try {
+      const res = await this.env.ASSETS.fetch(new Request("https://assets.local/assets/skills/skills.json"));
+      this.skillDefs = (await res.json()).skills || {};
+    } catch (e) {
+      console.log("[skill] manifest 載入失敗", String(e));
+      return {};
+    }
+    return this.skillDefs;
+  }
+  async ownerSays(terrain) {   // 這座島的島主放招前要不要先講台詞
+    const sk = (await this.getSkillDefs())[OWNER_TERRAINS[terrain]];
+    return !sk || sk.say !== false;
+  }
+
+  // 地板種類與大小取自前端 floors.json：id -> {w,h}（沒標的是 1×1）
+  async getFloorDefs() {
+    if (this.floorDefs) return this.floorDefs;
     try {
       const res = await this.env.ASSETS.fetch(new Request("https://assets.local/assets/floors/floors.json"));
-      this.floorIds = new Set((await res.json()).items.map(it => it.id));
+      this.floorDefs = new Map((await res.json()).items.map(it => [it.id, { w: it.w || 1, h: it.h || 1 }]));
     } catch (e) {
       console.log("[floor] manifest 載入失敗", String(e));
-      return new Set();
+      return new Map();
     }
-    return this.floorIds;
+    return this.floorDefs;
   }
 
   async getFloor(terrain) {   // 儲存格式 [[x,y,id],…]；記憶體裡用 Map 方便逐格改
     return new Map(((await this.state.storage.get("floor:" + terrain)) || []).map(([x, y, id]) => [y * COLS + x, id]));
+  }
+
+  // 釣魚：各地形的魚與稀有度取自前端 fish.json
+  async getFishDB() {
+    if (this.fishDB) return this.fishDB;
+    try {
+      const res = await this.env.ASSETS.fetch(new Request("https://assets.local/assets/fish/fish.json"));
+      this.fishDB = await res.json();
+    } catch (e) {
+      console.log("[fish] manifest 載入失敗", String(e));
+      return { terrains: {} };
+    }
+    return this.fishDB;
+  }
+
+  // 呼叫全域 Registry（跨島的玩家資料）；沒有綁定或失敗回 null（釣魚照樣能玩，只是圖鑑存不進伺服器）
+  async registryCall(path, body) {
+    if (!this.env.REGISTRY) return null;
+    try {
+      const stub = this.env.REGISTRY.get(this.env.REGISTRY.idFromName("global"));
+      const res = await stub.fetch("https://registry" + path, { method: "POST", body: JSON.stringify(body) });
+      return res.ok ? await res.json() : null;
+    } catch (e) {
+      console.log("[registry]", path, String(e));
+      return null;
+    }
+  }
+
+  // 釣魚：魚上鉤後拉竿成功 → 伺服器抽一條魚回給這條連線；登入的人同時記進 Registry 的圖鑑（帶回最新紀錄）
+  async fishCatch(ws, att) {
+    const now = Date.now();
+    if (now - (this.lastFish.get(ws) || 0) < FISH_CD_MS) return;
+    this.lastFish.set(ws, now);
+    const res = rollFish(await this.getFishDB(), att.terrain);
+    const out = { t: "fish_result", ...res, saved: false };
+    const user = (ws.deserializeAttachment() || {}).user;   // 重讀：hello 可能剛驗證完
+    if (!res.escaped && user) {
+      const r = await this.registryCall("/catch", { uid: user.id, terrain: res.terrain, id: res.id, size: res.size });
+      if (r && r.entry) Object.assign(out, { saved: true, entry: r.entry, isNew: r.isNew, isRecord: r.isRecord });
+    }
+    try { ws.send(JSON.stringify(out)); } catch { /* 對方已斷線 */ }
   }
 
   async getFurn(terrain) {
@@ -469,7 +601,11 @@ export class Island {
       cur.admin = !!user && isAdminId(this.env, user.id);
       if (user && cur.state) cur.state = { ...cur.state, name: String(user.name).slice(0, NAME_MAX), uid: user.id };
       ws.serializeAttachment(cur);
-      ws.send(JSON.stringify({ t: "me", admin: cur.admin }));
+      ws.send(JSON.stringify({ t: "me", admin: cur.admin, auth: !!user }));   // auth＝憑證驗證成功；失敗（例如 12 小時過期）客戶端會重新授權
+      if (user) {   // 登入的人：送他存在伺服器的魚類圖鑑
+        const r = await this.registryCall("/dex", { uid: user.id });
+        if (r) try { ws.send(JSON.stringify({ t: "dex", dex: r.dex || {} })); } catch { /* 對方已斷線 */ }
+      }
     } else if (msg.t === "state") {
       const s = sanitizeState(msg.s && typeof msg.s === "object" ? msg.s : {}, att.state);
       // 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）；訪客沒有 uid
@@ -482,19 +618,26 @@ export class Island {
       await this.enter(ws, att, String(msg.v));
     } else if (msg.t === "hit") {
       await this.hitDeco(ws, att, msg);
-    } else if (msg.t === "dragonMap") {   // 島主：陸地位圖（各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）。上傳者所在地形決定是哪座島的
-      if (att.terrain && OWNER_TERRAINS[att.terrain]) {
+    } else if (msg.t === "dragonMap") {   // 陸地位圖（島主路徑＋擺設的水邊驗證；各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）。上傳者所在地形決定是哪座島的
+      const t = att.terrain;
+      if (t) {
         const land = dragonLand(msg.v);
         if (land) {
-          this.dragonMaps.set(att.terrain, land);
-          this.dragonMapLoaded.add(att.terrain);
-          await this.state.storage.put("dragonMap:" + att.terrain, msg.v);   // 一定要存：DO 休眠會清空記憶體，沒存的話之後打島主不會反擊
+          this.dragonMaps.set(t, land);
+          this.dragonMapLoaded.add(t);
+          // 一定要存：DO 休眠會清空記憶體，沒存的話之後打島主不會反擊、擺設也驗不到水邊。
+          // 但各客戶端島形相同，絕大多數上傳都是重複的：和已存的內容一樣就不寫（休眠醒來第一次比對要讀一次 storage）
+          if (!this.dragonMapRaw.has(t)) this.dragonMapRaw.set(t, await this.state.storage.get("dragonMap:" + t));
+          if (this.dragonMapRaw.get(t) !== msg.v) {
+            await this.state.storage.put("dragonMap:" + t, msg.v);
+            this.dragonMapRaw.set(t, msg.v);
+          }
         }
       }
     } else if (msg.t === "dragonSnap") {   // 客戶端凍結恢復：回一份島主即時快照（只給這條連線，走 dragon 事件的 state）
       if (att.terrain && OWNER_TERRAINS[att.terrain]) {
         await this.getDragon(att.terrain);
-        ws.send(JSON.stringify({ t: "dragon", ev: "state", ...this.dragonSnapshot(att.terrain) }));
+        ws.send(JSON.stringify({ t: "dragon", ev: "state", terrain: att.terrain, ...this.dragonSnapshot(att.terrain) }));
       }
     } else if (msg.t === "dragonHit") {
       await this.dragonHit(ws, att, msg);
@@ -507,6 +650,8 @@ export class Island {
       if (att.terrain) await this.editSign(ws, att, msg);
     } else if (msg.t === "event") {
       if (att.terrain) this.broadcast({ t: "event", id: att.id, kind: msg.kind }, ws, att.terrain);
+    } else if (msg.t === "fish") {   // 釣魚：拉竿成功，伺服器抽魚
+      if (att.terrain) await this.fishCatch(ws, att);
     }
   }
 
@@ -632,11 +777,12 @@ export class Island {
       d.regenT = d.hp >= D_HP ? now : d.regenT + n * 1000;
     }
   }
-  // 島形位圖：玩家上傳後存 storage（懒載入）。各客戶端的島相同，誰上傳都一樣
+  // 島形位圖：玩家上傳後存 storage（懒載入）。各客戶端的島相同，誰上傳都一樣。所有地形都有（島主＋擺設的水邊驗證）
   async getDragonMap(terrain) {
     if (!this.dragonMapLoaded.has(terrain)) {
       this.dragonMapLoaded.add(terrain);
       let v = await this.state.storage.get("dragonMap:" + terrain);
+      if (!this.dragonMapRaw.has(terrain)) this.dragonMapRaw.set(terrain, v);   // 順便記下 storage 現值（上傳時比對用）
       if (v === undefined && terrain === "grass") v = await this.state.storage.get("dragonMap");   // 舊版 key
       this.dragonMaps.set(terrain, typeof v === "string" ? dragonLand(v) : null);
     }
@@ -679,6 +825,7 @@ export class Island {
     const [ph, pos, ms] = this.dragonPhase(terrain, now);
     const d = this.dragons.get(terrain);
     const o = { ph, x: pos[0], y: pos[1], hp: d.hp };
+    if (d.aggro) o.aggro = d.aggro.id;   // 仇恨中：附上追殺目標（中途進場的人才知道牠在戰鬥）
     if (ph === "aim") { o.castMs = Math.round(ms); o.tx = d.atk[0]; o.ty = d.atk[1]; o.dx = d.dest[0]; o.dy = d.dest[1]; }
     if (ph === "cast") { o.castMs = Math.round(ms); o.tx = d.atk[0]; o.ty = d.atk[1]; o.bx = d.beam[0]; o.by = d.beam[1]; }   // 石化之瞳：開眼中（直線已鎖定）
     if (ph === "dash") { o.ux = d.unit[0]; o.uy = d.unit[1]; o.dx = d.dest[0]; o.dy = d.dest[1]; }
@@ -724,17 +871,19 @@ export class Island {
       return;
     }
     // 反擊：閒置且冷卻過了才觸發。一被打就先建立仇恨（30 秒從最後一次被打起算）；
-    // 反擊照樣先放：說台詞 →（龍衝＝瞬移島緣／石化之瞳＝原地開眼），放完不用再被打就馬上接著追殺同一個攻擊者
+    // 反擊照樣先放：說台詞（skills.json 的 say:false 就跳過）→（龍衝＝瞬移島緣／石化之瞳＝原地開眼），放完不用再被打就馬上接著追殺同一個攻擊者
     const map = await this.getDragonMap(terrain);
     if (ph === "idle" && map && now >= (d.cooldownUntil || 0)) {
+      const says = await this.ownerSays(terrain);
       d.aggro = { id: att.id, rotateAt: now + D_AGGRO_MS, clawAt: now + D_CLAW_MS };
-      d.sayUntil = now + D_SAY_MS;
+      d.sayUntil = says ? now + D_SAY_MS : 0;
       d.atk = [Number(msg.x), Number(msg.y)];   // 記住攻擊者位置：龍衝要穿過這裡／石化之瞳要朝這裡射
       d.wander = null;
       d.pos = [pos[0], pos[1]];   // 打斷散步腿：把位置同步到目前插值點（否則之後的追腿會從舊腿起點出發，client 看起來像瞬移）
       await this.saveDragon(terrain);
       this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name: (att.state && att.state.name) || "玩家" }, null, terrain);
-      this.broadcast({ t: "dragon", ev: "say", x: pos[0], y: pos[1], ms: D_SAY_MS }, null, terrain);
+      if (says) this.broadcast({ t: "dragon", ev: "say", x: pos[0], y: pos[1], ms: D_SAY_MS }, null, terrain);
+      else await this.startCycle(now, terrain);   // 不講台詞：直接開始預警（會自己存檔並廣播 aim/gaze）
       await this.armOwnerAlarm();
       return;
     }
@@ -1100,19 +1249,31 @@ export class Island {
   // 每個操作各自驗證（不合法的跳過，不影響其他），「清空」只有管理員能做。改完把整份清單廣播給同地形的人
   async commitFurn(ws, att, ops) {
     if (!Array.isArray(ops) || !att.terrain) return;
+    const now = Date.now();
+    let b = this.commitBucket.get(ws) || { n: COMMIT_BURST, t: now };
+    b = { n: Math.min(COMMIT_BURST, b.n + (now - b.t) / COMMIT_REFILL_MS), t: now };
+    if (b.n < 1) {   // 保存太頻繁：整批不處理，回報給客戶端（畫面會退回伺服器版本）
+      this.commitBucket.set(ws, b);
+      try { ws.send(JSON.stringify({ t: "commit_result", applied: 0, rejected: Math.min(ops.length, MAX_OPS), denied: false, limited: true })); } catch { /* 對方已斷線 */ }
+      return;
+    }
+    b.n -= 1;
+    this.commitBucket.set(ws, b);
     const terrain = att.terrain, defs = await this.getFurnDefs();
     const items = await this.getFurn(terrain);
-    let floor = null, floorIds = null, furnApplied = 0, floorApplied = 0;
+    // 水邊：家具在水上的格子要有地板；水上有家具的地板不能拆。還沒收到島形時不檢查（退回只靠客戶端擋）
+    const floor = await this.getFloor(terrain), floorDefs = await this.getFloorDefs(), land = await this.getDragonMap(terrain);
+    const ground = land ? (x, y) => !!land[y * COLS + x] || floorAt(floor, floorDefs, x, y) >= 0 : null;
+    let furnApplied = 0, floorApplied = 0;
     let applied = 0, rejected = 0, denied = false;
     for (const op of ops.slice(0, MAX_OPS)) {
       if (!op || typeof op !== "object") { rejected++; continue; }
-      if (op.t === "floor") {      // 地板層：與家具各自獨立，不看家具、不看身分
-        if (!floor) { floor = await this.getFloor(terrain); floorIds = await this.getFloorIds(); }
-        if (applyFloorOp(floor, floorIds, op)) { applied++; floorApplied++; } else rejected++;
+      if (op.t === "floor") {      // 地板層：不看身分；水上有家具的地板不能拆
+        if (applyFloorOp(floor, floorDefs, op, items, defs, land)) { applied++; floorApplied++; } else rejected++;
         continue;
       }
       if (op.t === "clear" && !att.admin) { denied = true; continue; }
-      if (applyFurnOp(items, defs, op)) { applied++; furnApplied++; } else rejected++;
+      if (applyFurnOp(items, defs, op, ground)) { applied++; furnApplied++; } else rejected++;
     }
     if (furnApplied) {
       await this.state.storage.put("furn:" + terrain, items);
@@ -1129,6 +1290,9 @@ export class Island {
   async editSign(ws, att, msg) {
     const cell = msg.cell;
     if (!Array.isArray(cell) || cell.length !== 2 || !Number.isInteger(cell[0]) || !Number.isInteger(cell[1])) return;
+    const now = Date.now();
+    if (now - (this.lastSign.get(ws) || 0) < SIGN_CD_MS) return;
+    this.lastSign.set(ws, now);
     const defs = await this.getFurnDefs(), items = await this.getFurn(att.terrain);
     const it = items.find(o => {
       const d = defs.get(o.type);
@@ -1147,8 +1311,44 @@ export class Island {
   leave(ws) {
     this.rate.delete(ws);
     this.lastHit.delete(ws);
+    this.lastSign.delete(ws);
+    this.commitBucket.delete(ws);
     this.dragonHits.delete(ws);
+    this.lastFish.delete(ws);
     const att = ws.deserializeAttachment() || {};
     if (att.terrain) this.broadcast({ t: "leave", id: att.id }, ws, att.terrain);
+  }
+}
+
+// ============ 全域 Registry（跨島的玩家資料；目前只有魚類圖鑑）============
+// 全站只有一個實例（idFromName("global")），只由 Island 透過 REGISTRY 綁定呼叫，沒有對外的路由。
+// 資料：dex:<Discord 使用者 ID> → { 地形: { 魚id: { max（最大尺寸 cm）, n（釣到次數）, first（第一次釣到的時間） } } }
+// 讀寫在同一個請求裡只 await storage，DO 的 input gate 會擋住其他請求插隊，所以同一人同時送兩筆也不會互相覆蓋
+const UID_RE = /^[0-9A-Za-z_-]{1,40}$/;
+export class Registry {
+  constructor(state) {
+    this.state = state;
+  }
+
+  async fetch(request) {
+    const url = new URL(request.url);
+    let body = {};
+    try { body = await request.json(); } catch { /* 空 body */ }
+    const uid = String(body.uid || "");
+    if (!UID_RE.test(uid)) return json({ error: "uid" }, 400);
+    const key = "dex:" + uid;
+    if (url.pathname === "/dex") return json({ dex: (await this.state.storage.get(key)) || {} });
+    if (url.pathname === "/catch") {
+      const terrain = String(body.terrain), id = String(body.id), size = Number(body.size);
+      if (!TERRAIN_RE.test(terrain) || !ID_RE.test(id) || !(size > 0 && size < 100000)) return json({ error: "bad" }, 400);
+      const dex = (await this.state.storage.get(key)) || {};
+      const t = dex[terrain] || (dex[terrain] = {});
+      const e = t[id];
+      const isNew = !e, isRecord = !e || size > e.max;
+      t[id] = { max: e ? Math.max(e.max, size) : size, n: (e ? e.n : 0) + 1, first: e ? e.first : Date.now() };
+      await this.state.storage.put(key, dex);
+      return json({ entry: t[id], isNew, isRecord });
+    }
+    return json({ error: "not found" }, 404);
   }
 }

@@ -116,6 +116,7 @@ CELL = 32                # 與 client/js/main.js 一致
 # ---- 玩家 state 封包白名單（與 worker/src/index.js 的 sanitizeState 一致，改一邊要改另一邊）----
 ID_RE = re.compile(r"^[a-z0-9_-]{1,24}$")
 NAME_MAX = 24
+D8 = ("down", "down_right", "right", "up_right", "up", "up_left", "left", "down_left")   # 與 client 的 CHAR_DIR8 一致
 
 
 def _num(v, lo, hi, fb):
@@ -133,6 +134,7 @@ def sanitize_state(s, prev):
     look = s.get("look") if isinstance(s.get("look"), dict) else {}
     pl = prev.get("look") or {}
     name = s.get("name")
+    fs = s.get("fish")
     name = "".join(ch for ch in name if ord(ch) >= 32 and ord(ch) != 127)[:NAME_MAX] if isinstance(name, str) else (prev.get("name") or "")
     return {
         "x": _num(s.get("x"), 0, COLS * CELL, prev.get("x", (COLS / 2 - .5) * CELL)),
@@ -146,7 +148,11 @@ def sanitize_state(s, prev):
             "hair": _id_or(look.get("hair"), pl.get("hair", "hair1")),
             "shirt": round(_num(look.get("shirt"), 0, 99, pl.get("shirt", 0))),
             "pants": round(_num(look.get("pants"), 0, 99, pl.get("pants", 0))),
+            "hat": _id_or(look.get("hat"), None),        # 帽子 id（None＝沒戴）
+            "top": _id_or(look.get("top"), None),        # 上衣款式 id（None＝預設款）
+            "bottom": _id_or(look.get("bottom"), None),  # 褲子款式 id（None＝預設款）
         },
+        "d8": s.get("d8") if s.get("d8") in D8 else None,   # 畫面用的 8 方向朝向（只轉發；玩法看 face）
         "weapon": _id_or(s.get("weapon"), "hands"),
         "pose": s.get("pose") if s.get("pose") in ("sit", "sleep") else None,
         "face": s.get("face") if s.get("face") in ("up", "side") else "down",
@@ -154,11 +160,61 @@ def sanitize_state(s, prev):
         "job": s.get("job") if s.get("job") in ("tank", "healer") else "dps",   # 職業（坦/補/輸出）：白名單解讀，不合法的值當輸出（挑釁驗證靠這欄）
         "hp": round(_num(s.get("hp"), 0, 20, 10)),
         "dead": 1 if s.get("dead") else 0,
+        # 釣魚：浮標位置與階段（只轉發；釣到什麼由 fish 訊息決定）
+        "fish": {"x": _num(fs.get("x"), 0, COLS * CELL, 0), "y": _num(fs.get("y"), 0, ROWS * CELL, 0), "ph": fs["ph"]}
+                if isinstance(fs, dict) and fs.get("ph") in FISH_PHASES else None,
     }
+
+
+# ---- 釣魚（魚類圖鑑）：與 worker/src/index.js 一致（改一邊要改另一邊）----
+# 釣到什麼由伺服器抽；登入的人記進圖鑑（本機版存在記憶體，重開就清空；正式站存在 Worker 的全域 Registry）
+FISH_PHASES = ("wait", "bite", "reel")
+FISH_CD = 2.5            # 同一條連線兩次釣魚結果的最短間隔（秒）
+_FISH_DB = None
+def fish_db():
+    """fish.json（各地形的魚與稀有度）。"""
+    global _FISH_DB
+    if _FISH_DB is None:
+        with open(os.path.join(CLIENT, "assets", "fish", "fish.json"), encoding="utf-8") as f:
+            _FISH_DB = json.load(f)
+    return _FISH_DB
+
+def roll_fish(terrain):
+    """先脫鉤判定，再依權重抽稀有度，從該地形同稀有度的魚裡平均抽一種；尺寸越大越難（範圍內取 r^1.6）。"""
+    db = fish_db()
+    lst = db.get("terrains", {}).get(terrain) or []
+    if not lst or random.random() < db.get("escape", 0):
+        return {"terrain": terrain, "escaped": True}
+    rars = [(k, v) for k, v in db["rarity"].items() if any(f["rarity"] == k for f in lst)]
+    r, rar = random.random() * sum(v["weight"] for _, v in rars), rars[-1][0]
+    for k, v in rars:
+        r -= v["weight"]
+        if r < 0:
+            rar = k
+            break
+    f = random.choice([f for f in lst if f["rarity"] == rar])
+    size = round((f["size"][0] + (f["size"][1] - f["size"][0]) * random.random() ** 1.6) * 10) / 10
+    return {"terrain": terrain, "id": f["id"], "size": size, "rarity": rar}
+
+FISH_DEX = {}            # Discord 使用者 ID -> {地形: {魚id: {max, n, first}}}（對應 Worker 的 Registry）
+FISH_DEX_LOCK = threading.Lock()
+
+def dex_catch(uid, terrain, fid, size):
+    """記一筆釣到的魚，回 (entry, is_new, is_record)。"""
+    with FISH_DEX_LOCK:
+        t = FISH_DEX.setdefault(uid, {}).setdefault(terrain, {})
+        e = t.get(fid)
+        is_new, is_record = e is None, e is None or size > e["max"]
+        t[fid] = {"max": max(e["max"], size) if e else size, "n": (e["n"] if e else 0) + 1,
+                  "first": e["first"] if e else int(time.time() * 1000)}
+        return dict(t[fid]), is_new, is_record
 
 
 HIT_RANGE = 140          # 打可破壞物件時，玩家離目標最遠幾 px（客戶端範圍 72，留給延遲）
 HIT_CD = 0.3             # 同一條連線兩次打擊最短間隔（秒）
+SIGN_CD = 1.0            # 同一條連線兩次改看板的最短間隔（秒；與 Worker 的 SIGN_CD_MS 一致）
+COMMIT_BURST = 20        # 保存擺設的令牌桶：一次可連發幾批（客戶端一次保存最多約 19 批；與 Worker 一致）
+COMMIT_REFILL = 0.5      # 每幾秒回一批（與 Worker 的 COMMIT_REFILL_MS 一致）
 
 # ---- 島主（伺服器端同步；與 worker/src/index.js 的常數與演算法保持一致，改一邊要改另一邊）----
 # 被打 → 說台詞 → 反擊（樣式照 OWNER_TERRAINS：dash＝瞬移島緣＋龍衝；gaze＝原地開眼＋石化直線）→ 仇恨追殺 → 冷靜回閒晃。
@@ -294,14 +350,43 @@ def furn_defs():
             _FURN_DEFS = {it["id"]: (it["w"], it["h"]) for it in json.load(f)["items"]}
     return _FURN_DEFS
 
-_FLOOR_IDS = None
-def floor_ids():
-    """地板 id 集合，取自前端 floors.json，用來驗證地板操作。"""
-    global _FLOOR_IDS
-    if _FLOOR_IDS is None:
+_SKILL_DEFS = None
+def owner_says(terrain):
+    """這座島的島主放招前要不要先講台詞：取自前端 skills.json（key＝攻擊樣式），say:false 就被打直接開始預警。
+    與 Worker 的 ownerSays 一致；檔案讀不到就當作要講（與以前行為相同）。"""
+    global _SKILL_DEFS
+    if _SKILL_DEFS is None:
+        try:
+            with open(os.path.join(CLIENT, "assets", "skills", "skills.json"), encoding="utf-8") as f:
+                _SKILL_DEFS = json.load(f).get("skills", {})
+        except (OSError, ValueError):
+            return True
+    sk = _SKILL_DEFS.get(OWNER_TERRAINS.get(terrain))
+    return not sk or sk.get("say") is not False
+
+_FLOOR_DEFS = None
+def floor_defs():
+    """地板 id -> (w, h)，取自前端 floors.json（沒標的是 1×1），用來驗證地板操作。"""
+    global _FLOOR_DEFS
+    if _FLOOR_DEFS is None:
         with open(os.path.join(CLIENT, "assets", "floors", "floors.json"), encoding="utf-8") as f:
-            _FLOOR_IDS = {it["id"] for it in json.load(f)["items"]}
-    return _FLOOR_IDS
+            _FLOOR_DEFS = {it["id"]: (it.get("w", 1), it.get("h", 1)) for it in json.load(f)["items"]}
+    return _FLOOR_DEFS
+
+FLOOR_MAX = 4   # 多格地板的最大邊長（與 Worker 一致）
+
+def floor_at(floor, x, y):
+    """蓋住 (x,y) 的地板錨點 (ax, ay)，沒有回 None。多格地板（例如地毯 2×2）只在錨點格（左上）存一筆。"""
+    defs = floor_defs()
+    for dy in range(FLOOR_MAX):
+        for dx in range(FLOOR_MAX):
+            a = (x - dx, y - dy)
+            if a[0] < 0 or a[1] < 0 or a not in floor:
+                continue
+            w, h = defs.get(floor[a], (1, 1))
+            if dx < w and dy < h:
+                return a
+    return None
 
 def floor_to_list(floor):
     """地板 {(x,y): id} → [[x,y,id],…]（與 Worker 的儲存/廣播格式相同）。"""
@@ -329,18 +414,49 @@ class Room:
         return self.floor.setdefault(terrain, {})
 
     def edit_floor(self, op, terrain):
-        """地板操作 {"t":"floor","cell":[x,y],"type":id|None}（None＝拆除）。回傳 True 表示有變動。呼叫時需持有 self.lock。"""
+        """地板操作 {"t":"floor","cell":[x,y],"type":id|None}（None＝拆除）。回傳 True 表示有變動。呼叫時需持有 self.lock。
+        多格地板彼此不重疊、單格地板不能鋪在多格地板上；鋪多格地板會取代範圍內的單格地板；拆除點到任一格就整塊拆。
+        地板可以鋪在水上；水上那格有家具時不能拆（要先拿走家具），陸地上的地板不受限制（還沒收到島形時不檢查）。
+        規則與 worker/src/index.js、client/js/main.js 的 applyFloorOp 一致（改一邊要改另一邊）。"""
         cell = op.get("cell")
         if not (isinstance(cell, list) and len(cell) == 2 and all(isinstance(v, int) and not isinstance(v, bool) for v in cell)):
             return False
         x, y = cell
         if x < 0 or y < 0 or x >= COLS or y >= ROWS:
             return False
-        floor, typ = self.floor_map(terrain), op.get("type")
+        floor, typ, defs = self.floor_map(terrain), op.get("type"), floor_defs()
         if typ is None:
-            return floor.pop((x, y), None) is not None
-        if not isinstance(typ, str) or typ not in floor_ids() or floor.get((x, y)) == typ:
+            a = floor_at(floor, x, y)
+            if a is None:
+                return False
+            land, items = self.dragon_maps.get(terrain), self.furn_list(terrain)
+            if land:   # 拆掉後水上那格會沒有地板：上面有家具就不能拆
+                w, h = defs.get(floor[a], (1, 1))
+                for dy in range(h):
+                    for dx in range(w):
+                        cx, cy = a[0] + dx, a[1] + dy
+                        if cx < COLS and cy < ROWS and not land[cy * COLS + cx] and cell_has_furn(items, [cx, cy]):
+                            return False
+            return floor.pop(a, None) is not None
+        if not isinstance(typ, str) or typ not in defs:
             return False
+        w, h = defs[typ]
+        if x + w > COLS or y + h > ROWS:
+            return False
+        cov = []
+        for dy in range(h):
+            for dx in range(w):
+                a = floor_at(floor, x + dx, y + dy)
+                if a is None:
+                    continue
+                tw, th = defs.get(floor[a], (1, 1))
+                if tw * th > 1:
+                    return False   # 壓到多格地板（地毯）：不重疊
+                cov.append(a)
+        if w * h == 1 and len(cov) == 1 and floor[cov[0]] == typ:
+            return False   # 同一種，沒變
+        for a in cov:
+            floor.pop(a, None)
         floor[(x, y)] = typ
         return True
 
@@ -408,6 +524,13 @@ class Room:
             x, y = cell
             if x < 0 or y < 0 or x + d[0] > COLS or y + d[1] > ROWS:
                 return False
+            land = self.dragon_maps.get(terrain)
+            if land:   # 水上的格子要有地板（與 Worker 的 applyFurnOp、main.js 的 canPlaceIn 一致；還沒收到島形時不檢查）
+                floor = self.floor_map(terrain)
+                for dy in range(d[1]):
+                    for dx in range(d[0]):
+                        if not land[(y + dy) * COLS + x + dx] and floor_at(floor, x + dx, y + dy) is None:
+                            return False
             for it in items:
                 w, h = defs.get(it["type"], (1, 1))
                 if x < it["cell"][0] + w and it["cell"][0] < x + d[0] and y < it["cell"][1] + h and it["cell"][1] < y + d[1]:
@@ -454,7 +577,7 @@ class Room:
             for op in ops[:MAX_OPS]:
                 if not isinstance(op, dict):
                     rejected += 1
-                elif op.get("t") == "floor":   # 地板層：與家具各自獨立，不看身分
+                elif op.get("t") == "floor":   # 地板層：不看身分；水上有家具的地板不能拆
                     if self.edit_floor(op, terrain):
                         applied += 1; floor_changed = True
                     else:
@@ -594,6 +717,8 @@ class Room:
         ph, pos, ms = self.dragon_phase(now_ms, terrain)
         d = self.dragon_state(terrain)
         o = {"ph": ph, "x": pos[0], "y": pos[1], "hp": d["hp"]}
+        if d["aggro"]:   # 仇恨中：附上追殺目標（中途進場的人才知道牠在戰鬥）
+            o["aggro"] = d["aggro"]["id"]
         if ph == "aim":
             o.update(castMs=int(ms), tx=d["atk"][0], ty=d["atk"][1], dx=d["dest"][0], dy=d["dest"][1])
         elif ph == "cast":   # 石化之瞳：開眼中（直線已鎖定）
@@ -851,16 +976,26 @@ class Room:
             elif ph == "idle" and self.dragon_maps.get(terrain) and now >= d["cooldown_until"]:
                 # 一被打就先建立仇恨（30 秒從最後一次被打起算）；反擊照樣先放：說台詞 →（龍衝＝瞬移島緣／蛇女＝原地開眼），
                 # 放完不用再被打就馬上接著追殺同一個攻擊者（循環由 tick 在說完/放完時接手啟動）
+                says = owner_says(terrain)   # skills.json 的 say:false＝不講台詞，直接開始預警
                 d["aggro"] = {"id": cid, "rotate_at": now + D_AGGRO_MS, "claw_at": now + D_CLAW_MS}
-                d["say_until"] = now + D_SAY_MS
+                d["say_until"] = now + D_SAY_MS if says else 0.0
                 d["atk"] = [ax, ay]   # 記住攻擊者位置：龍衝要穿過這裡／石化之瞳要朝這裡射
                 d["wander"] = None
                 d["pos"] = [pos[0], pos[1]]   # 打斷散步腿：把位置同步到目前插值點（否則之後的追腿會從舊腿起點出發，client 看起來像瞬移）
                 d["wander_gen"] += 1
-                post_cycle = D_SAY_MS / 1000 + 0.1
                 outs.append({"t": "dragon", "ev": "aggro", "id": cid,
                              "name": (c.get("state") or {}).get("name") or "玩家"})
-                outs.append({"t": "dragon", "ev": "say", "x": pos[0], "y": pos[1], "ms": D_SAY_MS})
+                if says:
+                    post_cycle = D_SAY_MS / 1000 + 0.1
+                    outs.append({"t": "dragon", "ev": "say", "x": pos[0], "y": pos[1], "ms": D_SAY_MS})
+                else:   # 直接開始反擊循環；放完再醒（與 tick 裡「說完台詞」那段同樣的醒來時間）
+                    cyc = self._dragon_start_cycle(now, terrain)
+                    if cyc:
+                        outs.append(cyc)
+                    if OWNER_TERRAINS.get(terrain) == "gaze":
+                        post_cycle = (D_GAZE_CAST_MS / 1000 + 0.1) if cyc else 2.0
+                    else:
+                        post_cycle = ((D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS) / 1000 + 0.1) if cyc else 2.0
             else:
                 why = []
                 if ph != "idle":
@@ -1180,6 +1315,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         win_sec, win_n = 0, 0
         last_hit = 0.0
         last_dragon_hit = 0.0   # 打島主的每連線冷卻（與 last_hit 同款）
+        last_fish = 0.0         # 釣魚結果的每連線冷卻
+        last_sign = 0.0         # 改看板的每連線冷卻
+        commit_tokens, commit_t = float(COMMIT_BURST), time.time()   # 保存擺設的令牌桶
         try:
             # 剛連上時還沒進任何地形：看不到也不被看到，等客戶端送 enter
             ws_send(sock, json.dumps({"t": "init", "id": cid, "admin": is_admin(None)}))
@@ -1214,8 +1352,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if c is not None:
                         c["user"] = verify_session(msg.get("s"))
                         c["admin"] = is_admin(c["user"])
+                        if c["user"] and c.get("state"):   # 與 Worker 一致：已送過的狀態立刻改用驗證過的名字與 uid
+                            c["state"] = {**c["state"], "name": str(c["user"]["name"])[:NAME_MAX], "uid": c["user"]["id"]}
                         with c["send"]:
-                            ws_send(sock, json.dumps({"t": "me", "admin": c["admin"]}))
+                            ws_send(sock, json.dumps({"t": "me", "admin": c["admin"], "auth": bool(c["user"])}))   # auth＝憑證驗證成功；失敗客戶端會重新授權
+                            if c["user"]:   # 登入的人：送他的魚類圖鑑
+                                with FISH_DEX_LOCK:
+                                    dex = json.loads(json.dumps(FISH_DEX.get(c["user"]["id"], {})))
+                                ws_send(sock, json.dumps({"t": "dex", "dex": dex}))
                 elif t == "state":
                     c = room.clients.get(cid)
                     st = sanitize_state(msg.get("s") if isinstance(msg.get("s"), dict) else {}, c.get("state") if c else None)
@@ -1253,10 +1397,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if res:
                         last_hit = now
                         room.broadcast(res[1], terrain=res[0])
-                elif t == "dragonMap":   # 島主：陸地位圖（各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）。上傳者所在地形決定是哪座島的
+                elif t == "dragonMap":   # 陸地位圖（島主路徑＋擺設的水邊驗證；各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）。上傳者所在地形決定是哪座島的
                     c3 = room.clients.get(cid)
                     cur = c3.get("terrain") if c3 else None
-                    if cur in OWNER_TERRAINS:
+                    if cur:
                         land = dragon_land(msg.get("v"))
                         if land:
                             room.dragon_maps[cur] = land
@@ -1281,28 +1425,55 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if c2 and c2.get("terrain") in OWNER_TERRAINS:
                         snap = room.dragon_snapshot(c2["terrain"])
                         with c2["send"]:
-                            ws_send(sock, json.dumps({"t": "dragon", "ev": "state", **snap}))
+                            ws_send(sock, json.dumps({"t": "dragon", "ev": "state", "terrain": c2["terrain"], **snap}))
                 elif t in ("commit", "place", "remove", "clear"):
                     # 裝飾模式的變動是草稿，按保存才送 commit（一批操作）；舊客戶端的單一操作也走同一套驗證與權限
                     cur = room.terrain_of(cid)
                     ops = msg.get("ops") if t == "commit" else [msg]
                     if cur and isinstance(ops, list):
                         c = room.clients.get(cid) or {}
+                        now = time.time()
+                        commit_tokens = min(float(COMMIT_BURST), commit_tokens + (now - commit_t) / COMMIT_REFILL)
+                        commit_t = now
+                        if commit_tokens < 1:   # 保存太頻繁：整批不處理，回報給客戶端（與 Worker 一致）
+                            with c.get("send") or threading.Lock():
+                                ws_send(sock, json.dumps({"t": "commit_result", "applied": 0, "rejected": min(len(ops), MAX_OPS), "denied": False, "limited": True}))
+                            continue
+                        commit_tokens -= 1
                         applied, rejected, denied, furn_changed, floor_changed = room.commit_furn(cur, ops, c.get("admin", is_admin(None)))
-                        with c["send"]:
-                            ws_send(sock, json.dumps({"t": "commit_result", "applied": applied, "rejected": rejected, "denied": denied}))
+                        # 與 Worker 一致：先廣播新清單，再回 commit_result（客戶端收到結果時以最新清單為準）
                         if furn_changed:
                             room.broadcast({"t": "furn", "items": list(room.furn_list(cur))}, terrain=cur)
                         if floor_changed:
                             room.broadcast({"t": "floor", "items": floor_to_list(room.floor_map(cur))}, terrain=cur)
+                        with c.get("send") or threading.Lock():
+                            ws_send(sock, json.dumps({"t": "commit_result", "applied": applied, "rejected": rejected, "denied": denied}))
                 elif t == "sign":   # 看板改字（所有人都能改）
                     cur = room.terrain_of(cid)
-                    if cur and room.edit_sign(cur, msg.get("cell"), msg.get("text")):
+                    now = time.time()
+                    if not cur or now - last_sign < SIGN_CD:
+                        continue
+                    last_sign = now
+                    if room.edit_sign(cur, msg.get("cell"), msg.get("text")):
                         room.broadcast({"t": "furn", "items": list(room.furn_list(cur))}, terrain=cur)
                 elif t == "event":   # 揮擊等瞬時事件
                     cur = room.terrain_of(cid)
                     if cur:
                         room.broadcast({"t": "event", "id": cid, "kind": msg.get("kind")}, skip=cid, terrain=cur)
+                elif t == "fish":   # 釣魚：拉竿成功，伺服器抽魚（登入的人記進圖鑑）
+                    cur = room.terrain_of(cid)
+                    now = time.time()
+                    if not cur or now - last_fish < FISH_CD:
+                        continue
+                    last_fish = now
+                    res = roll_fish(cur)
+                    out = {"t": "fish_result", **res, "saved": False}
+                    user = (room.clients.get(cid) or {}).get("user")
+                    if not res.get("escaped") and user:
+                        entry, is_new, is_record = dex_catch(user["id"], res["terrain"], res["id"], res["size"])
+                        out.update(saved=True, entry=entry, isNew=is_new, isRecord=is_record)
+                    with (room.clients.get(cid) or {}).get("send") or threading.Lock():
+                        ws_send(sock, json.dumps(out))
         except Exception as e:
             print(f"[ws] !{cid} {e}", file=sys.stderr, flush=True)
         finally:

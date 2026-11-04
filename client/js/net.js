@@ -1,10 +1,11 @@
 // DC島 M2 — 多人同步（同語音頻道＝同一座島）
 // 房間鍵：Discord 的 guild_id:channel_id（本機則 local:local，可用 ?room= 指定）
-// 之後搬上 Cloudflare Durable Objects 時，這支的介面不變，只換連線位址。
+// 連到同網域的 /ws：正式站是 Cloudflare Worker（Durable Object，一座島一個實例），本機是 tools/dev_server.py，協定相同。
 
 const SEND_HZ = 12;          // 每秒送幾次自己的位置
 const HEARTBEAT_MS = 1000;   // 狀態沒變時的心跳間隔（必須遠小於 STALE_MS，否則站著不動的人會被當成離線）
 const STALE_MS = 15000;      // 超過這麼久沒收到訊息就當對方離線
+const D8 = ['down', 'down_right', 'right', 'up_right', 'up', 'up_left', 'left', 'down_left'];   // 與 main.js 的 CHAR_DIR8、兩份伺服器一致
 
 export function connectNet(S, opts = {}) {
   const q = new URLSearchParams(location.search);
@@ -29,14 +30,17 @@ export function connectNet(S, opts = {}) {
       moving: p.moving,
       z: Math.round(p.z),
       name: p.name,
-      look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt, pants: S.me.pants || 0 },
+      look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt, pants: S.me.pants || 0,
+              hat: S.me.hat || null, top: S.me.top || null, bottom: S.me.bottom || null },   // 帽子／上衣款式／褲子款式（null＝沒戴／用預設款）
       job: S.me.job,                       // 職業（坦/補/輸出）：伺服器原樣轉發，各畫面用 jobOf() 解讀
+      d8: p.d8 || null,                    // 畫面用的 8 方向朝向（down/down_right/right/…；玩法仍看 face）
       weapon: p.tool || S.me.weapon,       // 手上拿的（打石頭/樹木時是工具）
       pose: p.pose || null,                // 'sit' | 'sleep'（坐/睡在家具上）
       face: p.face || 'down',              // 四方向朝向：'up'（背面）| 'down'（正面）| 'side'（側，dir 決定左右）
       seat: p.seatType || null,            // 坐/睡的家具種類（畫圖用）
       hp: p.dead ? 0 : Math.round(p.hp ?? 10),   // 血量（島主爪擊扣 2、殺動物回 1；龍衝直接倒地）
       dead: p.dead ? 1 : 0,                // 死亡（墓碑）：被島主打倒後倒數復活
+      fish: p.fish ? { x: p.fish.x, y: p.fish.y, ph: p.fish.ph } : null,   // 釣魚：浮標位置與階段（wait 等魚／bite 上鉤／reel 拉扯）
     };
   }
 
@@ -58,7 +62,11 @@ export function connectNet(S, opts = {}) {
       r.weapon = st.weapon || r.weapon;
       r.pose = st.pose === 'sit' || st.pose === 'sleep' ? st.pose : null;
       r.face = st.face === 'up' || st.face === 'side' ? st.face : 'down';
+      r.d8 = D8.includes(st.d8) ? st.d8 : null;   // 舊客戶端沒送就從 face＋dir 推
       r.seatType = typeof st.seat === 'string' ? st.seat : null;
+      // 釣魚：浮標位置與階段；階段變了就重新起算（拉扯動畫要知道從什麼時候開始）
+      const fs = st.fish && ['wait', 'bite', 'reel'].includes(st.fish.ph) ? st.fish : null;
+      r.fish = fs ? { x: fs.x, y: fs.y, ph: fs.ph, t: r.fish?.ph === fs.ph ? r.fish.t : S.t } : null;
       const wasDead = !!r.dead;
       r.dead = !!st.dead;                  // 死亡（墓碑）：進出死亡時跟同島的人說一聲
       if (st.hp != null) r.hp = st.hp;     // 血量同步（對方自己算好的）
@@ -85,10 +93,18 @@ export function connectNet(S, opts = {}) {
         S.remotes.clear();
         if (opts.onAdmin) opts.onAdmin(!!msg.admin);        // 重連後先當一般人，hello 驗證成功後 me 會更新
         break;
-      case 'me': if (opts.onAdmin) opts.onAdmin(!!msg.admin); break;
+      case 'me':
+        if (opts.onAdmin) opts.onAdmin(!!msg.admin);
+        // 有憑證卻驗證失敗（12 小時過期等）：請 discord.js 重新授權拿新憑證，拿到後會自動再送 hello（舊伺服器沒有 auth 欄位就不動作）
+        if (S.session && msg.auth === false) S.reauth?.();
+        break;
       case 'commit_result': if (opts.onCommitResult) opts.onCommitResult(msg); break;
+      case 'fish_result': if (opts.onFishResult) opts.onFishResult(msg); break;   // 釣魚結果（伺服器抽）
+      case 'dex': if (opts.onDex) opts.onDex(msg.dex); break;                     // 魚類圖鑑（登入後由伺服器送來）
       case 'enter': {
         // 進入（或切換到）某地形：每個人各自在自己的地形，只看得到同地形的人
+        // 快速連切地形時，舊地形的回應會晚到：不是現在所在的地形就丟掉（之後還會收到新地形的 enter）
+        if (msg.terrain && msg.terrain !== S.terrain) break;
         S.remotes.clear();
         for (const [id, st] of Object.entries(msg.players || {})) {
           const r = upsert(Number(id), st);
@@ -97,7 +113,7 @@ export function connectNet(S, opts = {}) {
         if (opts.onFurn) opts.onFurn(msg.furn || []);
         if (opts.onFloor) opts.onFloor(msg.floor || []);
         if (opts.onDecos) opts.onDecos(msg.terrain, msg.decos || []);   // 在擺設之後（重生判斷要看家具）
-        if (msg.dragon && opts.onDragon) opts.onDragon({ ...msg.dragon, ev: 'state' });   // 進草島時的島主快照
+        if (msg.dragon && opts.onDragon) opts.onDragon({ ...msg.dragon, ev: 'state', terrain: msg.terrain });   // 進有島主的地形時的快照（帶地形，別套到別座島的島主上）
         break;
       }
       case 'deco': if (opts.onDeco) opts.onDeco(msg); break;
@@ -184,6 +200,8 @@ export function connectNet(S, opts = {}) {
   // 島主：上傳陸地位圖（進草島時）／打到島主時送意圖（座標＋傷害＋我們看到的龍位置），流程由伺服器權威
   net.sendDragonMap = v => net.connected && send({ t: 'dragonMap', v });
   net.dragonHit = (x, y, dmg, ddx, ddy) => net.connected && send({ t: 'dragonHit', x, y, dmg, ddx, ddy });
+  // 釣魚：魚上鉤後拉竿成功，請伺服器抽一條魚（登入的人順便記進伺服器的圖鑑），結果用 fish_result 回來
+  net.fishCatch = () => net.connected && send({ t: 'fish' });
   // 分頁凍結恢復後要島主即時快照（伺服器用 dragon 事件的 state 回這條連線）
   net.requestDragonSnap = () => net.connected && send({ t: 'dragonSnap' });
 
