@@ -142,7 +142,7 @@ body {
 #helpBox li::before { content: "·"; position: absolute; left: 2px; color: var(--gold-dim); }
 
 /* ---------- 造型面板：色票排成多列（上衣、褲子各 24 色）---------- */
-#skinOpts, #hairOpts, #shirtOpts, #pantsOpts { display: flex; flex-wrap: wrap; gap: 5px; }
+#jobOpts, #skinOpts, #hairOpts, #shirtOpts, #pantsOpts { display: flex; flex-wrap: wrap; gap: 5px; }
 #shirtOpts .opt, #pantsOpts .opt { width: 22px; height: 22px; }
 
 /* ---------- 裝飾面板：擺設／地板分頁 ---------- */
