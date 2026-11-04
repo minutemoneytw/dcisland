@@ -34,7 +34,7 @@ client/assets/
   terrain/<id>/terrain.json   地形調色、點綴物、出現的動物、島主
   furniture/furniture.json    家具：名稱、尺寸(格)、是否可碰撞、sprite、坐/睡、可寫字
   floors/floors.json          地板：名稱、sprite、多格尺寸（地毯 2×2）
-  avatar/avatar.json          造型：膚色、髮型、上衣／褲子（調色換色）、武器
+  avatar/avatar.json          造型：膚色、髮型、上衣／褲子（調色換色）；武器清單（左上角武器列切換，法杖有 ranged 欄位＝遠距詠唱）
   animals/animals.json        野外動物與島主
   npcs/npcs.json              各地圖 NPC、台詞、簡易說明
   tools/tools.json            採集工具與可破壞物件

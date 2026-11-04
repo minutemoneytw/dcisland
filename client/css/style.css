@@ -142,7 +142,7 @@ body {
 #helpBox li::before { content: "·"; position: absolute; left: 2px; color: var(--gold-dim); }
 
 /* ---------- 造型面板：色票排成多列（上衣、褲子各 24 色）---------- */
-#skinOpts, #hairOpts, #shirtOpts, #pantsOpts, #weaponOpts { display: flex; flex-wrap: wrap; gap: 5px; }
+#skinOpts, #hairOpts, #shirtOpts, #pantsOpts { display: flex; flex-wrap: wrap; gap: 5px; }
 #shirtOpts .opt, #pantsOpts .opt { width: 22px; height: 22px; }
 
 /* ---------- 裝飾面板：擺設／地板分頁 ---------- */
@@ -185,3 +185,13 @@ body {
 #skillBtn.flash { animation: skillFlash .55s ease-out; }
 @keyframes skillFlash { 0% { box-shadow: 0 0 0 0 rgba(255, 236, 150, .95); } 100% { box-shadow: 0 0 16px 12px rgba(255, 236, 150, 0); } }
 #app.has-skill #toast { bottom: 92px; }   /* 技能列顯示時，提示往上讓出位置 */
+
+/* ---------- 武器列（左上角，橫向只有圖示；選到的那格才顯示名稱，滾輪切換）---------- */
+#weaponBar { position: absolute; left: 10px; top: 52px; z-index: 12; display: flex; flex-direction: row; gap: 4px; user-select: none; }
+#weaponBar .wrow { position: relative; width: 34px; height: 34px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: rgba(22, 25, 34, .62); border: 1px solid #3a3f4e; cursor: pointer; }
+#weaponBar .wrow canvas { width: 24px; height: 24px; image-rendering: pixelated; opacity: .6; }
+#weaponBar .wrow .wic { font-size: 16px; line-height: 24px; opacity: .6; }
+#weaponBar .wrow:hover { border-color: var(--accent); }
+#weaponBar .wrow.cur { background: rgba(40, 36, 20, .92); border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+#weaponBar .wrow.cur canvas, #weaponBar .wrow.cur .wic { opacity: 1; }
+#weaponBar .wrow.cur::after { content: attr(data-name); position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 4px; white-space: nowrap; padding: 1px 8px; font-size: 12px; letter-spacing: 2px; color: #ffe9a8; background: rgba(22, 25, 34, .85); border: 1px solid var(--gold-dim); text-shadow: 0 0 3px #000; pointer-events: none; }

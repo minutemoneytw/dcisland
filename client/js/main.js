@@ -371,7 +371,7 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
     }
   }
   if (isRod()) { S._hits = 1; if (!quiet) fishAction(wx, wy); return; }   // 拿著釣竿：拋竿（不能攻擊）
-  if (S.me.weapon === 'hands') { say('先在「造型」裡裝備武器！'); return; }
+  if (S.me.weapon === 'hands') { say('先用左上角的武器列裝備武器！'); return; }
   if (!S.weaponImgs[S.me.weapon]) return;
   if (S.t - p.lastAtk < ATK_CD) return;
   const rg = rangedDef();
@@ -1866,7 +1866,7 @@ function standUp(p) {
 }
 
 // ---------------- 釣魚 ----------------
-// 造型的武器換成釣竿（avatar.json 的 fishing: true）後，面向水邊按 F 或點水面就拋竿：浮標在水面上下飄，
+// 用左上角武器列把武器換成釣竿（avatar.json 的 fishing: true）後，面向水邊按 F 或點水面就拋竿：浮標在水面上下飄，
 // 幾秒後魚上鉤（浮標被拉下水、頭上「!」），FISH_BITE 秒內再按一次就拉竿（FISH_REEL 秒的拉扯動畫）釣上來，超過就跑掉。
 // 釣到什麼：連線時由伺服器抽（結果與圖鑑存在伺服器，依 Discord 帳號；訪客只存本機），沒連線才在本機抽（rollFish，與兩份伺服器同演算法）。
 // 浮標位置與階段走 state.fish 同步，同地形的人看得到你在釣魚；釣到的東西只有自己知道
@@ -2835,17 +2835,48 @@ function buildAvatarPanel() {
     o.onclick = () => { S.me.shirt = i; saveAvatar(); buildAvatarPanel(); };
     sh.appendChild(o);
   });
-  // 武器（含職業的圓盾／法杖／木劍與釣竿）：自由選擇；職業不強制換武器
-  const wp = $('weaponOpts'); wp.innerHTML = '';
-  for (const w of S.avatar.weapons) {
-    const o = document.createElement('div');
-    o.className = 'opt name' + (S.me.weapon === w.id ? ' sel' : '');
-    o.textContent = w.name;
-    o.onclick = () => { S.me.weapon = w.id; saveAvatar(); buildAvatarPanel(); };
-    wp.appendChild(o);
-  }
 }
 function saveAvatar() { lsSet('dcisland.m0.avatar', S.me); }
+
+// ---------------- 武器列（左上角，橫向只有圖示）：滑鼠滾輪切換目前拿的武器；選到的那格才顯示名稱 ----------------
+// 這是換武器的唯一入口（造型面板已沒有武器選項）；S.me.weapon，存檔沿用 dcisland.m0.avatar；拿著釣竿／法杖時換掉會自己收竿／中斷詠唱（各自每幀檢查）
+let weaponBarKey = '';
+function updateWeaponBar() {
+  const bar = $('weaponBar'); if (!S.avatar) return;
+  const key = S.me.weapon; if (key === weaponBarKey && bar.childElementCount) return;
+  weaponBarKey = key; bar.innerHTML = '';
+  for (const w of S.avatar.weapons) {
+    const row = document.createElement('div'); row.className = 'wrow' + (w.id === S.me.weapon ? ' cur' : '');
+    const im = w.sprite && S.weaponImgs[w.id];
+    if (im) { const cv = document.createElement('canvas'); cv.width = cv.height = 24; const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; const sc = Math.min(24 / im.width, 24 / im.height); g.drawImage(im, (24 - im.width * sc) / 2, (24 - im.height * sc) / 2, im.width * sc, im.height * sc); row.appendChild(cv); }
+    else { const ic = document.createElement('span'); ic.className = 'wic'; ic.textContent = '✋'; row.appendChild(ic); }
+    row.dataset.name = w.name;   // 名稱只在選到的那格顯示（CSS ::after 讀這個）
+    row.onclick = () => setWeapon(w.id);
+    bar.appendChild(row);
+  }
+  bar.classList.remove('hidden');
+}
+function setWeapon(id) {
+  if (S.me.weapon === id || !S.avatar.weapons.some(w => w.id === id)) return;
+  S.me.weapon = id; saveAvatar(); updateWeaponBar();
+}
+function cycleWeapon(step) {
+  const ws = S.avatar.weapons, i = Math.max(0, ws.findIndex(w => w.id === S.me.weapon));
+  setWeapon(ws[(i + step + ws.length) % ws.length].id);
+}
+let wheelAcc = 0, wheelAt = 0;
+const wheelBlocked = () => S.mode !== 'walk' || S.helpOpen || S.listOpen || S.dexOpen || S.signOpen || S.confirmOpen;
+document.addEventListener('wheel', e => {
+  const t = e.target;
+  if (t !== canvas && !t.closest?.('#weaponBar')) return;   // 只有在遊戲畫面或武器列上滾才切換（面板、視窗要照常捲動）
+  e.preventDefault();
+  if (wheelBlocked()) return;
+  const now = performance.now();
+  if (now - wheelAt > 400) wheelAcc = 0;   // 隔一陣子重新累積（觸控板會連發很多小量）
+  wheelAcc += e.deltaY; wheelAt = now;
+  if (Math.abs(wheelAcc) < 40) return;
+  cycleWeapon(wheelAcc > 0 ? 1 : -1); wheelAcc = 0;
+}, { passive: false });
 
 // 換職業：特性立即生效（血量截到新上限，不回滿，避免換職業當補血用）；武器照玩家自己的選擇不動；存檔沿用 dcisland.m0.avatar 這支 key
 function setJob(id) {
@@ -3139,6 +3170,7 @@ async function boot() {
         if (f.life <= 0) S.floaters.splice(i, 1);
       }
       updateSkillBar();
+      updateWeaponBar();
       draw();
     } catch (e) { console.error('loop:', e); }
     requestAnimationFrame(loop);
