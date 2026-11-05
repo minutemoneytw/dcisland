@@ -4097,7 +4097,7 @@ function buildGlams() {
   const gearIt = slot === 'weapon' ? jobWeaponDef() : lookItem(slotList(slot), jd?.gear?.[slot]);
   const list = (slotList(slot) || []).filter(it => glamFits(slot, it)), cur = shownItem(slot);
   $('glamTitle').textContent = `${label}外觀`;
-  $('glamHint').textContent = `${jd?.name || ''}：已解鎖 ${list.filter(glamUnlocked).length}／${list.length}` + (slot === 'weapon' ? ' · 武器外觀只能選同類型的樣子' : '') + ' · 每個職業各記一套';
+  $('glamHint').textContent = `${jd?.name || ''}：已解鎖 ${list.filter(glamUnlocked).length}／${list.length}` + (slot === 'weapon' ? ' · 武器外觀只能選同類型的樣子' : '');
   const box = $('glamList'); box.innerHTML = '';
   const row = (id, name, desc, ok) => {
     const o = document.createElement('div');
