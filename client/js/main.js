@@ -4068,7 +4068,7 @@ function buildAvatarPanel() {
     const cur = shownItem(slot), isGlam = cur && gearIt && cur.id !== gearIt.id;
     const nm = document.createElement('div'); nm.className = 'gear-name' + (isGlam ? ' glam' : '');
     nm.textContent = cur ? cur.name : '（無）';
-    nm.title = isGlam ? `外觀（裝備：${gearIt.name}）` : '職業裝備';
+    nm.title = (cur ? cur.name : '（無）') + (isGlam ? `（外觀；裝備：${gearIt.name}）` : '（職業裝備）');   // 名稱太長被截斷時，滑鼠停留看全名
     row.appendChild(nm);
     const gb = document.createElement('button'); gb.className = 'ff-btn small'; gb.textContent = '外觀';
     gb.onclick = () => openGlams(slot);

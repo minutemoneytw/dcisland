@@ -101,7 +101,7 @@ body {
 .fitem canvas { image-rendering: pixelated; }
 .fitem .nm { font-size: 11px; color: var(--text-dim); letter-spacing: 1px; margin-top: 3px; }
 
-#avatarPanel { right: 10px; top: 60px; width: 240px; }
+#avatarPanel { right: 10px; top: 60px; width: 264px; }   /* 264：裝備名稱欄放得下五個字（例如「龍騎士鎧甲」） */
 .grp { margin-bottom: 10px; }
 .grp > label { display: block; font-size: 11px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 5px; }
 .optrow { display: flex; gap: 6px; flex-wrap: wrap; }
