@@ -243,6 +243,15 @@
    ]
   },
   {
+   "id": "bard_top",
+   "name": "詩人外衣",
+   "sheet": "char_bard_top.png",
+   "dye": [
+    "#4a8a3a",
+    "#366a2a"
+   ]
+  },
+  {
    "id": "blackmage_top",
    "name": "黑魔長袍",
    "sheet": "char_blackmage_top.png",
@@ -309,6 +318,15 @@
    ]
   },
   {
+   "id": "bard_bottom",
+   "name": "詩人長褲",
+   "sheet": "char_bard_bottom.png",
+   "dye": [
+    "#5a4a3a",
+    "#45382a"
+   ]
+  },
+  {
    "id": "blackmage_bottom",
    "name": "黑魔長褲",
    "sheet": "char_blackmage_bottom.png",
@@ -368,6 +386,15 @@
    "dye": [
     "#4a3a6a",
     "#352a4e"
+   ]
+  },
+  {
+   "id": "bard_hat",
+   "name": "羽毛帽",
+   "sheet": "char_hat_bard_hat.png",
+   "dye": [
+    "#4a8a3a",
+    "#366a2a"
    ]
   },
   {
@@ -476,6 +503,19 @@
     "range": 320,
     "cast": 1.2,
     "dmg": 2
+   }
+  },
+  {
+   "id": "harpbow",
+   "name": "豎琴弓",
+   "type": "bow",
+   "sprite": "weapon_harpbow.png",
+   "carry": "back",
+   "ranged": {
+    "range": 320,
+    "cast": 0,
+    "dmg": 2,
+    "shot": "arrow"
    }
   },
   {

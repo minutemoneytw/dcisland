@@ -443,6 +443,7 @@ GEAR_TOPS = {   # id: (名稱, 主色, 陰影, 點綴函式, 長袍)
     "whitemage_top": ("白魔長袍", "#f0ece0", "#c8c0ac", "trim_red", True),
     "sage_top":      ("賢者長袍", "#3a9a8a", "#2a7466", "trim_gold", True),
     "ninja_top":     ("忍者上衣", "#4a3a6a", "#352a4e", "sash", False),
+    "bard_top":      ("詩人外衣", "#4a8a3a", "#366a2a", "trim_gold", False),
     "blackmage_top": ("黑魔長袍", "#2e3a7a", "#1f2858", "trim_gold", True),
 }
 GEAR_BOTTOMS = {
@@ -451,6 +452,7 @@ GEAR_BOTTOMS = {
     "whitemage_bottom": ("白魔長褲", "#d8d0bc", "#b0a890"),
     "sage_bottom":      ("賢者長褲", "#2e6a62", "#1f4e48"),
     "ninja_bottom":     ("忍者褲", "#3a2e52", "#2a2140"),
+    "bard_bottom":      ("詩人長褲", "#5a4a3a", "#45382a"),
     "blackmage_bottom": ("黑魔長褲", "#2a3060", "#1d2246"),
 }
 GEAR_HATS = {   # id: (名稱, 主色, 陰影, 畫法)
@@ -459,6 +461,7 @@ GEAR_HATS = {   # id: (名稱, 主色, 陰影, 畫法)
     "whitemage_hat": ("白魔兜帽", "#f0ece0", "#c8c0ac", "hood"),
     "sage_hat":      ("賢者頭冠", "#e0c040", "#b08a28", "circlet"),
     "ninja_hat":     ("忍者頭巾", "#4a3a6a", "#352a4e", "band"),
+    "bard_hat":      ("羽毛帽", "#4a8a3a", "#366a2a", "feather"),
     "blackmage_hat": ("黑魔尖帽", "#2e3a7a", "#1f2858", "pointy"),
 }
 GOLD, RED_TRIM, FUR = hx("#e0c040"), hx("#c83a3a"), hx("#d8c8a0")
@@ -532,6 +535,11 @@ def hat_canvas(kind, main, shd, back):
         cv.set(7, 0, m); cv.set(8, 0, m)
         if back:
             cv.rect(3, 1, 12, 10, m); cv.vline(8, 2, 9, s)
+    elif kind == "feather":  # 羽毛帽：小帽簷的軟帽＋往後斜插一根紅羽毛
+        cv.hline(3, 12, 4, s); cv.rect(5, 1, 10, 3, m); cv.hline(6, 9, 0, m)
+        cv.set(11, 2, hx("#c83a3a")); cv.set(12, 1, hx("#c83a3a")); cv.set(13, 0, hx("#e86a5a")); cv.set(12, 2, hx("#e86a5a"))
+        if back:
+            cv.rect(4, 4, 11, 6, s)
     elif kind == "circlet":  # 頭冠：額前一圈細金環＋中間一顆綠寶石
         cv.hline(4, 11, 3, m); cv.hline(4, 11, 4, s)
         cv.set(7, 2, m); cv.set(8, 2, m)
@@ -935,6 +943,18 @@ def weapon_tome():  # 魔導書（賢者的職業武器）：綠色封面、金�
     for x, y in ((3, 1), (10, 1), (3, 12), (10, 12)):
         cv.set(x, y, gold)                    # 書角
     cv.rect(5, 5, 7, 7, gold); cv.set(6, 6, hx("#5ad8b0"))   # 封面的寶石徽記
+    cv.outline((30, 24, 22, 255))
+    return cv
+
+def weapon_harpbow():  # 豎琴弓（吟遊詩人的職業武器）：弓身彎成豎琴的樣子，中間幾條金色弦
+    cv = Canvas(10, 20)
+    wood = hx("#8a5a32"); wood_hi = hx("#b88a52"); gold = hx("#e0c040")
+    for y, x in ((1, 6), (2, 5), (3, 4), (4, 3), (5, 3), (6, 2), (7, 2), (8, 2), (9, 2), (10, 2), (11, 2), (12, 2), (13, 3), (14, 3), (15, 4), (16, 5), (17, 6)):
+        cv.set(x, y, wood); cv.set(x + 1, y, wood_hi)
+    cv.vline(7, 1, 17, gold)                  # 弓弦
+    for y in (6, 9, 12):
+        cv.hline(4, 6, y, gold)               # 豎琴弦
+    cv.rect(2, 18, 3, 19, wood)               # 握把尾
     cv.outline((30, 24, 22, 255))
     return cv
 
@@ -1799,6 +1819,7 @@ def main():
     save(weapon_scepter(), "weapon_scepter.png", "avatar")
     save(weapon_goldsword(), "weapon_goldsword.png", "avatar")
     save(weapon_tome(), "weapon_tome.png", "avatar")
+    save(weapon_harpbow(), "weapon_harpbow.png", "avatar")
     save(weapon_staff(), "weapon_staff.png", "avatar")
     save(weapon_rod(), "weapon_rod.png", "avatar")
     print("== 釣魚：魚類圖鑑 ==")
@@ -1860,6 +1881,8 @@ def main():
             dict(id="waraxe", name="戰斧", type="axe", sprite="weapon_waraxe.png", carry="back"),
             dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", ranged=dict(range=320, cast=1.2, dmg=2)),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
             dict(id="tome", name="魔導書", type="tome", sprite="weapon_tome.png", carry="waist", ranged=dict(range=320, cast=1.2, dmg=2)),
+            # 豎琴弓：遠程但不用詠唱（cast 0＝按攻擊直接射箭；shot: "arrow"＝畫箭矢而不是光球）
+            dict(id="harpbow", name="豎琴弓", type="bow", sprite="weapon_harpbow.png", carry="back", ranged=dict(range=320, cast=0, dmg=2, shot="arrow")),
             dict(id="daggers", name="雙劍", type="daggers", sprite="weapon_daggers.png", carry="waist"),
             dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=320, cast=1.6, dmg=2)),
             dict(id="rod", name="釣竿", type="rod", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊

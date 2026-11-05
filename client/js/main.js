@@ -430,7 +430,7 @@ function pickCastTarget(p, rg, aim) {
 }
 function startCast(p, rg, wx, wy) {
   if (p.cast || S.t - p.lastAtk < ATK_CD) return;
-  if (p.moving || p.z > 0) { say('站定才能詠唱'); return; }   // 詠唱時不能移動（移動會中斷）
+  if (rg.cast && (p.moving || p.z > 0)) { say('站定才能詠唱'); return; }   // 詠唱時不能移動（移動會中斷）；不用詠唱的弓可以邊走邊射
   const aim = castAim(wx, wy);
   let a = null;
   const under = aim ? mobUnder(aim[0], aim[1]) : null;   // 游標點在動物身上：就打牠（超出射程不改選別的）
@@ -439,12 +439,15 @@ function startCast(p, rg, wx, wy) {
     a = under;
   } else a = pickCastTarget(p, rg, aim);
   if (!a) { say('射程內沒有目標'); return; }
-  const tr = S.fx.triple;
-  if (tr && tr.n > 0 && S.t < tr.until) {   // 三重：這一擊不用詠唱
-    tr.n--;
+  const tr = S.fx.triple, instant = !rg.cast;   // cast 0（豎琴弓）＝不用詠唱，直接射
+  if (instant || (tr && tr.n > 0 && S.t < tr.until)) {   // 三重：這一擊不用詠唱
+    if (!instant) tr.n--;
     p.lastAtk = S.t; p.swing = 0; p.tool = null; S._hits = 1;
+    if (Math.abs(a.x - p.x) > 6) p.dir = Math.sign(a.x - p.x);
     S.net?.notifyAttack?.();
-    S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: a.y - 24 * (mobDef(a.id).big || 1) * .6, life: .22 });
+    const ty = a.y - 24 * (mobDef(a.id).big || 1) * .6;
+    if (rg.shot === 'arrow') S.floaters.push({ fxk: 'arrow', x1: p.x + p.dir * 8, y1: p.y - 30, x2: a.x, y2: ty, life: .2 });
+    else S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: ty, life: .22 });
     hitMob(p, a, true);
     return;
   }
@@ -473,8 +476,9 @@ function stepCast(p) {   // 每幀（只有本機玩家）：檢查中斷條件�
 function hitMob(p, a, ranged, force) {
   {
     S._hits++;
-    const crit = !ranged && !force && Math.random() < .18;
-    let dmg = force ? force.dmg : ranged ? (rangedDef()?.dmg || 2) : (crit ? 2 : 1);
+    const critP = (ranged ? 0 : .18) + (p === S.players[0] && fxOn('song') ? JOB_SKILLS.song.crit : 0);   // 吟遊詩人的唱歌：爆擊率 +25%
+    const crit = !force && Math.random() < critP;
+    let dmg = force ? force.dmg : ranged ? (rangedDef()?.dmg || 2) + (crit ? 1 : 0) : (crit ? 2 : 1);
     const jd = jobOf(p);
     if (jd?.dmgPlus && !force) dmg += jd.dmgPlus;   // 輸出：每擊 +1（連線打島主時送出去的值仍會被伺服器夾回 1～2）
     const od = mobDef(a.id);
@@ -490,11 +494,12 @@ function hitMob(p, a, ranged, force) {
       a.startle = 1; a.startleT = 3; a.target = null; a.idle = 0;
     }
     // 補師：揮擊命中動物就吸回自己一點血（血量走既有 state 封包同步）；翅膀期間 +1
-    const heal = force?.dot ? 0 : (jd?.healHit ? jd.healHit + (p === S.players[0] && fxOn('wings') ? 1 : 0) : 0) + (p === S.players[0] && fxOn('vamp') ? 1 : 0);   // 戰士吸血：命中回 1；上毒的持續傷害不算「命中」
+    const heal = force?.dot ? 0 : (jd?.healHit ? jd.healHit + (p === S.players[0] && fxOn('wings') ? 1 : 0) : 0) + (p === S.players[0] && fxOn('vamp') ? 1 : 0);   // 戰士吸血：命中回 1；毒箭的持續傷害不算「命中」
     const care = p === S.players[0] && S.fx.care && S.t < S.fx.care.until ? S.fx.care : null;   // 賢者關心：每造成一次傷害，被關心的人回 1
     if (care) {
-      if (care.self) healMe(JOB_SKILLS.care.amt);
-      else S.net?.skillEvent?.('careheal:' + care.id);
+      const amt = JOB_SKILLS.care.amt + (fxOn('save') ? JOB_SKILLS.save.plus : 0);   // 拯救期間：關心的回血變多
+      if (care.self) healMe(amt);
+      else S.net?.skillEvent?.(`careheal:${care.id}:${amt}`);
     }
     if (heal) {
       const cap = hpCap(p) ?? PLAYER_HP;
@@ -980,14 +985,14 @@ function ownerAggroPick(a, ag) {
 // S.fx：自己身上的技能狀態（都是遊戲時間 S.t 的到期時刻；0＝沒有）。被打時的減傷／護盾在 playerDamage 套用（受害者自判）；
 // 給隊友的增益（兩種群盾）走泛型 event 廣播，收到的人自判「在不在放的人周圍 SHIELD_RADIUS 內」再套在自己身上（與群療同一原則）。
 // 持續型效果（翅膀、護盾、結印、三重、法陣）走 state 的 fx／circle 給同地形的人畫特效（myFx）。
-S.fx = { cd: {}, guard: 0, kshield: 0, wshield: 0, vamp: 0, wings: 0, seal: null, triple: null, circle: null, care: null, cared: 0 };
+S.fx = { cd: {}, guard: 0, kshield: 0, wshield: 0, vamp: 0, wings: 0, seal: null, triple: null, circle: null, care: null, cared: 0, song: 0, save: 0 };
 const SHIELD_RADIUS = 300;   // 兩種群盾的範圍（px，約 9 格；使用者定）
 const ROLE_DEBUFF = { dur: 10, cd: 30, weakMul: .7 };   // 破綻／降傷：持續 10 秒、冷卻 30 秒、降傷 −30%（與兩份伺服器的 D_DEBUFF_* 一致）
 const fxOn = k => S.t < (S.fx[k] || 0);
 const skillCdLeft = id => Math.max(0, (S.fx.cd[id] || 0) - S.t);
 function myFx() {   // 給 state 的持續型效果清單（id 要符合伺服器的 ID_RE）
   const F = S.fx, out = [];
-  for (const k of ['guard', 'kshield', 'wshield', 'vamp', 'wings', 'cared']) if (fxOn(k)) out.push(k);   // cared＝被賢者關心中
+  for (const k of ['guard', 'kshield', 'wshield', 'vamp', 'wings', 'cared', 'song', 'save']) if (fxOn(k)) out.push(k);   // cared＝被賢者關心中、song＝唱歌加成中、save＝拯救中
   if (F.seal) out.push('seal');
   if (F.triple && F.triple.n > 0 && S.t < F.triple.until) out.push('triple' + F.triple.n);
   return out;
@@ -1012,14 +1017,16 @@ Object.assign(JOB_SKILLS, {
                 else S.net?.skillEvent?.('sheal:' + t.id);   // 對方收到後自己補（血量由各人自己算，與群療同一原則）
                 return true;
               } },
-  poison:   { name: '上毒', cd: 12, dur: 30, every: 3, dmg: 1, range: 320, desc: '對滑鼠方向的敵人上毒：30 秒內每 3 秒受到 1 傷害（共 10 下）',
+  song:     { name: '唱歌', cd: 40, dur: 15, r: 300, crit: .25, desc: '周圍 300px 內所有人（含自己）15 秒內爆擊率 +25%（遠程攻擊平常不會爆擊，唱歌期間也會）',
+              run(me) { S.fx.song = S.t + this.dur; S.net?.skillEvent?.('song'); S.floaters.push({ fxk: 'song', x: me.x, y: me.y, r: this.r, life: .7 }); return true; } },
+  poison:   { name: '毒箭', cd: 12, dur: 30, every: 3, dmg: 1, range: 320, desc: '對滑鼠方向的敵人射一支毒箭：30 秒內每 3 秒受到 1 傷害（共 10 下）',
               usable() { return pickCastTarget(S.players[0], this, castAim()) ? null : '射程內沒有目標'; },
               run(me) {
                 const a = pickCastTarget(me, this, castAim());
                 if (!a) { say('射程內沒有目標'); return false; }
                 a.poison = { until: S.t + this.dur, next: S.t + this.every };   // 每跳由自己這邊送（stepSkills），島主／深海魚人由伺服器驗證 sk:'poison'
                 const big = mobDef(a.id).big || 1;
-                S.floaters.push({ orb: true, x1: me.x, y1: me.y - 52, x2: a.x, y2: a.y - 20 * big, life: .22 });
+                S.floaters.push({ fxk: 'arrow', poison: true, x1: me.x + me.dir * 8, y1: me.y - 30, x2: a.x, y2: a.y - 20 * big, life: .2 });
                 S.floaters.push({ fxk: 'poisonpop', x: a.x, y: a.y - 20 * big, big, life: .6 });
                 return true;
               } },
@@ -1032,6 +1039,12 @@ Object.assign(JOB_SKILLS, {
                 else S.net?.skillEvent?.('care:' + t.id);
                 toast(`關心了 ${S.fx.care.name}`, 1400);
                 return true;
+              } },
+  save:     { name: '拯救', cd: 30, dur: 8, plus: 2, desc: '8 秒內關心的回血從 1 變 3（要先關心一位玩家）',
+              usable() { return S.fx.care && S.t < S.fx.care.until ? null : '還沒有關心的人'; },
+              run() {
+                if (!(S.fx.care && S.t < S.fx.care.until)) { toast('先用「關心」指定一位玩家', 1600); return false; }
+                S.fx.save = S.t + this.dur; fxBurst('save'); return true;
               } },
   wings:    { name: '翅膀', cd: 45, dur: 15, desc: '15 秒內所有治療量 +1',
               run() { S.fx.wings = S.t + this.dur; fxBurst('wings'); return true; } },
@@ -1120,10 +1133,10 @@ function stepSkills() {
   }
   if (F.triple && (F.triple.n <= 0 || S.t >= F.triple.until)) F.triple = null;
   if (F.care && S.t >= F.care.until) F.care = null;
-  for (const a of S.mobs) {   // 賢者上毒：每 3 秒跳一次（自己上的毒，自己這邊送）；換掉職業或倒地就停
+  for (const a of S.mobs) {   // 吟遊詩人的毒箭：每 3 秒跳一次（自己上的毒，自己這邊送）；換掉職業或倒地就停
     const po = a.poison;
     if (!po) continue;
-    if (a.dead || S.t >= po.until || me.dead || S.me.job !== 'sage') { a.poison = null; continue; }
+    if (a.dead || S.t >= po.until || me.dead || S.me.job !== 'bard') { a.poison = null; continue; }
     if (S.t >= po.next) { po.next += JOB_SKILLS.poison.every; hitMob(me, a, true, { dmg: JOB_SKILLS.poison.dmg, sk: 'poison', dot: true }); }
   }
   if (F.circle && S.t >= F.circle.until) F.circle = null;
@@ -1131,7 +1144,12 @@ function stepSkills() {
 // 別人的技能事件：群盾自判是否在範圍內；其餘只演出
 function onSkillEvent(kind, r) {
   const me = S.players[0];
-  if (kind === 'kshield' || kind === 'wshield') {
+  if (kind === 'song') {   // 吟遊詩人的唱歌：在範圍內就套上爆擊率加成
+    S.floaters.push({ fxk: 'song', x: r.x, y: r.y, r: JOB_SKILLS.song.r, life: .7 });
+    if (me.dead || Math.hypot(me.x - r.x, me.y - r.y) > JOB_SKILLS.song.r) return;
+    S.fx.song = S.t + JOB_SKILLS.song.dur;
+    toast(`${r.name} 的歌聲讓你更容易爆擊`, 1800);
+  } else if (kind === 'kshield' || kind === 'wshield') {
     S.floaters.push({ fxk: kind, x: r.x, y: r.y, r: SHIELD_RADIUS, life: .6 });
     if (me.dead || Math.hypot(me.x - r.x, me.y - r.y) > SHIELD_RADIUS) return;
     S.fx[kind] = S.t + JOB_SKILLS[kind].dur;
@@ -1139,10 +1157,10 @@ function onSkillEvent(kind, r) {
   } else if (kind === 'ninjutsu') S.floaters.push({ fxk: 'boom', x: r.x, y: r.y, r: JOB_SKILLS.ninjutsu.r, life: .6 });
   else if (kind === 'blink') { S.floaters.push({ fxk: 'smoke', x: r.x, y: r.y, life: .45 }); r.snapNext = true; }
   else if (kind.startsWith('care:') || kind.startsWith('careheal:')) {   // 賢者的關心：目標是我才處理
-    const heal = kind.startsWith('careheal:'), tid = kind.slice(heal ? 9 : 5);
+    const heal = kind.startsWith('careheal:'), [tid, a] = kind.slice(heal ? 9 : 5).split(':');
     if (tid !== String(S.net?.id)) return;
     if (!heal) { S.fx.cared = S.t + JOB_SKILLS.care.dur; S.floaters.push({ fxk: 'heart', x1: r.x, y1: r.y - 40, x2: me.x, y2: me.y - 30, life: .6 }); toast(`${r.name} 關心了你`, 1600); }
-    else if (fxOn('cared')) healMe(JOB_SKILLS.care.amt);
+    else if (fxOn('cared')) healMe(Math.max(1, Math.min(JOB_SKILLS.care.amt + JOB_SKILLS.save.plus, Math.round(+a) || JOB_SKILLS.care.amt)));   // 回血量由賢者帶（拯救期間較多），夾在合理範圍
   }
   else if (kind.startsWith('sheal:')) {   // 單補：目標是我就補自己（翅膀看放的人 state 的 fx），其他人只畫特效
     const tid = kind.slice(6), t = tid === String(S.net?.id) ? me : [...S.remotes.values()].find(q => String(q.id) === tid);   // 連線編號可能是數字
@@ -1275,6 +1293,11 @@ function drawSkillIcon(c, id) {
       g.fillStyle = '#fff'; g.beginPath(); g.moveTo(30, 4); g.lineTo(37, 4); g.lineTo(37, 11); g.closePath(); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.moveTo(27, 14); g.lineTo(35, 6); g.stroke(); break;
     case 'poison': bg('#221830'); g.fillStyle = '#9ad850'; g.beginPath(); g.moveTo(20, 5); g.quadraticCurveTo(32, 22, 20, 34); g.quadraticCurveTo(8, 22, 20, 5); g.fill();
       g.fillStyle = '#b060d8'; for (const [x, y, r] of [[10, 30, 3], [30, 28, 4], [27, 10, 2.5]]) { g.beginPath(); g.arc(x, y, r, 0, P * 2); g.fill(); } g.fillStyle = '#e8ffd0'; g.fillRect(16, 18, 3, 8); break;
+    case 'song': bg('#2e2814'); g.fillStyle = '#ffe17a'; g.strokeStyle = '#ffe17a'; g.lineWidth = 3;
+      g.beginPath(); g.ellipse(13, 29, 5, 4, -.4, 0, P * 2); g.fill(); g.beginPath(); g.ellipse(27, 25, 5, 4, -.4, 0, P * 2); g.fill();
+      g.beginPath(); g.moveTo(17.5, 28); g.lineTo(17.5, 9); g.lineTo(31.5, 5); g.lineTo(31.5, 24); g.stroke(); g.lineWidth = 4; g.beginPath(); g.moveTo(17.5, 11); g.lineTo(31.5, 7); g.stroke(); break;
+    case 'save': bg('#33280e'); g.strokeStyle = 'rgba(255,215,110,.8)'; g.lineWidth = 2; g.beginPath(); g.arc(20, 21, 16, 0, P * 2); g.stroke();
+      g.fillStyle = '#ffd76e'; g.fillRect(16.5, 7, 7, 26); g.fillRect(7, 16.5, 26, 7); g.fillStyle = '#ff82aa'; g.beginPath(); g.arc(20, 20, 4.5, 0, P * 2); g.fill(); break;
     case 'care': bg('#34202a'); { const h = (x, y, s, c) => { g.fillStyle = c; g.beginPath(); g.moveTo(x, y + s * .9); g.bezierCurveTo(x - s * 1.4, y - s * .1, x - s * .6, y - s * 1.1, x, y - s * .35); g.bezierCurveTo(x + s * .6, y - s * 1.1, x + s * 1.4, y - s * .1, x, y + s * .9); g.fill(); };
       h(20, 22, 13, '#ff82aa'); h(20, 21, 7, '#ffd0e0'); } break;
     case 'wings': bg('#2a3440'); g.fillStyle = '#f4f4ff'; for (const s of [-1, 1]) { g.beginPath(); g.moveTo(20, 22); g.quadraticCurveTo(20 + s * 18, 2, 20 + s * 18, 14); g.quadraticCurveTo(20 + s * 14, 20, 20 + s * 16, 28); g.quadraticCurveTo(20 + s * 8, 26, 20, 22); g.fill(); } break;
@@ -2247,6 +2270,14 @@ function drawPersonFx(p, fx, backView, phase) {
     ctx.fillStyle = `rgba(230,50,60,${.75 * (1 - q)})`;
     ctx.beginPath(); ctx.arc(x, -6 - q * 40, 2, 0, Math.PI * 2); ctx.fill();
   }
+  if (has('song')) for (let i = 0; i < 3; i++) {   // 唱歌加成中：身邊飄著音符
+    const q = (t * .5 + i / 3) % 1, x = Math.sin(i * 2 + t * 1.5) * 16;
+    drawNote(x, -20 - q * 34, `rgba(255,225,120,${.9 * (1 - q)})`);
+  }
+  if (has('save')) {   // 拯救中：腳下一圈金色光環
+    ctx.strokeStyle = `rgba(255,215,110,${.55 + .3 * Math.sin(t * 6)})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(0, 0, 16, 5, 0, 0, Math.PI * 2); ctx.stroke();
+  }
   if (has('cared')) drawHeart(-dir * 16, -40 + Math.sin(t * 3) * 2, 4.5, 'rgba(255,130,170,.95)');   // 被賢者關心中
   const tri = fx.find(k => /^triple\d$/.test(k));
   if (tri) {   // 三重：身邊繞著剩下幾次的光球
@@ -2287,12 +2318,17 @@ function drawMagicCircle(x, y, left) {   // 黑魔法師的魔法陣：慢慢自
   for (let i = 0; i < 12; i++) { const an = i * Math.PI / 6; ctx.fillRect(Math.cos(an) * R * .86 - 2, Math.sin(an) * R * .86 - 2, 4, 4); }
   ctx.restore();
 }
-function drawPoison(x, y, W, H) {   // 上毒：身上冒起紫綠色毒泡泡（只有上毒的賢者自己看得到）
+function drawPoison(x, y, W, H) {   // 毒箭：身上冒起紫綠色毒泡泡（只有射毒箭的人自己看得到）
   for (let i = 0; i < 6; i++) {
     const q = (S.t * .7 + i / 6) % 1, bx = x + Math.sin(i * 2.3 + S.t) * W * .28, by = y - H * .2 - q * H * .6;
     ctx.fillStyle = i % 2 ? `rgba(150,220,90,${.75 * (1 - q)})` : `rgba(170,90,210,${.75 * (1 - q)})`;
     ctx.beginPath(); ctx.arc(bx, by, 2.5 + (i % 3), 0, Math.PI * 2); ctx.fill();
   }
+}
+function drawNote(x, y, col) {   // 八分音符
+  ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.ellipse(x, y, 3, 2.2, -.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x + 2.6, y - 1); ctx.lineTo(x + 2.6, y - 10); ctx.quadraticCurveTo(x + 6, y - 8, x + 6, y - 5); ctx.stroke();
 }
 function drawHeart(x, y, s, col) {
   ctx.fillStyle = col; ctx.beginPath();
@@ -2322,10 +2358,29 @@ function drawOwnerDebuff(a, W, H) {   // 島主身上：破綻＝紅色裂紋閃
 }
 // 瞬間特效（S.floaters 裡帶 fxk 的；ctx 在世界座標、外層已 save/restore）
 function drawFxFloater(f) {
-  const L = { poisonpop: .6, heart: .6, sheal: .5, smoke: .5, after: .6, boom: .6, kshield: .6, wshield: .6, pop: .6, shout: .5, crack: .8, fog: .8, drain: .4 }[f.fxk] || .5;
+  const L = { arrow: .2, song: .7, poisonpop: .6, heart: .6, sheal: .5, smoke: .5, after: .6, boom: .6, kshield: .6, wshield: .6, pop: .6, shout: .5, crack: .8, fog: .8, drain: .4 }[f.fxk] || .5;
   const q = Math.min(1, Math.max(0, 1 - f.life / L)), al = 1 - q;
   switch (f.fxk) {
-    case 'poisonpop': {   // 上毒：命中處一圈紫綠色毒霧
+    case 'arrow': {   // 豎琴弓的箭／毒箭（綠色箭羽）：從弓飛向目標
+      const x = f.x1 + (f.x2 - f.x1) * q, y = f.y1 + (f.y2 - f.y1) * q, ang = Math.atan2(f.y2 - f.y1, f.x2 - f.x1);
+      ctx.translate(x, y); ctx.rotate(ang);
+      ctx.strokeStyle = '#e8d8b0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(4, 0); ctx.stroke();
+      ctx.fillStyle = '#dfe6ec'; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(3, -3); ctx.lineTo(3, 3); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = f.poison ? '#9ad850' : '#c83a3a'; ctx.fillRect(-15, -3, 4, 2); ctx.fillRect(-15, 1, 4, 2);
+      break;
+    }
+    case 'song': {   // 唱歌：音符往外散開到範圍邊緣
+      ctx.save(); ctx.translate(f.x, f.y); ctx.scale(1, .5);
+      ctx.strokeStyle = `rgba(255,225,120,${.6 * al})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, 12 + q * (f.r - 12), 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      for (let i = 0; i < 8; i++) {
+        const an = i * Math.PI / 4, r = 10 + q * 60;
+        drawNote(f.x + Math.cos(an) * r, f.y - 30 + Math.sin(an) * r * .5, `rgba(255,225,120,${al})`);
+      }
+      break;
+    }
+    case 'poisonpop': {   // 毒箭：命中處一圈紫綠色毒霧
       for (let i = 0; i < 7; i++) {
         const an = i * Math.PI * 2 / 7, r = (8 + q * 18) * Math.max(1, f.big * .6);
         ctx.fillStyle = i % 2 ? `rgba(150,220,90,${.6 * al})` : `rgba(170,90,210,${.6 * al})`;
@@ -2385,7 +2440,7 @@ function drawFxFloater(f) {
       break;
     }
     case 'pop': {   // 放出瞬間的小光環（顏色看技能）
-      const col = { guard: '140,190,255', kshield: '180,220,255', vamp: '230,60,70', wings: '255,255,255', triple: '190,130,255' }[f.kind] || '255,255,255';
+      const col = { guard: '140,190,255', kshield: '180,220,255', vamp: '230,60,70', wings: '255,255,255', triple: '190,130,255', save: '255,215,110' }[f.kind] || '255,255,255';
       ctx.strokeStyle = `rgba(${col},${al})`; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.ellipse(f.x, f.y - 24, 10 + q * 18, 16 + q * 18, 0, 0, Math.PI * 2); ctx.stroke();
       break;
