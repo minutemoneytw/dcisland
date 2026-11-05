@@ -598,6 +598,10 @@ const OWNER_GAZE_CAST = 2;      // 石化之瞳的開眼預警秒數（與兩份
 const OWNER_BEAM_CAST = 2;      // 波動砲的讀條秒數（與兩份伺服器的 D_BEAM_CAST_MS 一致）
 const OWNER_COMMAND_CAST = 2;   // 命令（行動／靜止命令）的讀條秒數（與兩份伺服器的 D_COMMAND_CAST_MS 一致）
 const OWNER_CMD_LEEWAY = .5;    // 命令檢定的寬限：讀條結束前後 0.5 秒內「有移動輸入」算行動中（純客戶端判定）
+const CMD_ICONS = {   // 命令提示圖示（行人號誌風，gen_assets.py 產出）：act＝行動（走路小綠人）、still＝靜止（站立小紅人）
+  act: Object.assign(new Image(), { src: 'assets/ui/command_act.png' }),
+  still: Object.assign(new Image(), { src: 'assets/ui/command_still.png' }),
+};
 const OWNER_BEAM_DMG = 4;       // 波動砲命中的扣血（比爪擊重、非即死；與伺服器一樣是各客戶端自判）
 const OWNER_PETRIFY_MS = 10000; // 石化時長：不能移動＋每秒扣 1 HP（判定在各人自己的畫面，不進同步協定）
 const OWNER_WALK_SPEED = 34, OWNER_LEG_MIN = 1500, OWNER_PAUSE = [1.5, 4];   // 閒晃：路點間散步速度／每腿最短時長／休息範圍（秒）
@@ -3425,18 +3429,16 @@ function draw() {
         }
         const top = a.y - a.z - H - 2;   // 圖的頂端（名牌/驚嘆號/血條貼這條線往下排）
         // 島主預警：龍衝＝金色虛線＝衝刺路徑；石化之瞳＝大眼睛（全地圖面向她的人石化）；波動砲＝光波帶狀範圍；命令＝頭上大字（行動！／靜止！）
-        if (a.command) {   // 命令讀條：全地圖都看得到的大字提示（行動＝綠色、靜止＝紅色），隨時間呼吸閃爍
-          const c = a.command, pul = Math.sin(S.t * 12) * .5 + .5;
-          const act = c.kind === 'act';
-          ctx.save();
-          ctx.font = `bold ${Math.round(15 + 7 * bs)}px "Microsoft JhengHei"`; ctx.textAlign = 'center';
-          ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(8,10,14,.85)';
-          const txt = act ? '↑ 行動！' : '✕ 靜止！';
-          const wy = Math.max(top - 34, S.cam.y + 8);
-          ctx.strokeText(txt, a.x, wy);
-          ctx.fillStyle = act ? `rgba(122,216,140,${.65 + .35 * pul})` : `rgba(240,110,90,${.65 + .35 * pul})`;
-          ctx.fillText(txt, a.x, wy);
-          ctx.restore();
+        if (a.command) {   // 命令讀條：行人號誌風圖示（行動＝走路小綠人、靜止＝站立小紅人），全地圖可見、隨時間呼吸閃爍
+          const ic = CMD_ICONS[a.command.kind] || CMD_ICONS.act;
+          if (ic.complete && ic.naturalWidth) {
+            const s = 64, pul = .7 + .3 * (Math.sin(S.t * 10) * .5 + .5);
+            ctx.save();
+            ctx.imageSmoothingEnabled = false;
+            ctx.globalAlpha = pul;
+            ctx.drawImage(ic, a.x - s / 2, Math.max(top - 20 - s, S.cam.y + 8), s, s);
+            ctx.restore();
+          }
         }
         if (a.cast > 0 && a.castFrom) {
           const cf = a.castFrom, L = 1700;

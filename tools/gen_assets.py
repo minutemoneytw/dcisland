@@ -232,6 +232,64 @@ def gear():   # 機械島的擺設：半埋在土裡的廢棄齒輪（金屬灰�
     cv.outline()
     return cv
 
+# 命令提示圖示（壓力山大；行人號誌風，16×16，顯示時放大＋關閉平滑）：
+# act＝行動命令＝綠框黑底＋走路小綠人；still＝靜止命令＝黑底圓角＋站立小紅人。字元：#=框 O=人 .=底
+_ICON_ACT = [
+    "################",
+    "#..............#",
+    "#.......OO.....#",
+    "#......OOOO....#",
+    "#......OOOO....#",
+    "#..O...OOO.....#",
+    "#..OO.OOOO.O...#",
+    "#...OOOOOO.O...#",
+    "#.....OOOO.....#",
+    "#....OO.OO.....#",
+    "#...OO...OO....#",
+    "#..OO.....OO...#",
+    "#..O.......OO..#",
+    "#...........O..#",
+    "#..............#",
+    "################",
+]
+_ICON_STILL = [
+    "................",
+    "....OOOOOO......",
+    "...OOOOOOOO.....",
+    "...OOOOOOOO.....",
+    "...OOOOOOOO.....",
+    "..OO.OOOO.OO....",
+    "..OO.OOOO.OO....",
+    "..OO.OOOO.OO....",
+    "..OO.OOOO.OO....",
+    "..OO.OOOO.OO....",
+    "....OOOOOO......",
+    "...OOOOOOOO.....",
+    "...OOO..OOO.....",
+    "...OOO..OOO.....",
+    "..OOOO..OOOO....",
+    "................",
+]
+
+def _icon_from(rows, frame, person, bg):
+    """把字元矩陣畫成 16×16 圖示：frame＝框色（None＝無框）、person＝人形色、bg＝底色。"""
+    cv = Canvas(16, 16)
+    cv.rect(0, 0, 15, 15, hx(bg))
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            if ch == "O":
+                cv.set(x, y, hx(person))
+            elif ch == "#":
+                cv.set(x, y, hx(frame))
+    return cv
+
+def command_icon_act():
+    return _icon_from(_ICON_ACT, frame="#3ad45a", person="#4ae06a", bg="#141018")
+
+def command_icon_still():
+    return _icon_from(_ICON_STILL, frame=None, person="#f04a3a", bg="#1a1214")
+
+
 def flower(petal="#e26a8a"):
     cv = Canvas(8, 8)
     cv.vline(3, 5, 7, hx("#4d8a3a"))
@@ -1885,6 +1943,8 @@ def main():
 
     print("== 一般素材 ==")
     save(tombstone(), "tombstone.png")
+    save(command_icon_act(), "command_act.png", "ui")      # 命令提示圖示（壓力山大）：行動＝走路小綠人
+    save(command_icon_still(), "command_still.png", "ui")  # 靜止＝站立小紅人（main.js 的 CMD_ICONS 載入）
     print("== 武器 ==")
     save(weapon_sword(), "weapon_sword.png", "avatar")
     save(weapon_waraxe(), "weapon_waraxe.png", "avatar")
