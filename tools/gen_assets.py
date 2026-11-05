@@ -1367,14 +1367,16 @@ FISH_TABLE = [
 def fish_manifest():
     out = dict(
         _comment="釣魚與魚類圖鑑。由 tools/gen_assets.py 的 FISH_TABLE 產生（改這裡要改產生器再重跑）。稀有度先依 weight 抽，再從該地形同稀有度的魚裡平均抽一種；尺寸在 size 範圍內、越大越難（兩份伺服器與單機模擬一致）。",
-        escape=0.01,
+        escape=0.002,
+        _bigComment="big＝大尺寸門檻（cm，釣到 ≥ big 就算大尺寸；稱號用）。取尺寸範圍的 75% 處四捨五入，每次釣到該魚時約一到兩成機率是大尺寸（尺寸取 r^1.6）。",
         rarity=dict(common=dict(name="常見", weight=60, color="#c8d0bc"),
                     uncommon=dict(name="罕見", weight=35, color="#7ab8f0"),
                     rare=dict(name="稀有", weight=5, color="#f0c84a")),
         terrains={},
     )
     for t, fid, name, rar, size, _ in FISH_TABLE:
-        out["terrains"].setdefault(t, []).append(dict(id=fid, name=name, rarity=rar, size=list(size), sprite=f"{fid}.png"))
+        big = round(size[0] + (size[1] - size[0]) * 0.75)   # 大尺寸門檻：範圍的 75% 處
+        out["terrains"].setdefault(t, []).append(dict(id=fid, name=name, rarity=rar, size=list(size), big=big, sprite=f"{fid}.png"))
     return out
 
 def main():

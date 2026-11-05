@@ -1,6 +1,7 @@
 {
  "_comment": "釣魚與魚類圖鑑。由 tools/gen_assets.py 的 FISH_TABLE 產生（改這裡要改產生器再重跑）。稀有度先依 weight 抽，再從該地形同稀有度的魚裡平均抽一種；尺寸在 size 範圍內、越大越難（兩份伺服器與單機模擬一致）。",
- "escape": 0.01,
+ "escape": 0.002,
+ "_bigComment": "big＝大尺寸門檻（cm，釣到 ≥ big 就算大尺寸；稱號用）。取尺寸範圍的 75% 處四捨五入，每次釣到該魚時約一到兩成機率是大尺寸（尺寸取 r^1.6）。",
  "rarity": {
   "common": {
    "name": "常見",
@@ -28,6 +29,7 @@
      10,
      25
     ],
+    "big": 21,
     "sprite": "crucian.png"
    },
    {
@@ -38,6 +40,7 @@
      3,
      6
     ],
+    "big": 5,
     "sprite": "medaka.png"
    },
    {
@@ -48,6 +51,7 @@
      3,
      8
     ],
+    "big": 7,
     "sprite": "river_shrimp.png"
    },
    {
@@ -58,6 +62,7 @@
      25,
      30
     ],
+    "big": 29,
     "sprite": "old_boot.png"
    },
    {
@@ -68,6 +73,7 @@
      8,
      20
     ],
+    "big": 17,
     "sprite": "loach.png"
    },
    {
@@ -78,6 +84,7 @@
      30,
      80
     ],
+    "big": 68,
     "sprite": "perch.png"
    },
    {
@@ -88,6 +95,7 @@
      8,
      20
     ],
+    "big": 17,
     "sprite": "green_crab.png"
    },
    {
@@ -98,6 +106,7 @@
      30,
      100
     ],
+    "big": 82,
     "sprite": "catfish.png"
    },
    {
@@ -108,6 +117,7 @@
      40,
      90
     ],
+    "big": 78,
     "sprite": "koi.png"
    },
    {
@@ -118,6 +128,7 @@
      60,
      120
     ],
+    "big": 105,
     "sprite": "meadow_trout.png"
    },
    {
@@ -128,6 +139,7 @@
      2,
      6
     ],
+    "big": 5,
     "sprite": "pond_snail.png"
    },
    {
@@ -138,6 +150,7 @@
      20,
      80
     ],
+    "big": 65,
     "sprite": "pond_weed.png"
    },
    {
@@ -148,6 +161,7 @@
      8,
      20
     ],
+    "big": 17,
     "sprite": "bluegill.png"
    },
    {
@@ -158,6 +172,7 @@
      4,
      9
     ],
+    "big": 8,
     "sprite": "bitterling.png"
    },
    {
@@ -168,6 +183,7 @@
      4,
      8
     ],
+    "big": 7,
     "sprite": "stickleback.png"
    },
    {
@@ -178,6 +194,7 @@
      15,
      25
     ],
+    "big": 22,
     "sprite": "old_flask.png"
    },
    {
@@ -188,6 +205,7 @@
      4,
      10
     ],
+    "big": 8,
     "sprite": "marsh_crab.png"
    },
    {
@@ -198,6 +216,7 @@
      8,
      12
     ],
+    "big": 11,
     "sprite": "rusty_can.png"
    },
    {
@@ -208,6 +227,7 @@
      2,
      5
     ],
+    "big": 4,
     "sprite": "rice_shrimp.png"
    },
    {
@@ -218,6 +238,7 @@
      30,
      80
     ],
+    "big": 68,
     "sprite": "grass_carp.png"
    },
    {
@@ -228,6 +249,7 @@
      30,
      80
     ],
+    "big": 68,
     "sprite": "paddy_eel.png"
    },
    {
@@ -238,6 +260,7 @@
      15,
      30
     ],
+    "big": 26,
     "sprite": "pond_slider.png"
    },
    {
@@ -248,6 +271,7 @@
      30,
      90
     ],
+    "big": 75,
     "sprite": "carp.png"
    },
    {
@@ -258,6 +282,7 @@
      25,
      50
     ],
+    "big": 44,
     "sprite": "mandarin_fish.png"
    },
    {
@@ -268,6 +293,7 @@
      40,
      100
     ],
+    "big": 85,
     "sprite": "black_carp.png"
    },
    {
@@ -278,6 +304,7 @@
      40,
      100
     ],
+    "big": 85,
     "sprite": "silver_carp.png"
    },
    {
@@ -288,6 +315,7 @@
      25,
      45
     ],
+    "big": 40,
     "sprite": "goldfish_king.png"
    },
    {
@@ -298,6 +326,7 @@
      50,
      100
     ],
+    "big": 88,
     "sprite": "platinum_koi.png"
    },
    {
@@ -308,6 +337,7 @@
      100,
      220
     ],
+    "big": 190,
     "sprite": "marsh_sturgeon.png"
    },
    {
@@ -318,6 +348,7 @@
      50,
      90
     ],
+    "big": 80,
     "sprite": "amber_trout.png"
    }
   ],
@@ -330,6 +361,7 @@
      10,
      20
     ],
+    "big": 18,
     "sprite": "sardine.png"
    },
    {
@@ -340,6 +372,7 @@
      15,
      35
     ],
+    "big": 30,
     "sprite": "horse_mackerel.png"
    },
    {
@@ -350,6 +383,7 @@
      3,
      10
     ],
+    "big": 8,
     "sprite": "hermit_crab.png"
    },
    {
@@ -360,6 +394,7 @@
      30,
      150
     ],
+    "big": 120,
     "sprite": "kelp.png"
    },
    {
@@ -370,6 +405,7 @@
      8,
      12
     ],
+    "big": 11,
     "sprite": "empty_can.png"
    },
    {
@@ -380,6 +416,7 @@
      6,
      11
     ],
+    "big": 10,
     "sprite": "clownfish.png"
    },
    {
@@ -390,6 +427,7 @@
      30,
      90
     ],
+    "big": 75,
     "sprite": "octopus.png"
    },
    {
@@ -400,6 +438,7 @@
      10,
      30
     ],
+    "big": 25,
     "sprite": "starfish.png"
    },
    {
@@ -410,6 +449,7 @@
      80,
      180
     ],
+    "big": 155,
     "sprite": "mahi.png"
    },
    {
@@ -420,6 +460,7 @@
      60,
      120
     ],
+    "big": 105,
     "sprite": "golden_turtle.png"
    },
    {
@@ -430,6 +471,7 @@
      3,
      10
     ],
+    "big": 8,
     "sprite": "conch.png"
    },
    {
@@ -440,6 +482,7 @@
      3,
      8
     ],
+    "big": 7,
     "sprite": "sand_crab.png"
    },
    {
@@ -450,6 +493,7 @@
      5,
      12
     ],
+    "big": 10,
     "sprite": "anchovy.png"
    },
    {
@@ -460,6 +504,7 @@
      20,
      50
     ],
+    "big": 42,
     "sprite": "flounder.png"
    },
    {
@@ -470,6 +515,7 @@
      10,
      40
     ],
+    "big": 32,
     "sprite": "sea_lettuce.png"
    },
    {
@@ -480,6 +526,7 @@
      20,
      30
     ],
+    "big": 28,
     "sprite": "plastic_bottle.png"
    },
    {
@@ -490,6 +537,7 @@
      3,
      8
     ],
+    "big": 7,
     "sprite": "sand_shrimp.png"
    },
    {
@@ -500,6 +548,7 @@
      30,
      70
     ],
+    "big": 60,
     "sprite": "mullet.png"
    },
    {
@@ -510,6 +559,7 @@
      20,
      28
     ],
+    "big": 26,
     "sprite": "beach_sandal.png"
    },
    {
@@ -520,6 +570,7 @@
      10,
      30
     ],
+    "big": 25,
     "sprite": "moon_jelly.png"
    },
    {
@@ -530,6 +581,7 @@
      15,
      40
     ],
+    "big": 34,
     "sprite": "pufferfish.png"
    },
    {
@@ -540,6 +592,7 @@
      8,
      20
     ],
+    "big": 17,
     "sprite": "seahorse.png"
    },
    {
@@ -550,6 +603,7 @@
      30,
      100
     ],
+    "big": 82,
     "sprite": "grouper.png"
    },
    {
@@ -560,6 +614,7 @@
      25,
      50
     ],
+    "big": 44,
     "sprite": "black_porgy.png"
    },
    {
@@ -570,6 +625,7 @@
      40,
      120
     ],
+    "big": 100,
     "sprite": "stingray.png"
    },
    {
@@ -580,6 +636,7 @@
      20,
      50
     ],
+    "big": 42,
     "sprite": "lobster.png"
    },
    {
@@ -590,6 +647,7 @@
      150,
      300
     ],
+    "big": 262,
     "sprite": "sailfish.png"
    },
    {
@@ -600,6 +658,7 @@
      10,
      30
     ],
+    "big": 25,
     "sprite": "pearl_starfish.png"
    },
    {
@@ -610,6 +669,7 @@
      20,
      50
     ],
+    "big": 42,
     "sprite": "rainbow_wrasse.png"
    },
    {
@@ -620,6 +680,7 @@
      20,
      40
     ],
+    "big": 35,
     "sprite": "leafy_sea_dragon.png"
    }
   ],
@@ -632,6 +693,7 @@
      30,
      90
     ],
+    "big": 75,
     "sprite": "cod.png"
    },
    {
@@ -642,6 +704,7 @@
      10,
      18
     ],
+    "big": 16,
     "sprite": "capelin.png"
    },
    {
@@ -652,6 +715,7 @@
      3,
      8
     ],
+    "big": 7,
     "sprite": "ice_shrimp.png"
    },
    {
@@ -662,6 +726,7 @@
      20,
      25
     ],
+    "big": 24,
     "sprite": "frozen_glove.png"
    },
    {
@@ -672,6 +737,7 @@
      8,
      15
     ],
+    "big": 13,
     "sprite": "hairy_crab.png"
    },
    {
@@ -682,6 +748,7 @@
      50,
      100
     ],
+    "big": 88,
     "sprite": "salmon.png"
    },
    {
@@ -692,6 +759,7 @@
      20,
      40
     ],
+    "big": 35,
     "sprite": "icefish.png"
    },
    {
@@ -702,6 +770,7 @@
      20,
      60
     ],
+    "big": 50,
     "sprite": "squid.png"
    },
    {
@@ -712,6 +781,7 @@
      100,
      200
     ],
+    "big": 175,
     "sprite": "narwhal_calf.png"
    },
    {
@@ -722,6 +792,7 @@
      50,
      90
     ],
+    "big": 80,
     "sprite": "aurora_trout.png"
    },
    {
@@ -732,6 +803,7 @@
      10,
      20
     ],
+    "big": 18,
     "sprite": "smelt.png"
    },
    {
@@ -742,6 +814,7 @@
      20,
      35
     ],
+    "big": 31,
     "sprite": "herring.png"
    },
    {
@@ -752,6 +825,7 @@
      30,
      60
     ],
+    "big": 52,
     "sprite": "pollock.png"
    },
    {
@@ -762,6 +836,7 @@
      2,
      6
     ],
+    "big": 5,
     "sprite": "frost_snail.png"
    },
    {
@@ -772,6 +847,7 @@
      20,
      100
     ],
+    "big": 80,
     "sprite": "ice_kelp.png"
    },
    {
@@ -782,6 +858,7 @@
      18,
      28
     ],
+    "big": 26,
     "sprite": "iced_bottle.png"
    },
    {
@@ -792,6 +869,7 @@
      20,
      25
     ],
+    "big": 24,
     "sprite": "wool_glove.png"
    },
    {
@@ -802,6 +880,7 @@
      4,
      10
     ],
+    "big": 8,
     "sprite": "arctic_shrimp.png"
    },
    {
@@ -812,6 +891,7 @@
      8,
      20
     ],
+    "big": 17,
     "sprite": "sculpin.png"
    },
    {
@@ -822,6 +902,7 @@
      20,
      50
     ],
+    "big": 42,
     "sprite": "icicle.png"
    },
    {
@@ -832,6 +913,7 @@
      60,
      150
     ],
+    "big": 128,
     "sprite": "halibut.png"
    },
    {
@@ -842,6 +924,7 @@
      40,
      80
     ],
+    "big": 70,
     "sprite": "arctic_char.png"
    },
    {
@@ -852,6 +935,7 @@
      60,
      120
     ],
+    "big": 105,
     "sprite": "wolffish.png"
    },
    {
@@ -862,6 +946,7 @@
      30,
      80
     ],
+    "big": 68,
     "sprite": "ice_octopus.png"
    },
    {
@@ -872,6 +957,7 @@
      15,
      40
     ],
+    "big": 34,
     "sprite": "king_crab.png"
    },
    {
@@ -882,6 +968,7 @@
      10,
      40
     ],
+    "big": 32,
     "sprite": "snowflake_jelly.png"
    },
    {
@@ -892,6 +979,7 @@
      150,
      250
     ],
+    "big": 225,
     "sprite": "beluga_calf.png"
    },
    {
@@ -902,6 +990,7 @@
      30,
      60
     ],
+    "big": 52,
     "sprite": "crystal_fish.png"
    },
    {
@@ -912,6 +1001,7 @@
      100,
      250
     ],
+    "big": 212,
     "sprite": "frost_dragon_eel.png"
    },
    {
@@ -922,6 +1012,7 @@
      60,
      120
     ],
+    "big": 105,
     "sprite": "glacier_turtle.png"
    }
   ],
@@ -934,6 +1025,7 @@
      5,
      12
     ],
+    "big": 10,
     "sprite": "lanternfish.png"
    },
    {
@@ -944,6 +1036,7 @@
      10,
      40
     ],
+    "big": 32,
     "sprite": "glow_jelly.png"
    },
    {
@@ -954,6 +1047,7 @@
      20,
      50
     ],
+    "big": 42,
     "sprite": "black_bass.png"
    },
    {
@@ -964,6 +1058,7 @@
      20,
      30
     ],
+    "big": 28,
     "sprite": "message_bottle.png"
    },
    {
@@ -974,6 +1069,7 @@
      3,
      8
     ],
+    "big": 7,
     "sprite": "glow_shrimp.png"
    },
    {
@@ -984,6 +1080,7 @@
      50,
      150
     ],
+    "big": 125,
     "sprite": "moon_eel.png"
    },
    {
@@ -994,6 +1091,7 @@
      40,
      120
     ],
+    "big": 100,
     "sprite": "star_ray.png"
    },
    {
@@ -1004,6 +1102,7 @@
      20,
      60
     ],
+    "big": 50,
     "sprite": "anglerfish.png"
    },
    {
@@ -1014,6 +1113,7 @@
      30,
      70
     ],
+    "big": 60,
     "sprite": "ghost_fish.png"
    },
    {
@@ -1024,6 +1124,7 @@
      60,
      130
     ],
+    "big": 112,
     "sprite": "moon_arowana.png"
    },
    {
@@ -1034,6 +1135,7 @@
      2,
      6
     ],
+    "big": 5,
     "sprite": "glow_snail.png"
    },
    {
@@ -1044,6 +1146,7 @@
      5,
      15
     ],
+    "big": 12,
     "sprite": "night_crab.png"
    },
    {
@@ -1054,6 +1157,7 @@
      20,
      100
     ],
+    "big": 80,
     "sprite": "moon_kelp.png"
    },
    {
@@ -1064,6 +1168,7 @@
      3,
      8
     ],
+    "big": 7,
     "sprite": "spark_minnow.png"
    },
    {
@@ -1074,6 +1179,7 @@
      20,
      45
     ],
+    "big": 39,
     "sprite": "dusk_perch.png"
    },
    {
@@ -1084,6 +1190,7 @@
      8,
      12
     ],
+    "big": 11,
     "sprite": "drift_can.png"
    },
    {
@@ -1094,6 +1201,7 @@
      3,
      8
     ],
+    "big": 7,
     "sprite": "star_shrimp.png"
    },
    {
@@ -1104,6 +1212,7 @@
      5,
      12
     ],
+    "big": 10,
     "sprite": "firefly_squid.png"
    },
    {
@@ -1114,6 +1223,7 @@
      15,
      30
     ],
+    "big": 26,
     "sprite": "midnight_crucian.png"
    },
    {
@@ -1124,6 +1234,7 @@
      25,
      30
     ],
+    "big": 29,
     "sprite": "lost_boot.png"
    },
    {
@@ -1134,6 +1245,7 @@
      15,
      30
     ],
+    "big": 26,
     "sprite": "vampire_squid.png"
    },
    {
@@ -1144,6 +1256,7 @@
      60,
      160
     ],
+    "big": 135,
     "sprite": "comet_eel.png"
    },
    {
@@ -1154,6 +1267,7 @@
      50,
      130
     ],
+    "big": 110,
     "sprite": "dream_ray.png"
    },
    {
@@ -1164,6 +1278,7 @@
      80,
      180
     ],
+    "big": 155,
     "sprite": "opah.png"
    },
    {
@@ -1174,6 +1289,7 @@
      30,
      70
     ],
+    "big": 60,
     "sprite": "lamp_octopus.png"
    },
    {
@@ -1184,6 +1300,7 @@
      15,
      40
     ],
+    "big": 34,
     "sprite": "abyss_crab.png"
    },
    {
@@ -1194,6 +1311,7 @@
      150,
      300
     ],
+    "big": 262,
     "sprite": "starlight_whale.png"
    },
    {
@@ -1204,6 +1322,7 @@
      20,
      60
     ],
+    "big": 50,
     "sprite": "aurora_jelly.png"
    },
    {
@@ -1214,6 +1333,7 @@
      40,
      100
     ],
+    "big": 85,
     "sprite": "shadow_angler.png"
    },
    {
@@ -1224,6 +1344,7 @@
      70,
      140
     ],
+    "big": 122,
     "sprite": "comet_arowana.png"
    }
   ],
@@ -1236,6 +1357,7 @@
      8,
      15
     ],
+    "big": 13,
     "sprite": "minnow.png"
    },
    {
@@ -1246,6 +1368,7 @@
      1,
      4
     ],
+    "big": 3,
     "sprite": "tadpole.png"
    },
    {
@@ -1256,6 +1379,7 @@
      20,
      60
     ],
+    "big": 50,
     "sprite": "dead_branch.png"
    },
    {
@@ -1266,6 +1390,7 @@
      6,
      12
     ],
+    "big": 10,
     "sprite": "crayfish.png"
    },
    {
@@ -1276,6 +1401,7 @@
      2,
      6
     ],
+    "big": 5,
     "sprite": "moss_snail.png"
    },
    {
@@ -1286,6 +1412,7 @@
      30,
      70
     ],
+    "big": 60,
     "sprite": "rainbow_trout.png"
    },
    {
@@ -1296,6 +1423,7 @@
      20,
      40
     ],
+    "big": 35,
     "sprite": "softshell_turtle.png"
    },
    {
@@ -1306,6 +1434,7 @@
      30,
      60
     ],
+    "big": 52,
     "sprite": "largemouth_bass.png"
    },
    {
@@ -1316,6 +1445,7 @@
      80,
      150
     ],
+    "big": 132,
     "sprite": "ancient_fish.png"
    },
    {
@@ -1326,6 +1456,7 @@
      40,
      90
     ],
+    "big": 78,
     "sprite": "jade_carp.png"
    },
    {
@@ -1336,6 +1467,7 @@
      8,
      16
     ],
+    "big": 14,
     "sprite": "creek_chub.png"
    },
    {
@@ -1346,6 +1478,7 @@
      15,
      40
     ],
+    "big": 34,
     "sprite": "pine_twig.png"
    },
    {
@@ -1356,6 +1489,7 @@
      2,
      5
     ],
+    "big": 4,
     "sprite": "mud_snail.png"
    },
    {
@@ -1366,6 +1500,7 @@
      10,
      40
     ],
+    "big": 32,
     "sprite": "water_cress.png"
    },
    {
@@ -1376,6 +1511,7 @@
      3,
      8
     ],
+    "big": 7,
     "sprite": "brook_crab.png"
    },
    {
@@ -1386,6 +1522,7 @@
      2,
      5
     ],
+    "big": 4,
     "sprite": "glass_shrimp.png"
    },
    {
@@ -1396,6 +1533,7 @@
      15,
      25
     ],
+    "big": 22,
     "sprite": "spring_bottle.png"
    },
    {
@@ -1406,6 +1544,7 @@
      20,
      40
     ],
+    "big": 35,
     "sprite": "moss_carp.png"
    },
    {
@@ -1416,6 +1555,7 @@
      25,
      30
     ],
+    "big": 29,
     "sprite": "hiking_boot.png"
    },
    {
@@ -1426,6 +1566,7 @@
      8,
      15
     ],
+    "big": 13,
     "sprite": "birch_fish.png"
    },
    {
@@ -1436,6 +1577,7 @@
      30,
      60
     ],
+    "big": 52,
     "sprite": "mountain_char.png"
    },
    {
@@ -1446,6 +1588,7 @@
      60,
      150
     ],
+    "big": 128,
     "sprite": "giant_salamander.png"
    },
    {
@@ -1456,6 +1599,7 @@
      60,
      120
     ],
+    "big": 105,
     "sprite": "pike.png"
    },
    {
@@ -1466,6 +1610,7 @@
      20,
      40
     ],
+    "big": 35,
     "sprite": "forest_turtle.png"
    },
    {
@@ -1476,6 +1621,7 @@
      5,
      12
     ],
+    "big": 10,
     "sprite": "rock_crab.png"
    },
    {
@@ -1486,6 +1632,7 @@
      50,
      120
     ],
+    "big": 102,
     "sprite": "river_eel.png"
    },
    {
@@ -1496,6 +1643,7 @@
      25,
      50
     ],
+    "big": 44,
     "sprite": "emerald_salamander.png"
    },
    {
@@ -1506,6 +1654,7 @@
      50,
      100
     ],
+    "big": 88,
     "sprite": "spirit_trout.png"
    },
    {
@@ -1516,6 +1665,7 @@
      90,
      160
     ],
+    "big": 142,
     "sprite": "elder_pike.png"
    },
    {
@@ -1526,6 +1676,7 @@
      60,
      120
     ],
+    "big": 105,
     "sprite": "moss_dragon_turtle.png"
    }
   ],
@@ -1538,6 +1689,7 @@
      10,
      30
     ],
+    "big": 25,
     "sprite": "char_fish.png"
    },
    {
@@ -1548,6 +1700,7 @@
      4,
      10
     ],
+    "big": 8,
     "sprite": "lava_shrimp.png"
    },
    {
@@ -1558,6 +1711,7 @@
      25,
      30
     ],
+    "big": 29,
     "sprite": "burnt_boot.png"
    },
    {
@@ -1568,6 +1722,7 @@
      3,
      8
     ],
+    "big": 7,
     "sprite": "magma_snail.png"
    },
    {
@@ -1578,6 +1733,7 @@
      5,
      12
     ],
+    "big": 10,
     "sprite": "ash_goby.png"
    },
    {
@@ -1588,6 +1744,7 @@
      50,
      120
     ],
+    "big": 102,
     "sprite": "flame_ray.png"
    },
    {
@@ -1598,6 +1755,7 @@
      10,
      30
     ],
+    "big": 25,
     "sprite": "lava_crab.png"
    },
    {
@@ -1608,6 +1766,7 @@
      60,
      140
     ],
+    "big": 120,
     "sprite": "sulfur_eel.png"
    },
    {
@@ -1618,6 +1777,7 @@
      50,
      100
     ],
+    "big": 88,
     "sprite": "phoenix_fish.png"
    },
    {
@@ -1628,6 +1788,7 @@
      70,
      150
     ],
+    "big": 130,
     "sprite": "fire_dragon_carp.png"
    },
    {
@@ -1638,6 +1799,7 @@
      3,
      8
     ],
+    "big": 7,
     "sprite": "cinder_snail.png"
    },
    {
@@ -1648,6 +1810,7 @@
      3,
      8
     ],
+    "big": 7,
     "sprite": "steam_shrimp.png"
    },
    {
@@ -1658,6 +1821,7 @@
      5,
      12
     ],
+    "big": 10,
     "sprite": "obsidian_crab.png"
    },
    {
@@ -1668,6 +1832,7 @@
      5,
      12
     ],
+    "big": 10,
     "sprite": "hot_spring_fish.png"
    },
    {
@@ -1678,6 +1843,7 @@
      10,
      25
     ],
+    "big": 21,
     "sprite": "soot_loach.png"
    },
    {
@@ -1688,6 +1854,7 @@
      4,
      9
     ],
+    "big": 8,
     "sprite": "ember_goby.png"
    },
    {
@@ -1698,6 +1865,7 @@
      8,
      12
     ],
+    "big": 11,
     "sprite": "scorched_can.png"
    },
    {
@@ -1708,6 +1876,7 @@
      15,
      30
     ],
+    "big": 26,
     "sprite": "basalt_carp.png"
    },
    {
@@ -1718,6 +1887,7 @@
      10,
      50
     ],
+    "big": 40,
     "sprite": "sulfur_kelp.png"
    },
    {
@@ -1728,6 +1898,7 @@
      15,
      25
     ],
+    "big": 22,
     "sprite": "melted_bottle.png"
    },
    {
@@ -1738,6 +1909,7 @@
      60,
      150
     ],
+    "big": 128,
     "sprite": "magma_eel.png"
    },
    {
@@ -1748,6 +1920,7 @@
      30,
      80
     ],
+    "big": 68,
     "sprite": "ash_octopus.png"
    },
    {
@@ -1758,6 +1931,7 @@
      20,
      50
     ],
+    "big": 42,
     "sprite": "cinder_squid.png"
    },
    {
@@ -1768,6 +1942,7 @@
      30,
      70
     ],
+    "big": 60,
     "sprite": "fire_bass.png"
    },
    {
@@ -1778,6 +1953,7 @@
      30,
      60
     ],
+    "big": 52,
     "sprite": "ember_turtle.png"
    },
    {
@@ -1788,6 +1964,7 @@
      30,
      80
     ],
+    "big": 68,
     "sprite": "caldera_angler.png"
    },
    {
@@ -1798,6 +1975,7 @@
      100,
      200
     ],
+    "big": 175,
     "sprite": "magma_dragon.png"
    },
    {
@@ -1808,6 +1986,7 @@
      70,
      150
     ],
+    "big": 130,
     "sprite": "obsidian_ray.png"
    },
    {
@@ -1818,6 +1997,7 @@
      50,
      100
     ],
+    "big": 88,
     "sprite": "sun_koi.png"
    },
    {
@@ -1828,6 +2008,7 @@
      40,
      90
     ],
+    "big": 78,
     "sprite": "salamander_fish.png"
    }
   ]
