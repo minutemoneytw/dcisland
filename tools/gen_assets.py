@@ -935,7 +935,7 @@ MOB_MANIFEST = dict(
              anim=dict(sheet="external/img2pixel/bahamut_fly_sheet.png", frames=6, fps=8, dashFps=16, scale=4, keyBg=True),
              line="「黃金肥龍」抖了抖金色的肚皮，打了一個不容小覷的呵欠。",
              # 黃金肥龍：暫時代用（說這些台詞的本人還沒做）。使用者提供的正式翻譯，字句照原文（全形空白是刻意的停頓），不要自行潤飾；
-             # 每句之後會對應一個招式，關鍵字對照見 docs/notes.md「島主與戰鬥」
+             # 每句台詞依關鍵字對應招式（QUOTE_KEYWORDS，產生 lineSkills），讀完台詞後依序放出；關鍵字對照見 docs/notes.md「島主與戰鬥」
              ownerLines=["我降臨於此對月長嘯！　召喚星降之夜！", "我自月而來降臨於此，　召喚星降之夜！",
                          "鋼鐵燃燒吧！　成為我降臨於此的刀劍吧！", "鋼鐵成為我降臨於此的燃燒之劍！",
                          "我自月而來降臨於此，　踏過熾熱之地！", "我自月而來攜鋼鐵降臨於此！",
@@ -980,6 +980,30 @@ MOB_MANIFEST = dict(
              ownerLinesSeq=True),   # 蓋老師的台詞照順序一句一句說（說完一輪回到第一句）；其他島主維持隨機
     ],
 )
+
+# 台詞招式（黃金肥龍）：台詞裡的關鍵字 → 招式 id（使用者定，2026-11-05）。
+# 依關鍵字在句中出現的順序放招；同一招在一句裡重複只放一次；先比對長的（「紅月」不另外算成「月」）。
+# 招式 id 與名稱、數值見 client/assets/skills/skills.json 的 quotes 與 main.js 的 QUOTE_*；「超新星」不對應招式
+QUOTE_KEYWORDS = [("紅月", "dive"), ("月光", "ring"), ("月亮", "ring"), ("月", "ring"),
+                  ("熾熱", "ion"), ("燃燒", "ion"), ("鐵血", "iron"), ("鋼鐵", "iron"), ("星降", "meteor")]
+
+def quote_skills(line):
+    """一句台詞 → 依序要放的招式 id 清單（最多 3 個）。"""
+    out, i = [], 0
+    while i < len(line):
+        for kw, sk in QUOTE_KEYWORDS:
+            if line.startswith(kw, i):
+                if sk not in out:
+                    out.append(sk)
+                i += len(kw)
+                break
+        else:
+            i += 1
+    return out[:3]
+
+for _m in MOB_MANIFEST["mobs"]:
+    if _m.get("id") == "gold_dragon":
+        _m["lineSkills"] = [quote_skills(l) for l in _m["ownerLines"]]   # 與 ownerLines 一一對應
 
 # 每座地形的島主（id＝mobs.json 裡的動物 id；沒列的就是還沒有島主）
 OWNER_BY_TERRAIN = {

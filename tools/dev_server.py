@@ -222,13 +222,14 @@ COMMIT_REFILL = 0.5      # 每幾秒回一批（與 Worker 的 COMMIT_REFILL_MS 
 # 客戶端只負責演出與自己有沒有被打到的判定；伺服器只送「階段變更」事件，不需要每幀醒著跑。
 # 每座地形各自的島主（地形 → 攻擊樣式；要與 client assets 的 terrain.json owner／mobs.json atk 一致）
 OWNER_TERRAINS = {"grass": "dash", "night": "gaze", "volcano": "beam"}
-D_CAST_MS = 1000         # 龍衝的島緣鎖定（預警）持續時間
+D_CAST_MS = 2000         # 龍衝的島緣鎖定（預警）持續時間（頭上有讀條，跟石化之瞳一樣 2 秒；與 Worker、client 的 OWNER_CAST 一致）
 D_GAZE_CAST_MS = 2000    # 石化之瞳的開眼預警持續時間（與 client 的 OWNER_GAZE_CAST 一致）
 D_BEAM_CAST_MS = 2000    # 波動砲的讀條持續時間（與 client 的 OWNER_BEAM_CAST 一致）
 D_DASH = 560             # 龍衝速度 px/s（比仇恨追殺的 180 更快：高速掠過才有威嚇感；與 client 的 OWNER_DASH_SPEED 一致）
 D_REST_MS = 700          # 衝到底落地的停留時間
 D_RAGE_MS = 12000        # 龍衝冷卻：到點才能再觸發龍衝；冷卻期間被打進入仇恨追殺
 D_SAY_MS = 3000          # 被打後先在原地說台詞的時間（說完才瞬移反擊）
+Q_GAP_MS = 3000          # 台詞招式：說完台詞後每隔幾 ms 放一招（第一招在說完後 Q_GAP_MS；與 Worker 一致）
 D_RESPAWN_MS = 30000     # 島主被打倒後的重生秒數
 D_HP = 200
 D_REGEN = 18             # 島主每秒回血（用牆鐘 lazy 計算；與 worker/src/index.js 的 D_REGEN 一致）
@@ -379,6 +380,30 @@ def owner_says(terrain):
             return True
     sk = _SKILL_DEFS.get(OWNER_TERRAINS.get(terrain))
     return not sk or sk.get("say") is not False
+
+_MOB_DEFS = None
+def mob_defs():
+    global _MOB_DEFS
+    if _MOB_DEFS is None:
+        try:
+            with open(os.path.join(CLIENT, "assets", "mobs", "mobs.json"), encoding="utf-8") as f:
+                _MOB_DEFS = json.load(f).get("mobs", [])
+        except (OSError, ValueError):
+            return []
+    return _MOB_DEFS
+
+def quote_def(terrain):
+    """台詞招式設定：(quoteChance, lineSkills) 或 None（與 Worker 的 pickQuote 同一套）。"""
+    owner_says(terrain)   # 確保 skills.json 已載入
+    style = OWNER_TERRAINS.get(terrain)
+    sk = (_SKILL_DEFS or {}).get(style) or {}
+    ch = sk.get("quoteChance") or 0
+    if ch <= 0:
+        return None
+    for m in mob_defs():
+        if m.get("owner") and m.get("atk") == style and isinstance(m.get("lineSkills"), list):
+            return ch, m["lineSkills"]
+    return None
 
 _FLOOR_DEFS = None
 def floor_defs():
@@ -617,7 +642,7 @@ class Room:
             d = self.dragons[terrain] = {"hp": D_HP, "st": "idle", "pos": list(D_CENTER), "aim_tms": 0.0, "dead_at": 0.0,
                            "gen": 0, "wander": None, "wander_gen": 0, "cooldown_until": 0.0, "say_until": 0.0,
                            "warp": [0, 0], "atk": [0, 0], "unit": [0, 0], "dest": [0, 0], "dash_len": 0.0, "beam": [0, 0],
-                           "regen_t": 0.0, "aggro": None, "last_hit_at": 0.0}
+                           "regen_t": 0.0, "aggro": None, "last_hit_at": 0.0, "quote": None, "last_line": -1}
         return d
 
     def dragon_regen(self, terrain, now):
@@ -706,6 +731,8 @@ class Room:
         if not d["aim_tms"]:
             if d["say_until"] and now < d["say_until"]:
                 return "say", list(d["pos"]), int(d["say_until"] - now)   # 說台詞中：原地不動
+            if d.get("quote"):
+                return "quote", list(d["pos"]), 0   # 台詞招式放招中：原地不動
             if not d["wander"]:
                 return "idle", list(d["pos"]), 0
             w = d["wander"]
@@ -755,6 +782,8 @@ class Room:
                          "el": int(max(0, min(w["tms"], now_ms - w["t0"])))}
         elif ph == "say":   # 說台詞中：附上剩餘時間
             o["sayMs"] = int(ms)
+        if d.get("quote"):   # 台詞招式中：哪一句（中途進場的人也看到同一句）
+            o["line"] = d["quote"]["line"]
         return o
 
     def _dragon_start_leg(self, terrain):
@@ -820,7 +849,9 @@ class Room:
             if d["st"] == "dead" or not self._has_clients(terrain):
                 return
             now = time.time() * 1000
-            if d.get("aggro"):   # 仇恨中：追殺＋爪擊（tick 自己排下一次）；掛保險：tick 出錯就清仇恨讓散步接手，不會卡死
+            if d.get("quote"):   # 台詞招式：說完台詞後依序放招
+                outs, next_delay = self._quote_tick_locked(now, terrain)
+            elif d.get("aggro"):   # 仇恨中：追殺＋爪擊（tick 自己排下一次）；掛保險：tick 出錯就清仇恨讓散步接手，不會卡死
                 try:
                     outs, next_delay = self._aggro_tick_locked(now, terrain)
                 except Exception:
@@ -869,6 +900,64 @@ class Room:
                 next_delay = min(next_delay, max(0.1, (full_at - now) / 1000 + 0.05))
             self._schedule_wander_tick(next_delay, gen, terrain)
 
+    # ---- 台詞招式（黃金肥龍；與 Worker 的 pickQuote／startQuote／quoteTargets／stepQuote 同一套）----
+    def _pick_quote(self, terrain):
+        """被激怒時要不要改放台詞招式：回 {"line","skills"} 或 None。需在鎖內。"""
+        qd = quote_def(terrain)
+        if not qd or random.random() >= qd[0]:
+            return None
+        d = self.dragon_state(terrain)
+        cands = [i for i, v in enumerate(qd[1]) if v and i != d.get("last_line", -1)]
+        if not cands:
+            return None
+        line = random.choice(cands)
+        d["last_line"] = line
+        return {"line": line, "skills": list(qd[1][line])[:3]}
+
+    def _start_quote(self, now, terrain, q, pos):
+        """開始台詞招式：原地說台詞，之後每 Q_GAP_MS 放一招。需在鎖內；回 say 訊息與下一次 tick 延遲（秒）。"""
+        d = self.dragon_state(terrain)
+        d["wander"] = None
+        d["aim_tms"] = 0.0
+        d["pos"] = [pos[0], pos[1]]
+        d["say_until"] = now + D_SAY_MS
+        fires = [d["say_until"] + Q_GAP_MS * (i + 1) for i in range(len(q["skills"]))]
+        d["quote"] = {"line": q["line"], "skills": q["skills"], "fires": fires, "fired": 0}
+        d["cooldown_until"] = fires[-1] + D_RAGE_MS   # 不動 wander_gen：仇恨 tick 裡呼叫時，這次 tick 排的下一次還要有效
+        print(f"[dragon {time.strftime('%H:%M:%S')}] {terrain} 台詞招式 #{q['line']} {q['skills']}", file=sys.stderr, flush=True)
+        return ({"t": "dragon", "ev": "say", "x": d["pos"][0], "y": d["pos"][1], "ms": D_SAY_MS, "line": q["line"]},
+                (fires[0] - now) / 1000)
+
+    def _quote_targets(self, terrain, skill, d):
+        alive = [cid for cid, c in self.clients.items()
+                 if c.get("terrain") == terrain and c.get("state") and not c["state"].get("dead")]
+        if not alive:
+            return []
+        if skill == "meteor":
+            return alive
+        if skill == "dive":
+            ag = d.get("aggro")
+            return [ag["id"] if ag and ag["id"] in alive else random.choice(alive)]
+        if skill == "ion":
+            return [random.choice(alive)]
+        return []
+
+    def _quote_tick_locked(self, now, terrain):
+        """推進台詞招式：到點的招式依序廣播 qfire；放完結束（仇恨保持，接著追殺）。需在鎖內；回 (訊息, 延遲秒)。"""
+        d = self.dragon_state(terrain)
+        q = d["quote"]
+        outs = []
+        while q["fired"] < len(q["skills"]) and now >= q["fires"][q["fired"]] - 30:
+            sk = q["skills"][q["fired"]]
+            outs.append({"t": "dragon", "ev": "qfire", "skill": sk, "i": q["fired"], "x": d["pos"][0], "y": d["pos"][1],
+                         "ids": self._quote_targets(terrain, sk, d)})
+            q["fired"] += 1
+        if q["fired"] >= len(q["skills"]):
+            d["quote"] = None
+            d["say_until"] = 0.0
+            return outs, 0.4
+        return outs, max(0.05, (q["fires"][q["fired"]] - now) / 1000)
+
     def _cycle_end(self, terrain, now):
         """反擊循環（aim_tms 起算）結束的絕對時間 ms。"""
         d = self.dragon_state(terrain)
@@ -911,6 +1000,11 @@ class Room:
         if now >= d["cooldown_until"]:
             st = c["state"]
             ph, pos2, _ = self.dragon_phase(now, terrain)
+            q = self._pick_quote(terrain)
+            if q:   # 台詞招式：原地說台詞後依序放招，仇恨保持
+                say, delay = self._start_quote(now, terrain, q, pos2)
+                outs.append(say)
+                return outs, D_SAY_MS / 1000 + 0.05
             d["wander"] = None
             d["pos"] = [pos2[0], pos2[1]]   # 打斷追腿：位置同步到目前插值點（同 say 的理由）
             d["atk"] = [float(st.get("x", 0)), float(st.get("y", 0))]
@@ -995,12 +1089,21 @@ class Room:
             d["last_hit_at"] = now
             if d["hp"] <= 0:
                 d["st"], d["hp"], d["pos"], d["aim_tms"], d["dead_at"] = "dead", 0, list(pos), 0.0, now
+                d["quote"] = None
+                d["say_until"] = 0.0
                 d["gen"] += 1
                 d["wander"] = None
                 d["aggro"] = None
                 d["wander_gen"] += 1   # 作廢散步 tick
                 dead_gen = d["gen"]
                 outs.append({"t": "dragon", "ev": "dead", "x": pos[0], "y": pos[1]})
+            elif ph == "idle" and self.dragon_maps.get(terrain) and now >= d["cooldown_until"] and (q := self._pick_quote(terrain)):
+                # 黃金肥龍：80% 台詞招式（說台詞→依序放招）
+                d["aggro"] = {"id": cid, "rotate_at": now + D_AGGRO_MS, "claw_at": now + D_CLAW_MS}
+                outs.append({"t": "dragon", "ev": "aggro", "id": cid, "name": (c.get("state") or {}).get("name") or "玩家"})
+                say, _ = self._start_quote(now, terrain, q, pos)
+                outs.append(say)
+                post_cycle = D_SAY_MS / 1000 + 0.05
             elif ph == "idle" and self.dragon_maps.get(terrain) and now >= d["cooldown_until"]:
                 # 一被打就先建立仇恨（30 秒從最後一次被打起算）；反擊照樣先放：說台詞 →（龍衝＝瞬移島緣／蛇女＝原地開眼），
                 # 放完不用再被打就馬上接著追殺同一個攻擊者（循環由 tick 在說完/放完時接手啟動）
@@ -1106,17 +1209,28 @@ class Room:
                 self._schedule_wander_tick(0.1, d["wander_gen"], terrain)   # 快點醒來，追殺改鎖定挑釁者
                 return outs
             if ph == "idle" and self.dragon_maps.get(terrain) and now >= d["cooldown_until"]:
-                # 沒有仇恨且閒置：照被打的反擊流程演出——說台詞後反擊（龍衝＝瞬移島緣／石化之瞳＝原地開眼，照 OWNER_TERRAINS 樣式）
+                # 沒有仇恨且閒置：照被打的反擊流程（台詞招式，或照樣式：要講台詞就先講再反擊）
                 d["aggro"] = {"id": cid, "rotate_at": now + D_AGGRO_MS, "claw_at": now + D_CLAW_MS}
-                d["say_until"] = now + D_SAY_MS
                 d["atk"] = [float(st.get("x") or 0), float(st.get("y") or 0)]
                 d["wander"] = None
                 d["pos"] = [pos[0], pos[1]]   # 打斷散步腿：位置同步到目前插值點（同 dragon_hit 的理由）
                 d["wander_gen"] += 1
-                post_cycle = D_SAY_MS / 1000 + 0.1
                 print(f"[dragon {time.strftime('%H:%M:%S')}] {terrain} 挑釁 → 反擊流程（鎖定 {cid}）", file=sys.stderr, flush=True)
                 outs.append({"t": "dragon", "ev": "aggro", "id": cid, "name": st.get("name") or "玩家"})
-                outs.append({"t": "dragon", "ev": "say", "x": pos[0], "y": pos[1], "ms": D_SAY_MS})
+                q = self._pick_quote(terrain)
+                if q:
+                    say, _ = self._start_quote(now, terrain, q, pos)
+                    outs.append(say)
+                    post_cycle = D_SAY_MS / 1000 + 0.05
+                elif owner_says(terrain):
+                    d["say_until"] = now + D_SAY_MS
+                    post_cycle = D_SAY_MS / 1000 + 0.1
+                    outs.append({"t": "dragon", "ev": "say", "x": pos[0], "y": pos[1], "ms": D_SAY_MS})
+                else:
+                    cyc = self._dragon_start_cycle(now, terrain)
+                    if cyc:
+                        outs.append(cyc)
+                    post_cycle = max(0.1, self._cycle_end(terrain, now) / 1000 - time.time() + 0.1) if cyc else 2.0
             elif ph == "idle" and self.dragon_maps.get(terrain):
                 # 反擊冷卻中且沒有仇恨：直接進入追殺（同 dragon_hit 的冷卻路徑）
                 d["pos"] = [pos[0], pos[1]]
@@ -1166,7 +1280,7 @@ class Room:
                 return
             m = self.dragon_maps.get(terrain)
             pos = dragon_edge(m, random.random() * math.pi * 2) if m else list(D_CENTER)
-            d.update(st="idle", hp=D_HP, pos=pos, aim_tms=0.0, atk=[0, 0], wander=None, aggro=None)
+            d.update(st="idle", hp=D_HP, pos=pos, aim_tms=0.0, atk=[0, 0], wander=None, aggro=None, quote=None, say_until=0.0)
             d["wander_gen"] += 1   # 作廢舊散步 tick
             out = {"t": "dragon", "ev": "spawn", "x": pos[0], "y": pos[1], "hp": d["hp"]}
             if self._has_clients(terrain):

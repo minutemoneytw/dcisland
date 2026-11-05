@@ -1,8 +1,15 @@
 {
- "_comment": "島主招式設定（手寫，不由 gen_assets.py 產生）。key＝mobs.json 島主的 atk 攻擊樣式。name＝招式名稱（顯示在倒數條右上角）；bar＝放招預警期間在島主頭上顯示黃色倒數條（由左往右填），填滿就放招；say＝放招前先原地講台詞 3 秒（mobs.json 的 ownerLines），false＝被打就直接開始預警。兩份伺服器（worker/src/index.js、tools/dev_server.py）也讀 say。改這個檔不用改程式。",
+ "_comment": "島主招式設定（手寫，不由 gen_assets.py 產生）。key＝mobs.json 島主的 atk 攻擊樣式。name＝招式名稱（顯示在倒數條右上角）；bar＝放招預警期間在島主頭上顯示黃色倒數條（由左往右填），填滿就放招；say＝放招前先原地講台詞 3 秒（mobs.json 的 ownerLines），false＝被打就直接開始預警。quoteChance＝有 lineSkills（台詞招式）的島主被激怒時改放台詞招式的機率（其餘照 atk 樣式放；黃金肥龍：80% 台詞招式、20% 龍衝）。兩份伺服器（worker/src/index.js、tools/dev_server.py）也讀 say 與 quoteChance。quotes＝台詞招式的名稱（key＝lineSkills 裡的招式 id；範圍與傷害在 main.js 的 QUOTE_*）。改這個檔不用改程式。",
  "skills": {
-  "dash": { "name": "龍衝", "bar": false, "say": true },
+  "dash": { "name": "龍衝", "bar": true, "say": false, "quoteChance": 0.8 },
   "gaze": { "name": "石化", "bar": true, "say": false },
   "beam": { "name": "波動砲", "bar": true, "say": true }
+ },
+ "quotes": {
+  "ring": { "name": "月環" },
+  "iron": { "name": "鋼鐵" },
+  "dive": { "name": "月華衝" },
+  "meteor": { "name": "隕石流" },
+  "ion": { "name": "離子砲" }
  }
 }

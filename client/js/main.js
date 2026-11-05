@@ -555,7 +555,18 @@ function nearestLand(a) {
 
 // ---- 島主的龍衝反擊（連線時由伺服器權威同步，這裡是單機模擬與共用演出）：被打後先說台詞，再瞬間消失、在島隨機邊緣現蹤瞄準攻擊者 ----
 // 預警範圍提示 1 秒後，以龍本體直線飛衝過島（攻擊範圍＝龍的大小，被撞到＝KO），衝到對岸落地歇一下後就地繼續散步／追殺
-const OWNER_FLY_SPEED = 240, OWNER_DASH_SPEED = 560, OWNER_CAST = 1, OWNER_CD = 12;
+const OWNER_FLY_SPEED = 240, OWNER_DASH_SPEED = 560, OWNER_CAST = 2, OWNER_CD = 12;   // OWNER_CAST＝龍衝讀條秒數（與兩份伺服器的 D_CAST_MS 一致）
+// 台詞招式（黃金肥龍：mobs.json 的 lineSkills＋skills.json 的 quoteChance）：說完台詞（3 秒）後每 QUOTE_GAP 秒放一招，放招期間原地不動。
+// 沒有預警：放出的瞬間才畫範圍並結算（各人自判，與爪擊同一原則）。數值以職業血量（輸出 8／補師 10／坦克 20 且減半）設計：
+//   ring 月環：島主中心 r1～r2 之間的環形扣 dmg（最內圈與最外圈之外安全）
+//   iron 鋼鐵：島主中心半徑 r 內扣 dmg 並擊飛 kb px
+//   dive 月華衝：仇恨目標身邊半徑 r 扣 dmg（坦克滿血單吃剩 12；其他人太近也會中）
+//   meteor 隕石流：每個人身上一圈半徑 r、每圈扣 dmg，站太近會多吃別人的（三人疊 9：輸出死、補師剩 1）
+//   ion 離子砲：隨機一人身邊半徑 r，total 由圈內人數平分（兩人分攤各 7 不會死，單吃 14）
+const QUOTE_GAP = 3;   // 與兩份伺服器的 Q_GAP_MS 一致
+const QUOTE = { ring: { r1: 110, r2: 330, dmg: 4 }, iron: { r: 200, dmg: 4, kb: 160 }, dive: { r: 64, dmg: 16 },
+                meteor: { r: 56, dmg: 3 }, ion: { r: 64, total: 14 } };
+const quoteName = sk => S.skillsDB?.quotes?.[sk]?.name || sk;
 const OWNER_GAZE_CAST = 2;      // 石化之瞳的開眼預警秒數（與兩份伺服器的 D_GAZE_CAST_MS 一致）
 const OWNER_BEAM_CAST = 2;      // 波動砲的讀條秒數（與兩份伺服器的 D_BEAM_CAST_MS 一致）
 const OWNER_BEAM_DMG = 4;       // 波動砲命中的扣血（比爪擊重、非即死；與伺服器一樣是各客戶端自判）
@@ -601,11 +612,12 @@ const ownerCastTotal = def => ownerAtk(def) === 'gaze' ? OWNER_GAZE_CAST : owner
 // 例外：mobs.json 標了 ownerLinesSeq（目前只有蓋老師）的島主照順序一句一句說，說完一輪回到第一句。
 // 順序號記在 S.ownerSayIdx（key＝島主 id，不跟島主物件走，物件重建、換地形後再回來都接著說）；
 // 純客戶端計數，沒有同步——每個畫面各自從頭數，中途才進來的人看到的句子可能和別人差幾句
-function ownerSay(a) {
+function ownerSay(a, idx) {   // idx＝指定第幾句（台詞招式由伺服器挑，全島同一句）；沒給照下面的規則挑
   const def = mobDef(a.id), lines = def?.ownerLines;
   if (!Array.isArray(lines) || !lines.length) return;
   let line;
-  if (def.ownerLinesSeq) {
+  if (Number.isInteger(idx) && lines[idx]) line = lines[idx];
+  else if (def.ownerLinesSeq) {
     const idx = (S.ownerSayIdx[a.id] ||= 0);
     line = lines[idx % lines.length]; S.ownerSayIdx[a.id] = idx + 1;
   } else {
@@ -630,7 +642,22 @@ function ownerEdgeAt(angle) {
 function ownerTakeoff(a, src) {
   // 被打：先在原地說台詞（3 秒泡泡），說完才瞬移到島緣（ownerStep 的 sayPhase 接手）；skills.json 的 say:false 就不講、直接開始預警。
   // 一被打就建立仇恨（龍衝照放），落地歇完就接著追殺同一個攻擊者，不用再被打一次
-  const says = ownerSkill(mobDef(a.id)).say !== false;
+  const def = mobDef(a.id), sk = ownerSkill(def);
+  if (Array.isArray(def.lineSkills) && sk.quoteChance > 0 && Math.random() < sk.quoteChance) {   // 台詞招式（單機；連線時由伺服器挑）
+    const cands = def.lineSkills.map((v, i) => i).filter(i => def.lineSkills[i].length && i !== a.lastQuote);
+    if (cands.length) {
+      const idx = cands[Math.floor(Math.random() * cands.length)], skills = def.lineSkills[idx].slice(0, 3);
+      a.lastQuote = idx;
+      ownerSay(a, idx);
+      a.sayPhase = S.t + 3; a.saySrc = null;
+      a.quote = { skills, fires: skills.map((_, i) => S.t + 3 + QUOTE_GAP * (i + 1)), fired: 0 };
+      a.target = null; a.idle = 0; a.wleg = null;
+      a.aggro = { target: src, rotateAt: S.t + OWNER_AGGRO_MS, clawAt: 0 };
+      a.rageCd = a.quote.fires[a.quote.fires.length - 1] + OWNER_CD;
+      return;
+    }
+  }
+  const says = sk.say !== false;
   if (says) ownerSay(a);
   a.sayPhase = says ? S.t + 3 : S.t; a.saySrc = { x: src.x, y: src.y };
   a.target = null; a.idle = 0; a.wleg = null;
@@ -653,9 +680,20 @@ function ownerStep(a, dt, def) {
     if (S.t < a.sayPhase) { a.z = 0; return; }
     const src = a.saySrc;
     a.sayPhase = 0; a.saySrc = null;
+    if (a.quote) return;   // 台詞招式：說完由下面的 quote 段依序放招
     if (ownerAtk(def) === 'gaze') ownerGazeCast(a, src);
     else if (ownerAtk(def) === 'beam') ownerBeamCast(a, src);
     else ownerWarp(a, src);
+    return;
+  }
+  if (a.quote) {   // 台詞招式（單機）：原地不動，到點依序放招；目標只有自己
+    a.z = 0;
+    const q = a.quote;
+    while (q.fired < q.skills.length && S.t >= q.fires[q.fired]) {
+      const skn = q.skills[q.fired++];
+      quoteFire(a, skn, skn === 'ring' || skn === 'iron' ? [] : ['me'], a.x, a.y);
+    }
+    if (q.fired >= q.skills.length) a.quote = null;
     return;
   }
   if (a.cast) {
@@ -723,6 +761,49 @@ function ownerDive(a, def) {
   a.flyTo = dest;
   a.dir = u.x < 0 ? -1 : 1;
   toast(`${def.name} 發動龍衝！`, 2000);
+}
+
+// ---- 台詞招式的放出與結算（單機與連線共用；ids＝目標：'me' 或連線編號）----
+function quoteFire(a, skill, ids, bx, by) {
+  const def = mobDef(a.id), me = S.players[0], Q = QUOTE[skill], nm = quoteName(skill);
+  if (!Q) return;
+  const posOf = id => (id === 'me' || id === S.net?.id) ? me : S.remotes.get(id);
+  const dist = (p, c) => Math.hypot(p.x - c.x, p.y - c.y);
+  const b = { x: bx ?? a.x, y: by ?? a.y };
+  const hurt = dmg => {
+    if (me.dead || !(dmg > 0)) return;
+    playerDamage(me, dmg, `${def.name}的${nm}`);
+    S.floaters.push({ x: me.x, y: me.y - 24, ring: true, life: .35 });
+  };
+  if (skill === 'ring') {
+    S.floaters.push({ aoe: 'ring', x: b.x, y: b.y, r1: Q.r1, r2: Q.r2, life: .7 });
+    const d = dist(me, b);
+    if (d > Q.r1 && d < Q.r2) hurt(Q.dmg);
+  } else if (skill === 'iron') {
+    S.floaters.push({ aoe: 'circle', x: b.x, y: b.y, r: Q.r, life: .7 });
+    const d = dist(me, b);
+    if (d < Q.r && !me.dead) {
+      hurt(Q.dmg);
+      if (!me.dead) { const l = d || 1; me.knock = { ux: (me.x - b.x) / l || 1, uy: (me.y - b.y) / l, left: Q.kb }; }   // 擊飛：往遠離島主的方向（stepPlayer 推）
+    }
+  } else if (skill === 'dive' || skill === 'ion') {
+    const t = posOf(ids?.[0]);
+    if (t) {
+      S.floaters.push({ aoe: 'circle', x: t.x, y: t.y, r: Q.r, life: .7, hot: skill === 'dive' });
+      if (dist(me, t) <= Q.r) {
+        if (skill === 'dive') hurt(Q.dmg);
+        else {   // 離子砲：圈內的人平分（以我畫面上的位置算人數，含自己）
+          const n = [me, ...S.remotes.values()].filter(q => !q.dead && dist(q, t) <= Q.r).length;
+          hurt(Math.ceil(Q.total / Math.max(1, n)));
+        }
+      }
+    }
+  } else if (skill === 'meteor') {
+    const cs = (ids || []).map(posOf).filter(Boolean).map(t => ({ x: t.x, y: t.y }));
+    for (const c of cs) S.floaters.push({ aoe: 'circle', x: c.x, y: c.y, r: Q.r, life: .7 });
+    hurt(Q.dmg * cs.filter(c => dist(me, c) <= Q.r).length);
+  }
+  toast(`${def.name}：${nm}！`, 1400);
 }
 
 // ---- 石化之瞳（笨蛋蛇女的攻擊，atk: "gaze"）：不瞬移，原地開眼 2 秒 → 全地圖「正面朝著她」的人石化 ----
@@ -831,7 +912,7 @@ function onNetHeal(healerId) {
 // 釣上來的怪物只要還在就一定在追殺人，也算戰鬥中（玩家不自動回血，否則每秒回 1 比牠的爪擊快，站著不動也打不死）
 function ownerEngaged() {
   return S.mobs.some(a => !a.dead && a.lurker) || S.mobs.some(a => !a.dead && mobDef(a.id)?.owner &&
-    (a.aggro || a.fly || a.cast || a.castFrom || a.rest || a.sayPhase || a.cycle || a.gaze || a.beam));
+    (a.aggro || a.fly || a.cast || a.castFrom || a.rest || a.sayPhase || a.quote || a.cycle || a.gaze || a.beam));
 }
 // 龍衝 CD 中被打：進入仇恨（單機版；連線版由伺服器廣播 aggro 事件）
 function ownerAggroStart(a, src) {
@@ -1139,7 +1220,7 @@ function applyDragonSnap(o) {
   a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null; a.beam = null;
   a.aggro = o.aggro != null;   // 快照帶仇恨目標（連線編號）：中途進場也知道牠在追殺（戰鬥中不自動回血、之後會提示冷靜）
   if (o.ph === 'aim') {   // 島緣鎖定中：還原成循環（扣掉已過的預警時間）
-    const total = 1000;
+    const total = OWNER_CAST * 1000;
     a.cycle = {
       t0ms: Date.now() - (total - (o.castMs || total)), castMs: total, restMs: 700,
       dashMs: Math.max(1, Math.hypot(o.dx - o.x, o.dy - o.y) / OWNER_DASH_SPEED * 1000),
@@ -1161,7 +1242,8 @@ function applyDragonSnap(o) {
   } else if (o.ph === 'say') {   // 說台詞中：站在原地（說完才會收到 aim/gaze 事件）
     a.cycle = null; a.wleg = null;
     a.x = o.x; a.y = o.y; a.z = 0; a.fly = false;
-    if (ownerSkill(mobDef(a.id)).say !== false) ownerSay(a);
+    if (o.line != null) ownerSay(a, o.line);   // 台詞招式：伺服器帶的那一句
+    else if (ownerSkill(mobDef(a.id)).say !== false) ownerSay(a);
   } else if (o.ph === 'cast') {   // 原地施放中（石化之瞳開眼／波動砲讀條）：站定，接續剩餘時間後本地發射
     a.cycle = null; a.wleg = null;
     const beam = ownerAtk(mobDef(a.id)) === 'beam';
@@ -1217,7 +1299,15 @@ function onNetDragon(m) {
     if (!na) return;
     na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.beam = null; na.wleg = null;
     na.x = m.x; na.y = m.y;
-    ownerSay(na);
+    ownerSay(na, m.line);   // 台詞招式帶台詞編號（全島同一句）
+    return;
+  }
+  if (m.ev === 'qfire') {   // 台詞招式放出：島主原地不動，範圍與傷害各人自判
+    const na = a || dragonEnsure(m.x, m.y);
+    if (!na) return;
+    na.cycle = null; na.wleg = null; na.fly = false; na.z = 0;
+    na.x = m.x; na.y = m.y;
+    quoteFire(na, m.skill, m.ids, m.x, m.y);
     return;
   }
   if (m.ev === 'gaze') {   // 蛇女開眼：原地石化預警（castMs 後本地發射；發射瞬間面向她的人石化）
@@ -1263,7 +1353,7 @@ function onNetDragon(m) {
     S.floaters.push({ x: a.x, y: a.y - 40, poof: true, life: .55 });
     a.hp = m.hp;
     a.cycle = {   // 整個反擊循環用牆鐘（預警→龍衝→歇腳），與伺服器同軸
-      t0ms: Date.now(), castMs: m.castMs || 1000, restMs: 700,
+      t0ms: Date.now(), castMs: m.castMs || OWNER_CAST * 1000, restMs: 700,
       dashMs: Math.max(1, Math.hypot(m.dx - m.x, m.dy - m.y) / OWNER_DASH_SPEED * 1000),
       warp: { x: m.x, y: m.y }, from: { x: m.tx, y: m.ty }, dest: { x: m.dx, y: m.dy },
     };
@@ -1450,7 +1540,7 @@ function stepMob(a, dt) {
       const n = Math.floor(a.regenAcc);
       if (n > 0) { a.regenAcc -= n; a.hp = Math.min(a.maxHp, a.hp + n); }
     }
-    if (a.fly || a.cast || a.rest || a.sayPhase) { ownerStep(a, dt, def); return; }
+    if (a.fly || a.cast || a.rest || a.sayPhase || a.quote) { ownerStep(a, dt, def); return; }
     if (a.aggro) { ownerAggroStep(a, dt, def); return; }   // 龍衝 CD 中：仇恨追殺（單機模擬）
     if (a.wleg) { stepOwnerWalk(a, dt); return; }
     if (a.idle > 0) { a.idle -= dt; a.z = 0; return; }
@@ -1699,6 +1789,14 @@ function stepPlayer(p, dt) {
     const wantsMove = keys['a'] || keys['arrowleft'] || keys['d'] || keys['arrowright'] || keys['w'] || keys['arrowup'] || keys['s'] || keys['arrowdown'] || keys[' '];
     if (!seatItem(p) || wantsMove) standUp(p);
     else { p.moving = false; p.frame = 0; p.z = 0; p.vz = 0; return; }
+  }
+  if (p.knock) {   // 被鋼鐵擊飛：0.25 秒內往外推（撞到水邊／家具就停），期間不能自己走
+    const k = p.knock, st = Math.min(k.left, 640 * dt), nx = p.x + k.ux * st, ny = p.y + k.uy * st;
+    if (!blocked(nx, ny)) { p.x = nx; p.y = ny; k.left -= st; } else k.left = 0;
+    p.z = Math.max(p.z, 10 * Math.sin(Math.PI * Math.min(1, 1 - k.left / QUOTE.iron.kb)));
+    if (k.left <= 0) { p.knock = null; p.z = 0; }
+    p.moving = false;
+    return;
   }
   // 腳下的水上地板被拆掉（自己或別人）：挪到最近能站的地方，不會泡在水裡動不了
   if (p === S.players[0] && blocked(p.x, p.y, true)) [p.x, p.y] = landNear(p.x, p.y);
@@ -2726,6 +2824,17 @@ function draw() {
       ctx.beginPath(); ctx.arc(f.x1, f.y1, 40 + q * 2200, 0, Math.PI * 2); ctx.stroke();
       ctx.restore(); continue;
     }
+    if (f.aoe) {   // 台詞招式的範圍：放出瞬間亮起再淡出（circle＝圓形、ring＝月環的環形）
+      const q = 1 - f.life / .7, al = 1 - q;
+      ctx.beginPath();
+      if (f.aoe === 'ring') { ctx.arc(f.x, f.y, f.r2, 0, Math.PI * 2); ctx.arc(f.x, f.y, f.r1, 0, Math.PI * 2, true); }
+      else ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+      ctx.fillStyle = f.hot ? `rgba(255,70,60,${.42 * al})` : `rgba(255,150,70,${.34 * al})`;
+      ctx.fill('evenodd');
+      ctx.strokeStyle = `rgba(255,236,170,${.9 * al})`; ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.restore(); continue;
+    }
     if (f.beamLine) {   // 波動砲：從島主沿光束方向射出的帶狀光波（0.5 秒淡出）
       const q = 1 - f.life / .5;
       ctx.translate(f.x, f.y); ctx.rotate(f.ang);
@@ -3526,7 +3635,7 @@ async function boot() {
       for (let i = S.floaters.length - 1; i >= 0; i--) {
         const f = S.floaters[i];
         f.life -= dt;
-        if (!f.slash && !f.beam && !f.beamLine && !f.healPulse && !f.orb) f.y -= 34 * dt;   // 爪擊/光束/綠圈特效固定在原座標，不隨飄字上浮
+        if (!f.slash && !f.beam && !f.beamLine && !f.healPulse && !f.orb && !f.aoe) f.y -= 34 * dt;   // 爪擊/光束/綠圈特效固定在原座標，不隨飄字上浮
         if (f.life <= 0) S.floaters.splice(i, 1);
       }
       updateSkillBar();

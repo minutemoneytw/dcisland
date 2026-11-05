@@ -36,7 +36,7 @@ const COMMIT_REFILL_MS = 500;
 // 伺服器本來不知道島的形狀（世界由前端種子生成），由玩家上傳陸地位圖（RLE）；各客戶端的島相同，誰上傳都一樣。
 // 每座地形各自的島主（地形 → 攻擊樣式；要與 client assets 的 terrain.json owner／mobs.json atk 一致）：
 const OWNER_TERRAINS = { grass: "dash", night: "gaze", volcano: "beam" };
-const D_CAST_MS = 1000;      // 龍衝的島緣鎖定（預警）持續時間
+const D_CAST_MS = 2000;      // 龍衝的島緣鎖定（預警）持續時間（頭上有讀條，跟石化之瞳一樣 2 秒；與 client 的 OWNER_CAST 一致）
 const D_GAZE_CAST_MS = 2000; // 石化之瞳的開眼預警持續時間（與 client 的 OWNER_GAZE_CAST 一致）
 const D_BEAM_CAST_MS = 2000; // 波動砲的讀條持續時間（與 client 的 OWNER_BEAM_CAST 一致）
 const D_DASH = 560;          // 龍衝速度 px/s（比仇恨追殺的 180 更快：高速掠過才有威嚇感）
@@ -45,6 +45,9 @@ const D_WALK = 34;           // 閒晃散步速度 px/s（與 client 的 OWNER_W
 const D_WANDER_PAUSE = [1500, 4000];   // 每個路點之間站著休息的時間範圍 ms
 const D_RAGE_MS = 12000;     // 龍衝冷卻：到點才能再觸發龍衝；冷卻期間被打進入仇恨追殺
 const D_SAY_MS = 3000;       // 被打後先在原地說台詞的時間（說完才瞬移反擊）
+// 台詞招式（黃金肥龍：skills.json 的 quoteChance＋mobs.json 的 lineSkills）：說完台詞後每 Q_GAP_MS 放一招（第一招在說完後 Q_GAP_MS）。
+// 放招期間島主原地不動；範圍與傷害由各客戶端自判（main.js 的 QUOTE_*），伺服器只決定時間點與目標
+const Q_GAP_MS = 3000;
 const D_RESPAWN_MS = 30000;  // 島主被打倒後的重生秒數
 const D_HP = 200;
 const D_REGEN = 18;      // 島主每秒回血（用牆鐘 lazy 計算，DO 休眠也照補；約 7 人打不贏、8 人圍毆約 70 秒擊殺，client 的 OWNER_REGEN 與本機 dev_server 的 D_REGEN 要同值）
@@ -482,6 +485,71 @@ export class Island {
     }
     return this.skillDefs;
   }
+  async getMobDefs() {   // mobs.json（台詞招式表 lineSkills 用）
+    if (this.mobDefs) return this.mobDefs;
+    try {
+      const res = await this.env.ASSETS.fetch(new Request("https://assets.local/assets/mobs/mobs.json"));
+      this.mobDefs = (await res.json()).mobs || [];
+    } catch (e) {
+      console.log("[mobs] manifest 載入失敗", String(e));
+      return [];
+    }
+    return this.mobDefs;
+  }
+  // 被激怒時要不要改放台詞招式：skills.json 該樣式的 quoteChance 機率；是的話隨機挑一句（不連續重複）回 {line, skills}，否則 null
+  async pickQuote(terrain) {
+    const style = OWNER_TERRAINS[terrain];
+    const sk = (await this.getSkillDefs())[style];
+    if (!sk || !(sk.quoteChance > 0) || Math.random() >= sk.quoteChance) return null;
+    const def = (await this.getMobDefs()).find(m => m.owner && m.atk === style && Array.isArray(m.lineSkills));
+    if (!def) return null;
+    const d = this.dragons.get(terrain);
+    const cands = def.lineSkills.map((v, i) => i).filter(i => def.lineSkills[i].length && i !== d.lastLine);
+    if (!cands.length) return null;
+    const line = cands[Math.floor(Math.random() * cands.length)];
+    d.lastLine = line;
+    return { line, skills: def.lineSkills[line].slice(0, 3) };
+  }
+  // 開始台詞招式：原地說台詞 D_SAY_MS，之後每 Q_GAP_MS 放一招（stepQuote 推進）；廣播 say（帶台詞編號，全島同一句）。存檔由呼叫端負責
+  startQuote(now, terrain, q, pos) {
+    const d = this.dragons.get(terrain);
+    d.wander = null; d.aimTms = 0;
+    d.pos = [pos[0], pos[1]];
+    d.sayUntil = now + D_SAY_MS;
+    const fires = q.skills.map((_, i) => d.sayUntil + Q_GAP_MS * (i + 1));
+    d.quote = { line: q.line, skills: q.skills, fires, fired: 0 };
+    d.cooldownUntil = fires[fires.length - 1] + D_RAGE_MS;
+    this.broadcast({ t: "dragon", ev: "say", x: d.pos[0], y: d.pos[1], ms: D_SAY_MS, line: q.line }, null, terrain);
+  }
+  // 台詞招式的目標（放招當下才挑；客戶端同時顯示範圍並自判傷害）：月華衝＝仇恨目標、隕石流＝場上每個人、離子砲＝隨機一人；月環／鋼鐵以島主為中心不需要
+  quoteTargets(terrain, skill, d) {
+    const alive = [];
+    for (const ws of this.state.getWebSockets()) {
+      const a = ws.deserializeAttachment() || {};
+      if (a.terrain === terrain && a.state && !a.state.dead) alive.push(a.id);
+    }
+    if (!alive.length) return [];
+    if (skill === "meteor") return alive;
+    if (skill === "dive") return [d.aggro && alive.includes(d.aggro.id) ? d.aggro.id : alive[Math.floor(Math.random() * alive.length)]];
+    if (skill === "ion") return [alive[Math.floor(Math.random() * alive.length)]];
+    return [];
+  }
+  // 推進台詞招式：到點的招式依序廣播 qfire；全部放完就結束（仇恨保持，接著追殺）。回傳下一個要醒的時間
+  async stepQuote(now, terrain) {
+    const d = this.dragons.get(terrain), q = d.quote;
+    while (q.fired < q.skills.length && now >= q.fires[q.fired] - 30) {
+      const skill = q.skills[q.fired];
+      this.broadcast({ t: "dragon", ev: "qfire", skill, i: q.fired, x: d.pos[0], y: d.pos[1], ids: this.quoteTargets(terrain, skill, d) }, null, terrain);
+      q.fired++;
+    }
+    if (q.fired >= q.skills.length) {
+      d.quote = null; d.sayUntil = 0;
+      await this.saveDragon(terrain);
+      return now + 400;   // 最後一招的特效放一下再開始追
+    }
+    await this.saveDragonLazy(terrain);
+    return q.fires[q.fired];
+  }
   async ownerSays(terrain) {   // 這座島的島主放招前要不要先講台詞
     const sk = (await this.getSkillDefs())[OWNER_TERRAINS[terrain]];
     return !sk || sk.say !== false;
@@ -753,6 +821,7 @@ export class Island {
     if (d.regenT === undefined) d.regenT = Date.now();   // 舊存檔從現在起算（不憑空補血）
     if (d.aggro === undefined) d.aggro = null;
     if (d.lastHitAt === undefined) d.lastHitAt = 0;
+    if (d.quote === undefined) d.quote = null;
     return d;
   }
   saveDragon(terrain) {
@@ -842,6 +911,7 @@ export class Island {
     if (d.st === "dead") return ["dead", d.pos, 0];
     if (!d.aimTms) {
       if (d.sayUntil && now < d.sayUntil) return ["say", d.pos, d.sayUntil - now];   // 說台詞中：原地不動
+      if (d.quote) return ["quote", d.pos, 0];   // 台詞招式放招中：原地不動
       if (!d.wander) return ["idle", d.pos, 0];
       const t = Math.min(1, Math.max(0, (now - d.wander.t0) / d.wander.tms));
       return ["idle", [d.wander.fx + (d.wander.tx - d.wander.fx) * t, d.wander.fy + (d.wander.ty - d.wander.fy) * t], 0];
@@ -883,6 +953,7 @@ export class Island {
     if (ph === "dash") { o.ux = d.unit[0]; o.uy = d.unit[1]; o.dx = d.dest[0]; o.dy = d.dest[1]; }
     if (ph === "rest") o.restMs = Math.round(ms);
     if (ph === "say") o.sayMs = Math.round(ms);   // 說台詞中：附上剩餘時間
+    if (d.quote) o.line = d.quote.line;           // 台詞招式中：哪一句（中途進場的人也看到同一句）
     if (ph === "idle" && d.wander) {   // 散步中：附上路點與已走時間，客戶端接著插值
       const w = d.wander;
       o.wleg = { fx: w.fx, fy: w.fy, tx: w.tx, ty: w.ty, tms: w.tms, el: Math.max(0, Math.min(w.tms, now - w.t0)) };
@@ -917,7 +988,7 @@ export class Island {
     d.lastHitAt = now;   // 仇恨計時：D_DROPOUT 內沒有人再打牠就脫離追殺
     d.hp -= dmg;
     if (d.hp <= 0) {   // 打倒了：全地形廣播死亡，30 秒後用鬧鐘重生
-      d.st = "dead"; d.hp = 0; d.pos = [pos[0], pos[1]]; d.aimTms = 0; d.deadAt = now; d.wander = null; d.aggro = null;
+      d.st = "dead"; d.hp = 0; d.pos = [pos[0], pos[1]]; d.aimTms = 0; d.deadAt = now; d.wander = null; d.aggro = null; d.quote = null; d.sayUntil = 0;
       await this.saveDragon(terrain);
       this.broadcast({ t: "dragon", ev: "dead", x: pos[0], y: pos[1] }, null, terrain);
       await this.armOwnerAlarm();
@@ -927,6 +998,15 @@ export class Island {
     // 反擊照樣先放：說台詞（skills.json 的 say:false 就跳過）→（龍衝＝瞬移島緣／石化之瞳＝原地開眼），放完不用再被打就馬上接著追殺同一個攻擊者
     const map = await this.getDragonMap(terrain);
     if (ph === "idle" && map && now >= (d.cooldownUntil || 0)) {
+      const q = await this.pickQuote(terrain);   // 黃金肥龍：80% 台詞招式（說台詞→依序放招）、20% 照樣式（龍衝）
+      if (q) {
+        d.aggro = { id: att.id, rotateAt: now + D_AGGRO_MS, clawAt: now + D_CLAW_MS };
+        this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name: (att.state && att.state.name) || "玩家" }, null, terrain);
+        this.startQuote(now, terrain, q, pos);
+        await this.saveDragon(terrain);
+        await this.armOwnerAlarm();
+        return;
+      }
       const says = await this.ownerSays(terrain);
       d.aggro = { id: att.id, rotateAt: now + D_AGGRO_MS, clawAt: now + D_CLAW_MS };
       d.sayUntil = says ? now + D_SAY_MS : 0;
@@ -979,15 +1059,19 @@ export class Island {
     }
     const map = await this.getDragonMap(terrain);
     if (ph === "idle" && map && now >= (d.cooldownUntil || 0)) {
-      // 沒有仇恨且閒置：照被打的反擊流程——說台詞後反擊（龍衝＝瞬移島緣／石化之瞳＝原地開眼，照 OWNER_TERRAINS 樣式）
+      // 沒有仇恨且閒置：照被打的反擊流程（台詞招式，或照樣式：要講台詞就先講再反擊）
       d.aggro = { id: att.id, rotateAt: now + D_AGGRO_MS, clawAt: now + D_CLAW_MS };
-      d.sayUntil = now + D_SAY_MS;
       d.atk = [Number(st.x), Number(st.y)];
       d.wander = null;
       d.pos = [pos[0], pos[1]];   // 打斷散步腿：位置同步到目前插值點（同 dragonHit 的理由）
-      await this.saveDragon(terrain);
       this.broadcast({ t: "dragon", ev: "aggro", id: att.id, name }, null, terrain);
-      this.broadcast({ t: "dragon", ev: "say", x: pos[0], y: pos[1], ms: D_SAY_MS }, null, terrain);
+      const q = await this.pickQuote(terrain);
+      if (q) this.startQuote(now, terrain, q, pos);
+      else if (await this.ownerSays(terrain)) {
+        d.sayUntil = now + D_SAY_MS;
+        this.broadcast({ t: "dragon", ev: "say", x: pos[0], y: pos[1], ms: D_SAY_MS }, null, terrain);
+      } else await this.startCycle(now, terrain);
+      await this.saveDragon(terrain);
       await this.armOwnerAlarm();
       return;
     }
@@ -1029,6 +1113,12 @@ export class Island {
     // 反擊冷卻到了：直接對現在的仇恨目標放招（龍衝＝瞬移島緣→預警→衝穿牠；石化之瞳＝原地開眼）；仇恨保持，放完接著追殺
     if (now >= (d.cooldownUntil || 0)) {
       const [, pos2] = this.dragonPhase(terrain, now);
+      const q = await this.pickQuote(terrain);
+      if (q) {   // 台詞招式：原地說台詞後依序放招（stepQuote 接手），仇恨保持
+        this.startQuote(now, terrain, q, pos2);
+        await this.saveDragon(terrain);
+        return now + 100;
+      }
       d.wander = null;
       d.pos = [pos2[0], pos2[1]];   // 打斷追腿：位置同步到目前插值點（同 say 的理由）
       d.atk = [att.state.x, att.state.y];
@@ -1248,7 +1338,7 @@ export class Island {
       if (now < d.deadAt + D_RESPAWN_MS - 500) return d.deadAt + D_RESPAWN_MS;
       const map = await this.getDragonMap(terrain);
       const pos = map ? dragonEdge(map, Math.random() * Math.PI * 2) : [...D_CENTER];
-      d.st = "idle"; d.hp = D_HP; d.pos = pos; d.aimTms = 0; d.wander = null; d.sayUntil = 0; d.aggro = null;
+      d.st = "idle"; d.hp = D_HP; d.pos = pos; d.aimTms = 0; d.wander = null; d.sayUntil = 0; d.aggro = null; d.quote = null;
       await this.saveDragon(terrain);
       this.broadcast({ t: "dragon", ev: "spawn", x: pos[0], y: pos[1], hp: d.hp }, null, terrain);
       if (!this.hasPlayers(terrain)) return null;   // 沒人看：等 enter 恢復散步
@@ -1257,6 +1347,7 @@ export class Island {
       return this.wanderWake(terrain);
     }
     if (!this.hasPlayers(terrain)) return null;   // 沒人看：停擺（enter 時會恢復）
+    if (d.quote) return await this.stepQuote(now, terrain);   // 台詞招式：說完台詞後依序放招
     if (d.sayUntil && now >= d.sayUntil - 50) {   // 說完台詞：開始反擊循環
       d.sayUntil = 0;
       const ok = await this.startCycle(now, terrain);
@@ -1298,6 +1389,7 @@ export class Island {
       let wake;
       if (d.st === "dead") wake = d.deadAt + D_RESPAWN_MS;   // 死亡重生不受「有沒有人看」影響
       else if (!this.hasPlayers(terrain)) continue;
+      else if (d.quote) wake = d.quote.fires[d.quote.fired] ?? now + 60;   // 台詞招式：下一招放出的時間
       else if (d.sayUntil && now < d.sayUntil) wake = d.sayUntil + 50;
       else if (d.aggro) wake = now + 60;   // 仇恨中：快醒（追殺 tick 會自己細排）
       else if (d.aimTms) wake = this.dragonIdleAt(terrain) + 100;
