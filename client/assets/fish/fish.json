@@ -687,6 +687,118 @@
     "sprite": "leafy_sea_dragon.png"
    }
   ],
+  "machine": [
+   {
+    "id": "sardine",
+    "name": "沙丁魚",
+    "rarity": "common",
+    "size": [
+     10,
+     20
+    ],
+    "big": 18,
+    "sprite": "sardine.png"
+   },
+   {
+    "id": "horse_mackerel",
+    "name": "竹莢魚",
+    "rarity": "common",
+    "size": [
+     15,
+     35
+    ],
+    "big": 30,
+    "sprite": "horse_mackerel.png"
+   },
+   {
+    "id": "hermit_crab",
+    "name": "寄居蟹",
+    "rarity": "common",
+    "size": [
+     3,
+     10
+    ],
+    "big": 8,
+    "sprite": "hermit_crab.png"
+   },
+   {
+    "id": "kelp",
+    "name": "海帶",
+    "rarity": "common",
+    "size": [
+     30,
+     150
+    ],
+    "big": 120,
+    "sprite": "kelp.png"
+   },
+   {
+    "id": "empty_can",
+    "name": "空罐頭",
+    "rarity": "common",
+    "size": [
+     8,
+     12
+    ],
+    "big": 11,
+    "sprite": "empty_can.png"
+   },
+   {
+    "id": "clownfish",
+    "name": "小丑魚",
+    "rarity": "uncommon",
+    "size": [
+     6,
+     11
+    ],
+    "big": 10,
+    "sprite": "clownfish.png"
+   },
+   {
+    "id": "octopus",
+    "name": "章魚",
+    "rarity": "uncommon",
+    "size": [
+     30,
+     90
+    ],
+    "big": 75,
+    "sprite": "octopus.png"
+   },
+   {
+    "id": "starfish",
+    "name": "海星",
+    "rarity": "uncommon",
+    "size": [
+     10,
+     30
+    ],
+    "big": 25,
+    "sprite": "starfish.png"
+   },
+   {
+    "id": "mahi",
+    "name": "鬼頭刀",
+    "rarity": "rare",
+    "size": [
+     80,
+     180
+    ],
+    "big": 155,
+    "sprite": "mahi.png"
+   },
+   {
+    "id": "golden_turtle",
+    "name": "黃金海龜",
+    "rarity": "rare",
+    "size": [
+     60,
+     120
+    ],
+    "big": 105,
+    "sprite": "golden_turtle.png"
+   }
+  ],
   "snow": [
    {
     "id": "cod",

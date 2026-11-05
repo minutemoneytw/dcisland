@@ -29,6 +29,15 @@
    }
   },
   {
+   "id": "perfect",
+   "name": "完美",
+   "desc": "參與擊倒機械島的壓力山大",
+   "cond": {
+    "type": "owner",
+    "mob": "alexander"
+   }
+  },
+  {
    "id": "angler_grass",
    "name": "草島釣魚能手",
    "desc": "草島的魚類圖鑑收集 10 種",

@@ -1,0 +1,22 @@
+{
+ "id": "machine",
+ "name": "機械島",
+ "scale": 2,
+ "tile": 16,
+ "ground": "ground.png",
+ "edge": "edge.png",
+ "water": "water.png",
+ "deco": [
+  {
+   "sprite": "gear.png",
+   "weight": 3
+  },
+  {
+   "sprite": "rock.png",
+   "weight": 1
+  }
+ ],
+ "mobs": [],
+ "uiColor": "#8a94a4",
+ "owner": "alexander"
+}

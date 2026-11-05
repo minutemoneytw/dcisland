@@ -206,6 +206,41 @@
     "英雄……也只是虛偽的偶像。\n就由我來打破！"
    ],
    "ownerLinesSeq": true
+  },
+  {
+   "id": "alexander",
+   "name": "壓力山大",
+   "owner": true,
+   "big": 5,
+   "atk": "command",
+   "speed": 16,
+   "flee": 110,
+   "hp": 200,
+   "anim": {
+    "sheet": "external/img2pixel/alexander_idle_sheet.png",
+    "frames": 4,
+    "fps": 8,
+    "scale": 4,
+    "keyBg": false
+   },
+   "line": "「壓力山大」的關節噴出一縷白色蒸氣，眼睛閃過一道冷冽的紅光。",
+   "ownerLines": [
+    "我乃机械之神，通過改良自身，可達究极完美之境!!",
+    "合神完畢……\n我壓力山大……將引领你體驗最深的绝望!!",
+    "時空干涉解除，你會在“時間牢獄”中被永遠囚禁!!"
+   ],
+   "ownerLinesSeq": true,
+   "lineSkills": [
+    [
+     "act"
+    ],
+    [
+     "act"
+    ],
+    [
+     "still"
+    ]
+   ]
   }
  ]
 }
