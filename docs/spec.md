@@ -34,15 +34,16 @@ client/assets/
   terrain/<id>/terrain.json   地形調色、點綴物、出現的動物、島主
   furniture/furniture.json    家具：名稱、尺寸(格)、是否可碰撞、sprite、坐/睡、可寫字
   floors/floors.json          地板：名稱、sprite、多格尺寸（地毯 2×2）
-  avatar/avatar.json          造型：膚色、髮型、上衣／褲子（調色換色）；武器清單（左上角武器列切換，法杖有 ranged 欄位＝遠距詠唱）
+  avatar/avatar.json          造型：膚色、髮型、帽子／上衣／褲子（裝備與外觀，dye＝可換色）；武器（職業武器與武器外觀，ranged＝遠距攻擊）
   mobs/mobs.json        野外動物與島主
   npcs/npcs.json              各地圖 NPC、台詞、簡易說明
   tools/tools.json            採集工具與可破壞物件
   skills/skills.json          島主招式：招式名稱、頭上倒數條、放招前要不要講台詞
   titles/titles.json          稱號：名稱、解鎖條件（手寫）
+  jobs/jobs.json              職業：職能、職業武器、一套裝備、1／2 鍵技能（手寫）
 ```
 
-- 預設 6 地形：草島、沙灘、雪島、夜光島、森林島、熔岩島
+- 預設 7 地形：草島、沙灘、雪島、夜光島、森林島、熔岩島、機械島
 - 目前家具：沙發、桌子、椅子、植栽、電燈、電視、床、書架、看板（地毯已改為地板；貓已移出擺設清單，留給之後的寵物）
 - 新地形/新家具/新造型 = 加檔案（細節見 README「內容擴充」）
 
@@ -136,5 +137,5 @@ client/assets/
 ### 9.5 實作階段（都已完成）
 1. 資料與造型：`jobs.json`（手寫）、`avatar.json` 新格式與 placeholder 素材、裝備／外觀合成、換色視窗、造型面板、舊存檔轉換、武器列。
 2. 職業與職能：新職業 id、職能被動、R 鍵職能技能（破綻、降傷）。
-3. 職業技能與特效：1／2 鍵、技能列、各職業技能與特效（之後新增的賢者、單補也照同一套）。
+3. 職業技能與特效：1／2 鍵、技能列、各職業技能與特效（之後新增的職業也照同一套）。
 4. 文件：`docs/notes.md`、README、`npcs.json` 嚮導說明。

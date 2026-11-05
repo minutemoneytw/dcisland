@@ -68,7 +68,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 | 地形 | `client/assets/terrain/<id>/` 加資料夾 + `terrain.json`，並在 `main.js` 的 `TERRAIN_IDS` 登記 |
 | 家具 | `client/assets/furniture/furniture.json` 加條目 + png |
 | 地板 | `client/assets/floors/floors.json` 加條目 + 16×16 無縫磚 png（`gen_assets.py` 的 `FLOOR_MANIFEST`）；多格地板（如地毯 2×2）加 `"w"`/`"h"`，圖為 16w×16h，邊長最多 4 |
-| 動物／怪物（mobs） | `client/assets/mobs/mobs.json` 加條目 + png，並在各地形 `terrain.json` 的 `mobs` 指定；會游泳/兩棲/會飛的加 `"swim": true`（才能逃到海上）；影子預設依 `big` 畫，素材腳印很寬或腳不在正中央時加 `"shadow": {"rx", "ry", "dx", "dy"}`（px，dy 負＝往上）；要多幀動畫就加 `"anim"`（等寬水平 sheet，由左至右循環：`sheet`／`frames`／`fps`／`dashFps`／`scale`／`keyBg`，見 `gen_assets.py` 的 `MOB_MANIFEST` 註解） |
+| 動物／怪物（mobs） | `client/assets/mobs/mobs.json` 加條目 + png，並在各地形 `terrain.json` 的 `mobs` 指定；會游泳/兩棲/會飛的加 `"swim": true`（才能逃到海上）；影子預設依 `big` 畫，素材腳印很寬或腳不在正中央時加 `"shadow": {"rx", "ry", "dx", "dy"}`（px，dy 負＝往上）；素材本身面向左邊時加 `"faceLeft": true`（預設素材面向右、往左走才翻轉）；腳底中心不在圖正中央時加 `"footDx"`（px，負＝偏左，畫圖時挪回來，讓判定圈與影子在正腳下）；要多幀動畫就加 `"anim"`（等寬水平 sheet，由左至右循環：`sheet`／`frames`／`fps`／`dashFps`／`scale`／`keyBg`，見 `gen_assets.py` 的 `MOB_MANIFEST` 註解） |
 | 造型 | `client/assets/avatar/avatar.json`（＋對應 png）。人物分五層（軀幹＞褲子＞衣服＞頭髮＞帽子，由下往上疊），每層一張照**標準排列**畫的 sheet：每幀 24×24，8 方向（下、右下、右、右上、上、左上、左、左下）×〔待機 4 幀＋走路 4 幀〕＋最後 1 幀坐姿，共 65 幀（幀表在 `avatar.json` 的 `frames`）。換素材＝照排列畫好覆蓋同名檔；加衣服／褲子／帽子＝`tops`／`bottoms`／`hats` 加一項（`dye`＝可染色的原色；`glam: true`＝可當外觀，`unlock`＝解鎖條件〔格式同稱號的 `cond`〕）。產生器在 `gen_assets.py` 的 `char_*` |
 | 職業 | `client/assets/jobs/jobs.json`（手寫）：職業的職能（`role`）、職業武器、一套裝備（`gear`）、1／2 鍵技能（`skills`）。技能效果與職能數值在 `main.js` 的 `JOB_SKILLS`／`ROLES`；新增職業時兩份伺服器的 `JOB_ROLE` 也要加（見 `docs/notes.md`「島主與戰鬥」） |
 | NPC／嚮導／台詞／操作說明 | `client/assets/npcs/npcs.json`（`terrains.<地圖>` 每張地圖各自的 NPC，`help` 是嚮導的說明視窗） |
