@@ -39,7 +39,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 ## 架構
 | 路徑 | 職責 |
 |---|---|
-| `client/js/main.js` | 遊戲本體：世界生成、移動/跳躍、繪圖、戰鬥、動物、裝飾、造型、UI |
+| `client/js/main.js` | 遊戲本體：世界生成、移動/跳躍、繪圖、戰鬥、動物、裝飾、造型（裝備／外觀／換色）、職能與職業技能、UI |
 | `client/js/net.js` | 多人同步客戶端（WebSocket）。介面保持穩定 |
 | `client/js/discord.js` | Discord Embedded App SDK 接線（本機 / mock / 真 DC 三模式） |
 | `client/vendor/` | 自託管的 SDK 單檔 bundle（不依賴外部 CDN，勿手改） |
