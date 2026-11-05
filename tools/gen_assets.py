@@ -1227,6 +1227,9 @@ MOB_MANIFEST = dict(
         dict(id="alexander", name="壓力山大", owner=True, big=5, atk="command",
              speed=16, flee=110, hp=200,
              anim=dict(sheet="external/img2pixel/alexander_idle_sheet.png", frames=4, fps=8, scale=4, keyBg=False),
+             faceLeft=True,   # 素材本身面向左邊（預設是面向右），往右走時才左右翻轉
+             footDx=-20,      # 兩腳的中心在圖正中央偏左 20px：畫圖時往右挪回來，讓判定圈、影子在正腳下
+             shadow=dict(rx=108, ry=20, dx=0, dy=-10),   # 影子：兩腳張開約 210px 寬，預設的 big 影子太小，看起來飄在空中（同蓋老師的做法）
              line="「壓力山大」的關節噴出一縷白色蒸氣，眼睛閃過一道冷冽的紅光。",
              ownerLines=["我乃机械之神，通過改良自身，可達究极完美之境!!",
                          "合神完畢……\n我壓力山大……將引领你體驗最深的绝望!!",

@@ -3385,19 +3385,24 @@ function draw() {
         const bs = def.big || 1, W = an ? an.fw * an.scale : img.width * 2 * bs, H = an ? an.fh * an.scale : img.height * 2 * bs;
         const shs = 1 - Math.min(.5, a.z / 60);
         // 影子：預設依 big 算大小、貼在腳底中央；素材的腳印寬度與 big 不成比例、或腳不在正中央時（例如蓋老師），
-        // mobs.json 可寫 shadow:{rx, ry, dx, dy}（px，ry/rx 是半徑，dx/dy 是相對腳底中央的位移，dy 負＝往上）
+        // mobs.json 可寫 shadow:{rx, ry, dx, dy}（px，ry/rx 是半徑，dx/dy 是相對腳底中央的位移，dy 負＝往上；dx 以素材原本的朝向為準，圖翻轉時跟著翻）
+        // 素材預設面向右邊（往左走才左右翻轉）；mobs.json 標 faceLeft: true 的素材本身面向左邊（例如壓力山大），翻轉條件相反
+        const flip = (a.dir < 0) !== !!def.faceLeft;
         const sd = def.shadow;
         ctx.fillStyle = `rgba(10,14,20,${.26 * shs + .03})`;
-        ctx.beginPath(); ctx.ellipse(a.x + (sd?.dx || 0), a.y + (sd ? sd.dy : 1), (sd ? sd.rx : 9 * bs) * shs, (sd ? sd.ry : 3 * Math.max(1, bs * .6)) * shs, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(a.x + (sd?.dx || 0) * (flip ? -1 : 1), a.y + (sd ? sd.dy : 1), (sd ? sd.rx : 9 * bs) * shs, (sd ? sd.ry : 3 * Math.max(1, bs * .6)) * shs, 0, 0, Math.PI * 2); ctx.fill();
         ctx.save(); ctx.translate(a.x, a.y - a.z);
         if (a.dead) {  // 死亡：縮小旋轉淡出
           const q = 1 - a.dieT / .6;
           ctx.globalAlpha = Math.max(0, 1 - q * 1.2);
           ctx.rotate(q * 1.1); ctx.scale(1 - q * .3, 1 - q * .3);
         }
-        if (a.dir < 0) ctx.scale(-1, 1);
-        if (an) drawSpr(an, animFrame(a, an), -W / 2, -H, W, H);
-        else ctx.drawImage(img, -W / 2, -H, W, H);
+        if (flip) ctx.scale(-1, 1);
+        // footDx：素材的腳底中心不在圖的正中央時（px，以素材原本的朝向為準，負＝偏左），把圖往反方向挪，讓腳底中心對準 a.x——
+        // 判定圈、影子、名牌、血條都以 a.x 為準，這樣才會在正腳下（翻轉時 ctx 已經左右翻，挪的方向自動跟著翻）
+        const fdx = def.footDx || 0;
+        if (an) drawSpr(an, animFrame(a, an), -W / 2 - fdx, -H, W, H);
+        else ctx.drawImage(img, -W / 2 - fdx, -H, W, H);
         ctx.restore();
         if (a.dead) return;
         if (def.owner && (S.t < (a.vulnUntil ?? 0) || S.t < (a.weakUntil ?? 0))) drawOwnerDebuff(a, W, H);
