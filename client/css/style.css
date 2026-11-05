@@ -171,6 +171,7 @@ body {
 .dex-name { font-size: 12px; color: var(--text); letter-spacing: 1px; }
 .dex-rar { font-size: 10px; margin-top: 2px; letter-spacing: 1px; }
 .dex-size { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+.dex-big { display: inline-block; font-size: 9px; line-height: 12px; padding: 0 3px; margin-left: 4px; background: var(--gold); color: #161922; font-weight: bold; border-radius: 2px; }
 
 /* ---------- 稱號 ---------- */
 .title-cur { display: flex; align-items: center; gap: 8px; }

@@ -2165,9 +2165,12 @@ function buildDex() {
     b.onclick = () => { S.dexTab = id; buildDex(); };
     tabs.appendChild(b);
   }
-  const list = S.fishDB.terrains[S.dexTab] || [], seen = S.dex[S.dexTab] || {};
-  const n = list.filter(f => seen[f.id]).length;
-  $('dexHint').textContent = `已發現 ${n}／${list.length}` + (S.dexSource === 'server' ? ' · 以 Discord 帳號保存' : ' · 訪客／未連線：只存在這台電腦');
+  // 依稀有度排（常見→罕見→稀有，順序照 fish.json 的 rarity）；同稀有度維持 fish.json 的順序（sort 是穩定排序）
+  const rarOrder = Object.keys(S.fishDB.rarity || {});
+  const list = [...(S.fishDB.terrains[S.dexTab] || [])].sort((a, b) => rarOrder.indexOf(a.rarity) - rarOrder.indexOf(b.rarity));
+  const seen = S.dex[S.dexTab] || {};
+  const n = list.filter(f => seen[f.id]).length, nBig = list.filter(f => bigCaught(S.dexTab, f)).length;
+  $('dexHint').textContent = `已發現 ${n}／${list.length} · 大尺寸 ${nBig}` + (S.dexSource === 'server' ? ' · 以 Discord 帳號保存' : ' · 訪客／未連線：只存在這台電腦');
   const grid = $('dexGrid'); grid.innerHTML = '';
   for (const f of list) {
     const e = seen[f.id], rar = S.fishDB.rarity[f.rarity];
@@ -2184,6 +2187,10 @@ function buildDex() {
     if (e) {
       const r = document.createElement('div'); r.className = 'dex-rar'; r.textContent = rar?.name || ''; r.style.color = rar?.color || '';
       const s = document.createElement('div'); s.className = 'dex-size'; s.textContent = `最大 ${e.max} cm · ${e.n} 次`;
+      if (bigCaught(S.dexTab, f)) {   // 最大尺寸達到大尺寸門檻（fish.json 的 big）：稀有度旁加金色「大」（放尺寸那行會擠到換行）
+        const bg = document.createElement('span'); bg.className = 'dex-big'; bg.textContent = '大'; bg.title = `大尺寸（≥ ${f.big} cm）`;
+        r.append(bg);
+      }
       card.append(r, s);
     }
     grid.appendChild(card);
