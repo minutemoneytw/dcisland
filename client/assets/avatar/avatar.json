@@ -522,14 +522,15 @@
   },
   {
    "id": "tome",
-   "name": "魔導書",
+   "name": "賢具",
    "type": "tome",
    "sprite": "weapon_tome.png",
    "carry": "waist",
    "ranged": {
     "range": 320,
-    "cast": 1.2,
-    "dmg": 2
+    "cast": 0,
+    "dmg": 1,
+    "shot": "funnels"
    }
   },
   {

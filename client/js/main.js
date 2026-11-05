@@ -448,6 +448,7 @@ function startCast(p, rg, wx, wy) {
     S.net?.notifyAttack?.();
     const ty = a.y - 24 * (mobDef(a.id).big || 1) * .6;
     if (rg.shot === 'arrow') S.floaters.push({ fxk: 'arrow', x1: p.x + p.dir * 8, y1: p.y - 30, x2: a.x, y2: ty, life: .2 });
+    else if (rg.shot === 'funnels') S.floaters.push({ fxk: 'funnels', x1: p.x, y1: p.y - 30, x2: a.x, y2: ty, life: .45 });   // 賢具浮游炮：四座賢具飛出、四道光束
     else S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: ty, life: .22 });
     hitMob(p, a, true);
     return;
@@ -2487,7 +2488,7 @@ function drawOwnerDebuff(a, W, H) {   // 島主身上：破綻＝紅色裂紋閃
 }
 // 瞬間特效（S.floaters 裡帶 fxk 的；ctx 在世界座標、外層已 save/restore）
 function drawFxFloater(f) {
-  const L = { jumpboom: .5, arrow: .2, song: .7, poisonpop: .6, heart: .6, sheal: .5, smoke: .5, after: .6, boom: .6, kshield: .6, wshield: .6, pop: .6, shout: .5, crack: .8, fog: .8, drain: .4 }[f.fxk] || .5;
+  const L = { jumpboom: .5, arrow: .2, song: .7, poisonpop: .6, heart: .6, sheal: .5, smoke: .5, after: .6, boom: .6, kshield: .6, wshield: .6, pop: .6, shout: .5, crack: .8, fog: .8, drain: .4, funnels: .45 }[f.fxk] || .5;
   const q = Math.min(1, Math.max(0, 1 - f.life / L)), al = 1 - q;
   switch (f.fxk) {
     case 'jumpboom': {   // 高跳落地：藍白色衝擊圈＋往外噴的碎片
@@ -2508,6 +2509,33 @@ function drawFxFloater(f) {
       ctx.strokeStyle = '#e8d8b0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(4, 0); ctx.stroke();
       ctx.fillStyle = '#dfe6ec'; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(3, -3); ctx.lineTo(3, 3); ctx.closePath(); ctx.fill();
       ctx.fillStyle = f.poison ? '#9ad850' : '#c83a3a'; ctx.fillRect(-15, -3, 4, 2); ctx.fillRect(-15, 1, 4, 2);
+      break;
+    }
+    case 'funnels': {   // 賢具浮游炮（賢者的普攻）：四座小賢具從人物飛出、繞到目標四個方位，各朝目標射一道光束，放完收回
+      const cx = f.x2, cy = f.y2, ang0 = Math.atan2(f.y2 - f.y1, f.x2 - f.x1) + Math.PI / 4;
+      for (let i = 0; i < 4; i++) {
+        const an = ang0 + i * Math.PI / 2;
+        const px = cx + Math.cos(an) * 22, py = cy + Math.sin(an) * 22 * .7;   // 陣位：目標周圍四個方位
+        let fx, fy;                                                            // 飛出（0～0.35）→ 陣位射擊 → 收回（0.75 之後）
+        if (q < .35) { fx = f.x1 + (px - f.x1) * (q / .35); fy = f.y1 + (py - f.y1) * (q / .35); }
+        else if (q < .75) { fx = px; fy = py; }
+        else { const t = (q - .75) / .25; fx = px + (f.x1 - px) * t; fy = py + (f.y1 - py) * t; }
+        ctx.save(); ctx.translate(fx, fy); ctx.rotate(an + Math.PI);           // 小賢具：一根細針＋光核，朝向目標
+        ctx.fillStyle = `rgba(58,154,138,${al})`; ctx.fillRect(-1, -5, 2, 9);
+        ctx.fillStyle = `rgba(200,240,224,${al})`; ctx.fillRect(-1, -6, 2, 2);
+        ctx.restore();
+        if (q > .3) {                                                          // 光束：陣位就位後射向目標
+          const bl = Math.min(1, (q - .3) / .18);
+          ctx.save(); ctx.globalCompositeOperation = 'lighter';
+          ctx.strokeStyle = `rgba(140,240,200,${.85 * bl * al})`; ctx.lineWidth = 2.5 * bl + .5; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(cx, cy); ctx.stroke();
+          ctx.restore();
+        }
+      }
+      if (q > .45 && q < .8) {                                                 // 命中閃光
+        ctx.fillStyle = `rgba(200,255,224,${.5 * al})`;
+        ctx.beginPath(); ctx.arc(cx, cy, 8 + (q - .45) * 30, 0, Math.PI * 2); ctx.fill();
+      }
       break;
     }
     case 'song': {   // 唱歌：音符往外散開到範圍邊緣

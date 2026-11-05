@@ -1018,15 +1018,15 @@ def weapon_scepter():  # 咒杖（黑魔法師的職業武器）：深色杖身�
     cv.outline((30, 24, 22, 255))
     return cv
 
-def weapon_tome():  # 魔導書（賢者的職業武器）：綠色封面、金色書角與書扣的厚書
-    cv = Canvas(12, 14)
-    cov = hx("#2f8a78"); cov_d = hx("#1f5e52"); gold = hx("#e0c040"); page = hx("#f0ead8")
-    cv.rect(1, 1, 10, 12, cov)
-    cv.rect(1, 1, 2, 12, cov_d)              # 書背
-    cv.vline(11, 2, 11, page)                # 書頁
-    for x, y in ((3, 1), (10, 1), (3, 12), (10, 12)):
-        cv.set(x, y, gold)                    # 書角
-    cv.rect(5, 5, 7, 7, gold); cv.set(6, 6, hx("#5ad8b0"))   # 封面的寶石徽記
+def weapon_tome():  # 賢具（賢者的職業武器，FF14 的 nouliths／浮游炮）：四根懸浮的細針並排，針尖朝上發光
+    cv = Canvas(16, 16)
+    body = hx("#3a9a8a"); tail = hx("#1f5e52"); tip = hx("#c8f0e0"); mid = hx("#5ad8b0")
+    for k in range(4):                     # 四根針，間隔 4px（彼此分開看得清楚）
+        x = 2 + k * 4                      # x = 2, 6, 10, 14
+        cv.vline(x, 5, 12, body)           # 針身（1px 細針，遊戲裡顯示 2x 剛好清楚）
+        cv.set(x, 13, tail)                # 針尾暗
+        cv.set(x, 4, tip)                  # 針尖
+        cv.set(x, 3, mid)                  # 尖端光暈
     cv.outline((30, 24, 22, 255))
     return cv
 
@@ -2014,7 +2014,7 @@ def main():
             dict(id="sword", name="長劍", type="sword", sprite="weapon_sword.png", carry="back", back="hilt"),
             dict(id="waraxe", name="戰斧", type="axe", sprite="weapon_waraxe.png", carry="back"),
             dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", ranged=dict(range=320, cast=1.2, dmg=2)),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
-            dict(id="tome", name="魔導書", type="tome", sprite="weapon_tome.png", carry="waist", ranged=dict(range=320, cast=1.2, dmg=2)),
+            dict(id="tome", name="賢具", type="tome", sprite="weapon_tome.png", carry="waist", ranged=dict(range=320, cast=0, dmg=1, shot="funnels")),   # 賢具＝浮游炮（FF14 nouliths）：不用詠唱，攻擊時四座賢具飛出、各朝目標射一道光束（main.js 的 fxk 'funnels'）；不用詠唱的 dmg 1（使用者定的平衡，同豎琴弓）
             # 豎琴弓：遠程但不用詠唱（cast 0＝按攻擊直接射箭；shot: "arrow"＝畫箭矢而不是光球）。dmg 1：加上輸出的 +1＝2，
             # 和忍者一樣；要詠唱的武器（咒杖等）才是 2＋1＝3（使用者定：不用詠唱的普攻都是 2）
             dict(id="harpbow", name="豎琴弓", type="bow", sprite="weapon_harpbow.png", carry="back", ranged=dict(range=320, cast=0, dmg=1, shot="arrow")),
