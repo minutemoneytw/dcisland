@@ -3122,6 +3122,7 @@ addEventListener('keydown', e => {
   if (S.titleOpen) { if (k === 'escape') closeTitles(); return; }                          // 稱號一覽開著：Esc 關閉（仍可走路）
   if (S.helpOpen) { if (k === 'escape' || k === 'enter') closeHelp(); return; }       // 操作說明開著：Esc / Enter 關閉，其他鍵不處理
   if (S.confirmOpen) { if (k === 'escape') closeConfirm(); return; }   // 「要保存嗎？」開著時：Esc＝繼續編輯，其他鍵不處理
+  if (k === 'escape' && !$('avatarPanel').classList.contains('hidden')) { $('avatarPanel').classList.add('hidden'); return; }   // 造型面板開著：Esc 先關面板（不會同時離開裝飾模式）；其他鍵照常
   if (k === 'e' && !e.repeat) {
     if (S.mode === 'decor') requestExitDecor();                       // 離開不受死亡影響
     else if (S.mode === 'walk') { if (S.players[0].dead) toast('你在墓碑裡動不了', 1400); else enterDecor(); }
