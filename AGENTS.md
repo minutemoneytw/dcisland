@@ -29,6 +29,7 @@ Discord Activity 小遊戲：2D 點陣島，**同一個語音頻道＝同一座�
 ```bash
 python tools/dev_server.py            # 本機：靜態檔 + /api/token + /ws，http://localhost:8787（不需 Node）
 python tools/gen_assets.py            # 重新產生 client/assets 下的 PNG（placeholder 素材）
+python tools/import_external.py <zip 或資料夾> <輸出.png>   # 使用者自製（img2pixel）逐幀素材 → 水平 sheet，放進 client/assets/external/img2pixel/
 cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Durable Object；需 Node ≥22）
 ```
 - 多人測試：開兩個分頁（同 `?room=` 即同島）；模擬 DC 身分：`/index.html?mock=1`

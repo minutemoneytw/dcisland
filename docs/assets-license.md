@@ -21,3 +21,4 @@
 1. 每引入一批素材，在這裡記錄來源連結、授權、版本與引入日期。
 2. 非商用授權素材僅用於社群娛樂用途；未來若涉及商業化，需重新檢視或重製。
 3. 成員申請的家具/造型需重繪至 16px 基準、統一調色盤，以本 repo 的 manifest 格式上架。
+4. 使用者自製（img2pixel）素材導入流程見 `client/assets/external/img2pixel/README.md`（`tools/import_external.py` → `gen_assets.py` 的 `EXTERNAL_BUNDLES`／`MOB_MANIFEST` 登記 → 在本文件補記錄）。

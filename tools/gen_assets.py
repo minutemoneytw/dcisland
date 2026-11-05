@@ -854,6 +854,32 @@ FURN_MANIFEST = dict(
 )
 
 # FF14 致敬野生動物（三種）＋各地形島主 + 各地形出現組合
+# ---------------- 外部（img2pixel 自製）素材登記簿 ----------------
+# 產生器「不畫」client/assets/external/img2pixel/ 下手放的 sheet；這裡只登記它們、在重跑開頭檢查存在與尺寸。
+# 加新外部素材的流程：
+#   1. 逐幀 PNG（zip 或資料夾）丟 tools/import_external.py 拼成水平 sheet，放進 client/assets/external/img2pixel/
+#   2. 這裡加一條 dict
+#   3. 在 MOB_MANIFEST 的動物／島主條目加 anim（sheet／frames／fps／scale／keyBg）；是島主就再登記 OWNER_BY_TERRAIN
+#   4. 素材來源與授權記到 docs/assets-license.md
+EXTERNAL_BUNDLES = [
+    dict(sheet="external/img2pixel/bahamut_fly_sheet.png", frames=6, fw=88, fh=59, what="黃金肥龍的飛行 6 幀（草島島主）"),
+    dict(sheet="external/img2pixel/snake_queen_sheet.png", frames=4, fw=88, fh=85, what="笨蛋蛇女的 4 幀（夜光島島主）"),
+    dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fw=88, fh=74, what="蓋老師（究極神兵）的走路 6 幀（熔岩島島主）"),
+]
+
+def check_external():
+    """重跑開頭的健檢：sheet 存在、寬＝frames×fw、高＝fh；對不上只印警告（錯的 anim 設定不擋重跑，但要在輸出裡看得見）"""
+    for e in EXTERNAL_BUNDLES:
+        px = read_png_pixels(os.path.join(ASSETS, e["sheet"]))
+        if px is None:
+            print(f"  ⚠ {e['sheet']}：不存在或無法解碼")
+            continue
+        w, h = px[0], px[1]
+        if w != e["frames"] * e["fw"] or h != e["fh"]:
+            print(f"  ⚠ {e['sheet']}：實際 {w}x{h}，與登記（{e['frames']} 幀 × 每幀 {e['fw']}x{e['fh']}）不符")
+            continue
+        print(f"  {e['sheet']}: {e['frames']} 幀 x {e['fw']}x{e['fh']} — {e['what']}")
+
 MOB_MANIFEST = dict(
     scale=2, respawn=30,
     mobs=[
@@ -1459,6 +1485,8 @@ def fish_manifest():
     return out
 
 def main():
+    print("== 外部素材（img2pixel）登記檢查 ==")
+    check_external()
     print("== 地形 ==")
     for t in TERRAINS:
         sub = os.path.join("terrain", t["id"])
