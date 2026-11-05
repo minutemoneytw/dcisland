@@ -94,7 +94,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 ### 新增其他島的島主（照範本，4 步）
 1. **造型**：`tools/gen_assets.py` 畫該島主的正面圖＋重跑（記得用 `git checkout` 還原不相干素材）；改用外部自製素材時，把 sheet 放進 `client/assets/external/img2pixel/`、在條目加 `"anim"`（此時可以沒有 `"sprite"`），並在 `client/assets/mobs/mobs.json` 加條目：`"owner": true`、`"big"` 放大倍率、`"hp"`（目標約 8 人擊殺）、`"atk"`（攻擊樣式：`dash`／`gaze`／`beam`）、`"line"`（點擊時的描述）、`"ownerLines"`（被激怒的台詞，見第 3 步）
 2. **指定**：該島 `client/assets/terrain/<id>/terrain.json` 加 `"owner": "<動物id>"`（一張地圖一隻），並在兩份伺服器的 `OWNER_TERRAINS` 登記該地形的攻擊樣式
-3. **台詞與招式**：`client/assets/skills/skills.json` 設定該攻擊樣式的招式名稱、要不要倒數條（`bar`）、要不要先講台詞（`say`）；要講台詞的話寫在 `mobs.json` 該島主條目的 `"ownerLines"`（字串陣列；被打觸發反擊前，隨機泡泡說一句；沒寫就不說話）。`mobs.json` 由產生器管理，要寫進 `tools/gen_assets.py` 的 `MOB_MANIFEST`，否則下次重跑會被蓋掉
+3. **台詞與招式**：`client/assets/skills/skills.json` 設定該攻擊樣式的招式名稱、要不要倒數條（`bar`）、要不要先講台詞（`say`）；要講台詞的話寫在 `mobs.json` 該島主條目的 `"ownerLines"`（字串陣列；被打觸發反擊前，隨機泡泡說一句；沒寫就不說話）；條目再加 `"ownerLinesSeq": true` 就改成照順序一句一句說、說完回到第一句（目前只有蓋老師）。`mobs.json` 由產生器管理，要寫進 `tools/gen_assets.py` 的 `MOB_MANIFEST`，否則下次重跑會被蓋掉
 4. **完成**——說台詞、預警、攻擊（照 `atk` 分岔）、歇腳、全島散步、仇恨追殺＋爪擊、死亡重生、泡泡、優先攻擊全部由共用框架處理（伺服器權威；`worker/src/index.js` 與 `tools/dev_server.py` 兩份實作已就緒）
 
 ## 機密與安全
