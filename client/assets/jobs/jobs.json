@@ -1,0 +1,16 @@
+{
+ "_comment": "職業（手寫，不由 gen_assets.py 產生）。role＝職能（tank 坦克／healer 補師／melee 近戰輸出／ranged 遠程輸出；被動特性與 R 鍵職能技能的數值在 main.js 的 ROLES）。weapon＝唯一的職業武器（avatar.json 的 weapons id；武器列＝職業武器＋空手＋釣竿）。gear＝切換到這個職業時自動套用的裝備（avatar.json 的 hats／tops／bottoms id）。skills＝1、2 鍵的職業技能 id（數值與效果在 main.js 的 JOB_SKILLS）。legacy＝舊存檔／舊客戶端的職業 id 轉換。兩份伺服器（worker/src/index.js、tools/dev_server.py）各有一份「職業 → 職能」小表 JOB_ROLE，新增職業時要一起加。",
+ "legacy": { "tank": "knight", "healer": "whitemage", "dps": "ninja" },
+ "jobs": [
+  { "id": "knight", "name": "騎士", "role": "tank", "weapon": "sword",
+    "gear": { "hat": "knight_hat", "top": "knight_top", "bottom": "knight_bottom" }, "skills": ["guard", "kshield"] },
+  { "id": "warrior", "name": "戰士", "role": "tank", "weapon": "waraxe",
+    "gear": { "hat": "warrior_hat", "top": "warrior_top", "bottom": "warrior_bottom" }, "skills": ["vamp", "wshield"] },
+  { "id": "whitemage", "name": "白魔法師", "role": "healer", "weapon": "staff",
+    "gear": { "hat": "whitemage_hat", "top": "whitemage_top", "bottom": "whitemage_bottom" }, "skills": ["shine", "wings"] },
+  { "id": "ninja", "name": "忍者", "role": "melee", "weapon": "daggers",
+    "gear": { "hat": "ninja_hat", "top": "ninja_top", "bottom": "ninja_bottom" }, "skills": ["ninjutsu", "blink"] },
+  { "id": "blackmage", "name": "黑魔法師", "role": "ranged", "weapon": "scepter",
+    "gear": { "hat": "blackmage_hat", "top": "blackmage_top", "bottom": "blackmage_bottom" }, "skills": ["circle", "triple"] }
+ ]
+}

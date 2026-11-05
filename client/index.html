@@ -56,12 +56,26 @@
     <div class="grp"><label>稱號</label><div class="title-cur"><span id="titleCur"></span><button id="btnTitles" class="ff-btn small">稱號設定</button></div></div>
     <div class="grp"><label>膚色</label><div id="skinOpts"></div></div>
     <div class="grp"><label>髮型</label><div id="hairOpts"></div></div>
-    <div class="grp" id="hatGrp"><label>帽子</label><div id="hatOpts"></div></div>
-    <div class="grp" id="topGrp"><label>上衣款式</label><div id="topOpts"></div></div>
-    <div class="grp"><label>上衣</label><div id="shirtOpts"></div></div>
-    <div class="grp" id="bottomGrp"><label>褲子款式</label><div id="bottomOpts"></div></div>
-    <div class="grp"><label>褲子</label><div id="pantsOpts"></div></div>
+    <div class="grp"><label>裝備與外觀</label><div id="gearRows"></div></div>
     <div class="ff-panel-foot"><button id="avatarClose" class="ff-btn small">完成</button></div>
+  </div>
+
+  <!-- 外觀一覽（造型的「外觀」鈕）：某部位可用的外觀 -->
+  <div id="glamBox" class="ff-panel hidden">
+    <div id="glamTitle" class="ff-panel-title">外觀</div>
+    <div id="glamHint" class="ff-panel-hint"></div>
+    <div id="glamList"></div>
+    <div class="ff-panel-foot"><button id="glamClose" class="ff-btn small">關閉</button></div>
+  </div>
+
+  <!-- 選色視窗（造型的換色） -->
+  <div id="colorBox" class="ff-panel hidden">
+    <div id="colorTitle" class="ff-panel-title">換色</div>
+    <canvas id="colorSV" width="200" height="120"></canvas>
+    <canvas id="colorHue" width="200" height="14"></canvas>
+    <div class="color-hexrow"><span id="colorNow"></span><input id="colorHex" maxlength="7" spellcheck="false"></div>
+    <div id="colorPresets"></div>
+    <div class="ff-panel-foot"><button id="colorReset" class="ff-btn small">原色</button><button id="colorCancel" class="ff-btn small">取消</button><button id="colorOk" class="ff-btn small">確定</button></div>
   </div>
 
   <!-- 嚮導的簡易操作說明 -->
@@ -111,15 +125,7 @@
   <div id="weaponBar" class="hidden" title="滑鼠滾輪切換武器"></div>
 
   <!-- 職業技能列（R 鍵）：畫面底部正中間，冷卻時有順時針退去的暗色扇形與秒數 -->
-  <div id="skillBar" class="hidden">
-    <div id="skillBtn" title="職業技能（R）">
-      <canvas id="skillIcon" width="40" height="40"></canvas>
-      <div id="skillCd"></div>
-      <div id="skillNum"></div>
-      <span id="skillKey">R</span>
-    </div>
-    <div id="skillName"></div>
-  </div>
+  <div id="skillBar" class="hidden"></div>
 
   <div id="toast" class="hidden"></div>
 </div>

@@ -30,8 +30,8 @@ export function connectNet(S, opts = {}) {
       moving: p.moving,
       z: Math.round(p.z),
       name: p.name,
-      look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt, pants: S.me.pants || 0,
-              hat: S.me.hat || null, top: S.me.top || null, bottom: S.me.bottom || null },   // 帽子／上衣款式／褲子款式（null＝沒戴／用預設款）
+      // 顯示用的造型：帽子／上衣／褲子（裝備或外觀，已決定好）、換色色碼（null＝原色）、武器外觀；shirt／pants 是給舊客戶端的顏色編號
+      look: S.myLook ? S.myLook() : { skin: S.me.skin, hair: S.me.hair, shirt: 0, pants: 0 },
       job: S.me.job,                       // 職業（坦克/補師/輸出）：伺服器原樣轉發，各畫面用 jobOf() 解讀
       title: S.me.title || null,           // 稱號 id（null＝不顯示）：各畫面查 titles.json 取文字
       d8: p.d8 || null,                    // 畫面用的 8 方向朝向（down/down_right/right/…；玩法仍看 face）
@@ -42,6 +42,8 @@ export function connectNet(S, opts = {}) {
       hp: p.dead ? 0 : Math.round(p.hp ?? 10),   // 血量（島主爪擊扣 2、殺動物回 1；龍衝直接倒地）
       dead: p.dead ? 1 : 0,                // 死亡（墓碑）：被島主打倒後倒數復活
       fish: p.fish ? { x: p.fish.x, y: p.fish.y, ph: p.fish.ph } : null,   // 釣魚：浮標位置與階段（wait 等魚／bite 上鉤／reel 拉扯）
+      fx: S.myFx ? S.myFx() : [],          // 持續型技能效果（翅膀、護盾、結印…）：給同地形的人畫特效
+      circle: S.fx?.circle && S.t < S.fx.circle.until ? { x: S.fx.circle.x, y: S.fx.circle.y } : null,   // 黑魔法師的魔法陣
     };
   }
 
@@ -72,7 +74,10 @@ export function connectNet(S, opts = {}) {
       r.dead = !!st.dead;                  // 死亡（墓碑）：進出死亡時跟同島的人說一聲
       if (st.hp != null) r.hp = st.hp;     // 血量同步（對方自己算好的）
       r.title = typeof st.title === 'string' ? st.title : null;   // 稱號 id（舊客戶端沒送＝不顯示；main.js 的 titleText() 查不到也不顯示）
-      if (st.job) r.job = st.job;          // 職業（坦克/補師/輸出）：只收字串，main.js 的 jobOf() 會做白名單解讀
+      if (st.job) r.job = st.job;          // 職業：只收字串，main.js 的 jobOf() 會做白名單解讀（舊客戶端的 tank/healer/dps 照 legacy 轉）
+      r.fx = Array.isArray(st.fx) ? st.fx.filter(v => typeof v === 'string') : [];
+      r.circle = st.circle && typeof st.circle.x === 'number' ? { x: st.circle.x, y: st.circle.y } : null;
+      if (r.snapNext) { r.snapNext = false; r.x = st.x; r.y = st.y; }   // 縮地：不要從原地滑過去，直接跳到新位置
       if (!r.dead) {                       // 死亡時位置凍結（墓碑不會被推著走）
         r.tx = st.x; r.ty = st.y; r.dir = st.dir ?? r.dir; r.tz = st.z ?? r.tz;   // 高度只設目標，由 stepRemote 平滑追上（直接覆蓋會每次封包都彈回 0 → 跳躍抽動）
         r.moving = !!st.moving;
@@ -142,6 +147,7 @@ export function connectNet(S, opts = {}) {
         const r = S.remotes.get(msg.id);
         if (r && msg.kind === 'attack') r.swing = 0.22;
         else if (r && msg.kind === 'heal' && opts.onHeal) opts.onHeal(msg.id);   // 補師的群補：每個收到的人自判自己是否被補到
+        else if (r && typeof msg.kind === 'string' && opts.onSkillEvent) opts.onSkillEvent(msg.kind, r);   // 職業技能（群盾、忍術、縮地…）：各人自判／演出
         break;
       }
     }
@@ -193,6 +199,10 @@ export function connectNet(S, opts = {}) {
   net.heal = () => net.connected && send({ t: 'event', kind: 'heal' });
   // 挑釁（坦克限定，main.js 的 R 鍵會呼叫）：伺服器驗證職業/範圍/冷卻後轉向或觸發反擊
   net.provoke = () => net.connected && send({ t: 'provoke' });
+  // 破綻／降傷（近戰／遠程輸出的 R 鍵）：伺服器驗證職能/距離/冷卻後記在島主狀態並廣播 dragon debuff
+  net.debuff = kind => net.connected && send({ t: 'debuff', kind });
+  // 職業技能的瞬時事件（泛型 event，兩份伺服器原樣轉發 kind）：群盾的各人自判、別人畫面上的特效
+  net.skillEvent = kind => net.connected && send({ t: 'event', kind });
   // 宣告自己進入某地形：只有自己過去，同地形的人才看得到你
   net.enter = v => net.connected && send({ t: 'enter', v });
   // 家具編輯：只送意圖，結果以伺服器廣播的 furn 清單為準
@@ -203,13 +213,14 @@ export function connectNet(S, opts = {}) {
   net.hitDeco = (i, sprite, cell) => net.connected && send({ t: 'hit', i, sprite, cell });
   // 島主：上傳陸地位圖（進草島時）／打到島主時送意圖（座標＋傷害＋我們看到的龍位置），流程由伺服器權威
   net.sendDragonMap = v => net.connected && send({ t: 'dragonMap', v });
-  net.dragonHit = (x, y, dmg, ddx, ddy, staff) => net.connected && send({ t: 'dragonHit', x, y, dmg, ddx, ddy, ...(staff ? { staff: 1 } : {}) });   // staff：法杖遠距詠唱（伺服器放寬射程，並核對 state.weapon）
+  // staff：法杖／咒杖遠距詠唱（伺服器放寬射程，並核對 state.weapon）；sk：職業技能（忍術／閃耀，伺服器驗證職業與冷卻、傷害照技能）
+  net.dragonHit = (x, y, dmg, ddx, ddy, staff, sk) => net.connected && send({ t: 'dragonHit', x, y, dmg, ddx, ddy, ...(staff ? { staff: 1 } : {}), ...(sk ? { sk } : {}) });
   // 釣魚：魚上鉤後拉竿成功，請伺服器抽一條魚（登入的人順便記進伺服器的圖鑑），結果用 fish_result 回來
   net.fishCatch = () => net.connected && send({ t: 'fish' });
   // 分頁凍結恢復後要島主即時快照（伺服器用 dragon 事件的 state 回這條連線）
   net.requestDragonSnap = () => net.connected && send({ t: 'dragonSnap' });
   // 打釣上來的怪物（伺服器權威扣血）：lx/ly＝我們畫面上怪物的位置（伺服器容許漏接一腿的落後）
-  net.lurkerHit = (x, y, dmg, lx, ly, staff) => net.connected && send({ t: 'lurkerHit', x, y, dmg, lx, ly, ...(staff ? { staff: 1 } : {}) });
+  net.lurkerHit = (x, y, dmg, lx, ly, staff, sk) => net.connected && send({ t: 'lurkerHit', x, y, dmg, lx, ly, ...(staff ? { staff: 1 } : {}), ...(sk ? { sk } : {}) });
 
   return net;
 }

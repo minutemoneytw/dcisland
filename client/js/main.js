@@ -375,6 +375,7 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
       if (npc) { S._hits = 1; talkTo(npc); S.holdSkipF = true; return; }
     }
   }
+  if (S.fx.seal) { if (!quiet) say('結印中，不能攻擊', 900); return; }   // 忍術結印中（可移動、不能攻擊）
   if (isRod()) { S._hits = 1; if (!quiet) fishAction(wx, wy); return; }   // 拿著釣竿：拋竿（不能攻擊）
   if (S.me.weapon === 'hands') { say('先用左上角的武器列裝備武器！'); return; }
   if (!S.weaponImgs[S.me.weapon]) return;
@@ -438,7 +439,16 @@ function startCast(p, rg, wx, wy) {
     a = under;
   } else a = pickCastTarget(p, rg, aim);
   if (!a) { say('射程內沒有目標'); return; }
-  p.cast = { t0: S.t, dur: rg.cast, a };
+  const tr = S.fx.triple;
+  if (tr && tr.n > 0 && S.t < tr.until) {   // 三重：這一擊不用詠唱
+    tr.n--;
+    p.lastAtk = S.t; p.swing = 0; p.tool = null; S._hits = 1;
+    S.net?.notifyAttack?.();
+    S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: a.y - 24 * (mobDef(a.id).big || 1) * .6, life: .22 });
+    hitMob(p, a, true);
+    return;
+  }
+  p.cast = { t0: S.t, dur: rg.cast * castMul(p), a };   // 黑魔法師站在魔法陣內：詠唱 −50%
   p.swing = 0; p.tool = null; S._hits = 1;   // 算有互動，點到動物時不要再跳動物的台詞
 }
 function cancelCast(p, why) { if (!p.cast) return; p.cast = null; if (why) toast(why, 1500); }
@@ -458,30 +468,36 @@ function stepCast(p) {   // 每幀（只有本機玩家）：檢查中斷條件�
   hitMob(p, a, true);
 }
 
-// 命中一隻動物（近戰揮擊與法杖詠唱完共用）：ranged＝法杖（傷害固定取武器的 dmg、不暴擊）
-function hitMob(p, a, ranged) {
+// 命中一隻動物（近戰揮擊、法杖／咒杖詠唱完、職業技能共用）：ranged＝遠距詠唱（傷害固定取武器的 dmg、不暴擊）；
+// force＝職業技能 {dmg, sk, stun}：傷害固定、不吃職能的 +1，打島主／深海魚人時帶 sk 給伺服器驗證
+function hitMob(p, a, ranged, force) {
   {
     S._hits++;
-    const crit = !ranged && Math.random() < .18;
-    let dmg = ranged ? (rangedDef()?.dmg || 2) : (crit ? 2 : 1);
+    const crit = !ranged && !force && Math.random() < .18;
+    let dmg = force ? force.dmg : ranged ? (rangedDef()?.dmg || 2) : (crit ? 2 : 1);
     const jd = jobOf(p);
-    if (jd?.dmgPlus) dmg += jd.dmgPlus;   // 輸出：每擊 +1（連線打島主時送出去的值仍會被伺服器夾回 1～2）
+    if (jd?.dmgPlus && !force) dmg += jd.dmgPlus;   // 輸出：每擊 +1（連線打島主時送出去的值仍會被伺服器夾回 1～2）
     const od = mobDef(a.id);
+    const sendDmg = force ? force.dmg : Math.min(2, dmg);   // 送給伺服器的值（破綻的 +1 由伺服器自己加）
+    if (od.owner && S.t < (a.vulnUntil ?? 0)) dmg += 1;      // 破綻：每擊 +1（單機在這裡扣、連線只是飄字）
     if (od.owner && p === S.players[0]) S.ownerHitAt[a.id] = S.t;   // 稱號「參與擊倒」用
     if (od.owner && a.proxy) {   // 島主連線時由伺服器權威：送意圖（座標＋傷害＋我們看到的龍位置），本地不扣血（血量等伺服器廣播）
-      S.net?.dragonHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.min(2, dmg), Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10, ranged);
+      S.net?.dragonHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, sendDmg, Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10, ranged, force?.sk);
     } else if (od.lurker && a.proxy) {   // 釣上來的怪物連線時也由伺服器權威扣血
-      S.net?.lurkerHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.min(2, dmg), Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10, ranged);
+      S.net?.lurkerHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, sendDmg, Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10, ranged, force?.sk);
     } else {
       a.hp -= dmg;
       a.startle = 1; a.startleT = 3; a.target = null; a.idle = 0;
     }
-    // 補師：揮擊命中動物就吸回自己一點血（血量走既有 state 封包同步）
-    if (jd?.healHit) {
+    if (force?.stun && !od.owner && !od.lurker) a.stunUntil = S.t + force.stun;   // 閃耀：野外動物暈眩（純客戶端，野外動物本來就各自模擬）
+    // 補師：揮擊命中動物就吸回自己一點血（血量走既有 state 封包同步）；翅膀期間 +1
+    const heal = (jd?.healHit ? jd.healHit + (p === S.players[0] && fxOn('wings') ? 1 : 0) : 0) + (p === S.players[0] && fxOn('vamp') ? 1 : 0);   // 戰士吸血：命中回 1
+    if (heal) {
       const cap = hpCap(p) ?? PLAYER_HP;
       if (p.hp < cap) {
-        p.hp = Math.min(cap, p.hp + jd.healHit);
-        S.floaters.push({ x: p.x + (Math.random() * 16 - 8), y: p.y - 50, v: '+' + jd.healHit, life: .7 });
+        p.hp = Math.min(cap, p.hp + heal);
+        S.floaters.push({ x: p.x + (Math.random() * 16 - 8), y: p.y - 50, v: '+' + heal, life: .7 });
+        if (fxOn('vamp')) S.floaters.push({ fxk: 'drain', x1: a.x, y1: a.y - 20, x2: p.x, y2: p.y - 30, life: .4 });
       }
     }
     S.floaters.push({ x: a.x + (Math.random() * 24 - 12), y: a.y - 42, v: String(dmg), life: .8, crit });
@@ -510,9 +526,10 @@ function hitMob(p, a, ranged) {
         // 「受害者自判」同一原則），所以只廣播 heal 事件，各客戶端收到後自判是否在半徑內。
         if (jd?.healAoE) {
           S.net?.heal?.();
+          const amt = jd.healAoE + (fxOn('wings') ? 1 : 0);   // 翅膀：治療量 +1
           S.floaters.push({ x: me.x, y: me.y - 24, healPulse: true, life: .35 });
-          me.hp = Math.min(hpCap(me), me.hp + jd.healAoE);
-          S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + jd.healAoE, life: .75 });
+          me.hp = Math.min(hpCap(me), me.hp + amt);
+          S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + amt, life: .75 });
         }
       }
       toast(od.lurker ? `${od.name} 被打倒了！` : `${mobDef(a.id).name} 被打倒了！${S.mobsDB.respawn || 30} 秒後重生`, 2200);
@@ -578,25 +595,36 @@ const OWNER_AGGRO_MS = 5, OWNER_DROPOUT = 30;                              // �
 const OWNER_PROVOKE_RANGE = 240, OWNER_PROVOKE_CD = 15;                    // 挑釁：有效距離／冷卻（秒；與伺服器 D_PROVOKE_* 一致）
 const PLAYER_REGEN = 1;   // 玩家脫離戰鬥後每秒回幾點血（場上有島主處於仇恨／攻擊狀態、或自己被石化時不回）
 const PLAYER_HP = 10;     // 玩家血量上限：爪擊扣 2（5 下倒地）、龍衝直接倒地、石化每秒扣 1、殺一隻動物回 1、復活即滿血
-// ---------------- 職業（純客戶端 MVP：坦克／補師／輸出；改數值／說明只動這組常數） ----------------
-// 理由：打野外動物與「自己被扣血」都是各畫面自算（野外動物刻意不同步、爪擊是受害者自判），
-// 所以職業效果全在客戶端生效，不用改兩份伺服器。島主傷害仍由伺服器夾 1～2（職業對島主的
-// 加成要到放寬兩份伺服器的 dmg 夾擊值那步再做，見 AGENTS.md「職業」條目）。
-const JOBS = {
-  // weapons：這個職業能用的武器（空手與釣竿所有職業都能用，不用列；沒寫＝不限制）；defaultWeapon：轉職時目前的武器不能用就換成它
-  tank:   { name: '坦克', color: '#7cc0ff', hpMax: 20, takenHalf: true, provoke: true, weapons: ['sword', 'shield'], defaultWeapon: 'sword',
-            desc: '只能用木劍／圓盾；血量上限 20、被打傷害減半；按 R 挑釁把島主拉到自己身上（龍衝仍直接倒地）' },
-  healer: { name: '補師', color: '#8fe08a', hpMax: 10, healHit: 1, healAoE: 2, groupHeal: true, weapons: ['staff'], defaultWeapon: 'staff',
-            desc: '只能用法杖；揮擊命中動物吸回自己 1、打倒動物補 3 格內所有人 2；按 R 群療周遭 3 格內所有人 2（含自己）' },
-  dps:    { name: '輸出', color: '#ff9a8a', hpMax: 8, dmgPlus: 1,
-            desc: '武器不限；每擊額外 +1 傷害（變 2～3）；血量上限 8' },
+// ---------------- 職能與職業 ----------------
+// 職能（ROLES）＝被動特性＋R 鍵職能技能；職業（assets/jobs/jobs.json，boot 時載入到 JOBS）＝職能＋唯一的職業武器＋一套裝備＋1／2 鍵技能。
+// JOBS[id]＝{ ...職能的被動數值, ...jobs.json 的條目, role }，所以原本讀 jd.hpMax／jd.takenHalf／jd.dmgPlus／jd.healHit 的地方不用改。
+// 被打與打野外動物都是各畫面自算（野外動物刻意不同步、爪擊是受害者自判），被動效果在客戶端生效；
+// 打島主的傷害由兩份伺服器夾值（一般攻擊 1～2，職業技能另有上限與冷卻，見 JOB_SKILLS）。
+const ROLES = {
+  tank:   { name: '坦克', color: '#7cc0ff', hpMax: 20, takenHalf: true, provoke: true,
+            desc: '血量上限 20、被打傷害減半；R＝挑釁（把島主拉到自己身上，龍衝仍直接倒地）' },
+  healer: { name: '補師', color: '#8fe08a', hpMax: 10, healHit: 1, healAoE: 2, groupHeal: true,
+            desc: '血量上限 10；揮擊命中動物吸回自己 1、打倒動物補周遭所有人 2；R＝群療（補周遭所有人 2，含自己）' },
+  melee:  { name: '近戰輸出', color: '#ff9a8a', hpMax: 8, dmgPlus: 1, vuln: true,
+            desc: '血量上限 8、每擊 +1 傷害；R＝破綻（島主 10 秒內受到的傷害每擊 +1，所有人打都算）' },
+  ranged: { name: '遠程輸出', color: '#ff9a8a', hpMax: 8, dmgPlus: 1, weak: true,
+            desc: '血量上限 8、每擊 +1 傷害；R＝降傷（島主 10 秒內對所有人造成的傷害 −30%）' },
 };
-const ALWAYS_WEAPONS = ['hands', 'rod'];   // 所有職業都能用的武器（空手、釣竿）
-const weaponAllowed = (job, id) => { const jd = JOBS[job]; return !jd?.weapons || ALWAYS_WEAPONS.includes(id) || jd.weapons.includes(id); };
-const allowedWeapons = () => S.avatar.weapons.filter(w => weaponAllowed(S.me.job, w.id));   // 目前職業能用的武器（依 avatar.json 的順序）
+const JOBS = {};          // boot() 由 jobs.json 填
+const JOB_SKILLS = {};    // 職業技能（1／2 鍵），見下方「職業技能」
+let JOB_LEGACY = {};      // 舊存檔／舊客戶端的職業 id（tank／healer／dps）→ 新職業 id
+const DEFAULT_JOB = 'ninja';
+const jobIdOf = id => JOBS[id] ? id : (JOBS[JOB_LEGACY[id]] ? JOB_LEGACY[id] : null);
+function loadJobs(db) {
+  JOB_LEGACY = db?.legacy || {};
+  for (const j of db?.jobs || []) if (ROLES[j.role]) JOBS[j.id] = { ...ROLES[j.role], ...j, roleName: ROLES[j.role].name, color: ROLES[j.role].color };
+}
+const ALWAYS_WEAPONS = ['hands', 'rod'];   // 所有職業都能用的武器（空手、釣竿）；其餘只有職業武器
+const weaponAllowed = (job, id) => ALWAYS_WEAPONS.includes(id) || JOBS[job]?.weapon === id;
+const allowedWeapons = () => S.avatar.weapons.filter(w => !w.glam && weaponAllowed(S.me.job, w.id));   // 武器列：職業武器＋空手＋釣竿（依 avatar.json 的順序）
 const HEAL_RADIUS = 110;  // 補師打倒動物／群療時的治療半徑（約 3.4 格；2026-11-05 由 96 調大，與月環內圈安全區同大）
-// 自己看「造型」面板選的職業（S.me.job）；別人看 state 封包同步的 job；NPC 沒有職業（回 null）
-const jobOf = p => JOBS[p === S.players[0] ? S.me.job : p.job] || null;
+// 自己看「造型」面板選的職業（S.me.job）；別人看 state 封包同步的 job（舊客戶端的 tank／healer／dps 照 legacy 轉）；NPC 沒有職業（回 null）
+const jobOf = p => JOBS[jobIdOf(p === S.players[0] ? S.me.job : p.job)] || null;
 // 血量上限：有職業用職業的上限，沒有（NPC／未設定）就 PLAYER_HP
 const hpCap = p => jobOf(p)?.hpMax ?? PLAYER_HP;
 // 島主攻擊樣式（mobs.json 的 atk 欄位）：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女）、beam＝波動砲（蓋老師）
@@ -890,7 +918,21 @@ function beamFire(a, def) {   // 讀條結束：發射直線光波（方向＝�
 // 單機本地模擬在這裡；連線時追殺流程由伺服器權威（aggro/claw/wander 事件），但「自己有沒有被打到」仍是各人自判
 function playerDamage(p, dmg, cause) {
   if (p.dead) return;
-  if (jobOf(p)?.takenHalf) dmg = Math.ceil(dmg / 2);   // 坦克：被打傷害減半（無條件進位，2 → 1）
+  // 減傷相乘後無條件進位、最少 1：坦克職能 ×0.5、單盾 ×0.5、戰士群盾 ×0.7、島主被降傷 ×0.7；騎士群盾整擊擋掉（用掉護盾）。
+  // 龍衝不經過這裡（直接 killPlayer），不受任何減傷影響
+  let m = jobOf(p)?.takenHalf ? .5 : 1;
+  if (p === S.players[0]) {
+    if (fxOn('guard')) m *= .5;
+    if (fxOn('wshield')) m *= JOB_SKILLS.wshield.mul;
+    if (S.mobs.some(a => !a.dead && mobDef(a.id)?.owner && mobDef(a.id).name === cause && S.t < (a.weakUntil ?? 0))) m *= ROLE_DEBUFF.weakMul;
+    if (fxOn('kshield')) {
+      S.fx.kshield = 0;
+      S.floaters.push({ x: p.x, y: p.y - 50, v: '擋下', life: .8 });
+      S.floaters.push({ fxk: 'pop', kind: 'kshield', x: p.x, y: p.y, life: .4 });
+      return;
+    }
+  }
+  if (m < 1) dmg = Math.max(1, Math.ceil(dmg * m));
   p.hp = Math.max(0, (p.hp ?? hpCap(p)) - dmg);
   S.floaters.push({ x: p.x + (Math.random() * 20 - 10), y: p.y - 50, v: String(dmg), life: .8, crit: true });
   if (p.hp <= 0) killPlayer(p, cause);
@@ -901,7 +943,7 @@ function onNetHeal(healerId) {
   const me = S.players[0];
   if (me.dead) return;
   const src = S.remotes.get(healerId);
-  const ao = src && JOBS[src.job]?.healAoE;
+  const ao = src && jobOf(src)?.healAoE && jobOf(src).healAoE + (src.fx?.includes('wings') ? 1 : 0);   // 翅膀：治療量 +1
   if (!ao) return;
   if (Math.hypot(me.x - src.x, me.y - src.y) <= HEAL_RADIUS) {
     me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + ao);
@@ -928,6 +970,152 @@ function ownerAggroPick(a, ag) {
     .filter(([p, t]) => S.t - t <= OWNER_DROPOUT && !p.dead && p !== ag.target)
     .map(([p]) => p);
   return cands.length ? cands[Math.floor(Math.random() * cands.length)] : null;
+}
+
+// ---------------- 職業技能（1／2 鍵）與職能技能（R 鍵）的共用狀態 ----------------
+// S.fx：自己身上的技能狀態（都是遊戲時間 S.t 的到期時刻；0＝沒有）。被打時的減傷／護盾在 playerDamage 套用（受害者自判）；
+// 給隊友的增益（兩種群盾）走泛型 event 廣播，收到的人自判「在不在放的人周圍 SHIELD_RADIUS 內」再套在自己身上（與群療同一原則）。
+// 持續型效果（翅膀、護盾、結印、三重、法陣）走 state 的 fx／circle 給同地形的人畫特效（myFx）。
+S.fx = { cd: {}, guard: 0, kshield: 0, wshield: 0, vamp: 0, wings: 0, seal: null, triple: null, circle: null };
+const SHIELD_RADIUS = 300;   // 兩種群盾的範圍（px，約 9 格；使用者定）
+const ROLE_DEBUFF = { dur: 10, cd: 30, weakMul: .7 };   // 破綻／降傷：持續 10 秒、冷卻 30 秒、降傷 −30%（與兩份伺服器的 D_DEBUFF_* 一致）
+const fxOn = k => S.t < (S.fx[k] || 0);
+const skillCdLeft = id => Math.max(0, (S.fx.cd[id] || 0) - S.t);
+function myFx() {   // 給 state 的持續型效果清單（id 要符合伺服器的 ID_RE）
+  const F = S.fx, out = [];
+  for (const k of ['guard', 'kshield', 'wshield', 'vamp', 'wings']) if (fxOn(k)) out.push(k);
+  if (F.seal) out.push('seal');
+  if (F.triple && F.triple.n > 0 && S.t < F.triple.until) out.push('triple' + F.triple.n);
+  return out;
+}
+S.myFx = myFx;
+// 職業技能：jobs.json 的 skills 依序對應 1、2 鍵。name／desc 顯示在技能列與造型面板；cd＝冷卻秒數；
+// run(me) 回 true＝放出去了（才開始冷卻）；usable() 回 null＝可以放、字串＝不能放的原因（圖示變暗）
+Object.assign(JOB_SKILLS, {
+  guard:    { name: '單盾', cd: 25, dur: 8, desc: '8 秒內自己受到的傷害 −50%',
+              run() { S.fx.guard = S.t + this.dur; fxBurst('guard'); return true; } },
+  kshield:  { name: '群盾', cd: 40, dur: 15, desc: `周圍 ${SHIELD_RADIUS}px 內所有人（含自己）上護盾，${15} 秒內擋下一次傷害`,
+              run() { S.fx.kshield = S.t + this.dur; S.net?.skillEvent?.('kshield'); fxBurst('kshield'); return true; } },
+  vamp:     { name: '吸血', cd: 25, dur: 10, desc: '10 秒內揮擊命中敵人回自己 1',
+              run() { S.fx.vamp = S.t + this.dur; fxBurst('vamp'); return true; } },
+  wshield:  { name: '群盾', cd: 40, dur: 8, desc: `周圍 ${SHIELD_RADIUS}px 內所有人（含自己）8 秒內受到的傷害 −30%`, mul: .7,
+              run() { S.fx.wshield = S.t + this.dur; S.net?.skillEvent?.('wshield'); fxBurst('wshield'); return true; } },
+  shine:    { name: '閃耀', cd: 12, dmg: 3, stun: 3, range: 320, desc: '朝滑鼠方向的敵人瞬發 3 傷害；野外動物暈眩 3 秒（島主、深海魚人不會暈）',
+              usable() { return pickCastTarget(S.players[0], this, castAim()) ? null : '射程內沒有目標'; },
+              run(me) {
+                const a = pickCastTarget(me, this, castAim());
+                if (!a) { say('射程內沒有目標'); return false; }
+                const big = mobDef(a.id).big || 1;
+                S.floaters.push({ fxk: 'shine', x: a.x, y: a.y - 20 * big, life: .5 });
+                S.floaters.push({ orb: true, x1: me.x, y1: me.y - 52, x2: a.x, y2: a.y - 20 * big, life: .18 });
+                hitMob(me, a, true, { dmg: this.dmg, sk: 'shine', stun: this.stun });
+                S.net?.skillEvent?.('shine');
+                return true;
+              } },
+  wings:    { name: '翅膀', cd: 45, dur: 15, desc: '15 秒內所有治療量 +1',
+              run() { S.fx.wings = S.t + this.dur; fxBurst('wings'); return true; } },
+  ninjutsu: { name: '忍術', cd: 20, cast: 1.5, r: 80, dmg: 6, desc: '結印 1.5 秒（可移動、不能攻擊），結完對身邊 80px 內的敵人各造成 6 傷害',
+              run() { S.fx.seal = { t0: S.t, until: S.t + this.cast }; return true; } },
+  blink:    { name: '縮地', cd: 8, dist: 120, desc: '朝滑鼠方向瞬移 120px（遇水或家具停在最後能站的點）',
+              run(me) { return blinkMe(me, this.dist); } },
+  circle:   { name: '魔法陣', cd: 40, dur: 15, r: 72, desc: '腳下放一個慢慢自轉的魔法陣（15 秒），站在陣內詠唱時間 −50%',
+              run(me) { S.fx.circle = { x: me.x, y: me.y, until: S.t + this.dur, t0: S.t }; return true; } },
+  triple:   { name: '三重', cd: 30, dur: 15, n: 3, desc: '接下來 3 次攻擊不用詠唱（15 秒內有效）',
+              run() { S.fx.triple = { n: this.n, until: S.t + this.dur }; fxBurst('triple'); return true; } },
+});
+const jobSkillIds = () => JOBS[S.me.job]?.skills || [];
+function tryJobSkill(slot) {   // slot：0＝1 鍵、1＝2 鍵
+  const me = S.players[0], id = jobSkillIds()[slot], sk = JOB_SKILLS[id];
+  if (!sk || S.mode !== 'walk' || me.dead || me.pose || S.t < (me.petUntil ?? 0)) return;
+  const left = skillCdLeft(id);
+  if (left > 0) { toast(`${sk.name}還要 ${Math.ceil(left)} 秒`, 1200); return; }
+  if (S.fx.seal) { say('結印中'); return; }
+  if (sk.run(me)) S.fx.cd[id] = S.t + sk.cd;
+}
+// 黑魔法師：詠唱時間（站在自己的魔法陣內 −50%）
+function castMul(p) {
+  const c = S.fx.circle;
+  return c && S.t < c.until && Math.hypot(p.x - c.x, p.y - c.y) <= JOB_SKILLS.circle.r ? .5 : 1;
+}
+// 縮地：朝游標方向（沒有游標＝面向）一步一步往前，停在最後一個能站的點
+function blinkMe(me, dist) {
+  const aim = castAim();
+  let ux = aim ? aim[0] - me.x : me.dir, uy = aim ? aim[1] - me.y : 0;
+  const l = Math.hypot(ux, uy); if (l < 1) { ux = me.dir; uy = 0; } else { ux /= l; uy /= l; }
+  let bx = me.x, by = me.y;
+  for (let s = 4; s <= dist; s += 4) {
+    const nx = me.x + ux * s, ny = me.y + uy * s;
+    if (blocked(nx, ny)) break;
+    bx = nx; by = ny;
+  }
+  if (Math.hypot(bx - me.x, by - me.y) < 8) { say('那邊過不去'); return false; }
+  for (let i = 0; i < 4; i++) S.floaters.push({ fxk: 'after', x: me.x + (bx - me.x) * i / 4, y: me.y + (by - me.y) * i / 4, life: .35 + i * .06, d8: d8Of(me) });
+  S.floaters.push({ fxk: 'smoke', x: me.x, y: me.y, life: .45 });
+  me.x = bx; me.y = by; me.target = null; cancelCast(me);
+  if (Math.abs(ux) > .2) me.dir = Math.sign(ux);
+  S.floaters.push({ fxk: 'smoke', x: bx, y: by, life: .5 });
+  S.net?.skillEvent?.('blink');
+  return true;
+}
+// 每幀：忍術結印完成、三重／法陣過期
+function stepSkills() {
+  const F = S.fx, me = S.players[0];
+  if (F.seal && (me.dead || S.t < (me.petUntil ?? 0))) F.seal = null;
+  if (F.seal && S.t >= F.seal.until) {
+    F.seal = null;
+    const sk = JOB_SKILLS.ninjutsu;
+    S.floaters.push({ fxk: 'boom', x: me.x, y: me.y, r: sk.r, life: .6 });
+    S.net?.skillEvent?.('ninjutsu');
+    for (const a of S.mobs) {
+      if (a.dead || a.fly) continue;
+      if (Math.hypot(a.x - me.x, a.y - me.y) - hitRadius(mobDef(a.id)) > sk.r) continue;
+      hitMob(me, a, false, { dmg: sk.dmg, sk: 'ninjutsu' });
+    }
+  }
+  if (F.triple && (F.triple.n <= 0 || S.t >= F.triple.until)) F.triple = null;
+  if (F.circle && S.t >= F.circle.until) F.circle = null;
+}
+// 別人的技能事件：群盾自判是否在範圍內；其餘只演出
+function onSkillEvent(kind, r) {
+  const me = S.players[0];
+  if (kind === 'kshield' || kind === 'wshield') {
+    S.floaters.push({ fxk: kind, x: r.x, y: r.y, r: SHIELD_RADIUS, life: .6 });
+    if (me.dead || Math.hypot(me.x - r.x, me.y - r.y) > SHIELD_RADIUS) return;
+    S.fx[kind] = S.t + JOB_SKILLS[kind].dur;
+    toast(`${r.name} 的${JOB_SKILLS[kind].name}罩住了你`, 1800);
+  } else if (kind === 'ninjutsu') S.floaters.push({ fxk: 'boom', x: r.x, y: r.y, r: JOB_SKILLS.ninjutsu.r, life: .6 });
+  else if (kind === 'blink') { S.floaters.push({ fxk: 'smoke', x: r.x, y: r.y, life: .45 }); r.snapNext = true; }
+  else if (kind === 'shine') S.floaters.push({ fxk: 'shine', x: r.x, y: r.y - 60, life: .4 });
+  else if (kind === 'vuln' || kind === 'weak' || kind === 'provoke') S.floaters.push({ fxk: 'shout', x: r.x, y: r.y, kind, life: .5 });
+}
+// 放出瞬間的小特效（自己畫面；別人畫面靠 state 的 fx 看到持續效果）
+function fxBurst(kind) {
+  const me = S.players[0];
+  S.floaters.push({ fxk: kind === 'kshield' || kind === 'wshield' ? kind : 'pop', kind, x: me.x, y: me.y, r: SHIELD_RADIUS, life: .6 });
+}
+
+// ---------------- 破綻／降傷（R 鍵，近戰／遠程輸出）----------------
+// 對所在地形的島主下負面效果：破綻＝10 秒內受到的傷害每擊 +1（所有人打都算；連線時由伺服器加）；
+// 降傷＝10 秒內對所有人造成的傷害 −30%（受害者自判，看島主的 weakUntil）。連線時送 debuff，伺服器驗證職能/距離/冷卻後廣播 dragon debuff
+function ownerHere() { return S.mobs.find(v => !v.dead && mobDef(v.id).owner) || null; }
+function tryDebuff(kind) {
+  const me = S.players[0], jd = JOBS[S.me.job];
+  if (S.mode !== 'walk' || me.dead || S.t < (me.petUntil ?? 0) || !(kind === 'vuln' ? jd?.vuln : jd?.weak)) return;
+  const left = skillCdLeft(kind);
+  if (left > 0) { toast(`${kind === 'vuln' ? '破綻' : '降傷'}還要 ${Math.ceil(left)} 秒`, 1200); return; }
+  const a = ownerHere();
+  if (!a) { toast('這裡沒有島主', 1400); return; }
+  if (Math.hypot(me.x - a.x, me.y - a.y) > OWNER_PROVOKE_RANGE) { toast('離島主太遠了，靠近一點', 1800); return; }
+  S.fx.cd[kind] = S.t + ROLE_DEBUFF.cd;
+  S.floaters.push({ fxk: 'shout', x: me.x, y: me.y, kind, life: .5 });
+  if (S.net?.connected && a.proxy) { S.net.debuff(kind); S.net.skillEvent?.(kind); return; }   // 結果走 dragon debuff 廣播（含自己）
+  applyDebuff(a, kind, ROLE_DEBUFF.dur, S.players[0].name);
+}
+function applyDebuff(a, kind, secs, who) {
+  a[kind + 'Until'] = S.t + secs;
+  const big = mobDef(a.id).big || 1;
+  S.floaters.push({ fxk: kind === 'vuln' ? 'crack' : 'fog', x: a.x, y: a.y - 22 * big, big, life: .8 });
+  toast(kind === 'vuln' ? `${who} 看穿了 ${mobDef(a.id).name} 的破綻！受到的傷害 +1` : `${who} 削弱了 ${mobDef(a.id).name}！造成的傷害 −30%`, 2200);
 }
 
 // ---------------- 挑釁（R 鍵，坦克限定，玩家自選）----------------
@@ -967,68 +1155,104 @@ function tryGroupHeal() {
   if (S.t < groupHealCd) { toast(`群療還要 ${Math.ceil(groupHealCd - S.t)} 秒`, 1200); return; }
   groupHealCd = S.t + GROUP_HEAL_CD;
   S.net?.heal?.();   // 同島的人（不含自己：對方畫面自補，走 onNetHeal）
-  const amt = JOBS[S.me.job].healAoE || 2;
+  const amt = (JOBS[S.me.job].healAoE || 2) + (fxOn('wings') ? 1 : 0);   // 翅膀：治療量 +1
   S.floaters.push({ x: me.x, y: me.y - 24, healPulse: true, life: .35 });   // 綠圈從腳下擴散
   me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + amt);
   S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + amt, life: .75 });
 }
-// ---------------- 職業技能列（畫面底部正中間，R 鍵技能的圖示＋冷卻倒數）----------------
-// 只有有 R 技能的職業顯示（坦克＝挑釁、補師＝群療；輸出沒有，整列隱藏）。冷卻用順時針退去的暗色扇形（conic-gradient）＋秒數，
-// 冷卻結束閃一下。冷卻時間取本地計時（provokeCd／groupHealCd），伺服器端另有自己的冷卻，這裡顯示的是本地的。
-const SKILL_BAR = {
-  tank:   { name: '挑釁', total: () => OWNER_PROVOKE_CD, until: () => provokeCd, run: () => tryProvoke(),
-            usable() {   // 回 null＝可以放；字串＝不能放的原因（圖示變暗）
-              const a = S.mobs.find(v => !v.dead && mobDef(v.id).owner);
-              if (!a) return '這裡沒有島主';
-              return Math.hypot(S.players[0].x - a.x, S.players[0].y - a.y) > OWNER_PROVOKE_RANGE ? '離島主太遠' : null;
-            } },
-  healer: { name: '群療', total: () => GROUP_HEAL_CD, until: () => groupHealCd, run: () => tryGroupHeal(), usable: () => null },
+// ---------------- 技能列（畫面底部正中間）：1、2＝職業技能、R＝職能技能；圖示＋冷卻倒數 ----------------
+// 冷卻用順時針退去的暗色扇形（conic-gradient）＋秒數，冷卻結束閃一下。冷卻取本地計時（伺服器另有自己的冷卻）
+const ROLE_SKILLS = {
+  tank:   { id: 'provoke', name: '挑釁', total: () => OWNER_PROVOKE_CD, until: () => provokeCd, run: () => tryProvoke(),
+            usable() { const a = ownerHere(); if (!a) return '這裡沒有島主'; return Math.hypot(S.players[0].x - a.x, S.players[0].y - a.y) > OWNER_PROVOKE_RANGE ? '離島主太遠' : null; } },
+  healer: { id: 'groupHeal', name: '群療', total: () => GROUP_HEAL_CD, until: () => groupHealCd, run: () => tryGroupHeal(), usable: () => null },
+  melee:  { id: 'vuln', name: '破綻', total: () => ROLE_DEBUFF.cd, until: () => S.fx.cd.vuln || 0, run: () => tryDebuff('vuln'),
+            usable() { const a = ownerHere(); if (!a) return '這裡沒有島主'; return Math.hypot(S.players[0].x - a.x, S.players[0].y - a.y) > OWNER_PROVOKE_RANGE ? '離島主太遠' : null; } },
+  ranged: { id: 'weak', name: '降傷', total: () => ROLE_DEBUFF.cd, until: () => S.fx.cd.weak || 0, run: () => tryDebuff('weak'),
+            usable() { const a = ownerHere(); if (!a) return '這裡沒有島主'; return Math.hypot(S.players[0].x - a.x, S.players[0].y - a.y) > OWNER_PROVOKE_RANGE ? '離島主太遠' : null; } },
 };
-const skillUI = { job: null, cdLeft: 0, dim: null, num: '', flashT: 0, ready: null };
-function drawSkillIcon(job) {   // 40×40 簡單圖示（placeholder）：挑釁＝藍盾加驚嘆號與衝擊波、群療＝綠十字加光圈
-  const c = $('skillIcon'), g = c.getContext('2d');
+const roleSkill = () => ROLE_SKILLS[JOBS[S.me.job]?.role] || null;
+// 目前職業的三格：[1 鍵, 2 鍵, R 鍵]
+function skillSlots() {
+  const out = jobSkillIds().map((id, i) => {
+    const d = JOB_SKILLS[id]; if (!d) return null;
+    return { id, key: String(i + 1), name: d.name, total: () => d.cd, until: () => S.fx.cd[id] || 0, run: () => tryJobSkill(i),
+             usable: () => (S.fx.seal ? '結印中' : d.usable ? d.usable() : null) };
+  }).filter(Boolean);
+  const r = roleSkill(); if (r) out.push({ ...r, key: 'R' });
+  return out;
+}
+const skillUI = { job: null, slots: [] };
+// 技能圖示（40×40，程式畫的 placeholder）：依技能 id 畫
+function drawSkillIcon(c, id) {
+  const g = c.getContext('2d'), P = Math.PI;
   g.clearRect(0, 0, 40, 40);
-  if (job === 'tank') {
-    g.fillStyle = '#1d2a44'; g.fillRect(0, 0, 40, 40);
-    g.strokeStyle = 'rgba(160,210,255,.75)'; g.lineWidth = 2;
-    for (const r of [13, 18]) { g.beginPath(); g.arc(20, 21, r, -.9, .9); g.stroke(); g.beginPath(); g.arc(20, 21, r, Math.PI - .9, Math.PI + .9); g.stroke(); }   // 兩側衝擊波
-    g.fillStyle = '#6fb4ff'; g.beginPath(); g.moveTo(11, 9); g.lineTo(29, 9); g.lineTo(29, 22); g.quadraticCurveTo(29, 31, 20, 35); g.quadraticCurveTo(11, 31, 11, 22); g.closePath(); g.fill();   // 盾
-    g.strokeStyle = '#0e1626'; g.lineWidth = 2; g.stroke();
-    g.fillStyle = '#fff'; g.fillRect(18.5, 13, 3, 11); g.fillRect(18.5, 27, 3, 3);   // 驚嘆號
-  } else {
-    g.fillStyle = '#16301f'; g.fillRect(0, 0, 40, 40);
-    g.strokeStyle = 'rgba(150,240,160,.7)'; g.lineWidth = 2; g.beginPath(); g.arc(20, 20, 16, 0, Math.PI * 2); g.stroke();
-    g.fillStyle = '#7ee08a'; g.fillRect(16.5, 7, 7, 26); g.fillRect(7, 16.5, 26, 7);   // 十字
-    g.strokeStyle = '#0e2616'; g.lineWidth = 1.5; g.strokeRect(16.5, 7, 7, 26); g.strokeRect(7, 16.5, 26, 7);
-    g.fillStyle = '#e8ffe8'; g.fillRect(18.5, 12, 3, 16); g.fillRect(12, 18.5, 16, 3);
+  const bg = (col) => { g.fillStyle = col; g.fillRect(0, 0, 40, 40); };
+  const shield = (x, y, w, h, fill) => { g.fillStyle = fill; g.beginPath(); g.moveTo(x, y); g.lineTo(x + w, y); g.lineTo(x + w, y + h * .55); g.quadraticCurveTo(x + w, y + h * .9, x + w / 2, y + h); g.quadraticCurveTo(x, y + h * .9, x, y + h * .55); g.closePath(); g.fill(); g.strokeStyle = '#0e1626'; g.lineWidth = 2; g.stroke(); };
+  switch (id) {
+    case 'provoke':
+      bg('#1d2a44'); g.strokeStyle = 'rgba(160,210,255,.75)'; g.lineWidth = 2;
+      for (const r of [13, 18]) { g.beginPath(); g.arc(20, 21, r, -.9, .9); g.stroke(); g.beginPath(); g.arc(20, 21, r, P - .9, P + .9); g.stroke(); }
+      shield(11, 9, 18, 26, '#6fb4ff'); g.fillStyle = '#fff'; g.fillRect(18.5, 13, 3, 11); g.fillRect(18.5, 27, 3, 3); break;
+    case 'groupHeal':
+      bg('#16301f'); g.strokeStyle = 'rgba(150,240,160,.7)'; g.lineWidth = 2; g.beginPath(); g.arc(20, 20, 16, 0, P * 2); g.stroke();
+      g.fillStyle = '#7ee08a'; g.fillRect(16.5, 7, 7, 26); g.fillRect(7, 16.5, 26, 7); g.fillStyle = '#e8ffe8'; g.fillRect(18.5, 12, 3, 16); g.fillRect(12, 18.5, 16, 3); break;
+    case 'vuln':   // 破綻：紅色裂紋
+      bg('#3a1418'); g.strokeStyle = '#ff6a5a'; g.lineWidth = 3; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(20, 4); g.lineTo(16, 14); g.lineTo(23, 20); g.lineTo(15, 30); g.lineTo(19, 37); g.stroke();
+      g.lineWidth = 2; g.beginPath(); g.moveTo(23, 20); g.lineTo(32, 17); g.moveTo(16, 14); g.lineTo(8, 12); g.stroke(); break;
+    case 'weak':   // 降傷：紫霧＋向下箭頭
+      bg('#241a34'); for (let i = 0; i < 6; i++) { g.fillStyle = `rgba(170,140,220,${.25 + i * .05})`; g.beginPath(); g.arc(8 + i * 5, 14 + (i % 2) * 5, 7, 0, P * 2); g.fill(); }
+      g.fillStyle = '#e8d8ff'; g.beginPath(); g.moveTo(14, 22); g.lineTo(26, 22); g.lineTo(26, 28); g.lineTo(31, 28); g.lineTo(20, 37); g.lineTo(9, 28); g.lineTo(14, 28); g.closePath(); g.fill(); break;
+    case 'guard': bg('#1d2a44'); shield(9, 6, 22, 30, '#8fb8ff'); g.fillStyle = '#e0b840'; g.fillRect(18, 11, 4, 18); g.fillRect(13, 16, 14, 4); break;
+    case 'kshield': bg('#1d2a44'); for (const [x, y] of [[4, 10], [20, 10], [12, 4]]) shield(x, y, 16, 22, 'rgba(150,200,255,.85)'); g.strokeStyle = 'rgba(200,230,255,.8)'; g.lineWidth = 2; g.beginPath(); g.arc(20, 22, 17, P * 1.1, P * 1.9); g.stroke(); break;
+    case 'vamp': bg('#2e1014'); g.fillStyle = '#d83a3a'; g.beginPath(); g.moveTo(20, 6); g.quadraticCurveTo(32, 22, 20, 34); g.quadraticCurveTo(8, 22, 20, 6); g.fill(); g.fillStyle = '#ffb0a8'; g.fillRect(16, 18, 3, 8); break;
+    case 'wshield': bg('#3a2412'); g.strokeStyle = '#ff9a4a'; g.lineWidth = 3; for (const r of [8, 13, 18]) { g.globalAlpha = 1 - r / 26; g.beginPath(); g.arc(20, 26, r, P, P * 2); g.stroke(); } g.globalAlpha = 1; shield(14, 12, 12, 16, '#ffb060'); break;
+    case 'shine': bg('#2a2a3a'); g.fillStyle = '#fff'; g.beginPath(); for (let i = 0; i < 8; i++) { const r = i % 2 ? 6 : 17, an = i * P / 4 - P / 2; g.lineTo(20 + Math.cos(an) * r, 20 + Math.sin(an) * r); } g.closePath(); g.fill(); g.fillStyle = '#fff6b0'; g.beginPath(); g.arc(20, 20, 4, 0, P * 2); g.fill(); break;
+    case 'wings': bg('#2a3440'); g.fillStyle = '#f4f4ff'; for (const s of [-1, 1]) { g.beginPath(); g.moveTo(20, 22); g.quadraticCurveTo(20 + s * 18, 2, 20 + s * 18, 14); g.quadraticCurveTo(20 + s * 14, 20, 20 + s * 16, 28); g.quadraticCurveTo(20 + s * 8, 26, 20, 22); g.fill(); } break;
+    case 'ninjutsu': bg('#241c36'); g.strokeStyle = '#e8d0ff'; g.lineWidth = 2.5; g.strokeRect(9, 9, 22, 22); g.beginPath(); g.moveTo(9, 20); g.lineTo(31, 20); g.moveTo(20, 9); g.lineTo(20, 31); g.stroke(); g.fillStyle = '#c83a3a'; g.beginPath(); g.arc(20, 20, 5, 0, P * 2); g.fill(); break;
+    case 'blink': bg('#1c2436'); for (let i = 0; i < 3; i++) { g.fillStyle = `rgba(180,200,255,${.25 + i * .3})`; g.beginPath(); g.ellipse(9 + i * 9, 22, 4, 9, 0, 0, P * 2); g.fill(); } g.fillStyle = '#fff'; g.beginPath(); g.moveTo(28, 14); g.lineTo(36, 22); g.lineTo(28, 30); g.closePath(); g.fill(); break;
+    case 'circle': bg('#1a1430'); g.strokeStyle = '#b88aff'; g.lineWidth = 2; g.beginPath(); g.arc(20, 20, 15, 0, P * 2); g.stroke(); g.beginPath(); g.arc(20, 20, 9, 0, P * 2); g.stroke();
+      g.beginPath(); for (let i = 0; i <= 5; i++) { const an = i * P * 4 / 5 - P / 2; g.lineTo(20 + Math.cos(an) * 15, 20 + Math.sin(an) * 15); } g.stroke(); break;
+    case 'triple': bg('#1a1430'); for (let i = 0; i < 3; i++) { const an = i * P * 2 / 3 - P / 2; const gr = g.createRadialGradient(20 + Math.cos(an) * 10, 20 + Math.sin(an) * 10, 0, 20 + Math.cos(an) * 10, 20 + Math.sin(an) * 10, 7); gr.addColorStop(0, '#fff'); gr.addColorStop(1, 'rgba(170,110,255,0)'); g.fillStyle = gr; g.beginPath(); g.arc(20 + Math.cos(an) * 10, 20 + Math.sin(an) * 10, 7, 0, P * 2); g.fill(); } break;
+    default: bg('#333');
   }
 }
-function updateSkillBar() {   // 每幀：依職業顯示／隱藏、更新冷卻扇形與秒數（只在值變了才改 DOM）
-  const bar = $('skillBar'), sk = SKILL_BAR[S.me.job];
-  if (!sk) { if (skillUI.job !== '') { skillUI.job = ''; bar.classList.add('hidden'); $('app').classList.remove('has-skill'); } return; }
-  if (skillUI.job !== S.me.job) {
-    skillUI.job = S.me.job; skillUI.cdLeft = 0; skillUI.dim = skillUI.ready = null; skillUI.num = '';
-    drawSkillIcon(S.me.job); $('skillName').textContent = sk.name;
-    $('skillBtn').onclick = () => sk.run();
-    bar.classList.remove('hidden'); $('app').classList.add('has-skill');
+function buildSkillBar() {
+  const bar = $('skillBar'); bar.innerHTML = '';
+  skillUI.slots = skillSlots().map(sk => {
+    const el = document.createElement('div'); el.className = 'skslot';
+    el.innerHTML = '<div class="skbtn"><canvas width="40" height="40"></canvas><div class="skcd"></div><div class="sknum"></div><span class="skkey"></span></div><div class="skname"></div>';
+    drawSkillIcon(el.querySelector('canvas'), sk.id);
+    el.querySelector('.skkey').textContent = sk.key; el.querySelector('.skname').textContent = sk.name;
+    el.querySelector('.skbtn').onclick = () => sk.run();
+    bar.appendChild(el);
+    return { sk, btn: el.querySelector('.skbtn'), cd: el.querySelector('.skcd'), num: el.querySelector('.sknum'), cdLeft: 0, dim: null, ready: null, n: '' };
+  });
+  const on = skillUI.slots.length > 0;
+  bar.classList.toggle('hidden', !on); $('app').classList.toggle('has-skill', on);
+}
+function updateSkillBar() {   // 每幀：換職業就重建三格；更新冷卻扇形與秒數（只在值變了才改 DOM）
+  if (skillUI.job !== S.me.job) { skillUI.job = S.me.job; buildSkillBar(); }
+  const me = S.players[0], busy = me.dead || S.t < (me.petUntil ?? 0) || S.mode !== 'walk';
+  for (const u of skillUI.slots) {
+    const total = u.sk.total(), left = Math.max(0, u.sk.until() - S.t);
+    const why = busy ? '現在不能使用' : u.sk.usable();
+    if (left > 0) {
+      const deg = Math.min(360, (1 - left / total) * 360);
+      u.cd.style.background = `conic-gradient(rgba(0,0,0,0) 0deg ${deg.toFixed(1)}deg, rgba(8,10,14,.72) ${deg.toFixed(1)}deg 360deg)`;
+      const num = left < 1 ? left.toFixed(1) : String(Math.ceil(left));
+      if (num !== u.n) { u.num.textContent = num; u.n = num; }
+    } else if (u.cdLeft > 0 || u.n) {
+      u.cd.style.background = 'none'; u.num.textContent = ''; u.n = '';
+      if (u.cdLeft > 0) { u.btn.classList.remove('flash'); void u.btn.offsetWidth; u.btn.classList.add('flash'); }   // 冷卻結束閃一下
+    }
+    u.cdLeft = left;
+    const dim = !!why, ready = !why && left <= 0;
+    if (dim !== u.dim) { u.btn.classList.toggle('dim', dim); u.dim = dim; }
+    if (ready !== u.ready) { u.btn.classList.toggle('ready', ready); u.ready = ready; }
+    u.btn.title = `${u.sk.name}（${u.sk.key}）` + (why ? ` — ${why}` : '');
   }
-  const me = S.players[0], total = sk.total(), left = Math.max(0, sk.until() - S.t);
-  const why = (me.dead || S.t < (me.petUntil ?? 0) || S.mode !== 'walk') ? '現在不能使用' : sk.usable();
-  const btn = $('skillBtn');
-  if (left > 0) {   // 冷卻中：暗色扇形從 12 點鐘順時針退去（已過的角度透明、剩下的暗）
-    const deg = Math.min(360, (1 - left / total) * 360);
-    $('skillCd').style.background = `conic-gradient(rgba(0,0,0,0) 0deg ${deg.toFixed(1)}deg, rgba(8,10,14,.72) ${deg.toFixed(1)}deg 360deg)`;
-    const num = left < 1 ? left.toFixed(1) : String(Math.ceil(left));
-    if (num !== skillUI.num) { $('skillNum').textContent = num; skillUI.num = num; }
-  } else if (skillUI.cdLeft > 0 || skillUI.num) {
-    $('skillCd').style.background = 'none'; $('skillNum').textContent = ''; skillUI.num = '';
-    if (skillUI.cdLeft > 0 && skillUI.job === S.me.job) { btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash'); }   // 冷卻結束閃一下
-  }
-  skillUI.cdLeft = left;
-  const dim = !!why, ready = !why && left <= 0;
-  if (dim !== skillUI.dim) { btn.classList.toggle('dim', dim); skillUI.dim = dim; }
-  if (ready !== skillUI.ready) { btn.classList.toggle('ready', ready); skillUI.ready = ready; }
-  btn.title = `${sk.name}（R）` + (why ? ` — ${why}` : '');
 }
 
 // 仇恨狀態的單機 tick：追（每腿重瞄目標、速度 180）、進範圍就每秒一抓（扣 2 HP）、
@@ -1219,6 +1443,7 @@ function applyDragonSnap(o) {
   if (!a) return;
   a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null; a.beam = null;
   a.aggro = o.aggro != null;   // 快照帶仇恨目標（連線編號）：中途進場也知道牠在追殺（戰鬥中不自動回血、之後會提示冷靜）
+  a.vulnUntil = o.vulnMs ? S.t + o.vulnMs / 1000 : 0; a.weakUntil = o.weakMs ? S.t + o.weakMs / 1000 : 0;   // 破綻／降傷剩餘時間
   if (o.ph === 'aim') {   // 島緣鎖定中：還原成循環（扣掉已過的預警時間）
     const total = OWNER_CAST * 1000;
     a.cycle = {
@@ -1271,6 +1496,10 @@ function onNetDragon(m) {
     return;
   }
   const a = S.mobs.find(v => v.id === S.terrains[S.terrain].owner);
+  if (m.ev === 'debuff') {   // 破綻／降傷（伺服器驗證過才廣播）
+    if (a && (m.kind === 'vuln' || m.kind === 'weak')) applyDebuff(a, m.kind, (m.ms || 10000) / 1000, m.name || '玩家');
+    return;
+  }
   if (m.ev === 'hp') {   // 別人（或自己）打到牠：更新血條
     if (a) a.hp = m.hp;
     return;
@@ -1531,6 +1760,7 @@ function onNetLurker(m) {
 function stepMob(a, dt) {
   const def = mobDef(a.id);
   if (a.lurker) { stepLurker(a, dt, def); return; }   // 釣上來的敵對怪物
+  if (!def.owner && !a.dead && S.t < (a.stunUntil ?? 0)) { a.target = null; a.moving = false; return; }   // 閃耀暈眩中：原地不動
   // 島主：連線時整個狀態機用牆鐘（與伺服器同軸，webview 節流也不影響）；單機沿用 dt 積分
   if (def.owner) {
     if (a.proxy) { stepOwnerProxy(a, dt, def); return; }
@@ -1629,42 +1859,53 @@ function hexRGB(h) { const s = h.replace('#', ''); return [parseInt(s.slice(0, 2
 const CHAR_DIR8 = ['down', 'down_right', 'right', 'up_right', 'up', 'up_left', 'left', 'down_left'];
 const CHAR_MIRROR = { left: 'right', up_left: 'up_right', down_left: 'down_right', right: 'left', up_right: 'up_left', down_right: 'down_left' };
 const lookItem = (list, id) => list?.find(it => it.id === id) || null;
-// 換色：把圖上 recolor.base／shade 的像素換成所選顏色（shade 用 78%），結果依 (層, 款式, 顏色) 快取整張 sheet
-function recolorSheet(img, rc, hex) {
-  const key = img.src + '|' + hex;
+// 換色：素材上「可染色」的原色（avatar.json 各件的 dye，第一個是主色）換成所選顏色；其他可染色的顏色依與主色的明暗比例跟著換
+// （比主色暗的乘上比例、比主色亮的往白色推）。舊格式 recolor: {base, shade} 視同 dye: [base, shade]。結果依 (sheet, 顏色) 快取整張
+const dyeList = it => it?.dye || (it?.recolor ? [it.recolor.base, it.recolor.shade].filter(Boolean) : null);
+const lum = ([r, g, b]) => .299 * r + .587 * g + .114 * b;
+function dyeSheet(img, dye, hex) {
+  const key = img.src + '|' + dye.join(',') + '|' + hex;
   let cv = S.recolorCache.get(key);
   if (cv) return cv;
   cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
   const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
   const d = g.getImageData(0, 0, cv.width, cv.height), p = d.data;
-  const [br, bg, bb] = hexRGB(rc.base), [sr, sg, sb] = rc.shade ? hexRGB(rc.shade) : [-1, -1, -1], [tr, tg, tb] = hexRGB(hex);
+  const T = hexRGB(hex), base = Math.max(1, lum(hexRGB(dye[0])));
+  const map = new Map(dye.map(c => {   // 原色（整數 rgb）→ 換成的顏色
+    const src = hexRGB(c), k = lum(src) / base;
+    const out = T.map(v => Math.round(k <= 1 ? v * k : v + (255 - v) * Math.min(1, k - 1)));
+    return [(src[0] << 16) | (src[1] << 8) | src[2], out];
+  }));
   for (let i = 0; i < p.length; i += 4) {
     if (!p[i + 3]) continue;
-    if (p[i] === br && p[i + 1] === bg && p[i + 2] === bb) { p[i] = tr; p[i + 1] = tg; p[i + 2] = tb; }
-    else if (p[i] === sr && p[i + 1] === sg && p[i + 2] === sb) { p[i] = tr * .78 | 0; p[i + 1] = tg * .78 | 0; p[i + 2] = tb * .78 | 0; }
+    const o = map.get((p[i] << 16) | (p[i + 1] << 8) | p[i + 2]);
+    if (o) { p[i] = o[0]; p[i + 1] = o[1]; p[i + 2] = o[2]; }
   }
   g.putImageData(d, 0, 0);
   S.recolorCache.set(key, cv);
   return cv;
 }
-// 合成一幀（24×24 之類，大小看 frames.w/h），依 (造型, 幀號) 快取
+// 合成一幀（24×24 之類，大小看 frames.w/h），依 (造型, 幀號) 快取。
+// look：{skin, hair, hat, top, bottom（顯示用的款式 id，裝備／外觀已在送出前決定好）, hatC／topC／botC（換色色碼，null＝原色）}；
+// 沒有 topC／botC 欄位（NPC、舊格式）就用 shirt／pants 顏色編號（shirtColors／pantsColors）
 function charSprite(look, fi) {
   const A = S.avatar, F = A.frames;
-  // 索引超出範圍（舊存檔/別人送來的怪值）就用 0 號，避免畫圖當掉
-  const shirtHex = A.shirtColors[look.shirt] ?? A.shirtColors[0], pantsHex = A.pantsColors[look.pants || 0] ?? A.pantsColors[0];
+  const legacy = (key, idx, list) => key in look ? (look[key] || null) : (list[idx || 0] ?? list[0]);
+  const shirtHex = legacy('topC', look.shirt, A.shirtColors), pantsHex = legacy('botC', look.pants, A.pantsColors);
+  const hatHex = look.hatC || null;
   const skin = lookItem(A.skins, look.skin) || A.skins[0], hair = lookItem(A.hair, look.hair) || A.hair[0];
   const top = lookItem(A.tops, look.top) || A.tops?.[0], bottom = lookItem(A.bottoms, look.bottom) || A.bottoms?.[0];
   const hat = lookItem(A.hats, look.hat);
-  const k = [skin.id, hair.id, hat?.id || '', top?.id, shirtHex, bottom?.id, pantsHex, fi].join('|');
+  const k = [skin.id, hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, fi].join('|');
   let cv = S.charCache.get(k);
   if (cv) return cv;
   cv = document.createElement('canvas'); cv.width = F.w; cv.height = F.h;
   const g = cv.getContext('2d');
-  // 由下往上：軀幹 → 褲子 → 衣服 → 頭髮 → 帽子（帽子也可以有 recolor，顏色暫用衣服的）
-  for (const [it, hex] of [[skin], [bottom, pantsHex], [top, shirtHex], [hair], [hat, shirtHex]]) {
+  // 由下往上：軀幹 → 褲子 → 衣服 → 頭髮 → 帽子
+  for (const [it, hex] of [[skin], [bottom, pantsHex], [top, shirtHex], [hair], [hat, hatHex]]) {
     const img = it && S.charImgs[it.sheet];
     if (!img || (fi + 1) * F.w > img.width) continue;   // 缺圖／這張 sheet 沒有這一幀：這層略過
-    const src = it.recolor && hex ? recolorSheet(img, it.recolor, hex) : img;
+    const dye = dyeList(it), src = dye && hex ? dyeSheet(img, dye, hex) : img;
     g.drawImage(src, fi * F.w, 0, F.w, F.h, 0, 0, F.w, F.h);
   }
   S.charCache.set(k, cv);
@@ -1734,8 +1975,17 @@ function spawnNPCs() {
 }
 
 function playerSpriteDiv(p, fi) {
-  // NPC 與遠端玩家都有自己的 look；自己（players[0]）則用當前造型
-  return charSprite(p.look || S.me, fi);
+  // NPC 與遠端玩家都有自己的 look；自己（players[0]）則用當前職業的裝備＋外觀（myLook）
+  return charSprite(p.look || myLook(), fi);
+}
+// 武器的圖：拿著職業武器且有選同類型的武器外觀（glam）時畫外觀的圖；玩法（射程、詠唱等）照拿著的武器
+function weaponImgFor(wid, wlook) {
+  if (!wid || wid === 'hands') return null;
+  if (wlook && wlook !== wid) {
+    const ws = S.avatar.weapons, g = ws.find(w => w.id === wlook), base = ws.find(w => w.id === wid);
+    if (g?.glam && base && g.type === base.type && S.weaponImgs[wlook]) return S.weaponImgs[wlook];
+  }
+  return S.weaponImgs[wid];
 }
 
 // ---- M2：遠端玩家（位置用內插，避免網路抖動造成瞬移）----
@@ -1884,6 +2134,197 @@ function stepNPC(p, dt) {
 }
 
 // 畫一個人（本人/NPC/同島玩家共用）：影子、身體（站/坐/睡）、武器、名牌。ctx 在世界座標
+// ---------------- 技能特效（全部程式畫的 placeholder；之後可以逐一換成 manifest 的多幀素材）----------------
+// 人物身上的持續效果：ctx 已平移到腳底（身體約 y=-48～0）；phase＝'back'（畫在身體後面）／'front'（畫在身體前面）
+function drawPersonFx(p, fx, backView, phase) {
+  const has = k => fx.includes(k), t = S.t, dir = p.dir < 0 ? -1 : 1;
+  if (has('wings') && (phase === 'back') !== backView) {   // 翅膀：正面時在身後，背面時疊在身上
+    const flap = Math.sin(t * 6) * .18;
+    ctx.save(); ctx.translate(0, -30);
+    for (const s of [-1, 1]) {
+      ctx.save(); ctx.scale(s, 1); ctx.rotate(-flap);
+      ctx.fillStyle = 'rgba(250,250,255,.92)'; ctx.strokeStyle = 'rgba(150,170,210,.9)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(2, 0); ctx.quadraticCurveTo(14, -22, 26, -16); ctx.quadraticCurveTo(22, -8, 25, -4);
+      ctx.quadraticCurveTo(19, -2, 22, 4); ctx.quadraticCurveTo(14, 4, 15, 10); ctx.quadraticCurveTo(8, 6, 2, 4); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+    if (phase === 'front' || !backView) for (let i = 0; i < 2; i++) {   // 飄落的羽毛
+      const q = (t * .6 + i * .5) % 1, fx2 = Math.sin((t + i) * 3) * 10 + (i ? 12 : -12);
+      ctx.fillStyle = `rgba(255,255,255,${.8 * (1 - q)})`;
+      ctx.beginPath(); ctx.ellipse(fx2, -40 + q * 40, 2.5, 1.2, q * 3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  if (phase !== 'front') return;
+  if (has('wshield')) {   // 戰士群盾：橘紅色外框
+    const pul = .5 + .5 * Math.sin(t * 5);
+    ctx.strokeStyle = `rgba(255,150,70,${.45 + .3 * pul})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(0, -22, 15, 26, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (has('kshield')) {   // 騎士群盾：藍色泡泡
+    const pul = .5 + .5 * Math.sin(t * 3);
+    ctx.fillStyle = `rgba(150,200,255,${.12 + .06 * pul})`; ctx.strokeStyle = `rgba(190,225,255,${.6 + .3 * pul})`; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.ellipse(0, -24, 19, 28, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(-8, -40, 3, 5, -.5, 0, Math.PI * 2); ctx.fill();
+  }
+  if (has('guard')) {   // 騎士單盾：身前一面半透明盾形光
+    ctx.save(); ctx.translate(dir * 15, -24); ctx.globalAlpha = .55 + .2 * Math.sin(t * 4);
+    ctx.fillStyle = 'rgba(140,190,255,.8)'; ctx.strokeStyle = '#e8f2ff'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-6, -11); ctx.lineTo(6, -11); ctx.lineTo(6, 2); ctx.quadraticCurveTo(6, 9, 0, 12); ctx.quadraticCurveTo(-6, 9, -6, 2); ctx.closePath();
+    ctx.fill(); ctx.stroke(); ctx.fillStyle = '#e0b840'; ctx.fillRect(-1, -8, 2, 14); ctx.fillRect(-4, -4, 8, 2);
+    ctx.restore();
+  }
+  if (has('vamp')) for (let i = 0; i < 4; i++) {   // 戰士吸血：身邊冒起的紅色光點
+    const q = (t * .8 + i * .25) % 1, x = Math.sin(i * 2.1 + t) * 13;
+    ctx.fillStyle = `rgba(230,50,60,${.75 * (1 - q)})`;
+    ctx.beginPath(); ctx.arc(x, -6 - q * 40, 2, 0, Math.PI * 2); ctx.fill();
+  }
+  const tri = fx.find(k => /^triple\d$/.test(k));
+  if (tri) {   // 三重：身邊繞著剩下幾次的光球
+    const n = +tri.slice(6);
+    for (let i = 0; i < n; i++) {
+      const an = t * 2.4 + i * Math.PI * 2 / 3, x = Math.cos(an) * 18, y = -26 + Math.sin(an) * 7;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 6);
+      g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(1, 'rgba(170,110,255,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  if (has('seal')) {   // 忍術結印：頭旁依序浮出三個手印符號（自創）
+    const own = p === S.players[0] && S.fx.seal, q = own ? Math.min(.999, (t - S.fx.seal.t0) / JOB_SKILLS.ninjutsu.cast) : (t * .67) % 1;
+    const k = Math.floor(q * 3);
+    for (let i = 0; i <= k; i++) drawSealGlyph(dir * 22, -44 + (i - k) * 3, i, i === k ? (q * 3) % 1 : 1);
+  }
+}
+function drawSealGlyph(x, y, kind, a) {   // 三款自創手印符號：方印、交叉、三角
+  ctx.save(); ctx.translate(x, y); ctx.globalAlpha = Math.min(1, a * 2);
+  ctx.fillStyle = 'rgba(30,20,50,.7)'; ctx.fillRect(-7, -7, 14, 14);
+  ctx.strokeStyle = '#e8d0ff'; ctx.lineWidth = 1.5; ctx.strokeRect(-7, -7, 14, 14);
+  ctx.strokeStyle = '#ff8a8a'; ctx.beginPath();
+  if (kind === 0) { ctx.rect(-3, -3, 6, 6); }
+  else if (kind === 1) { ctx.moveTo(-4, -4); ctx.lineTo(4, 4); ctx.moveTo(4, -4); ctx.lineTo(-4, 4); }
+  else { ctx.moveTo(0, -5); ctx.lineTo(5, 4); ctx.lineTo(-5, 4); ctx.closePath(); }
+  ctx.stroke(); ctx.restore();
+}
+function drawMagicCircle(x, y, left) {   // 黑魔法師的魔法陣：慢慢自轉的紫色雙圈＋星形＋符文點；最後 2 秒閃爍
+  const R = JOB_SKILLS.circle.r, rot = S.t * .5, al = left < 2 ? .4 + .4 * Math.abs(Math.sin(S.t * 8)) : .8;
+  ctx.save(); ctx.translate(x, y); ctx.scale(1, .5);   // 壓扁成地上的橢圓
+  ctx.globalAlpha = al;
+  ctx.fillStyle = 'rgba(150,90,255,.12)'; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#b88aff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, R * .72, 0, Math.PI * 2); ctx.stroke();
+  ctx.rotate(rot);
+  ctx.beginPath(); for (let i = 0; i <= 5; i++) { const an = i * Math.PI * 4 / 5; ctx.lineTo(Math.cos(an) * R * .72, Math.sin(an) * R * .72); } ctx.stroke();
+  ctx.fillStyle = '#e0c8ff';
+  for (let i = 0; i < 12; i++) { const an = i * Math.PI / 6; ctx.fillRect(Math.cos(an) * R * .86 - 2, Math.sin(an) * R * .86 - 2, 4, 4); }
+  ctx.restore();
+}
+function drawOwnerDebuff(a, W, H) {   // 島主身上：破綻＝紅色裂紋閃爍、降傷＝紫灰色的霧
+  const cy = a.y - a.z - H * .45, s = Math.max(1, W / 120);
+  if (S.t < (a.vulnUntil ?? 0) && (S.t * 3 | 0) % 2 === 0) {
+    ctx.save(); ctx.translate(a.x, cy); ctx.scale(s, s);
+    ctx.strokeStyle = 'rgba(255,90,70,.9)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-4, -22); ctx.lineTo(-10, -8); ctx.lineTo(2, 0); ctx.lineTo(-6, 14); ctx.lineTo(0, 24);
+    ctx.moveTo(2, 0); ctx.lineTo(14, -4); ctx.moveTo(-10, -8); ctx.lineTo(-20, -10); ctx.stroke();
+    ctx.restore();
+  }
+  if (S.t < (a.weakUntil ?? 0)) {
+    ctx.save();
+    for (let i = 0; i < 7; i++) {
+      const an = S.t * .7 + i * .9, x = a.x + Math.cos(an) * W * .32, y = cy + Math.sin(an * 1.3) * H * .25;
+      ctx.fillStyle = `rgba(150,120,190,${.16 + .06 * Math.sin(S.t * 2 + i)})`;
+      ctx.beginPath(); ctx.arc(x, y, 14 * s, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+function drawStunStars(x, y) {   // 暈眩：頭上轉圈的星星
+  for (let i = 0; i < 3; i++) {
+    const an = S.t * 4 + i * Math.PI * 2 / 3, sx = x + Math.cos(an) * 10, sy = y + Math.sin(an) * 3;
+    ctx.fillStyle = '#ffe27a'; ctx.beginPath();
+    for (let k = 0; k < 10; k++) { const r = k % 2 ? 1.5 : 3.5, a2 = k * Math.PI / 5 - Math.PI / 2; ctx.lineTo(sx + Math.cos(a2) * r, sy + Math.sin(a2) * r); }
+    ctx.closePath(); ctx.fill();
+  }
+}
+// 瞬間特效（S.floaters 裡帶 fxk 的；ctx 在世界座標、外層已 save/restore）
+function drawFxFloater(f) {
+  const L = { shine: .5, smoke: .5, after: .6, boom: .6, kshield: .6, wshield: .6, pop: .6, shout: .5, crack: .8, fog: .8, drain: .4 }[f.fxk] || .5;
+  const q = Math.min(1, Math.max(0, 1 - f.life / L)), al = 1 - q;
+  switch (f.fxk) {
+    case 'shine': {   // 閃耀：白色十字閃光
+      ctx.translate(f.x, f.y); ctx.globalCompositeOperation = 'lighter';
+      const s = 10 + q * 22;
+      ctx.fillStyle = `rgba(255,255,240,${al})`;
+      ctx.fillRect(-s, -2, s * 2, 4); ctx.fillRect(-2, -s, 4, s * 2);
+      ctx.rotate(Math.PI / 4); ctx.fillRect(-s * .5, -1.5, s, 3); ctx.fillRect(-1.5, -s * .5, 3, s);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s); g.addColorStop(0, `rgba(255,255,220,${.8 * al})`); g.addColorStop(1, 'rgba(255,255,220,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, s, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    case 'smoke':   // 縮地的煙
+      for (let i = 0; i < 6; i++) {
+        const an = i * Math.PI / 3, r = 6 + q * 16;
+        ctx.fillStyle = `rgba(220,220,230,${.7 * al})`;
+        ctx.beginPath(); ctx.arc(f.x + Math.cos(an) * r, f.y - 14 + Math.sin(an) * r * .6, 6 + q * 4, 0, Math.PI * 2); ctx.fill();
+      }
+      break;
+    case 'after': {   // 縮地殘影：自己的身影淡淡留在原地
+      const F = S.avatar.frames, fi = (F.states[`${f.d8}_idle`] || F.states.down_idle)[0];
+      ctx.globalAlpha = .4 * al; ctx.filter = 'brightness(1.6) saturate(.3)';
+      ctx.drawImage(charSprite(myLook(), fi), f.x - F.w, f.y - F.h * 2, F.w * 2, F.h * 2);
+      break;
+    }
+    case 'boom': {   // 忍術：範圍圈＋紫紅色煙爆
+      ctx.save(); ctx.translate(f.x, f.y); ctx.scale(1, .5);
+      ctx.strokeStyle = `rgba(255,120,160,${al})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, f.r * (.4 + .6 * q), 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      for (let i = 0; i < 9; i++) {
+        const an = i * Math.PI * 2 / 9, r = f.r * .7 * q;
+        ctx.fillStyle = i % 2 ? `rgba(190,90,220,${.6 * al})` : `rgba(255,110,110,${.6 * al})`;
+        ctx.beginPath(); ctx.arc(f.x + Math.cos(an) * r, f.y - 18 + Math.sin(an) * r * .5, 9 + q * 6, 0, Math.PI * 2); ctx.fill();
+      }
+      break;
+    }
+    case 'kshield': case 'wshield': {   // 群盾：從放的人腳下擴散到範圍邊緣的波
+      ctx.translate(f.x, f.y); ctx.scale(1, .5);
+      ctx.strokeStyle = f.fxk === 'kshield' ? `rgba(160,210,255,${.8 * al})` : `rgba(255,150,70,${.8 * al})`;
+      ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(0, 0, 12 + q * (f.r - 12), 0, Math.PI * 2); ctx.stroke();
+      break;
+    }
+    case 'pop': {   // 放出瞬間的小光環（顏色看技能）
+      const col = { guard: '140,190,255', kshield: '180,220,255', vamp: '230,60,70', wings: '255,255,255', triple: '190,130,255' }[f.kind] || '255,255,255';
+      ctx.strokeStyle = `rgba(${col},${al})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(f.x, f.y - 24, 10 + q * 18, 16 + q * 18, 0, 0, Math.PI * 2); ctx.stroke();
+      break;
+    }
+    case 'shout':   // 放職能技能的人：挑釁＝紅「!」、破綻＝紅色斬痕、降傷＝紫色波
+      ctx.translate(f.x, f.y - 30);
+      if (f.kind === 'weak') { ctx.strokeStyle = `rgba(180,140,230,${al})`; ctx.lineWidth = 2; for (const r of [10, 18]) { ctx.beginPath(); ctx.arc(0, 0, r + q * 14, 0, Math.PI * 2); ctx.stroke(); } }
+      else if (f.kind === 'vuln') { ctx.strokeStyle = `rgba(255,90,70,${al})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-14 + q * 6, -14); ctx.lineTo(14, 14); ctx.moveTo(14 - q * 6, -14); ctx.lineTo(-14, 14); ctx.stroke(); }
+      else { ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = `rgba(255,90,70,${al})`; ctx.fillText('!', 0, -24 - q * 8); }
+      break;
+    case 'crack':   // 破綻剛下：島主身上裂開一下
+      ctx.translate(f.x, f.y); ctx.scale(f.big * .8, f.big * .8);
+      ctx.strokeStyle = `rgba(255,90,70,${al})`; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-6, -24); ctx.lineTo(-12, -8); ctx.lineTo(4, 0); ctx.lineTo(-8, 16); ctx.lineTo(0, 26); ctx.stroke();
+      ctx.font = 'bold 14px "Microsoft JhengHei"'; ctx.textAlign = 'center'; ctx.fillStyle = `rgba(255,220,200,${al})`; ctx.fillText('破綻', 0, -32 - q * 10);
+      break;
+    case 'fog':     // 降傷剛下：島主身上罩一陣紫霧
+      for (let i = 0; i < 8; i++) {
+        const an = i * Math.PI / 4, r = (20 + q * 30) * f.big * .6;
+        ctx.fillStyle = `rgba(160,130,200,${.5 * al})`;
+        ctx.beginPath(); ctx.arc(f.x + Math.cos(an) * r, f.y + Math.sin(an) * r * .6, 12 * f.big * .5, 0, Math.PI * 2); ctx.fill();
+      }
+      break;
+    case 'drain': {  // 吸血：紅色光點從敵人飛回自己
+      const x = f.x1 + (f.x2 - f.x1) * q, y = f.y1 + (f.y2 - f.y1) * q - Math.sin(q * Math.PI) * 20;
+      ctx.fillStyle = `rgba(240,60,70,${.9})`; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+  }
+}
+
 function drawPerson(p, wi, nameColor) {
   const pose = p.pose === 'sit' || p.pose === 'sleep' ? p.pose : null;
   let nameY = p.y - p.z - 52;
@@ -1908,11 +2349,14 @@ function drawPerson(p, wi, nameColor) {
     // 掛著的武器畫在左右翻轉之外：固定在同一側，人物轉向時不會跟著換邊
     const drawCarry = onBack => wi.carry === 'waist' ? drawWeaponWaist(wi) : drawWeaponBack(wi, onBack);
     if (carry && !backView) drawCarry(false);
+    const pfx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);   // 技能效果（自己看本地狀態，別人看 state 同步的 fx）
+    if (pfx?.length) drawPersonFx(p, pfx, backView, 'back');
     ctx.save();
     if (cf.mirror) ctx.scale(-1, 1);
     ctx.drawImage(img, -F.w, -F.h * 2, F.w * 2, F.h * 2);   // 錨點＝腳底中央，畫 2 倍
     ctx.restore();
     if (carry && backView) drawCarry(true);
+    if (pfx?.length) drawPersonFx(p, pfx, backView, 'front');
     if (p.dir < 0) ctx.scale(-1, 1);                          // 揮擊、拋竿朝面向那側（要翻轉）
     if (wi && !pose && !fish && p.swing > 0) drawWeaponSwing(wi, p.swing, p.dir < 0 ? -1 : 1);
     if (fish) drawRodCast(wi, rodAngle(fish));
@@ -2470,6 +2914,13 @@ function checkTitles(silent) {
     lsSet('dcisland.m0.titles', S.titleBook);
     if (!silent) setTimeout(() => toast(`獲得稱號 ${fresh.map(titleText).join('')}！可在「造型」的稱號設定中使用`, 3600), 2000);
   }
+  // 外觀：解鎖條件與稱號同一套（avatar.json 各件的 unlock）；剛解鎖的跳提示（比稱號晚一點，不要疊在一起）
+  const gk = new Set(S.titleBook.glams || []), gFresh = allGlams().filter(it => it.unlock && glamUnlocked(it) && !gk.has(it.id));
+  if (gFresh.length) {
+    S.titleBook.glams = [...gk, ...gFresh.map(it => it.id)];
+    lsSet('dcisland.m0.titles', S.titleBook);
+    if (!silent) setTimeout(() => toast(`解鎖外觀「${gFresh.map(it => it.name).join('」「')}」！可在「造型」的裝備與外觀中使用`, 3600), 4200);
+  }
   if (S.titleOpen) buildTitles();
 }
 // 島主倒下：TITLE_ASSIST 秒內自己打過牠就記一筆「參與擊倒」
@@ -2636,6 +3087,9 @@ function draw() {
       }
     });
   });
+  // 黑魔法師的魔法陣（地上，先畫＝在所有角色腳底下）
+  if (S.fx.circle && S.t < S.fx.circle.until) drawMagicCircle(S.fx.circle.x, S.fx.circle.y, S.fx.circle.until - S.t);
+  for (const r of S.remotes.values()) if (r.circle) drawMagicCircle(r.circle.x, r.circle.y, 99);
   // 小動物
   for (const a of S.mobs) {
     const img = S.mobImgs[a.id], an = S.mobAnims[a.id]; if (!img && !an) continue;
@@ -2662,6 +3116,8 @@ function draw() {
         else ctx.drawImage(img, -W / 2, -H, W, H);
         ctx.restore();
         if (a.dead) return;
+        if (def.owner && (S.t < (a.vulnUntil ?? 0) || S.t < (a.weakUntil ?? 0))) drawOwnerDebuff(a, W, H);
+        if (!def.owner && S.t < (a.stunUntil ?? 0)) drawStunStars(a.x, a.y - a.z - H - 6);
         if (def.owner && !a.fly) {   // 島主腳下判定圈：以「武器尖端」為準——武器點（人前方 WEAPON_REACH 處的小圓點）進圈就打得到，不看面向。靠近（約 220px 內）才顯示
           const me = S.players[0], d = Math.hypot(a.x - me.x, a.y - me.y);
           if (d < 220 && !me.dead && !me.pose && S.me.weapon !== 'hands' && !rangedDef()) {   // 空手（沒裝備武器）、拿法杖（遠距詠唱，沒有近戰判定）不顯示
@@ -2753,7 +3209,7 @@ function draw() {
       y: p.y + (p.pose ? 2 : 0),      // 坐著/睡著的人要畫在自己的椅子/床之後（排序鍵比家具大一點）
       draw: () => {
         const wid = p.tool || S.me.weapon;      // 打石頭/樹木時暫時換成鎬子/斧頭
-        const wi = !p.npc && wid !== 'hands' ? S.weaponImgs[wid] : null;
+        const wi = !p.npc ? weaponImgFor(wid, p.tool ? null : myLook().wlook) : null;
         drawPerson(p, wi, p.npc ? (p.guide ? '#ffd86b' : '#bcd8e8') : '#ffffff');
       }
     });
@@ -2763,7 +3219,7 @@ function draw() {
     if (r.dead) { list.push(tombEntry(r.x, r.y, r.name, DEAD_SECONDS - (performance.now() - (r.deadAt || performance.now())) / 1000)); continue; }
     list.push({
       y: r.y + (r.pose ? 2 : 0),
-      draw: () => drawPerson(r, r.weapon && r.weapon !== 'hands' ? S.weaponImgs[r.weapon] : null, '#ffe9a8')   // 同島的人用暖金色名牌區分
+      draw: () => drawPerson(r, weaponImgFor(r.weapon, r.look?.wlook), '#ffe9a8')   // 同島的人用暖金色名牌區分
     });
   }
   list.sort((a, b) => a.y - b.y).forEach(o => o.draw());
@@ -2806,6 +3262,7 @@ function draw() {
   // 傷害飄字 / 消失特效
   for (const f of S.floaters) {
     ctx.save();
+    if (f.fxk) { drawFxFloater(f); ctx.restore(); continue; }   // 技能特效（世界座標）
     if (f.orb) {   // 法杖光球：從杖頂飛向目標（0.22 秒）
       const q = 1 - f.life / .22, x = f.x1 + (f.x2 - f.x1) * q, y = f.y1 + (f.y2 - f.y1) * q;
       ctx.globalCompositeOperation = 'lighter';
@@ -3228,19 +3685,56 @@ function swatchOrder(colors) {
   }).sort((a, b) => (a.neutral - b.neutral) || (a.neutral ? a.l - b.l : (a.fam - b.fam) || (a.l - b.l))).map(x => x.i);
 }
 
+// ---------------- 裝備與外觀 ----------------
+// 部位：帽子／上衣／褲子／武器。裝備＝職業固定的一套（jobs.json 的 gear／weapon）；外觀（avatar.json 標 glam 的那些）每個職業各記一套，
+// 某部位有選外觀就顯示外觀、沒選就顯示裝備。換色（帽子／上衣／褲子）也是每個職業各記一套，套在該部位顯示中的那件。
+// 存檔：S.me.wardrobe[職業 id] = { glam: {hat, top, bottom, weapon}, color: {hat, top, bottom} }（色碼 '#rrggbb'，沒有＝原色）
+const SLOTS = [['hat', '帽子'], ['top', '上衣'], ['bottom', '褲子'], ['weapon', '武器']];
+const slotList = s => s === 'hat' ? S.avatar.hats : s === 'top' ? S.avatar.tops : s === 'bottom' ? S.avatar.bottoms : S.avatar.weapons;
+const allGlams = () => SLOTS.flatMap(([s]) => (slotList(s) || []).filter(it => it.glam));
+const glamUnlocked = it => !it.unlock || titleMet(it.unlock);
+const jobWeaponDef = (job = S.me.job) => S.avatar.weapons.find(w => w.id === JOBS[job]?.weapon) || null;
+// 這件外觀能不能給這個職業的這個部位用（不管解鎖）：要標 glam、jobs 沒限定或包含這個職業；武器還要和職業武器同類型
+function glamFits(slot, it, job = S.me.job) {
+  if (!it?.glam || (it.jobs && !it.jobs.includes(job))) return false;
+  return slot !== 'weapon' || it.type === jobWeaponDef(job)?.type;
+}
+function wardrobe(job = S.me.job) {
+  const w = (S.me.wardrobe && typeof S.me.wardrobe === 'object') ? S.me.wardrobe : (S.me.wardrobe = {});
+  const e = w[job] && typeof w[job] === 'object' ? w[job] : (w[job] = {});
+  e.glam ||= {}; e.color ||= {};
+  return e;
+}
+// 某部位現在顯示哪一件（外觀優先；外觀失效＝沒解鎖／不適用就退回裝備）
+function shownItem(slot, job = S.me.job) {
+  const g = wardrobe(job).glam[slot], it = g && lookItem(slotList(slot), g);
+  if (it && glamFits(slot, it, job) && glamUnlocked(it)) return it;
+  return slot === 'weapon' ? jobWeaponDef(job) : lookItem(slotList(slot), JOBS[job]?.gear?.[slot]);
+}
+// 自己的顯示造型（畫自己、送給同島的人都用這個；外觀與裝備在這裡就決定好，別人只看結果）
+function myLook() {
+  const c = wardrobe().color, w = shownItem('weapon');
+  return { skin: S.me.skin, hair: S.me.hair,
+           hat: shownItem('hat')?.id || null, top: shownItem('top')?.id || null, bottom: shownItem('bottom')?.id || null,
+           hatC: c.hat || null, topC: c.top || null, botC: c.bottom || null,
+           wlook: w && w.id !== JOBS[S.me.job]?.weapon ? w.id : null,
+           shirt: 0, pants: 0 };   // shirt／pants：給舊客戶端的顏色編號（舊版只認這兩個）
+}
+
 function buildAvatarPanel() {
-  // 職業（坦克／補師／輸出）：純客戶端數值，常數在 main.js 的 JOBS
+  // 職業：jobs.json（職能＝圓點顏色；滑鼠停留顯示職能說明）
   const jb = $('jobOpts'); jb.innerHTML = '';
   for (const id of Object.keys(JOBS)) {
-    const o = document.createElement('div');
+    const jd = JOBS[id], o = document.createElement('div');
     o.className = 'opt name' + (S.me.job === id ? ' sel' : '');
-    o.textContent = JOBS[id].name; o.title = JOBS[id].desc;
+    o.textContent = jd.name; o.title = `${jd.roleName}：${jd.desc}`;
     const dot = document.createElement('span');
-    dot.style.color = JOBS[id].color; dot.style.marginRight = '4px'; dot.textContent = '●';
+    dot.style.color = jd.color; dot.style.marginRight = '4px'; dot.textContent = '●';
     o.prepend(dot);
     o.onclick = () => setJob(id);
     jb.appendChild(o);
   }
+  const jd = JOBS[S.me.job];
   $('titleCur').textContent = titleText(S.me.title) || '無';   // 稱號：按「稱號設定」開稱號一覽選
   const sk = $('skinOpts'); sk.innerHTML = '';
   for (const s of S.avatar.skins) {
@@ -3258,40 +3752,133 @@ function buildAvatarPanel() {
     o.onclick = () => { S.me.hair = h.id; saveAvatar(); buildAvatarPanel(); };
     hr.appendChild(o);
   }
-  // 帽子／上衣款式／褲子款式：avatar.json 的 hats／tops／bottoms；可選的不到 2 種（帽子：沒有任何一頂）就不顯示那一列
-  const styleRow = (grp, box, list, field, none) => {
-    const opts = none ? [{ id: null, name: '無' }, ...(list || [])] : (list || []);
-    $(grp).classList.toggle('hidden', opts.length < 2);
-    const el = $(box); el.innerHTML = '';
-    const cur = S.me[field] ?? (none ? null : opts[0]?.id);
-    for (const it of opts) {
-      const o = document.createElement('div');
-      o.className = 'opt name' + (cur === it.id ? ' sel' : '');
-      o.textContent = it.name;
-      o.onclick = () => { S.me[field] = it.id; saveAvatar(); buildAvatarPanel(); };
-      el.appendChild(o);
+  // 裝備與外觀：每個部位一列——顯示中的那件（裝備，或套了外觀時的外觀名）＋「外觀」鈕（開外觀一覽選）＋換色鈕
+  const box = $('gearRows'); box.innerHTML = '';
+  const wr = wardrobe();
+  for (const [slot, label] of SLOTS) {
+    const row = document.createElement('div'); row.className = 'gear-row';
+    const lb = document.createElement('div'); lb.className = 'gear-lb'; lb.textContent = label; row.appendChild(lb);
+    const gearIt = slot === 'weapon' ? jobWeaponDef() : lookItem(slotList(slot), jd?.gear?.[slot]);
+    const cur = shownItem(slot), isGlam = cur && gearIt && cur.id !== gearIt.id;
+    const nm = document.createElement('div'); nm.className = 'gear-name' + (isGlam ? ' glam' : '');
+    nm.textContent = cur ? cur.name : '（無）';
+    nm.title = isGlam ? `外觀（裝備：${gearIt.name}）` : '職業裝備';
+    row.appendChild(nm);
+    const gb = document.createElement('button'); gb.className = 'ff-btn small'; gb.textContent = '外觀';
+    gb.onclick = () => openGlams(slot);
+    row.appendChild(gb);
+    if (slot !== 'weapon') {   // 換色：顯示中的那件有可染色的顏色才能換
+      const b = document.createElement('button'); b.className = 'ff-btn small dye-btn';
+      const dye = dyeList(cur);
+      b.disabled = !dye;
+      b.title = dye ? '換色' : '這件不能換色';
+      const sw = document.createElement('span'); sw.className = 'dye-sw';
+      sw.style.background = wr.color[slot] || dye?.[0] || 'transparent';
+      b.append(sw, document.createTextNode('換色'));
+      b.onclick = () => openColor(slot, cur);
+      row.appendChild(b);
     }
-  };
-  styleRow('hatGrp', 'hatOpts', S.avatar.hats, 'hat', true);
-  styleRow('topGrp', 'topOpts', S.avatar.tops, 'top', false);
-  styleRow('bottomGrp', 'bottomOpts', S.avatar.bottoms, 'bottom', false);
-  const pn = $('pantsOpts'); pn.innerHTML = '';
-  swatchOrder(S.avatar.pantsColors).forEach(i => {
-    const hex = S.avatar.pantsColors[i], o = document.createElement('div');
-    o.className = 'opt' + ((S.me.pants || 0) === i ? ' sel' : '');
-    o.style.background = hex;
-    o.onclick = () => { S.me.pants = i; saveAvatar(); buildAvatarPanel(); };
-    pn.appendChild(o);
-  });
-  const sh = $('shirtOpts'); sh.innerHTML = '';
-  swatchOrder(S.avatar.shirtColors).forEach(i => {
-    const hex = S.avatar.shirtColors[i], o = document.createElement('div');
-    o.className = 'opt' + (S.me.shirt === i ? ' sel' : '');
-    o.style.background = hex;
-    o.onclick = () => { S.me.shirt = i; saveAvatar(); buildAvatarPanel(); };
-    sh.appendChild(o);
-  });
+    box.appendChild(row);
+  }
 }
+// ---------------- 外觀一覽（比照稱號一覽）：某部位可用的外觀，已解鎖的可以選、沒解鎖的變暗並顯示條件；開著仍可走路、Esc 關閉 ----------------
+let glamSlot = null;
+function openGlams(slot) { glamSlot = slot; S.glamOpen = true; buildGlams(); $('glamBox').classList.remove('hidden'); }
+function closeGlams() { S.glamOpen = false; glamSlot = null; $('glamBox').classList.add('hidden'); }
+function buildGlams() {
+  const slot = glamSlot; if (!slot) return;
+  const label = SLOTS.find(x => x[0] === slot)[1], jd = JOBS[S.me.job], wr = wardrobe();
+  const gearIt = slot === 'weapon' ? jobWeaponDef() : lookItem(slotList(slot), jd?.gear?.[slot]);
+  const list = (slotList(slot) || []).filter(it => glamFits(slot, it)), cur = shownItem(slot);
+  $('glamTitle').textContent = `${label}外觀`;
+  $('glamHint').textContent = `${jd?.name || ''}：已解鎖 ${list.filter(glamUnlocked).length}／${list.length}` + (slot === 'weapon' ? ' · 武器外觀只能選同類型的樣子' : '') + ' · 每個職業各記一套';
+  const box = $('glamList'); box.innerHTML = '';
+  const row = (id, name, desc, ok) => {
+    const o = document.createElement('div');
+    o.className = 'title-row' + (ok ? '' : ' locked') + ((id ? cur?.id === id && cur?.id !== gearIt?.id : !wr.glam[slot] || cur?.id === gearIt?.id) ? ' sel' : '');
+    const nm = document.createElement('div'); nm.className = 'title-name'; nm.textContent = name;
+    const ds = document.createElement('div'); ds.className = 'title-desc'; ds.textContent = desc;
+    o.append(nm, ds);
+    if (ok) o.onclick = () => { if (id) wr.glam[slot] = id; else delete wr.glam[slot]; saveAvatar(); buildAvatarPanel(); buildGlams(); };
+    box.appendChild(o);
+  };
+  row(null, '不使用外觀', `顯示職業裝備：${gearIt ? gearIt.name : '（無）'}`, true);
+  for (const it of list) {
+    const ok = glamUnlocked(it);
+    row(it.id, it.name, ok ? '已解鎖' : `未解鎖${it.hint ? '：' + it.hint : ''}`, ok);
+  }
+  if (!list.length) { const d = document.createElement('div'); d.className = 'title-desc'; d.style.padding = '6px 2px'; d.textContent = '這個部位還沒有外觀'; box.appendChild(d); }
+}
+$('glamClose').onclick = closeGlams;
+
+// ---------------- 選色視窗（換色）：色相條＋飽和度／明度方塊＋色碼輸入＋常用色；拖曳時即時預覽，取消就還原 ----------------
+const colorUI = { slot: null, before: null, h: 0, s: 1, v: 1 };
+function hsv2hex(h, s, v) {
+  const f = n => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+  return '#' + [f(5), f(3), f(1)].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+}
+function hex2hsv(hex) {
+  const [r, g, b] = hexRGB(hex).map(x => x / 255), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) { h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+  return { h, s: mx ? d / mx : 0, v: mx };
+}
+function openColor(slot, item) {
+  const dye = dyeList(item); if (!dye) return;
+  const wr = wardrobe();
+  colorUI.slot = slot; colorUI.before = wr.color[slot] || null; colorUI.orig = dye[0];
+  Object.assign(colorUI, hex2hsv(wr.color[slot] || dye[0]));
+  $('colorTitle').textContent = `${SLOTS.find(x => x[0] === slot)[1]}換色：${item.name}`;
+  const ps = $('colorPresets'); ps.innerHTML = '';
+  for (const hex of [dye[0], ...new Set([...S.avatar.shirtColors, ...S.avatar.pantsColors])]) {
+    const o = document.createElement('div'); o.className = 'opt'; o.style.background = hex; o.title = hex === dye[0] ? '原色' : hex;
+    o.onclick = () => { Object.assign(colorUI, hex2hsv(hex)); colorApply(); };
+    ps.appendChild(o);
+  }
+  $('colorBox').classList.remove('hidden'); S.colorOpen = true;
+  colorApply();
+}
+function colorApply(fromHex) {   // 依 colorUI 的 hsv 重畫方塊與色相條、更新預覽（即時套在自己身上）
+  const hex = fromHex || hsv2hex(colorUI.h, colorUI.s, colorUI.v);
+  const sv = $('colorSV'), g = sv.getContext('2d'), W = sv.width, H = sv.height;
+  g.fillStyle = hsv2hex(colorUI.h, 1, 1); g.fillRect(0, 0, W, H);
+  let gr = g.createLinearGradient(0, 0, W, 0); gr.addColorStop(0, '#fff'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, '#000'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  const cx = colorUI.s * W, cy = (1 - colorUI.v) * H;
+  g.lineWidth = 2; g.strokeStyle = colorUI.v > .5 ? '#000' : '#fff'; g.beginPath(); g.arc(cx, cy, 5, 0, Math.PI * 2); g.stroke();
+  const hu = $('colorHue'), h2 = hu.getContext('2d');
+  gr = h2.createLinearGradient(0, 0, hu.width, 0);
+  for (let i = 0; i <= 6; i++) gr.addColorStop(i / 6, hsv2hex(i * 60 % 360, 1, 1));
+  h2.fillStyle = gr; h2.fillRect(0, 0, hu.width, hu.height);
+  const hx = colorUI.h / 360 * hu.width;
+  h2.fillStyle = '#fff'; h2.fillRect(hx - 2, 0, 4, hu.height); h2.strokeStyle = '#000'; h2.lineWidth = 1; h2.strokeRect(hx - 2.5, .5, 5, hu.height - 1);
+  if (document.activeElement !== $('colorHex')) $('colorHex').value = hex;
+  $('colorNow').style.background = hex;
+  const wr = wardrobe();
+  if (hex.toLowerCase() === colorUI.orig.toLowerCase()) delete wr.color[colorUI.slot]; else wr.color[colorUI.slot] = hex;   // 選回原色＝不換色
+}
+function closeColor(ok) {
+  if (!S.colorOpen) return;
+  const wr = wardrobe();
+  if (!ok) { if (colorUI.before) wr.color[colorUI.slot] = colorUI.before; else delete wr.color[colorUI.slot]; }
+  $('colorBox').classList.add('hidden'); S.colorOpen = false;
+  saveAvatar(); buildAvatarPanel();
+}
+function colorDrag(el, fn) {   // 方塊／色相條：按下拖曳都會更新
+  const at = e => { const r = el.getBoundingClientRect(); fn(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))); colorApply(); };
+  el.addEventListener('pointerdown', e => { el.setPointerCapture(e.pointerId); at(e); });
+  el.addEventListener('pointermove', e => { if (e.buttons & 1) at(e); });
+}
+colorDrag($('colorSV'), (x, y) => { colorUI.s = x; colorUI.v = 1 - y; });
+colorDrag($('colorHue'), x => { colorUI.h = Math.min(359.9, x * 360); });
+$('colorHex').addEventListener('input', e => {
+  const v = e.target.value.trim(), m = /^#?([0-9a-f]{6})$/i.exec(v);
+  if (m) { Object.assign(colorUI, hex2hsv('#' + m[1])); colorApply('#' + m[1].toLowerCase()); }
+});
+$('colorOk').onclick = () => closeColor(true);
+$('colorCancel').onclick = () => closeColor(false);
+$('colorReset').onclick = () => { Object.assign(colorUI, hex2hsv(colorUI.orig)); colorApply(); };
+
 function saveAvatar() { lsSet('dcisland.m0.avatar', S.me); }
 
 // ---------------- 武器列（左上角，橫向只有圖示）：滑鼠滾輪切換目前拿的武器；選到的那格才顯示名稱 ----------------
@@ -3321,7 +3908,7 @@ function cycleWeapon(step) {
   setWeapon(ws[(i + step + ws.length) % ws.length].id);
 }
 let wheelAcc = 0, wheelAt = 0;
-const wheelBlocked = () => S.mode !== 'walk' || S.helpOpen || S.listOpen || S.dexOpen || S.titleOpen || S.signOpen || S.confirmOpen;
+const wheelBlocked = () => S.mode !== 'walk' || S.helpOpen || S.listOpen || S.dexOpen || S.titleOpen || S.colorOpen || S.glamOpen || S.signOpen || S.confirmOpen;
 document.addEventListener('wheel', e => {
   const t = e.target;
   if (t !== canvas && !t.closest?.('#weaponBar')) return;   // 只有在遊戲畫面或武器列上滾才切換（面板、視窗要照常捲動）
@@ -3334,19 +3921,16 @@ document.addEventListener('wheel', e => {
   cycleWeapon(wheelAcc > 0 ? 1 : -1); wheelAcc = 0;
 }, { passive: false });
 
-// 換職業：特性立即生效（血量截到新上限，不回滿，避免換職業當補血用）；武器照玩家自己的選擇不動；存檔沿用 dcisland.m0.avatar 這支 key
+// 換職業：特性立即生效（血量截到新上限，不回滿，避免換職業當補血用）；裝備自動換成該職業那套（外觀與換色每個職業各記一套）；
+// 手上拿的是舊職業的武器就換成新職業的武器（空手／釣竿不動）；存檔沿用 dcisland.m0.avatar 這支 key
 function setJob(id) {
   if (!JOBS[id] || S.me.job === id) return;
   S.me.job = id;
   const p = S.players[0];
-  if (p) p.hp = Math.min(p.hp ?? Infinity, hpCap(p));
-  let swapped = '';
-  if (!weaponAllowed(id, S.me.weapon)) {   // 手上的武器這個職業不能用：換成職業的預設武器
-    const w = S.avatar.weapons.find(v => v.id === (JOBS[id].defaultWeapon || 'hands'));
-    S.me.weapon = w?.id || 'hands'; swapped = `（武器換成${w?.name || '空手'}）`;
-  }
-  saveAvatar(); buildAvatarPanel();
-  toast(`轉職「${JOBS[id].name}」${swapped}— ${JOBS[id].desc}`, 3600);
+  if (p) { p.hp = Math.min(p.hp ?? Infinity, hpCap(p)); cancelCast(p); }
+  if (!weaponAllowed(id, S.me.weapon)) S.me.weapon = JOBS[id].weapon || 'hands';
+  saveAvatar(); buildAvatarPanel(); updateWeaponBar(); if (S.glamOpen) buildGlams();
+  toast(`轉職「${JOBS[id].name}」（${JOBS[id].roleName}）`, 2600);
 }
 
 
@@ -3365,6 +3949,8 @@ addEventListener('keydown', e => {
   if (S.listOpen) { if (k === 'escape' || k === 'l') closeList(); return; }                // 線上列表開著：Esc / L 關閉
   if (S.dexOpen) { if (k === 'escape') closeDex(); return; }                               // 圖鑑開著：Esc 關閉（仍可走路）
   if (S.titleOpen) { if (k === 'escape') closeTitles(); return; }                          // 稱號一覽開著：Esc 關閉（仍可走路）
+  if (S.colorOpen) { if (k === 'escape') closeColor(false); return; }                      // 選色視窗開著：Esc 取消
+  if (S.glamOpen) { if (k === 'escape') closeGlams(); return; }                            // 外觀一覽開著：Esc 關閉（仍可走路）
   if (S.helpOpen) { if (k === 'escape' || k === 'enter') closeHelp(); return; }       // 操作說明開著：Esc / Enter 關閉，其他鍵不處理
   if (S.confirmOpen) { if (k === 'escape') closeConfirm(); return; }   // 「要保存嗎？」開著時：Esc＝繼續編輯，其他鍵不處理
   if (k === 'escape' && !$('avatarPanel').classList.contains('hidden')) { $('avatarPanel').classList.add('hidden'); return; }   // 造型面板開著：Esc 先關面板（不會同時離開裝飾模式）；其他鍵照常
@@ -3375,11 +3961,8 @@ addEventListener('keydown', e => {
   if (k === 'escape' && S.mode === 'decor') requestExitDecor();     // Esc 也能離開裝飾模式
   if (k === 'l' && !e.repeat && S.mode === 'walk' && !S.confirmOpen) openList();
   if (k === 'f' && !e.repeat) doAttack(true);
-  if (k === 'r' && !e.repeat) {   // R：職業技能（坦克＝挑釁拉島主仇恨；補師＝群療補周遭玩家）
-    const jd = JOBS[S.me.job];
-    if (jd?.provoke) tryProvoke();
-    else if (jd?.groupHeal) tryGroupHeal();
-  }
+  if (k === 'r' && !e.repeat) roleSkill()?.run();   // R：職能技能（坦克＝挑釁、補師＝群療、近戰輸出＝破綻、遠程輸出＝降傷）
+  if ((k === '1' || k === '2') && !e.repeat) tryJobSkill(+k - 1);   // 1／2：職業技能
 });
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key.toLowerCase() === 'f') S.holdSkipF = false; });
 // 切走視窗時放開所有按住的鍵，避免卡住一直揮擊/走路
@@ -3512,7 +4095,7 @@ $('furnClear').onclick = () => {
 $('listClose').onclick = closeList;
 $('btnHelp').onclick = () => { if (S.helpOpen) closeHelp(); else openHelp(); };   // 右上「操作說明」：和嚮導一樣的操作說明；開著時再按就關閉（同「圖鑑」）
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
-$('avatarClose').onclick = () => $('avatarPanel').classList.add('hidden');
+$('avatarClose').onclick = () => { closeColor(false); closeGlams(); $('avatarPanel').classList.add('hidden'); };
 $('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑
 $('dexClose').onclick = closeDex;
 $('btnTitles').onclick = () => { if (S.titleOpen) closeTitles(); else openTitles(); };   // 造型面板的「稱號設定」：稱號一覽
@@ -3547,7 +4130,7 @@ let welcomeUntil = 0;
 async function boot() {
   $('btnDecor').disabled = false;
   // manifest：互不相依，一次全部並行抓（以前是一個接一個，首次進島要等一長串往返）
-  const [tjson, furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB] = await Promise.all([
+  const [tjson, furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB] = await Promise.all([
     Promise.all(TERRAIN_IDS.map(id => loadJSON(`assets/terrain/${id}/terrain.json`))),
     loadJSON('assets/furniture/furniture.json'),
     loadJSON('assets/floors/floors.json'),
@@ -3558,15 +4141,17 @@ async function boot() {
     loadJSON('assets/fish/fish.json'),          // 釣魚：各地形的魚與稀有度
     loadJSON('assets/skills/skills.json').catch(() => ({ skills: {} })),   // 島主招式（倒數條／招式名／要不要講台詞）；讀不到就照舊
     loadJSON('assets/titles/titles.json').catch(() => ({ titles: [] })),   // 稱號；讀不到就沒有稱號可選
+    loadJSON('assets/jobs/jobs.json'),          // 職業（職能、職業武器、裝備、技能）
   ]);
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
-  Object.assign(S, { furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB });
+  Object.assign(S, { furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB });
+  loadJobs(jobsDB);
+  S.myLook = myLook;   // net.js 送 state 時用（自己的顯示造型）
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
-  if (!JOBS[S.me.job]) S.me.job = 'dps';   // 舊存檔沒有職業欄（或值不合法）：當輸出
+  S.me.job = jobIdOf(S.me.job) || DEFAULT_JOB;   // 舊存檔的坦克／補師／輸出照 legacy 轉成騎士／白魔法師／忍者；沒有或不合法＝忍者
   if (S.me.title && !titleDef(S.me.title)) S.me.title = null;   // 稱號已從清單移除：不顯示
   checkTitles(true);                       // 依現有紀錄算一次已解鎖的稱號（不跳提示）
-  if (!weaponAllowed(S.me.job, S.me.weapon)) S.me.weapon = JOBS[S.me.job].defaultWeapon || 'hands';   // 舊存檔的武器這個職業不能用：換成預設武器
-  if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';   // 舊存檔沒武器欄：給第一款有圖的武器
+  if (!S.me.weapon || !weaponAllowed(S.me.job, S.me.weapon)) S.me.weapon = JOBS[S.me.job].weapon || 'hands';   // 舊存檔的武器（例如圓盾）這個職業不能用／沒武器欄：換成職業武器
   // 圖片：同樣全部並行（含目前所在地形的圖）。只有角色身體是必要的（缺了畫不出人），其餘缺圖就略過該項
   await Promise.all([
     ...S.floors.items.map(async f => S.floorImgs[f.id] = await loadSpr(`assets/floors/${f.sprite}`, f.anim)),
@@ -3580,7 +4165,7 @@ async function boot() {
     ...S.furn.items.map(async it => S.furnImgs[it.id] = await loadSpr(`assets/furniture/${it.sprite}`, it.anim)),
     // 人物分層 sheet：軀幹（膚色）是必要的（缺了畫不出人），頭髮／衣服／褲子／帽子缺圖就略過那一層
     ...S.avatar.skins.map(async s => S.charImgs[s.sheet] = await loadImg(`assets/avatar/${s.sheet}`)),
-    ...[...S.avatar.hair, ...(S.avatar.tops || []), ...(S.avatar.bottoms || []), ...(S.avatar.hats || [])]
+    ...[...S.avatar.hair, ...(S.avatar.tops || []), ...(S.avatar.bottoms || []), ...(S.avatar.hats || [])].filter(it => it.sheet)   // 沒有圖的（不戴帽子）不用載
       .map(async it => S.charImgs[it.sheet] = await optImg(`assets/avatar/${it.sheet}`)),
     ...S.avatar.weapons.filter(w => w.sprite).map(async w => {
       const im = await optImg(`assets/avatar/${w.sprite}`);
@@ -3635,9 +4220,10 @@ async function boot() {
       for (let i = S.floaters.length - 1; i >= 0; i--) {
         const f = S.floaters[i];
         f.life -= dt;
-        if (!f.slash && !f.beam && !f.beamLine && !f.healPulse && !f.orb && !f.aoe) f.y -= 34 * dt;   // 爪擊/光束/綠圈特效固定在原座標，不隨飄字上浮
+        if (!f.slash && !f.beam && !f.beamLine && !f.healPulse && !f.orb && !f.aoe && !f.fxk) f.y -= 34 * dt;   // 爪擊/光束/綠圈特效固定在原座標，不隨飄字上浮
         if (f.life <= 0) S.floaters.splice(i, 1);
       }
+      stepSkills();
       updateSkillBar();
       updateWeaponBar();
       draw();
@@ -3657,6 +4243,7 @@ async function boot() {
     onFurn: onNetFurn,
     onFloor: onNetFloor,
     onHeal: onNetHeal,       // 補師的群補事件（各客戶端自判自己是否在半徑內）
+    onSkillEvent,            // 職業技能事件（群盾自判、別人畫面上的特效）
     onAdmin: v => { S.admin = !!v; updateDecorUI(); },
     onCommitResult: onCommitResult,
     onDecos: onNetDecos,

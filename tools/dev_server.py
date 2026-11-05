@@ -125,6 +125,34 @@ def _num(v, lo, hi, fb):
     return fb
 
 
+HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+# 職業 → 職能（與 client/assets/jobs/jobs.json、worker 的 JOB_ROLE 一致；新增職業要一起加）
+JOB_ROLE = {"knight": "tank", "warrior": "tank", "whitemage": "healer", "ninja": "melee", "blackmage": "ranged"}
+JOB_LEGACY = {"tank": "knight", "healer": "whitemage", "dps": "ninja"}   # 舊客戶端的職業 id
+JOB_DEFAULT = "ninja"
+RANGED_WEAPONS = ("staff", "scepter")   # 遠距詠唱的武器（法杖、咒杖）
+D_DEBUFF_MS = 10000      # 破綻／降傷的持續時間（與 worker、client 一致）
+D_DEBUFF_CD_MS = 30000   # 破綻／降傷冷卻（每條連線、每種各算）
+# 職業技能打島主／深海魚人（與 worker 的 SKILL_HITS、client 的 JOB_SKILLS 一致）
+SKILL_HITS = {
+    "ninjutsu": {"job": "ninja", "dmg": 6, "cd_ms": 19000, "range": 170},
+    "shine": {"job": "whitemage", "dmg": 3, "cd_ms": 11000, "range": 440},
+}
+FX_MAX = 8
+
+
+def _hex_or(v):
+    return v.lower() if isinstance(v, str) and HEX_RE.match(v) else None
+
+
+def _job_or(v):
+    return v if v in JOB_ROLE else JOB_LEGACY.get(v, JOB_DEFAULT)
+
+
+def role_of(st):
+    return JOB_ROLE.get((st or {}).get("job"))
+
+
 def _id_or(v, fb):
     return v if isinstance(v, str) and ID_RE.match(v) else fb
 
@@ -148,16 +176,23 @@ def sanitize_state(s, prev):
             "hair": _id_or(look.get("hair"), pl.get("hair", "hair1")),
             "shirt": round(_num(look.get("shirt"), 0, 99, pl.get("shirt", 0))),
             "pants": round(_num(look.get("pants"), 0, 99, pl.get("pants", 0))),
-            "hat": _id_or(look.get("hat"), None),        # 帽子 id（None＝沒戴）
-            "top": _id_or(look.get("top"), None),        # 上衣款式 id（None＝預設款）
-            "bottom": _id_or(look.get("bottom"), None),  # 褲子款式 id（None＝預設款）
+            "hat": _id_or(look.get("hat"), None),        # 顯示中的帽子 id（裝備或外觀，客戶端已決定好；None＝沒戴）
+            "top": _id_or(look.get("top"), None),        # 顯示中的上衣 id（None＝預設款）
+            "bottom": _id_or(look.get("bottom"), None),  # 顯示中的褲子 id（None＝預設款）
+            "hatC": _hex_or(look.get("hatC")),           # 換色色碼（None＝原色）
+            "topC": _hex_or(look.get("topC")),
+            "botC": _hex_or(look.get("botC")),
+            "wlook": _id_or(look.get("wlook"), None),    # 武器外觀 id
         },
         "d8": s.get("d8") if s.get("d8") in D8 else None,   # 畫面用的 8 方向朝向（只轉發；玩法看 face）
         "weapon": _id_or(s.get("weapon"), "hands"),
         "pose": s.get("pose") if s.get("pose") in ("sit", "sleep") else None,
         "face": s.get("face") if s.get("face") in ("up", "side") else "down",
         "seat": _id_or(s.get("seat"), None),
-        "job": s.get("job") if s.get("job") in ("tank", "healer") else "dps",   # 職業（坦/補/輸出）：白名單解讀，不合法的值當輸出（挑釁驗證靠這欄）
+        "job": _job_or(s.get("job")),   # 職業：白名單（JOB_ROLE），舊客戶端的 tank/healer/dps 轉換，不合法＝忍者（職能驗證靠這欄）
+        "fx": [v for v in s.get("fx") if isinstance(v, str) and ID_RE.match(v)][:FX_MAX] if isinstance(s.get("fx"), list) else [],   # 持續型技能效果：只轉發
+        "circle": {"x": _num(s["circle"].get("x"), 0, COLS * CELL, 0), "y": _num(s["circle"].get("y"), 0, ROWS * CELL, 0)}
+                  if isinstance(s.get("circle"), dict) else None,   # 黑魔法師的魔法陣位置（只轉發）
         "title": _id_or(s.get("title"), None),   # 稱號 id（None＝不顯示；只轉發 id，文字由各客戶端查 titles.json，解鎖與否不驗證）
         "hp": round(_num(s.get("hp"), 0, 20, 10)),
         "dead": 1 if s.get("dead") else 0,
@@ -447,6 +482,8 @@ class Room:
         self.dragon_maps = {}    # 地形 -> 陸地位圖 list[int]
         self.dragon_hits = {}    # cid -> (地形, 上次打島主的時刻 ms)
         self.provokes = {}       # cid -> 上次挑釁的時刻（ms）（挑釁冷卻只在成功出手時計）
+        self.debuffs = {}        # cid -> {"vuln": ms, "weak": ms}：上次放破綻／降傷的時刻
+        self.skill_hits = {}     # cid -> {"技能:owner|lurker": ms}：職業技能打怪的冷卻
         self.dragon_timers = {}  # 地形 -> 重生計時器
         self.wander_tick_seq = {}   # 地形 -> 散步 tick 序號（只讓最新排程生效）
         self.lurkers = {}        # 地形 -> 釣上來的敵對怪物狀態（每個地形同時最多一隻）
@@ -784,6 +821,9 @@ class Room:
             o["sayMs"] = int(ms)
         if d.get("quote"):   # 台詞招式中：哪一句（中途進場的人也看到同一句）
             o["line"] = d["quote"]["line"]
+        for k in ("vuln", "weak"):   # 破綻／降傷剩餘時間
+            if now_ms < d.get(k + "_until", 0.0):
+                o[k + "Ms"] = int(d[k + "_until"] - now_ms)
         return o
 
     def _dragon_start_leg(self, terrain):
@@ -1046,6 +1086,46 @@ class Room:
             ends.append(w["t0"] + w["tms"] + 50)
         return outs, max(0.08, min(ends) / 1000 - time.time() + 0.02)
 
+    def _skill_hit(self, cid, st, msg, kind, now):
+        """職業技能的命中（msg.sk）：回 dict(dmg, range)；不是技能＝None；不合法（職業不對、冷卻中）＝False。呼叫前要持有 lock。"""
+        if not msg.get("sk"):
+            return None
+        sk = SKILL_HITS.get(msg.get("sk"))
+        if not sk or st.get("job") != sk["job"] or st.get("dead"):
+            return False
+        book = self.skill_hits.setdefault(cid, {})
+        key = f'{msg["sk"]}:{kind}'
+        if now - book.get(key, 0.0) < sk["cd_ms"]:
+            return False
+        book[key] = now
+        return {"dmg": sk["dmg"], "range": sk["range"]}
+
+    def dragon_debuff(self, cid, msg):
+        """破綻／降傷（R 鍵，近戰／遠程輸出）：驗證職能、距離、冷卻後記在島主狀態；回 (地形, 廣播訊息) 或 None。"""
+        with self.lock:
+            c = self.clients.get(cid)
+            if c is None or not c["terrain"] or not c["state"]:
+                return None
+            terrain, st = c["terrain"], c["state"]
+            if terrain not in OWNER_TERRAINS:
+                return None
+            kind = msg.get("kind") if msg.get("kind") in ("vuln", "weak") else None
+            if not kind or st.get("dead") or role_of(st) != ("melee" if kind == "vuln" else "ranged"):
+                return None
+            d = self.dragon_state(terrain)
+            if d["st"] == "dead":
+                return None
+            now = time.time() * 1000
+            book = self.debuffs.setdefault(cid, {})
+            if now - book.get(kind, 0.0) < D_DEBUFF_CD_MS - 1000:
+                return None
+            _, pos, _ = self.dragon_phase(now, terrain)
+            if math.hypot(float(st.get("x") or 0) - pos[0], float(st.get("y") or 0) - pos[1]) > D_PROVOKE_RANGE:
+                return None
+            book[kind] = now
+            d[kind + "_until"] = now + D_DEBUFF_MS
+            return terrain, {"t": "dragon", "ev": "debuff", "kind": kind, "ms": D_DEBUFF_MS, "id": cid, "name": st.get("name") or "玩家"}
+
     def dragon_hit(self, cid, msg):
         """打到島主：扣血；閒置且冷卻過了 → 開始反擊；冷卻中 → 納入仇恨。回傳要廣播的訊息清單（空清單＝無效/太遠/飛行中）。
         攻擊者所在地形決定打的是哪座島的島主。"""
@@ -1064,8 +1144,13 @@ class Room:
             if d["st"] == "dead":
                 return None
             now = time.time() * 1000
+            sk = self._skill_hit(cid, c["state"], msg, "owner", now)
+            if sk is False:
+                return None
             self.dragon_regen(terrain, now)   # 扣血前先把該補的血補上（之後廣播的 hp 是回血後的值）
-            dmg = 2 if msg.get("dmg") == 2 else 1
+            dmg = sk["dmg"] if sk else (2 if msg.get("dmg") == 2 else 1)
+            if now < d.get("vuln_until", 0.0):
+                dmg += 1   # 破綻（近戰輸出的職能技能）：每擊 +1
             ph, pos, _ = self.dragon_phase(now, terrain)
             if ph == "dash":
                 return self._drej(terrain, "衝刺中")
@@ -1075,7 +1160,7 @@ class Room:
                 return self._drej(terrain, "座標格式壞")
             dist = math.hypot(ax - pos[0], ay - pos[1])
             # 客戶端可能漏接一個路點事件（散步腿落後）：只要它宣稱的島主位置離伺服器的不遠、且玩家貼著宣稱的位置，就接受
-            max_r = D_STAFF_RANGE if (msg.get("staff") and (c["state"] or {}).get("weapon") == "staff") else D_RANGE   # 法杖旗標要配上 state 裡真的拿著法杖才算
+            max_r = sk["range"] if sk else D_STAFF_RANGE if (msg.get("staff") and (c["state"] or {}).get("weapon") in RANGED_WEAPONS) else D_RANGE   # 法杖旗標要配上 state 裡真的拿著法杖／咒杖才算
             try:
                 cdx, cdy = float(msg.get("ddx")), float(msg.get("ddy"))
                 near = dist <= max_r or (math.hypot(ax - cdx, ay - cdy) <= max_r
@@ -1182,7 +1267,7 @@ class Room:
             if terrain not in OWNER_TERRAINS:
                 return None
             st = c["state"]
-            if st.get("job") != "tank" or st.get("dead"):
+            if role_of(st) != "tank" or st.get("dead"):   # 坦克職能限定（騎士、戰士）
                 print("[dragon] 挑釁拒絕: 非坦職或已倒地", file=sys.stderr, flush=True)
                 return None
             d = self.dragon_state(terrain)
@@ -1351,11 +1436,14 @@ class Room:
             if not L or not st:
                 return None
             now = time.time() * 1000
+            sk = self._skill_hit(cid, st, msg, "lurker", now)
+            if sk is False:
+                return None
             h = self.lurk_hits.get(cid)
-            if h and h[0] == terrain and now - h[1] < D_CD * 1000:
+            if not sk and h and h[0] == terrain and now - h[1] < D_CD * 1000:
                 return None
             pos = self.lurker_pos(L, now)
-            max_r = L_STAFF_RANGE if msg.get("staff") and st.get("weapon") == "staff" else L_RANGE
+            max_r = sk["range"] if sk else L_STAFF_RANGE if msg.get("staff") and st.get("weapon") in RANGED_WEAPONS else L_RANGE
             try:
                 px, py = float(msg.get("x")), float(msg.get("y"))
             except (TypeError, ValueError):
@@ -1366,10 +1454,13 @@ class Room:
                 near = math.hypot(px - lx, py - ly) <= max_r and math.hypot(lx - pos[0], ly - pos[1]) <= D_DRIFT_TOLER
             if not near:
                 return None
-            self.lurk_hits[cid] = (terrain, now)
+            if not sk:
+                self.lurk_hits[cid] = (terrain, now)
+            elif not h or h[1] < now - D_CD * 1000:
+                self.lurk_hits[cid] = (terrain, now - D_CD * 1000)   # 技能命中也算攻擊者（仇恨候選），但不佔一般攻擊的間隔
             L["last_hit_at"] = now
             try:
-                dmg = max(1, min(2, round(float(msg.get("dmg") or 1))))
+                dmg = sk["dmg"] if sk else max(1, min(2, round(float(msg.get("dmg") or 1))))
             except (TypeError, ValueError):
                 dmg = 1
             L["hp"] -= dmg
@@ -1482,6 +1573,8 @@ class Room:
             self.clients.pop(cid, None)
             self.dragon_hits.pop(cid, None)
             self.lurk_hits.pop(cid, None)
+            self.debuffs.pop(cid, None)
+            self.skill_hits.pop(cid, None)
 
     def terrain_of(self, cid):
         with self.lock:
@@ -1729,16 +1822,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             room.dragon_maps[cur] = land
                 elif t == "dragonHit":   # 打島主：驗證後廣播 hp/aim/gaze/beam/dead/aggro 事件（回傳訊息清單）
                     now = time.time()
-                    if now - last_dragon_hit < D_CD:
+                    if not msg.get("sk") and now - last_dragon_hit < D_CD:   # 職業技能另有自己的冷卻（_skill_hit）
                         continue
                     res = room.dragon_hit(cid, msg)
-                    if res:
+                    if res and not msg.get("sk"):
                         last_dragon_hit = now
+                    if res:
                         cur = room.terrain_of(cid)
                         for m in res:
                             room.broadcast(m, terrain=cur)
                 elif t == "lurkerHit":   # 打釣上來的敵對怪物
                     res = room.lurker_hit(cid, msg)
+                    if res:
+                        room.broadcast(res[1], terrain=res[0])
+                elif t == "debuff":    # 破綻（近戰輸出）／降傷（遠程輸出）：職能/距離/冷卻由伺服器驗證
+                    res = room.dragon_debuff(cid, msg)
                     if res:
                         room.broadcast(res[1], terrain=res[0])
                 elif t == "provoke":   # 挑釁（坦職限定）：把島主的仇恨拉到自己身上（職業/距離/冷卻由伺服器驗證）

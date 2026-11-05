@@ -143,7 +143,28 @@ body {
 
 /* ---------- 造型面板：色票排成多列（上衣、褲子各 24 色）---------- */
 #jobOpts, #skinOpts, #hairOpts, #shirtOpts, #pantsOpts { display: flex; flex-wrap: wrap; gap: 5px; }
-#shirtOpts .opt, #pantsOpts .opt { width: 22px; height: 22px; }
+#jobOpts { display: flex; flex-wrap: wrap; gap: 4px; }
+#jobOpts .opt.name { width: 70px; padding: 0 0 0 7px; box-sizing: border-box; margin: 0; justify-content: flex-start; }
+.gear-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.gear-lb { flex: 0 0 28px; font-size: 11px; color: var(--text-dim); line-height: 24px; }
+.gear-name { flex: 1; min-width: 0; font-size: 12px; line-height: 24px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gear-name.glam { color: #f0dc9a; }
+.gear-row .ff-btn { flex: 0 0 auto; }
+#glamBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 300px; max-height: 440px; display: flex; flex-direction: column; z-index: 32; }
+#glamBox.hidden { display: none !important; }
+#glamList { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
+.dye-btn { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
+.dye-btn:disabled { opacity: .35; cursor: default; }
+.dye-sw { width: 10px; height: 10px; border: 1px solid rgba(0,0,0,.6); display: inline-block; }
+#colorBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 220px; z-index: 33; }
+#colorBox.hidden { display: none !important; }
+#colorSV, #colorHue { display: block; width: 200px; margin: 0 auto 6px; cursor: crosshair; touch-action: none; }
+.color-hexrow { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+#colorNow { width: 22px; height: 22px; border: 1px solid var(--gold-dim); }
+#colorHex { flex: 1; background: rgba(0,0,0,.3); color: var(--text); border: 1px solid var(--gold-dim); padding: 2px 6px; font: 12px monospace; }
+#colorPresets { display: flex; flex-wrap: wrap; gap: 3px; max-height: 64px; overflow: auto; }
+#colorPresets .opt { width: 16px; height: 16px; margin: 0; }
+#colorBox .ff-panel-foot { display: flex; gap: 6px; justify-content: flex-end; }
 
 /* ---------- 裝飾面板：擺設／地板分頁 ---------- */
 .ff-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
@@ -188,19 +209,20 @@ body {
 .title-row.locked .title-name { color: var(--text-dim); }
 .title-desc { font-size: 10px; color: var(--text-dim); margin-top: 2px; letter-spacing: 1px; }
 
-/* ---------- 職業技能列（R 鍵）---------- */
-#skillBar { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 15; display: flex; flex-direction: column; align-items: center; gap: 3px; pointer-events: none; }
-#skillBtn { position: relative; width: 48px; height: 48px; box-sizing: border-box; border: 2px solid var(--gold-dim); background: var(--panel); cursor: pointer; pointer-events: auto; }
-#skillBtn canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
-#skillBtn.dim canvas { filter: grayscale(1) brightness(.55); }
-#skillBtn.ready { border-color: var(--gold); }
-#skillCd { position: absolute; inset: 0; pointer-events: none; }
-#skillNum { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: bold 18px "Microsoft JhengHei", sans-serif; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000, 1px 1px 0 #000; pointer-events: none; }
-#skillKey { position: absolute; right: 2px; bottom: 0; font: bold 10px "Microsoft JhengHei", sans-serif; color: #ffe9a8; text-shadow: 0 0 2px #000, 1px 1px 0 #000; pointer-events: none; }
-#skillName { font-size: 11px; letter-spacing: 2px; color: var(--text); text-shadow: 0 0 3px #000, 1px 1px 0 #000; }
-#skillBtn.flash { animation: skillFlash .55s ease-out; }
+/* ---------- 技能列（1、2＝職業技能，R＝職能技能）---------- */
+#skillBar { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 15; display: flex; gap: 6px; align-items: flex-end; pointer-events: none; }
+.skslot { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.skbtn { position: relative; width: 32px; height: 32px; box-sizing: border-box; border: 2px solid var(--gold-dim); background: var(--panel); cursor: pointer; pointer-events: auto; }
+.skbtn canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.skbtn.dim canvas { filter: grayscale(1) brightness(.55); }
+.skbtn.ready { border-color: var(--gold); }
+.skcd { position: absolute; inset: 0; pointer-events: none; }
+.sknum { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font: bold 13px "Microsoft JhengHei", sans-serif; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000, 1px 1px 0 #000; pointer-events: none; }
+.skkey { position: absolute; right: 1px; bottom: -1px; font: bold 9px "Microsoft JhengHei", sans-serif; color: #ffe9a8; text-shadow: 0 0 2px #000, 1px 1px 0 #000; pointer-events: none; }
+.skname { font-size: 10px; letter-spacing: 1px; color: var(--text); text-shadow: 0 0 3px #000, 1px 1px 0 #000; }
+.skbtn.flash { animation: skillFlash .55s ease-out; }
 @keyframes skillFlash { 0% { box-shadow: 0 0 0 0 rgba(255, 236, 150, .95); } 100% { box-shadow: 0 0 16px 12px rgba(255, 236, 150, 0); } }
-#app.has-skill #toast { bottom: 92px; }   /* 技能列顯示時，提示往上讓出位置 */
+#app.has-skill #toast { bottom: 74px; }   /* 技能列顯示時，提示往上讓出位置 */
 
 /* ---------- 武器列（左上角，橫向只有圖示；選到的那格才顯示名稱，滾輪切換）---------- */
 #weaponBar { position: absolute; left: 10px; top: 52px; z-index: 12; display: flex; flex-direction: row; gap: 4px; user-select: none; }

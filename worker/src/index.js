@@ -62,6 +62,14 @@ const D_DRIFT_TOLER = 600;   // 客戶端宣稱的龍位置與伺服器的最大
 const D_STAFF_RANGE = 440;   // 法杖（遠距詠唱）打島主的最大距離：客戶端射程 320 + 判定圈 58 + 緩衝；只有 state.weapon＝staff 的連線才適用
 const D_CD_MS = 300;         // 同一條連線兩次打島主的最短間隔
 const D_PROVOKE_CD_MS = 15000;   // 挑釁冷卻（每條連線；與 dev_server.py 的 D_PROVOKE_CD 一致）
+const D_DEBUFF_MS = 10000;        // 破綻／降傷的持續時間（與 client 的 ROLE_DEBUFF.dur 一致）
+const D_DEBUFF_CD_MS = 30000;     // 破綻／降傷冷卻（每條連線、每種各算）
+// 職業技能打島主／深海魚人：技能標記 sk＋職業驗證＋每條連線的冷卻（略短於客戶端，吸收延遲）；不受一般攻擊的 D_CD_MS 限制
+// range＝玩家到島主（或我們看到的島主位置）的最大距離。與 client 的 JOB_SKILLS 數值一致
+const SKILL_HITS = {
+  ninjutsu: { job: "ninja", dmg: 6, cdMs: 19000, range: 170 },       // 忍術：身邊 80px＋判定圈 58＋緩衝
+  shine: { job: "whitemage", dmg: 3, cdMs: 11000, range: 440 },      // 閃耀：射程同法杖
+};
 const D_PROVOKE_RANGE = 240;     // 挑釁距離（比攻擊距離寬：把島主拉過來的是「聲東擊西」，不需要貼臉）
 const D_SAVE_MS = 2000;      // 熱路徑（被打／爪擊／追腿／回血）寫 storage 的最短間隔；其餘變動標 dirty，由鬧鐘補寫
 const SEQ_BLOCK = 50;        // 連線編號一次預留幾個再寫 storage（不必每次連線都寫）
@@ -243,6 +251,16 @@ const NAME_MAX = 24;
 const D8 = ["down", "down_right", "right", "up_right", "up", "up_left", "left", "down_left"];   // 與 client 的 CHAR_DIR8 一致
 const num = (v, lo, hi, fb) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fb);
 const idOr = (v, fb) => (typeof v === "string" && ID_RE.test(v) ? v : fb);
+const HEX_RE = /^#[0-9a-f]{6}$/i;
+const hexOr = v => (typeof v === "string" && HEX_RE.test(v) ? v.toLowerCase() : null);
+// 職業 → 職能（與 client/assets/jobs/jobs.json 一致；新增職業要在這裡與 dev_server.py 的 JOB_ROLE 一起加，否則會被當成預設職業）
+const JOB_ROLE = { knight: "tank", warrior: "tank", whitemage: "healer", ninja: "melee", blackmage: "ranged" };
+const JOB_LEGACY = { tank: "knight", healer: "whitemage", dps: "ninja" };   // 舊客戶端的職業 id
+const JOB_DEFAULT = "ninja";
+const jobOr = v => (JOB_ROLE[v] ? v : JOB_LEGACY[v] || JOB_DEFAULT);
+const roleOf = st => JOB_ROLE[st && st.job] || null;
+const RANGED_WEAPONS = ["staff", "scepter"];   // 遠距詠唱的武器（法杖、咒杖）：放寬打島主／深海魚人的距離
+const FX_MAX = 8;   // state.fx：持續型技能效果的 id 清單（只轉發給同地形的人畫特效）
 function sanitizeState(s, prev) {
   prev = prev || {};
   const look = s.look && typeof s.look === "object" ? s.look : {};
@@ -259,16 +277,23 @@ function sanitizeState(s, prev) {
       hair: idOr(look.hair, pl.hair || "hair1"),
       shirt: Math.round(num(look.shirt, 0, 99, pl.shirt ?? 0)),
       pants: Math.round(num(look.pants, 0, 99, pl.pants ?? 0)),
-      hat: idOr(look.hat, null),          // 帽子 id（null＝沒戴）
-      top: idOr(look.top, null),          // 上衣款式 id（null＝預設款）
-      bottom: idOr(look.bottom, null),    // 褲子款式 id（null＝預設款）
+      hat: idOr(look.hat, null),          // 顯示中的帽子 id（裝備或外觀，客戶端已決定好；null＝沒戴）
+      top: idOr(look.top, null),          // 顯示中的上衣 id（null＝預設款）
+      bottom: idOr(look.bottom, null),    // 顯示中的褲子 id（null＝預設款）
+      hatC: hexOr(look.hatC),             // 換色色碼（null＝原色）
+      topC: hexOr(look.topC),
+      botC: hexOr(look.botC),
+      wlook: idOr(look.wlook, null),      // 武器外觀 id（同類型才會畫，由客戶端判斷）
     },
     d8: D8.includes(s.d8) ? s.d8 : null,  // 畫面用的 8 方向朝向（只轉發；玩法看 face）
     weapon: idOr(s.weapon, "hands"),
     pose: s.pose === "sit" || s.pose === "sleep" ? s.pose : null,
     face: s.face === "up" || s.face === "side" ? s.face : "down",
     seat: idOr(s.seat, null),
-    job: s.job === "tank" || s.job === "healer" ? s.job : "dps",   // 職業（坦/補/輸出）：白名單解讀，不合法的值當輸出（挑釁驗證靠這欄）
+    job: jobOr(s.job),                     // 職業：白名單（JOB_ROLE），舊客戶端的 tank/healer/dps 轉成騎士/白魔法師/忍者，不合法＝忍者（挑釁等職能驗證靠這欄）
+    fx: Array.isArray(s.fx) ? s.fx.filter(v => typeof v === "string" && ID_RE.test(v)).slice(0, FX_MAX) : [],   // 持續型技能效果（翅膀、護盾…）：只轉發
+    circle: s.circle && typeof s.circle === "object"   // 黑魔法師的魔法陣位置（只轉發）
+      ? { x: num(s.circle.x, 0, COLS * CELL, 0), y: num(s.circle.y, 0, ROWS * CELL, 0) } : null,
     title: idOr(s.title, null),            // 稱號 id（null＝不顯示；只轉發 id，文字由各客戶端查 titles.json，解鎖與否不驗證）
     hp: Math.round(num(s.hp, 0, 20, 10)),
     dead: s.dead ? 1 : 0,
@@ -413,6 +438,8 @@ export class Island {
     this.lastFish = new Map();       // ws → 上次釣魚結果的時間（冷卻）
     this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
     this.provokes = new Map();       // ws → {terrain, t}：上次挑釁哪座島的島主（冷卻只在成功出手時計）
+    this.debuffs = new Map();        // ws → {vuln: t, weak: t}：上次放破綻／降傷的時刻（冷卻只在成功時計）
+    this.skillHits = new Map();      // ws → {"技能:owner|lurker": t}：職業技能打怪的冷卻
     this.lurkers = new Map();        // 地形 → 釣上來的敵對怪物（每個地形同時最多一隻；只放記憶體，見 L_* 常數的說明）
     this.lurkHits = new Map();       // ws → {terrain, t}：上次打釣上來的怪物（冷卻＋仇恨換人用）
     this.dragonSavedAt = new Map();  // 地形 → 上次真的寫 storage 的時間（saveDragonLazy 節流用）
@@ -759,6 +786,8 @@ export class Island {
       await this.lurkerHit(ws, att, msg);
     } else if (msg.t === "provoke") {   // 挑釁（坦職限定，client 的 R 鍵）：把島主的仇恨拉到自己身上
       await this.provoke(ws, att);
+    } else if (msg.t === "debuff") {    // 破綻（近戰輸出）／降傷（遠程輸出）：client 的 R 鍵
+      await this.debuff(ws, att, msg);
     } else if (msg.t === "commit" || msg.t === "place" || msg.t === "remove" || msg.t === "clear") {
       // 舊客戶端的單一操作（place/remove/clear）也走同一套驗證與權限
       if (att.terrain) await this.commitFurn(ws, att, msg.t === "commit" ? msg.ops : [msg]);
@@ -954,11 +983,23 @@ export class Island {
     if (ph === "rest") o.restMs = Math.round(ms);
     if (ph === "say") o.sayMs = Math.round(ms);   // 說台詞中：附上剩餘時間
     if (d.quote) o.line = d.quote.line;           // 台詞招式中：哪一句（中途進場的人也看到同一句）
+    if (now < (d.vulnUntil || 0)) o.vulnMs = d.vulnUntil - now;   // 破綻／降傷剩餘時間
+    if (now < (d.weakUntil || 0)) o.weakMs = d.weakUntil - now;
     if (ph === "idle" && d.wander) {   // 散步中：附上路點與已走時間，客戶端接著插值
       const w = d.wander;
       o.wleg = { fx: w.fx, fy: w.fy, tx: w.tx, ty: w.ty, tms: w.tms, el: Math.max(0, Math.min(w.tms, now - w.t0)) };
     }
     return o;
+  }
+  // 職業技能的命中（msg.sk）：回 {dmg, range}；不是技能＝null；是技能但不合法（職業不對、冷卻中）＝false（整擊忽略）
+  skillHit(ws, att, msg, kind, now) {
+    if (!msg.sk) return null;
+    const sk = SKILL_HITS[msg.sk];
+    if (!sk || att.state.job !== sk.job || att.state.dead) return false;
+    const book = this.skillHits.get(ws) || {}, key = msg.sk + ":" + kind;
+    if (now - (book[key] || 0) < sk.cdMs) return false;
+    book[key] = now; this.skillHits.set(ws, book);
+    return { dmg: sk.dmg, range: sk.range };
   }
   // 打到島主：扣血；若在閒置且冷卻過了 → 開始反擊（樣式照 OWNER_TERRAINS）。攻擊者所在地形決定打的是哪座島的島主
   async dragonHit(ws, att, msg) {
@@ -967,24 +1008,28 @@ export class Island {
     if (!OWNER_TERRAINS[terrain]) return;
     const d = await this.getDragon(terrain);
     const now = Date.now();
-    const h = this.dragonHits.get(ws);
-    if (now - (h ? h.t : 0) < D_CD_MS) return;
     if (d.st === "dead") return;
+    const sk = this.skillHit(ws, att, msg, "owner", now);
+    if (sk === false) return;
+    const h = this.dragonHits.get(ws);
+    if (!sk && now - (h ? h.t : 0) < D_CD_MS) return;   // 一般攻擊的間隔；職業技能另有自己的冷卻
     this.regenDragon(terrain, now);   // 扣血前先把該補的血補上（之後廣播的 hp 是回血後的值）
-    const dmg = Math.max(1, Math.min(2, Math.round(Number(msg.dmg) || 1)));
+    let dmg = sk ? sk.dmg : Math.max(1, Math.min(2, Math.round(Number(msg.dmg) || 1)));
+    if (now < (d.vulnUntil || 0)) dmg += 1;   // 破綻（近戰輸出的職能技能）：每擊 +1
     const [ph, pos] = this.dragonPhase(terrain, now);
     if (ph === "dash") return;     // 龍衝飛行中打不到（開眼/預警/歇腳與散步時都打得到）
     // 客戶端可能漏接一個路點事件（散步腿落後）：只要它宣稱的島主位置離伺服器的不遠、且玩家貼著宣稱的位置，就接受
     const distSrv = Math.hypot(Number(msg.x) - pos[0], Number(msg.y) - pos[1]);
     const cdx = Number(msg.ddx), cdy = Number(msg.ddy);
-    const maxR = msg.staff && att.state.weapon === "staff" ? D_STAFF_RANGE : D_RANGE;   // 法杖旗標要配上 state 裡真的拿著法杖才算
+    const maxR = sk ? sk.range : msg.staff && RANGED_WEAPONS.includes(att.state.weapon) ? D_STAFF_RANGE : D_RANGE;   // 法杖旗標要配上 state 裡真的拿著法杖／咒杖才算
     let near = distSrv <= maxR;
     if (!near && Number.isFinite(cdx) && Number.isFinite(cdy)) {
       near = Math.hypot(Number(msg.x) - cdx, Number(msg.y) - cdy) <= maxR
           && Math.hypot(cdx - pos[0], cdy - pos[1]) <= D_DRIFT_TOLER;
     }
     if (!near) return;
-    this.dragonHits.set(ws, { terrain, t: now });
+    if (!sk) this.dragonHits.set(ws, { terrain, t: now });
+    else if (!h || h.t < now - D_CD_MS) this.dragonHits.set(ws, { terrain, t: now - D_CD_MS });   // 技能命中也算現役攻擊者（進仇恨換人的候選池），但不佔一般攻擊的間隔
     d.lastHitAt = now;   // 仇恨計時：D_DROPOUT 內沒有人再打牠就脫離追殺
     d.hp -= dmg;
     if (d.hp <= 0) {   // 打倒了：全地形廣播死亡，30 秒後用鬧鐘重生
@@ -1029,6 +1074,26 @@ export class Island {
     this.broadcast({ t: "dragon", ev: "hp", hp: d.hp }, null, terrain);
     await this.armOwnerAlarm();   // 仇恨開始：快點醒來追殺（下一個醒的時間統一在這裡算）
   }
+  // 破綻／降傷（R 鍵，近戰／遠程輸出的職能技能）：所在地形島主 D_DEBUFF_MS 內受到的傷害每擊 +1（伺服器加）／
+  // 對所有人造成的傷害 −30%（受害者自判，客戶端看 weakUntil）。伺服器驗證職能、距離、每條連線冷卻；記在島主狀態並廣播、進快照
+  async debuff(ws, att, msg) {
+    if (!att.state || !att.terrain) return;
+    const terrain = att.terrain, st = att.state;
+    if (!OWNER_TERRAINS[terrain]) return;
+    const kind = msg.kind === "vuln" ? "vuln" : msg.kind === "weak" ? "weak" : null;
+    if (!kind || st.dead || roleOf(st) !== (kind === "vuln" ? "melee" : "ranged")) return;
+    const d = await this.getDragon(terrain);
+    const now = Date.now();
+    if (d.st === "dead") return;
+    const book = this.debuffs.get(ws) || {};
+    if (now - (book[kind] || 0) < D_DEBUFF_CD_MS - 1000) return;
+    const [, pos] = this.dragonPhase(terrain, now);
+    if (Math.hypot(Number(st.x) - pos[0], Number(st.y) - pos[1]) > D_PROVOKE_RANGE) return;   // 距離同挑釁
+    book[kind] = now; this.debuffs.set(ws, book);
+    if (kind === "vuln") d.vulnUntil = now + D_DEBUFF_MS; else d.weakUntil = now + D_DEBUFF_MS;
+    await this.saveDragonLazy(terrain);
+    this.broadcast({ t: "dragon", ev: "debuff", kind, ms: D_DEBUFF_MS, id: att.id, name: st.name || "玩家" }, null, terrain);
+  }
   // 挑釁（R 鍵，坦職限定，玩家自選）：把島主的仇恨拉到自己身上。
   // 已有仇恨 → 直接換目標；沒有仇恨且 idle → 照「被打」的同一套反擊流程演出（說台詞→反擊，樣式照 OWNER_TERRAINS）。
   // 伺服器驗證職業（信任 state 的 job 欄位）、距離、每條連線冷卻；不扣血。挑釁者所在地形決定挑釁的是哪座島的島主。
@@ -1037,7 +1102,7 @@ export class Island {
     const terrain = att.terrain;
     if (!OWNER_TERRAINS[terrain]) return;
     const st = att.state;
-    if (st.job !== "tank" || st.dead) return;   // 坦職限定；死了無法挑釁（客戶端會擋 R 鍵，這裡再驗一次）
+    if (roleOf(st) !== "tank" || st.dead) return;   // 坦克職能限定（騎士、戰士）；死了無法挑釁（客戶端會擋 R 鍵，這裡再驗一次）
     const d = await this.getDragon(terrain);
     const now = Date.now();
     if (d.st === "dead") return;
@@ -1442,17 +1507,20 @@ export class Island {
     const terrain = att.terrain, L = this.lurkers.get(terrain);
     if (!L) return;
     const now = Date.now(), h = this.lurkHits.get(ws);
-    if (h && h.terrain === terrain && now - h.t < D_CD_MS) return;
+    const sk = this.skillHit(ws, att, msg, "lurker", now);
+    if (sk === false) return;
+    if (!sk && h && h.terrain === terrain && now - h.t < D_CD_MS) return;
     const pos = this.lurkerPos(L, now);
-    const maxR = msg.staff && att.state.weapon === "staff" ? L_STAFF_RANGE : L_RANGE;
+    const maxR = sk ? sk.range : msg.staff && RANGED_WEAPONS.includes(att.state.weapon) ? L_STAFF_RANGE : L_RANGE;
     const px = Number(msg.x), py = Number(msg.y), cdx = Number(msg.lx), cdy = Number(msg.ly);
     let near = Math.hypot(px - pos[0], py - pos[1]) <= maxR;
     if (!near && Number.isFinite(cdx) && Number.isFinite(cdy))
       near = Math.hypot(px - cdx, py - cdy) <= maxR && Math.hypot(cdx - pos[0], cdy - pos[1]) <= D_DRIFT_TOLER;
     if (!near) return;
-    this.lurkHits.set(ws, { terrain, t: now });
+    if (!sk) this.lurkHits.set(ws, { terrain, t: now });
+    else if (!h || h.t < now - D_CD_MS) this.lurkHits.set(ws, { terrain, t: now - D_CD_MS });   // 技能命中也算攻擊者（仇恨候選），但不佔一般攻擊的間隔
     L.lastHitAt = now;
-    L.hp -= Math.max(1, Math.min(2, Math.round(Number(msg.dmg) || 1)));
+    L.hp -= sk ? sk.dmg : Math.max(1, Math.min(2, Math.round(Number(msg.dmg) || 1)));
     if (L.hp <= 0) {
       this.lurkers.delete(terrain);
       this.broadcast({ t: "lurker", ev: "dead", x: pos[0], y: pos[1] }, null, terrain);
@@ -1575,6 +1643,8 @@ export class Island {
     this.lastSign.delete(ws);
     this.commitBucket.delete(ws);
     this.dragonHits.delete(ws);
+    this.debuffs.delete(ws);
+    this.skillHits.delete(ws);
     this.lastFish.delete(ws);
     const att = ws.deserializeAttachment() || {};
     if (att.terrain) this.broadcast({ t: "leave", id: att.id }, ws, att.terrain);

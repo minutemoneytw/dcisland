@@ -432,6 +432,130 @@ def char_hair_sheet(style):
         return cv
     return char_sheet(draw)
 
+# ---------------- 職業裝備與外觀（帽子／上衣／褲子）----------------
+# 每件一張標準排列的 sheet（與 char_top_basic 等同一套排列）。dye＝可染色的原色（第一個是主色；client 換色時
+# 主色換成玩家選的顏色、其他依與主色的明暗比例跟著換），其餘顏色（點綴）不換色。
+# 形狀：上衣／褲子沿用 body() 依顏色拆出的範圍（換成各職業的顏色＋點綴），長袍類（robe）把上衣往下蓋住褲子前 3 列；
+# 帽子另外畫（正面／背面；坐姿整體下移 3 列）。之後換成正式素材只要照排列畫、覆蓋同名檔。
+GEAR_TOPS = {   # id: (名稱, 主色, 陰影, 點綴函式, 長袍)
+    "knight_top":    ("騎士鎧甲", "#8fa6c8", "#6a7f9e", "plate", False),
+    "warrior_top":   ("戰士皮甲", "#b5452f", "#8a3322", "fur", False),
+    "whitemage_top": ("白魔長袍", "#f0ece0", "#c8c0ac", "trim_red", True),
+    "ninja_top":     ("忍者上衣", "#4a3a6a", "#352a4e", "sash", False),
+    "blackmage_top": ("黑魔長袍", "#2e3a7a", "#1f2858", "trim_gold", True),
+}
+GEAR_BOTTOMS = {
+    "knight_bottom":    ("騎士腿甲", "#5a6a88", "#46536c"),
+    "warrior_bottom":   ("戰士褲", "#5a4030", "#45301f"),
+    "whitemage_bottom": ("白魔長褲", "#d8d0bc", "#b0a890"),
+    "ninja_bottom":     ("忍者褲", "#3a2e52", "#2a2140"),
+    "blackmage_bottom": ("黑魔長褲", "#2a3060", "#1d2246"),
+}
+GEAR_HATS = {   # id: (名稱, 主色, 陰影, 畫法)
+    "knight_hat":    ("騎士頭盔", "#a8b8d0", "#7a8aa4", "helm"),
+    "warrior_hat":   ("戰士角盔", "#8a5a3a", "#6a4228", "horned"),
+    "whitemage_hat": ("白魔兜帽", "#f0ece0", "#c8c0ac", "hood"),
+    "ninja_hat":     ("忍者頭巾", "#4a3a6a", "#352a4e", "band"),
+    "blackmage_hat": ("黑魔尖帽", "#2e3a7a", "#1f2858", "pointy"),
+}
+GOLD, RED_TRIM, FUR = hx("#e0c040"), hx("#c83a3a"), hx("#d8c8a0")
+
+def _gear_part(skin, f, sit, part, main, shd, accent=None, robe=False):
+    """把 body() 的上衣／褲子範圍換成裝備顏色；accent(cv, x, y, top_row) 可以在上面加點綴。"""
+    src = body_sit(skin) if sit else body(skin, f)
+    m, s = hx(main), hx(shd)
+    out = Canvas(src.w, src.h)
+    top_row = 12 if sit else 9          # 上衣第一列（坐姿整體下移 3 列）
+    pants_row = 18 if sit else 15
+    for y in range(src.h):
+        for x in range(src.w):
+            c = src.get(x, y)
+            if not c[3]:
+                continue
+            if part == "top" and c in SHIRT:
+                out.set(x, y, m if c == SHIRT[0] else s)
+            elif part == "bottom" and c in PANTS:
+                out.set(x, y, m if c == PANTS[0] else s)
+            elif part == "top" and robe and c in PANTS and y < pants_row + 3:
+                out.set(x, y, s if y == pants_row + 2 else m)   # 長袍下擺蓋住褲子前 3 列
+    if accent:
+        accent(out, top_row, robe, pants_row)
+    return out
+
+def _acc(kind):
+    def plate(cv, r, robe, pr):     # 騎士：胸口金色十字＋腰帶
+        cv.rect(7, r + 1, 8, r + 3, GOLD); cv.rect(6, r + 2, 9, r + 2, GOLD)
+        cv.hline(4, 11, r + 5, hx("#4a5670"))
+    def fur(cv, r, robe, pr):       # 戰士：肩上的毛皮
+        cv.hline(3, 5, r, FUR); cv.hline(10, 12, r, FUR); cv.set(3, r + 1, FUR); cv.set(12, r + 1, FUR)
+    def trim_red(cv, r, robe, pr):  # 白魔：下擺紅色三角花紋
+        for x in (5, 8, 10):
+            cv.set(x, pr + 2, RED_TRIM)
+        cv.set(7, r, RED_TRIM); cv.set(8, r, RED_TRIM)
+    def sash(cv, r, robe, pr):      # 忍者：紅色腰帶
+        cv.hline(4, 11, r + 5, RED_TRIM); cv.set(11, r + 4, RED_TRIM)
+    def trim_gold(cv, r, robe, pr): # 黑魔：金色鑲邊
+        cv.hline(5, 10, pr + 2, GOLD); cv.vline(8, r + 1, r + 4, GOLD)
+    return dict(plate=plate, fur=fur, trim_red=trim_red, sash=sash, trim_gold=trim_gold)[kind]
+
+def gear_top_sheet(tid):
+    _, main, shd, acc, robe = GEAR_TOPS[tid]
+    return char_sheet(lambda back, f, sit: _gear_part(SKINS["light"], f, sit, "top", main, shd, _acc(acc), robe))
+
+def gear_bottom_sheet(bid):
+    _, main, shd = GEAR_BOTTOMS[bid]
+    return char_sheet(lambda back, f, sit: _gear_part(SKINS["light"], f, sit, "bottom", main, shd))
+
+def hat_canvas(kind, main, shd, back):
+    m, s = hx(main), hx(shd)
+    cv = Canvas(16, 24)
+    if kind == "helm":       # 頭盔：蓋住頭頂與兩側，正面留臉、有一條眼縫
+        cv.rect(4, 1, 11, 4, m); cv.rect(4, 5, 4, 8, s); cv.rect(11, 5, 11, 8, s)
+        cv.hline(5, 10, 1, shade(m, 1.15))
+        if back:
+            cv.rect(4, 1, 11, 9, m); cv.vline(8, 2, 8, s)
+        else:
+            cv.hline(5, 10, 4, s)
+        cv.set(8, 0, hx("#c83a3a"))   # 頂上一點紅纓
+    elif kind == "horned":   # 角盔：額頭一圈＋兩支往外彎的角
+        cv.rect(4, 2, 11, 4, m); cv.hline(4, 11, 4, s)
+        cv.set(3, 2, FUR); cv.set(2, 1, FUR); cv.set(2, 0, FUR)
+        cv.set(12, 2, FUR); cv.set(13, 1, FUR); cv.set(13, 0, FUR)
+        if back:
+            cv.rect(4, 2, 11, 7, m)
+    elif kind == "hood":     # 兜帽：包住頭與兩側披到肩，正面露臉；前緣紅邊
+        cv.rect(4, 1, 11, 3, m); cv.rect(3, 3, 4, 10, m); cv.rect(11, 3, 12, 10, m)
+        cv.hline(5, 10, 3, RED_TRIM)
+        cv.set(7, 0, m); cv.set(8, 0, m)
+        if back:
+            cv.rect(3, 1, 12, 10, m); cv.vline(8, 2, 9, s)
+    elif kind == "band":     # 頭巾：額頭一條＋背後兩條飄帶
+        cv.rect(4, 3, 11, 4, m); cv.hline(4, 11, 4, s)
+        cv.set(12, 4, m); cv.set(13, 5, m); cv.set(13, 6, s); cv.set(12, 6, s)
+        if back:
+            cv.rect(4, 2, 11, 4, m); cv.vline(7, 5, 7, m); cv.vline(9, 5, 7, s)
+    elif kind == "pointy":   # 尖帽：寬帽簷＋尖頂（頂端往一側彎）
+        cv.hline(2, 13, 4, s); cv.hline(3, 12, 3, m)
+        cv.rect(5, 2, 10, 2, m); cv.rect(6, 1, 9, 1, m); cv.rect(7, 0, 9, 0, m); cv.set(10, 0, m)
+        cv.hline(4, 11, 3, GOLD)
+        if back:
+            cv.rect(4, 5, 11, 6, m)
+    cv.outline((30, 24, 22, 255))
+    return cv
+
+def gear_hat_sheet(hid):
+    _, main, shd, kind = GEAR_HATS[hid]
+    def draw(back, f, sit):
+        src = hat_canvas(kind, main, shd, back)
+        if not sit:
+            return src
+        cv = Canvas(16, 24)                    # 坐姿：頭整體下移 3 列（與頭髮相同）
+        for y in range(24 - 3):
+            for x in range(16):
+                cv.set(x, y + 3, src.get(x, y))
+        return cv
+    return char_sheet(draw)
+
 # ---------------- 家具 ----------------
 def sofa():
     r = hx("#c9544f"); rd = shade(r, 0.72)
@@ -746,17 +870,6 @@ def weapon_sword():  # 木劍（M0 武器 1 號；輸出職的專屬武器）
     cv.outline((30, 24, 22, 255))
     return cv
 
-def weapon_shield():  # 圓盾（坦職的專屬武器）：盾面在上、小握把在下（轉軸同其他武器＝離底 3 格）
-    cv = Canvas(12, 14)
-    steel = hx("#7d8ea0"); st_hi = hx("#c9d6de"); boss = hx("#e0b840")
-    cv.ellipse(5.5, 5.5, 5, 5, steel)     # 盾面（圓形）
-    cv.ellipse(4, 4, 2.4, 2.4, st_hi)     # 左上受光反光
-    cv.ellipse(5.5, 5.5, 1.5, 1.5, boss)  # 金色的盾心螺釘
-    cv.ellipse(5.5, 9.5, 3.4, 1.2, hx("#5a6a78"))   # 下緣陰影（立體感）
-    cv.rect(5, 11, 6, 13, hx("#5a4028"))  # 小握把（與劍同款深色握柄）
-    cv.outline((30, 24, 22, 255))
-    return cv
-
 def weapon_staff():  # 法杖（補職的專屬武器）：頂端一顆回復色（綠）寶珠的細杖
     cv = Canvas(6, 18)
     wood = hx("#9a6f46"); orb = hx("#7ee2a8"); orb_hi = hx("#d8ffe4")
@@ -764,6 +877,52 @@ def weapon_staff():  # 法杖（補職的專屬武器）：頂端一顆回復色
     cv.rect(2, 15, 2, 17, hx("#6f4a2c"))  # 杖尾陰影
     cv.ellipse(2.5, 2.5, 2, 2, orb)       # 寶珠（治療綠）
     cv.set(1, 2, orb_hi); cv.set(2, 1, orb_hi)   # 光點
+    cv.outline((30, 24, 22, 255))
+    return cv
+
+def weapon_waraxe():  # 戰斧（戰士的職業武器）：比採集用的斧頭大、紅色斧柄纏帶、雙面斧刃
+    cv = Canvas(12, 20)
+    wood = hx("#6a4228"); wrap = hx("#b5452f")
+    st = hx("#a4aeb8"); st_hi = hx("#e4eaf0"); st_d = hx("#6c7680")
+    cv.rect(5, 2, 6, 19, wood)
+    for y in (12, 14, 16):
+        cv.hline(5, 6, y, wrap)               # 握柄纏帶
+    cv.rect(1, 2, 10, 7, st)                  # 雙面斧刃
+    cv.rect(2, 1, 9, 1, st); cv.rect(2, 8, 9, 8, st)
+    cv.vline(1, 3, 6, st_hi); cv.vline(10, 3, 6, st_hi)
+    cv.rect(5, 2, 6, 8, st_d)                 # 斧心
+    cv.outline((30, 24, 22, 255))
+    return cv
+
+def weapon_daggers():  # 雙劍（忍者的職業武器）：兩把並排的短刀（右邊那把高一格）
+    cv = Canvas(12, 17)
+    bl = hx("#c9d2d9"); hi = hx("#f0f4f8"); grip = hx("#3a2e52"); guard = hx("#c83a3a")
+    for ox, oy in ((1, 1), (7, 0)):
+        cv.rect(ox + 1, oy + 2, ox + 2, oy + 9, bl)      # 刀身
+        cv.vline(ox + 1, oy + 2, oy + 9, hi)            # 刃光
+        cv.set(ox + 1, oy + 1, hi)                      # 刀尖
+        cv.hline(ox, ox + 3, oy + 10, guard)            # 護手
+        cv.rect(ox + 1, oy + 11, ox + 2, oy + 14, grip) # 握柄
+    cv.outline((30, 24, 22, 255))
+    return cv
+
+def weapon_scepter():  # 咒杖（黑魔法師的職業武器）：深色杖身，頂端金框包著紫色水晶
+    cv = Canvas(8, 20)
+    wood = hx("#3a2a4a"); gold = hx("#e0c040"); gem = hx("#9a5ad8"); gem_hi = hx("#e0c8ff")
+    cv.rect(3, 6, 4, 19, wood)
+    cv.hline(2, 5, 6, gold); cv.hline(2, 5, 17, gold)
+    cv.ellipse(3.5, 3, 2.6, 3, gem)
+    cv.set(2, 2, gem_hi); cv.set(3, 1, gem_hi)
+    cv.vline(1, 2, 5, gold); cv.vline(6, 2, 5, gold)
+    cv.outline((30, 24, 22, 255))
+    return cv
+
+def weapon_goldsword():  # 金劍（範例武器外觀，劍類；打倒黃金肥龍解鎖）
+    cv = Canvas(6, 18)
+    sv = hx("#e0b840"); hi = hx("#fff0a0")
+    cv.rect(2, 2, 3, 11, sv); cv.rect(2, 2, 2, 11, hi); cv.set(2, 1, hi)
+    cv.rect(0, 12, 5, 12, hx("#c83a3a"))
+    cv.rect(2, 13, 3, 17, hx("#6a3a1a"))
     cv.outline((30, 24, 22, 255))
     return cv
 
@@ -1614,7 +1773,10 @@ def main():
     save(tombstone(), "tombstone.png")
     print("== 武器 ==")
     save(weapon_sword(), "weapon_sword.png", "avatar")
-    save(weapon_shield(), "weapon_shield.png", "avatar")
+    save(weapon_waraxe(), "weapon_waraxe.png", "avatar")
+    save(weapon_daggers(), "weapon_daggers.png", "avatar")
+    save(weapon_scepter(), "weapon_scepter.png", "avatar")
+    save(weapon_goldsword(), "weapon_goldsword.png", "avatar")
     save(weapon_staff(), "weapon_staff.png", "avatar")
     save(weapon_rod(), "weapon_rod.png", "avatar")
     print("== 釣魚：魚類圖鑑 ==")
@@ -1634,6 +1796,12 @@ def main():
     save(char_body_sheet(SKINS["light"], "bottom"), "char_bottom_basic.png", sub)
     for i, st in enumerate(["short", "side", "fluffy"]):
         save(char_hair_sheet(st), f"char_hair{i + 1}.png", sub)
+    for tid in GEAR_TOPS:
+        save(gear_top_sheet(tid), f"char_{tid}.png", sub)
+    for bid in GEAR_BOTTOMS:
+        save(gear_bottom_sheet(bid), f"char_{bid}.png", sub)
+    for hid in GEAR_HATS:
+        save(gear_hat_sheet(hid), f"char_hat_{hid}.png", sub)
     write_json(os.path.join(ASSETS, sub, "avatar.json"), dict(
         scale=2,
         # 人物分層的幀表（所有層共用）：w×h＝每幀大小；states＝狀態 → 幀號（8 方向 × idle/walk，加 sit）；fps＝待機／走路每秒幾幀；
@@ -1648,20 +1816,33 @@ def main():
         hair=[dict(id="hair1", name="短髮", sheet="char_hair1.png"),
               dict(id="hair2", name="披髮", sheet="char_hair2.png"),
               dict(id="hair3", name="蓬鬆", sheet="char_hair3.png")],
-        # 衣服／褲子／帽子：每款一張 sheet；有 recolor 就能再換色（base／shade＝圖上要被換掉的顏色，shade 換成所選顏色的 78%）
-        tops=[dict(id="basic", name="基本", sheet="char_top_basic.png", recolor=dict(base="#d95c68", shade="#aa474f"))],
-        bottoms=[dict(id="basic", name="基本", sheet="char_bottom_basic.png", recolor=dict(base="#4a54a0", shade="#38417c"))],
-        hats=[],
+        # 帽子／上衣／褲子：每件一張 sheet。dye＝可染色的原色（第一個是主色；換色時主色換成玩家選的顏色，其他依明暗比例跟著換）。
+        # 職業裝備由 assets/jobs/jobs.json 的 gear 指定；glam＝可當外觀選（沒有 unlock＝一開始就能用；unlock＝解鎖條件，
+        # 格式同 titles.json 的 cond；hint＝沒解鎖時顯示的條件說明）；jobs＝限定哪些職業能用（沒寫＝所有職業）。第一款（basic）也是舊客戶端／沒指定時的預設款。
+        tops=[dict(id="basic", name="便服", sheet="char_top_basic.png", dye=["#d95c68", "#aa474f"], glam=True)] +
+             [dict(id=k, name=v[0], sheet=f"char_{k}.png", dye=[v[1], v[2]]) for k, v in GEAR_TOPS.items()],
+        bottoms=[dict(id="basic", name="便服", sheet="char_bottom_basic.png", dye=["#4a54a0", "#38417c"], glam=True)] +
+                [dict(id=k, name=v[0], sheet=f"char_{k}.png", dye=[v[1], v[2]]) for k, v in GEAR_BOTTOMS.items()],
+        # nohat＝「不戴帽子」：沒有圖的免費外觀（選了就不畫帽子層）
+        hats=[dict(id="nohat", name="不戴帽子", sheet=None, glam=True)] +
+             [dict(id=k, name=v[0], sheet=f"char_hat_{k}.png", dye=[v[1], v[2]])
+              for k, v in GEAR_HATS.items()],
         hairColor="#4a3428",
         shirtColors=['#d95c68', '#4a90d9', '#4aa564', '#c9a227', '#8a5cc9', '#e0e0e0', '#4a4a52', '#d97a3a', '#f2a1b5', '#b5303f', '#f0c93a', '#8fd0e8', '#2e5fa8', '#3a3f8c', '#6fcfc0', '#2f8a78', '#8fc455', '#3e6b3a', '#b48be0', '#6a3f9a', '#8a5a3a', '#c8b08a', '#9aa0aa', '#f4ede0'],
         pantsColors=['#4a54a0', '#2f3548', '#4a4a52', '#8a8f99', '#d8d4c8', '#8a6a46', '#c8b08a', '#5a4a3a', '#3e6b3a', '#6a8a4a', '#2f8a78', '#3a78c8', '#2e5fa8', '#7aa8d8', '#6a3f9a', '#a63d4a', '#d97a3a', '#e0b840', '#e8a0b8', '#b5303f', '#1f1f26', '#f0f0f0', '#6fcfc0', '#b48be0'],
         weapons=[
-            dict(id="hands", name="空手", sprite=None),
+            # type＝武器類型（武器外觀只能換成同類型的樣子）；職業武器由 jobs.json 的 weapon 指定，武器列只列「職業武器＋空手＋釣竿」
+            dict(id="hands", name="空手", type="hands", sprite=None),
             # carry：不拿在手上時掛哪裡（back＝背上、waist＝腰間）；back: "hilt"＝背著時劍柄朝上（沒寫＝頭朝上，例如釣竿）
-            dict(id="sword", name="木劍", sprite="weapon_sword.png", carry="back", back="hilt"),
-            dict(id="shield", name="圓盾", sprite="weapon_shield.png"),
-            dict(id="staff", name="法杖", sprite="weapon_staff.png", ranged=dict(range=320, cast=1.2, dmg=2)),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
-            dict(id="rod", name="釣竿", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
+            dict(id="sword", name="長劍", type="sword", sprite="weapon_sword.png", carry="back", back="hilt"),
+            dict(id="waraxe", name="戰斧", type="axe", sprite="weapon_waraxe.png", carry="back"),
+            dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", ranged=dict(range=320, cast=1.2, dmg=2)),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
+            dict(id="daggers", name="雙劍", type="daggers", sprite="weapon_daggers.png", carry="waist"),
+            dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=320, cast=1.6, dmg=2)),
+            dict(id="rod", name="釣竿", type="rod", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
+            # 武器外觀（glam）：只換樣子，玩法照職業武器；type 要和職業武器相同才能選
+            dict(id="goldsword", name="金劍", type="sword", sprite="weapon_goldsword.png", carry="back", back="hilt",
+                 glam=True, unlock=dict(type="owner", mob="gold_dragon"), hint="打倒黃金肥龍"),
         ],
     ))
     print("  avatar/avatar.json")
