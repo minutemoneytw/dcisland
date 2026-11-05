@@ -1060,6 +1060,7 @@ function blinkMe(me, dist) {
 // 每幀：忍術結印完成、三重／法陣過期
 function stepSkills() {
   const F = S.fx, me = S.players[0];
+  if (S.jobSwapUsed && !ownerEngaged()) S.jobSwapUsed = false;   // 戰鬥結束：戰鬥中換職業的次數重置
   if (F.seal && (me.dead || S.t < (me.petUntil ?? 0))) F.seal = null;
   if (F.seal && S.t >= F.seal.until) {
     F.seal = null;
@@ -3923,8 +3924,13 @@ document.addEventListener('wheel', e => {
 
 // 換職業：特性立即生效（血量截到新上限，不回滿，避免換職業當補血用）；裝備自動換成該職業那套（外觀與換色每個職業各記一套）；
 // 手上拿的是舊職業的武器就換成新職業的武器（空手／釣竿不動）；存檔沿用 dcisland.m0.avatar 這支 key
+// 戰鬥中（場上有島主在仇恨／放招、或釣上來的怪物還在＝ownerEngaged）只能換一次職業，要等戰鬥結束才能再換（使用者定；純客戶端）
 function setJob(id) {
   if (!JOBS[id] || S.me.job === id) return;
+  if (ownerEngaged()) {
+    if (S.jobSwapUsed) { toast('戰鬥中只能換一次職業，等仇恨解除後才能再換', 2200); return; }
+    S.jobSwapUsed = true;
+  }
   S.me.job = id;
   const p = S.players[0];
   if (p) { p.hp = Math.min(p.hp ?? Infinity, hpCap(p)); cancelCast(p); }
