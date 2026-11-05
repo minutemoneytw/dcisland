@@ -1018,16 +1018,23 @@ def weapon_scepter():  # 咒杖（黑魔法師的職業武器）：深色杖身�
     cv.outline((30, 24, 22, 255))
     return cv
 
-def weapon_tome():  # 賢具（賢者的職業武器，FF14 的 nouliths／浮游炮）：四根懸浮的細針並排，針尖朝上發光
+def weapon_tome():  # 賢具（賢者的職業武器，FF14 的 nouliths／浮游炮）：一座白色鏢形機身、深色座艙、
+                    # 機尾兩道藍色能量翼（攻擊時的浮游炮特效見 main.js 的 drawNoulith，同一套造型）
     cv = Canvas(16, 16)
-    body = hx("#3a9a8a"); tail = hx("#1f5e52"); tip = hx("#c8f0e0"); mid = hx("#5ad8b0")
-    for k in range(4):                     # 四根針，間隔 4px（彼此分開看得清楚）
-        x = 2 + k * 4                      # x = 2, 6, 10, 14
-        cv.vline(x, 5, 12, body)           # 針身（1px 細針，遊戲裡顯示 2x 剛好清楚）
-        cv.set(x, 13, tail)                # 針尾暗
-        cv.set(x, 4, tip)                  # 針尖
-        cv.set(x, 3, mid)                  # 尖端光暈
-    cv.outline((30, 24, 22, 255))
+    body = hx("#eef1f6"); shade = hx("#c6cdd9"); dark = hx("#343b49")
+    fin = hx("#d8dde8"); blue = hx("#7d9dff"); blue2 = hx("#aec2ff")
+    for x, y in ((6, 12), (6, 13), (5, 14), (5, 15), (9, 12), (9, 13), (10, 14), (10, 15)):
+        cv.set(x, y, blue)                  # 機尾兩道藍色能量翼
+    cv.set(5, 15, blue2); cv.set(10, 15, blue2)
+    cv.set(4, 9, fin); cv.set(3, 10, fin)   # 後掠小翼
+    cv.set(11, 9, fin); cv.set(12, 10, fin)
+    rows = ((1, 8, 8), (2, 7, 8), (3, 7, 8), (4, 6, 9), (5, 6, 9), (6, 5, 10),
+            (7, 5, 10), (8, 5, 10), (9, 6, 9), (10, 6, 9), (11, 7, 8), (12, 7, 8))
+    for y, x0, x1 in rows:
+        cv.rect(x0, y, x1, y, body)         # 機身（鏢形，針尖朝上）
+        cv.set(x1, y, shade)                # 右緣一點灰階
+    cv.rect(6, 7, 9, 9, dark)               # 深色座艙
+    cv.outline((30, 28, 38, 255))
     return cv
 
 def weapon_harpbow():  # 豎琴弓（吟遊詩人的職業武器）：弓身彎成豎琴的樣子，中間幾條金色弦
