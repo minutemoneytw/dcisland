@@ -3429,14 +3429,18 @@ function draw() {
         }
         const top = a.y - a.z - H - 2;   // 圖的頂端（名牌/驚嘆號/血條貼這條線往下排）
         // 島主預警：龍衝＝金色虛線＝衝刺路徑；石化之瞳＝大眼睛（全地圖面向她的人石化）；波動砲＝光波帶狀範圍；命令＝頭上大字（行動！／靜止！）
-        if (a.command) {   // 命令讀條：行人號誌風圖示（行動＝走路小綠人、靜止＝站立小紅人），全地圖可見、隨時間呼吸閃爍
+        if (a.command) {   // 命令讀條：行人號誌風圖示畫在身上（與石化之瞳的大眼睛同位置）＋身上持續冒白蒸汽（蒸氣停＝命令結束）
+          if (!a.nextSteam || S.t >= a.nextSteam) {
+            a.nextSteam = S.t + .06;
+            S.floaters.push({ steam: true, x: a.x + (Math.random() * W * .56 - W * .28), y: a.y - H * (.1 + Math.random() * .4), r: 3 + Math.random() * 4, life: .9 });
+          }
           const ic = CMD_ICONS[a.command.kind] || CMD_ICONS.act;
           if (ic.complete && ic.naturalWidth) {
             const s = 64, pul = .7 + .3 * (Math.sin(S.t * 10) * .5 + .5);
             ctx.save();
             ctx.imageSmoothingEnabled = false;
             ctx.globalAlpha = pul;
-            ctx.drawImage(ic, a.x - s / 2, Math.max(top - 20 - s, S.cam.y + 8), s, s);
+            ctx.drawImage(ic, a.x - s / 2, a.y - H * .62 - s / 2, s, s);
             ctx.restore();
           }
         }
@@ -3630,6 +3634,13 @@ function draw() {
       ctx.strokeStyle = `rgba(130,224,138,${1 - q})`;
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(0, 0, 8 + q * (HEAL_RADIUS - 8), 0, Math.PI * 2); ctx.stroke();
+    } else if (f.steam) {   // 蒸汽：白圓上升擴大淡出（壓力山大下命令時持續冒，蒸氣停＝命令結束）
+      const q = 1 - f.life / .9;
+      ctx.strokeStyle = `rgba(240,244,248,${(1 - q) * .6})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(0, -q * 30, f.r + q * 8, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = `rgba(240,244,248,${(1 - q) * .25})`;
+      ctx.beginPath(); ctx.arc(0, -q * 30, (f.r + q * 8) * .55, 0, Math.PI * 2); ctx.fill();
     } else if (f.poof) {
       const q = 1 - f.life / .55;
       ctx.strokeStyle = `rgba(250,250,240,${1 - q})`;
@@ -4533,7 +4544,7 @@ async function boot() {
       for (let i = S.floaters.length - 1; i >= 0; i--) {
         const f = S.floaters[i];
         f.life -= dt;
-        if (!f.slash && !f.beam && !f.beamLine && !f.healPulse && !f.orb && !f.aoe && !f.fxk) f.y -= 34 * dt;   // 爪擊/光束/綠圈特效固定在原座標，不隨飄字上浮
+        if (!f.slash && !f.beam && !f.beamLine && !f.healPulse && !f.orb && !f.aoe && !f.fxk && !f.steam) f.y -= 34 * dt;   // 爪擊/光束/綠圈/蒸汽特效固定在原座標，不隨飄字上浮（蒸汽自己在渲染時上升）
         if (f.life <= 0) S.floaters.splice(i, 1);
       }
       stepSkills();
