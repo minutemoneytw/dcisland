@@ -42,7 +42,7 @@ function lsSet(key, val) {
 const lsObj = (key, def) => { const v = lsGet(key, null); return v && typeof v === 'object' && !Array.isArray(v) ? v : def; };
 
 // ---------------- 全域狀態 ----------------
-const TERRAIN_IDS = ['grass', 'beach', 'snow', 'night', 'forest', 'volcano'];
+const TERRAIN_IDS = ['grass', 'beach', 'snow', 'night', 'forest', 'volcano', 'machine'];
 const S = {
   terrain: (t => TERRAIN_IDS.includes(t) ? t : 'grass')(lsRaw('dcisland.m0.terrain')),   // 舊資料是純字串（非 JSON）
   terrains: {},                 // id -> manifest
@@ -596,6 +596,8 @@ const QUOTE = { ring: { r1: 110, r2: 330, dmg: 4 }, iron: { r: 200, dmg: 4, kb: 
 const quoteName = sk => S.skillsDB?.quotes?.[sk]?.name || sk;
 const OWNER_GAZE_CAST = 2;      // 石化之瞳的開眼預警秒數（與兩份伺服器的 D_GAZE_CAST_MS 一致）
 const OWNER_BEAM_CAST = 2;      // 波動砲的讀條秒數（與兩份伺服器的 D_BEAM_CAST_MS 一致）
+const OWNER_COMMAND_CAST = 2;   // 命令（行動／靜止命令）的讀條秒數（與兩份伺服器的 D_COMMAND_CAST_MS 一致）
+const OWNER_CMD_LEEWAY = .5;    // 命令檢定的寬限：讀條結束前後 0.5 秒內「有移動輸入」算行動中（純客戶端判定）
 const OWNER_BEAM_DMG = 4;       // 波動砲命中的扣血（比爪擊重、非即死；與伺服器一樣是各客戶端自判）
 const OWNER_PETRIFY_MS = 10000; // 石化時長：不能移動＋每秒扣 1 HP（判定在各人自己的畫面，不進同步協定）
 const OWNER_WALK_SPEED = 34, OWNER_LEG_MIN = 1500, OWNER_PAUSE = [1.5, 4];   // 閒晃：路點間散步速度／每腿最短時長／休息範圍（秒）
@@ -640,11 +642,11 @@ const hpCap = p => jobOf(p)?.hpMax ?? PLAYER_HP;
 // 島主攻擊樣式（mobs.json 的 atk 欄位）：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女）、beam＝波動砲（蓋老師）
 // gaze／beam 都是「原地施放」（不瞬移），dash 會瞬移到島緣再衝
 const ownerAtk = def => def.atk || 'dash';
-const ownerStationary = def => ownerAtk(def) === 'gaze' || ownerAtk(def) === 'beam';
+const ownerStationary = def => ownerAtk(def) === 'gaze' || ownerAtk(def) === 'beam' || ownerAtk(def) === 'command';
 // 島主招式設定：assets/skills/skills.json（key＝攻擊樣式）。name＝招式名稱、bar＝預警時頭上畫黃色倒數條、say＝放招前先講台詞
 // （false＝被打直接開始預警；兩份伺服器也讀同一個檔決定要不要跳過說話階段）
 const ownerSkill = def => S.skillsDB?.skills?.[ownerAtk(def)] || {};
-const ownerCastTotal = def => ownerAtk(def) === 'gaze' ? OWNER_GAZE_CAST : ownerAtk(def) === 'beam' ? OWNER_BEAM_CAST : OWNER_CAST;   // 預警總秒數（倒數條的分母）
+const ownerCastTotal = def => ownerAtk(def) === 'gaze' ? OWNER_GAZE_CAST : ownerAtk(def) === 'beam' ? OWNER_BEAM_CAST : ownerAtk(def) === 'command' ? OWNER_COMMAND_CAST : OWNER_CAST;   // 預警總秒數（倒數條的分母）
 // 島主被激怒的台詞：mobs.json 該島主條目的 ownerLines（由 gen_assets.py 的 MOB_MANIFEST 產生）。
 // 發動反擊前隨機說一句（不連續重複）；沒寫台詞的島主就不說話。
 // 例外：mobs.json 標了 ownerLinesSeq（目前只有蓋老師）的島主照順序一句一句說，說完一輪回到第一句。
@@ -721,6 +723,7 @@ function ownerStep(a, dt, def) {
     if (a.quote) return;   // 台詞招式：說完由下面的 quote 段依序放招
     if (ownerAtk(def) === 'gaze') ownerGazeCast(a, src);
     else if (ownerAtk(def) === 'beam') ownerBeamCast(a, src);
+    else if (ownerAtk(def) === 'command') ownerCommandCast(a, src);
     else ownerWarp(a, src);
     return;
   }
@@ -729,13 +732,15 @@ function ownerStep(a, dt, def) {
     const q = a.quote;
     while (q.fired < q.skills.length && S.t >= q.fires[q.fired]) {
       const skn = q.skills[q.fired++];
+      if (skn === 'act' || skn === 'still') { startCommandCheck(a, skn, OWNER_COMMAND_CAST * 1000); continue; }   // 命令檢定：讀條 2 秒後本地判定（不進 quoteFire）
       quoteFire(a, skn, skn === 'ring' || skn === 'iron' ? [] : ['me'], a.x, a.y);
     }
     if (q.fired >= q.skills.length) a.quote = null;
     return;
   }
+  if (a.command) { stepCommandCheck(a, def); return; }   // 命令讀條中：原地不動（單機與連線共用牆鐘）
   if (a.cast) {
-    a.cast -= dt;   // 預警：龍衝＝金色虛線鎖定攻擊範圍；石化之瞳＝大眼睛；波動砲＝光波帶狀預警
+    a.cast -= dt;   // 預警：龍衝＝金色虛線鎖定攻擊範圍；石化之瞳＝大眼睛；波動砲＝光波帶狀預警（命令走 a.command 牆鐘，不經這裡）
     if (a.cast <= 0) {
       a.cast = 0;
       if (ownerAtk(def) === 'gaze') gazeFire(a, def);
@@ -924,6 +929,40 @@ function beamFire(a, def) {   // 讀條結束：發射直線光波（方向＝�
   toast(`${def.name} 的波動砲發射了！`, 2000);
 }
 
+// ---- 命令（壓力山大的攻擊，atk: "command"）：不瞬移，原地讀條 2 秒 → 下達「行動命令」或「靜止命令」----
+// 讀條結束的瞬間檢查玩家：「行動命令」＝最近 0.5 秒內有移動輸入、「靜止命令」＝最近 0.5 秒完全沒動；不服從就強制倒地（不看血量）。
+// 判定在各人自己的畫面（跟龍衝／石化同源）；伺服器只決定時間點與命令種類。台詞招式（lineSkills 的 act／still）與普攻共用同一套讀條檢定
+// （a.command 牆鐘，單機與連線同構）；p.lastMoveAt 在 stepPlayer／stepRemote 隨移動輸入更新（石化／擊飛／坐睡中不更新＝視為靜止）。
+function startCommandCheck(a, kind, castMs) {   // 開始一次命令讀條（kind＝'act'｜'still'）；島主原地不動
+  const def = mobDef(a.id);
+  a.command = { t0ms: Date.now(), castMs, kind, x: a.x, y: a.y };
+  a.wleg = null; a.z = 0; a.fly = false;
+  toast(kind === 'act'
+    ? `${def.name} 下達了行動命令——讀條結束前開始移動！`
+    : `${def.name} 下達了靜止命令——立刻停住不動！`, 2600);
+}
+function stepCommandCheck(a, def) {   // 命令讀條推進（牆鐘與伺服器同軸）：到點就本地檢定
+  const c = a.command, el = Date.now() - c.t0ms;
+  a.x = c.x; a.y = c.y; a.z = 0; a.fly = false;
+  a.cast = Math.max(0, (c.castMs - el) / 1000);   // 給倒數條沿用既有繪製（cast > 0 且 bar:true 就會畫）
+  if (el >= c.castMs) commandFire(a, def);
+}
+function commandFire(a, def) {   // 讀條結束：檢定（自己＝真判定；遠端＝只畫演出，由對方畫面自判）
+  const kind = a.command?.kind;
+  a.command = null; a.cast = 0;
+  a.rageCd = S.t + OWNER_CD;
+  const me = S.players[0];
+  const moving = q => q.lastMoveAt != null && (S.t - q.lastMoveAt) < OWNER_CMD_LEEWAY;   // 最近 0.5 秒內有移動＝行動中
+  if (!me.dead) {
+    if (kind === 'act' && !moving(me)) killPlayer(me, def.name, '行動命令');
+    if (kind === 'still' && moving(me)) killPlayer(me, def.name, '靜止命令');
+  }
+  for (const r of S.remotes.values()) {
+    if (r.dead) continue;
+    if ((kind === 'act' && !moving(r)) || (kind === 'still' && moving(r))) S.floaters.push({ x: r.x, y: r.y - 40, v: '……', life: .8 });
+  }
+}
+
 // ---- 玩家血量＋島主仇恨（龍衝冷卻中的追殺）----
 // 單機本地模擬在這裡；連線時追殺流程由伺服器權威（aggro/claw/wander 事件），但「自己有沒有被打到」仍是各人自判
 function playerDamage(p, dmg, cause) {
@@ -964,7 +1003,7 @@ function onNetHeal(healerId) {
 // 釣上來的怪物只要還在就一定在追殺人，也算戰鬥中（玩家不自動回血，否則每秒回 1 比牠的爪擊快，站著不動也打不死）
 function ownerEngaged() {
   return S.mobs.some(a => !a.dead && a.lurker) || S.mobs.some(a => !a.dead && mobDef(a.id)?.owner &&
-    (a.aggro || a.fly || a.cast || a.castFrom || a.rest || a.sayPhase || a.quote || a.cycle || a.gaze || a.beam));
+    (a.aggro || a.fly || a.cast || a.castFrom || a.rest || a.sayPhase || a.quote || a.cycle || a.gaze || a.beam || a.command));
 }
 // 龍衝 CD 中被打：進入仇恨（單機版；連線版由伺服器廣播 aggro 事件）
 function ownerAggroStart(a, src) {
@@ -1498,6 +1537,10 @@ function stepOwnerWalk(a, dt) {
 // 連線的島主：整個反擊循環（預警→龍衝→歇腳）用牆鐘插值，與伺服器的 dragonPhase 同軸——
 // webview 的 rAF 被節流也不會慢動作或只瞬移，每一幀都畫在伺服器時序的正確位置
 function stepOwnerProxy(a, dt, def) {
+  if (a.command) {   // 命令讀條（牆鐘與伺服器同軸），castMs 到就本地檢定（行動／靜止，各人自判）
+    stepCommandCheck(a, def);
+    return;
+  }
   if (a.gaze) {   // 石化之瞳：原地開眼（牆鐘與伺服器同軸），castMs 到就本地發射（光束＋石化判定，受害者自判）
     const g = a.gaze, el = Date.now() - g.t0ms;
     a.x = g.x; a.y = g.y; a.z = 0; a.fly = false;
@@ -1513,7 +1556,7 @@ function stepOwnerProxy(a, dt, def) {
     a.x = b.x; a.y = b.y; a.z = 0; a.fly = false;
     a.cast = Math.max(0, (b.castMs - el) / 1000); a.castFrom = b.from;
     if (el >= b.castMs) {
-      a.beam = null; a.cast = 0; a.castFrom = null;
+      a.command = null; a.beam = null; a.cast = 0; a.castFrom = null;
       beamFire(a, def);
     }
     return;
@@ -1594,7 +1637,7 @@ function applyDragonSnap(o) {
   if (o.ph === 'dead') return;   // 死了就先不生成，等 spawn 事件
   const a = dragonEnsure(o.x, o.y, o.hp);
   if (!a) return;
-  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null; a.beam = null;
+  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null; a.command = null; a.beam = null;
   a.aggro = o.aggro != null;   // 快照帶仇恨目標（連線編號）：中途進場也知道牠在追殺（戰鬥中不自動回血、之後會提示冷靜）
   a.vulnUntil = o.vulnMs ? S.t + o.vulnMs / 1000 : 0; a.weakUntil = o.weakMs ? S.t + o.weakMs / 1000 : 0;   // 破綻／降傷剩餘時間
   if (o.ph === 'aim') {   // 島緣鎖定中：還原成循環（扣掉已過的預警時間）
@@ -1622,9 +1665,16 @@ function applyDragonSnap(o) {
     a.x = o.x; a.y = o.y; a.z = 0; a.fly = false;
     if (o.line != null) ownerSay(a, o.line);   // 台詞招式：伺服器帶的那一句
     else if (ownerSkill(mobDef(a.id)).say !== false) ownerSay(a);
-  } else if (o.ph === 'cast') {   // 原地施放中（石化之瞳開眼／波動砲讀條）：站定，接續剩餘時間後本地發射
+  } else if (o.ph === 'cast') {   // 原地施放中（石化之瞳開眼／波動砲讀條／命令讀條）：站定，接續剩餘時間後本地發射／檢定
     a.cycle = null; a.wleg = null;
-    const beam = ownerAtk(mobDef(a.id)) === 'beam';
+    const atk = ownerAtk(mobDef(a.id));
+    if (atk === 'command') {   // 命令：快照帶 kind（中途進場的人也知道現在讀的是行動還是靜止）
+      const total = OWNER_COMMAND_CAST * 1000, remain = Math.max(0, Math.min(total, o.castMs || total));
+      a.command = { t0ms: Date.now() - (total - remain), castMs: total, kind: o.kind || 'act', x: o.x, y: o.y };
+      a.x = o.x; a.y = o.y; a.z = 0; a.fly = false;
+      return;
+    }
+    const beam = atk === 'beam';
     const total = (beam ? OWNER_BEAM_CAST : OWNER_GAZE_CAST) * 1000, remain = Math.max(0, Math.min(total, o.castMs || total));
     const st = { t0ms: Date.now() - (total - remain), castMs: total,
                  from: { x: o.tx, y: o.ty }, x: o.x, y: o.y, bx: o.bx, by: o.by };
@@ -1659,7 +1709,7 @@ function onNetDragon(m) {
   }
   if (m.ev === 'dead') {   // 被打倒了：原地死亡；重生等伺服器的 spawn 事件，不排本地重生
     if (a && !a.dead) {
-      a.dead = true; a.dieT = .6; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0; a.wleg = null; a.cycle = null; a.gaze = null; a.beam = null; a.aggro = false;
+      a.dead = true; a.dieT = .6; a.fly = false; a.dashU = null; a.cast = 0; a.castFrom = null; a.rest = 0; a.wleg = null; a.cycle = null; a.gaze = null; a.command = null; a.beam = null; a.aggro = false;
       if (m.x !== undefined) { a.x = m.x; a.y = m.y; }
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
       toast(`${mobDef(a.id).name} 被打倒了！30 秒後重生`, 2200);
@@ -1671,7 +1721,7 @@ function onNetDragon(m) {
     const na = dragonEnsure(m.x, m.y, m.hp);
     if (na) {
       na.dead = false; na.dieT = 0; na.x = m.x; na.y = m.y; na.hp = m.hp; na.z = 0;
-      na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.idle = 1.2; na.wleg = null; na.cycle = null; na.gaze = null; na.beam = null; na.aggro = false;
+      na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.idle = 1.2; na.wleg = null; na.cycle = null; na.gaze = null; na.command = null; na.beam = null; na.aggro = false;
     }
     toast(`${mobDef(S.terrains[S.terrain].owner).name} 回來了！`, 1600);
     return;
@@ -1679,7 +1729,7 @@ function onNetDragon(m) {
   if (m.ev === 'say') {   // 島主被激怒：先在原地說台詞（泡泡 3 秒），說完才反擊（龍衝＝瞬移島緣；蛇女＝原地開眼）
     const na = a || dragonEnsure(m.x, m.y);
     if (!na) return;
-    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.beam = null; na.wleg = null;
+    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.command = null; na.beam = null; na.wleg = null;
     na.x = m.x; na.y = m.y;
     ownerSay(na, m.line);   // 台詞招式帶台詞編號（全島同一句）
     return;
@@ -1689,7 +1739,17 @@ function onNetDragon(m) {
     if (!na) return;
     na.cycle = null; na.wleg = null; na.fly = false; na.z = 0;
     na.x = m.x; na.y = m.y;
+    if (m.skill === 'act' || m.skill === 'still') { startCommandCheck(na, m.skill, m.castMs || OWNER_COMMAND_CAST * 1000); return; }   // 命令檢定：讀條 2 秒後本地判定
     quoteFire(na, m.skill, m.ids, m.x, m.y);
+    return;
+  }
+  if (m.ev === 'command') {   // 壓力山大下達命令：原地讀條（castMs 後本地檢定；行動＝要動、靜止＝不能動）
+    const na = a || dragonEnsure(m.x, m.y);
+    if (!na) return;
+    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.command = null; na.beam = null; na.wleg = null;
+    na.x = m.x; na.y = m.y; na.z = 0;
+    if (m.hp != null) na.hp = m.hp;
+    startCommandCheck(na, m.kind || 'act', m.castMs || OWNER_COMMAND_CAST * 1000);
     return;
   }
   if (m.ev === 'gaze') {   // 蛇女開眼：原地石化預警（castMs 後本地發射；發射瞬間面向她的人石化）
@@ -1722,7 +1782,7 @@ function onNetDragon(m) {
   if (m.ev === 'wander') {   // 島主往新路點散步（伺服器帶路；插值與伺服器一致，凍結恢復也正確）
     const na = a || dragonEnsure(m.fx, m.fy);
     if (!na) return;
-    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.beam = null;
+    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.command = null; na.beam = null;
     na.wleg = { fx: m.fx, fy: m.fy, tx: m.tx, ty: m.ty, tms: m.tms, t0ms: Date.now() };
     na.legEndedAt = 0;
     na.x = m.fx; na.y = m.fy; na.dir = m.tx < m.fx ? -1 : 1;
@@ -1751,7 +1811,7 @@ function onNetDragon(m) {
     const r = S.remotes.get(m.id);
     if (a) {
       a.aggro = true; a.wleg = null; a.cast = 0; a.castFrom = null;
-      a.fly = false; a.dashU = null; a.cycle = null; a.gaze = null; a.beam = null; a.rest = 0; a.retHome = false;
+      a.fly = false; a.dashU = null; a.cycle = null; a.gaze = null; a.command = null; a.beam = null; a.rest = 0; a.retHome = false;
     }
     if (m.id === S.net?.id) toast(`${ownerName()} 火冒三丈地追殺你！快跑！`, 2600);
     else if (r) toast(`${ownerName()} 追殺 ${r.name}！`, 2200);
@@ -2146,6 +2206,7 @@ function stepRemote(r, dt) {
   const dx = r.tx - r.x, dy = r.ty - r.y;
   r.x += dx * k; r.y += dy * k;
   r.moving = Math.hypot(dx, dy) > 1.5;   // 走路／待機的幀由 charFrame 依時間取
+  if (r.moving) r.lastMoveAt = S.t;   // 命令檢定的畫面演出用（真判定在對方自己的畫面）
   if (r.swing > 0) r.swing -= dt;
   r.z += ((r.tz ?? r.z) - r.z) * Math.min(1, dt * 22);   // 跳躍高度追目標（封包 12Hz，這個速度追得上又夠平滑）
 }
@@ -2214,6 +2275,7 @@ function stepPlayer(p, dt) {
     if (keys['s'] || keys['arrowdown']) dy += 1;
   }
   p.moving = dx !== 0 || dy !== 0;
+  if (p.moving) p.lastMoveAt = S.t;   // 命令檢定用（行動命令／靜止命令）：最後一次有移動輸入的時間
   // 釣魚中（拉扯以外）：可以走、可以跳，離浮標太遠（FISH_LEASH）才收竿；換掉釣竿、進裝飾模式、被石化也會收竿
   if (p.fish && !reeling) {
     if (Math.hypot(p.fish.x - p.x, p.fish.y - p.y) > FISH_LEASH) stopFishing(p, '離浮標太遠，收竿了');
@@ -3357,7 +3419,20 @@ function draw() {
           }
         }
         const top = a.y - a.z - H - 2;   // 圖的頂端（名牌/驚嘆號/血條貼這條線往下排）
-        // 島主預警：龍衝＝金色虛線＝衝刺路徑；石化之瞳＝大眼睛（全地圖面向她的人石化）；波動砲＝光波帶狀範圍
+        // 島主預警：龍衝＝金色虛線＝衝刺路徑；石化之瞳＝大眼睛（全地圖面向她的人石化）；波動砲＝光波帶狀範圍；命令＝頭上大字（行動！／靜止！）
+        if (a.command) {   // 命令讀條：全地圖都看得到的大字提示（行動＝綠色、靜止＝紅色），隨時間呼吸閃爍
+          const c = a.command, pul = Math.sin(S.t * 12) * .5 + .5;
+          const act = c.kind === 'act';
+          ctx.save();
+          ctx.font = `bold ${Math.round(15 + 7 * bs)}px "Microsoft JhengHei"`; ctx.textAlign = 'center';
+          ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(8,10,14,.85)';
+          const txt = act ? '↑ 行動！' : '✕ 靜止！';
+          const wy = Math.max(top - 34, S.cam.y + 8);
+          ctx.strokeText(txt, a.x, wy);
+          ctx.fillStyle = act ? `rgba(122,216,140,${.65 + .35 * pul})` : `rgba(240,110,90,${.65 + .35 * pul})`;
+          ctx.fillText(txt, a.x, wy);
+          ctx.restore();
+        }
         if (a.cast > 0 && a.castFrom) {
           const cf = a.castFrom, L = 1700;
           const ux = cf.x - a.x, uy = cf.y - a.y, ul = Math.hypot(ux, uy) || 1;
@@ -3398,7 +3473,8 @@ function draw() {
         // 島主放招倒數條（skills.json 標 bar 的招式）：預警期間畫在名牌上方，黃色由左往右填，填滿就放招；右上角是招式名稱。
         // 島主很高，人站在牠腳邊時頭會超出畫面上緣：倒數條貼齊畫面上緣，不會看不到
         if (def.owner && a.cast > 0 && ownerSkill(def).bar)
-          drawCastBar(a.x, Math.max(top - 16, S.cam.y + 20), 1 - a.cast / ownerCastTotal(def), ownerSkill(def).name);
+          drawCastBar(a.x, Math.max(top - 16, S.cam.y + 20), 1 - a.cast / ownerCastTotal(def),
+                      a.command ? quoteName(a.command.kind) : ownerSkill(def).name);
       }
     });
   }

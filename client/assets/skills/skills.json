@@ -3,13 +3,16 @@
  "skills": {
   "dash": { "name": "龍衝", "bar": true, "say": false, "quoteChance": 0.8 },
   "gaze": { "name": "石化", "bar": true, "say": false },
-  "beam": { "name": "波動砲", "bar": true, "say": true }
+  "beam": { "name": "波動砲", "bar": true, "say": true },
+  "command": { "name": "命令", "bar": true, "say": false, "quoteChance": 0.8 }
  },
  "quotes": {
   "ring": { "name": "月環" },
   "iron": { "name": "鋼鐵" },
   "dive": { "name": "月華衝" },
   "meteor": { "name": "隕石流" },
-  "ion": { "name": "離子砲" }
+  "ion": { "name": "離子砲" },
+  "act": { "name": "行動命令" },
+  "still": { "name": "靜止命令" }
  }
 }

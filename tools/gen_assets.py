@@ -216,6 +216,22 @@ def stump():
     cv.outline()
     return cv
 
+def gear():   # 機械島的擺設：半埋在土裡的廢棄齒輪（金屬灰＋鏽點）
+    cv = Canvas(16, 12)
+    body, dark, hi = hx("#8a94a4"), hx("#5a6070"), hx("#a8b2c2")
+    cx, cy, r = 8.0, 7.0, 4.2
+    for i in range(8):   # 八根齒
+        a = math.pi * 2 * i / 8
+        gx, gy = cx + math.cos(a) * (r + .8), cy + math.sin(a) * (r + .8) * .9
+        cv.rect(round(gx) - 1, round(gy) - 1, round(gx) + 1, round(gy) + 1, body)
+    cv.ellipse(cx, cy, r, r * .9, body)
+    cv.ellipse(cx, cy, r * .45, r * .4, dark)   # 中孔
+    for px, py in ((5, 5), (11, 6), (8, 10), (10, 4)):   # 鏽點與亮部
+        cv.set(px, py, hx("#9a6a3a")); cv.set(px + 1, py, shade(body, 1.15))
+    cv.hline(4, 12, 3, hi)
+    cv.outline()
+    return cv
+
 def flower(petal="#e26a8a"):
     cv = Canvas(8, 8)
     cv.vline(3, 5, 7, hx("#4d8a3a"))
@@ -1084,6 +1100,10 @@ TERRAINS = [
          ground=("#5a4a48", "#4c3e3c"), edge=("#8a5040", "#744234"),
          water=("#c23a1e", "#a83018"), leaf=("#6a6a46", "#54543a"), trunk="#3c2a22",
          deco=[("rock.png", 3), ("volcanic.png", 3), ("stump.png", 1)], ui="#6c5a58"),
+    dict(id="machine", name="機械島",
+         ground=("#8a8f98", "#7a7f88"), edge=("#5a5f68", "#4c5058"),
+         water=("#2a7ea8", "#226a90"), leaf=("#5a6a7a", "#4a5a6a"), trunk="#4a5058",
+         deco=[("gear.png", 3), ("rock.png", 1)], ui="#8a94a4"),
 ]
 
 FURN_MANIFEST = dict(
@@ -1114,6 +1134,7 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/bahamut_fly_sheet.png", frames=6, fw=88, fh=59, what="黃金肥龍的飛行 6 幀（草島島主）"),
     dict(sheet="external/img2pixel/snake_queen_sheet.png", frames=4, fw=88, fh=85, what="笨蛋蛇女的 4 幀（夜光島島主）"),
     dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fw=88, fh=74, what="蓋老師（究極神兵）的走路 6 幀（熔岩島島主）"),
+    dict(sheet="external/img2pixel/alexander_idle_sheet.png", frames=4, fw=88, fh=77, what="壓力山大的待機 4 幀（機械島島主）"),
 ]
 
 def check_external():
@@ -1198,6 +1219,20 @@ MOB_MANIFEST = dict(
                          "只有在我的鐵腕統治之下，\n艾奧傑亞才會獲得新生！",
                          "英雄……也只是虛偽的偶像。\n就由我來打破！"],
              ownerLinesSeq=True),   # 蓋老師的台詞照順序一句一句說（說完一輪回到第一句）；其他島主維持隨機
+        # 壓力山大（機械島島主）：外觀是使用者自製的 4 幀待機圖（88×77，透明底），external/ 不由產生器畫，沒有 sprite 備用圖（同蓋老師）。
+        # 台詞由使用者提供（2026-11-05），字句照原文（含原文的用字與標點，不要自行潤飾）；一句裡的換行（\n）是泡泡裡的換行。
+        # atk="command"＝命令（行動命令／靜止命令：讀條 2 秒，結束時玩家必須處於行動／靜止狀態，否則強制倒地，見 main.js 的 commandFire）。
+        # lineSkills 與 ownerLines 一一對應（手寫、不走 QUOTE_KEYWORDS）：第 1、2 句＝行動命令、第 3 句（時間牢獄＝不能動）＝靜止命令。
+        # ownerLinesSeq=True：照順序一句一句說（敘事順序：出場自介 → 合神完畢 → 時間牢獄）。
+        dict(id="alexander", name="壓力山大", owner=True, big=5, atk="command",
+             speed=16, flee=110, hp=200,
+             anim=dict(sheet="external/img2pixel/alexander_idle_sheet.png", frames=4, fps=8, scale=4, keyBg=False),
+             line="「壓力山大」的關節噴出一縷白色蒸氣，眼睛閃過一道冷冽的紅光。",
+             ownerLines=["我乃机械之神，通過改良自身，可達究极完美之境!!",
+                         "合神完畢……\n我壓力山大……將引领你體驗最深的绝望!!",
+                         "時空干涉解除，你會在“時間牢獄”中被永遠囚禁!!"],
+             ownerLinesSeq=True,
+             lineSkills=[["act"], ["act"], ["still"]]),
     ],
 )
 
@@ -1230,6 +1265,7 @@ OWNER_BY_TERRAIN = {
     "grass": "gold_dragon",
     "night": "snake_queen",
     "volcano": "ultima_weapon",
+    "machine": "alexander",
 }
 
 # 各地形出現的小動物（id=權重）
@@ -1240,6 +1276,7 @@ MOBS_BY_TERRAIN = {
     "night":   [("frog", 2), ("sheep", 1)],
     "forest":  [("sheep", 2), ("bird", 2)],
     "volcano": [("frog", 1), ("bird", 1)],
+    "machine": [],   # 機械島：沒有野生小動物（只有島主）
 }
 
 # ---------------- 地板（裝飾模式的地板層，16×16 無縫磚，畫在地面與家具之間）----------------
@@ -1576,6 +1613,17 @@ FISH_TABLE = [
     ("beach", "starfish", "海星", U, (10, 30), lambda: starfish("#e88a4a")),
     ("beach", "mahi", "鬼頭刀", R, (80, 180), lambda: fish("#4aa86a", "#f0d84a", L=14, H=6, fin="#3a88c8")),
     ("beach", "golden_turtle", "黃金海龜", R, (60, 120), lambda: turtle("#d8a830", "#a8c870", "#f8e8a0")),
+    # 機械島：周圍是同一片海（魚種沿用近海組合，同 id 共用圖檔；之後要加機械限定魚再擴充）
+    ("machine", "sardine", "沙丁魚", C, (10, 20), lambda: fish("#6a8ab8", "#e0e8f0", L=10, H=4)),
+    ("machine", "horse_mackerel", "竹莢魚", C, (15, 35), lambda: fish("#8aa0a8", "#e8e0c8", L=11, H=5, band="#c8b860")),
+    ("machine", "hermit_crab", "寄居蟹", C, (3, 10), lambda: crab("#d8703a", shell="#e8d0a8")),
+    ("machine", "kelp", "海帶", C, (30, 150), lambda: kelp("#5a7a3a")),
+    ("machine", "empty_can", "空罐頭", C, (8, 12), lambda: can("#b8bec6", "#d84a4a")),
+    ("machine", "clownfish", "小丑魚", U, (6, 11), lambda: fish("#f08a2a", L=10, H=6, stripes=(6, 10), fin="#f0f0f0")),
+    ("machine", "octopus", "章魚", U, (30, 90), lambda: octopus("#c8584a")),
+    ("machine", "starfish", "海星", U, (10, 30), lambda: starfish("#e88a4a")),
+    ("machine", "mahi", "鬼頭刀", R, (80, 180), lambda: fish("#4aa86a", "#f0d84a", L=14, H=6, fin="#3a88c8")),
+    ("machine", "golden_turtle", "黃金海龜", R, (60, 120), lambda: turtle("#d8a830", "#a8c870", "#f8e8a0")),
     # 雪島：冰海
     ("snow", "cod", "鱈魚", C, (30, 90), lambda: fish("#8a8070", "#e0d8c8", L=12, H=6, spots=((6, 7), (9, 6), (11, 8)))),
     ("snow", "capelin", "柳葉魚", C, (10, 18), lambda: fish("#9aa8b0", "#f0f0e8", L=10, H=3)),
@@ -1794,6 +1842,8 @@ def main():
             save(mushroom(), "mushroom.png", sub)
         if t["id"] == "volcano":
             save(volcanic(), "volcanic.png", sub)
+        if t["id"] == "machine":
+            save(gear(), "gear.png", sub)
         td = dict(id=t["id"], name=t["name"], scale=2, tile=TILE,
                   ground="ground.png", edge="edge.png", water="water.png",
                   deco=[dict(sprite=s, weight=w) for s, w in t["deco"]],
