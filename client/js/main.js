@@ -3692,6 +3692,9 @@ function landNear(px, py) {
 
 async function switchTerrain(id) {
   if (id === S.terrain) return;
+  // 死亡（墓碑）中、或戰鬥中（島主仇恨／放招中、釣上來的怪物還在＝ownerEngaged）不能換島（使用者定）
+  if (S.players[0]?.dead) { toast('倒地中不能換島，等復活後再走', 2000); return; }
+  if (ownerEngaged()) { toast('戰鬥中不能換島，等仇恨解除後再走', 2000); return; }
   if (S.mode === 'decor' && S.draft.length) { toast('有未保存的擺設變動，請先按「完成」保存或「取消變動」', 3000); return; }
   try {
     if (S.mode === 'decor') exitDecor(false);
