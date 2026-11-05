@@ -581,6 +581,35 @@ def frog():  # 大肚蛙（眼神無辜）
     cv.outline()
     return cv
 
+def fishman():  # 深海魚人（釣魚時極低機率釣上來的敵對怪物：藍綠鱗片、背鰭、死魚眼、手拿魚叉；自製 placeholder）
+    cv = Canvas(18, 22)
+    s1 = hx("#3f8f8a"); sd = shade(s1, 0.72); sl = shade(s1, 1.22); belly = hx("#b8d8b0")
+    fin = hx("#c84a4a"); find = shade(fin, 0.75); eye = hx("#f4f0d8"); dark = (26, 22, 22, 255)
+    wood = hx("#8a6236"); steel = hx("#cfd6dc")
+    # 魚叉（握在右手，立在身側）
+    cv.rect(15, 2, 15, 21, wood)
+    cv.set(14, 2, steel); cv.set(15, 1, steel); cv.set(16, 2, steel); cv.set(15, 0, steel)
+    # 背鰭（頭頂到背後的紅色鋸齒）
+    for x, y0 in [(5, 3), (6, 1), (7, 2), (8, 0), (9, 2), (10, 1), (11, 3)]:
+        cv.rect(x, y0, x, 4, fin if x % 2 else find)
+    # 頭（扁圓魚頭）＋大嘴
+    cv.ellipse(8.5, 6.5, 4.6, 3.4, s1)
+    cv.ellipse(7.5, 5.5, 2.4, 1.4, sl)
+    cv.rect(5, 8, 12, 8, dark); cv.set(6, 9, eye); cv.set(9, 9, eye); cv.set(11, 9, eye)   # 嘴與尖牙
+    cv.set(5, 5, eye); cv.set(11, 5, eye); cv.set(5, 6, dark); cv.set(11, 6, dark)          # 死魚眼（左右兩側）
+    # 身體（駝背、肚子淺色）
+    cv.ellipse(8.5, 13.5, 4.4, 4.2, s1)
+    cv.ellipse(8.5, 14.5, 2.6, 3.0, belly)
+    cv.rect(4, 12, 5, 13, sd); cv.rect(12, 12, 13, 13, sd)   # 鱗片陰影
+    # 手臂（右手握叉）
+    cv.rect(3, 12, 3, 16, s1); cv.set(3, 17, sd)
+    cv.rect(13, 12, 14, 13, s1); cv.set(14, 14, sd)
+    # 腿與蹼腳
+    cv.rect(6, 18, 7, 20, sd); cv.rect(10, 18, 11, 20, sd)
+    cv.rect(5, 21, 7, 21, fin); cv.rect(10, 21, 12, 21, fin)
+    cv.outline()
+    return cv
+
 def golden_dragon():  # 島主黃金肥龍（正面、雙翼上展、金黃配色；自製 placeholder，非 SE 素材）
     cv = Canvas(24, 20)
     y1 = hx("#e8c23a"); yl = shade(y1, 0.92); yd = shade(y1, 0.72); ys = shade(y1, 0.5); yhi = shade(y1, 1.25)
@@ -889,6 +918,11 @@ MOB_MANIFEST = dict(
              line="「波波羊」慢悠悠地嚼著草。"),
         dict(id="frog",  name="大肚蛙", sprite="frog.png",  swim=True, speed=26, flee=70, hp=3,
              line="「大肚蛙」的眼神飄向遠方。"),
+        # 釣上來的敵對怪物（lurker=True）：不在任何地形的 mobs 裡自然出現，只會在釣魚時以 fish.json 的 lurkerChance 機率被釣上來；
+        # 落在浮標旁的陸地、直接追殺釣到牠的人（與島主同一套仇恨／爪擊），30 秒沒人打就原地消失，被打倒也消失（不重生、沒有獎勵）
+        dict(id="fishman", name="深海魚人", sprite="fishman.png", lurker=True, swim=True, big=2,
+             speed=16, flee=110, hp=20,
+             line="「深海魚人」瞪著死魚眼，嘴角一直滴著海水。"),
         # 島主：terrain.json 的 owner 指定的動物；big=N＝比普通動物大 N 倍；owner=True＝不會被嚇跑、金色名牌
         # atk＝攻擊樣式：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女：開眼 2 秒→全地圖、面向她的人石化，背對就安全）、
         #   beam＝波動砲（蓋老師：原地讀條 2 秒→朝攻擊者發射一道跟島主同寬的直線光波，站在光波裡的人受傷）
@@ -1475,6 +1509,8 @@ def fish_manifest():
     out = dict(
         _comment="釣魚與魚類圖鑑。由 tools/gen_assets.py 的 FISH_TABLE 產生（改這裡要改產生器再重跑）。稀有度先依 weight 抽，再從該地形同稀有度的魚裡平均抽一種；尺寸在 size 範圍內、越大越難（兩份伺服器與單機模擬一致）。",
         escape=0.002,
+        lurker="fishman", lurkerChance=0.002,
+        _lurkerComment="lurker＝釣上來的敵對怪物（mobs.json 的 id）；lurkerChance＝每次拉竿成功（沒脫鉤）時釣到牠的機率（約 500 竿一次）。同一地形已經有一隻還沒消失時照常釣魚。",
         _bigComment="big＝大尺寸門檻（cm，釣到 ≥ big 就算大尺寸；稱號用）。取尺寸範圍的 75% 處四捨五入，每次釣到該魚時約一到兩成機率是大尺寸（尺寸取 r^1.6）。",
         rarity=dict(common=dict(name="常見", weight=60, color="#c8d0bc"),
                     uncommon=dict(name="罕見", weight=35, color="#7ab8f0"),
@@ -1544,7 +1580,7 @@ def main():
 
     print("== 小動物（FF14 致敬）==")
     adir = os.path.join(ASSETS, "mobs")
-    for fn, cv in [("bird", bird()), ("sheep", sheep()), ("frog", frog()), ("golden_dragon", golden_dragon()),
+    for fn, cv in [("bird", bird()), ("sheep", sheep()), ("frog", frog()), ("fishman", fishman()), ("golden_dragon", golden_dragon()),
                    ("snake_queen", snake_queen())]:
         save(cv, fn + ".png", "mobs")
     write_json(os.path.join(adir, "mobs.json"), MOB_MANIFEST)

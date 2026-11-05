@@ -63,6 +63,20 @@ const D_PROVOKE_RANGE = 240;     // 挑釁距離（比攻擊距離寬：把島�
 const D_SAVE_MS = 2000;      // 熱路徑（被打／爪擊／追腿／回血）寫 storage 的最短間隔；其餘變動標 dirty，由鬧鐘補寫
 const SEQ_BLOCK = 50;        // 連線編號一次預留幾個再寫 storage（不必每次連線都寫）
 const D_CENTER = [(COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL];
+
+// ---- 釣上來的敵對怪物（lurker；fish.json 的 lurker／lurkerChance 決定是誰、多常出現）----
+// 拉竿成功時極低機率釣到牠：落在浮標旁最近的陸地，直接追殺釣到牠的人（仇恨換人、爪擊與島主同一套規則），
+// L_DROPOUT 內沒人打牠就原地消失；被打倒也消失，不重生。每個地形同時最多一隻；沒有人在該地形時直接消失。
+// 只放記憶體不存 storage：牠存在時一定在追殺（鬧鐘每 1 秒內就醒一次），DO 不會休眠；部署重啟弄丟了，客戶端幾秒沒收到事件也會自己移除。
+// 常數與 dev_server.py 的 L_* 一致（改一邊要改另一邊）；client/js/main.js 的 LURK_* 也要一起看
+// 強度以「一個人也打得倒」為準（釣魚通常是單人）：一般揮擊約 8 秒打死；貼身時每 1.5 秒抓一下、每下只扣 1（client 的 LURK_CLAW_DMG）
+const L_HP = 20;              // 血量（與 mobs.json 的 hp 一致；以伺服器為準，spawn 事件會帶 max）
+const L_CHASE = 150;          // 追殺速度 px/s（玩家走路 120 逃不掉、跑步 200 甩得掉；比島主慢一點）
+const L_CLAW_RANGE = 30;      // 爪擊範圍
+const L_CLAW_MS = 1500;       // 爪擊間隔（比島主的 1 秒慢）
+const L_DROPOUT = 30000;      // 多久沒人打牠就原地消失（從最後一次被打起算；剛釣上來也算一次）
+const L_RANGE = 90;           // 玩家打牠的最大距離（判定圈 40 + 武器伸出 30，留延遲）
+const L_STAFF_RANGE = 400;    // 法杖打牠的最大距離（射程 320 + 判定圈 40 + 緩衝）
 const jsRound = v => Math.floor(v + .5);   // 與前端 Math.round 同義（明寫以防其他語言實作四捨五入規則不同）
 
 function dragonLand(v) {   // RLE 位圖 → Uint8Array（1＝陸地）；回 null 表示格式錯
@@ -101,6 +115,25 @@ function dragonDashDest(map, fx, fy, ux, uy) {
     last = [x, y];
   }
   return [last[0] * CELL + CELL / 2, last[1] * CELL + CELL / 2];
+}
+
+// 追殺腿的終點（釣上來的怪物用）：在陸地上時，直線前方連續 3 格是水就截在海邊（下一腿重新瞄準會繼續沿岸繞）。
+// 規則與島主 aggroTick 裡的追腿相同（島主那段沒抽出來，避免動到現有島主流程）
+function chaseDest(map, pos, tx, ty) {
+  if (!map) return [tx, ty];
+  const gx0 = Math.floor(pos[0] / CELL), gy0 = Math.floor(pos[1] / CELL);
+  const onLand = gx0 >= 0 && gy0 >= 0 && gx0 < COLS && gy0 < ROWS && !!map[gy0 * COLS + gx0];
+  if (!onLand) return [tx, ty];
+  const steps = Math.max(1, Math.ceil(Math.hypot(tx - pos[0], ty - pos[1]) / CELL));
+  let water = 0;
+  for (let s = 1; s <= steps; s++) {
+    const t = s / steps;
+    const gx = Math.floor((pos[0] + (tx - pos[0]) * t) / CELL), gy = Math.floor((pos[1] + (ty - pos[1]) * t) / CELL);
+    if (gx < 0 || gy < 0 || gx >= COLS || gy >= ROWS || !map[gy * COLS + gx]) {
+      if (++water >= 3) { const tt = Math.max(0, (s - water) / steps); return [pos[0] + (tx - pos[0]) * tt, pos[1] + (ty - pos[1]) * tt]; }
+    } else water = 0;
+  }
+  return [tx, ty];
 }
 
 // 管理員：Worker 環境變數 ADMIN_IDS（逗號分隔的 Discord 使用者 ID）。沒設就沒有管理員
@@ -377,6 +410,8 @@ export class Island {
     this.lastFish = new Map();       // ws → 上次釣魚結果的時間（冷卻）
     this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
     this.provokes = new Map();       // ws → {terrain, t}：上次挑釁哪座島的島主（冷卻只在成功出手時計）
+    this.lurkers = new Map();        // 地形 → 釣上來的敵對怪物（每個地形同時最多一隻；只放記憶體，見 L_* 常數的說明）
+    this.lurkHits = new Map();       // ws → {terrain, t}：上次打釣上來的怪物（冷卻＋仇恨換人用）
     this.dragonSavedAt = new Map();  // 地形 → 上次真的寫 storage 的時間（saveDragonLazy 節流用）
     this.dragonDirty = new Set();    // 有變動但還沒寫進 storage 的地形
     this.alarmAt = null;             // 目前排著的鬧鐘時間（記憶體；醒來後重置，只用來略過重複的 setAlarm）
@@ -500,7 +535,14 @@ export class Island {
     const now = Date.now();
     if (now - (this.lastFish.get(ws) || 0) < FISH_CD_MS) return;
     this.lastFish.set(ws, now);
-    const res = rollFish(await this.getFishDB(), att.terrain);
+    const db = await this.getFishDB();
+    const res = rollFish(db, att.terrain);
+    // 極低機率釣到敵對怪物（該地形沒有其他還在的怪物時才會）：不記圖鑑，改成在浮標旁落地追殺釣到牠的人
+    if (!res.escaped && db.lurker && !this.lurkers.has(att.terrain) && Math.random() < (db.lurkerChance || 0)
+        && await this.spawnLurker(ws, att, String(db.lurker), now)) {
+      try { ws.send(JSON.stringify({ t: "fish_result", terrain: att.terrain, lurker: String(db.lurker), saved: false })); } catch { /* 對方已斷線 */ }
+      return;
+    }
     const out = { t: "fish_result", ...res, saved: false };
     const user = (ws.deserializeAttachment() || {}).user;   // 重讀：hello 可能剛驗證完
     if (!res.escaped && user) {
@@ -539,7 +581,7 @@ export class Island {
 
   // terrain 有給時只送給「目前在該地形」的連線；沒給就是全部
   broadcast(msg, skip, terrain) {
-    if (terrain !== undefined && msg.t === "dragon" && msg.terrain === undefined) msg = { ...msg, terrain };   // 島主事件註明是哪座地形的，客戶端才能擋掉切地形空檔收到的舊島事件
+    if (terrain !== undefined && (msg.t === "dragon" || msg.t === "lurker") && msg.terrain === undefined) msg = { ...msg, terrain };   // 島主事件註明是哪座地形的，客戶端才能擋掉切地形空檔收到的舊島事件
     const data = JSON.stringify(msg);
     for (const ws of this.state.getWebSockets()) {
       if (ws === skip) continue;
@@ -571,7 +613,8 @@ export class Island {
       dragon = this.dragonSnapshot(v);
       await this.armOwnerAlarm();   // 有人進來了：醒來恢復散步（統一匯總，不會蓋掉別座島更早的排程）
     }
-    ws.send(JSON.stringify({ t: "enter", terrain: v, players, furn: await this.getFurn(v), floor: floorToList(await this.getFloor(v)), decos, dragon }));
+    const lurker = this.lurkerSnapshot(v);   // 釣上來的怪物（沒有就是 null，客戶端據此清掉殘留的）
+    ws.send(JSON.stringify({ t: "enter", terrain: v, players, furn: await this.getFurn(v), floor: floorToList(await this.getFloor(v)), decos, dragon, lurker }));
     this.broadcast({ t: "join", id: att.id, name: att.state && att.state.name }, ws, v);
     if (att.state) this.broadcast({ t: "p", id: att.id, s: att.state }, ws, v);
   }
@@ -644,6 +687,8 @@ export class Island {
       }
     } else if (msg.t === "dragonHit") {
       await this.dragonHit(ws, att, msg);
+    } else if (msg.t === "lurkerHit") {   // 打釣上來的敵對怪物
+      await this.lurkerHit(ws, att, msg);
     } else if (msg.t === "provoke") {   // 挑釁（坦職限定，client 的 R 鍵）：把島主的仇恨拉到自己身上
       await this.provoke(ws, att);
     } else if (msg.t === "commit" || msg.t === "place" || msg.t === "remove" || msg.t === "clear") {
@@ -742,9 +787,9 @@ export class Island {
   }
   // ---- 島主仇恨（反擊冷卻期間的追殺行為；client 的演出在 ownerAggro 系列）----
   // D_DROPOUT（30 秒）內在該地形打過島主、還在線上沒死的連線名單（仇恨換人從這裡隨機挑）
-  aggroCandidates(now, terrain, win = D_DROPOUT) {
+  aggroCandidates(now, terrain, win = D_DROPOUT, hits = this.dragonHits) {   // hits＝攻擊紀錄（島主用 dragonHits，釣上來的怪物用 lurkHits）
     const out = [];
-    for (const [ws, h] of this.dragonHits) {
+    for (const [ws, h] of hits) {
       if (h.terrain !== terrain || now - h.t > win) continue;
       const att = ws.deserializeAttachment?.() || {};
       if (att.terrain === terrain && att.state && !att.state.dead) out.push(att);
@@ -1183,6 +1228,15 @@ export class Island {
         if (next === null || retry < next) next = retry;
       }
     }
+    for (const terrain of [...this.lurkers.keys()]) {   // 釣上來的怪物（與島主共用同一個鬧鐘）
+      try {
+        const wake = await this.stepLurker(terrain, now);
+        if (wake !== null && (next === null || wake < next)) next = wake;
+      } catch (e) {
+        console.error("[lurker] stepLurker 錯誤：", terrain, e);
+        this.lurkers.delete(terrain);   // 出錯就讓牠消失，不要卡住鬧鐘（客戶端幾秒沒收到事件會自己移除）
+      }
+    }
     const dirtyWake = await this.flushDragons();   // 節流中沒寫的變動：到期的現在補寫，沒到期的把鬧鐘排進去
     if (dirtyWake !== null && (next === null || dirtyWake < next)) next = dirtyWake;
     if (next !== null) await this.setOwnerAlarm(next);
@@ -1254,7 +1308,110 @@ export class Island {
       const due = (this.dragonSavedAt.get(terrain) || 0) + D_SAVE_MS;
       if (next === null || due < next) next = due;
     }
+    if (this.lurkers.size && (next === null || now + 60 < next)) next = now + 60;   // 有釣上來的怪物：快醒（追殺 tick 會自己細排）
     if (next !== null) await this.setOwnerAlarm(next);
+  }
+
+  // ---- 釣上來的敵對怪物（lurker）----
+  // 牠現在的位置：沿著目前這一腿插值（與島主散步同一套，客戶端用同一個 wander 插值演出）
+  lurkerPos(L, now) {
+    const w = L.wander;
+    if (!w) return L.pos;
+    const t = Math.min(1, Math.max(0, (now - w.t0) / w.tms));
+    return [w.fx + (w.tx - w.fx) * t, w.fy + (w.ty - w.fy) * t];
+  }
+  lurkerSnapshot(terrain) {
+    const L = this.lurkers.get(terrain);
+    if (!L) return null;
+    const now = Date.now(), pos = this.lurkerPos(L, now), o = { mob: L.mob, x: pos[0], y: pos[1], hp: L.hp, max: L.max, aggro: L.aggro.id };
+    if (L.wander) o.wleg = { fx: L.wander.fx, fy: L.wander.fy, tx: L.wander.tx, ty: L.wander.ty, tms: L.wander.tms, el: Math.max(0, Math.min(L.wander.tms, now - L.wander.t0)) };
+    return o;
+  }
+  // 釣到怪物：落在浮標旁最近的陸地（沒有島形就落在釣的人旁邊），立刻鎖定釣到牠的人
+  async spawnLurker(ws, att, mob, now) {
+    const st = att.state || {}, terrain = att.terrain;
+    const map = await this.getDragonMap(terrain);
+    const bx = Number(st.fish && st.fish.x), by = Number(st.fish && st.fish.y);
+    const fx = Number.isFinite(bx) ? bx : Number(st.x), fy = Number.isFinite(by) ? by : Number(st.y);
+    if (!Number.isFinite(fx) || !Number.isFinite(fy)) return false;
+    const land = map ? this.nearestLand(fx, fy, map) : null;
+    const pos = land || [Number(st.x) || fx, Number(st.y) || fy];
+    this.lurkers.set(terrain, { mob, hp: L_HP, max: L_HP, pos, wander: null, lastHitAt: now,
+                                aggro: { id: att.id, rotateAt: now + D_AGGRO_MS, clawAt: now + L_CLAW_MS } });
+    this.lurkHits.set(ws, { terrain, t: now });   // 釣到牠的人視同攻擊者（仇恨換人的候選池）
+    this.broadcast({ t: "lurker", ev: "spawn", terrain, mob, x: pos[0], y: pos[1], fx, fy, hp: L_HP, max: L_HP,
+                     id: att.id, name: st.name || "玩家" }, null, terrain);
+    await this.armOwnerAlarm();
+    return true;
+  }
+  // 打釣上來的怪物：扣血（伺服器權威），打倒就消失；距離驗證比照島主（容許客戶端漏接一腿的落後）
+  async lurkerHit(ws, att, msg) {
+    if (!att.state || !att.terrain) return;
+    const terrain = att.terrain, L = this.lurkers.get(terrain);
+    if (!L) return;
+    const now = Date.now(), h = this.lurkHits.get(ws);
+    if (h && h.terrain === terrain && now - h.t < D_CD_MS) return;
+    const pos = this.lurkerPos(L, now);
+    const maxR = msg.staff && att.state.weapon === "staff" ? L_STAFF_RANGE : L_RANGE;
+    const px = Number(msg.x), py = Number(msg.y), cdx = Number(msg.lx), cdy = Number(msg.ly);
+    let near = Math.hypot(px - pos[0], py - pos[1]) <= maxR;
+    if (!near && Number.isFinite(cdx) && Number.isFinite(cdy))
+      near = Math.hypot(px - cdx, py - cdy) <= maxR && Math.hypot(cdx - pos[0], cdy - pos[1]) <= D_DRIFT_TOLER;
+    if (!near) return;
+    this.lurkHits.set(ws, { terrain, t: now });
+    L.lastHitAt = now;
+    L.hp -= Math.max(1, Math.min(2, Math.round(Number(msg.dmg) || 1)));
+    if (L.hp <= 0) {
+      this.lurkers.delete(terrain);
+      this.broadcast({ t: "lurker", ev: "dead", x: pos[0], y: pos[1] }, null, terrain);
+      return;
+    }
+    this.broadcast({ t: "lurker", ev: "hp", hp: L.hp }, null, terrain);
+  }
+  // 推進一步（鬧鐘）：沒人看／太久沒人打／目標死了又沒人可換 → 原地消失；否則追殺、貼近就每秒爪擊。回傳下一個要醒的時間
+  async stepLurker(terrain, now) {
+    const L = this.lurkers.get(terrain);
+    if (!L) return null;
+    if (!this.hasPlayers(terrain)) { this.lurkers.delete(terrain); return null; }   // 沒人在這個地形：直接消失（不用廣播）
+    const pos = this.lurkerPos(L, now);
+    const gone = () => {
+      this.lurkers.delete(terrain);
+      this.broadcast({ t: "lurker", ev: "gone", x: pos[0], y: pos[1] }, null, terrain);
+      return null;
+    };
+    if (now - L.lastHitAt > L_DROPOUT) return gone();
+    const ag = L.aggro;
+    let att = this.aggroTarget(ag.id, terrain);
+    if (!att || now >= ag.rotateAt) {   // 目標死了／離開，或 5 秒到：從最近打過牠的人裡隨機換一個
+      const cands = this.aggroCandidates(now, terrain, L_DROPOUT, this.lurkHits).filter(v => v.id !== ag.id);
+      if (cands.length) {
+        att = cands[Math.floor(Math.random() * cands.length)];
+        ag.id = att.id; ag.rotateAt = now + D_AGGRO_MS;
+        this.broadcast({ t: "lurker", ev: "aggro", id: att.id, name: (att.state && att.state.name) || "玩家" }, null, terrain);
+      } else if (!att) return gone();   // 仇恨對象沒了又沒人可換：仇恨消失 → 原地消失
+      else ag.rotateAt = now + D_AGGRO_MS;
+    }
+    const dist = Math.hypot(att.state.x - pos[0], att.state.y - pos[1]);
+    if (dist <= L_CLAW_RANGE) {   // 貼近：站定每秒一抓（受害者自判，與島主爪擊同一套）
+      L.pos = [pos[0], pos[1]]; L.wander = null;
+      if (now >= ag.clawAt) {
+        ag.clawAt = now + L_CLAW_MS;
+        this.broadcast({ t: "lurker", ev: "claw", x: pos[0], y: pos[1], tx: att.state.x, ty: att.state.y, id: att.id }, null, terrain);
+      }
+    } else {
+      const w = L.wander;
+      if (!w || now >= w.t0 + w.tms || now >= w.t0 + 600) {   // 每 0.6 秒重新瞄準目標目前的位置
+        const map = await this.getDragonMap(terrain);
+        const [tx, ty] = chaseDest(map, pos, att.state.x, att.state.y);
+        const tms = Math.max(80, Math.round(Math.hypot(tx - pos[0], ty - pos[1]) / L_CHASE * 1000));
+        L.pos = [pos[0], pos[1]];
+        L.wander = { fx: pos[0], fy: pos[1], tx, ty, tms, t0: now };
+        this.broadcast({ t: "lurker", ev: "wander", fx: pos[0], fy: pos[1], tx, ty, tms }, null, terrain);
+      }
+    }
+    const ends = [ag.rotateAt, L.lastHitAt + L_DROPOUT, ag.clawAt, now + 600];
+    if (L.wander) ends.push(L.wander.t0 + L.wander.tms + 60);
+    return Math.max(now + 60, Math.min(...ends) + 25);
   }
 
   // 家具編輯：伺服器是唯一權威。裝飾模式的變動是「草稿」，客戶端按保存才送 commit（一批操作）；

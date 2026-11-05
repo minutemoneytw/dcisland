@@ -248,6 +248,19 @@ D_WALK = 34              # 閒晃散步速度 px/s（與 client 的 OWNER_WALK_S
 D_WANDER_PAUSE = (1.5, 4.0)   # 每個路點之間站著休息的時間範圍（秒）
 D_CENTER = ((COLS / 2 - .5) * CELL, (ROWS / 2 - .5) * CELL)
 
+# ---- 釣上來的敵對怪物（lurker；fish.json 的 lurker／lurkerChance）----
+# 拉竿成功時極低機率釣到：落在浮標旁最近的陸地、追殺釣到牠的人（仇恨換人、爪擊與島主同一套規則），
+# L_DROPOUT 內沒人打就原地消失，被打倒也消失（不重生）。每個地形同時最多一隻；該地形沒人時直接消失。
+# 常數與 worker/src/index.js 的 L_* 一致（改一邊要改另一邊）
+# 強度以「一個人也打得倒」為準（釣魚通常是單人）：一般揮擊約 8 秒打死；貼身時每 1.5 秒抓一下、每下只扣 1
+L_HP = 20
+L_CHASE = 150.0
+L_CLAW_RANGE = 30
+L_CLAW_MS = 1500
+L_DROPOUT = 30000
+L_RANGE = 90
+L_STAFF_RANGE = 400
+
 def js_round(v):
     """與前端 Math.round 同義（floor(v+0.5)），避免各家四捨五入規則不同。"""
     return math.floor(v + 0.5)
@@ -411,6 +424,9 @@ class Room:
         self.provokes = {}       # cid -> 上次挑釁的時刻（ms）（挑釁冷卻只在成功出手時計）
         self.dragon_timers = {}  # 地形 -> 重生計時器
         self.wander_tick_seq = {}   # 地形 -> 散步 tick 序號（只讓最新排程生效）
+        self.lurkers = {}        # 地形 -> 釣上來的敵對怪物狀態（每個地形同時最多一隻）
+        self.lurk_hits = {}      # cid -> (地形, 上次打怪物的時刻 ms)
+        self.lurk_seq = {}       # 地形 -> 怪物 tick 序號（只讓最新排程生效）
         # 每位玩家各自在某個地形（client["terrain"]）；剛連上時為 None，等 enter
 
     def floor_map(self, terrain):
@@ -1164,6 +1180,180 @@ class Room:
         if leg_delay is not None:
             self._schedule_wander_tick(leg_delay, wgen, terrain)
 
+    # ---- 釣上來的敵對怪物（lurker；與 worker/src/index.js 的 spawnLurker／lurkerHit／stepLurker 同一套）----
+    def lurker_pos(self, L, now):
+        w = L["wander"]
+        if not w:
+            return list(L["pos"])
+        t = max(0.0, min(1.0, (now - w["t0"]) / w["tms"]))
+        return [w["fx"] + (w["tx"] - w["fx"]) * t, w["fy"] + (w["ty"] - w["fy"]) * t]
+
+    def lurker_snapshot(self, terrain):
+        """需在鎖內。沒有怪物回 None。"""
+        L = self.lurkers.get(terrain)
+        if not L:
+            return None
+        now = time.time() * 1000
+        pos = self.lurker_pos(L, now)
+        o = {"mob": L["mob"], "x": pos[0], "y": pos[1], "hp": L["hp"], "max": L["max"], "aggro": L["aggro"]["id"]}
+        w = L["wander"]
+        if w:
+            o["wleg"] = {"fx": w["fx"], "fy": w["fy"], "tx": w["tx"], "ty": w["ty"], "tms": w["tms"],
+                         "el": int(max(0, min(w["tms"], now - w["t0"])))}
+        return o
+
+    def spawn_lurker(self, cid, mob):
+        """釣到怪物：落在浮標旁最近的陸地（沒有島形就落在釣的人旁邊），鎖定釣到牠的人。回 spawn 訊息；不能生成回 None。"""
+        with self.lock:
+            c = self.clients.get(cid)
+            terrain = c and c.get("terrain")
+            if not terrain or terrain in self.lurkers:
+                return None
+            st = c.get("state") or {}
+            fs = st.get("fish") or {}
+            fx = fs.get("x", st.get("x")); fy = fs.get("y", st.get("y"))
+            if not isinstance(fx, (int, float)) or not isinstance(fy, (int, float)):
+                return None
+            m = self.dragon_maps.get(terrain)
+            land = dragon_nearest_land(m, fx, fy) if m else None
+            pos = list(land) if land else [st.get("x", fx), st.get("y", fy)]
+            now = time.time() * 1000
+            self.lurkers[terrain] = {"mob": mob, "hp": L_HP, "max": L_HP, "pos": pos, "wander": None, "last_hit_at": now,
+                                     "aggro": {"id": cid, "rotate_at": now + D_AGGRO_MS, "claw_at": now + L_CLAW_MS}}
+            self.lurk_hits[cid] = (terrain, now)
+            print(f"[lurker {time.strftime('%H:%M:%S')}] {terrain} 釣到 {mob} @({pos[0]:.0f},{pos[1]:.0f})", file=sys.stderr, flush=True)
+            msg = {"t": "lurker", "ev": "spawn", "terrain": terrain, "mob": mob, "x": pos[0], "y": pos[1], "fx": fx, "fy": fy,
+                   "hp": L_HP, "max": L_HP, "id": cid, "name": st.get("name") or "玩家"}
+        self._schedule_lurker_tick(0.06, terrain)
+        return terrain, msg
+
+    def lurker_hit(self, cid, msg):
+        """打釣上來的怪物：回 (地形, 要廣播的訊息) 或 None。"""
+        with self.lock:
+            c = self.clients.get(cid)
+            terrain = c and c.get("terrain")
+            L = self.lurkers.get(terrain) if terrain else None
+            st = (c or {}).get("state") or {}
+            if not L or not st:
+                return None
+            now = time.time() * 1000
+            h = self.lurk_hits.get(cid)
+            if h and h[0] == terrain and now - h[1] < D_CD * 1000:
+                return None
+            pos = self.lurker_pos(L, now)
+            max_r = L_STAFF_RANGE if msg.get("staff") and st.get("weapon") == "staff" else L_RANGE
+            try:
+                px, py = float(msg.get("x")), float(msg.get("y"))
+            except (TypeError, ValueError):
+                return None
+            near = math.hypot(px - pos[0], py - pos[1]) <= max_r
+            lx, ly = msg.get("lx"), msg.get("ly")
+            if not near and isinstance(lx, (int, float)) and isinstance(ly, (int, float)):
+                near = math.hypot(px - lx, py - ly) <= max_r and math.hypot(lx - pos[0], ly - pos[1]) <= D_DRIFT_TOLER
+            if not near:
+                return None
+            self.lurk_hits[cid] = (terrain, now)
+            L["last_hit_at"] = now
+            try:
+                dmg = max(1, min(2, round(float(msg.get("dmg") or 1))))
+            except (TypeError, ValueError):
+                dmg = 1
+            L["hp"] -= dmg
+            if L["hp"] <= 0:
+                del self.lurkers[terrain]
+                return terrain, {"t": "lurker", "ev": "dead", "x": pos[0], "y": pos[1]}
+            return terrain, {"t": "lurker", "ev": "hp", "hp": L["hp"]}
+
+    def _schedule_lurker_tick(self, delay, terrain):
+        seq = self.lurk_seq.get(terrain, 0) + 1
+        self.lurk_seq[terrain] = seq
+        t = threading.Timer(delay, self._lurker_tick, (terrain, seq))
+        t.daemon = True
+        t.start()
+
+    def _lurker_tick(self, terrain, seq):
+        """推進一步：沒人看／太久沒人打／目標死了又沒人可換 → 原地消失；否則追殺、貼近就每秒爪擊。"""
+        outs, next_delay = [], None
+        with self.lock:
+            if seq != self.lurk_seq.get(terrain, 0):
+                return
+            L = self.lurkers.get(terrain)
+            if not L:
+                return
+            if not self._has_clients(terrain):   # 沒人在這個地形：直接消失
+                del self.lurkers[terrain]
+                return
+            now = time.time() * 1000
+            pos = self.lurker_pos(L, now)
+            gone = {"t": "lurker", "ev": "gone", "x": pos[0], "y": pos[1]}
+            ag = L["aggro"]
+            tid, tc = self.aggro_target(ag["id"], terrain)
+            if now - L["last_hit_at"] > L_DROPOUT:
+                del self.lurkers[terrain]; outs = [gone]
+            else:
+                if tc is None or now >= ag["rotate_at"]:   # 目標死了／離開，或 5 秒到：從最近打過牠的人裡隨機換
+                    cands = []
+                    for k, cc in self.clients.items():
+                        h = self.lurk_hits.get(k)
+                        st0 = cc.get("state")
+                        if k != ag["id"] and h and h[0] == terrain and now - h[1] <= L_DROPOUT and cc.get("terrain") == terrain and st0 and not st0.get("dead"):
+                            cands.append((k, cc))
+                    if cands:
+                        tid, tc = random.choice(cands)
+                        ag["id"] = tid; ag["rotate_at"] = now + D_AGGRO_MS
+                        outs.append({"t": "lurker", "ev": "aggro", "id": tid, "name": (tc.get("state") or {}).get("name") or "玩家"})
+                    elif tc is None:   # 仇恨對象沒了又沒人可換：原地消失
+                        del self.lurkers[terrain]
+                        outs = [gone]
+                    else:
+                        ag["rotate_at"] = now + D_AGGRO_MS
+                if terrain in self.lurkers:
+                    tst = tc["state"]
+                    tx0, ty0 = tst.get("x", pos[0]), tst.get("y", pos[1])
+                    if math.hypot(tx0 - pos[0], ty0 - pos[1]) <= L_CLAW_RANGE:   # 貼近：站定每秒一抓
+                        L["pos"] = pos; L["wander"] = None
+                        if now >= ag["claw_at"]:
+                            ag["claw_at"] = now + L_CLAW_MS
+                            outs.append({"t": "lurker", "ev": "claw", "x": pos[0], "y": pos[1], "tx": tx0, "ty": ty0, "id": tid})
+                    else:
+                        w = L["wander"]
+                        if not w or now >= w["t0"] + w["tms"] or now >= w["t0"] + 600:   # 每 0.6 秒重新瞄準
+                            tx, ty = self._chase_dest(terrain, pos, tx0, ty0)
+                            tms = max(80, int(math.hypot(tx - pos[0], ty - pos[1]) / L_CHASE * 1000))
+                            L["pos"] = pos
+                            L["wander"] = {"fx": pos[0], "fy": pos[1], "tx": tx, "ty": ty, "tms": tms, "t0": now}
+                            outs.append({"t": "lurker", "ev": "wander", "fx": pos[0], "fy": pos[1], "tx": tx, "ty": ty, "tms": tms})
+                    ends = [ag["rotate_at"], L["last_hit_at"] + L_DROPOUT, ag["claw_at"], now + 600]
+                    if L["wander"]:
+                        ends.append(L["wander"]["t0"] + L["wander"]["tms"] + 60)
+                    next_delay = max(0.06, (min(ends) + 25 - now) / 1000)
+        for m in outs:
+            self.broadcast(m, terrain=terrain)
+        if next_delay is not None:
+            self._schedule_lurker_tick(next_delay, terrain)
+
+    def _chase_dest(self, terrain, pos, tx, ty):
+        """追殺腿的終點：在陸地上時直線前方連續 3 格是水就截在海邊（與島主追腿、Worker 的 chaseDest 同規則）。"""
+        m = self.dragon_maps.get(terrain)
+        if not m:
+            return tx, ty
+        gx0, gy0 = int(pos[0] // CELL), int(pos[1] // CELL)
+        if not (0 <= gx0 < COLS and 0 <= gy0 < ROWS and m[gy0 * COLS + gx0]):
+            return tx, ty
+        steps = max(1, math.ceil(math.hypot(tx - pos[0], ty - pos[1]) / CELL))
+        water = 0
+        for s in range(1, steps + 1):
+            t = s / steps
+            gx, gy = int((pos[0] + (tx - pos[0]) * t) // CELL), int((pos[1] + (ty - pos[1]) * t) // CELL)
+            if not (0 <= gx < COLS and 0 <= gy < ROWS) or not m[gy * COLS + gx]:
+                water += 1
+                if water >= 3:
+                    t = max(0.0, (s - water) / steps)
+                    return pos[0] + (tx - pos[0]) * t, pos[1] + (ty - pos[1]) * t
+            else:
+                water = 0
+        return tx, ty
+
     def add(self, sock):
         with self.lock:
             if len(self.clients) >= MAX_PLAYERS:
@@ -1177,6 +1367,7 @@ class Room:
         with self.lock:
             self.clients.pop(cid, None)
             self.dragon_hits.pop(cid, None)
+            self.lurk_hits.pop(cid, None)
 
     def terrain_of(self, cid):
         with self.lock:
@@ -1198,11 +1389,12 @@ class Room:
                 dragon = self.dragon_snapshot(v)
                 if d["st"] == "idle":   # 有人進來了：排一次 tick 恢復散步（沒人看時是停擺的）
                     self._schedule_wander_tick(1.0, d["wander_gen"], v)
-            return old, players, list(self.furn_list(v)), floor_to_list(self.floor_map(v)), self.deco_list(v), dragon
+            lurker = self.lurker_snapshot(v)   # 釣上來的怪物（沒有就是 None，客戶端據此清掉殘留的）
+            return old, players, list(self.furn_list(v)), floor_to_list(self.floor_map(v)), self.deco_list(v), dragon, lurker
 
     # terrain 有給時只送給「目前在該地形」的連線；沒給就是全部
     def broadcast(self, msg, skip=None, terrain=None):
-        if terrain is not None and msg.get("t") == "dragon" and "terrain" not in msg:
+        if terrain is not None and msg.get("t") in ("dragon", "lurker") and "terrain" not in msg:
             msg = {**msg, "terrain": terrain}   # 島主事件註明是哪座地形的，客戶端才能擋掉切地形空檔收到的舊島事件
         data = json.dumps(msg)
         with self.lock:
@@ -1397,11 +1589,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     res = room.enter(cid, v)
                     if res is None:
                         continue
-                    old, players, furn, floor, decos, dragon = res
+                    old, players, furn, floor, decos, dragon, lurker = res
                     if old:   # leave 帶 to＝去了哪個地形（讓留下的人顯示「XXX 移動到了OO區域」）；斷線的 leave 不帶
                         room.broadcast({"t": "leave", "id": cid, "to": v}, skip=cid, terrain=old)
                     with room.clients[cid]["send"]:
-                        ws_send(sock, json.dumps({"t": "enter", "terrain": v, "players": players, "furn": furn, "floor": floor, "decos": decos, "dragon": dragon}))
+                        ws_send(sock, json.dumps({"t": "enter", "terrain": v, "players": players, "furn": furn, "floor": floor, "decos": decos, "dragon": dragon, "lurker": lurker}))
                     st = room.clients[cid]["state"]
                     room.broadcast({"t": "join", "id": cid, "name": st.get("name")}, skip=cid, terrain=v)
                     if st:
@@ -1431,6 +1623,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         cur = room.terrain_of(cid)
                         for m in res:
                             room.broadcast(m, terrain=cur)
+                elif t == "lurkerHit":   # 打釣上來的敵對怪物
+                    res = room.lurker_hit(cid, msg)
+                    if res:
+                        room.broadcast(res[1], terrain=res[0])
                 elif t == "provoke":   # 挑釁（坦職限定）：把島主的仇恨拉到自己身上（職業/距離/冷卻由伺服器驗證）
                     res = room.dragon_provoke(cid)
                     if res:
@@ -1484,6 +1680,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         continue
                     last_fish = now
                     res = roll_fish(cur)
+                    db = fish_db()
+                    # 極低機率釣到敵對怪物（該地形沒有其他還在的怪物時才會）：不記圖鑑，改成在浮標旁落地追殺釣到牠的人
+                    if not res.get("escaped") and db.get("lurker") and random.random() < db.get("lurkerChance", 0):
+                        sp = room.spawn_lurker(cid, str(db["lurker"]))
+                        if sp:
+                            room.broadcast(sp[1], terrain=sp[0])
+                            with (room.clients.get(cid) or {}).get("send") or threading.Lock():
+                                ws_send(sock, json.dumps({"t": "fish_result", "terrain": cur, "lurker": str(db["lurker"]), "saved": False}))
+                            continue
                     out = {"t": "fish_result", **res, "saved": False}
                     user = (room.clients.get(cid) or {}).get("user")
                     if not res.get("escaped") and user:

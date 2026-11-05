@@ -470,6 +470,8 @@ function hitMob(p, a, ranged) {
     if (od.owner && p === S.players[0]) S.ownerHitAt[a.id] = S.t;   // 稱號「參與擊倒」用
     if (od.owner && a.proxy) {   // 島主連線時由伺服器權威：送意圖（座標＋傷害＋我們看到的龍位置），本地不扣血（血量等伺服器廣播）
       S.net?.dragonHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.min(2, dmg), Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10, ranged);
+    } else if (od.lurker && a.proxy) {   // 釣上來的怪物連線時也由伺服器權威扣血
+      S.net?.lurkerHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.min(2, dmg), Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10, ranged);
     } else {
       a.hp -= dmg;
       a.startle = 1; a.startleT = 3; a.target = null; a.idle = 0;
@@ -491,13 +493,16 @@ function hitMob(p, a, ranged) {
         if (!a.fly && !a.cast && !a.rest && !a.sayPhase && S.t >= (a.rageCd ?? 0)) ownerTakeoff(a, p);
         else if (!a.aggro && !a.fly && !a.cast && !a.rest && !a.sayPhase && !a.wleg && S.t < (a.rageCd ?? 0)) ownerAggroStart(a, p);
       }
+    } else if (od.lurker) {   // 釣上來的怪物：不逃跑；單機記下最後被打的時刻（30 秒沒人打就消失）
+      if (!a.proxy) a.lastHitAt = S.t;
+      a.startle = 0;
     } else {
       a.target = fleeTarget(a, od, p.x, p.y, 220);
     }
     if (a.hp <= 0) {
       a.dead = true; a.dieT = .6;
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
-      if (!od.owner) {   // 殺到動物回 1 HP（島主是伺服器權威事件，不算在此）
+      if (!od.owner && !od.lurker) {   // 殺到動物回 1 HP（島主是伺服器權威事件，不算在此；釣上來的怪物也不算）
         const me = S.players[0];
         me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + 1);
         S.floaters.push({ x: me.x, y: me.y - 50, v: '+1', life: .7 });
@@ -510,7 +515,7 @@ function hitMob(p, a, ranged) {
           S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + jd.healAoE, life: .75 });
         }
       }
-      toast(`${mobDef(a.id).name} 被打倒了！${S.mobsDB.respawn || 30} 秒後重生`, 2200);
+      toast(od.lurker ? `${od.name} 被打倒了！` : `${mobDef(a.id).name} 被打倒了！${S.mobsDB.respawn || 30} 秒後重生`, 2200);
       if (od.owner) titleOwnerDown(a.id);   // 單機打倒島主
     }
   }
@@ -822,9 +827,10 @@ function onNetHeal(healerId) {
     S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + ao, life: .75 });
   }
 }
-// 場上有沒有島主正在戰鬥（仇恨追殺、預警、龍衝、開眼、說台詞、歇腳都算）；連線時這些旗標由伺服器事件驅動
+// 場上有沒有島主正在戰鬥（仇恨追殺、預警、龍衝、開眼、說台詞、歇腳都算）；連線時這些旗標由伺服器事件驅動。
+// 釣上來的怪物只要還在就一定在追殺人，也算戰鬥中（玩家不自動回血，否則每秒回 1 比牠的爪擊快，站著不動也打不死）
 function ownerEngaged() {
-  return S.mobs.some(a => !a.dead && mobDef(a.id)?.owner &&
+  return S.mobs.some(a => !a.dead && a.lurker) || S.mobs.some(a => !a.dead && mobDef(a.id)?.owner &&
     (a.aggro || a.fly || a.cast || a.castFrom || a.rest || a.sayPhase || a.cycle || a.gaze || a.beam));
 }
 // 龍衝 CD 中被打：進入仇恨（單機版；連線版由伺服器廣播 aggro 事件）
@@ -1310,8 +1316,131 @@ function onNetDragon(m) {
   }
 }
 
+// ---- 釣上來的敵對怪物（lurker；fish.json 的 lurker／lurkerChance）----
+// 拉竿成功時極低機率釣到：從浮標跳上最近的陸地，追殺釣到牠的人（仇恨換人、爪擊與島主同一套規則），
+// 30 秒沒人打就原地消失，被打倒也消失（不重生、沒有獎勵）。連線時由伺服器權威（兩份伺服器的 lurker 系列），
+// 客戶端只演出與自判爪擊；單機在這裡本地模擬。強度以一個人打得倒為準：血 20、每 1.5 秒抓一下、每下扣 1。
+const LURK_CHASE = 150, LURK_CLAW_RANGE = 30, LURK_CLAW_CD = 1.5, LURK_CLAW_DMG = 1, LURK_DROPOUT = 30;   // 與兩份伺服器的 L_* 一致
+const LURK_STALE_MS = 8000;   // 連線時這麼久沒收到牠的任何事件（追殺中最多 1.5 秒就有一則）＝伺服器那邊已經沒了：自己移除
+function lurkerNew(mob, x, y, hp, max, proxy) {
+  const def = mobDef(mob);
+  const a = { id: mob, x, y, dir: 1, target: null, idle: 0, startle: 0, z: 0, bounce: 0,
+              hp: hp ?? def.hp, maxHp: max ?? def.hp, dead: false, dieT: 0, lurker: true, proxy, seenMs: Date.now() };
+  S.mobs.push(a);
+  return a;
+}
+function lurkerRemove(a, msg) {
+  const i = S.mobs.indexOf(a);
+  if (i >= 0) S.mobs.splice(i, 1);
+  S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
+  if (msg) toast(msg, 2200);
+}
+// 從浮標跳上岸（演出）：0.55 秒拋物線，起點冒水花
+function lurkerLeap(a, fx, fy) {
+  if (!Number.isFinite(fx) || !Number.isFinite(fy)) return;
+  a.jump = { fx, fy, tx: a.x, ty: a.y, t0: S.t, dur: .55 };
+  S.floaters.push({ x: fx, y: fy - 10, poof: true, life: .5 });
+}
+function lurkerSpawnLocal(mob, bx, by) {   // 單機：落在浮標旁最近的陸地，鎖定自己
+  if (!mobDef(mob)) return;
+  const land = nearestLand({ x: bx, y: by }) || { x: bx, y: by };
+  const a = lurkerNew(mob, land.x, land.y, null, null, false);
+  a.lastHitAt = S.t; a.clawAt = S.t + LURK_CLAW_CD; a.prey = S.players[0];
+  lurkerLeap(a, bx, by);
+  toast(`釣上來的不是魚——是${mobDef(mob).name}！快逃或打倒牠！`, 3200);
+}
+function stepLurker(a, dt, def) {
+  if (a.jump) {   // 跳上岸中
+    const j = a.jump, q = (S.t - j.t0) / j.dur;
+    if (q < 1) {
+      a.x = j.fx + (j.tx - j.fx) * q; a.y = j.fy + (j.ty - j.fy) * q; a.z = Math.sin(q * Math.PI) * 46;
+      if (j.tx !== j.fx) a.dir = Math.sign(j.tx - j.fx);
+      return;
+    }
+    a.jump = null; a.z = 0;
+    if (!a.wleg) { a.x = j.tx; a.y = j.ty; }
+  }
+  if (a.proxy) {   // 連線：位置跟伺服器的追殺腿插值；太久沒消息＝伺服器那邊已經沒了
+    if (Date.now() - (a.seenMs || 0) > LURK_STALE_MS) { lurkerRemove(a); return; }
+    if (a.wleg) stepOwnerWalk(a, dt); else a.z = 0;
+    return;
+  }
+  // ---- 單機本地模擬（與伺服器同規則）----
+  if (S.t - (a.lastHitAt ?? S.t) > LURK_DROPOUT) { lurkerRemove(a, `${def.name} 失去興趣，潛回水裡消失了。`); return; }
+  const t = a.prey;
+  if (!t || t.dead) { lurkerRemove(a, `${def.name} 潛回水裡消失了。`); return; }   // 單機只有自己：倒下就沒人可追
+  const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy);
+  if (d <= LURK_CLAW_RANGE) {
+    a.wleg = null; a.z = 0;
+    if (dx) a.dir = Math.sign(dx);
+    if (S.t >= (a.clawAt ?? 0)) {
+      a.clawAt = S.t + LURK_CLAW_CD;
+      S.floaters.push({ x: a.x + dx * .45, y: a.y - 20 + dy * .45, ang: Math.atan2(dy, dx), slash: true, life: .45 });
+      playerDamage(t, LURK_CLAW_DMG, def.name);
+      S.floaters.push({ x: t.x, y: t.y - 24, ring: true, life: .35 });
+    }
+    return;
+  }
+  if (a.wleg && Date.now() - a.wleg.t0ms < 600) { stepOwnerWalk(a, dt); return; }   // 每 0.6 秒重新瞄準
+  a.wleg = { fx: a.x, fy: a.y, tx: t.x, ty: t.y, tms: Math.max(80, Math.round(d / LURK_CHASE * 1000)), t0ms: Date.now() };
+  stepOwnerWalk(a, dt);
+}
+// 連線：伺服器的怪物事件（spawn/state 快照/none/wander/claw/aggro/hp/dead/gone）
+function onNetLurker(m) {
+  if (m.terrain && m.terrain !== S.terrain) return;   // 切地形空檔收到的舊島事件
+  let a = S.mobs.find(v => v.lurker && !v.dead);
+  const me = S.players[0], mine = m.id != null && m.id === S.net?.id;
+  if (m.ev === 'none') { if (a) lurkerRemove(a); return; }   // 進場快照：這個地形沒有怪物
+  if (m.ev === 'state' || m.ev === 'spawn') {
+    if (!mobDef(m.mob)) return;
+    if (!a) a = lurkerNew(m.mob, m.x, m.y, m.hp, m.max, true);
+    Object.assign(a, { x: m.x, y: m.y, hp: m.hp, maxHp: m.max ?? a.maxHp, proxy: true, seenMs: Date.now(), wleg: null });
+    if (m.wleg) a.wleg = { fx: m.wleg.fx, fy: m.wleg.fy, tx: m.wleg.tx, ty: m.wleg.ty, tms: m.wleg.tms, t0ms: Date.now() - (m.wleg.el || 0) };
+    if (m.ev === 'spawn') {
+      lurkerLeap(a, m.fx, m.fy);
+      const nm = mobDef(m.mob).name;
+      toast(mine ? `釣上來的不是魚——是${nm}！快逃或打倒牠！` : `${m.name || '有人'} 釣上了${nm}！`, 3200);
+    }
+    return;
+  }
+  if (!a) return;   // 沒看過牠（例如剛連線的空檔）：等下一次進場快照
+  a.seenMs = Date.now();
+  const nm = mobDef(a.id).name;
+  if (m.ev === 'hp') { a.hp = m.hp; return; }
+  if (m.ev === 'dead') {
+    a.dead = true; a.dieT = .6; a.wleg = null; a.jump = null; a.z = 0;
+    if (m.x !== undefined) { a.x = m.x; a.y = m.y; }
+    S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
+    toast(`${nm} 被打倒了！`, 2200);
+    return;
+  }
+  if (m.ev === 'gone') { lurkerRemove(a, `${nm} 失去興趣，潛回水裡消失了。`); return; }
+  if (m.ev === 'wander') {
+    a.wleg = { fx: m.fx, fy: m.fy, tx: m.tx, ty: m.ty, tms: m.tms, t0ms: Date.now() };
+    if (!a.jump) { a.x = m.fx; a.y = m.fy; }
+    if (m.tx !== m.fx) a.dir = Math.sign(m.tx - m.fx);
+    return;
+  }
+  if (m.ev === 'aggro') {
+    const r = S.remotes.get(m.id);
+    toast(mine ? `${nm} 改追你了！` : r ? `${nm} 改追 ${r.name}！` : `${nm} 換了追殺目標！`, 2000);
+    return;
+  }
+  if (m.ev === 'claw') {   // 爪擊：抓的是我（或我也貼在旁邊）就扣血（受害者自判，與島主爪擊同一套）
+    if (!a.jump) { a.x = m.x; a.y = m.y; }
+    a.wleg = null; a.z = 0;
+    a.dir = m.tx < m.x ? -1 : 1;
+    S.floaters.push({ x: m.x + (m.tx - m.x) * .45, y: m.y - 20 + (m.ty - m.y) * .45, ang: Math.atan2(m.ty - m.y, m.tx - m.x), slash: true, life: .45 });
+    if (!me.dead && (mine || Math.hypot(me.x - m.x, me.y - m.y) <= LURK_CLAW_RANGE)) {
+      playerDamage(me, LURK_CLAW_DMG, nm);
+      S.floaters.push({ x: me.x, y: me.y - 24, ring: true, life: .35 });
+    }
+  }
+}
+
 function stepMob(a, dt) {
   const def = mobDef(a.id);
+  if (a.lurker) { stepLurker(a, dt, def); return; }   // 釣上來的敵對怪物
   // 島主：連線時整個狀態機用牆鐘（與伺服器同軸，webview 節流也不影響）；單機沿用 dt 積分
   if (def.owner) {
     if (a.proxy) { stepOwnerProxy(a, dt, def); return; }
@@ -2042,7 +2171,7 @@ function fishAction(wx, wy) {
   else if (f.ph === 'bite') {
     f.ph = 'reel'; f.t = S.t; f.result = null;
     if (netOn()) S.net.fishCatch();            // 伺服器抽魚並記進圖鑑，結果由 fish_result 回來
-    else f.result = rollFish(S.terrain);
+    else f.result = rollFish(S.terrain, f);
   }
 }
 function stopFishing(p, msg) {
@@ -2063,9 +2192,12 @@ function stepFishing(p) {
 }
 // 單機抽魚（與 Worker 的 rollFish、dev_server 的 roll_fish 同演算法）：先脫鉤判定，再依權重抽稀有度，
 // 從該地形同稀有度的魚裡平均抽一種；尺寸越大越難（範圍內取 r^1.6）
-function rollFish(terrain) {
+function rollFish(terrain, bob) {
   const db = S.fishDB, list = db?.terrains[terrain] || [];
   if (!list.length || Math.random() < db.escape) return { terrain, escaped: true };
+  // 極低機率釣到敵對怪物（場上已經有一隻就照常釣魚）；與兩份伺服器的 fishCatch 同規則
+  if (db.lurker && mobDef(db.lurker) && !S.mobs.some(v => v.lurker && !v.dead) && Math.random() < (db.lurkerChance || 0))
+    return { terrain, lurker: db.lurker, bx: bob?.x, by: bob?.y };
   const rars = Object.entries(db.rarity).filter(([k]) => list.some(f => f.rarity === k));
   let r = Math.random() * rars.reduce((s, [, v]) => s + v.weight, 0), rar = rars[rars.length - 1][0];
   for (const [k, v] of rars) { if ((r -= v.weight) < 0) { rar = k; break; } }
@@ -2090,6 +2222,10 @@ function recordCatch(m) {
 }
 function showCatch(p, m) {
   if (m.escaped) { toast('魚脫鉤逃走了！', 2200); return; }
+  if (m.lurker) {   // 釣到的是怪物：連線時伺服器已廣播 spawn（牠已經跳上岸了），單機在這裡生成
+    if (!netOn()) lurkerSpawnLocal(m.lurker, m.bx ?? p.x, m.by ?? p.y);
+    return;
+  }
   const def = fishDef(m.terrain, m.id), rar = S.fishDB.rarity[m.rarity];
   if (!def) return;
   const { isNew, isRecord } = recordCatch(m);
@@ -2479,7 +2615,7 @@ function draw() {
         ctx.font = (bs > 1 ? 'bold 12px ' : '9px ') + '"Microsoft JhengHei"'; ctx.textAlign = 'center';
         ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.75)';
         ctx.strokeText(def.name, a.x, top);
-        ctx.fillStyle = a.startle ? '#e8b2a2' : (def.owner ? '#ffd86b' : '#cfd8c8');
+        ctx.fillStyle = a.startle ? '#e8b2a2' : (def.owner ? '#ffd86b' : def.lurker ? '#ff8f7a' : '#cfd8c8');   // 釣上來的怪物用紅色名牌
         ctx.fillText(def.name, a.x, top);
         // 島主的台詞泡泡（被打反擊前隨機一句；與 NPC 泡泡同款，畫在名牌上方）
         if (a.say && S.t < a.say.until) drawBubble(a.x, top - 8, a.say.text, Math.min(1, (a.say.until - S.t) / .4));
@@ -3376,7 +3512,7 @@ async function boot() {
           a.dieT -= dt;
           if (a.dieT <= 0) {
             S.mobs.splice(i, 1);
-            if (!a.proxy) S.respawn.push({ id: a.id, at: S.t + (S.mobsDB.respawn || 30) });   // 島主（proxy）重生由伺服器的 spawn 事件驅動
+            if (!a.proxy && !a.lurker) S.respawn.push({ id: a.id, at: S.t + (S.mobsDB.respawn || 30) });   // 島主（proxy）重生由伺服器的 spawn 事件驅動；釣上來的怪物不重生
           }
           continue;
         }
@@ -3417,6 +3553,7 @@ async function boot() {
     onDecos: onNetDecos,
     onDeco: onNetDeco,
     onDragon: onNetDragon,   // 島主事件（aim/hp/dead/spawn/state 快照）
+    onLurker: onNetLurker,   // 釣上來的敵對怪物（spawn/wander/claw/aggro/hp/dead/gone/state 快照）
     onFishResult,            // 釣魚結果（伺服器抽的魚；登入的人已記進伺服器的圖鑑）
     onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); checkTitles(true); },   // 登入後伺服器送來的圖鑑（稱號跟著重算，不跳提示）
     onOpen: net => {

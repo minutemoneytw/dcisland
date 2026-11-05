@@ -1,6 +1,9 @@
 {
  "_comment": "釣魚與魚類圖鑑。由 tools/gen_assets.py 的 FISH_TABLE 產生（改這裡要改產生器再重跑）。稀有度先依 weight 抽，再從該地形同稀有度的魚裡平均抽一種；尺寸在 size 範圍內、越大越難（兩份伺服器與單機模擬一致）。",
  "escape": 0.002,
+ "lurker": "fishman",
+ "lurkerChance": 0.002,
+ "_lurkerComment": "lurker＝釣上來的敵對怪物（mobs.json 的 id）；lurkerChance＝每次拉竿成功（沒脫鉤）時釣到牠的機率（約 500 竿一次）。同一地形已經有一隻還沒消失時照常釣魚。",
  "_bigComment": "big＝大尺寸門檻（cm，釣到 ≥ big 就算大尺寸；稱號用）。取尺寸範圍的 75% 處四捨五入，每次釣到該魚時約一到兩成機率是大尺寸（尺寸取 r^1.6）。",
  "rarity": {
   "common": {

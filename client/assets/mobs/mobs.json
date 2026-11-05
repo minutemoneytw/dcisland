@@ -32,6 +32,18 @@
    "line": "「大肚蛙」的眼神飄向遠方。"
   },
   {
+   "id": "fishman",
+   "name": "深海魚人",
+   "sprite": "fishman.png",
+   "lurker": true,
+   "swim": true,
+   "big": 2,
+   "speed": 16,
+   "flee": 110,
+   "hp": 20,
+   "line": "「深海魚人」瞪著死魚眼，嘴角一直滴著海水。"
+  },
+  {
    "id": "gold_dragon",
    "name": "黃金肥龍",
    "sprite": "golden_dragon.png",

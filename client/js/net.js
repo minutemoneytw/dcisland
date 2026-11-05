@@ -116,10 +116,12 @@ export function connectNet(S, opts = {}) {
         if (opts.onFloor) opts.onFloor(msg.floor || []);
         if (opts.onDecos) opts.onDecos(msg.terrain, msg.decos || []);   // 在擺設之後（重生判斷要看家具）
         if (msg.dragon && opts.onDragon) opts.onDragon({ ...msg.dragon, ev: 'state', terrain: msg.terrain });   // 進有島主的地形時的快照（帶地形，別套到別座島的島主上）
+        if (opts.onLurker) opts.onLurker({ ...(msg.lurker || {}), ev: msg.lurker ? 'state' : 'none', terrain: msg.terrain });   // 釣上來的怪物快照（沒有＝清掉殘留的）
         break;
       }
       case 'deco': if (opts.onDeco) opts.onDeco(msg); break;
       case 'dragon': if (opts.onDragon) opts.onDragon(msg); break;   // 島主事件（aim/hp/dead/spawn）由 main.js 演出
+      case 'lurker': if (opts.onLurker) opts.onLurker(msg); break;   // 釣上來的敵對怪物事件（spawn/wander/claw/aggro/hp/dead/gone）
       case 'join': {
         const r = upsert(msg.id, null);
         if (msg.name) r.name = msg.name;
@@ -206,6 +208,8 @@ export function connectNet(S, opts = {}) {
   net.fishCatch = () => net.connected && send({ t: 'fish' });
   // 分頁凍結恢復後要島主即時快照（伺服器用 dragon 事件的 state 回這條連線）
   net.requestDragonSnap = () => net.connected && send({ t: 'dragonSnap' });
+  // 打釣上來的怪物（伺服器權威扣血）：lx/ly＝我們畫面上怪物的位置（伺服器容許漏接一腿的落後）
+  net.lurkerHit = (x, y, dmg, lx, ly, staff) => net.connected && send({ t: 'lurkerHit', x, y, dmg, lx, ly, ...(staff ? { staff: 1 } : {}) });
 
   return net;
 }
