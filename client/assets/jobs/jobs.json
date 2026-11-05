@@ -12,6 +12,8 @@
     "gear": { "hat": "sage_hat", "top": "sage_top", "bottom": "sage_bottom" }, "skills": ["care", "save"] },
   { "id": "ninja", "name": "忍者", "role": "melee", "weapon": "daggers",
     "gear": { "hat": "ninja_hat", "top": "ninja_top", "bottom": "ninja_bottom" }, "skills": ["ninjutsu", "blink"] },
+  { "id": "dragoon", "name": "龍騎士", "role": "melee", "weapon": "lance",
+    "gear": { "hat": "dragoon_hat", "top": "dragoon_top", "bottom": "dragoon_bottom" }, "skills": ["highjump", "backjump"] },
   { "id": "bard", "name": "吟遊詩人", "role": "ranged", "weapon": "harpbow",
     "gear": { "hat": "bard_hat", "top": "bard_top", "bottom": "bard_bottom" }, "skills": ["song", "poison"] },
   { "id": "blackmage", "name": "黑魔法師", "role": "ranged", "weapon": "scepter",

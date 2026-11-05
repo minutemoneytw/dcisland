@@ -69,6 +69,7 @@ const D_DEBUFF_CD_MS = 30000;     // 破綻／降傷冷卻（每條連線、每�
 // range＝玩家到島主（或我們看到的島主位置）的最大距離。與 client 的 JOB_SKILLS 數值一致
 const SKILL_HITS = {
   ninjutsu: { job: "ninja", dmg: 6, cdMs: 19000, range: 170 },       // 忍術：身邊 80px＋判定圈 58＋緩衝
+  jump: { job: "dragoon", dmg: 5, cdMs: 14000, range: 170 },        // 龍騎士高跳：落在敵人身上
   poison: { job: "bard", dmg: 1, cdMs: 2700, range: 2000 },          // 吟遊詩人上毒：每 3 秒跳一次（每跳都送一次；持續傷害不看距離）
 };
 const D_PROVOKE_RANGE = 240;     // 挑釁距離（比攻擊距離寬：把島主拉過來的是「聲東擊西」，不需要貼臉）
@@ -255,7 +256,7 @@ const idOr = (v, fb) => (typeof v === "string" && ID_RE.test(v) ? v : fb);
 const HEX_RE = /^#[0-9a-f]{6}$/i;
 const hexOr = v => (typeof v === "string" && HEX_RE.test(v) ? v.toLowerCase() : null);
 // 職業 → 職能（與 client/assets/jobs/jobs.json 一致；新增職業要在這裡與 dev_server.py 的 JOB_ROLE 一起加，否則會被當成預設職業）
-const JOB_ROLE = { knight: "tank", warrior: "tank", whitemage: "healer", sage: "healer", ninja: "melee", bard: "ranged", blackmage: "ranged" };
+const JOB_ROLE = { knight: "tank", warrior: "tank", whitemage: "healer", sage: "healer", ninja: "melee", dragoon: "melee", bard: "ranged", blackmage: "ranged" };
 const JOB_LEGACY = { tank: "knight", healer: "whitemage", dps: "ninja" };   // 舊客戶端的職業 id
 const JOB_DEFAULT = "ninja";
 const jobOr = v => (JOB_ROLE[v] ? v : JOB_LEGACY[v] || JOB_DEFAULT);

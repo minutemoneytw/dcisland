@@ -243,6 +243,15 @@
    ]
   },
   {
+   "id": "dragoon_top",
+   "name": "龍騎士鎧甲",
+   "sheet": "char_dragoon_top.png",
+   "dye": [
+    "#3a4a8a",
+    "#2a3668"
+   ]
+  },
+  {
    "id": "bard_top",
    "name": "詩人外衣",
    "sheet": "char_bard_top.png",
@@ -318,6 +327,15 @@
    ]
   },
   {
+   "id": "dragoon_bottom",
+   "name": "龍騎士腿甲",
+   "sheet": "char_dragoon_bottom.png",
+   "dye": [
+    "#2e3a6a",
+    "#222b50"
+   ]
+  },
+  {
    "id": "bard_bottom",
    "name": "詩人長褲",
    "sheet": "char_bard_bottom.png",
@@ -386,6 +404,15 @@
    "dye": [
     "#4a3a6a",
     "#352a4e"
+   ]
+  },
+  {
+   "id": "dragoon_hat",
+   "name": "龍騎士頭盔",
+   "sheet": "char_hat_dragoon_hat.png",
+   "dye": [
+    "#3a4a8a",
+    "#2a3668"
    ]
   },
   {
@@ -517,6 +544,13 @@
     "dmg": 1,
     "shot": "arrow"
    }
+  },
+  {
+   "id": "lance",
+   "name": "長槍",
+   "type": "lance",
+   "sprite": "weapon_lance.png",
+   "carry": "back"
   },
   {
    "id": "daggers",

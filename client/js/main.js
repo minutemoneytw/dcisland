@@ -375,7 +375,8 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
       if (npc) { S._hits = 1; talkTo(npc); S.holdSkipF = true; return; }
     }
   }
-  if (S.fx.seal) { if (!quiet) say('結印中，不能攻擊', 900); return; }   // 忍術結印中（可移動、不能攻擊）
+  if (S.fx.seal) { if (!quiet) say('結印中，不能攻擊', 900); return; }
+  if (p.leap) return;   // 跳躍中不能攻擊   // 忍術結印中（可移動、不能攻擊）
   if (isRod()) { S._hits = 1; if (!quiet) fishAction(wx, wy); return; }   // 拿著釣竿：拋竿（不能攻擊）
   if (S.me.weapon === 'hands') { say('先用左上角的武器列裝備武器！'); return; }
   if (!S.weaponImgs[S.me.weapon]) return;
@@ -1054,6 +1055,39 @@ Object.assign(JOB_SKILLS, {
               run() { S.fx.wings = S.t + this.dur; fxBurst('wings'); return true; } },
   ninjutsu: { name: '忍術', cd: 20, cast: 1.5, r: 80, dmg: 6, desc: '結印 1.5 秒（可移動、不能攻擊），結完對身邊 80px 內的敵人各造成 6 傷害',
               run() { S.fx.seal = { t0: S.t, until: S.t + this.cast }; return true; } },
+  highjump: { name: '高跳', cd: 15, dmg: 5, range: 200, desc: '跳到滑鼠方向 200px 內的敵人身上造成 5 傷害，再跳回原位',
+              usable() { return pickCastTarget(S.players[0], this, castAim()) ? null : '範圍內沒有敵人'; },
+              run(me) {
+                const a = pickCastTarget(me, this, castAim());
+                if (!a) { say('範圍內沒有敵人'); return false; }
+                const ux = me.x - a.x, uy = me.y - a.y, l = Math.hypot(ux, uy) || 1;
+                const tx = a.x + ux / l * 14, ty = a.y + uy / l * 6;   // 落在敵人身上（稍微偏向自己這側）
+                const home = { x: me.x, y: me.y };
+                startLeap(me, tx, ty, .42, 120, () => {
+                  S.floaters.push({ fxk: 'jumpboom', x: a.x, y: a.y, life: .5 });
+                  if (S.mobs.includes(a) && !a.dead) hitMob(me, a, false, { dmg: this.dmg, sk: 'jump' });
+                  S.net?.skillEvent?.('highjump');
+                  startLeap(me, home.x, home.y, .38, 60);   // 跳回原位
+                });
+                if (Math.abs(a.x - me.x) > 6) me.dir = Math.sign(a.x - me.x);
+                return true;
+              } },
+  backjump: { name: '後跳', cd: 8, dist: 120, desc: '往滑鼠的反方向跳 120px（遇水或家具停在最後能站的點）',
+              run(me) {
+                const aim = castAim();
+                let ux = aim ? me.x - aim[0] : -me.dir, uy = aim ? me.y - aim[1] : 0;
+                const l = Math.hypot(ux, uy); if (l < 1) { ux = -me.dir; uy = 0; } else { ux /= l; uy /= l; }
+                let bx = me.x, by = me.y;
+                for (let s = 4; s <= this.dist; s += 4) {
+                  const nx = me.x + ux * s, ny = me.y + uy * s;
+                  if (blocked(nx, ny)) break;
+                  bx = nx; by = ny;
+                }
+                if (Math.hypot(bx - me.x, by - me.y) < 8) { say('後面過不去'); return false; }
+                startLeap(me, bx, by, .32, 40);   // 面向不變（往後跳）
+                S.floaters.push({ fxk: 'smoke', x: me.x, y: me.y, life: .4 });
+                return true;
+              } },
   blink:    { name: '縮地', cd: 8, dist: 120, desc: '朝滑鼠方向瞬移 120px（遇水或家具停在最後能站的點）',
               run(me) { return blinkMe(me, this.dist); } },
   circle:   { name: '魔法陣', cd: 40, dur: 15, r: 72, desc: '腳下放一個慢慢自轉的魔法陣（15 秒），站在陣內詠唱時間 −50%',
@@ -1092,7 +1126,24 @@ function tryJobSkill(slot) {   // slot：0＝1 鍵、1＝2 鍵
   const left = skillCdLeft(id);
   if (left > 0) { toast(`${sk.name}還要 ${Math.ceil(left)} 秒`, 1200); return; }
   if (S.fx.seal) { say('結印中'); return; }
+  if (me.leap) return;   // 跳躍中
   if (sk.run(me)) S.fx.cd[id] = S.t + sk.cd;
+}
+// 龍騎士的跳躍：dur 秒內從目前位置拋物線移到 (tx, ty)，最高 h px（z 走 state 同步，別人也看得到跳起來）；落地呼叫 onLand。
+// 跳躍中不能自己走、不能攻擊或放技能；倒地或被石化就中斷（停在原地）
+function startLeap(p, tx, ty, dur, h, onLand) {
+  p.leap = { fx: p.x, fy: p.y, tx, ty, t0: S.t, dur, h, onLand };
+  p.target = null; p.pose = null; cancelCast(p);
+}
+function stepLeap(p) {   // stepPlayer 每幀呼叫；回 true＝這幀在跳（不處理其他移動）
+  const L = p.leap;
+  if (!L) return false;
+  if (p.dead || S.t < (p.petUntil ?? 0)) { p.leap = null; p.z = 0; return false; }
+  const q = Math.min(1, (S.t - L.t0) / L.dur);
+  p.x = L.fx + (L.tx - L.fx) * q; p.y = L.fy + (L.ty - L.fy) * q;
+  p.z = Math.sin(Math.PI * q) * L.h; p.vz = 0; p.moving = false;
+  if (q >= 1) { p.leap = null; p.z = 0; L.onLand?.(); }
+  return true;
 }
 // 黑魔法師：詠唱時間（站在自己的魔法陣內 −50%）
 function castMul(p) {
@@ -1158,7 +1209,8 @@ function onSkillEvent(kind, r) {
     if (me.dead || Math.hypot(me.x - r.x, me.y - r.y) > SHIELD_RADIUS) return;
     S.fx[kind] = S.t + JOB_SKILLS[kind].dur;
     toast(`${r.name} 的${JOB_SKILLS[kind].name}罩住了你`, 1800);
-  } else if (kind === 'ninjutsu') S.floaters.push({ fxk: 'boom', x: r.x, y: r.y, r: JOB_SKILLS.ninjutsu.r, life: .6 });
+  } else if (kind === 'highjump') S.floaters.push({ fxk: 'jumpboom', x: r.x, y: r.y, life: .5 });
+  else if (kind === 'ninjutsu') S.floaters.push({ fxk: 'boom', x: r.x, y: r.y, r: JOB_SKILLS.ninjutsu.r, life: .6 });
   else if (kind === 'blink') { S.floaters.push({ fxk: 'smoke', x: r.x, y: r.y, life: .45 }); r.snapNext = true; }
   else if (kind.startsWith('care:') || kind.startsWith('careheal:')) {   // 賢者的關心：目標是我才處理
     const heal = kind.startsWith('careheal:'), [tid, a] = kind.slice(heal ? 9 : 5).split(':');
@@ -1306,6 +1358,12 @@ function drawSkillIcon(c, id) {
       h(20, 22, 13, '#ff82aa'); h(20, 21, 7, '#ffd0e0'); } break;
     case 'wings': bg('#2a3440'); g.fillStyle = '#f4f4ff'; for (const s of [-1, 1]) { g.beginPath(); g.moveTo(20, 22); g.quadraticCurveTo(20 + s * 18, 2, 20 + s * 18, 14); g.quadraticCurveTo(20 + s * 14, 20, 20 + s * 16, 28); g.quadraticCurveTo(20 + s * 8, 26, 20, 22); g.fill(); } break;
     case 'ninjutsu': bg('#241c36'); g.strokeStyle = '#e8d0ff'; g.lineWidth = 2.5; g.strokeRect(9, 9, 22, 22); g.beginPath(); g.moveTo(9, 20); g.lineTo(31, 20); g.moveTo(20, 9); g.lineTo(20, 31); g.stroke(); g.fillStyle = '#c83a3a'; g.beginPath(); g.arc(20, 20, 5, 0, P * 2); g.fill(); break;
+    case 'highjump': bg('#1c2440'); g.strokeStyle = 'rgba(170,200,255,.8)'; g.lineWidth = 2; g.setLineDash([3, 3]);
+      g.beginPath(); g.moveTo(6, 34); g.quadraticCurveTo(20, -6, 34, 30); g.stroke(); g.setLineDash([]);
+      g.fillStyle = '#c9d2d9'; g.beginPath(); g.moveTo(34, 36); g.lineTo(29, 26); g.lineTo(37, 26); g.closePath(); g.fill(); g.fillStyle = '#3a4a8a'; g.fillRect(31, 14, 3, 13); break;
+    case 'backjump': bg('#1c2440'); g.strokeStyle = 'rgba(170,200,255,.8)'; g.lineWidth = 3;
+      g.beginPath(); g.moveTo(30, 32); g.quadraticCurveTo(20, 6, 8, 26); g.stroke();
+      g.fillStyle = '#fff'; g.beginPath(); g.moveTo(3, 30); g.lineTo(6, 20); g.lineTo(13, 27); g.closePath(); g.fill(); break;
     case 'blink': bg('#1c2436'); for (let i = 0; i < 3; i++) { g.fillStyle = `rgba(180,200,255,${.25 + i * .3})`; g.beginPath(); g.ellipse(9 + i * 9, 22, 4, 9, 0, 0, P * 2); g.fill(); } g.fillStyle = '#fff'; g.beginPath(); g.moveTo(28, 14); g.lineTo(36, 22); g.lineTo(28, 30); g.closePath(); g.fill(); break;
     case 'circle': bg('#1a1430'); g.strokeStyle = '#b88aff'; g.lineWidth = 2; g.beginPath(); g.arc(20, 20, 15, 0, P * 2); g.stroke(); g.beginPath(); g.arc(20, 20, 9, 0, P * 2); g.stroke();
       g.beginPath(); for (let i = 0; i <= 5; i++) { const an = i * P * 4 / 5 - P / 2; g.lineTo(20 + Math.cos(an) * 15, 20 + Math.sin(an) * 15); } g.stroke(); break;
@@ -2134,6 +2192,7 @@ function stepPlayer(p, dt) {
     if (!seatItem(p) || wantsMove) standUp(p);
     else { p.moving = false; p.frame = 0; p.z = 0; p.vz = 0; return; }
   }
+  if (stepLeap(p)) return;   // 龍騎士的高跳／後跳中
   if (p.knock) {   // 被鋼鐵擊飛：0.25 秒內往外推（撞到水邊／家具就停），期間不能自己走
     const k = p.knock, st = Math.min(k.left, 640 * dt), nx = p.x + k.ux * st, ny = p.y + k.uy * st;
     if (!blocked(nx, ny)) { p.x = nx; p.y = ny; k.left -= st; } else k.left = 0;
@@ -2362,9 +2421,21 @@ function drawOwnerDebuff(a, W, H) {   // 島主身上：破綻＝紅色裂紋閃
 }
 // 瞬間特效（S.floaters 裡帶 fxk 的；ctx 在世界座標、外層已 save/restore）
 function drawFxFloater(f) {
-  const L = { arrow: .2, song: .7, poisonpop: .6, heart: .6, sheal: .5, smoke: .5, after: .6, boom: .6, kshield: .6, wshield: .6, pop: .6, shout: .5, crack: .8, fog: .8, drain: .4 }[f.fxk] || .5;
+  const L = { jumpboom: .5, arrow: .2, song: .7, poisonpop: .6, heart: .6, sheal: .5, smoke: .5, after: .6, boom: .6, kshield: .6, wshield: .6, pop: .6, shout: .5, crack: .8, fog: .8, drain: .4 }[f.fxk] || .5;
   const q = Math.min(1, Math.max(0, 1 - f.life / L)), al = 1 - q;
   switch (f.fxk) {
+    case 'jumpboom': {   // 高跳落地：藍白色衝擊圈＋往外噴的碎片
+      ctx.save(); ctx.translate(f.x, f.y); ctx.scale(1, .45);
+      ctx.strokeStyle = `rgba(170,200,255,${al})`; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(0, 0, 10 + q * 46, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      for (let i = 0; i < 8; i++) {
+        const an = i * Math.PI / 4 + .3, r = 8 + q * 34;
+        ctx.fillStyle = `rgba(230,240,255,${al})`;
+        ctx.fillRect(f.x + Math.cos(an) * r - 2, f.y - 10 + Math.sin(an) * r * .5 - q * 12, 4, 4);
+      }
+      break;
+    }
     case 'arrow': {   // 豎琴弓的箭／毒箭（綠色箭羽）：從弓飛向目標
       const x = f.x1 + (f.x2 - f.x1) * q, y = f.y1 + (f.y2 - f.y1) * q, ang = Math.atan2(f.y2 - f.y1, f.x2 - f.x1);
       ctx.translate(x, y); ctx.rotate(ang);

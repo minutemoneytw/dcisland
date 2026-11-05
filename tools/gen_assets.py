@@ -443,6 +443,7 @@ GEAR_TOPS = {   # id: (名稱, 主色, 陰影, 點綴函式, 長袍)
     "whitemage_top": ("白魔長袍", "#f0ece0", "#c8c0ac", "trim_red", True),
     "sage_top":      ("賢者長袍", "#3a9a8a", "#2a7466", "trim_gold", True),
     "ninja_top":     ("忍者上衣", "#4a3a6a", "#352a4e", "sash", False),
+    "dragoon_top":   ("龍騎士鎧甲", "#3a4a8a", "#2a3668", "plate", False),
     "bard_top":      ("詩人外衣", "#4a8a3a", "#366a2a", "trim_gold", False),
     "blackmage_top": ("黑魔長袍", "#2e3a7a", "#1f2858", "trim_gold", True),
 }
@@ -452,6 +453,7 @@ GEAR_BOTTOMS = {
     "whitemage_bottom": ("白魔長褲", "#d8d0bc", "#b0a890"),
     "sage_bottom":      ("賢者長褲", "#2e6a62", "#1f4e48"),
     "ninja_bottom":     ("忍者褲", "#3a2e52", "#2a2140"),
+    "dragoon_bottom":   ("龍騎士腿甲", "#2e3a6a", "#222b50"),
     "bard_bottom":      ("詩人長褲", "#5a4a3a", "#45382a"),
     "blackmage_bottom": ("黑魔長褲", "#2a3060", "#1d2246"),
 }
@@ -461,6 +463,7 @@ GEAR_HATS = {   # id: (名稱, 主色, 陰影, 畫法)
     "whitemage_hat": ("白魔兜帽", "#f0ece0", "#c8c0ac", "hood"),
     "sage_hat":      ("賢者頭冠", "#e0c040", "#b08a28", "circlet"),
     "ninja_hat":     ("忍者頭巾", "#4a3a6a", "#352a4e", "band"),
+    "dragoon_hat":   ("龍騎士頭盔", "#3a4a8a", "#2a3668", "dragoon"),
     "bard_hat":      ("羽毛帽", "#4a8a3a", "#366a2a", "feather"),
     "blackmage_hat": ("黑魔尖帽", "#2e3a7a", "#1f2858", "pointy"),
 }
@@ -535,6 +538,13 @@ def hat_canvas(kind, main, shd, back):
         cv.set(7, 0, m); cv.set(8, 0, m)
         if back:
             cv.rect(3, 1, 12, 10, m); cv.vline(8, 2, 9, s)
+    elif kind == "dragoon":  # 龍騎士頭盔：包住頭的頭盔＋兩側往後的尖角、面罩一條縫
+        cv.rect(4, 1, 11, 4, m); cv.rect(4, 5, 4, 8, s); cv.rect(11, 5, 11, 8, s)
+        cv.hline(5, 10, 4, s); cv.hline(6, 9, 0, m)
+        cv.set(3, 2, s); cv.set(2, 1, s); cv.set(12, 2, s); cv.set(13, 1, s)   # 兩側尖角
+        cv.set(7, 1, hx("#c9d2d9")); cv.set(8, 1, hx("#c9d2d9"))
+        if back:
+            cv.rect(4, 1, 11, 9, m); cv.vline(8, 2, 8, s)
     elif kind == "feather":  # 羽毛帽：小帽簷的軟帽＋往後斜插一根紅羽毛
         cv.hline(3, 12, 4, s); cv.rect(5, 1, 10, 3, m); cv.hline(6, 9, 0, m)
         cv.set(11, 2, hx("#c83a3a")); cv.set(12, 1, hx("#c83a3a")); cv.set(13, 0, hx("#e86a5a")); cv.set(12, 2, hx("#e86a5a"))
@@ -955,6 +965,16 @@ def weapon_harpbow():  # 豎琴弓（吟遊詩人的職業武器）：弓身彎�
     for y in (6, 9, 12):
         cv.hline(4, 6, y, gold)               # 豎琴弦
     cv.rect(2, 18, 3, 19, wood)               # 握把尾
+    cv.outline((30, 24, 22, 255))
+    return cv
+
+def weapon_lance():  # 長槍（龍騎士的職業武器）：長木桿＋銀色槍頭與紅色槍纓
+    cv = Canvas(6, 28)
+    wood = hx("#6a4a32"); st = hx("#c9d2d9"); hi = hx("#f0f4f8"); red = hx("#c83a3a")
+    cv.rect(2, 7, 3, 27, wood)
+    cv.rect(2, 1, 3, 5, st); cv.vline(2, 1, 5, hi); cv.set(2, 0, hi)   # 槍頭
+    cv.rect(1, 6, 4, 6, st)                    # 槍頭底座
+    cv.set(1, 7, red); cv.set(4, 7, red); cv.set(1, 8, red); cv.set(4, 8, red)   # 槍纓
     cv.outline((30, 24, 22, 255))
     return cv
 
@@ -1820,6 +1840,7 @@ def main():
     save(weapon_goldsword(), "weapon_goldsword.png", "avatar")
     save(weapon_tome(), "weapon_tome.png", "avatar")
     save(weapon_harpbow(), "weapon_harpbow.png", "avatar")
+    save(weapon_lance(), "weapon_lance.png", "avatar")
     save(weapon_staff(), "weapon_staff.png", "avatar")
     save(weapon_rod(), "weapon_rod.png", "avatar")
     print("== 釣魚：魚類圖鑑 ==")
@@ -1884,6 +1905,7 @@ def main():
             # 豎琴弓：遠程但不用詠唱（cast 0＝按攻擊直接射箭；shot: "arrow"＝畫箭矢而不是光球）。dmg 1：加上輸出的 +1＝2，
             # 和忍者一樣；要詠唱的武器（咒杖等）才是 2＋1＝3（使用者定：不用詠唱的普攻都是 2）
             dict(id="harpbow", name="豎琴弓", type="bow", sprite="weapon_harpbow.png", carry="back", ranged=dict(range=320, cast=0, dmg=1, shot="arrow")),
+            dict(id="lance", name="長槍", type="lance", sprite="weapon_lance.png", carry="back"),
             dict(id="daggers", name="雙劍", type="daggers", sprite="weapon_daggers.png", carry="waist"),
             dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=320, cast=1.6, dmg=2)),
             dict(id="rod", name="釣竿", type="rod", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
