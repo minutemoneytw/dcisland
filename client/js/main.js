@@ -3431,16 +3431,27 @@ function draw() {
         // 島主預警：龍衝＝金色虛線＝衝刺路徑；石化之瞳＝大眼睛（全地圖面向她的人石化）；波動砲＝光波帶狀範圍；命令＝頭上大字（行動！／靜止！）
         if (a.command) {   // 命令讀條：行人號誌風圖示畫在身上（與石化之瞳的大眼睛同位置）＋身上持續冒白蒸汽（蒸氣停＝命令結束）
           if (!a.nextSteam || S.t >= a.nextSteam) {
-            a.nextSteam = S.t + .06;
+            a.nextSteam = S.t + 1 / 18;   // 每秒 18 顆（使用者定，2026-11-05）
             S.floaters.push({ steam: true, x: a.x + (Math.random() * W * .56 - W * .28), y: a.y - H * (.1 + Math.random() * .4), r: 3 + Math.random() * 4, life: .9 });
           }
           const ic = CMD_ICONS[a.command.kind] || CMD_ICONS.act;
           if (ic.complete && ic.naturalWidth) {
-            const s = 64, pul = .7 + .3 * (Math.sin(S.t * 10) * .5 + .5);
+            const pul = .7 + .3 * (Math.sin(S.t * 10) * .5 + .5);
             ctx.save();
             ctx.imageSmoothingEnabled = false;
             ctx.globalAlpha = pul;
-            ctx.drawImage(ic, a.x - s / 2, a.y - H * .62 - s / 2, s, s);
+            ctx.drawImage(ic, a.x - 32, a.y - H * .62 - 32, 64, 64);
+            ctx.restore();
+          } else {   // 圖示還沒載入（或載入失敗）的保險：畫文字，保證一定有提示
+            const act = a.command.kind === 'act';
+            ctx.save();
+            ctx.font = 'bold 15px "Microsoft JhengHei"'; ctx.textAlign = 'center';
+            ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(8,10,14,.85)';
+            const txt = act ? '↑ 行動！' : '✕ 靜止！';
+            const wy = Math.max(top - 34, S.cam.y + 8);
+            ctx.strokeText(txt, a.x, wy);
+            ctx.fillStyle = act ? 'rgba(122,216,140,.9)' : 'rgba(240,110,90,.9)';
+            ctx.fillText(txt, a.x, wy);
             ctx.restore();
           }
         }
