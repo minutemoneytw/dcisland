@@ -225,6 +225,15 @@
    ]
   },
   {
+   "id": "sage_top",
+   "name": "賢者長袍",
+   "sheet": "char_sage_top.png",
+   "dye": [
+    "#3a9a8a",
+    "#2a7466"
+   ]
+  },
+  {
    "id": "ninja_top",
    "name": "忍者上衣",
    "sheet": "char_ninja_top.png",
@@ -282,6 +291,15 @@
    ]
   },
   {
+   "id": "sage_bottom",
+   "name": "賢者長褲",
+   "sheet": "char_sage_bottom.png",
+   "dye": [
+    "#2e6a62",
+    "#1f4e48"
+   ]
+  },
+  {
    "id": "ninja_bottom",
    "name": "忍者褲",
    "sheet": "char_ninja_bottom.png",
@@ -332,6 +350,15 @@
    "dye": [
     "#f0ece0",
     "#c8c0ac"
+   ]
+  },
+  {
+   "id": "sage_hat",
+   "name": "賢者頭冠",
+   "sheet": "char_hat_sage_hat.png",
+   "dye": [
+    "#e0c040",
+    "#b08a28"
    ]
   },
   {
@@ -433,6 +460,18 @@
    "name": "法杖",
    "type": "staff",
    "sprite": "weapon_staff.png",
+   "ranged": {
+    "range": 320,
+    "cast": 1.2,
+    "dmg": 2
+   }
+  },
+  {
+   "id": "tome",
+   "name": "魔導書",
+   "type": "tome",
+   "sprite": "weapon_tome.png",
+   "carry": "waist",
    "ranged": {
     "range": 320,
     "cast": 1.2,

@@ -127,16 +127,16 @@ def _num(v, lo, hi, fb):
 
 HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 # 職業 → 職能（與 client/assets/jobs/jobs.json、worker 的 JOB_ROLE 一致；新增職業要一起加）
-JOB_ROLE = {"knight": "tank", "warrior": "tank", "whitemage": "healer", "ninja": "melee", "blackmage": "ranged"}
+JOB_ROLE = {"knight": "tank", "warrior": "tank", "whitemage": "healer", "sage": "healer", "ninja": "melee", "blackmage": "ranged"}
 JOB_LEGACY = {"tank": "knight", "healer": "whitemage", "dps": "ninja"}   # 舊客戶端的職業 id
 JOB_DEFAULT = "ninja"
-RANGED_WEAPONS = ("staff", "scepter")   # 遠距詠唱的武器（法杖、咒杖）
+RANGED_WEAPONS = ("staff", "scepter", "tome")   # 遠距詠唱的武器（法杖、咒杖、魔導書）
 D_DEBUFF_MS = 10000      # 破綻／降傷的持續時間（與 worker、client 一致）
 D_DEBUFF_CD_MS = 30000   # 破綻／降傷冷卻（每條連線、每種各算）
 # 職業技能打島主／深海魚人（與 worker 的 SKILL_HITS、client 的 JOB_SKILLS 一致）
 SKILL_HITS = {
     "ninjutsu": {"job": "ninja", "dmg": 6, "cd_ms": 19000, "range": 170},
-    "shine": {"job": "whitemage", "dmg": 3, "cd_ms": 11000, "range": 440},
+    "poison": {"job": "sage", "dmg": 1, "cd_ms": 2700, "range": 2000},   # 賢者上毒：每 3 秒跳一次（持續傷害不看距離）
 }
 FX_MAX = 8
 

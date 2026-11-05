@@ -469,7 +469,7 @@ function stepCast(p) {   // 每幀（只有本機玩家）：檢查中斷條件�
 }
 
 // 命中一隻動物（近戰揮擊、法杖／咒杖詠唱完、職業技能共用）：ranged＝遠距詠唱（傷害固定取武器的 dmg、不暴擊）；
-// force＝職業技能 {dmg, sk, stun}：傷害固定、不吃職能的 +1，打島主／深海魚人時帶 sk 給伺服器驗證
+// force＝職業技能 {dmg, sk}：傷害固定、不吃職能的 +1，打島主／深海魚人時帶 sk 給伺服器驗證
 function hitMob(p, a, ranged, force) {
   {
     S._hits++;
@@ -489,9 +489,13 @@ function hitMob(p, a, ranged, force) {
       a.hp -= dmg;
       a.startle = 1; a.startleT = 3; a.target = null; a.idle = 0;
     }
-    if (force?.stun && !od.owner && !od.lurker) a.stunUntil = S.t + force.stun;   // 閃耀：野外動物暈眩（純客戶端，野外動物本來就各自模擬）
     // 補師：揮擊命中動物就吸回自己一點血（血量走既有 state 封包同步）；翅膀期間 +1
-    const heal = (jd?.healHit ? jd.healHit + (p === S.players[0] && fxOn('wings') ? 1 : 0) : 0) + (p === S.players[0] && fxOn('vamp') ? 1 : 0);   // 戰士吸血：命中回 1
+    const heal = force?.dot ? 0 : (jd?.healHit ? jd.healHit + (p === S.players[0] && fxOn('wings') ? 1 : 0) : 0) + (p === S.players[0] && fxOn('vamp') ? 1 : 0);   // 戰士吸血：命中回 1；上毒的持續傷害不算「命中」
+    const care = p === S.players[0] && S.fx.care && S.t < S.fx.care.until ? S.fx.care : null;   // 賢者關心：每造成一次傷害，被關心的人回 1
+    if (care) {
+      if (care.self) healMe(JOB_SKILLS.care.amt);
+      else S.net?.skillEvent?.('careheal:' + care.id);
+    }
     if (heal) {
       const cap = hpCap(p) ?? PLAYER_HP;
       if (p.hp < cap) {
@@ -976,14 +980,14 @@ function ownerAggroPick(a, ag) {
 // S.fx：自己身上的技能狀態（都是遊戲時間 S.t 的到期時刻；0＝沒有）。被打時的減傷／護盾在 playerDamage 套用（受害者自判）；
 // 給隊友的增益（兩種群盾）走泛型 event 廣播，收到的人自判「在不在放的人周圍 SHIELD_RADIUS 內」再套在自己身上（與群療同一原則）。
 // 持續型效果（翅膀、護盾、結印、三重、法陣）走 state 的 fx／circle 給同地形的人畫特效（myFx）。
-S.fx = { cd: {}, guard: 0, kshield: 0, wshield: 0, vamp: 0, wings: 0, seal: null, triple: null, circle: null };
+S.fx = { cd: {}, guard: 0, kshield: 0, wshield: 0, vamp: 0, wings: 0, seal: null, triple: null, circle: null, care: null, cared: 0 };
 const SHIELD_RADIUS = 300;   // 兩種群盾的範圍（px，約 9 格；使用者定）
 const ROLE_DEBUFF = { dur: 10, cd: 30, weakMul: .7 };   // 破綻／降傷：持續 10 秒、冷卻 30 秒、降傷 −30%（與兩份伺服器的 D_DEBUFF_* 一致）
 const fxOn = k => S.t < (S.fx[k] || 0);
 const skillCdLeft = id => Math.max(0, (S.fx.cd[id] || 0) - S.t);
 function myFx() {   // 給 state 的持續型效果清單（id 要符合伺服器的 ID_RE）
   const F = S.fx, out = [];
-  for (const k of ['guard', 'kshield', 'wshield', 'vamp', 'wings']) if (fxOn(k)) out.push(k);
+  for (const k of ['guard', 'kshield', 'wshield', 'vamp', 'wings', 'cared']) if (fxOn(k)) out.push(k);   // cared＝被賢者關心中
   if (F.seal) out.push('seal');
   if (F.triple && F.triple.n > 0 && S.t < F.triple.until) out.push('triple' + F.triple.n);
   return out;
@@ -1000,16 +1004,33 @@ Object.assign(JOB_SKILLS, {
               run() { S.fx.vamp = S.t + this.dur; fxBurst('vamp'); return true; } },
   wshield:  { name: '群盾', cd: 40, dur: 8, desc: `周圍 ${SHIELD_RADIUS}px 內所有人（含自己）8 秒內受到的傷害 −30%`, mul: .7,
               run() { S.fx.wshield = S.t + this.dur; S.net?.skillEvent?.('wshield'); fxBurst('wshield'); return true; } },
-  shine:    { name: '閃耀', cd: 12, dmg: 3, stun: 3, range: 320, desc: '朝滑鼠方向的敵人瞬發 3 傷害；野外動物暈眩 3 秒（島主、深海魚人不會暈）',
+  sheal:    { name: '單補', cd: 12, amt: 4, range: 320, desc: '瞬發恢復滑鼠方向上最近的一位玩家 4 血（射程 320px；附近沒有別人就補自己；翅膀期間 +1）',
+              run(me) {
+                const t = pickHealTarget(me, this.range), amt = this.amt + (fxOn('wings') ? 1 : 0);
+                S.floaters.push({ fxk: 'sheal', x1: me.x, y1: me.y - 40, x2: t.x, y2: t.y - 24, life: .5 });
+                if (t === me) healMe(amt);
+                else S.net?.skillEvent?.('sheal:' + t.id);   // 對方收到後自己補（血量由各人自己算，與群療同一原則）
+                return true;
+              } },
+  poison:   { name: '上毒', cd: 12, dur: 30, every: 3, dmg: 1, range: 320, desc: '對滑鼠方向的敵人上毒：30 秒內每 3 秒受到 1 傷害（共 10 下）',
               usable() { return pickCastTarget(S.players[0], this, castAim()) ? null : '射程內沒有目標'; },
               run(me) {
                 const a = pickCastTarget(me, this, castAim());
                 if (!a) { say('射程內沒有目標'); return false; }
+                a.poison = { until: S.t + this.dur, next: S.t + this.every };   // 每跳由自己這邊送（stepSkills），島主／深海魚人由伺服器驗證 sk:'poison'
                 const big = mobDef(a.id).big || 1;
-                S.floaters.push({ fxk: 'shine', x: a.x, y: a.y - 20 * big, life: .5 });
-                S.floaters.push({ orb: true, x1: me.x, y1: me.y - 52, x2: a.x, y2: a.y - 20 * big, life: .18 });
-                hitMob(me, a, true, { dmg: this.dmg, sk: 'shine', stun: this.stun });
-                S.net?.skillEvent?.('shine');
+                S.floaters.push({ orb: true, x1: me.x, y1: me.y - 52, x2: a.x, y2: a.y - 20 * big, life: .22 });
+                S.floaters.push({ fxk: 'poisonpop', x: a.x, y: a.y - 20 * big, big, life: .6 });
+                return true;
+              } },
+  care:     { name: '關心', cd: 20, dur: 30, amt: 1, range: 320, desc: '指定滑鼠方向最近的一位玩家（附近沒人就是自己）：30 秒內賢者每造成一次傷害，對方回 1 血',
+              run(me) {
+                const t = pickHealTarget(me, this.range);
+                S.fx.care = { id: t === me ? null : String(t.id), self: t === me, until: S.t + this.dur, name: t === me ? '自己' : t.name };
+                S.floaters.push({ fxk: 'heart', x1: me.x, y1: me.y - 40, x2: t.x, y2: t.y - 30, life: .6 });
+                if (t === me) S.fx.cared = S.t + this.dur;
+                else S.net?.skillEvent?.('care:' + t.id);
+                toast(`關心了 ${S.fx.care.name}`, 1400);
                 return true;
               } },
   wings:    { name: '翅膀', cd: 45, dur: 15, desc: '15 秒內所有治療量 +1',
@@ -1024,6 +1045,30 @@ Object.assign(JOB_SKILLS, {
               run() { S.fx.triple = { n: this.n, until: S.t + this.dur }; fxBurst('triple'); return true; } },
 });
 const jobSkillIds = () => JOBS[S.me.job]?.skills || [];
+// 單補的目標：射程內（含自己）。游標點在某人身上就補他；否則挑「游標方向」夾角最小的別人（60° 以內，夾角相近挑近的）；
+// 沒有游標、游標在自己身上、或那個方向沒人 → 補自己
+function pickHealTarget(me, range) {
+  const cands = [...S.remotes.values()].filter(r => !r.dead && Math.hypot(r.x - me.x, r.y - me.y) <= range);
+  const aim = castAim();
+  if (!aim) return me;
+  const [ax, ay] = aim, onBody = q => Math.abs(ax - q.x) <= 14 && ay <= q.y + 4 && ay >= q.y - 50;
+  const hitOne = cands.find(onBody);
+  if (hitOne) return hitOne;
+  const ux = ax - me.x, uy = ay - me.y;
+  if (onBody(me) || Math.hypot(ux, uy) < 16) return me;
+  let best = me, bs = Math.PI / 3;
+  for (const r of cands) {
+    const dx = r.x - me.x, dy = r.y - me.y, ang = Math.abs(Math.atan2(ux * dy - uy * dx, ux * dx + uy * dy)), sc = ang + Math.hypot(dx, dy) / 2000;
+    if (sc < bs) { bs = sc; best = r; }
+  }
+  return best;
+}
+function healMe(amt) {
+  const me = S.players[0];
+  if (me.dead) return;
+  me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + amt);
+  S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + amt, life: .75 });
+}
 function tryJobSkill(slot) {   // slot：0＝1 鍵、1＝2 鍵
   const me = S.players[0], id = jobSkillIds()[slot], sk = JOB_SKILLS[id];
   if (!sk || S.mode !== 'walk' || me.dead || me.pose || S.t < (me.petUntil ?? 0)) return;
@@ -1074,6 +1119,13 @@ function stepSkills() {
     }
   }
   if (F.triple && (F.triple.n <= 0 || S.t >= F.triple.until)) F.triple = null;
+  if (F.care && S.t >= F.care.until) F.care = null;
+  for (const a of S.mobs) {   // 賢者上毒：每 3 秒跳一次（自己上的毒，自己這邊送）；換掉職業或倒地就停
+    const po = a.poison;
+    if (!po) continue;
+    if (a.dead || S.t >= po.until || me.dead || S.me.job !== 'sage') { a.poison = null; continue; }
+    if (S.t >= po.next) { po.next += JOB_SKILLS.poison.every; hitMob(me, a, true, { dmg: JOB_SKILLS.poison.dmg, sk: 'poison', dot: true }); }
+  }
   if (F.circle && S.t >= F.circle.until) F.circle = null;
 }
 // 別人的技能事件：群盾自判是否在範圍內；其餘只演出
@@ -1086,7 +1138,17 @@ function onSkillEvent(kind, r) {
     toast(`${r.name} 的${JOB_SKILLS[kind].name}罩住了你`, 1800);
   } else if (kind === 'ninjutsu') S.floaters.push({ fxk: 'boom', x: r.x, y: r.y, r: JOB_SKILLS.ninjutsu.r, life: .6 });
   else if (kind === 'blink') { S.floaters.push({ fxk: 'smoke', x: r.x, y: r.y, life: .45 }); r.snapNext = true; }
-  else if (kind === 'shine') S.floaters.push({ fxk: 'shine', x: r.x, y: r.y - 60, life: .4 });
+  else if (kind.startsWith('care:') || kind.startsWith('careheal:')) {   // 賢者的關心：目標是我才處理
+    const heal = kind.startsWith('careheal:'), tid = kind.slice(heal ? 9 : 5);
+    if (tid !== String(S.net?.id)) return;
+    if (!heal) { S.fx.cared = S.t + JOB_SKILLS.care.dur; S.floaters.push({ fxk: 'heart', x1: r.x, y1: r.y - 40, x2: me.x, y2: me.y - 30, life: .6 }); toast(`${r.name} 關心了你`, 1600); }
+    else if (fxOn('cared')) healMe(JOB_SKILLS.care.amt);
+  }
+  else if (kind.startsWith('sheal:')) {   // 單補：目標是我就補自己（翅膀看放的人 state 的 fx），其他人只畫特效
+    const tid = kind.slice(6), t = tid === String(S.net?.id) ? me : [...S.remotes.values()].find(q => String(q.id) === tid);   // 連線編號可能是數字
+    if (t) S.floaters.push({ fxk: 'sheal', x1: r.x, y1: r.y - 40, x2: t.x, y2: t.y - 24, life: .5 });
+    if (t === me) { healMe(JOB_SKILLS.sheal.amt + (r.fx?.includes('wings') ? 1 : 0)); toast(`${r.name} 幫你補血`, 1400); }
+  }
   else if (kind === 'vuln' || kind === 'weak' || kind === 'provoke') S.floaters.push({ fxk: 'shout', x: r.x, y: r.y, kind, life: .5 });
 }
 // 放出瞬間的小特效（自己畫面；別人畫面靠 state 的 fx 看到持續效果）
@@ -1209,7 +1271,12 @@ function drawSkillIcon(c, id) {
     case 'kshield': bg('#1d2a44'); for (const [x, y] of [[4, 10], [20, 10], [12, 4]]) shield(x, y, 16, 22, 'rgba(150,200,255,.85)'); g.strokeStyle = 'rgba(200,230,255,.8)'; g.lineWidth = 2; g.beginPath(); g.arc(20, 22, 17, P * 1.1, P * 1.9); g.stroke(); break;
     case 'vamp': bg('#2e1014'); g.fillStyle = '#d83a3a'; g.beginPath(); g.moveTo(20, 6); g.quadraticCurveTo(32, 22, 20, 34); g.quadraticCurveTo(8, 22, 20, 6); g.fill(); g.fillStyle = '#ffb0a8'; g.fillRect(16, 18, 3, 8); break;
     case 'wshield': bg('#3a2412'); g.strokeStyle = '#ff9a4a'; g.lineWidth = 3; for (const r of [8, 13, 18]) { g.globalAlpha = 1 - r / 26; g.beginPath(); g.arc(20, 26, r, P, P * 2); g.stroke(); } g.globalAlpha = 1; shield(14, 12, 12, 16, '#ffb060'); break;
-    case 'shine': bg('#2a2a3a'); g.fillStyle = '#fff'; g.beginPath(); for (let i = 0; i < 8; i++) { const r = i % 2 ? 6 : 17, an = i * P / 4 - P / 2; g.lineTo(20 + Math.cos(an) * r, 20 + Math.sin(an) * r); } g.closePath(); g.fill(); g.fillStyle = '#fff6b0'; g.beginPath(); g.arc(20, 20, 4, 0, P * 2); g.fill(); break;
+    case 'sheal': bg('#16301f'); g.fillStyle = '#7ee08a'; g.fillRect(14, 8, 10, 26); g.fillRect(6, 16, 26, 10); g.fillStyle = '#e8ffe8'; g.fillRect(17, 12, 4, 18); g.fillRect(10, 19, 18, 4);
+      g.fillStyle = '#fff'; g.beginPath(); g.moveTo(30, 4); g.lineTo(37, 4); g.lineTo(37, 11); g.closePath(); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 2; g.beginPath(); g.moveTo(27, 14); g.lineTo(35, 6); g.stroke(); break;
+    case 'poison': bg('#221830'); g.fillStyle = '#9ad850'; g.beginPath(); g.moveTo(20, 5); g.quadraticCurveTo(32, 22, 20, 34); g.quadraticCurveTo(8, 22, 20, 5); g.fill();
+      g.fillStyle = '#b060d8'; for (const [x, y, r] of [[10, 30, 3], [30, 28, 4], [27, 10, 2.5]]) { g.beginPath(); g.arc(x, y, r, 0, P * 2); g.fill(); } g.fillStyle = '#e8ffd0'; g.fillRect(16, 18, 3, 8); break;
+    case 'care': bg('#34202a'); { const h = (x, y, s, c) => { g.fillStyle = c; g.beginPath(); g.moveTo(x, y + s * .9); g.bezierCurveTo(x - s * 1.4, y - s * .1, x - s * .6, y - s * 1.1, x, y - s * .35); g.bezierCurveTo(x + s * .6, y - s * 1.1, x + s * 1.4, y - s * .1, x, y + s * .9); g.fill(); };
+      h(20, 22, 13, '#ff82aa'); h(20, 21, 7, '#ffd0e0'); } break;
     case 'wings': bg('#2a3440'); g.fillStyle = '#f4f4ff'; for (const s of [-1, 1]) { g.beginPath(); g.moveTo(20, 22); g.quadraticCurveTo(20 + s * 18, 2, 20 + s * 18, 14); g.quadraticCurveTo(20 + s * 14, 20, 20 + s * 16, 28); g.quadraticCurveTo(20 + s * 8, 26, 20, 22); g.fill(); } break;
     case 'ninjutsu': bg('#241c36'); g.strokeStyle = '#e8d0ff'; g.lineWidth = 2.5; g.strokeRect(9, 9, 22, 22); g.beginPath(); g.moveTo(9, 20); g.lineTo(31, 20); g.moveTo(20, 9); g.lineTo(20, 31); g.stroke(); g.fillStyle = '#c83a3a'; g.beginPath(); g.arc(20, 20, 5, 0, P * 2); g.fill(); break;
     case 'blink': bg('#1c2436'); for (let i = 0; i < 3; i++) { g.fillStyle = `rgba(180,200,255,${.25 + i * .3})`; g.beginPath(); g.ellipse(9 + i * 9, 22, 4, 9, 0, 0, P * 2); g.fill(); } g.fillStyle = '#fff'; g.beginPath(); g.moveTo(28, 14); g.lineTo(36, 22); g.lineTo(28, 30); g.closePath(); g.fill(); break;
@@ -1761,7 +1828,6 @@ function onNetLurker(m) {
 function stepMob(a, dt) {
   const def = mobDef(a.id);
   if (a.lurker) { stepLurker(a, dt, def); return; }   // 釣上來的敵對怪物
-  if (!def.owner && !a.dead && S.t < (a.stunUntil ?? 0)) { a.target = null; a.moving = false; return; }   // 閃耀暈眩中：原地不動
   // 島主：連線時整個狀態機用牆鐘（與伺服器同軸，webview 節流也不影響）；單機沿用 dt 積分
   if (def.owner) {
     if (a.proxy) { stepOwnerProxy(a, dt, def); return; }
@@ -2181,6 +2247,7 @@ function drawPersonFx(p, fx, backView, phase) {
     ctx.fillStyle = `rgba(230,50,60,${.75 * (1 - q)})`;
     ctx.beginPath(); ctx.arc(x, -6 - q * 40, 2, 0, Math.PI * 2); ctx.fill();
   }
+  if (has('cared')) drawHeart(-dir * 16, -40 + Math.sin(t * 3) * 2, 4.5, 'rgba(255,130,170,.95)');   // 被賢者關心中
   const tri = fx.find(k => /^triple\d$/.test(k));
   if (tri) {   // 三重：身邊繞著剩下幾次的光球
     const n = +tri.slice(6);
@@ -2220,6 +2287,20 @@ function drawMagicCircle(x, y, left) {   // 黑魔法師的魔法陣：慢慢自
   for (let i = 0; i < 12; i++) { const an = i * Math.PI / 6; ctx.fillRect(Math.cos(an) * R * .86 - 2, Math.sin(an) * R * .86 - 2, 4, 4); }
   ctx.restore();
 }
+function drawPoison(x, y, W, H) {   // 上毒：身上冒起紫綠色毒泡泡（只有上毒的賢者自己看得到）
+  for (let i = 0; i < 6; i++) {
+    const q = (S.t * .7 + i / 6) % 1, bx = x + Math.sin(i * 2.3 + S.t) * W * .28, by = y - H * .2 - q * H * .6;
+    ctx.fillStyle = i % 2 ? `rgba(150,220,90,${.75 * (1 - q)})` : `rgba(170,90,210,${.75 * (1 - q)})`;
+    ctx.beginPath(); ctx.arc(bx, by, 2.5 + (i % 3), 0, Math.PI * 2); ctx.fill();
+  }
+}
+function drawHeart(x, y, s, col) {
+  ctx.fillStyle = col; ctx.beginPath();
+  ctx.moveTo(x, y + s * .9);
+  ctx.bezierCurveTo(x - s * 1.4, y - s * .1, x - s * .6, y - s * 1.1, x, y - s * .35);
+  ctx.bezierCurveTo(x + s * .6, y - s * 1.1, x + s * 1.4, y - s * .1, x, y + s * .9);
+  ctx.fill();
+}
 function drawOwnerDebuff(a, W, H) {   // 島主身上：破綻＝紅色裂紋閃爍、降傷＝紫灰色的霧
   const cy = a.y - a.z - H * .45, s = Math.max(1, W / 120);
   if (S.t < (a.vulnUntil ?? 0) && (S.t * 3 | 0) % 2 === 0) {
@@ -2239,27 +2320,37 @@ function drawOwnerDebuff(a, W, H) {   // 島主身上：破綻＝紅色裂紋閃
     ctx.restore();
   }
 }
-function drawStunStars(x, y) {   // 暈眩：頭上轉圈的星星
-  for (let i = 0; i < 3; i++) {
-    const an = S.t * 4 + i * Math.PI * 2 / 3, sx = x + Math.cos(an) * 10, sy = y + Math.sin(an) * 3;
-    ctx.fillStyle = '#ffe27a'; ctx.beginPath();
-    for (let k = 0; k < 10; k++) { const r = k % 2 ? 1.5 : 3.5, a2 = k * Math.PI / 5 - Math.PI / 2; ctx.lineTo(sx + Math.cos(a2) * r, sy + Math.sin(a2) * r); }
-    ctx.closePath(); ctx.fill();
-  }
-}
 // 瞬間特效（S.floaters 裡帶 fxk 的；ctx 在世界座標、外層已 save/restore）
 function drawFxFloater(f) {
-  const L = { shine: .5, smoke: .5, after: .6, boom: .6, kshield: .6, wshield: .6, pop: .6, shout: .5, crack: .8, fog: .8, drain: .4 }[f.fxk] || .5;
+  const L = { poisonpop: .6, heart: .6, sheal: .5, smoke: .5, after: .6, boom: .6, kshield: .6, wshield: .6, pop: .6, shout: .5, crack: .8, fog: .8, drain: .4 }[f.fxk] || .5;
   const q = Math.min(1, Math.max(0, 1 - f.life / L)), al = 1 - q;
   switch (f.fxk) {
-    case 'shine': {   // 閃耀：白色十字閃光
-      ctx.translate(f.x, f.y); ctx.globalCompositeOperation = 'lighter';
-      const s = 10 + q * 22;
-      ctx.fillStyle = `rgba(255,255,240,${al})`;
-      ctx.fillRect(-s, -2, s * 2, 4); ctx.fillRect(-2, -s, 4, s * 2);
-      ctx.rotate(Math.PI / 4); ctx.fillRect(-s * .5, -1.5, s, 3); ctx.fillRect(-1.5, -s * .5, 3, s);
-      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s); g.addColorStop(0, `rgba(255,255,220,${.8 * al})`); g.addColorStop(1, 'rgba(255,255,220,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, s, 0, Math.PI * 2); ctx.fill();
+    case 'poisonpop': {   // 上毒：命中處一圈紫綠色毒霧
+      for (let i = 0; i < 7; i++) {
+        const an = i * Math.PI * 2 / 7, r = (8 + q * 18) * Math.max(1, f.big * .6);
+        ctx.fillStyle = i % 2 ? `rgba(150,220,90,${.6 * al})` : `rgba(170,90,210,${.6 * al})`;
+        ctx.beginPath(); ctx.arc(f.x + Math.cos(an) * r, f.y + Math.sin(an) * r * .6, 5, 0, Math.PI * 2); ctx.fill();
+      }
+      break;
+    }
+    case 'heart': {   // 關心：一顆愛心從賢者飄向對方
+      const x = f.x1 + (f.x2 - f.x1) * q, y = f.y1 + (f.y2 - f.y1) * q - Math.sin(q * Math.PI) * 18;
+      drawHeart(x, y, 5 + 2 * Math.sin(q * Math.PI), `rgba(255,130,170,${Math.min(1, al * 1.5)})`);
+      break;
+    }
+    case 'sheal': {   // 單補：放的人到目標一道綠光，目標身上綠色十字光往上飄
+      ctx.globalCompositeOperation = 'lighter';
+      const self = Math.hypot(f.x2 - f.x1, f.y2 - f.y1) < 20;
+      if (!self) {
+        ctx.strokeStyle = `rgba(140,240,160,${.85 * al})`; ctx.lineWidth = 3 * al + 1; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(f.x1, f.y1); ctx.lineTo(f.x2, f.y2); ctx.stroke();
+      }
+      ctx.translate(f.x2, f.y2 - q * 14);
+      const s = 8 + q * 10;
+      ctx.fillStyle = `rgba(150,255,170,${al})`;
+      ctx.fillRect(-s, -2.5, s * 2, 5); ctx.fillRect(-2.5, -s, 5, s * 2);
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s * 1.6); g.addColorStop(0, `rgba(200,255,210,${.7 * al})`); g.addColorStop(1, 'rgba(120,230,150,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, s * 1.6, 0, Math.PI * 2); ctx.fill();
       break;
     }
     case 'smoke':   // 縮地的煙
@@ -3118,7 +3209,7 @@ function draw() {
         ctx.restore();
         if (a.dead) return;
         if (def.owner && (S.t < (a.vulnUntil ?? 0) || S.t < (a.weakUntil ?? 0))) drawOwnerDebuff(a, W, H);
-        if (!def.owner && S.t < (a.stunUntil ?? 0)) drawStunStars(a.x, a.y - a.z - H - 6);
+        if (a.poison) drawPoison(a.x, a.y - a.z, W, H);
         if (def.owner && !a.fly) {   // 島主腳下判定圈：以「武器尖端」為準——武器點（人前方 WEAPON_REACH 處的小圓點）進圈就打得到，不看面向。靠近（約 220px 內）才顯示
           const me = S.players[0], d = Math.hypot(a.x - me.x, a.y - me.y);
           if (d < 220 && !me.dead && !me.pose && S.me.weapon !== 'hands' && !rangedDef()) {   // 空手（沒裝備武器）、拿法杖（遠距詠唱，沒有近戰判定）不顯示

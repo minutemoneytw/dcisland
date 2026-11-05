@@ -441,6 +441,7 @@ GEAR_TOPS = {   # id: (名稱, 主色, 陰影, 點綴函式, 長袍)
     "knight_top":    ("騎士鎧甲", "#8fa6c8", "#6a7f9e", "plate", False),
     "warrior_top":   ("戰士皮甲", "#b5452f", "#8a3322", "fur", False),
     "whitemage_top": ("白魔長袍", "#f0ece0", "#c8c0ac", "trim_red", True),
+    "sage_top":      ("賢者長袍", "#3a9a8a", "#2a7466", "trim_gold", True),
     "ninja_top":     ("忍者上衣", "#4a3a6a", "#352a4e", "sash", False),
     "blackmage_top": ("黑魔長袍", "#2e3a7a", "#1f2858", "trim_gold", True),
 }
@@ -448,6 +449,7 @@ GEAR_BOTTOMS = {
     "knight_bottom":    ("騎士腿甲", "#5a6a88", "#46536c"),
     "warrior_bottom":   ("戰士褲", "#5a4030", "#45301f"),
     "whitemage_bottom": ("白魔長褲", "#d8d0bc", "#b0a890"),
+    "sage_bottom":      ("賢者長褲", "#2e6a62", "#1f4e48"),
     "ninja_bottom":     ("忍者褲", "#3a2e52", "#2a2140"),
     "blackmage_bottom": ("黑魔長褲", "#2a3060", "#1d2246"),
 }
@@ -455,6 +457,7 @@ GEAR_HATS = {   # id: (名稱, 主色, 陰影, 畫法)
     "knight_hat":    ("騎士頭盔", "#a8b8d0", "#7a8aa4", "helm"),
     "warrior_hat":   ("戰士角盔", "#8a5a3a", "#6a4228", "horned"),
     "whitemage_hat": ("白魔兜帽", "#f0ece0", "#c8c0ac", "hood"),
+    "sage_hat":      ("賢者頭冠", "#e0c040", "#b08a28", "circlet"),
     "ninja_hat":     ("忍者頭巾", "#4a3a6a", "#352a4e", "band"),
     "blackmage_hat": ("黑魔尖帽", "#2e3a7a", "#1f2858", "pointy"),
 }
@@ -529,6 +532,12 @@ def hat_canvas(kind, main, shd, back):
         cv.set(7, 0, m); cv.set(8, 0, m)
         if back:
             cv.rect(3, 1, 12, 10, m); cv.vline(8, 2, 9, s)
+    elif kind == "circlet":  # 頭冠：額前一圈細金環＋中間一顆綠寶石
+        cv.hline(4, 11, 3, m); cv.hline(4, 11, 4, s)
+        cv.set(7, 2, m); cv.set(8, 2, m)
+        cv.set(7, 3, hx("#5ad8b0")); cv.set(8, 3, hx("#5ad8b0"))
+        if back:
+            cv.hline(4, 11, 3, s)
     elif kind == "band":     # 頭巾：額頭一條＋背後兩條飄帶
         cv.rect(4, 3, 11, 4, m); cv.hline(4, 11, 4, s)
         cv.set(12, 4, m); cv.set(13, 5, m); cv.set(13, 6, s); cv.set(12, 6, s)
@@ -914,6 +923,18 @@ def weapon_scepter():  # 咒杖（黑魔法師的職業武器）：深色杖身�
     cv.ellipse(3.5, 3, 2.6, 3, gem)
     cv.set(2, 2, gem_hi); cv.set(3, 1, gem_hi)
     cv.vline(1, 2, 5, gold); cv.vline(6, 2, 5, gold)
+    cv.outline((30, 24, 22, 255))
+    return cv
+
+def weapon_tome():  # 魔導書（賢者的職業武器）：綠色封面、金色書角與書扣的厚書
+    cv = Canvas(12, 14)
+    cov = hx("#2f8a78"); cov_d = hx("#1f5e52"); gold = hx("#e0c040"); page = hx("#f0ead8")
+    cv.rect(1, 1, 10, 12, cov)
+    cv.rect(1, 1, 2, 12, cov_d)              # 書背
+    cv.vline(11, 2, 11, page)                # 書頁
+    for x, y in ((3, 1), (10, 1), (3, 12), (10, 12)):
+        cv.set(x, y, gold)                    # 書角
+    cv.rect(5, 5, 7, 7, gold); cv.set(6, 6, hx("#5ad8b0"))   # 封面的寶石徽記
     cv.outline((30, 24, 22, 255))
     return cv
 
@@ -1777,6 +1798,7 @@ def main():
     save(weapon_daggers(), "weapon_daggers.png", "avatar")
     save(weapon_scepter(), "weapon_scepter.png", "avatar")
     save(weapon_goldsword(), "weapon_goldsword.png", "avatar")
+    save(weapon_tome(), "weapon_tome.png", "avatar")
     save(weapon_staff(), "weapon_staff.png", "avatar")
     save(weapon_rod(), "weapon_rod.png", "avatar")
     print("== 釣魚：魚類圖鑑 ==")
@@ -1837,6 +1859,7 @@ def main():
             dict(id="sword", name="長劍", type="sword", sprite="weapon_sword.png", carry="back", back="hilt"),
             dict(id="waraxe", name="戰斧", type="axe", sprite="weapon_waraxe.png", carry="back"),
             dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", ranged=dict(range=320, cast=1.2, dmg=2)),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
+            dict(id="tome", name="魔導書", type="tome", sprite="weapon_tome.png", carry="waist", ranged=dict(range=320, cast=1.2, dmg=2)),
             dict(id="daggers", name="雙劍", type="daggers", sprite="weapon_daggers.png", carry="waist"),
             dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=320, cast=1.6, dmg=2)),
             dict(id="rod", name="釣竿", type="rod", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
