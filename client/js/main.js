@@ -448,7 +448,7 @@ function startCast(p, rg, wx, wy) {
     S.net?.notifyAttack?.();
     const ty = a.y - 24 * (mobDef(a.id).big || 1) * .6;
     if (rg.shot === 'arrow') S.floaters.push({ fxk: 'arrow', x1: p.x + p.dir * 8, y1: p.y - 30, x2: a.x, y2: ty, life: .2 });
-    else if (rg.shot === 'funnels') S.floaters.push({ fxk: 'funnels', x1: p.x, y1: p.y - 30, x2: a.x, y2: ty, life: .45 });   // 賢具浮游炮：四座賢具飛出、四道光束
+    else if (rg.shot === 'funnels') S.floaters.push({ fxk: 'funnels', x2: a.x, y2: ty, slots: noulithSlots(p.x, p.y, S.t, noulithSeed(p)).map(s => [s.x, s.y]), life: .45 });   // 賢具普攻：本體待機不動，四座依序從陣位射光束
     else S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: ty, life: .22 });
     hitMob(p, a, true);
     return;
@@ -1084,6 +1084,12 @@ Object.assign(JOB_SKILLS, {
                 const t = pickHealTarget(me, this.range);
                 S.fx.care = { id: t === me ? null : String(t.id), self: t === me, until: S.t + this.dur, name: t === me ? '自己' : t.name };
                 S.floaters.push({ fxk: 'heart', x1: me.x, y1: me.y - 40, x2: t.x, y2: t.y - 30, life: .6 });
+                {   // 四座賢具本體一起飛出去繞對象一圈再回來（待機位在 drawNoulithIdle 會暫時全缺席）——手上是賢具才演
+                  if ((me.tool || S.me.weapon) === 'tome') {
+                    const slots = noulithSlots(me.x, me.y, S.t, noulithSeed(me));
+                    S.floaters.push({ fxk: 'carego', sx: slots.map(s => s.x), sy: slots.map(s => s.y), x2: t.x, y2: t.y - 24, p: me, life: .7 });
+                  }
+                }
                 if (t === me) S.fx.cared = S.t + this.dur;
                 else S.net?.skillEvent?.('care:' + t.id);
                 toast(`關心了 ${S.fx.care.name}`, 1400);
@@ -1337,7 +1343,13 @@ function tryGroupHeal() {
   groupHealCd = S.t + GROUP_HEAL_CD;
   S.net?.heal?.();   // 同島的人（不含自己：對方畫面自補，走 onNetHeal）
   const amt = (JOBS[S.me.job].healAoE || 2) + (fxOn('wings') ? 1 : 0);   // 翅膀：治療量 +1
-  S.floaters.push({ x: me.x, y: me.y - 24, healPulse: true, life: .35 });   // 綠圈從腳下擴散
+  if ((me.tool || S.me.weapon) === 'tome') {
+    // 賢者（賢具）：四座賢具變藍、分散到東南西北的最大範圍撐起一圈淡光再飛回（取代綠圈；本地演出）
+    const slots = noulithSlots(me.x, me.y, S.t, noulithSeed(me));
+    S.floaters.push({ fxk: 'healgo', sx: slots.map(s => s.x), sy: slots.map(s => s.y), p: me, life: .65 });
+  } else {
+    S.floaters.push({ x: me.x, y: me.y - 24, healPulse: true, life: .35 });   // 綠圈從腳下擴散（沒有賢具的補師）
+  }
   me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + amt);
   S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + amt, life: .75 });
 }
@@ -2486,9 +2498,89 @@ function drawOwnerDebuff(a, W, H) {   // 島主身上：破綻＝紅色裂紋閃
     ctx.restore();
   }
 }
+// 賢具（noulith，參考使用者提供的圖）：白色鏢形機身＋深色座艙＋後掠小翼，機尾往後飄兩道藍色能量翼
+function drawNoulith(x, y, ang, al, trail, t, seed, sc = 1, tint = false) {   // tint：演出時機身變色（白→賢具藍）
+  ctx.save(); ctx.translate(x, y); ctx.rotate(ang); ctx.scale(sc, sc);
+  // 能量翼：先畫（被機身壓住），兩道從尾部往後飄的藍色帶子，會輕輕擺動
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let s = -1; s <= 1; s += 2) {
+    const len = trail * (.8 + .25 * Math.sin(t * 9 + seed * 2.4 + s));
+    const wob = Math.sin(t * 11 + seed * 1.7 + s * 2) * 2.2;
+    const g = ctx.createLinearGradient(-7, 0, -7 - len, 0);
+    g.addColorStop(0, `rgba(115,155,255,${.85 * al})`);
+    g.addColorStop(1, 'rgba(115,155,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(-6, s * 1.4);
+    ctx.quadraticCurveTo(-7 - len * .5, s * 3.6 + wob, -7 - len, s * 1.8 + wob);
+    ctx.quadraticCurveTo(-7 - len * .55, s * 1.2 + wob * .4, -6, s * -.6);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  // 後掠小翼（先畫，機身會蓋住根部）
+  ctx.fillStyle = tint ? '#7d94e0' : '#d8dde8'; ctx.strokeStyle = '#23272f'; ctx.lineWidth = .8;
+  for (let s = -1; s <= 1; s += 2) {
+    ctx.beginPath(); ctx.moveTo(1, s * 2.2); ctx.lineTo(-4, s * 5.4); ctx.lineTo(-5.5, s * 2); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+  }
+  // 機身：鏢形（尖頭、收尾）——tint 時用賢具藍當對比色
+  ctx.beginPath();
+  ctx.moveTo(9, 0); ctx.lineTo(3, -2.4); ctx.lineTo(-5, -2); ctx.lineTo(-8, 0); ctx.lineTo(-5, 2); ctx.lineTo(3, 2.4);
+  ctx.closePath();
+  ctx.fillStyle = tint ? '#8fa6ff' : '#eef1f6'; ctx.fill();
+  ctx.save(); ctx.clip();                       // 下半留深一階的陰影面
+  ctx.fillStyle = tint ? 'rgba(85,115,205,.6)' : 'rgba(150,160,180,.55)'; ctx.fillRect(-8, .4, 17, 2.2);
+  ctx.restore();
+  ctx.strokeStyle = '#23272f'; ctx.lineWidth = 1; ctx.stroke();
+  // 深色座艙（機身中後段的黑色塊，像參考圖）與尾端噴口
+  ctx.fillStyle = '#343b49';
+  ctx.beginPath(); ctx.ellipse(-1.5, 0, 2.6, 1.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#5a6474'; ctx.fillRect(-9, -1, 1.6, 2);
+  ctx.restore();
+}
+// 賢具的常駐待機（參考使用者提供的圖）：裝備賢具（tome）的人身邊繞著四座漂浮的賢具＋手前的藍色光環。
+// 普攻時本體不動、只射光束（drawFxFloater 'funnels'）；「關心」時 0 號座飛出去繞對象一圈再回來（'carego'）
+function noulithSeed(p) {
+  let h = 0;
+  for (const c of (p.name || '')) h = (h + c.charCodeAt(0) * 7) % 97;
+  return h;
+}
+function noulithSlots(px, py, t, seed) {   // 繞著上半身緩慢繞圈的四個陣位（畫圖與攻擊光束的出發點共用）
+  return [0, 1, 2, 3].map(i => {
+    const a = t * .55 + i * Math.PI / 2 + seed * .11;
+    const rr = 24 + Math.sin(t * 1.3 + i * 2.1) * 3;
+    return {
+      x: px + Math.cos(a) * rr * 1.15,
+      y: py - 26 + Math.sin(a) * rr * .72 + Math.sin(t * 2.1 + i * 1.3) * 2,
+      ang: a + Math.PI / 2 + Math.sin(t * .9 + i * 2.4) * .5,   // 大致沿繞行方向、帶一點擺動
+    };
+  });
+}
+function drawNoulithIdle(p, wid, part) {   // part：'back'＝畫在人物後面、'front'＝前面（依陣位高低分）
+  if (wid !== 'tome' || p.dead) return;
+  const t = S.t, seed = noulithSeed(p);
+  if (!S.floaters.some(f => f.fxk === 'carego' || f.fxk === 'healgo')) {   // 四座都外出（關心／群療）時待機位全空
+    const slots = noulithSlots(p.x, p.y, t, seed);
+    for (let i = 0; i < 4; i++) {
+      const s = slots[i], behind = s.y < p.y - 24;
+      if ((part === 'back') !== behind) continue;
+      drawNoulith(s.x, s.y, s.ang, 1, 12, t, seed + i * 13, 1.2);
+    }
+  }
+  if (part === 'front') {                  // 施術焦點：手前的藍色光環（旋轉的光珠圈）
+    const rx = p.x + (p.dir || 1) * 5, ry = p.y - 22;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 10; i++) {
+      const a = t * 1.8 + i * Math.PI / 5;
+      ctx.fillStyle = 'rgba(110,150,255,.7)';
+      ctx.beginPath(); ctx.arc(rx + Math.cos(a) * 10, ry + Math.sin(a) * 8, 1.8, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
 // 瞬間特效（S.floaters 裡帶 fxk 的；ctx 在世界座標、外層已 save/restore）
 function drawFxFloater(f) {
-  const L = { jumpboom: .5, arrow: .2, song: .7, poisonpop: .6, heart: .6, sheal: .5, smoke: .5, after: .6, boom: .6, kshield: .6, wshield: .6, pop: .6, shout: .5, crack: .8, fog: .8, drain: .4, funnels: .45 }[f.fxk] || .5;
+  const L = { jumpboom: .5, arrow: .2, song: .7, poisonpop: .6, heart: .6, sheal: .5, smoke: .5, after: .6, boom: .6, kshield: .6, wshield: .6, pop: .6, shout: .5, crack: .8, fog: .8, drain: .4, funnels: .45, carego: .7, healgo: .65 }[f.fxk] || .5;
   const q = Math.min(1, Math.max(0, 1 - f.life / L)), al = 1 - q;
   switch (f.fxk) {
     case 'jumpboom': {   // 高跳落地：藍白色衝擊圈＋往外噴的碎片
@@ -2511,30 +2603,155 @@ function drawFxFloater(f) {
       ctx.fillStyle = f.poison ? '#9ad850' : '#c83a3a'; ctx.fillRect(-15, -3, 4, 2); ctx.fillRect(-15, 1, 4, 2);
       break;
     }
-    case 'funnels': {   // 賢具浮游炮（賢者的普攻）：四座小賢具從人物飛出、繞到目標四個方位，各朝目標射一道光束，放完收回
-      const cx = f.x2, cy = f.y2, ang0 = Math.atan2(f.y2 - f.y1, f.x2 - f.x1) + Math.PI / 4;
+    case 'funnels': {   // 賢具普攻：本體在人物身邊待機不動（drawNoulithIdle），四座從陣位依序朝目標射藍色光束
+      const A = q < .7 ? 1 : 1 - (q - .7) / .3;
+      const cx = f.x2, cy = f.y2;
       for (let i = 0; i < 4; i++) {
-        const an = ang0 + i * Math.PI / 2;
-        const px = cx + Math.cos(an) * 22, py = cy + Math.sin(an) * 22 * .7;   // 陣位：目標周圍四個方位
-        let fx, fy;                                                            // 飛出（0～0.35）→ 陣位射擊 → 收回（0.75 之後）
-        if (q < .35) { fx = f.x1 + (px - f.x1) * (q / .35); fy = f.y1 + (py - f.y1) * (q / .35); }
-        else if (q < .75) { fx = px; fy = py; }
-        else { const t = (q - .75) / .25; fx = px + (f.x1 - px) * t; fy = py + (f.y1 - py) * t; }
-        ctx.save(); ctx.translate(fx, fy); ctx.rotate(an + Math.PI);           // 小賢具：一根細針＋光核，朝向目標
-        ctx.fillStyle = `rgba(58,154,138,${al})`; ctx.fillRect(-1, -5, 2, 9);
-        ctx.fillStyle = `rgba(200,240,224,${al})`; ctx.fillRect(-1, -6, 2, 2);
+        const bq = q - i * .07;                                 // 四座依序開火（每座錯開 0.07 秒）
+        if (bq <= 0 || bq >= .22) continue;
+        const bl = Math.sin(bq / .22 * Math.PI), [sx, sy] = f.slots[i];
+        ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+        ctx.strokeStyle = `rgba(100,140,255,${.5 * bl * A})`; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(cx, cy); ctx.stroke();
+        ctx.strokeStyle = `rgba(225,238,255,${.85 * bl * A})`; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(cx, cy); ctx.stroke();
         ctx.restore();
-        if (q > .3) {                                                          // 光束：陣位就位後射向目標
-          const bl = Math.min(1, (q - .3) / .18);
-          ctx.save(); ctx.globalCompositeOperation = 'lighter';
-          ctx.strokeStyle = `rgba(140,240,200,${.85 * bl * al})`; ctx.lineWidth = 2.5 * bl + .5; ctx.lineCap = 'round';
-          ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(cx, cy); ctx.stroke();
-          ctx.restore();
-        }
       }
-      if (q > .45 && q < .8) {                                                 // 命中閃光
-        ctx.fillStyle = `rgba(200,255,224,${.5 * al})`;
-        ctx.beginPath(); ctx.arc(cx, cy, 8 + (q - .45) * 30, 0, Math.PI * 2); ctx.fill();
+      if (q > .3 && q < .58) {                                  // 命中閃光：藍白色爆開＋火花
+        const fk = (q - .3) / .28;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = `rgba(160,195,255,${.45 * (1 - fk) * A})`;
+        ctx.beginPath(); ctx.arc(cx, cy, 6 + fk * 26, 0, Math.PI * 2); ctx.fill();
+        for (let i = 0; i < 5; i++) {
+          const a2 = i * Math.PI * 2 / 5 + .5, r = 8 + fk * 22;
+          ctx.fillStyle = `rgba(210,228,255,${.6 * (1 - fk) * A})`;
+          ctx.fillRect(cx + Math.cos(a2) * r - 1.5, cy + Math.sin(a2) * r - 1.5, 3, 3);
+        }
+        ctx.restore();
+      }
+      break;
+    }
+    case 'carego': {   // 關心三段式：四座賢具先合在一起（緊密編隊）飛到對象 → 抵達後分成四座繞一圈 →
+                       // 再合在一起飛回待機位，最後落回各自的陣位（愛心照舊）
+      const tx = f.x2, ty2 = f.y2;
+      const seed = noulithSeed(f.p);
+      const homes = noulithSlots(f.p.x, f.p.y, S.t, seed);
+      const hx0 = (f.sx[0] + f.sx[1] + f.sx[2] + f.sx[3]) / 4, hy0 = (f.sy[0] + f.sy[1] + f.sy[2] + f.sy[3]) / 4;
+      const hx1 = (homes[0].x + homes[1].x + homes[2].x + homes[3].x) / 4, hy1 = (homes[0].y + homes[1].y + homes[2].y + homes[3].y) / 4;
+      const ease = k => k * k * (3 - 2 * k);
+      for (let i = 0; i < 4; i++) {
+        const aCl = i * Math.PI / 2 + seed * .3;                 // 編隊裡自己的方位（合體時的緊密小圈）
+        let fx, fy, face, trail = 24;
+        if (q < .25) {                                           // 合體飛去：邊收攏邊朝目標飛，收攏好用掉前段
+          const k = ease(q / .25), m = Math.min(1, (q / .25) * 2.2);
+          const cxp = hx0 + (tx - hx0) * k, cyp = hy0 + (ty2 - hy0) * k;
+          const dx = (f.sx[i] - hx0) * (1 - m), dy = (f.sy[i] - hy0) * (1 - m);
+          fx = cxp + dx + Math.cos(aCl) * 5 * m; fy = cyp + dy + Math.sin(aCl) * 4 * m;
+          face = Math.atan2(ty2 - cyp, tx - cxp);
+        } else if (q < .75) {                                    // 分成四座繞目標轉一圈：從編隊攤開成繞行半徑
+          const k = (q - .25) / .5;
+          const spread = Math.min(1, k * 6) * Math.min(1, (1 - k) * 6);   // 起末快速攤開／收攏
+          const r = 5 + 19 * spread;
+          const th = aCl + ease(k) * Math.PI * 2;                // 整段轉滿一圈（攤開／收攏主要發生在頭尾）
+          fx = tx + Math.cos(th) * r; fy = ty2 + Math.sin(th) * (r * .79);
+          face = th + Math.PI / 2; trail = spread > .5 ? 15 : 22;
+        } else {                                                 // 合體飛回：編隊朝待機中心飛，最後一段攤回各自的陣位
+          const k = ease((q - .75) / .25), m2 = Math.max(0, 1 - (q - .75) / .25 * 2.6);
+          const cxp = tx + (hx1 - tx) * k, cyp = ty2 + (hy1 - ty2) * k;
+          fx = cxp + Math.cos(aCl) * 5 * m2 + (homes[i].x - hx1) * (1 - m2);
+          fy = cyp + Math.sin(aCl) * 4 * m2 + (homes[i].y - hy1) * (1 - m2);
+          face = Math.atan2(hy1 - cyp, hx1 - cxp);
+        }
+        drawNoulith(fx, fy, face, 1, trail, S.t, seed + i * 13, 1.2);
+      }
+      break;
+    }
+    case 'healgo': {   // 群療（手上是賢具＝賢者限定演出）：四座賢具變成賢具藍（非黑白的對比色）、分散到東南西北的
+                       // 技能最大範圍（HEAL_RADIUS），展開時帶出一座魔法陣（賢具藍同色系）、結尾賢具飛回時魔法陣跟著消失。
+                       // 取代補師原有的綠圈（沒有賢具的補職照舊綠圈）
+      const seed = noulithSeed(f.p);
+      const homes = noulithSlots(f.p.x, f.p.y, S.t, seed);
+      const rxy = [HEAL_RADIUS, HEAL_RADIUS * .8];            // 地面圈照畫面慣例 y 收 20%（東西南北的落點跟圈同一套）
+      const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]];        // 東、南、西、北
+      const ease = k => k * k * (3 - 2 * k);
+      const gl = Math.min(1, Math.max(0, (q - .08) / .14)) * Math.min(1, Math.max(0, (1 - q) / .22));   // 光圈的淡入淡出
+      const gd = Math.min(1, Math.max(0, (q - .04) / .18)) * Math.min(1, Math.max(0, (1 - q) / .24));   // 魔法陣：展開帶入、收回淡出
+      if (gd > 0) {                                           // 魔法陣（畫在賢具下面）：外圈雙環＋符文刻痕帶、內環、
+                                                              // 中間上下雙三角（六芒星）、三個符號碟＝太陽／月牙／八角星，整座慢轉
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.translate(f.p.x, f.p.y - 24); ctx.scale(1, .8); ctx.rotate(-S.t * .6);
+        const R = HEAL_RADIUS, c0 = `rgba(143,166,255,${.6 * gd})`, c1 = `rgba(190,215,255,${.65 * gd})`;
+        ctx.strokeStyle = c0; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, R - 9, 0, Math.PI * 2); ctx.stroke();
+        for (let i = 0; i < 44; i++) {                        // 兩環之間的符文刻痕（長短相間，像外圈的字帶）
+          const a = i * Math.PI / 22, r1 = R - (i % 2 ? 2 : 4.5);
+          ctx.beginPath(); ctx.moveTo(Math.cos(a) * (R - 9), Math.sin(a) * (R - 9));
+          ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1); ctx.stroke();
+        }
+        ctx.beginPath(); ctx.arc(0, 0, R - 18, 0, Math.PI * 2); ctx.stroke();
+        for (let s = 0; s < 2; s++) {                         // 上下兩座三角形疊成六芒星
+          ctx.beginPath();
+          for (let k = 0; k < 3; k++) {
+            const a = -Math.PI / 2 + (s ? Math.PI : 0) + k * Math.PI * 2 / 3, r = R - 40;
+            if (!k) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r); else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+          }
+          ctx.closePath(); ctx.stroke();
+        }
+        for (let m = 0; m < 3; m++) {                         // 三個符號碟：太陽、月牙、八角星
+          const a = -Math.PI / 2 + m * Math.PI * 2 / 3, mx = Math.cos(a) * (R - 26), my = Math.sin(a) * (R - 26);
+          ctx.strokeStyle = c1; ctx.lineWidth = 1.2;
+          ctx.beginPath(); ctx.arc(mx, my, 10, 0, Math.PI * 2); ctx.stroke();
+          if (m === 0) {                                      // 太陽：中心小圓＋八道微彎光芒
+            ctx.beginPath(); ctx.arc(mx, my, 2.8, 0, Math.PI * 2); ctx.stroke();
+            for (let k = 0; k < 8; k++) {
+              const ra = k * Math.PI / 4, r0 = 4.2, r1 = 7.5 + (k % 2 ? .8 : 0);
+              ctx.beginPath(); ctx.moveTo(mx + Math.cos(ra) * r0, my + Math.sin(ra) * r0);
+              ctx.quadraticCurveTo(mx + Math.cos(ra + .3) * (r0 + r1) * .55, my + Math.sin(ra + .3) * (r0 + r1) * .55,
+                                   mx + Math.cos(ra) * r1, my + Math.sin(ra) * r1);
+              ctx.stroke();
+            }
+          } else if (m === 1) {                               // 月牙：兩道弧接成的弦月輪廓
+            ctx.beginPath();
+            ctx.arc(mx - 1.6, my, 6, Math.PI * .15, Math.PI * 1.85);
+            ctx.arc(mx + 2.4, my, 4.6, Math.PI * 1.7, Math.PI * .3, true);
+            ctx.closePath(); ctx.stroke();
+          } else {                                            // 八角星：內外交替的十六點星形
+            ctx.beginPath();
+            for (let k = 0; k < 16; k++) {
+              const ra = k * Math.PI / 8 - Math.PI / 16, r = k % 2 ? 3 : 7.5;
+              if (!k) ctx.moveTo(mx + Math.cos(ra) * r, my + Math.sin(ra) * r); else ctx.lineTo(mx + Math.cos(ra) * r, my + Math.sin(ra) * r);
+            }
+            ctx.closePath(); ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+      if (gl > 0) {                                           // 範圍內一圈淡淡的光：賢具藍的柔光圈＋細圈
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = `rgba(115,155,255,${.22 * gl})`; ctx.lineWidth = 7;
+        ctx.beginPath(); ctx.ellipse(f.p.x, f.p.y - 24, rxy[0] - 4, rxy[1] - 4, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = `rgba(190,215,255,${.4 * gl})`; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(f.p.x, f.p.y - 24, rxy[0], rxy[1], 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+      for (let i = 0; i < 4; i++) {
+        const gx = f.p.x + dirs[i][0] * rxy[0], gy = f.p.y - 24 + dirs[i][1] * rxy[1];
+        let fx, fy, face, trail = 24;
+        if (q < .22) {                                        // 飛往自己的方位
+          const e = ease(q / .22);
+          fx = f.sx[i] + (gx - f.sx[i]) * e; fy = f.sy[i] + (gy - f.sy[i]) * e;
+          face = Math.atan2(gy - f.sy[i], gx - f.sx[i]); trail = 28;
+        } else if (q < .72) {                                 // 定在四方位：輕微浮動，機頭朝外撐住光圈
+          fx = gx; fy = gy + Math.sin(S.t * 6 + i * 1.7) * 1.5;
+          face = dirs[i][0] ? (dirs[i][0] > 0 ? 0 : Math.PI) : (dirs[i][1] > 0 ? Math.PI / 2 : -Math.PI / 2);
+          trail = 10;
+        } else {                                              // 飛回待機位（跟著人走）
+          const h = homes[i], e = ease((q - .72) / .28);
+          fx = gx + (h.x - gx) * e; fy = gy + (h.y - gy) * e;
+          face = Math.atan2(h.y - gy, h.x - gx); trail = 28;
+        }
+        drawNoulith(fx, fy, face, 1, trail, S.t, seed + i * 13, 1.2, true);
       }
       break;
     }
@@ -3557,8 +3774,11 @@ function draw() {
       y: p.y + (p.pose ? 2 : 0),      // 坐著/睡著的人要畫在自己的椅子/床之後（排序鍵比家具大一點）
       draw: () => {
         const wid = p.tool || S.me.weapon;      // 打石頭/樹木時暫時換成鎬子/斧頭
-        const wi = !p.npc ? weaponImgFor(wid, p.tool ? null : myLook().wlook) : null;
+        // 賢具不畫手持/腰間的武器圖（腰間那座看起來像殘影）：待機的四座漂浮賢具就是它的樣子（drawNoulithIdle）
+        const wi = !p.npc && wid !== 'tome' ? weaponImgFor(wid, p.tool ? null : myLook().wlook) : null;
+        drawNoulithIdle(p, p.npc ? null : wid, 'back');
         drawPerson(p, wi, p.npc ? (p.guide ? '#ffd86b' : '#bcd8e8') : '#ffffff');
+        drawNoulithIdle(p, p.npc ? null : wid, 'front');
       }
     });
   }
@@ -3567,7 +3787,11 @@ function draw() {
     if (r.dead) { list.push(tombEntry(r.x, r.y, r.name, DEAD_SECONDS - (performance.now() - (r.deadAt || performance.now())) / 1000)); continue; }
     list.push({
       y: r.y + (r.pose ? 2 : 0),
-      draw: () => drawPerson(r, weaponImgFor(r.weapon, r.look?.wlook), '#ffe9a8')   // 同島的人用暖金色名牌區分
+      draw: () => {   // 同島的人用暖金色名牌區分；賢具同樣不畫腰間武器圖
+        drawNoulithIdle(r, r.weapon, 'back');
+        drawPerson(r, r.weapon === 'tome' ? null : weaponImgFor(r.weapon, r.look?.wlook), '#ffe9a8');
+        drawNoulithIdle(r, r.weapon, 'front');
+      }
     });
   }
   list.sort((a, b) => a.y - b.y).forEach(o => o.draw());
