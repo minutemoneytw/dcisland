@@ -26,7 +26,8 @@ worker/          Cloudflare Worker：靜態檔 + /api/token + /ws（Durable Obje
   wrangler.toml  部署設定（[assets] + Durable Object 綁定）
 tools/
   dev_server.py  本機伺服器：靜態 + /api/token + /ws（純 Python，不需 Node）
-  gen_assets.py  素材產生器（placeholder；改素材先改這裡再重跑）
+  gen_assets.py  素材產生器（placeholder；改素材先改這裡再重跑；內容感知寫檔，重跑不會弄出像素相同的假變更）
+  import_external.py  外部素材導入：img2pixel 的逐幀 PNG（zip 或資料夾）→ 拼成水平 sheet，用法 `python tools/import_external.py <zip 或資料夾> <輸出.png>`
   dev_config.example.json  憑證範本
 docs/            規格、授權記錄、Discord 串接、Cloudflare 部署
 ```
@@ -93,7 +94,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 - **島主＝範本**：之後其他島的島主照這套做；攻擊方式可不同（在 `OWNER_TERRAINS`（兩份伺服器）與 `mobs.json` 的 `atk` 登記新樣式 `dash`／`gaze`／`beam`），框架（伺服器權威狀態機＋事件廣播）共用。
 
 ### 新增其他島的島主（照範本，4 步）
-1. **造型**：`tools/gen_assets.py` 畫該島主的正面圖＋重跑（記得用 `git checkout` 還原不相干素材）；改用外部自製素材時，把 sheet 放進 `client/assets/external/img2pixel/`、在條目加 `"anim"`（此時可以沒有 `"sprite"`），並在 `client/assets/mobs/mobs.json` 加條目：`"owner": true`、`"big"` 放大倍率、`"hp"`（目標約 8 人擊殺）、`"atk"`（攻擊樣式：`dash`／`gaze`／`beam`）、`"line"`（點擊時的描述）、`"ownerLines"`（被激怒的台詞，見第 3 步）
+1. **造型**：`tools/gen_assets.py` 畫該島主的正面圖＋重跑（產生器有內容感知寫檔，重跑不會動到像素相同的其他素材）；改用外部自製素材時，用 `python tools/import_external.py <zip 或資料夾> <輸出.png>` 把逐幀接成 sheet 放進 `client/assets/external/img2pixel/`、在條目加 `"anim"`（此時可以沒有 `"sprite"`；登記步驟見該資料夾的 README），並在 `client/assets/mobs/mobs.json` 加條目：`"owner": true`、`"big"` 放大倍率、`"hp"`（目標約 8 人擊殺）、`"atk"`（攻擊樣式：`dash`／`gaze`／`beam`）、`"line"`（點擊時的描述）、`"ownerLines"`（被激怒的台詞，見第 3 步）
 2. **指定**：該島 `client/assets/terrain/<id>/terrain.json` 加 `"owner": "<動物id>"`（一張地圖一隻），並在兩份伺服器的 `OWNER_TERRAINS` 登記該地形的攻擊樣式
 3. **台詞與招式**：`client/assets/skills/skills.json` 設定該攻擊樣式的招式名稱、要不要倒數條（`bar`）、要不要先講台詞（`say`）；要講台詞的話寫在 `mobs.json` 該島主條目的 `"ownerLines"`（字串陣列；被打觸發反擊前，隨機泡泡說一句；沒寫就不說話）；條目再加 `"ownerLinesSeq": true` 就改成照順序一句一句說、說完回到第一句（目前只有蓋老師）。`mobs.json` 由產生器管理，要寫進 `tools/gen_assets.py` 的 `MOB_MANIFEST`，否則下次重跑會被蓋掉
 4. **完成**——說台詞、預警、攻擊（照 `atk` 分岔）、歇腳、全島散步、仇恨追殺＋爪擊、死亡重生、泡泡、優先攻擊全部由共用框架處理（伺服器權威；`worker/src/index.js` 與 `tools/dev_server.py` 兩份實作已就緒）

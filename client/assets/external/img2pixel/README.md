@@ -55,7 +55,18 @@
 `sprite_fly_01 → sprite_fly_02 → sprite_fly_02c → sprite_fly_02c-2 → sprite_fly_02c-3 → sprite_fly_03 →（回 01）`
 （02c 系列是使用者手改的變化幀，位置就是設計好的循環順序，不需再挑）
 
+## 導入流程（2026-11-05 起）
+
+1. 把 `img2pixel` 匯出的逐幀 PNG（zip 或資料夾）交給導入工具：
+   `python tools/import_external.py <zip 或資料夾> <輸出檔名>.png`
+   → 自動解壓／收集、檢查（8-bit RGBA、全部幀同尺寸，透明區 RGB 正規化為 0）、水平拼成 sheet 寫進本資料夾，並印出接下來要登記的三處。
+2. **登記三處**（工具只印指引、不代改程式，避免弄壞 manifest 的註解與排版）：
+   - `tools/gen_assets.py` 的 `EXTERNAL_BUNDLES` 加一條（重跑開頭會檢查 sheet 存在與幀數尺寸有沒有對上）；
+   - 動物／島主接線：`gen_assets.py` 的 `MOB_MANIFEST` 該條目加 `anim`（島主再登記 `OWNER_BY_TERRAIN`），下次重跑會寫進 `mobs.json`；
+   - `docs/assets-license.md` 補素材來源與授權記錄。
+3. 工具採內容感知寫檔：同一素材重導入（像素一模一樣）不會重寫檔案。
+
 ## 維護備註
 
-- 此資料夾**不由 `tools/gen_assets.py` 管理**（外部素材暫存區）；若日後重跑產生器把這裡清掉，從 git 歷史還原。
-- 是否把自製素材納入 `gen_assets.py` 產生流程，待使用者與其他開發者討論後再定。
+- 此資料夾**不由 `tools/gen_assets.py` 產生**（外部素材專區），產生器不會覆蓋或清理這裡的檔案；只負責在 `gen_assets.py` 的 `EXTERNAL_BUNDLES` 登記與健檢。
+- sheet 維持「等寬、水平排列、由左至右循環」的慣例；改幀序時逐一幀替換圖塊即可。

@@ -29,6 +29,7 @@ Discord Activity 小遊戲：2D 點陣島，**同一個語音頻道＝同一座�
 ```bash
 python tools/dev_server.py            # 本機：靜態檔 + /api/token + /ws，http://localhost:8787（不需 Node）
 python tools/gen_assets.py            # 重新產生 client/assets 下的 PNG（placeholder 素材）
+python tools/import_external.py <zip 或資料夾> <輸出.png>   # 使用者自製（img2pixel）逐幀素材 → 水平 sheet，放進 client/assets/external/img2pixel/
 cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Durable Object；需 Node ≥22）
 ```
 - 多人測試：開兩個分頁（同 `?room=` 即同島）；模擬 DC 身分：`/index.html?mock=1`
@@ -51,8 +52,8 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 
 ## 慣例
 1. **加內容走 manifest，不改程式**：新家具/動物/造型＝manifest 加條目＋圖檔。新地形＝`assets/terrain/<id>/` 資料夾＋在 `main.js` 的 `TERRAIN_IDS` 登記（見 README「內容擴充」）。
-2. **素材先改 `gen_assets.py` 再重跑**，不要手改 PNG。⚠️ 整支重跑會連帶改到三十幾個不相干的既有素材；只想更新單一素材時，重跑後用 `git checkout` 還原其他檔案。`assets/tools/tools.json`、`assets/skills/skills.json`、`assets/titles/titles.json` 是手寫資料，不由產生器產生。
-3. **引入外部素材必須在 `docs/assets-license.md` 補記錄**；不得使用 SE/FFXIV 的素材、圖示、字體或商標（HUD 僅風格參考）。
+2. **素材先改 `gen_assets.py` 再重跑**，不要手改 PNG。產生器採**內容感知寫檔**：PNG（像素）與 manifest（JSON，一律 LF）一模一樣就不重寫，重跑後 `git status` 只會列出真的改到的檔案，不需要再 `git checkout` 還原不相干素材。`assets/tools/tools.json`、`assets/skills/skills.json`、`assets/titles/titles.json` 是手寫資料，不由產生器產生。
+3. **引入外部素材必須在 `docs/assets-license.md` 補記錄**；不得使用 SE/FFXIV 的素材、圖示、字體或商標（HUD 僅風格參考）。使用者自製（img2pixel）素材的導入流程：先 `python tools/import_external.py` 拼 sheet 放進 `client/assets/external/img2pixel/`，再到 `tools/gen_assets.py` 的 `EXTERNAL_BUNDLES` 登記（重跑開頭會健檢尺寸）並接好 `MOB_MANIFEST` 的 `anim`（島主再加 `OWNER_BY_TERRAIN`）；細節見該資料夾的 `README.md`。
 4. **地形是「每位玩家各自在哪」**，不是房間共用狀態；廣播只給同地形的連線（細節見 `docs/notes.md`「同步協定與伺服器」）。
 5. Discord 授權 scope **只有 `identify`**。多加 scope 會讓每次啟動都跳授權畫面，要加先問使用者。
 6. 前端為純 ES module、單一全域狀態物件 `S`（`main.js`）；沿用現有風格，不要為小改動重構整檔。
