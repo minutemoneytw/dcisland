@@ -278,6 +278,7 @@ D_STAFF_RANGE = 440       # 法杖（遠距詠唱）打島主的最大距離：�
 D_RANGE = 100            # 玩家打島主的攻擊距離（客戶端以武器尖端為準：判定圈 58 + 武器伸出 30 = 88，留延遲）
 D_DRIFT_TOLER = 600      # 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 D_CD = 0.3               # 同一條連線兩次打島主的最短間隔（秒）
+D_HIT_MAX = 4            # 一般攻擊打島主／深海魚人的傷害上限（與 worker 的 D_HIT_MAX 一致；2026-11-05 由 2 放寬）
 D_PROVOKE_CD = 15.0      # 挑釁冷卻（每條連線，秒；與 worker/src/index.js 的 D_PROVOKE_CD_MS 一致）
 D_PROVOKE_RANGE = 240    # 挑釁範圍（比攻擊距離寬：把島主拉過來的是「聲東擊西」，不需要貼臉）
 D_WALK = 34              # 閒晃散步速度 px/s（與 client 的 OWNER_WALK_SPEED 一致）
@@ -1148,7 +1149,10 @@ class Room:
             if sk is False:
                 return None
             self.dragon_regen(terrain, now)   # 扣血前先把該補的血補上（之後廣播的 hp 是回血後的值）
-            dmg = sk["dmg"] if sk else (2 if msg.get("dmg") == 2 else 1)
+            try:
+                dmg = sk["dmg"] if sk else max(1, min(D_HIT_MAX, round(float(msg.get("dmg") or 1))))
+            except (TypeError, ValueError):
+                dmg = 1
             if now < d.get("vuln_until", 0.0):
                 dmg += 1   # 破綻（近戰輸出的職能技能）：每擊 +1
             ph, pos, _ = self.dragon_phase(now, terrain)
@@ -1460,7 +1464,7 @@ class Room:
                 self.lurk_hits[cid] = (terrain, now - D_CD * 1000)   # 技能命中也算攻擊者（仇恨候選），但不佔一般攻擊的間隔
             L["last_hit_at"] = now
             try:
-                dmg = sk["dmg"] if sk else max(1, min(2, round(float(msg.get("dmg") or 1))))
+                dmg = sk["dmg"] if sk else max(1, min(D_HIT_MAX, round(float(msg.get("dmg") or 1))))
             except (TypeError, ValueError):
                 dmg = 1
             L["hp"] -= dmg

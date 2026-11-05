@@ -61,6 +61,7 @@ const D_RANGE = 100;         // 玩家打島主的攻擊距離（客戶端以武
 const D_DRIFT_TOLER = 600;   // 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 const D_STAFF_RANGE = 440;   // 法杖（遠距詠唱）打島主的最大距離：客戶端射程 320 + 判定圈 58 + 緩衝；只有 state.weapon＝staff 的連線才適用
 const D_CD_MS = 300;         // 同一條連線兩次打島主的最短間隔
+const D_HIT_MAX = 4;         // 一般攻擊打島主／深海魚人的傷害上限（客戶端算好送來；最高＝遠程輸出 2＋1＋唱歌爆擊 1。2026-11-05 由 2 放寬，使用者定：信任客戶端）
 const D_PROVOKE_CD_MS = 15000;   // 挑釁冷卻（每條連線；與 dev_server.py 的 D_PROVOKE_CD 一致）
 const D_DEBUFF_MS = 10000;        // 破綻／降傷的持續時間（與 client 的 ROLE_DEBUFF.dur 一致）
 const D_DEBUFF_CD_MS = 30000;     // 破綻／降傷冷卻（每條連線、每種各算）
@@ -1014,7 +1015,7 @@ export class Island {
     const h = this.dragonHits.get(ws);
     if (!sk && now - (h ? h.t : 0) < D_CD_MS) return;   // 一般攻擊的間隔；職業技能另有自己的冷卻
     this.regenDragon(terrain, now);   // 扣血前先把該補的血補上（之後廣播的 hp 是回血後的值）
-    let dmg = sk ? sk.dmg : Math.max(1, Math.min(2, Math.round(Number(msg.dmg) || 1)));
+    let dmg = sk ? sk.dmg : Math.max(1, Math.min(D_HIT_MAX, Math.round(Number(msg.dmg) || 1)));
     if (now < (d.vulnUntil || 0)) dmg += 1;   // 破綻（近戰輸出的職能技能）：每擊 +1
     const [ph, pos] = this.dragonPhase(terrain, now);
     if (ph === "dash") return;     // 龍衝飛行中打不到（開眼/預警/歇腳與散步時都打得到）
@@ -1520,7 +1521,7 @@ export class Island {
     if (!sk) this.lurkHits.set(ws, { terrain, t: now });
     else if (!h || h.t < now - D_CD_MS) this.lurkHits.set(ws, { terrain, t: now - D_CD_MS });   // 技能命中也算攻擊者（仇恨候選），但不佔一般攻擊的間隔
     L.lastHitAt = now;
-    L.hp -= sk ? sk.dmg : Math.max(1, Math.min(2, Math.round(Number(msg.dmg) || 1)));
+    L.hp -= sk ? sk.dmg : Math.max(1, Math.min(D_HIT_MAX, Math.round(Number(msg.dmg) || 1)));
     if (L.hp <= 0) {
       this.lurkers.delete(terrain);
       this.broadcast({ t: "lurker", ev: "dead", x: pos[0], y: pos[1] }, null, terrain);

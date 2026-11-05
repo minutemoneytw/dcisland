@@ -480,9 +480,9 @@ function hitMob(p, a, ranged, force) {
     const crit = !force && Math.random() < critP;
     let dmg = force ? force.dmg : ranged ? (rangedDef()?.dmg || 2) + (crit ? 1 : 0) : (crit ? 2 : 1);
     const jd = jobOf(p);
-    if (jd?.dmgPlus && !force) dmg += jd.dmgPlus;   // 輸出：每擊 +1（連線打島主時送出去的值仍會被伺服器夾回 1～2）
+    if (jd?.dmgPlus && !force) dmg += jd.dmgPlus;   // 輸出：每擊 +1（打島主也算；伺服器的上限是 4）
     const od = mobDef(a.id);
-    const sendDmg = force ? force.dmg : Math.min(2, dmg);   // 送給伺服器的值（破綻的 +1 由伺服器自己加）
+    const sendDmg = force ? force.dmg : Math.min(4, dmg);   // 送給伺服器的值（上限 4＝兩份伺服器的 D_HIT_MAX；破綻的 +1 由伺服器自己加）
     if (od.owner && S.t < (a.vulnUntil ?? 0)) dmg += 1;      // 破綻：每擊 +1（單機在這裡扣、連線只是飄字）
     if (od.owner && p === S.players[0]) S.ownerHitAt[a.id] = S.t;   // 稱號「參與擊倒」用
     if (od.owner && a.proxy) {   // 島主連線時由伺服器權威：送意圖（座標＋傷害＋我們看到的龍位置），本地不扣血（血量等伺服器廣播）
@@ -608,7 +608,7 @@ const PLAYER_HP = 10;     // 玩家血量上限：爪擊扣 2（5 下倒地）�
 // 職能（ROLES）＝被動特性＋R 鍵職能技能；職業（assets/jobs/jobs.json，boot 時載入到 JOBS）＝職能＋唯一的職業武器＋一套裝備＋1／2 鍵技能。
 // JOBS[id]＝{ ...職能的被動數值, ...jobs.json 的條目, role }，所以原本讀 jd.hpMax／jd.takenHalf／jd.dmgPlus／jd.healHit 的地方不用改。
 // 被打與打野外動物都是各畫面自算（野外動物刻意不同步、爪擊是受害者自判），被動效果在客戶端生效；
-// 打島主的傷害由兩份伺服器夾值（一般攻擊 1～2，職業技能另有上限與冷卻，見 JOB_SKILLS）。
+// 打島主的傷害由兩份伺服器夾值（一般攻擊 1～4，職業技能另有上限與冷卻，見 JOB_SKILLS）。
 const ROLES = {
   tank:   { name: '坦克', color: '#7cc0ff', hpMax: 20, takenHalf: true, provoke: true,
             desc: '血量上限 20、被打傷害減半；R＝挑釁（把島主拉到自己身上，龍衝仍直接倒地）' },
