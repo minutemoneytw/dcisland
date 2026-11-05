@@ -1,0 +1,219 @@
+{
+ "_comment": "稱號（手寫，不由產生器產生）。依陣列順序列在稱號一覽。id 只能用小寫英數、底線、連字號（最多 24 字，會進 state 同步）；name＝稱號內容（頭上顯示成《name》）；desc＝解鎖條件說明。cond.type：owner＝參與擊倒島主（mob＝mobs.json 的 id；島主倒下前 30 秒內自己打過牠）、dex＝某地形圖鑑收集 n 種、big＝釣到過大尺寸（fish.json 的 big）的魚種：有 n＝不限島嶼達 n 種，沒有 n＝全部魚種都要（可加 rarity 只看某稀有度）、titles＝ids 裡的稱號全都解鎖。",
+ "titles": [
+  {
+   "id": "legend",
+   "name": "傳奇",
+   "desc": "參與擊倒草島的黃金肥龍",
+   "cond": {
+    "type": "owner",
+    "mob": "gold_dragon"
+   }
+  },
+  {
+   "id": "snake_bane",
+   "name": "蛇女剋星",
+   "desc": "參與擊倒夜光島的笨蛋蛇女",
+   "cond": {
+    "type": "owner",
+    "mob": "snake_queen"
+   }
+  },
+  {
+   "id": "ultima",
+   "name": "究極",
+   "desc": "參與擊倒熔岩島的蓋老師",
+   "cond": {
+    "type": "owner",
+    "mob": "ultima_weapon"
+   }
+  },
+  {
+   "id": "angler_grass",
+   "name": "草島釣魚能手",
+   "desc": "草島的魚類圖鑑收集 10 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "grass",
+    "n": 10
+   }
+  },
+  {
+   "id": "angler_beach",
+   "name": "沙灘島釣魚能手",
+   "desc": "沙灘島的魚類圖鑑收集 10 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "beach",
+    "n": 10
+   }
+  },
+  {
+   "id": "angler_snow",
+   "name": "雪島釣魚能手",
+   "desc": "雪島的魚類圖鑑收集 10 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "snow",
+    "n": 10
+   }
+  },
+  {
+   "id": "angler_night",
+   "name": "夜光島釣魚能手",
+   "desc": "夜光島的魚類圖鑑收集 10 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "night",
+    "n": 10
+   }
+  },
+  {
+   "id": "angler_forest",
+   "name": "森林島釣魚能手",
+   "desc": "森林島的魚類圖鑑收集 10 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "forest",
+    "n": 10
+   }
+  },
+  {
+   "id": "angler_volcano",
+   "name": "熔岩島釣魚能手",
+   "desc": "熔岩島的魚類圖鑑收集 10 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "volcano",
+    "n": 10
+   }
+  },
+  {
+   "id": "notes_grass",
+   "name": "專研草島釣魚筆記",
+   "desc": "草島的魚類圖鑑收集 30 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "grass",
+    "n": 30
+   }
+  },
+  {
+   "id": "notes_beach",
+   "name": "專研沙灘島釣魚筆記",
+   "desc": "沙灘島的魚類圖鑑收集 30 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "beach",
+    "n": 30
+   }
+  },
+  {
+   "id": "notes_snow",
+   "name": "專研雪島釣魚筆記",
+   "desc": "雪島的魚類圖鑑收集 30 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "snow",
+    "n": 30
+   }
+  },
+  {
+   "id": "notes_night",
+   "name": "專研夜光島釣魚筆記",
+   "desc": "夜光島的魚類圖鑑收集 30 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "night",
+    "n": 30
+   }
+  },
+  {
+   "id": "notes_forest",
+   "name": "專研森林島釣魚筆記",
+   "desc": "森林島的魚類圖鑑收集 30 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "forest",
+    "n": 30
+   }
+  },
+  {
+   "id": "notes_volcano",
+   "name": "專研熔岩島釣魚筆記",
+   "desc": "熔岩島的魚類圖鑑收集 30 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "volcano",
+    "n": 30
+   }
+  },
+  {
+   "id": "heart_hook",
+   "name": "勾人心魄",
+   "desc": "獲得每座島的釣魚能手",
+   "cond": {
+    "type": "titles",
+    "ids": [
+     "angler_grass",
+     "angler_beach",
+     "angler_snow",
+     "angler_night",
+     "angler_forest",
+     "angler_volcano"
+    ]
+   }
+  },
+  {
+   "id": "world_angler",
+   "name": "釣遍世界",
+   "desc": "獲得每座島的釣魚筆記",
+   "cond": {
+    "type": "titles",
+    "ids": [
+     "notes_grass",
+     "notes_beach",
+     "notes_snow",
+     "notes_night",
+     "notes_forest",
+     "notes_volcano"
+    ]
+   }
+  },
+  {
+   "id": "fish_expert",
+   "name": "捕魚專家",
+   "desc": "30 種魚釣到過大尺寸（不限島嶼）",
+   "cond": {
+    "type": "big",
+    "n": 30
+   }
+  },
+  {
+   "id": "taigong",
+   "name": "魚太公",
+   "desc": "所有罕見魚都釣到過大尺寸",
+   "cond": {
+    "type": "big",
+    "rarity": "uncommon"
+   }
+  },
+  {
+   "id": "yanbo",
+   "name": "煙波釣徒",
+   "desc": "所有稀有魚都釣到過大尺寸",
+   "cond": {
+    "type": "big",
+    "rarity": "rare"
+   }
+  },
+  {
+   "id": "fishing_king",
+   "name": "釣場之王",
+   "desc": "所有魚種都釣到過大尺寸",
+   "cond": {
+    "type": "big"
+   }
+  }
+ ]
+}

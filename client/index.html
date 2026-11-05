@@ -53,6 +53,7 @@
   <div id="avatarPanel" class="ff-panel hidden">
     <div class="ff-panel-title">造型設定</div>
     <div class="grp"><label>職業</label><div id="jobOpts"></div></div>
+    <div class="grp"><label>稱號</label><div class="title-cur"><span id="titleCur"></span><button id="btnTitles" class="ff-btn small">稱號設定</button></div></div>
     <div class="grp"><label>膚色</label><div id="skinOpts"></div></div>
     <div class="grp"><label>髮型</label><div id="hairOpts"></div></div>
     <div class="grp" id="hatGrp"><label>帽子</label><div id="hatOpts"></div></div>
@@ -85,6 +86,14 @@
     <div id="dexHint" class="ff-panel-hint"></div>
     <div id="dexGrid"></div>
     <div class="ff-panel-foot"><button id="dexClose" class="ff-btn small">關閉</button></div>
+  </div>
+
+  <!-- 稱號一覽：已解鎖的可以選，顯示在名字上方 -->
+  <div id="titleBox" class="ff-panel hidden">
+    <div class="ff-panel-title">稱號一覽</div>
+    <div id="titleHint" class="ff-panel-hint"></div>
+    <div id="titleList"></div>
+    <div class="ff-panel-foot"><button id="titleClose" class="ff-btn small">關閉</button></div>
   </div>
 
   <!-- 看板：所有人都看得到、都能改 -->

@@ -233,6 +233,7 @@ function sanitizeState(s, prev) {
     face: s.face === "up" || s.face === "side" ? s.face : "down",
     seat: idOr(s.seat, null),
     job: s.job === "tank" || s.job === "healer" ? s.job : "dps",   // 職業（坦/補/輸出）：白名單解讀，不合法的值當輸出（挑釁驗證靠這欄）
+    title: idOr(s.title, null),            // 稱號 id（null＝不顯示；只轉發 id，文字由各客戶端查 titles.json，解鎖與否不驗證）
     hp: Math.round(num(s.hp, 0, 20, 10)),
     dead: s.dead ? 1 : 0,
     // 釣魚：浮標位置與階段（只轉發給同地形的人畫圖；釣到什麼由伺服器的 fish 訊息決定）

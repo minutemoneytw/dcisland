@@ -92,6 +92,10 @@ const S = {
   dex: lsObj('dcisland.m0.fishdex', {}),   // 魚類圖鑑：地形 -> 魚id -> {max（最大尺寸 cm）, n（釣到次數）}；登入後換成伺服器的
   dexSource: 'local',                  // 'local'＝訪客／未連線（存本機）；'server'＝伺服器依 Discord 帳號保存
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
+  titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
+  titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
+  titleOpen: false,                    // 稱號一覽視窗是否開著
+  ownerHitAt: {},                      // 自己最後一次打到各島主的時刻（S.t；「參與擊倒」＝島主倒下前 TITLE_ASSIST 秒內打過）
 };
 
 // ---------------- 世界生成 ----------------
@@ -463,6 +467,7 @@ function hitMob(p, a, ranged) {
     const jd = jobOf(p);
     if (jd?.dmgPlus) dmg += jd.dmgPlus;   // 輸出：每擊 +1（連線打島主時送出去的值仍會被伺服器夾回 1～2）
     const od = mobDef(a.id);
+    if (od.owner && p === S.players[0]) S.ownerHitAt[a.id] = S.t;   // 稱號「參與擊倒」用
     if (od.owner && a.proxy) {   // 島主連線時由伺服器權威：送意圖（座標＋傷害＋我們看到的龍位置），本地不扣血（血量等伺服器廣播）
       S.net?.dragonHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, Math.min(2, dmg), Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10, ranged);
     } else {
@@ -506,6 +511,7 @@ function hitMob(p, a, ranged) {
         }
       }
       toast(`${mobDef(a.id).name} 被打倒了！${S.mobsDB.respawn || 30} 秒後重生`, 2200);
+      if (od.owner) titleOwnerDown(a.id);   // 單機打倒島主
     }
   }
 }
@@ -1187,6 +1193,7 @@ function onNetDragon(m) {
       if (m.x !== undefined) { a.x = m.x; a.y = m.y; }
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
       toast(`${mobDef(a.id).name} 被打倒了！30 秒後重生`, 2200);
+      titleOwnerDown(a.id);   // 連線：伺服器宣告島主倒下，最近打過牠的人算參與擊倒
     }
     return;
   }
@@ -1695,7 +1702,17 @@ function drawPerson(p, wi, nameColor) {
   ctx.strokeText(p.name, p.x, nameY);
   ctx.fillStyle = nameColor;
   ctx.fillText(p.name, p.x, nameY);
-  if (p.cast) drawCastBar(p.x, nameY - 30, (S.t - p.cast.t0) / p.cast.dur, '詠唱');   // 詠唱倒數條（同島島主的招式條同一個樣式）
+  // 稱號：名字正上方一行《稱號》（自己看 S.me.title，同島的人看 state 同步來的 id）；有稱號時，泡泡／倒數條／「!」跟著往上移
+  const tt = p.npc ? null : titleText(p === S.players[0] ? S.me.title : p.title);
+  let headY = nameY;
+  if (tt) {
+    headY = nameY - 12;
+    ctx.font = '9px "Microsoft JhengHei"';
+    ctx.strokeText(tt, p.x, headY);
+    ctx.fillStyle = '#f0dc9a'; ctx.fillText(tt, p.x, headY);
+    ctx.font = '10px "Microsoft JhengHei"';   // 職業圓點的位置要用名字的字型量寬
+  }
+  if (p.cast) drawCastBar(p.x, headY - 30, (S.t - p.cast.t0) / p.cast.dur, '詠唱');   // 詠唱倒數條（同島島主的招式條同一個樣式）
   const jd = jobOf(p);
   if (jd) {   // 職業小圓點（FF14 職業徽章的簡化）：名牌左邊一顆角色色圓點
     const px = p.x - ctx.measureText(p.name).width / 2 - 9;
@@ -1716,10 +1733,10 @@ function drawPerson(p, wi, nameColor) {
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#9ff0b4';
     ctx.strokeText(txt, p.x, ty); ctx.fillText(txt, p.x, ty);
   }
-  if (p.say && S.t < p.say.until) drawBubble(p.x, nameY - 14, p.say.text, Math.min(1, (p.say.until - S.t) / .4));
+  if (p.say && S.t < p.say.until) drawBubble(p.x, headY - 14, p.say.text, Math.min(1, (p.say.until - S.t) / .4));
   else if (p.fish?.ph === 'bite') {   // 魚上鉤：頭上跳動的「!」（同地形的人也看得到）
     ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
-    const yy = nameY - 14 - Math.abs(Math.sin(S.t * 10)) * 4;
+    const yy = headY - 14 - Math.abs(Math.sin(S.t * 10)) * 4;
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.9)'; ctx.fillStyle = '#ffd84a';
     ctx.strokeText('!', p.x, yy); ctx.fillText('!', p.x, yy);
   } else if (p.guide) {   // 嚮導頭上有個會晃動的「？」，提示可以問他
@@ -2077,8 +2094,10 @@ function showCatch(p, m) {
   if (!def) return;
   const { isNew, isRecord } = recordCatch(m);
   if (S.fishImgs[m.id]) S.floaters.push({ x: p.x, y: p.y - 64, fishImg: S.fishImgs[m.id], life: 1.8 });
-  toast(`釣到了 ${def.name}！${m.size} cm（${rar?.name || ''}）${isNew ? ' · 新發現！' : isRecord ? ' · 尺寸新紀錄！' : ''}`, 3400);
+  const big = def.big != null && m.size >= def.big;
+  toast(`釣到了 ${def.name}！${m.size} cm（${rar?.name || ''}）${big ? ' · 大尺寸！' : ''}${isNew ? ' · 新發現！' : isRecord ? ' · 尺寸新紀錄！' : ''}`, 3400);
   if (S.dexOpen) buildDex();
+  checkTitles(false);
 }
 // 釣竿拋出去的姿勢角度（正值＝竿尖往面向那側前傾）：等魚前傾、上鉤被往下拉、拉扯時往後上方甩
 function rodAngle(f) {
@@ -2168,6 +2187,81 @@ function buildDex() {
       card.append(r, s);
     }
     grid.appendChild(card);
+  }
+}
+
+// ---- 稱號：達成條件就解鎖（assets/titles/titles.json），在造型面板的「稱號設定」選一個顯示在名字上方 ----
+// 解鎖純客戶端判斷（與職業同樣信任客戶端）：釣魚類從圖鑑推算（登入的人用伺服器存的圖鑑）；擊倒島主記在 localStorage 的 dcisland.m0.titles。
+// 同步只送稱號 id（state.title），文字由各畫面查 titles.json。
+const TITLE_ASSIST = 30;   // 島主倒下前幾秒內打過牠算「參與擊倒」
+const titleDef = id => (id && S.titlesDB?.titles?.find(t => t.id === id)) || null;
+const titleText = id => { const t = titleDef(id); return t ? `《${t.name}》` : null; };
+const allFish = () => Object.entries(S.fishDB?.terrains || {}).flatMap(([t, l]) => l.map(f => ({ t, f })));
+const bigCaught = (t, f) => { const e = S.dex[t]?.[f.id]; return !!e && f.big != null && e.max >= f.big; };
+// 條件進度：{cur, need}；cur ≥ need 就算解鎖
+function titleProgress(c, depth = 0) {
+  if (!c || depth > 3) return { cur: 0, need: 1 };
+  switch (c.type) {
+    case 'owner': return { cur: S.titleBook.kills?.[c.mob] ? 1 : 0, need: 1 };
+    case 'dex': {
+      const seen = S.dex[c.terrain] || {};
+      return { cur: (S.fishDB?.terrains[c.terrain] || []).filter(f => seen[f.id]).length, need: c.n || 1 };
+    }
+    case 'big': {
+      const l = allFish().filter(x => !c.rarity || x.f.rarity === c.rarity);
+      return { cur: l.filter(x => bigCaught(x.t, x.f)).length, need: c.n || Math.max(1, l.length) };
+    }
+    case 'titles': {
+      const ids = c.ids || [];
+      return { cur: ids.filter(id => { const d = titleDef(id); return d && titleMet(d.cond, depth + 1); }).length, need: Math.max(1, ids.length) };
+    }
+  }
+  return { cur: 0, need: 1 };   // 不認得的條件：不解鎖
+}
+function titleMet(c, depth = 0) { const p = titleProgress(c, depth); return p.cur >= p.need; }
+function unlockedTitles() { return new Set((S.titlesDB?.titles || []).filter(t => titleMet(t.cond)).map(t => t.id)); }
+// 重算解鎖狀態；silent＝不跳提示（開機、伺服器送來圖鑑時）。剛解鎖的稱號延遲一下再提示，免得蓋掉釣到魚／打倒島主的提示
+function checkTitles(silent) {
+  const got = unlockedTitles(), known = new Set(S.titleBook.known || []);
+  const fresh = [...got].filter(id => !known.has(id));
+  if (fresh.length) {
+    S.titleBook.known = [...known, ...fresh];
+    lsSet('dcisland.m0.titles', S.titleBook);
+    if (!silent) setTimeout(() => toast(`獲得稱號 ${fresh.map(titleText).join('')}！可在「造型」的稱號設定中使用`, 3600), 2000);
+  }
+  if (S.titleOpen) buildTitles();
+}
+// 島主倒下：TITLE_ASSIST 秒內自己打過牠就記一筆「參與擊倒」
+function titleOwnerDown(mob) {
+  if (!(S.t - (S.ownerHitAt[mob] ?? -1e9) <= TITLE_ASSIST)) return;
+  const kills = S.titleBook.kills ||= {};
+  if (!kills[mob]) { kills[mob] = 1; lsSet('dcisland.m0.titles', S.titleBook); }
+  checkTitles(false);
+}
+function setTitle(id) {
+  S.me.title = id; saveAvatar();
+  toast(id ? `稱號設定為 ${titleText(id)}` : '不顯示稱號', 1600);
+  buildTitles(); buildAvatarPanel();
+}
+function openTitles() { S.titleOpen = true; buildTitles(); $('titleBox').classList.remove('hidden'); }
+function closeTitles() { S.titleOpen = false; $('titleBox').classList.add('hidden'); }
+function buildTitles() {
+  const list = S.titlesDB?.titles || [], got = unlockedTitles();
+  $('titleHint').textContent = `已解鎖 ${got.size}／${list.length}` + (S.dexSource === 'server' ? '' : ' · 訪客／未連線：釣魚紀錄只存在這台電腦') + ' · 擊倒島主的紀錄存在這台電腦';
+  const box = $('titleList'); box.innerHTML = '';
+  const row = (id, name, desc, ok, prog) => {
+    const o = document.createElement('div');
+    o.className = 'title-row' + (ok ? '' : ' locked') + ((S.me.title || null) === id ? ' sel' : '');
+    const nm = document.createElement('div'); nm.className = 'title-name'; nm.textContent = name;
+    const ds = document.createElement('div'); ds.className = 'title-desc'; ds.textContent = desc + (prog ? `（${prog}）` : '');
+    o.append(nm, ds);
+    if (ok) o.onclick = () => setTitle(id);
+    box.appendChild(o);
+  };
+  row(null, '無', '不顯示稱號', true, '');
+  for (const t of list) {
+    const ok = got.has(t.id), p = titleProgress(t.cond);
+    row(t.id, `《${t.name}》`, t.desc, ok, ok ? '已解鎖' : p.need > 1 ? `${Math.min(p.cur, p.need)}／${p.need}` : '未解鎖');
   }
 }
 
@@ -2895,6 +2989,7 @@ function buildAvatarPanel() {
     o.onclick = () => setJob(id);
     jb.appendChild(o);
   }
+  $('titleCur').textContent = titleText(S.me.title) || '無';   // 稱號：按「稱號設定」開稱號一覽選
   const sk = $('skinOpts'); sk.innerHTML = '';
   for (const s of S.avatar.skins) {
     const o = document.createElement('div');
@@ -2974,7 +3069,7 @@ function cycleWeapon(step) {
   setWeapon(ws[(i + step + ws.length) % ws.length].id);
 }
 let wheelAcc = 0, wheelAt = 0;
-const wheelBlocked = () => S.mode !== 'walk' || S.helpOpen || S.listOpen || S.dexOpen || S.signOpen || S.confirmOpen;
+const wheelBlocked = () => S.mode !== 'walk' || S.helpOpen || S.listOpen || S.dexOpen || S.titleOpen || S.signOpen || S.confirmOpen;
 document.addEventListener('wheel', e => {
   const t = e.target;
   if (t !== canvas && !t.closest?.('#weaponBar')) return;   // 只有在遊戲畫面或武器列上滾才切換（面板、視窗要照常捲動）
@@ -3017,6 +3112,7 @@ addEventListener('keydown', e => {
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   if (S.listOpen) { if (k === 'escape' || k === 'l') closeList(); return; }                // 線上列表開著：Esc / L 關閉
   if (S.dexOpen) { if (k === 'escape') closeDex(); return; }                               // 圖鑑開著：Esc 關閉（仍可走路）
+  if (S.titleOpen) { if (k === 'escape') closeTitles(); return; }                          // 稱號一覽開著：Esc 關閉（仍可走路）
   if (S.helpOpen) { if (k === 'escape' || k === 'enter') closeHelp(); return; }       // 操作說明開著：Esc / Enter 關閉，其他鍵不處理
   if (S.confirmOpen) { if (k === 'escape') closeConfirm(); return; }   // 「要保存嗎？」開著時：Esc＝繼續編輯，其他鍵不處理
   if (k === 'e' && !e.repeat) {
@@ -3085,7 +3181,7 @@ function clickAttack(wx, wy) {
 }
 // 長按 F 或左鍵：冷卻一到就自動再揮（每幀呼叫；第一下由按下事件負責，之後這裡接手）
 function autoAttack() {
-  if (S.mode !== 'walk' || S.helpOpen || S.listOpen || S.signOpen || S.dexOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
+  if (S.mode !== 'walk' || S.helpOpen || S.listOpen || S.signOpen || S.dexOpen || S.titleOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
   if (isRod() || S.players[0].fish) return;   // 釣竿不連擊：長按不會一直拋竿／收竿
   quiet = true;
   try {
@@ -3096,7 +3192,7 @@ function autoAttack() {
   } finally { quiet = false; }
 }
 canvas.addEventListener('mousedown', e => {
-  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.titleOpen) return;
   if (S.mode === 'decor' && S.decorTab === 'floor' && (e.button === 0 || e.button === 2)) {   // 地板模式：長按左鍵鋪、長按右鍵拆
     if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
     const r = canvas.getBoundingClientRect();
@@ -3123,7 +3219,7 @@ canvas.addEventListener('mousedown', e => {
 });
 canvas.addEventListener('contextmenu', e => {
   e.preventDefault();
-  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.titleOpen) return;
   if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身
     const r = canvas.getBoundingClientRect();
     const f = furnAtPoint(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y);
@@ -3166,6 +3262,8 @@ $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); bu
 $('avatarClose').onclick = () => $('avatarPanel').classList.add('hidden');
 $('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑
 $('dexClose').onclick = closeDex;
+$('btnTitles').onclick = () => { if (S.titleOpen) closeTitles(); else openTitles(); };   // 造型面板的「稱號設定」：稱號一覽
+$('titleClose').onclick = closeTitles;
 
 // ---------------- 資源載入 ----------------
 async function ensureTerrain(id) {
@@ -3196,7 +3294,7 @@ let welcomeUntil = 0;
 async function boot() {
   $('btnDecor').disabled = false;
   // manifest：互不相依，一次全部並行抓（以前是一個接一個，首次進島要等一長串往返）
-  const [tjson, furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB] = await Promise.all([
+  const [tjson, furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB] = await Promise.all([
     Promise.all(TERRAIN_IDS.map(id => loadJSON(`assets/terrain/${id}/terrain.json`))),
     loadJSON('assets/furniture/furniture.json'),
     loadJSON('assets/floors/floors.json'),
@@ -3206,11 +3304,14 @@ async function boot() {
     loadJSON('assets/avatar/avatar.json'),
     loadJSON('assets/fish/fish.json'),          // 釣魚：各地形的魚與稀有度
     loadJSON('assets/skills/skills.json').catch(() => ({ skills: {} })),   // 島主招式（倒數條／招式名／要不要講台詞）；讀不到就照舊
+    loadJSON('assets/titles/titles.json').catch(() => ({ titles: [] })),   // 稱號；讀不到就沒有稱號可選
   ]);
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
-  Object.assign(S, { furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB });
+  Object.assign(S, { furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB });
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
   if (!JOBS[S.me.job]) S.me.job = 'dps';   // 舊存檔沒有職業欄（或值不合法）：當輸出
+  if (S.me.title && !titleDef(S.me.title)) S.me.title = null;   // 稱號已從清單移除：不顯示
+  checkTitles(true);                       // 依現有紀錄算一次已解鎖的稱號（不跳提示）
   if (!weaponAllowed(S.me.job, S.me.weapon)) S.me.weapon = JOBS[S.me.job].defaultWeapon || 'hands';   // 舊存檔的武器這個職業不能用：換成預設武器
   if (!S.me.weapon) S.me.weapon = S.avatar.weapons?.find(w => w.sprite)?.id || 'hands';   // 舊存檔沒武器欄：給第一款有圖的武器
   // 圖片：同樣全部並行（含目前所在地形的圖）。只有角色身體是必要的（缺了畫不出人），其餘缺圖就略過該項
@@ -3309,7 +3410,7 @@ async function boot() {
     onDeco: onNetDeco,
     onDragon: onNetDragon,   // 島主事件（aim/hp/dead/spawn/state 快照）
     onFishResult,            // 釣魚結果（伺服器抽的魚；登入的人已記進伺服器的圖鑑）
-    onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); },   // 登入後伺服器送來的圖鑑
+    onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); checkTitles(true); },   // 登入後伺服器送來的圖鑑（稱號跟著重算，不跳提示）
     onOpen: net => {
       if (performance.now() >= welcomeUntil) toast(`已連上島（${net.room}）`, 2000);
       // 連上（或重連）時補傳目前地形的陸地位圖（新連線重新算「傳過沒」）

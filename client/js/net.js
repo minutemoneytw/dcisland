@@ -33,6 +33,7 @@ export function connectNet(S, opts = {}) {
       look: { skin: S.me.skin, hair: S.me.hair, shirt: S.me.shirt, pants: S.me.pants || 0,
               hat: S.me.hat || null, top: S.me.top || null, bottom: S.me.bottom || null },   // 帽子／上衣款式／褲子款式（null＝沒戴／用預設款）
       job: S.me.job,                       // 職業（坦克/補師/輸出）：伺服器原樣轉發，各畫面用 jobOf() 解讀
+      title: S.me.title || null,           // 稱號 id（null＝不顯示）：各畫面查 titles.json 取文字
       d8: p.d8 || null,                    // 畫面用的 8 方向朝向（down/down_right/right/…；玩法仍看 face）
       weapon: p.tool || S.me.weapon,       // 手上拿的（打石頭/樹木時是工具）
       pose: p.pose || null,                // 'sit' | 'sleep'（坐/睡在家具上）
@@ -70,6 +71,7 @@ export function connectNet(S, opts = {}) {
       const wasDead = !!r.dead;
       r.dead = !!st.dead;                  // 死亡（墓碑）：進出死亡時跟同島的人說一聲
       if (st.hp != null) r.hp = st.hp;     // 血量同步（對方自己算好的）
+      r.title = typeof st.title === 'string' ? st.title : null;   // 稱號 id（舊客戶端沒送＝不顯示；main.js 的 titleText() 查不到也不顯示）
       if (st.job) r.job = st.job;          // 職業（坦克/補師/輸出）：只收字串，main.js 的 jobOf() 會做白名單解讀
       if (!r.dead) {                       // 死亡時位置凍結（墓碑不會被推著走）
         r.tx = st.x; r.ty = st.y; r.dir = st.dir ?? r.dir; r.tz = st.z ?? r.tz;   // 高度只設目標，由 stepRemote 平滑追上（直接覆蓋會每次封包都彈回 0 → 跳躍抽動）
