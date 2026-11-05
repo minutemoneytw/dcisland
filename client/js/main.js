@@ -594,7 +594,7 @@ const JOBS = {
 const ALWAYS_WEAPONS = ['hands', 'rod'];   // 所有職業都能用的武器（空手、釣竿）
 const weaponAllowed = (job, id) => { const jd = JOBS[job]; return !jd?.weapons || ALWAYS_WEAPONS.includes(id) || jd.weapons.includes(id); };
 const allowedWeapons = () => S.avatar.weapons.filter(w => weaponAllowed(S.me.job, w.id));   // 目前職業能用的武器（依 avatar.json 的順序）
-const HEAL_RADIUS = 96;   // 補師打倒動物／群療時的治療半徑（3 格）
+const HEAL_RADIUS = 110;  // 補師打倒動物／群療時的治療半徑（約 3.4 格；2026-11-05 由 96 調大，與月環內圈安全區同大）
 // 自己看「造型」面板選的職業（S.me.job）；別人看 state 封包同步的 job；NPC 沒有職業（回 null）
 const jobOf = p => JOBS[p === S.players[0] ? S.me.job : p.job] || null;
 // 血量上限：有職業用職業的上限，沒有（NPC／未設定）就 PLAYER_HP
