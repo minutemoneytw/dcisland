@@ -8,11 +8,75 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(HERE, "..", "client", "assets")
 TILE = 16
 
-# ---------------- PNG ----------------
+# ---------------- PNG（內容感知寫檔）----------------
+# 地雷：不同 Python 版本內建的 zlib 壓縮結果不同，重跑會把幾十個「畫面完全一樣」的 PNG 弄成二進位落差，
+# git 看起來全被改過、逼著要 git checkout 還原。所以寫檔前先把既有 PNG 解碼回像素，一模一樣就跳過不寫。
+
+def decode_png_bytes(data):
+    """把 PNG 位元組解碼成原始像素：回傳 (w, h, 每列 RGBA 連續位元組)；不支援或壞掉的格式回 None。
+    專案內的 PNG 都是 8-bit RGBA 非交錯，剛好覆蓋會被覆寫的目標與外部 img2pixel 匯出的素材。"""
+    try:
+        pos, w, h, idat = 8, None, None, b""
+        while pos + 8 <= len(data):
+            ln = struct.unpack(">I", data[pos:pos+4])[0]
+            typ = data[pos+4:pos+8]; chunk = data[pos+8:pos+8+ln]
+            if typ == b"IHDR":
+                w, h, bit, color, _, _, inter = struct.unpack(">IIBBBBB", chunk)
+                if bit != 8 or color != 6 or inter != 0:
+                    return None
+            elif typ == b"IDAT":
+                idat += chunk
+            elif typ == b"IEND":
+                break
+            pos += 12 + ln
+        if w is None or h is None:
+            return None
+        raw = zlib.decompress(idat)
+    except (OSError, ValueError, struct.error, zlib.error):
+        return None
+    stride = w * 4; out = bytearray(); prev = bytearray(stride); i = 0
+    try:
+        for y in range(h):
+            f = raw[i]; i += 1; row = bytearray(raw[i:i+stride]); i += stride
+            if f == 0: pass
+            elif f == 1:
+                for x in range(stride): row[x] = (row[x] + (row[x-4] if x >= 4 else 0)) & 255
+            elif f == 2:
+                for x in range(stride): row[x] = (row[x] + prev[x]) & 255
+            elif f == 3:
+                for x in range(stride):
+                    row[x] = (row[x] + (((row[x-4] if x >= 4 else 0) + prev[x]) // 2)) & 255
+            elif f == 4:
+                for x in range(stride):
+                    a = row[x-4] if x >= 4 else 0; b = prev[x]; c = prev[x-4] if x >= 4 else 0
+                    p = a + b - c; pa, pb, pc = abs(p-a), abs(p-b), abs(p-c)
+                    row[x] = (row[x] + (a if pa <= pb and pa <= pc else (b if pb <= pc else c))) & 255
+            else:
+                return None
+            out += row; prev = row
+    except IndexError:
+        return None
+    return w, h, bytes(out)
+
+def read_png_pixels(path):
+    """讀檔後解碼成像素（見 decode_png_bytes）；讀不到回 None"""
+    if not os.path.exists(path):
+        return None
+    try:
+        return decode_png_bytes(open(path, "rb").read())
+    except OSError:
+        return None
+
 def write_png(path, w, h, get_px):
     def chunk(tag, data):
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
-    raw = b"".join(b"\x00" + b"".join(bytes(get_px(x, y)) for x in range(w)) for y in range(h))
+    pix = b"".join(b"".join(bytes(get_px(x, y)) for x in range(w)) for y in range(h))   # 純像素（不含 filter byte）
+    if os.path.exists(path):
+        old = read_png_pixels(path)
+        if old == (w, h, pix):   # 解碼後像素一模一樣：不重寫（重跑不再弄出一堆壓縮落差造成的變更）
+            print(f"  {os.path.relpath(path, HERE)}  ({w}x{h})　像素相同，不重寫")
+            return
+    raw = b"".join(b"\x00" + pix[y * w * 4:(y + 1) * w * 4] for y in range(h))   # PNG 列格式：每列一個 filter byte（這裡固定 0）
     ihdr = struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)
     data = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b"")
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -65,6 +129,23 @@ class Canvas:
 def save(cv, name, sub=""):
     path = os.path.join(ASSETS, sub, name) if sub else os.path.join(ASSETS, name)
     write_png(path, cv.w, cv.h, lambda x, y: cv.get(x, y))
+
+def write_json(path, obj):
+    """manifest JSON 一律用 LF 寫出、內容一模一樣就不重寫。
+    地雷：直接 open(..., 'w') 在 Windows 會把 \\n 轉成 CRLF，而 repo 的 .gitattributes 設了 eol=lf，
+    結果重跑每次都把所有 manifest 弄成「假變更」。"""
+    text = json.dumps(obj, ensure_ascii=False, indent=1)
+    if os.path.exists(path):
+        try:
+            if open(path, "rb").read() == text.encode("utf-8"):
+                print(f"  {os.path.relpath(path, HERE)}　內容相同，不重寫")
+                return
+        except OSError:
+            pass
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    print(f"  {os.path.relpath(path, HERE)}")
 
 # ---------------- 地形 tile ----------------
 def dither_tile(base, dot, seed, n=None):
@@ -1412,8 +1493,7 @@ def main():
             td["owner"] = OWNER_BY_TERRAIN[t["id"]]
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉
             td["anims"] = t["anims"]
-        json.dump(td, open(os.path.join(ASSETS, sub, "terrain.json"), "w", encoding="utf-8"),
-                  ensure_ascii=False, indent=1)
+        write_json(os.path.join(ASSETS, sub, "terrain.json"), td)
         print(f"  terrain/{t['id']}/terrain.json")
 
     print("== 家具 ==")
@@ -1422,16 +1502,14 @@ def main():
                    ("tv", tv()), ("cat", cat()), ("bed", bed()),
                    ("shelf", shelf()), ("sign", sign())]:
         save(cv, fn + ".png", "furniture")
-    json.dump(FURN_MANIFEST, open(os.path.join(ASSETS, "furniture", "furniture.json"), "w", encoding="utf-8"),
-              ensure_ascii=False, indent=1)
+    write_json(os.path.join(ASSETS, "furniture", "furniture.json"), FURN_MANIFEST)
     print("  furniture/furniture.json")
 
     print("== 地板 ==")
     save(floor_wood(), "floor_wood.png", "floors")
     save(floor_stone(), "floor_stone.png", "floors")
     save(rug(), "floor_rug.png", "floors")            # 地毯：2×2 格（32×32），沿用家具地毯的圖
-    json.dump(FLOOR_MANIFEST, open(os.path.join(ASSETS, "floors", "floors.json"), "w", encoding="utf-8"),
-              ensure_ascii=False, indent=1)
+    write_json(os.path.join(ASSETS, "floors", "floors.json"), FLOOR_MANIFEST)
     print("  floors/floors.json")
 
     print("== 小動物（FF14 致敬）==")
@@ -1439,8 +1517,7 @@ def main():
     for fn, cv in [("bird", bird()), ("sheep", sheep()), ("frog", frog()), ("golden_dragon", golden_dragon()),
                    ("snake_queen", snake_queen())]:
         save(cv, fn + ".png", "mobs")
-    json.dump(MOB_MANIFEST, open(os.path.join(adir, "mobs.json"), "w", encoding="utf-8"),
-              ensure_ascii=False, indent=1)
+    write_json(os.path.join(adir, "mobs.json"), MOB_MANIFEST)
     print("  mobs/mobs.json")
 
     print("== 一般素材 ==")
@@ -1453,8 +1530,7 @@ def main():
     print("== 釣魚：魚類圖鑑 ==")
     for t, fid, name, rar, size, draw in FISH_TABLE:
         save(draw(), f"{fid}.png", "fish")
-    json.dump(fish_manifest(), open(os.path.join(ASSETS, "fish", "fish.json"), "w", encoding="utf-8"),
-              ensure_ascii=False, indent=1)
+    write_json(os.path.join(ASSETS, "fish", "fish.json"), fish_manifest())
     print("  fish/fish.json")
     print("== 採集工具（tools.json 為手寫資料，這裡只畫圖）==")
     save(tool_pickaxe(), "tool_pickaxe.png", "tools")
@@ -1468,7 +1544,7 @@ def main():
     save(char_body_sheet(SKINS["light"], "bottom"), "char_bottom_basic.png", sub)
     for i, st in enumerate(["short", "side", "fluffy"]):
         save(char_hair_sheet(st), f"char_hair{i + 1}.png", sub)
-    json.dump(dict(
+    write_json(os.path.join(ASSETS, sub, "avatar.json"), dict(
         scale=2,
         # 人物分層的幀表（所有層共用）：w×h＝每幀大小；states＝狀態 → 幀號（8 方向 × idle/walk，加 sit）；fps＝待機／走路每秒幾幀；
         # anchors＝武器掛點（sheet 像素座標，腳底中心＝(w/2, h)）：back 背上、backView 背面時背上、waist 腰間、hand 手（揮擊／拋竿轉軸）；
@@ -1497,7 +1573,7 @@ def main():
             dict(id="staff", name="法杖", sprite="weapon_staff.png", ranged=dict(range=320, cast=1.2, dmg=2)),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
             dict(id="rod", name="釣竿", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
         ],
-    ), open(os.path.join(ASSETS, sub, "avatar.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    ))
     print("  avatar/avatar.json")
 
 if __name__ == "__main__":
