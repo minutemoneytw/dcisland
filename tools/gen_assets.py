@@ -1881,8 +1881,9 @@ def main():
             dict(id="waraxe", name="戰斧", type="axe", sprite="weapon_waraxe.png", carry="back"),
             dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", ranged=dict(range=320, cast=1.2, dmg=2)),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
             dict(id="tome", name="魔導書", type="tome", sprite="weapon_tome.png", carry="waist", ranged=dict(range=320, cast=1.2, dmg=2)),
-            # 豎琴弓：遠程但不用詠唱（cast 0＝按攻擊直接射箭；shot: "arrow"＝畫箭矢而不是光球）
-            dict(id="harpbow", name="豎琴弓", type="bow", sprite="weapon_harpbow.png", carry="back", ranged=dict(range=320, cast=0, dmg=2, shot="arrow")),
+            # 豎琴弓：遠程但不用詠唱（cast 0＝按攻擊直接射箭；shot: "arrow"＝畫箭矢而不是光球）。dmg 1：加上輸出的 +1＝2，
+            # 和忍者一樣；要詠唱的武器（咒杖等）才是 2＋1＝3（使用者定：不用詠唱的普攻都是 2）
+            dict(id="harpbow", name="豎琴弓", type="bow", sprite="weapon_harpbow.png", carry="back", ranged=dict(range=320, cast=0, dmg=1, shot="arrow")),
             dict(id="daggers", name="雙劍", type="daggers", sprite="weapon_daggers.png", carry="waist"),
             dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=320, cast=1.6, dmg=2)),
             dict(id="rod", name="釣竿", type="rod", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊

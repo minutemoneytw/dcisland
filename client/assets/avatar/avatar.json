@@ -514,7 +514,7 @@
    "ranged": {
     "range": 320,
     "cast": 0,
-    "dmg": 2,
+    "dmg": 1,
     "shot": "arrow"
    }
   },
