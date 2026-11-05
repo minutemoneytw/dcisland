@@ -1019,15 +1019,19 @@ Object.assign(JOB_SKILLS, {
               } },
   song:     { name: '唱歌', cd: 40, dur: 15, r: 300, crit: .25, desc: '周圍 300px 內所有人（含自己）15 秒內爆擊率 +25%（遠程攻擊平常不會爆擊，唱歌期間也會）',
               run(me) { S.fx.song = S.t + this.dur; S.net?.skillEvent?.('song'); S.floaters.push({ fxk: 'song', x: me.x, y: me.y, r: this.r, life: .7 }); return true; } },
-  poison:   { name: '毒箭', cd: 12, dur: 30, every: 3, dmg: 1, range: 320, desc: '對滑鼠方向的敵人射一支毒箭：30 秒內每 3 秒受到 1 傷害（共 10 下）',
+  poison:   { name: '毒箭', cd: 12, dur: 30, every: 3, dmg: 1, range: 320, desc: '對滑鼠方向的敵人射一支毒箭：射中當下先受到 1 傷害，之後 30 秒內每 3 秒 1 傷害（共 10 下）',
               usable() { return pickCastTarget(S.players[0], this, castAim()) ? null : '射程內沒有目標'; },
               run(me) {
                 const a = pickCastTarget(me, this, castAim());
                 if (!a) { say('射程內沒有目標'); return false; }
-                a.poison = { until: S.t + this.dur, next: S.t + this.every };   // 每跳由自己這邊送（stepSkills），島主／深海魚人由伺服器驗證 sk:'poison'
+                // 每跳由自己這邊送（stepSkills），島主／深海魚人由伺服器驗證 sk:'poison'。射中的當下（第 0 秒）先跳一次，之後每 3 秒一次（0、3…27 秒共 10 下）；
+                // 目標已經中毒就只延長時間、照原本的節奏跳（不另外多跳一次，也避免撞到伺服器每 2.7 秒一次的限制）
                 const big = mobDef(a.id).big || 1;
                 S.floaters.push({ fxk: 'arrow', poison: true, x1: me.x + me.dir * 8, y1: me.y - 30, x2: a.x, y2: a.y - 20 * big, life: .2 });
                 S.floaters.push({ fxk: 'poisonpop', x: a.x, y: a.y - 20 * big, big, life: .6 });
+                if (a.poison) { a.poison.until = S.t + this.dur; return true; }
+                a.poison = { until: S.t + this.dur, next: S.t + this.every };
+                hitMob(me, a, true, { dmg: this.dmg, sk: 'poison', dot: true });
                 return true;
               } },
   care:     { name: '關心', cd: 20, dur: 30, amt: 1, range: 320, desc: '指定滑鼠方向最近的一位玩家（附近沒人就是自己）：30 秒內賢者每造成一次傷害，對方回 1 血',
