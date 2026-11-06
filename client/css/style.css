@@ -227,6 +227,12 @@ body {
 #sprintBtn { position: absolute; right: 10px; bottom: 12px; z-index: 15; width: 52px; height: 52px; cursor: pointer; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .5)); }
 #sprintBtn canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
 #sprintBtn:active canvas { transform: scale(.93); }
+/* 設定（齒輪）選單：右上齒輪點開的下拉選單，操作說明等項目收在這裡 */
+#settingsBox { position: relative; display: flex; align-items: center; }
+#btnSettings svg { display: block; }
+#settingsMenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; min-width: 136px; padding: 4px; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--gold-dim); box-shadow: 0 6px 18px rgba(0, 0, 0, .5); }
+.settings-item { text-align: left; padding: 9px 12px; border: none; background: none; color: var(--text); font: 13px "Microsoft JhengHei", "PingFang TC", sans-serif; letter-spacing: 1px; cursor: pointer; white-space: nowrap; }
+.settings-item:hover { background: rgba(200, 170, 79, .18); color: #ffe9a8; }
 
 /* ---------- 武器列（左上角，橫向只有圖示；選到的那格才顯示名稱，滾輪切換）---------- */
 #weaponBar { position: absolute; left: 10px; top: 52px; z-index: 12; display: flex; flex-direction: row; gap: 4px; user-select: none; }

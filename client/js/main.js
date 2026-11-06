@@ -4780,7 +4780,11 @@ $('furnClear').onclick = () => {
 };
 
 $('listClose').onclick = closeList;
-$('btnHelp').onclick = () => { if (S.helpOpen) closeHelp(); else openHelp(); };   // 右上「操作說明」：和嚮導一樣的操作說明；開著時再按就關閉（同「圖鑑」）
+$('btnSettings').onclick = () => $('settingsMenu').classList.toggle('hidden');   // 右上齒輪：開／收設定選單（操作說明等收在裡面，之後的設定項目也加這）
+$('menuHelp').onclick = () => { $('settingsMenu').classList.add('hidden'); openHelp(); };   // 設定 → 操作說明（同嚮導的說明視窗）
+document.addEventListener('click', e => {   // 點齒輪與選單以外的地方就收起來
+  if (!(e.target instanceof Element) || !e.target.closest('#settingsBox')) $('settingsMenu')?.classList.add('hidden');
+});
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => { closeColor(false); closeGlams(); $('avatarPanel').classList.add('hidden'); };
 $('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑
@@ -4922,7 +4926,7 @@ async function boot() {
   requestAnimationFrame(loop);
   window.S = S; // debug / discord.js 接線用
   window.toast = toast;
-  // 進島只提示歡迎；操作方式看右上「操作說明」或問嚮導
+  // 進島只提示歡迎；操作方式看右上齒輪（設定）選單裡的「操作說明」或問嚮導
   const welcomeMs = 3000;
   welcomeUntil = performance.now() + welcomeMs;           // 歡迎訊息顯示期間，不讓「已連上島」把它蓋掉
   toast('歡迎來到 DC島！', welcomeMs);
