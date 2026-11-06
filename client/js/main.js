@@ -960,14 +960,18 @@ function commandFire(a, def) {   // 讀條結束：檢定（自己＝真判定�
   a.command = null; a.cast = 0;
   a.rageCd = S.t + OWNER_CD;
   const me = S.players[0];
-  const moving = q => q.lastMoveAt != null && (S.t - q.lastMoveAt) < OWNER_CMD_LEEWAY;   // 最近 0.5 秒內有移動＝行動中
+  // 判定用「真實時鐘」的移動輸入（me.lastInputWall：keydown 含 OS 重複鍵＋stepPlayer 每幀都會刷新），檢定窗與讀條同一條牆鐘軸。
+  // 2026-11-06 修正：原本用遊戲時間 S.t——Discord webview 的 rAF 被節流時 S.t 落後真實時間、節流期間的輸入又沒被記錄，造成「該中沒中」
+  const stationary = me.pose || me.knock || S.t < (me.petUntil ?? 0);   // 石化／被擊飛／坐著睡著＝視為靜止（原設計；避免按住的鍵被 OS 重複鍵出賣）
+  const moving = !stationary && me.lastInputWall != null && Date.now() - me.lastInputWall < OWNER_CMD_LEEWAY * 1000;
   if (!me.dead) {
-    if (kind === 'act' && !moving(me)) killPlayer(me, def.name, '行動命令');
-    if (kind === 'still' && moving(me)) killPlayer(me, def.name, '靜止命令');
+    if (kind === 'act' && !moving) killPlayer(me, def.name, '行動命令');
+    if (kind === 'still' && moving) killPlayer(me, def.name, '靜止命令');
   }
-  for (const r of S.remotes.values()) {
+  for (const r of S.remotes.values()) {   // 遠端只畫演出（由對方畫面自判）；這裡用對方回報的 moving 大概估
     if (r.dead) continue;
-    if ((kind === 'act' && !moving(r)) || (kind === 'still' && moving(r))) S.floaters.push({ x: r.x, y: r.y - 40, v: '……', life: .8 });
+    const rmoving = r.lastMoveAt != null && (S.t - r.lastMoveAt) < OWNER_CMD_LEEWAY;
+    if ((kind === 'act' && !rmoving) || (kind === 'still' && rmoving)) S.floaters.push({ x: r.x, y: r.y - 40, v: '……', life: .8 });
   }
 }
 
@@ -1663,7 +1667,12 @@ function applyDragonSnap(o) {
   if (o.ph === 'dead') return;   // 死了就先不生成，等 spawn 事件
   const a = dragonEnsure(o.x, o.y, o.hp);
   if (!a) return;
-  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null; a.command = null; a.beam = null;
+  // 台詞招式的命令（qfire 後的 2 秒檢定）在伺服器端是 idle（沒有 aim_tms），每個 state tick 的快照若把 a.command 洗掉，
+  // 本地檢定就永遠不會跑＝「該中沒中」。所以還沒到點的命令要保留，讓 stepCommandCheck 照牆鐘跑完檢定（2026-11-06 修正）；
+  // 至於伺服器 ph='cast' 的正規命令，下面 cast 分支會用伺服器時間軸重建，不受影響
+  const keepCmd = a.command && Date.now() - a.command.t0ms < a.command.castMs;
+  a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null; a.beam = null;
+  if (!keepCmd) a.command = null;
   a.aggro = o.aggro != null;   // 快照帶仇恨目標（連線編號）：中途進場也知道牠在追殺（戰鬥中不自動回血、之後會提示冷靜）
   a.vulnUntil = o.vulnMs ? S.t + o.vulnMs / 1000 : 0; a.weakUntil = o.weakMs ? S.t + o.weakMs / 1000 : 0;   // 破綻／降傷剩餘時間
   if (o.ph === 'aim') {   // 島緣鎖定中：還原成循環（扣掉已過的預警時間）
@@ -1808,7 +1817,11 @@ function onNetDragon(m) {
   if (m.ev === 'wander') {   // 島主往新路點散步（伺服器帶路；插值與伺服器一致，凍結恢復也正確）
     const na = a || dragonEnsure(m.fx, m.fy);
     if (!na) return;
-    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.command = null; na.beam = null;
+    // 台詞招式的命令（qfire 後 2 秒檢定）在伺服器端已回 idle、會排散步腿——但客戶端的檢定還在跑，
+    // 不能被 wander 事件洗掉（洗掉＝檢定永遠不會發生＝「該中沒中」，2026-11-06 修正）；讀條中島主照樣釘在原地
+    const keepCmd = na.command && Date.now() - na.command.t0ms < na.command.castMs;
+    na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.beam = null;
+    if (!keepCmd) na.command = null;
     na.wleg = { fx: m.fx, fy: m.fy, tx: m.tx, ty: m.ty, tms: m.tms, t0ms: Date.now() };
     na.legEndedAt = 0;
     na.x = m.fx; na.y = m.fy; na.dir = m.tx < m.fx ? -1 : 1;
@@ -1836,8 +1849,10 @@ function onNetDragon(m) {
     const ownerName = () => mobDef(S.terrains[S.terrain]?.owner || a?.id || 'gold_dragon')?.name || '島主';
     const r = S.remotes.get(m.id);
     if (a) {
+      const keepCmd = a.command && Date.now() - a.command.t0ms < a.command.castMs;   // 讀條中的命令照樣跑完檢定（同 wander 的修正）
       a.aggro = true; a.wleg = null; a.cast = 0; a.castFrom = null;
       a.fly = false; a.dashU = null; a.cycle = null; a.gaze = null; a.command = null; a.beam = null; a.rest = 0; a.retHome = false;
+      if (!keepCmd) a.command = null;
     }
     if (m.id === S.net?.id) toast(`${ownerName()} 火冒三丈地追殺你！快跑！`, 2600);
     else if (r) toast(`${ownerName()} 追殺 ${r.name}！`, 2200);
@@ -2301,7 +2316,7 @@ function stepPlayer(p, dt) {
     if (keys['s'] || keys['arrowdown']) dy += 1;
   }
   p.moving = dx !== 0 || dy !== 0;
-  if (p.moving) p.lastMoveAt = S.t;   // 命令檢定用（行動命令／靜止命令）：最後一次有移動輸入的時間
+  if (p.moving) { p.lastMoveAt = S.t; p.lastInputWall = Date.now(); }   // 命令檢定用（行動命令／靜止命令）：最後一次有移動輸入的時刻（真實時鐘一份、遊戲時間一份）
   // 釣魚中（拉扯以外）：可以走、可以跳，離浮標太遠（FISH_LEASH）才收竿；換掉釣竿、進裝飾模式、被石化也會收竿
   if (p.fish && !reeling) {
     if (Math.hypot(p.fish.x - p.x, p.fish.y - p.y) > FISH_LEASH) stopFishing(p, '離浮標太遠，收竿了');
@@ -4558,6 +4573,7 @@ function setJob(id) {
 
 // ---------------- 輸入 ----------------
 const keys = {};
+const MOVE_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (S.signOpen) {                                             // 看板視窗開著：Esc 取消、Ctrl+Enter 儲存，其他鍵留給輸入框
@@ -4566,6 +4582,10 @@ addEventListener('keydown', e => {
     return;
   }
   keys[k] = true;
+  if (MOVE_KEYS.includes(k)) {                                  // 命令檢定：移動輸入記在真實時鐘——keydown（含按住的 OS 重複鍵）
+    const me = S.players[0];                                    // 即使 rAF 被 Discord webview 凍結也記得到（2026-11-06 修正「該中沒中」）
+    if (me) me.lastInputWall = Date.now();
+  }
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   if (S.listOpen) { if (k === 'escape' || k === 'l') closeList(); return; }                // 線上列表開著：Esc / L 關閉
   if (S.dexOpen) { if (k === 'escape') closeDex(); return; }                               // 圖鑑開著：Esc 關閉（仍可走路）
