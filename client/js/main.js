@@ -53,6 +53,7 @@ const S = {
   charCache: new Map(),         // (造型, 幀號) -> 合成好的一幀
   recolorCache: new Map(),      // (sheet, 顏色) -> 換好色的整張 sheet
   me: lsObj('dcisland.m0.avatar', null) || { skin: 'light', hair: 'hair1', shirt: 0, weapon: 'sword' },
+  profile: lsObj('dcisland.m0.profile', null) || { xp: 0, showLv: true },   // 等級等個人資料（跟著人走，換職業繼承；key＝dcisland.m0.profile）
   world: null,                  // {types: Uint8Array, decos: []}
   furnItems: [],                // [{type, cell:[x,y]}]
   occ: new Map(),               // "x,y" -> furniture index
@@ -302,7 +303,7 @@ function applyDecoHit(d, hp, dead, ttl, mine) {
   if (!dead) return;
   d.dead = true; d.respawnAt = S.t + ttl / 1000;
   S.floaters.push({ x: bx, y: r.y + r.h * .5, poof: true, life: .55 });
-  if (mine) { spawnDrops(tgt, bx, by); toast(`${tgt.name}被破壞了`, 1600); }
+  if (mine) { spawnDrops(tgt, bx, by); grantExp(1, bx, by - 40); toast(`${tgt.name}被破壞了`, 1600); }   // 採集成功（打壞的人）＋1 XP
 }
 // 進入地形時伺服器給的完整狀態：先全部還原，再套用受損/已破壞的
 function onNetDecos(terrain, list) {
@@ -483,6 +484,7 @@ function hitMob(p, a, ranged, force) {
     let dmg = force ? force.dmg : ranged ? (rangedDef()?.dmg || 2) + (crit ? 1 : 0) : (crit ? 2 : 1);
     const jd = jobOf(p);
     if (jd?.dmgPlus && !force) dmg += jd.dmgPlus;   // 輸出：每擊 +1（打島主也算；伺服器的上限是 4）
+    if (!force) dmg += lvAtkBonus(levelOf(p));      // 等級攻擊加成：每 3 級 +1（島主那步會把兩份伺服器的夾值一起放寬）
     const od = mobDef(a.id);
     const sendDmg = force ? force.dmg : Math.min(4, dmg);   // 送給伺服器的值（上限 4＝兩份伺服器的 D_HIT_MAX；破綻的 +1 由伺服器自己加）
     if (od.owner && S.t < (a.vulnUntil ?? 0)) dmg += 1;      // 破綻：每擊 +1（單機在這裡扣、連線只是飄字）
@@ -532,6 +534,7 @@ function hitMob(p, a, ranged, force) {
     if (a.hp <= 0) {
       a.dead = true; a.dieT = .6;
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
+      if (p === S.players[0] && !od.owner && !od.lurker) grantExp(1, p.x, p.y - 60);   // 非主動怪（羊／鳥／蛙）：擊倒 +1 XP（島主／魚人那步由伺服器計）
       if (!od.owner && !od.lurker) {   // 殺到動物回 1 HP（島主是伺服器權威事件，不算在此；釣上來的怪物也不算）
         const me = S.players[0];
         me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + 1);
@@ -642,11 +645,46 @@ function loadJobs(db) {
 const ALWAYS_WEAPONS = ['hands', 'rod'];   // 所有職業都能用的武器（空手、釣竿）；其餘只有職業武器
 const weaponAllowed = (job, id) => ALWAYS_WEAPONS.includes(id) || JOBS[job]?.weapon === id;
 const allowedWeapons = () => S.avatar.weapons.filter(w => !w.glam && weaponAllowed(S.me.job, w.id));   // 武器列：職業武器＋空手＋釣竿（依 avatar.json 的順序）
+// ---------------- 等級（2026-11-06）----------------
+// 個人資料：跨職業繼承、跨島不重置；XP 由本機先記（之後同步那步改成伺服器權威記帳＋夾頻，body 只上報事件種類）
+// 每級需求線性（無上限）10 + 5×(Lv−1)；每級血量上限 +1、每 3 級攻擊 +1（第 4／7／10…級）。
+const xpNeed = lv => 10 + 5 * (lv - 1);   // 從 lv 升到 lv+1 所需 XP
+function lvInfo(xp) {                     // XP 換等級：lv＝目前等級、cur＝這級累積、need＝這級需求
+  let lv = 1, rest = Math.max(0, Math.floor(xp ?? 0));
+  while (rest >= xpNeed(lv)) { rest -= xpNeed(lv); lv++; }
+  return { lv, cur: rest, need: xpNeed(lv) };
+}
+const lvAtkBonus = lv => Math.floor((lv - 1) / 3);   // 攻擊加成：每 3 級 +1
+const levelOf = p => p === S.players[0] ? lvInfo(S.profile.xp).lv : (p.lvl ?? 1);   // 自己看本機資料；別人等 state 廣播 lvl（同步那步），沒有就當 Lv 1
+function saveProfile() { lsSet('dcisland.m0.profile', S.profile); }
+function grantExp(n, x, y) {             // 拿經驗值：金色 +N XP 飄字；升級＝金光演出＋回滿血（升級獎勵感）
+  const p = S.players[0], before = lvInfo(S.profile.xp).lv;
+  S.profile.xp = Math.max(0, S.profile.xp + n);
+  saveProfile();
+  const after = lvInfo(S.profile.xp);
+  S.floaters.push({ x: x, y: y, v: `+${n} XP`, life: .9, xpGain: true });
+  if (after.lv > before) {
+    p.hp = hpCap(p);                     // 升級回滿血
+    p.regenAcc = 0;
+    S.floaters.push({ x: p.x, y: p.y - 56, v: `升級！Lv ${after.lv}`, life: 1.6, crit: true });
+    S.floaters.push({ x: p.x, y: p.y, gold: true, life: .7 });   // 金光：金環擴散＋小光點
+    toast(`升級了！Lv ${after.lv}（血量上限 +1${after.lv % 3 === 0 ? '、攻擊力 +1' : ''}）`, 3200);
+    if (!$('avatarPanel').classList.contains('hidden')) buildAvatarPanel();   // 面板開著就同步進度條
+  }
+}
+function loseExp() {                     // 倒地 10% 機率扣 XP：扣「升這級還需要的 XP」5%（整數、至少 1、最低扣到 0 不掉級）
+  const i = lvInfo(S.profile.xp);
+  if (Math.random() >= .1 || i.cur <= 0) return;
+  const loss = Math.min(i.cur, Math.max(1, Math.ceil(i.need * .05)));
+  S.profile.xp -= loss;
+  saveProfile();
+  S.floaters.push({ x: S.players[0].x, y: S.players[0].y - 46, v: `−${loss} XP`, life: 1.2, xpLoss: true });
+}
 const HEAL_RADIUS = 110;  // 補師打倒動物／群療時的治療半徑（約 3.4 格；2026-11-05 由 96 調大，與月環內圈安全區同大）
 // 自己看「造型」面板選的職業（S.me.job）；別人看 state 封包同步的 job（舊客戶端的 tank／healer／dps 照 legacy 轉）；NPC 沒有職業（回 null）
 const jobOf = p => JOBS[jobIdOf(p === S.players[0] ? S.me.job : p.job)] || null;
-// 血量上限：有職業用職業的上限，沒有（NPC／未設定）就 PLAYER_HP
-const hpCap = p => jobOf(p)?.hpMax ?? PLAYER_HP;
+// 血量上限：有職業用職業的上限，沒有（NPC／未設定）就 PLAYER_HP；等級每級 +1（等級跟著人走，換職業繼承）
+const hpCap = p => (jobOf(p)?.hpMax ?? PLAYER_HP) + (p.npc ? 0 : levelOf(p) - 1);
 // 島主攻擊樣式（mobs.json 的 atk 欄位）：dash＝龍衝（黃金肥龍）、gaze＝石化之瞳（笨蛋蛇女）、beam＝波動砲（蓋老師）
 // gaze／beam 都是「原地施放」（不瞬移），dash 會瞬移到島緣再衝
 const ownerAtk = def => def.atk || 'dash';
@@ -2264,6 +2302,7 @@ function killPlayer(p, cause, label) {   // label：頭上飄字（龍衝撞倒�
   p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null; p.fish = null; p.cast = null;
   S.floaters.push({ x: p.x, y: p.y - 46, v: label || '倒地', life: 1.1, crit: true });
   toast(`${cause} 把你打倒了！${DEAD_SECONDS} 秒後在出生點復活`, 3200);
+  loseExp();   // 倒地 10% 機率扣 XP（本機版；同步那步改成伺服器計算，避免本機改存檔灌分）
 }
 function revivePlayer(p) {
   p.dead = false; p.deadAt = 0;
@@ -2935,6 +2974,20 @@ function drawPerson(p, wi, nameColor) {
   ctx.strokeText(p.name, p.x, nameY);
   ctx.fillStyle = nameColor;
   ctx.fillText(p.name, p.x, nameY);
+  // 等級：名字旁邊的金色 Lv.N（本人＝設定可關；同島的人＝等 state 同步的 lvl，同步那步之前先不顯示）
+  const lvTxt = p.npc ? null
+    : p === S.players[0] ? (S.profile.showLv === false ? null : `Lv.${lvInfo(S.profile.xp).lv}`)
+    : p.lvl != null ? `Lv.${p.lvl}` : null;
+  if (lvTxt) {
+    const nameW = ctx.measureText(p.name).width;
+    ctx.font = '9px "Microsoft JhengHei"';
+    ctx.textAlign = 'left';
+    ctx.strokeText(lvTxt, p.x + nameW / 2 + 4, nameY);
+    ctx.fillStyle = '#ffd86b';
+    ctx.fillText(lvTxt, p.x + nameW / 2 + 4, nameY);
+    ctx.textAlign = 'center';
+    ctx.font = '10px "Microsoft JhengHei"';   // 後面還有用這個字型量寬的地方
+  }
   // 稱號：名字正上方一行《稱號》（自己看 S.me.title，同島的人看 state 同步來的 id）；有稱號時，泡泡／倒數條／「!」跟著往上移
   const tt = p.npc ? null : titleText(p === S.players[0] ? S.me.title : p.title);
   let headY = nameY;
@@ -3351,6 +3404,7 @@ function showCatch(p, m) {
   const def = fishDef(m.terrain, m.id), rar = S.fishDB.rarity[m.rarity];
   if (!def) return;
   const { isNew, isRecord } = recordCatch(m);
+  grantExp(isNew ? 5 : 1, p.x, p.y - 80);   // 釣到魚 +1 XP；圖鑑首捕 +5（之後同步那步由伺服器記帳＋夾頻）
   if (S.fishImgs[m.id]) S.floaters.push({ x: p.x, y: p.y - 64, fishImg: S.fishImgs[m.id], life: 1.8 });
   const big = def.big != null && m.size >= def.big;
   toast(`釣到了 ${def.name}！${m.size} cm（${rar?.name || ''}）${big ? ' · 大尺寸！' : ''}${isNew ? ' · 新發現！' : isRecord ? ' · 尺寸新紀錄！' : ''}`, 3400);
@@ -3922,7 +3976,17 @@ function draw() {
       ctx.restore(); continue;
     }
     ctx.translate(f.x, f.y);
-    if (f.fishImg) {   // 釣到的東西：從頭上浮起來再淡出
+    if (f.gold) {   // 升級金光：金環擴散＋繞圈小光點（0.7 秒，固定在腳下）
+      const q = 1 - f.life / .7;
+      ctx.strokeStyle = `rgba(255,216,107,${(1 - q) * .95})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, 6 + q * 72, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = `rgba(255,236,170,${(1 - q) * .85})`;
+      for (let i = 0; i < 8; i++) {
+        const an = i * Math.PI / 4 + q * 1.6, r = 6 + q * 44;
+        ctx.fillRect(Math.cos(an) * r - 1.5, Math.sin(an) * r - 1.5, 3, 3);
+      }
+    } else if (f.fishImg) {   // 釣到的東西：從頭上浮起來再淡出
       ctx.globalAlpha = Math.min(1, f.life / .5);
       ctx.drawImage(f.fishImg, -24, -24, 48, 48);
     } else if (f.ring) {   // 被爪擊打中的衝擊圈：紅圈快速擴散淡出
@@ -3963,9 +4027,9 @@ function draw() {
         ctx.fillRect(Math.cos(an) * r - 1, Math.sin(an) * r - 1, 2, 2);
       }
     } else {
-      ctx.font = (f.crit ? 'bold 13px' : 'bold 11px') + ' "Microsoft JhengHei"';
+      ctx.font = (f.crit ? 'bold 13px' : f.xpGain || f.xpLoss ? 'bold 9px' : 'bold 11px') + ' "Microsoft JhengHei"';
       ctx.textAlign = 'center';
-      ctx.fillStyle = f.crit ? '#ffb347' : '#ffffff';
+      ctx.fillStyle = f.xpGain ? '#ffd86b' : f.xpLoss ? '#ff8f7a' : f.crit ? '#ffb347' : '#ffffff';
       ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)';
       const pop = f.life > .66 ? (0.8 - f.life) * 15 : 0; // 初段放大
       ctx.strokeText(f.crit ? f.v + ' !' : f.v, 0, -pop);
@@ -4353,6 +4417,11 @@ function myLook() {
 }
 
 function buildAvatarPanel() {
+  // 等級：XP 進度條（無上限，每級需求 10 + 5×(Lv−1)；來源＝怪物／釣竿／首捕／採集，2026-11-06）
+  const li = lvInfo(S.profile.xp);
+  $('lvCur').textContent = `Lv.${li.lv}`;
+  $('lvFill').style.width = Math.min(100, Math.round(li.cur / li.need * 100)) + '%';
+  $('lvRow').title = `經驗值 ${li.cur} / ${li.need}`;
   // 職業：jobs.json（職能＝圓點顏色；滑鼠停留顯示職能說明）
   const jb = $('jobOpts'); jb.innerHTML = '';
   for (const id of Object.keys(JOBS)) {
@@ -4806,6 +4875,13 @@ $('furnClear').onclick = () => {
 $('listClose').onclick = closeList;
 $('btnSettings').onclick = () => $('settingsMenu').classList.toggle('hidden');   // 右上齒輪：開／收設定選單（操作說明等收在裡面，之後的設定項目也加這）
 $('menuHelp').onclick = () => { $('settingsMenu').classList.add('hidden'); openHelp(); };   // 設定 → 操作說明（同嚮導的說明視窗）
+const menuLvLabel = () => $('menuLv').textContent = `名牌等級：${S.profile.showLv === false ? '隱藏' : '顯示'}`;
+menuLvLabel();   // 開先把開關文字對齊存檔
+$('menuLv').onclick = () => {   // 設定 → 名牌等級顯示開關（2026-11-06，使用者定）
+  S.profile.showLv = S.profile.showLv === false;
+  saveProfile(); menuLvLabel();
+  $('settingsMenu').classList.add('hidden');
+};
 document.addEventListener('click', e => {   // 點齒輪與選單以外的地方就收起來
   if (!(e.target instanceof Element) || !e.target.closest('#settingsBox')) $('settingsMenu')?.classList.add('hidden');
 });
@@ -4936,7 +5012,7 @@ async function boot() {
       for (let i = S.floaters.length - 1; i >= 0; i--) {
         const f = S.floaters[i];
         f.life -= dt;
-        if (!f.slash && !f.beam && !f.beamLine && !f.healPulse && !f.orb && !f.aoe && !f.fxk && !f.steam) f.y -= 34 * dt;   // 爪擊/光束/綠圈/蒸汽特效固定在原座標，不隨飄字上浮（蒸汽自己在渲染時上升）
+        if (!f.slash && !f.beam && !f.beamLine && !f.healPulse && !f.orb && !f.aoe && !f.fxk && !f.steam && !f.gold) f.y -= 34 * dt;   // 爪擊/光束/綠圈/蒸汽/升級金光固定在原座標，不隨飄字上浮（蒸汽自己在渲染時上升）
         if (f.life <= 0) S.floaters.splice(i, 1);
       }
       stepSkills();

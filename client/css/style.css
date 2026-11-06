@@ -104,6 +104,9 @@ body {
 #avatarPanel { right: 10px; top: 60px; width: 264px; }   /* 264：裝備名稱欄放得下五個字（例如「龍騎士鎧甲」） */
 .grp { margin-bottom: 10px; }
 .grp > label { display: block; font-size: 11px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 5px; }
+#lvRow { display: flex; align-items: center; gap: 8px; font: bold 12px "Microsoft JhengHei", "PingFang TC", sans-serif; color: var(--gold); }
+#lvBar { flex: 1; height: 7px; background: rgba(8, 10, 14, .6); border-radius: 4px; overflow: hidden; }
+#lvFill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ffd86b, #f0a63a); border-radius: 4px; transition: width .3s; }
 .optrow { display: flex; gap: 6px; flex-wrap: wrap; }
 .opt {
   width: 26px; height: 26px; border: 1px solid #3a3f4e;
