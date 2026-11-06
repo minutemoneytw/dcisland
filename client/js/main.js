@@ -3133,6 +3133,24 @@ function drawCastBar(cx, y, frac, name) {
   }
   ctx.restore();
 }
+// 島主放招倒數條：固定畫在視窗上方置中（不畫在島主頭上——島主很高，會被名牌／泡泡／其他物件蓋住，也常常跑出畫面外）。
+// 大小是 drawCastBar 的三倍（216×18）；黃色由左往右填，填滿就放招，右上角是招式名稱。
+function drawOwnerCastBar(frac, name) {
+  const w = 216, h = 18, x = Math.round(canvas.width / 2 - w / 2), y = 84;
+  frac = Math.max(0, Math.min(1, frac));
+  ctx.save();
+  ctx.fillStyle = 'rgba(8,10,14,.78)'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);   // 底
+  ctx.fillStyle = '#f3c93e'; ctx.fillRect(x, y, w * frac, h);                      // 黃色倒數
+  ctx.fillStyle = 'rgba(255,246,200,.55)'; ctx.fillRect(x, y, w * frac, 6);        // 上緣亮線
+  ctx.strokeStyle = 'rgba(214,180,96,.9)'; ctx.lineWidth = 1.5; ctx.strokeRect(x - .5, y - .5, w + 1, h + 1);   // 細金邊
+  if (name) {
+    ctx.font = 'bold 20px "Microsoft JhengHei"'; ctx.textAlign = 'right';
+    ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(8,10,14,.85)';
+    ctx.strokeText(name, x + w, y - 6);
+    ctx.fillStyle = '#ffe08a'; ctx.fillText(name, x + w, y - 6);
+  }
+  ctx.restore();
+}
 function drawBubble(x, y, text, alpha) {
   ctx.save(); ctx.globalAlpha = alpha;
   ctx.font = '11px "Microsoft JhengHei"'; ctx.textAlign = 'center';
@@ -3564,6 +3582,8 @@ function draw() {
   }
 
   // 收集繪製項目（y 排序）
+  // 島主放招倒數條：在下面物件繪製時記錄，最後統一畫在視窗上方置中（同一時間只有自己地形的一位島主在放招）
+  let ownerBar = null;
   // 畫面外的點綴物／家具不收：圖以「格子底邊」往上畫，所以用圖的實際範圍判斷（pad＝受擊抖動、看板文字的餘裕）
   const vx0 = S.cam.x, vy0 = S.cam.y, vx1 = vx0 + canvas.width, vy1 = vy0 + canvas.height;
   const offView = (left, bottom, w, h, pad) => left + w + pad < vx0 || left - pad > vx1 || bottom + pad < vy0 || bottom - h - pad > vy1;
@@ -3737,11 +3757,10 @@ function draw() {
         ctx.fillText(def.name, a.x, top);
         // 島主的台詞泡泡（被打反擊前隨機一句；與 NPC 泡泡同款，畫在名牌上方）
         if (a.say && S.t < a.say.until) drawBubble(a.x, top - 8, a.say.text, Math.min(1, (a.say.until - S.t) / .4));
-        // 島主放招倒數條（skills.json 標 bar 的招式）：預警期間畫在名牌上方，黃色由左往右填，填滿就放招；右上角是招式名稱。
-        // 島主很高，人站在牠腳邊時頭會超出畫面上緣：倒數條貼齊畫面上緣，不會看不到
+        // 島主放招倒數條（skills.json 標 bar 的招式）：這裡只記錄進度與招名，畫面最後統一疊在視窗上方置中（drawOwnerCastBar）
         if (def.owner && a.cast > 0 && ownerSkill(def).bar)
-          drawCastBar(a.x, Math.max(top - 16, S.cam.y + 20), 1 - a.cast / ownerCastTotal(def),
-                      a.command ? quoteName(a.command.kind) : ownerSkill(def).name);
+          ownerBar = { frac: 1 - a.cast / ownerCastTotal(def),
+                       name: a.command ? quoteName(a.command.kind) : ownerSkill(def).name };
       }
     });
   }
@@ -3926,6 +3945,7 @@ function draw() {
     ctx.restore();
   }
   ctx.restore();
+  if (ownerBar) drawOwnerCastBar(ownerBar.frac, ownerBar.name);   // 島主讀條固定在視窗上方置中（世界座標還原後畫，永遠在最上層）
 }
 
 const MAX_FURN = 500;   // 每個地形的擺設上限（與兩份伺服器的 MAX_FURN 一致）
