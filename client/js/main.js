@@ -1034,6 +1034,7 @@ function ownerAggroPick(a, ag) {
 // 給隊友的增益（兩種群盾）走泛型 event 廣播，收到的人自判「在不在放的人周圍 SHIELD_RADIUS 內」再套在自己身上（與群療同一原則）。
 // 持續型效果（翅膀、護盾、結印、三重、法陣）走 state 的 fx／circle 給同地形的人畫特效（myFx）。
 S.fx = { cd: {}, guard: 0, kshield: 0, wshield: 0, vamp: 0, wings: 0, seal: null, triple: null, circle: null, care: null, cared: 0, caredBy: null, song: 0, save: 0 };
+S.sprint = false;   // 疾走（跑步）：右下角虛擬按鍵或 Shift「切換」（2026-11-06 起 Shift 為切換制，不再按住才跑）
 const SHIELD_RADIUS = 300;   // 兩種群盾的範圍（px，約 9 格；使用者定）
 const ROLE_DEBUFF = { dur: 10, cd: 30, weakMul: .7 };   // 破綻／降傷：持續 10 秒、冷卻 30 秒、降傷 −30%（與兩份伺服器的 D_DEBUFF_* 一致）
 const fxOn = k => S.t < (S.fx[k] || 0);
@@ -2318,7 +2319,7 @@ function stepPlayer(p, dt) {
       p.face = dy < 0 ? 'up' : dx !== 0 ? 'side' : 'down';
       p.d8 = dir8Of(dx, dy);   // 畫面用的 8 方向（玩法仍看 face）
     }
-    const len = Math.hypot(dx, dy) || 1, sp = (keys['shift'] ? 200 : 120) * dt;
+    const len = Math.hypot(dx, dy) || 1, sp = (S.sprint ? 200 : 120) * dt;   // 疾走＝右下角虛擬按鍵或 Shift 切換的狀態
     const nx = clamp(p.x + dx / len * sp, 8, COLS * CELL - 8);
     const ny = clamp(p.y + dy / len * sp, 8, ROWS * CELL - 8);
     // 裝飾模式可穿過擺飾（避免被卡住）；已經被家具圍住/壓在家具上時（例如別人把家具擺在你腳下）也一樣可以走出來。水邊照樣擋
@@ -4583,8 +4584,74 @@ addEventListener('keydown', e => {
   if (k === 'f' && !e.repeat) doAttack(true);
   if (k === 'r' && !e.repeat) roleSkill()?.run();   // R：職能技能（坦克＝挑釁、補師＝群療、近戰輸出＝破綻、遠程輸出＝降傷）
   if ((k === '1' || k === '2') && !e.repeat) tryJobSkill(+k - 1);   // 1／2：職業技能
+  if (k === 'shift' && !e.repeat) toggleSprint();   // Shift：切換疾走／步行（與右下角虛擬按鍵同一個開關）
 });
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key.toLowerCase() === 'f') S.holdSkipF = false; });
+// ---------------- 疾走虛擬按鍵（畫面右下角）----------------
+// 圓形＋跑步像素小人；點擊或按 Shift 切換疾走／步行（2026-11-06 使用者要求：點擊後持續生效，再點擊或再按 Shift 切回步行）
+function toggleSprint() {
+  S.sprint = !S.sprint;
+  toast(S.sprint ? '切換為疾走' : '切換為步行', 900);
+}
+const SPRINT_COLORS = { h: '#e8c39a', b: '#7fb2e5', t: '#5b8ec9', p: '#4a5a74', s: '#2c3648' };   // 膚色／上衣／袖／褲／鞋
+const SPRINT_MAPS = {   // 像素小人（10×12，每格 2px）：步行＝站立；疾走＝兩幀跑步循環
+  stand: [
+    '..hhhhhh..',
+    '..hhhhhh..',
+    '..hhhhhh..',
+    '...bbbb...',
+    '..tbbbbt..',
+    '..tbbbbt..',
+    '...bbbb...',
+    '...pppp...',
+    '...p..p...',
+    '...p..p...',
+    '...p..p...',
+    '...s..s...',
+  ],
+  run0: [   // 跨步：四肢張開
+    '..hhhhhh..',
+    '..hhhhhh..',
+    '..hhhhhh..',
+    '...bbbb...',
+    '..tbbbb.t.',
+    '..tbbbb.t.',
+    '...bbbb...',
+    '...pppp...',
+    '..pp..pp..',
+    '.pp....pp.',
+    '.s......s.',
+    '..........',
+  ],
+  run1: [   // 收腿：四肢收攏交替
+    '..hhhhhh..',
+    '..hhhhhh..',
+    '..hhhhhh..',
+    '...bbbb...',
+    '...bbbb...',
+    '..tbbbbt..',
+    '...bbbb...',
+    '...pppp...',
+    '....pp....',
+    '....pp....',
+    '...s..s...',
+    '..........',
+  ],
+};
+function drawSprintBtn() {   // 每幀重畫（52×52 小畫布，成本可忽略）：疾走時小人兩幀交替跑起來、外框亮金
+  const c = $('sprintIcon'); if (!c) return;
+  const g = c.getContext('2d');
+  g.clearRect(0, 0, 52, 52);
+  g.beginPath(); g.arc(26, 26, 24, 0, Math.PI * 2);
+  g.fillStyle = 'rgba(8,10,14,.78)'; g.fill();
+  g.lineWidth = 2; g.strokeStyle = S.sprint ? '#f3c93e' : '#8a7536'; g.stroke();
+  const map = SPRINT_MAPS[S.sprint ? (Math.floor(S.t * 8) % 2 ? 'run0' : 'run1') : 'stand'];
+  for (let y = 0; y < map.length; y++) for (let x = 0; x < map[y].length; x++) {
+    const ch = map[y][x]; if (ch === '.') continue;
+    g.fillStyle = SPRINT_COLORS[ch];
+    g.fillRect(16 + x * 2, 13 + y * 2, 2, 2);
+  }
+}
 // 切走視窗時放開所有按住的鍵，避免卡住一直揮擊/走路
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; S.mouseHeld = false; S.paint = null; });
 addEventListener('mouseup', e => { if (e.button === 0) S.mouseHeld = false; if (e.button === 0 || e.button === 2) S.paint = null; });
@@ -4720,6 +4787,7 @@ $('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) open
 $('dexClose').onclick = closeDex;
 $('btnTitles').onclick = () => { if (S.titleOpen) closeTitles(); else openTitles(); };   // 造型面板的「稱號設定」：稱號一覽
 $('titleClose').onclick = closeTitles;
+$('sprintBtn').onclick = toggleSprint;   // 右下角疾走虛擬按鍵：點擊切換跑步／步行（Shift 同一個開關）
 
 // ---------------- 資源載入 ----------------
 async function ensureTerrain(id) {
@@ -4846,6 +4914,7 @@ async function boot() {
       stepSkills();
       updateSkillBar();
       updateWeaponBar();
+      drawSprintBtn();
       draw();
     } catch (e) { console.error('loop:', e); }
     requestAnimationFrame(loop);

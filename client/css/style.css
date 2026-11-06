@@ -223,6 +223,10 @@ body {
 .skbtn.flash { animation: skillFlash .55s ease-out; }
 @keyframes skillFlash { 0% { box-shadow: 0 0 0 0 rgba(255, 236, 150, .95); } 100% { box-shadow: 0 0 16px 12px rgba(255, 236, 150, 0); } }
 #app.has-skill #toast { bottom: 74px; }   /* 技能列顯示時，提示往上讓出位置 */
+/* 疾走虛擬按鍵（右下角）：圓形＋跑步像素小人；點擊或按 Shift 切換疾走／步行 */
+#sprintBtn { position: absolute; right: 10px; bottom: 12px; z-index: 15; width: 52px; height: 52px; cursor: pointer; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .5)); }
+#sprintBtn canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+#sprintBtn:active canvas { transform: scale(.93); }
 
 /* ---------- 武器列（左上角，橫向只有圖示；選到的那格才顯示名稱，滾輪切換）---------- */
 #weaponBar { position: absolute; left: 10px; top: 52px; z-index: 12; display: flex; flex-direction: row; gap: 4px; user-select: none; }
