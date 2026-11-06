@@ -941,9 +941,9 @@ function beamFire(a, def) {   // 讀條結束：發射直線光波（方向＝�
 // 讀條結束的瞬間檢查玩家：「行動命令」＝最近 0.5 秒內有移動輸入、「靜止命令」＝最近 0.5 秒完全沒動；不服從就強制倒地（不看血量）。
 // 判定在各人自己的畫面（跟龍衝／石化同源）；伺服器只決定時間點與命令種類。台詞招式（lineSkills 的 act／still）與普攻共用同一套讀條檢定
 // （a.command 牆鐘，單機與連線同構）；p.lastMoveAt 在 stepPlayer／stepRemote 隨移動輸入更新（石化／擊飛／坐睡中不更新＝視為靜止）。
-function startCommandCheck(a, kind, castMs) {   // 開始一次命令讀條（kind＝'act'｜'still'）；島主原地不動
+function startCommandCheck(a, kind, castMs, mv) {   // 開始一次命令讀條（kind＝'act'｜'still'）；mv＝台詞招式的命令（讀條中照伺服器移動，不釘在原地）
   const def = mobDef(a.id);
-  a.command = { t0ms: Date.now(), castMs, kind, x: a.x, y: a.y };
+  a.command = { t0ms: Date.now(), castMs, kind, x: a.x, y: a.y, mv: !!mv };
   a.wleg = null; a.z = 0; a.fly = false;
   toast(kind === 'act'
     ? `${def.name} 下達了行動命令——讀條結束前開始移動！`
@@ -951,7 +951,7 @@ function startCommandCheck(a, kind, castMs) {   // 開始一次命令讀條（ki
 }
 function stepCommandCheck(a, def) {   // 命令讀條推進（牆鐘與伺服器同軸）：到點就本地檢定
   const c = a.command, el = Date.now() - c.t0ms;
-  a.x = c.x; a.y = c.y; a.z = 0; a.fly = false;
+  if (!c.mv) { a.x = c.x; a.y = c.y; a.z = 0; a.fly = false; }   // 正規命令：島主原地不動；台詞招式的命令照伺服器追殺走（再釘住＝檢定結束瞬間瞬移）
   a.cast = Math.max(0, (c.castMs - el) / 1000);   // 給倒數條沿用既有繪製（cast > 0 且 bar:true 就會畫）
   if (el >= c.castMs) commandFire(a, def);
 }
@@ -1567,9 +1567,12 @@ function stepOwnerWalk(a, dt) {
 // 連線的島主：整個反擊循環（預警→龍衝→歇腳）用牆鐘插值，與伺服器的 dragonPhase 同軸——
 // webview 的 rAF 被節流也不會慢動作或只瞬移，每一幀都畫在伺服器時序的正確位置
 function stepOwnerProxy(a, dt, def) {
-  if (a.command) {   // 命令讀條（牆鐘與伺服器同軸），castMs 到就本地檢定（行動／靜止，各人自判）
+  if (a.command) {
+    const mv = a.command.mv;
     stepCommandCheck(a, def);
-    return;
+    if (!mv) return;   // 正規命令：島主釘在原地（伺服器也在原地）。台詞招式的命令往下走——
+    // 伺服器不知道客戶端在讀條，qfire 後照樣排追殺腿朝目標跑；這裡若釘在原地，檢定結束的瞬間就得瞬移去追伺服器位置。
+    // 改成讀條中也照伺服器的腿走（全畫面位置一致、過程連續），檢定照常由 stepCommandCheck 牆鐘判定
   }
   if (a.gaze) {   // 石化之瞳：原地開眼（牆鐘與伺服器同軸），castMs 到就本地發射（光束＋石化判定，受害者自判）
     const g = a.gaze, el = Date.now() - g.t0ms;
@@ -1669,6 +1672,7 @@ function applyDragonSnap(o) {
   if (!a) return;
   // 台詞招式的命令（qfire 後的 2 秒檢定）在伺服器端是 idle（沒有 aim_tms），每個 state tick 的快照若把 a.command 洗掉，
   // 本地檢定就永遠不會跑＝「該中沒中」。所以還沒到點的命令要保留，讓 stepCommandCheck 照牆鐘跑完檢定（2026-11-06 修正）；
+  // 命令帶 mv（台詞招式）時下面的 idle 分支會照伺服器追殺更新位置——讀條中不釘在原地，才不會在檢定結束瞬間瞬移。
   // 至於伺服器 ph='cast' 的正規命令，下面 cast 分支會用伺服器時間軸重建，不受影響
   const keepCmd = a.command && Date.now() - a.command.t0ms < a.command.castMs;
   a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null; a.beam = null;
@@ -1774,7 +1778,7 @@ function onNetDragon(m) {
     if (!na) return;
     na.cycle = null; na.wleg = null; na.fly = false; na.z = 0;
     na.x = m.x; na.y = m.y;
-    if (m.skill === 'act' || m.skill === 'still') { startCommandCheck(na, m.skill, m.castMs || OWNER_COMMAND_CAST * 1000); return; }   // 命令檢定：讀條 2 秒後本地判定
+    if (m.skill === 'act' || m.skill === 'still') { startCommandCheck(na, m.skill, m.castMs || OWNER_COMMAND_CAST * 1000, true); return; }   // 命令檢定：讀條 2 秒後本地判定；mv＝台詞招式，讀條中照伺服器走（不釘原地）
     quoteFire(na, m.skill, m.ids, m.x, m.y);
     return;
   }
@@ -1817,8 +1821,8 @@ function onNetDragon(m) {
   if (m.ev === 'wander') {   // 島主往新路點散步（伺服器帶路；插值與伺服器一致，凍結恢復也正確）
     const na = a || dragonEnsure(m.fx, m.fy);
     if (!na) return;
-    // 台詞招式的命令（qfire 後 2 秒檢定）在伺服器端已回 idle、會排散步腿——但客戶端的檢定還在跑，
-    // 不能被 wander 事件洗掉（洗掉＝檢定永遠不會發生＝「該中沒中」，2026-11-06 修正）；讀條中島主照樣釘在原地
+    // 台詞招式的命令（qfire 後 2 秒檢定）在伺服器端已回 idle、馬上排追殺腿——但客戶端的檢定還在跑，
+    // 不能被 wander 事件洗掉（洗掉＝檢定永遠不會發生＝「該中沒中」，2026-11-06 修正）；位置照腿走（命令帶 mv，讀條中不釘在原地）
     const keepCmd = na.command && Date.now() - na.command.t0ms < na.command.castMs;
     na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.beam = null;
     if (!keepCmd) na.command = null;
