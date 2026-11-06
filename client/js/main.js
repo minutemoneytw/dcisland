@@ -497,11 +497,14 @@ function hitMob(p, a, ranged, force) {
     }
     // 補師：揮擊命中動物就吸回自己一點血（血量走既有 state 封包同步）；翅膀期間 +1
     const heal = force?.dot ? 0 : (jd?.healHit ? jd.healHit + (p === S.players[0] && fxOn('wings') ? 1 : 0) : 0) + (p === S.players[0] && fxOn('vamp') ? 1 : 0);   // 戰士吸血：命中回 1；毒箭的持續傷害不算「命中」
-    const care = p === S.players[0] && S.fx.care && S.t < S.fx.care.until ? S.fx.care : null;   // 賢者關心：每造成一次傷害，被關心的人回 1
+    const care = p === S.players[0] ? S.fx.care : null;   // 賢者關心：永久有效（改關別人／轉職才解除），每造成一次傷害就累積補血量
     if (care) {
-      const amt = JOB_SKILLS.care.amt + (fxOn('save') ? JOB_SKILLS.save.plus : 0);   // 拯救期間：關心的回血變多
-      if (care.self) healMe(amt);
-      else S.net?.skillEvent?.(`careheal:${care.id}:${amt}`);
+      care.acc = (care.acc || 0) + JOB_SKILLS.care.amt + (fxOn('save') ? JOB_SKILLS.save.plus : 0);   // 拯救期間：累積速度變 5 倍（0.5→2.5／下）
+      while (care.acc >= 1) {                             // 補血量是 0.5／下的零頭：累積湊滿 1 才補，畫面與血量都保持整數
+        care.acc -= 1;
+        if (care.self) healMe(1);
+        else S.net?.skillEvent?.(`careheal:${care.id}:1`);
+      }
     }
     if (heal) {
       const cap = hpCap(p) ?? PLAYER_HP;
@@ -1030,7 +1033,7 @@ function ownerAggroPick(a, ag) {
 // S.fx：自己身上的技能狀態（都是遊戲時間 S.t 的到期時刻；0＝沒有）。被打時的減傷／護盾在 playerDamage 套用（受害者自判）；
 // 給隊友的增益（兩種群盾）走泛型 event 廣播，收到的人自判「在不在放的人周圍 SHIELD_RADIUS 內」再套在自己身上（與群療同一原則）。
 // 持續型效果（翅膀、護盾、結印、三重、法陣）走 state 的 fx／circle 給同地形的人畫特效（myFx）。
-S.fx = { cd: {}, guard: 0, kshield: 0, wshield: 0, vamp: 0, wings: 0, seal: null, triple: null, circle: null, care: null, cared: 0, song: 0, save: 0 };
+S.fx = { cd: {}, guard: 0, kshield: 0, wshield: 0, vamp: 0, wings: 0, seal: null, triple: null, circle: null, care: null, cared: 0, caredBy: null, song: 0, save: 0 };
 const SHIELD_RADIUS = 300;   // 兩種群盾的範圍（px，約 9 格；使用者定）
 const ROLE_DEBUFF = { dur: 10, cd: 30, weakMul: .7 };   // 破綻／降傷：持續 10 秒、冷卻 30 秒、降傷 −30%（與兩份伺服器的 D_DEBUFF_* 一致）
 const fxOn = k => S.t < (S.fx[k] || 0);
@@ -1079,10 +1082,10 @@ Object.assign(JOB_SKILLS, {
                 hitMob(me, a, true, { dmg: this.dmg, sk: 'poison', dot: true });
                 return true;
               } },
-  care:     { name: '關心', cd: 20, dur: 30, amt: 1, range: 320, desc: '指定滑鼠方向最近的一位玩家（附近沒人就是自己）：30 秒內賢者每造成一次傷害，對方回 1 血',
+  care:     { name: '關心', cd: 20, amt: .5, range: 320, desc: '指定滑鼠方向最近的一位玩家（附近沒人就是自己）：永久有效，賢者每造成 2 次傷害，對方回 1 血；再施放會改關新的對象',
               run(me) {
                 const t = pickHealTarget(me, this.range);
-                S.fx.care = { id: t === me ? null : String(t.id), self: t === me, until: S.t + this.dur, name: t === me ? '自己' : t.name };
+                S.fx.care = { id: t === me ? null : String(t.id), self: t === me, name: t === me ? '自己' : t.name, acc: 0 };
                 S.floaters.push({ fxk: 'heart', x1: me.x, y1: me.y - 40, x2: t.x, y2: t.y - 30, life: .6 });
                 {   // 四座賢具本體一起飛出去繞對象一圈再回來（待機位在 drawNoulithIdle 會暫時全缺席）——手上是賢具才演
                   if ((me.tool || S.me.weapon) === 'tome') {
@@ -1090,15 +1093,15 @@ Object.assign(JOB_SKILLS, {
                     S.floaters.push({ fxk: 'carego', sx: slots.map(s => s.x), sy: slots.map(s => s.y), x2: t.x, y2: t.y - 24, p: me, life: .7 });
                   }
                 }
-                if (t === me) S.fx.cared = S.t + this.dur;
-                else S.net?.skillEvent?.('care:' + t.id);
-                toast(`關心了 ${S.fx.care.name}`, 1400);
+                S.fx.cared = Infinity;   // 永久有效：心形顯示與補血資格沒有時限
+                S.net?.skillEvent?.(`care:${S.net?.id}:${t === me ? me.id : t.id}`);   // 廣播新對象（帶賢者 id：原本被這位賢者關心的人收到就解除）
+                toast(`關心了 ${S.fx.care.name}（永久，直到改關別人）`, 1400);
                 return true;
               } },
-  save:     { name: '拯救', cd: 30, dur: 8, plus: 2, desc: '8 秒內關心的回血從 1 變 3（要先關心一位玩家）',
-              usable() { return S.fx.care && S.t < S.fx.care.until ? null : '還沒有關心的人'; },
+  save:     { name: '拯救', cd: 30, dur: 8, plus: 2, desc: '8 秒內關心的回血量變 5 倍：每下傷害回 2.5 血（要先關心一位玩家）',
+              usable() { return S.fx.care ? null : '還沒有關心的人'; },
               run() {
-                if (!(S.fx.care && S.t < S.fx.care.until)) { toast('先用「關心」指定一位玩家', 1600); return false; }
+                if (!S.fx.care) { toast('先用「關心」指定一位玩家', 1600); return false; }
                 S.fx.save = S.t + this.dur; fxBurst('save'); return true;
               } },
   wings:    { name: '翅膀', cd: 45, dur: 15, desc: '15 秒內所有治療量 +1',
@@ -1237,7 +1240,6 @@ function stepSkills() {
     }
   }
   if (F.triple && (F.triple.n <= 0 || S.t >= F.triple.until)) F.triple = null;
-  if (F.care && S.t >= F.care.until) F.care = null;
   for (const a of S.mobs) {   // 吟遊詩人的毒箭：每 3 秒跳一次（自己上的毒，自己這邊送）；換掉職業或倒地就停
     const po = a.poison;
     if (!po) continue;
@@ -1262,11 +1264,17 @@ function onSkillEvent(kind, r) {
   } else if (kind === 'highjump') S.floaters.push({ fxk: 'jumpboom', x: r.x, y: r.y, life: .5 });
   else if (kind === 'ninjutsu') S.floaters.push({ fxk: 'boom', x: r.x, y: r.y, r: JOB_SKILLS.ninjutsu.r, life: .6 });
   else if (kind === 'blink') { S.floaters.push({ fxk: 'smoke', x: r.x, y: r.y, life: .45 }); r.snapNext = true; }
-  else if (kind.startsWith('care:') || kind.startsWith('careheal:')) {   // 賢者的關心：目標是我才處理
-    const heal = kind.startsWith('careheal:'), [tid, a] = kind.slice(heal ? 9 : 5).split(':');
-    if (tid !== String(S.net?.id)) return;
-    if (!heal) { S.fx.cared = S.t + JOB_SKILLS.care.dur; S.floaters.push({ fxk: 'heart', x1: r.x, y1: r.y - 40, x2: me.x, y2: me.y - 30, life: .6 }); toast(`${r.name} 關心了你`, 1600); }
-    else if (fxOn('cared')) healMe(Math.max(1, Math.min(JOB_SKILLS.care.amt + JOB_SKILLS.save.plus, Math.round(+a) || JOB_SKILLS.care.amt)));   // 回血量由賢者帶（拯救期間較多），夾在合理範圍
+  else if (kind.startsWith('care:') || kind.startsWith('careheal:')) {   // 賢者的關心：care:賢者id:對象id（對象換人／解除）｜careheal:對象id:1
+    const heal = kind.startsWith('careheal:');
+    if (heal) {
+      const [tid, a] = kind.slice(9).split(':');
+      if (tid !== String(S.net?.id)) return;
+      if (fxOn('cared')) healMe(Math.max(1, Math.min(JOB_SKILLS.care.amt + JOB_SKILLS.save.plus, Math.round(+a) || JOB_SKILLS.care.amt)));   // 回血量由賢者帶（補 1，拯救期間累積較快），夾在合理範圍
+    } else {
+      const [sid, tid] = kind.slice(5).split(':');
+      if (tid === String(S.net?.id)) { S.fx.cared = Infinity; S.fx.caredBy = sid; S.floaters.push({ fxk: 'heart', x1: r.x, y1: r.y - 40, x2: me.x, y2: me.y - 30, life: .6 }); toast(`${r.name} 關心了你（永久）`, 1600); }
+      else if (S.fx.caredBy === sid) { S.fx.cared = 0; S.fx.caredBy = null; }   // 這位賢者改關別人了：解除自己身上的關心狀態
+    }
   }
   else if (kind.startsWith('sheal:')) {   // 單補：目標是我就補自己（翅膀看放的人 state 的 fx），其他人只畫特效
     const tid = kind.slice(6), t = tid === String(S.net?.id) ? me : [...S.remotes.values()].find(q => String(q.id) === tid);   // 連線編號可能是數字
@@ -2667,19 +2675,20 @@ function drawFxFloater(f) {
       break;
     }
     case 'healgo': {   // 群療（手上是賢具＝賢者限定演出）：四座賢具變成賢具藍（非黑白的對比色）、分散到東南西北的
-                       // 技能最大範圍（HEAL_RADIUS），展開時帶出一座魔法陣（賢具藍同色系）、結尾賢具飛回時魔法陣跟著消失。
+                       // 技能最大範圍（HEAL_RADIUS），魔法陣（賢具藍同色系）由腳色所在位置向外擴散長出來、結尾賢具飛回時魔法陣跟著消失。
                        // 取代補師原有的綠圈（沒有賢具的補職照舊綠圈）
       const seed = noulithSeed(f.p);
       const homes = noulithSlots(f.p.x, f.p.y, S.t, seed);
       const rxy = [HEAL_RADIUS, HEAL_RADIUS * .8];            // 地面圈照畫面慣例 y 收 20%（東西南北的落點跟圈同一套）
       const dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]];        // 東、南、西、北
       const ease = k => k * k * (3 - 2 * k);
+      const ex = ease(Math.min(1, q / .6));                   // 魔法陣擴散：由腳色位置往外長，前 60% 長到最大範圍
       const gl = Math.min(1, Math.max(0, (q - .08) / .14)) * Math.min(1, Math.max(0, (1 - q) / .22));   // 光圈的淡入淡出
-      const gd = Math.min(1, Math.max(0, (q - .04) / .18)) * Math.min(1, Math.max(0, (1 - q) / .24));   // 魔法陣：展開帶入、收回淡出
+      const gd = Math.min(1, Math.max(0, q / .12)) * Math.min(1, Math.max(0, (1 - q) / .24));   // 魔法陣：跟著擴散淡入、收回淡出
       if (gd > 0) {                                           // 魔法陣（畫在賢具下面）：外圈雙環＋符文刻痕帶、內環、
                                                               // 中間上下雙三角（六芒星）、三個符號碟＝太陽／月牙／八角星，整座慢轉
         ctx.save(); ctx.globalCompositeOperation = 'lighter';
-        ctx.translate(f.p.x, f.p.y - 24); ctx.scale(1, .8); ctx.rotate(-S.t * .6);
+        ctx.translate(f.p.x, f.p.y - 24); ctx.scale(ex, ex); ctx.scale(1, .8); ctx.rotate(-S.t * .6);
         const R = HEAL_RADIUS, c0 = `rgba(143,166,255,${.6 * gd})`, c1 = `rgba(190,215,255,${.65 * gd})`;
         ctx.strokeStyle = c0; ctx.lineWidth = 1.4;
         ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
@@ -2727,12 +2736,12 @@ function drawFxFloater(f) {
         }
         ctx.restore();
       }
-      if (gl > 0) {                                           // 範圍內一圈淡淡的光：賢具藍的柔光圈＋細圈
+      if (gl > 0) {                                           // 範圍內一圈淡淡的光：賢具藍的柔光圈＋細圈（跟著魔法陣一起往外擴散）
         ctx.save(); ctx.globalCompositeOperation = 'lighter';
         ctx.strokeStyle = `rgba(115,155,255,${.22 * gl})`; ctx.lineWidth = 7;
-        ctx.beginPath(); ctx.ellipse(f.p.x, f.p.y - 24, rxy[0] - 4, rxy[1] - 4, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(f.p.x, f.p.y - 24, (rxy[0] - 4) * ex, (rxy[1] - 4) * ex, 0, 0, Math.PI * 2); ctx.stroke();
         ctx.strokeStyle = `rgba(190,215,255,${.4 * gl})`; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.ellipse(f.p.x, f.p.y - 24, rxy[0], rxy[1], 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(f.p.x, f.p.y - 24, rxy[0] * ex, rxy[1] * ex, 0, 0, Math.PI * 2); ctx.stroke();
         ctx.restore();
       }
       for (let i = 0; i < 4; i++) {
@@ -4531,6 +4540,10 @@ function setJob(id) {
   if (ownerEngaged()) {
     if (S.jobSwapUsed) { toast('戰鬥中只能換一次職業，等仇恨解除後才能再換', 2200); return; }
     S.jobSwapUsed = true;
+  }
+  if (id !== 'sage' && S.fx.care) {   // 轉職離開賢者：永久關心跟著解除（告知原本被關心的人）
+    S.fx.care = null;
+    S.net?.skillEvent?.(`care:${S.net?.id}:-`);
   }
   S.me.job = id;
   const p = S.players[0];
