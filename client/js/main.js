@@ -303,7 +303,7 @@ function applyDecoHit(d, hp, dead, ttl, mine) {
   if (!dead) return;
   d.dead = true; d.respawnAt = S.t + ttl / 1000;
   S.floaters.push({ x: bx, y: r.y + r.h * .5, poof: true, life: .55 });
-  if (mine) { spawnDrops(tgt, bx, by); grantExp(1, bx, by - 40); toast(`${tgt.name}被破壞了`, 1600); }   // 採集成功（打壞的人）＋1 XP
+  if (mine) { spawnDrops(tgt, bx, by); grantExp(1, bx, by - 40, 'mine'); toast(`${tgt.name}被破壞了`, 1600); }   // 採集成功（打壞的人）＋1 XP（登入者由伺服器記）
 }
 // 進入地形時伺服器給的完整狀態：先全部還原，再套用受損/已破壞的
 function onNetDecos(terrain, list) {
@@ -534,7 +534,7 @@ function hitMob(p, a, ranged, force) {
     if (a.hp <= 0) {
       a.dead = true; a.dieT = .6;
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
-      if (p === S.players[0] && !od.owner && !od.lurker) grantExp(1, p.x, p.y - 60);   // 非主動怪（羊／鳥／蛙）：擊倒 +1 XP（島主／魚人那步由伺服器計）
+      if (p === S.players[0] && !od.owner && !od.lurker) grantExp(1, p.x, p.y - 60, 'mob');   // 非主動怪（羊／鳥／蛙）：擊倒 +1 XP（登入者上報事件由伺服器記；島主／魚人那步由伺服器計）
       if (!od.owner && !od.lurker) {   // 殺到動物回 1 HP（島主是伺服器權威事件，不算在此；釣上來的怪物也不算）
         const me = S.players[0];
         me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + 1);
@@ -657,28 +657,62 @@ function lvInfo(xp) {                     // XP 換等級：lv＝目前等級、
 const lvAtkBonus = lv => Math.floor((lv - 1) / 3);   // 攻擊加成：每 3 級 +1
 const levelOf = p => p === S.players[0] ? lvInfo(S.profile.xp).lv : (p.lvl ?? 1);   // 自己看本機資料；別人等 state 廣播 lvl（同步那步），沒有就當 Lv 1
 function saveProfile() { lsSet('dcisland.m0.profile', S.profile); }
-function grantExp(n, x, y) {             // 拿經驗值：金色 +N XP 飄字；升級＝金光演出＋回滿血（升級獎勵感）
+const xpServer = () => !!(S.net?.connected && S.net.uid);   // 登入＆連線：XP 由伺服器記帳（2026-11-07 第 2 步）；訪客／沒連線照舊本機記
+function levelUpFx(p, afterLv) {         // 升級演出（本機記帳與伺服器回覆共用）：回滿血＋金光＋飄字
+  p.hp = hpCap(p);                       // 升級回滿血
+  p.regenAcc = 0;
+  S.floaters.push({ x: p.x, y: p.y - 56, v: `升級！Lv ${afterLv}`, life: 1.6, crit: true });
+  S.floaters.push({ x: p.x, y: p.y, gold: true, life: .7 });   // 金光：金環擴散＋小光點
+  toast(`升級了！Lv ${afterLv}（血量上限 +1${afterLv % 3 === 0 ? '、攻擊力 +1' : ''}）`, 3200);
+  if (!$('avatarPanel').classList.contains('hidden')) buildAvatarPanel();   // 面板開著就同步進度條
+}
+function grantExp(n, x, y, reason) {     // 拿經驗值：金色 +N XP 飄字；升級＝金光演出＋回滿血（升級獎勵感）
+  if (xpServer()) {                      // 登入者：伺服器記帳，等 xp 回覆再演出。擊倒非主動怪要上報事件（server 無法驗證，夾頻防灌分）；採集／釣魚伺服器自己知道，連訊息都不用送
+    if (reason === 'mob') S.net?.xpEvent?.('mob');
+    return;
+  }
   const p = S.players[0], before = lvInfo(S.profile.xp).lv;
   S.profile.xp = Math.max(0, S.profile.xp + n);
   saveProfile();
   const after = lvInfo(S.profile.xp);
   S.floaters.push({ x: x, y: y, v: `+${n} XP`, life: .9, xpGain: true });
-  if (after.lv > before) {
-    p.hp = hpCap(p);                     // 升級回滿血
-    p.regenAcc = 0;
-    S.floaters.push({ x: p.x, y: p.y - 56, v: `升級！Lv ${after.lv}`, life: 1.6, crit: true });
-    S.floaters.push({ x: p.x, y: p.y, gold: true, life: .7 });   // 金光：金環擴散＋小光點
-    toast(`升級了！Lv ${after.lv}（血量上限 +1${after.lv % 3 === 0 ? '、攻擊力 +1' : ''}）`, 3200);
-    if (!$('avatarPanel').classList.contains('hidden')) buildAvatarPanel();   // 面板開著就同步進度條
-  }
+  if (after.lv > before) levelUpFx(p, after.lv);
 }
 function loseExp() {                     // 倒地 10% 機率扣 XP：扣「升這級還需要的 XP」5%（整數、至少 1、最低扣到 0 不掉級）
+  if (xpServer()) return;                // 登入者：伺服器看 state.dead 自己知道並抽 10%（本機不記，避免改存檔灌分）
   const i = lvInfo(S.profile.xp);
   if (Math.random() >= .1 || i.cur <= 0) return;
   const loss = Math.min(i.cur, Math.max(1, Math.ceil(i.need * .05)));
   S.profile.xp -= loss;
   saveProfile();
   S.floaters.push({ x: S.players[0].x, y: S.players[0].y - 46, v: `−${loss} XP`, life: 1.2, xpLoss: true });
+}
+// 伺服器回來的 XP 記帳結果（不廣播、只給本人）：以伺服器為準更新本機映像＋飄字；k＝init（登入時同步存檔）只更新不演出
+function onNetXp(m) {
+  if (typeof m.xp !== 'number') return;
+  if (m.k === 'init') {
+    S.profile.xp = Math.max(0, Math.floor(m.xp));
+    saveProfile();
+    if (!$('avatarPanel').classList.contains('hidden')) buildAvatarPanel();
+    return;
+  }
+  const d = Math.round(m.d || 0);
+  if (!d) return;
+  const p = S.players[0], before = lvInfo(S.profile.xp).lv;
+  S.profile.xp = Math.max(0, Math.floor(m.xp));
+  saveProfile();
+  if (d > 0) S.floaters.push({ x: p.x, y: p.y - 60, v: `+${d} XP`, life: .9, xpGain: true });
+  else S.floaters.push({ x: p.x, y: p.y - 46, v: `−${-d} XP`, life: 1.2, xpLoss: true });
+  const after = lvInfo(S.profile.xp);
+  if (after.lv > before) levelUpFx(p, after.lv);
+}
+// me 回覆（net.js 轉）：登入成功才走伺服器記帳；伺服器沒有紀錄時把本機存檔一次性上繳（2026-11-07 使用者定 (a)：上繳＋之後以伺服器為準）
+function onNetMe(m) {
+  if (!(m.auth && typeof m.uid === 'string')) return;
+  if (m.xpKnown !== false || S.xpMigrated) return;   // 伺服器已有紀錄（會另送 xp init 覆寫本機映像）；這個分頁已上繳過就不再送
+  S.xpMigrated = true;
+  const v = Math.max(0, Math.floor(S.profile.xp || 0));
+  if (v > 0) S.net?.xpSync?.(v);         // 0 就不用送：之後第一筆記帳會在伺服器開紀錄
 }
 const HEAL_RADIUS = 110;  // 補師打倒動物／群療時的治療半徑（約 3.4 格；2026-11-05 由 96 調大，與月環內圈安全區同大）
 // 自己看「造型」面板選的職業（S.me.job）；別人看 state 封包同步的 job（舊客戶端的 tank／healer／dps 照 legacy 轉）；NPC 沒有職業（回 null）
@@ -3404,7 +3438,7 @@ function showCatch(p, m) {
   const def = fishDef(m.terrain, m.id), rar = S.fishDB.rarity[m.rarity];
   if (!def) return;
   const { isNew, isRecord } = recordCatch(m);
-  grantExp(isNew ? 5 : 1, p.x, p.y - 80);   // 釣到魚 +1 XP；圖鑑首捕 +5（之後同步那步由伺服器記帳＋夾頻）
+  grantExp(isNew ? 5 : 1, p.x, p.y - 80, 'fish');   // 釣到魚 +1 XP；圖鑑首捕 +5（登入者由伺服器記帳——牠自己抽的魚自己知道）
   if (S.fishImgs[m.id]) S.floaters.push({ x: p.x, y: p.y - 64, fishImg: S.fishImgs[m.id], life: 1.8 });
   const big = def.big != null && m.size >= def.big;
   toast(`釣到了 ${def.name}！${m.size} cm（${rar?.name || ''}）${big ? ' · 大尺寸！' : ''}${isNew ? ' · 新發現！' : isRecord ? ' · 尺寸新紀錄！' : ''}`, 3400);
@@ -4939,6 +4973,7 @@ async function boot() {
   Object.assign(S, { furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB });
   loadJobs(jobsDB);
   S.myLook = myLook;   // net.js 送 state 時用（自己的顯示造型）
+  S.myLvl = () => lvInfo(S.profile.xp).lv;   // net.js 送 state 時用（自己的等級；登入者由伺服器覆寫）
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
   S.me.job = jobIdOf(S.me.job) || DEFAULT_JOB;   // 舊存檔的坦克／補師／輸出照 legacy 轉成騎士／白魔法師／忍者；沒有或不合法＝忍者
   if (S.me.title && !titleDef(S.me.title)) S.me.title = null;   // 稱號已從清單移除：不顯示
@@ -5038,6 +5073,8 @@ async function boot() {
     onHeal: onNetHeal,       // 補師的群補事件（各客戶端自判自己是否在半徑內）
     onSkillEvent,            // 職業技能事件（群盾自判、別人畫面上的特效）
     onAdmin: v => { S.admin = !!v; updateDecorUI(); },
+    onMe: onNetMe,           // 登入結果：決定 XP 記帳走伺服器；伺服器沒紀錄時一次性上繳本機存檔
+    onXp: onNetXp,           // 伺服器的 XP 記帳結果（更新本機映像＋飄字／升級演出）
     onCommitResult: onCommitResult,
     onDecos: onNetDecos,
     onDeco: onNetDeco,

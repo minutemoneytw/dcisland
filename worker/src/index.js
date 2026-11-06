@@ -303,8 +303,23 @@ function sanitizeState(s, prev) {
     // 釣魚：浮標位置與階段（只轉發給同地形的人畫圖；釣到什麼由伺服器的 fish 訊息決定）
     fish: s.fish && typeof s.fish === "object" && FISH_PHASES.includes(s.fish.ph)
       ? { x: num(s.fish.x, 0, COLS * CELL, 0), y: num(s.fish.y, 0, ROWS * CELL, 0), ph: s.fish.ph } : null,
+    // 等級（名牌顯示用）：登入者由伺服器以存檔的 XP 覆寫；訪客照客戶端報的（只影響顯示）
+    lvl: Math.max(1, Math.round(num(s.lvl, 1, 2000, prev.lvl ?? 1))),
   };
 }
+
+// ---- 等級與 XP（2026-11-06 規劃；第 2 步：登入者的 XP 由伺服器權威記帳，動值都經 Registry）----
+// 非主動怪是「刻意不同步」的本機動物，伺服器驗證不到擊倒屬實：信任事件＋夾頻（XP_MOB_CD_MS，2026-11-07 使用者同意）
+const XP_MAX = 200000;                  // XP 總量上限（防灌分的保險；等級無上限是設計，這裡只是存檔安全閥）
+const XP_MOB_CD_MS = 1000;              // 擊倒非主動怪的 XP 冷卻（每條連線；每來源每秒最多 1 次）
+const XP_NEED = lv => 10 + 5 * (lv - 1);   // 每級需求 XP；與 client/js/main.js、dev_server.py 相同（改記得三邊都改）
+function xpInfo(xp) {                   // XP 換等級：與 client 的 lvInfo 同演算法
+  let lv = 1, rest = Math.max(0, Math.floor(xp ?? 0));
+  while (lv < 2000 && rest >= XP_NEED(lv)) { rest -= XP_NEED(lv); lv++; }
+  return { lv, cur: rest, need: XP_NEED(lv) };
+}
+// 死亡扣款（與 client 的 loseExp 同值）：扣「升這級還需要的 XP」5%，整數、至少 1、最低扣到 0 不掉級
+const xpDeathLoss = xp => { const i = xpInfo(xp); return Math.min(i.cur, Math.max(1, Math.ceil(i.need * .05))); };
 
 // ---- 釣魚（魚類圖鑑）----
 // 釣到什麼由伺服器抽（client/assets/fish/fish.json）；登入（hello 驗證過）的人記進全域 Registry（依 Discord 帳號），訪客只回結果。
@@ -439,6 +454,7 @@ export class Island {
     this.dragonMapRaw = new Map();   // 地形 → storage 裡目前存的島形字串（比對用：內容沒變就不重寫）
     this.fishDB = null;              // 釣魚：fish.json（懶載入）
     this.lastFish = new Map();       // ws → 上次釣魚結果的時間（冷卻）
+    this.lastXpMob = new Map();      // ws → 上次擊倒非主動怪的時間（XP 夾頻；2026-11-07）
     this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
     this.provokes = new Map();       // ws → {terrain, t}：上次挑釁哪座島的島主（冷卻只在成功出手時計）
     this.debuffs = new Map();        // ws → {vuln: t, weak: t}：上次放破綻／降傷的時刻（冷卻只在成功時計）
@@ -628,6 +644,21 @@ export class Island {
     }
   }
 
+  // 記一次 XP（登入者）：經 Registry 累加、更新這條連線的 att.xp／state.lvl、回給本人（不廣播）。
+  // await 之後要重讀 attachment（hello／state 可能在等 Registry 的期間先到，與 hello 處理同一慣例）
+  async grantXp(ws, d, k) {
+    const att = ws.deserializeAttachment() || {};
+    if (!att.user || !Number.isInteger(d) || d === 0) return;
+    const r = await this.registryCall("/addxp", { uid: att.user.id, d });
+    if (!r || typeof r.xp !== "number") return;   // Registry 掛了：這次不記不回，等下次事件再算
+    const cur = ws.deserializeAttachment() || {};
+    cur.xp = r.xp;
+    cur.xpKnown = true;
+    if (cur.state) cur.state.lvl = xpInfo(r.xp).lv;   // 自己的名牌與之後的 p 廣播即時跟上
+    ws.serializeAttachment(cur);
+    try { ws.send(JSON.stringify({ t: "xp", xp: r.xp, d, k })); } catch { /* 對方已斷線 */ }
+  }
+
   // 釣魚：魚上鉤後拉竿成功 → 伺服器抽一條魚回給這條連線；登入的人同時記進 Registry 的圖鑑（帶回最新紀錄）
   async fishCatch(ws, att) {
     const now = Date.now();
@@ -645,7 +676,10 @@ export class Island {
     const user = (ws.deserializeAttachment() || {}).user;   // 重讀：hello 可能剛驗證完
     if (!res.escaped && user) {
       const r = await this.registryCall("/catch", { uid: user.id, terrain: res.terrain, id: res.id, size: res.size });
-      if (r && r.entry) Object.assign(out, { saved: true, entry: r.entry, isNew: r.isNew, isRecord: r.isRecord });
+      if (r && r.entry) {
+        Object.assign(out, { saved: true, entry: r.entry, isNew: r.isNew, isRecord: r.isRecord });
+        await this.grantXp(ws, r.isNew ? 5 : 1, r.isNew ? "first" : "fish");   // 釣到 +1、圖鑑首捕 +5（2026-11-07）
+      }
     }
     try { ws.send(JSON.stringify(out)); } catch { /* 對方已斷線 */ }
   }
@@ -743,20 +777,63 @@ export class Island {
       const cur = ws.deserializeAttachment() || {};
       cur.user = user;
       cur.admin = !!user && isAdminId(this.env, user.id);
+      let xpKnown = false;
+      if (user) {   // 登入者：把伺服器存檔的 XP 讀回來（之後 state.lvl 與記帳都靠它）
+        const r = await this.registryCall("/profile", { uid: user.id });
+        if (r && typeof r.xp === "number") {
+          cur.xp = Math.max(0, Math.min(XP_MAX, Math.floor(r.xp)));
+          cur.xpKnown = xpKnown = !!r.has;
+          if (cur.state) cur.state.lvl = xpInfo(cur.xp).lv;
+        }
+      }
       if (user && cur.state) cur.state = { ...cur.state, name: String(user.name).slice(0, NAME_MAX), uid: user.id };
       ws.serializeAttachment(cur);
-      ws.send(JSON.stringify({ t: "me", admin: cur.admin, auth: !!user }));   // auth＝憑證驗證成功；失敗（例如 12 小時過期）客戶端會重新授權
-      if (user) {   // 登入的人：送他存在伺服器的魚類圖鑑
+      // me 的 uid／xpKnown：客戶端據此決定 XP 記帳走伺服器（xpKnown=false 時要把本機存檔一次性上繳）
+      ws.send(JSON.stringify({ t: "me", admin: cur.admin, auth: !!user, uid: user ? user.id : null, xpKnown }));
+      if (user) {   // 登入的人：送他存在伺服器的魚類圖鑑與 XP（XP 只在「伺服器有紀錄」時會收到 init；沒有就等 xpsync 上繳）
         const r = await this.registryCall("/dex", { uid: user.id });
         if (r) try { ws.send(JSON.stringify({ t: "dex", dex: r.dex || {} })); } catch { /* 對方已斷線 */ }
+        if (cur.xpKnown) try { ws.send(JSON.stringify({ t: "xp", xp: cur.xp, d: 0, k: "init" })); } catch { /* 對方已斷線 */ }
       }
     } else if (msg.t === "state") {
       const s = sanitizeState(msg.s && typeof msg.s === "object" ? msg.s : {}, att.state);
-      // 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）；訪客沒有 uid
-      if (att.user) { s.name = String(att.user.name).slice(0, NAME_MAX); s.uid = att.user.id; }
+      // 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）；等級以伺服器存檔為準（訪客照客戶端報的，只影響名牌）
+      if (att.user) {
+        s.name = String(att.user.name).slice(0, NAME_MAX);
+        s.uid = att.user.id;
+        if (att.xpKnown && typeof att.xp === "number") s.lvl = xpInfo(att.xp).lv;
+      }
+      // 倒地扣 XP（2026-11-07）：死因都是客戶端自判（state.dead），伺服器只看「本連線首次 dead」抽 10%
+      const wasDead = !!(att.state && att.state.dead);
       att.state = s;
       ws.serializeAttachment(att);
       if (att.terrain) this.broadcast({ t: "p", id: att.id, s }, ws, att.terrain);
+      if (att.user && att.xpKnown && !wasDead && s.dead) {   // 0→1 的那一格才判
+        const loss = xpDeathLoss(att.xp ?? 0);
+        if (loss > 0 && Math.random() < .1) await this.grantXp(ws, -loss, "death");
+      }
+    } else if (msg.t === "xpsync") {   // 舊存檔一次性上繳（2026-11-07 使用者定 (a)）：伺服器沒有紀錄才收，有就回現值（冪等）
+      const user = att.user;
+      if (user) {
+        const v = Math.max(0, Math.min(XP_MAX, Math.floor(Number(msg.v) || 0)));
+        const r = await this.registryCall("/deposit", { uid: user.id, v });
+        if (r && typeof r.xp === "number") {
+          const cur = ws.deserializeAttachment() || {};
+          cur.xp = r.xp;
+          cur.xpKnown = true;
+          if (cur.state) cur.state.lvl = xpInfo(r.xp).lv;
+          ws.serializeAttachment(cur);
+          try { ws.send(JSON.stringify({ t: "xp", xp: r.xp, d: 0, k: "init" })); } catch { /* 對方已斷線 */ }
+        }
+      }
+    } else if (msg.t === "xpe") {   // 擊倒非主動怪的 XP 事件（伺服器無法驗證：信任事件＋夾頻；2026-11-07 使用者同意）
+      if (att.user && msg.k === "mob" && att.terrain) {
+        const now = Date.now();
+        if (now - (this.lastXpMob.get(ws) || 0) >= XP_MOB_CD_MS) {
+          this.lastXpMob.set(ws, now);
+          await this.grantXp(ws, 1, "mob");
+        }
+      }
     } else if (msg.t === "enter" || msg.t === "terrain") {
       // "terrain" 是舊客戶端的訊息名，當作 enter 處理
       await this.enter(ws, att, String(msg.v));
@@ -828,6 +905,7 @@ export class Island {
     map[i] = e;
     await this.state.storage.put("deco:" + terrain, map);
     this.broadcast({ t: "deco", i, hp: e.hp, ttl: e.hp <= 0 ? ttl : 0, by: att.id }, null, terrain);
+    if (e.hp <= 0) await this.grantXp(ws, 1, "mine");   // 採集打壞 +1 XP（只有打壞的這條連線；2026-11-07）
   }
 
   // ---- 島主（伺服器端同步）----
@@ -1661,14 +1739,16 @@ export class Island {
     this.debuffs.delete(ws);
     this.skillHits.delete(ws);
     this.lastFish.delete(ws);
+    this.lastXpMob.delete(ws);
     const att = ws.deserializeAttachment() || {};
     if (att.terrain) this.broadcast({ t: "leave", id: att.id }, ws, att.terrain);
   }
 }
 
-// ============ 全域 Registry（跨島的玩家資料；目前只有魚類圖鑑）============
+// ============ 全域 Registry（跨島的玩家資料；魚類圖鑑＋腳色等級 XP）============
 // 全站只有一個實例（idFromName("global")），只由 Island 透過 REGISTRY 綁定呼叫，沒有對外的路由。
 // 資料：dex:<Discord 使用者 ID> → { 地形: { 魚id: { max（最大尺寸 cm）, n（釣到次數）, first（第一次釣到的時間） } } }
+//       xp:<Discord 使用者 ID> → 總 XP（整數；2026-11-07 腳色等級第 2 步）
 // 讀寫在同一個請求裡只 await storage，DO 的 input gate 會擋住其他請求插隊，所以同一人同時送兩筆也不會互相覆蓋
 const UID_RE = /^[0-9A-Za-z_-]{1,40}$/;
 export class Registry {
@@ -1694,6 +1774,24 @@ export class Registry {
       t[id] = { max: e ? Math.max(e.max, size) : size, n: (e ? e.n : 0) + 1, first: e ? e.first : Date.now() };
       await this.state.storage.put(key, dex);
       return json({ entry: t[id], isNew, isRecord });
+    }
+    // ---- 腳色等級 XP（與 Island 的 grantXp／hello／xpsync 搭配）----
+    if (url.pathname === "/profile") {
+      const xp = await this.state.storage.get("xp:" + uid);
+      return json({ xp: xp === undefined ? 0 : xp, has: xp !== undefined });
+    }
+    if (url.pathname === "/deposit") {   // 舊存檔一次性上繳：已經有紀錄就不覆蓋（冪等；兩台裝置同時上繳也不會疊加）
+      const v = Math.max(0, Math.min(XP_MAX, Math.floor(Number(body.v) || 0)));
+      const xk = "xp:" + uid, cur = await this.state.storage.get(xk);
+      if (cur === undefined) { await this.state.storage.put(xk, v); return json({ xp: v }); }
+      return json({ xp: cur });
+    }
+    if (url.pathname === "/addxp") {     // 累加（可負＝死亡扣款）：夾在 0..XP_MAX，沒變就不寫 storage
+      const d = Math.max(-100000, Math.min(100000, Math.floor(Number(body.d) || 0)));
+      const xk = "xp:" + uid, cur = await this.state.storage.get(xk);
+      const nv = Math.max(0, Math.min(XP_MAX, (cur === undefined ? 0 : cur) + d));
+      if (nv !== cur) await this.state.storage.put(xk, nv);
+      return json({ xp: nv });
     }
     return json({ error: "not found" }, 404);
   }

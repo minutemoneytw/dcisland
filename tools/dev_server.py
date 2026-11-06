@@ -197,10 +197,57 @@ def sanitize_state(s, prev):
         "title": _id_or(s.get("title"), None),   # 稱號 id（None＝不顯示；只轉發 id，文字由各客戶端查 titles.json，解鎖與否不驗證）
         "hp": round(_num(s.get("hp"), 0, 20, 10)),
         "dead": 1 if s.get("dead") else 0,
+        # 等級（名牌顯示用）：登入者由伺服器以存檔的 XP 覆寫；訪客照客戶端報的（只影響顯示）
+        "lvl": max(1, round(_num(s.get("lvl"), 1, 2000, (prev.get("lvl") or 1)))),
         # 釣魚：浮標位置與階段（只轉發；釣到什麼由 fish 訊息決定）
         "fish": {"x": _num(fs.get("x"), 0, COLS * CELL, 0), "y": _num(fs.get("y"), 0, ROWS * CELL, 0), "ph": fs["ph"]}
                 if isinstance(fs, dict) and fs.get("ph") in FISH_PHASES else None,
     }
+
+
+# ---- 腳色等級 XP（2026-11-07 第 2 步：登入者的 XP 由伺服器權威記帳）----
+# 與 worker/src/index.js 的 XP_* 同值同演算法（改一邊要改另一邊）。
+# 非主動怪是「刻意不同步」的本機動物，伺服器驗證不到擊倒屬實：信任事件＋夾頻（XP_MOB_CD，使用者同意）
+XP_MAX = 200000          # XP 總量上限（防灌分的保險；等級無上限是設計，這裡只是存檔安全閥）
+XP_MOB_CD = 1.0          # 擊倒非主動怪的 XP 冷卻（秒；每條連線，每來源每秒最多 1 次）
+XP_NEED = lambda lv: 10 + 5 * (lv - 1)   # 每級需求 XP；與 client/js/main.js、worker 相同（改記得三邊都改）
+
+
+def xp_info(xp):
+    """XP 換等級：與 client 的 lvInfo 同演算法。"""
+    lv, rest = 1, max(0, int(xp or 0))
+    while lv < 2000 and rest >= XP_NEED(lv):
+        rest -= XP_NEED(lv)
+        lv += 1
+    return {"lv": lv, "cur": rest, "need": XP_NEED(lv)}
+
+
+def xp_death_loss(xp):
+    """死亡扣款（與 client 的 loseExp 同值）：扣「升這級還需要的 XP」5%（整數、至少 1、最低扣到 0 不掉級）。"""
+    i = xp_info(xp)
+    return min(i["cur"], max(1, math.ceil(i["need"] * .05)))
+
+
+XP_DB = {}               # Discord 使用者 ID -> 總 XP（本機版存記憶體，重開就清空；正式站存在 Registry 的 xp:<uid>）
+XP_DB_LOCK = threading.Lock()
+
+
+def xp_grant(c, d, k):
+    """記一次 XP（登入者）：累加進 XP_DB、更新連線的 xp／state.lvl、回給本人（不廣播）。"""
+    user = c.get("user")
+    if not user or not isinstance(d, int) or d == 0:
+        return False
+    with XP_DB_LOCK:
+        nv = max(0, min(XP_MAX, XP_DB.get(user["id"], 0) + d))
+        if nv != XP_DB.get(user["id"]):
+            XP_DB[user["id"]] = nv
+    c["xp"] = nv
+    c["xp_known"] = True
+    if c.get("state"):
+        c["state"]["lvl"] = xp_info(nv)["lv"]   # 自己的名牌與之後的 p 廣播即時跟上
+    with c.get("send") or threading.Lock():
+        ws_send(c["sock"], json.dumps({"t": "xp", "xp": nv, "d": d, "k": k}))
+    return True
 
 
 # ---- 釣魚（魚類圖鑑）：與 worker/src/index.js 一致（改一邊要改另一邊）----
@@ -1753,6 +1800,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         last_hit = 0.0
         last_dragon_hit = 0.0   # 打島主的每連線冷卻（與 last_hit 同款）
         last_fish = 0.0         # 釣魚結果的每連線冷卻
+        last_xp_mob = 0.0       # 擊倒非主動怪的 XP 冷卻（2026-11-07）
         last_sign = 0.0         # 改看板的每連線冷卻
         commit_tokens, commit_t = float(COMMIT_BURST), time.time()   # 保存擺設的令牌桶
         try:
@@ -1789,26 +1837,66 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if c is not None:
                         c["user"] = verify_session(msg.get("s"))
                         c["admin"] = is_admin(c["user"])
+                        xp_known = False
+                        if c["user"]:   # 登入者：把伺服器存檔的 XP 讀回來（之後 state.lvl 與記帳都靠它）
+                            with XP_DB_LOCK:
+                                c["xp"] = XP_DB.get(c["user"]["id"], 0)
+                                xp_known = c["xp_known"] = c["user"]["id"] in XP_DB
+                            if c.get("state") and xp_known:
+                                c["state"]["lvl"] = xp_info(c["xp"])["lv"]
                         if c["user"] and c.get("state"):   # 與 Worker 一致：已送過的狀態立刻改用驗證過的名字與 uid
                             c["state"] = {**c["state"], "name": str(c["user"]["name"])[:NAME_MAX], "uid": c["user"]["id"]}
                         with c["send"]:
-                            ws_send(sock, json.dumps({"t": "me", "admin": c["admin"], "auth": bool(c["user"])}))   # auth＝憑證驗證成功；失敗客戶端會重新授權
+                            ws_send(sock, json.dumps({"t": "me", "admin": c["admin"], "auth": bool(c["user"]),
+                                                      # uid／xpKnown：客戶端據此決定 XP 記帳走伺服器（xpKnown=false 時要把本機存檔一次性上繳）
+                                                      "uid": c["user"]["id"] if c["user"] else None, "xpKnown": xp_known}))
                             if c["user"]:   # 登入的人：送他的魚類圖鑑
                                 with FISH_DEX_LOCK:
                                     dex = json.loads(json.dumps(FISH_DEX.get(c["user"]["id"], {})))
                                 ws_send(sock, json.dumps({"t": "dex", "dex": dex}))
+                                if xp_known:   # XP 只在「伺服器有紀錄」時送 init；沒有就等 xpsync 上繳
+                                    ws_send(sock, json.dumps({"t": "xp", "xp": c.get("xp", 0), "d": 0, "k": "init"}))
                 elif t == "state":
                     c = room.clients.get(cid)
                     st = sanitize_state(msg.get("s") if isinstance(msg.get("s"), dict) else {}, c.get("state") if c else None)
-                    # 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）；訪客沒有 uid
+                    # 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）；等級以伺服器存檔為準（訪客照客戶端報的，只影響名牌）
                     user = c.get("user") if c else None
                     if user:
                         st["name"], st["uid"] = str(user["name"])[:NAME_MAX], user["id"]
+                        if c.get("xp_known") and isinstance(c.get("xp"), (int, float)):
+                            st["lvl"] = xp_info(c["xp"])["lv"]
+                    was_dead = bool((c.get("state") or {}).get("dead")) if c else False
                     if c:
                         c["state"] = st
                     cur = room.terrain_of(cid)
                     if cur:
                         room.broadcast({"t": "p", "id": cid, "s": st}, skip=cid, terrain=cur)
+                    # 倒地扣 XP（2026-11-07）：死因都是客戶端自判（state.dead），伺服器只看「本連線首次 dead」抽 10%
+                    if user and c.get("xp_known") and not was_dead and st["dead"]:
+                        loss = xp_death_loss(c.get("xp") or 0)
+                        if loss > 0 and random.random() < .1:
+                            xp_grant(c, -loss, "death")
+                elif t == "xpsync":   # 舊存檔一次性上繳（2026-11-07 使用者定 (a)）：伺服器沒有紀錄才收，有就回現值（冪等）
+                    c = room.clients.get(cid)
+                    user = c.get("user") if c else None
+                    if user:
+                        v = max(0, min(XP_MAX, int(_num(msg.get("v"), 0, XP_MAX, 0))))
+                        with XP_DB_LOCK:
+                            if user["id"] not in XP_DB:
+                                XP_DB[user["id"]] = v
+                            nv = XP_DB[user["id"]]
+                        c["xp"], c["xp_known"] = nv, True
+                        if c.get("state"):
+                            c["state"]["lvl"] = xp_info(nv)["lv"]
+                        with c.get("send") or threading.Lock():
+                            ws_send(sock, json.dumps({"t": "xp", "xp": nv, "d": 0, "k": "init"}))
+                elif t == "xpe":   # 擊倒非主動怪的 XP 事件（伺服器無法驗證：信任事件＋夾頻；2026-11-07 使用者同意）
+                    c = room.clients.get(cid)
+                    if c and c.get("user") and msg.get("k") == "mob" and room.terrain_of(cid):
+                        now = time.time()
+                        if now - last_xp_mob >= XP_MOB_CD:
+                            last_xp_mob = now
+                            xp_grant(c, 1, "mob")
                 elif t in ("enter", "terrain"):   # "terrain" 是舊客戶端的訊息名
                     # 每位玩家各自在自己的地形，只有同地形的人看得到彼此
                     v = str(msg.get("v"))
@@ -1834,6 +1922,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if res:
                         last_hit = now
                         room.broadcast(res[1], terrain=res[0])
+                        if res[1].get("hp", 1) <= 0:   # 打壞了：採集 +1 XP（只有打壞的這條連線；2026-11-07）
+                            c4 = room.clients.get(cid)
+                            if c4 and c4.get("user"):
+                                xp_grant(c4, 1, "mine")
                 elif t == "dragonMap":   # 陸地位圖（島主路徑＋擺設的水邊驗證；各客戶端島形相同，誰上傳都一樣；後上傳的覆蓋也無妨）。上傳者所在地形決定是哪座島的
                     c3 = room.clients.get(cid)
                     cur = c3.get("terrain") if c3 else None
@@ -1923,10 +2015,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 ws_send(sock, json.dumps({"t": "fish_result", "terrain": cur, "lurker": str(db["lurker"]), "saved": False}))
                             continue
                     out = {"t": "fish_result", **res, "saved": False}
-                    user = (room.clients.get(cid) or {}).get("user")
+                    c5 = room.clients.get(cid)
+                    user = (c5 or {}).get("user")
                     if not res.get("escaped") and user:
                         entry, is_new, is_record = dex_catch(user["id"], res["terrain"], res["id"], res["size"])
                         out.update(saved=True, entry=entry, isNew=is_new, isRecord=is_record)
+                        xp_grant(c5, 5 if is_new else 1, "first" if is_new else "fish")   # 釣到 +1、首捕 +5（2026-11-07）
                     with (room.clients.get(cid) or {}).get("send") or threading.Lock():
                         ws_send(sock, json.dumps(out))
         except Exception as e:

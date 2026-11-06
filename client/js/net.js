@@ -41,6 +41,7 @@ export function connectNet(S, opts = {}) {
       seat: p.seatType || null,            // 坐/睡的家具種類（畫圖用）
       hp: p.dead ? 0 : Math.round(p.hp ?? 10),   // 血量（島主爪擊扣 2、殺動物回 1；龍衝直接倒地）
       dead: p.dead ? 1 : 0,                // 死亡（墓碑）：被島主打倒後倒數復活
+      lvl: S.myLvl ? S.myLvl() : 1,        // 等級（名牌顯示用）：登入者由伺服器覆寫，訪客照客戶端報的
       fish: p.fish ? { x: p.fish.x, y: p.fish.y, ph: p.fish.ph } : null,   // 釣魚：浮標位置與階段（wait 等魚／bite 上鉤／reel 拉扯）
       fx: S.myFx ? S.myFx() : [],          // 持續型技能效果（翅膀、護盾、結印…）：給同地形的人畫特效
       circle: S.fx?.circle && S.t < S.fx.circle.until ? { x: S.fx.circle.x, y: S.fx.circle.y } : null,   // 黑魔法師的魔法陣
@@ -74,6 +75,7 @@ export function connectNet(S, opts = {}) {
       r.dead = !!st.dead;                  // 死亡（墓碑）：進出死亡時跟同島的人說一聲
       if (st.hp != null) r.hp = st.hp;     // 血量同步（對方自己算好的）
       r.title = typeof st.title === 'string' ? st.title : null;   // 稱號 id（舊客戶端沒送＝不顯示；main.js 的 titleText() 查不到也不顯示）
+      if (st.lvl != null) r.lvl = st.lvl;   // 等級（名牌的 Lv.N；舊客戶端沒送＝不顯示；登入者由伺服器算好）
       if (st.job) r.job = st.job;          // 職業：只收字串，main.js 的 jobOf() 會做白名單解讀（舊客戶端的 tank/healer/dps 照 legacy 轉）
       r.fx = Array.isArray(st.fx) ? st.fx.filter(v => typeof v === 'string') : [];
       r.circle = st.circle && typeof st.circle.x === 'number' ? { x: st.circle.x, y: st.circle.y } : null;
@@ -101,10 +103,13 @@ export function connectNet(S, opts = {}) {
         if (opts.onAdmin) opts.onAdmin(!!msg.admin);        // 重連後先當一般人，hello 驗證成功後 me 會更新
         break;
       case 'me':
+        net.uid = typeof msg.uid === 'string' ? msg.uid : null;   // 登入成功才有 uid（決定 XP 記帳走伺服器還是本機）
+        if (opts.onMe) opts.onMe(msg);
         if (opts.onAdmin) opts.onAdmin(!!msg.admin);
         // 有憑證卻驗證失敗（12 小時過期等）：請 discord.js 重新授權拿新憑證，拿到後會自動再送 hello（舊伺服器沒有 auth 欄位就不動作）
         if (S.session && msg.auth === false) S.reauth?.();
         break;
+      case 'xp': if (opts.onXp) opts.onXp(msg); break;   // 自己的 XP 記帳結果（伺服器權威；不廣播）
       case 'commit_result': if (opts.onCommitResult) opts.onCommitResult(msg); break;
       case 'fish_result': if (opts.onFishResult) opts.onFishResult(msg); break;   // 釣魚結果（伺服器抽）
       case 'dex': if (opts.onDex) opts.onDex(msg.dex); break;                     // 魚類圖鑑（登入後由伺服器送來）
@@ -221,6 +226,10 @@ export function connectNet(S, opts = {}) {
   net.requestDragonSnap = () => net.connected && send({ t: 'dragonSnap' });
   // 打釣上來的怪物（伺服器權威扣血）：lx/ly＝我們畫面上怪物的位置（伺服器容許漏接一腿的落後）
   net.lurkerHit = (x, y, dmg, lx, ly, staff, sk) => net.connected && send({ t: 'lurkerHit', x, y, dmg, lx, ly, ...(staff ? { staff: 1 } : {}), ...(sk ? { sk } : {}) });
+  // 腳色等級 XP（2026-11-07 第 2 步）：登入者的 XP 由伺服器記帳。
+  // xpSync：舊存檔一次性上繳（伺服器沒有紀錄才會收）；xpEvent：擊倒非主動怪（伺服器無法驗證，信任＋夾頻）
+  net.xpSync = v => net.connected && send({ t: 'xpsync', v });
+  net.xpEvent = k => net.connected && send({ t: 'xpe', k });
 
   return net;
 }
