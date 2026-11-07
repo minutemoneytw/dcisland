@@ -568,7 +568,7 @@
    "ranged": {
     "range": 320,
     "cast": 1.0,
-    "dmg": 2,
+    "dmg": 4,
     "gap": 0
    }
   },

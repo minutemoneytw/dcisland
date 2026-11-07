@@ -486,10 +486,10 @@ function hitMob(p, a, ranged, force) {
     const crit = !force && Math.random() < critP;
     let dmg = force ? force.dmg : ranged ? (rangedDef()?.dmg || 2) + (crit ? 1 : 0) : (crit ? 2 : 1);
     const jd = jobOf(p);
-    if (jd?.dmgPlus && !force) dmg += jd.dmgPlus;   // 輸出：每擊 +1（打島主也算；伺服器的上限是 4）
+    if (jd?.dmgPlus && !force) dmg += jd.dmgPlus;   // 輸出：每擊 +1（打島主也算；伺服器的上限是 HIT_MAX_BASE＝6）
     if (!force) dmg += lvAtkBonus(levelOf(p));      // 等級攻擊加成：每 3 級 +1（兩份伺服器的夾值同式放寬）
     const od = mobDef(a.id);
-    const sendDmg = force ? force.dmg : Math.min(4 + lvAtkBonus(levelOf(p)), dmg);   // 送給伺服器的值（上限 4＋攻擊者等級加成＝兩份伺服器的 dlHitMax；破綻的 +1 由伺服器自己加）
+    const sendDmg = force ? force.dmg : Math.min(HIT_MAX_BASE + lvAtkBonus(levelOf(p)), dmg);   // 送給伺服器的值（上限 4＋攻擊者等級加成＝兩份伺服器的 dlHitMax；破綻的 +1 由伺服器自己加）
     if (od.owner && S.t < (a.vulnUntil ?? 0)) dmg += 1;      // 破綻：每擊 +1（單機在這裡扣、連線只是飄字）
     if ((od.owner || od.lurker) && p === S.players[0]) S.ownerHitAt[a.id] = S.t;   // 稱號「參與擊倒」＋擊倒獎勵（訪客）用：30 秒內打過牠
     if (od.owner && a.proxy) {   // 島主連線時由伺服器權威：送意圖（座標＋傷害＋我們看到的龍位置），本地不扣血（血量等伺服器廣播）
@@ -658,6 +658,7 @@ function lvInfo(xp) {                     // XP 換等級：lv＝目前等級、
   while (lv < 2000 && rest >= xpNeed(lv)) { rest -= xpNeed(lv); lv++; }   // 上限 2000 級：與兩份伺服器一致，也防亂改的存檔讓迴圈跑不完
   return { lv, cur: rest, need: xpNeed(lv) };
 }
+const HIT_MAX_BASE = 6;   // 打島主／魚人的單擊上限基底（與兩份伺服器的 D_HIT_MAX 一致；實際上限＝這個＋lvAtkBonus）
 const lvAtkBonus = lv => Math.floor((lv - 1) / 3);   // 攻擊加成：每 3 級 +1
 const levelOf = p => p === S.players[0] ? lvInfo(S.profile.xp).lv : (p.lvl ?? 1);   // 自己看本機資料；別人等 state 廣播 lvl（同步那步），沒有就當 Lv 1
 // ---- 島主／深海魚人的等級（2026-11-07 改成「強度等級」；與 worker/src/index.js、tools/dev_server.py 的 helper 同式，三邊一起改）----
