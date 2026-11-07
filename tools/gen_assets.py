@@ -594,10 +594,62 @@ GEAR_HATS = {   # id: (名稱, 主色, 陰影, 畫法)
 def basic_top_sheet():
     return _char_sheet(lambda d, f: _draw_part(d, f, "top", hx("#d95c68"), hx("#aa474f"), d == "up"))
 
-# 三款髮型（placeholder：用不同髮色區分；正式素材再照排列覆蓋 char_hair*.png）
-HAIR_STYLES = [("hair1", "#4a3428", "#7a5a44"), ("hair2", "#2a2a33", "#4a4a58"), ("hair3", "#b8925a", "#dcbc86")]
-def hair_sheet(main_hex, shd_hex):
-    return _char_sheet(lambda d, f: _draw_part(d, f, "hair", hx(main_hex), hx(shd_hex), d == "up"))
+# ---------------- 髮型模組（LPC 通用格式外部素材）----------------
+# 使用者提供的髮型是 LPC 通用格式：832×1344＝13 欄 × 21 列、每格 64×64（單層、透明底、12 種顏色）。
+# LPC 的列＝動作：0-3 施法(7 幀)、4-7 突刺(8)、8-11 走路(9)、12-15 揮砍(6)、16-19 射擊(13)、20 受擊(6)；
+#   每組四列的順序＝朝上/朝左/朝下/朝右（走路＝列 8 上、9 左、10 下、11 右）。
+# 這裡只取走路四列、縮放 LPC_SCALE 對齊我們底圖的頭部，重排成遊戲的 65 幀髮型 sheet（疊在頭髮層）。
+# 之後再加別的 LPC 髮型：把檔名加進 KIDOL_HAIR（或另開清單）呼叫 lpc_hair_sheet 即可。
+LPC_SCALE = 2 / 3                # LPC 模組 → 遊戲底圖的縮放比例（以 64px 底圖的頭部對齊校準；見 docs/notes.md）
+LPC_ROW_OF = {"down": 10, "down_right": 11, "right": 11, "up_right": 11, "up": 8, "up_left": 9, "left": 9, "down_left": 9}
+LPC_PICK = [0, 1, 2, 1]          # 走路 9 幀循環取 4 幀（觸地-通過-觸地-通過）；待機＝站立幀 0
+KIDOL_HAIR = [                   # LPC 短髮模組的 12 種顏色 (檔名後綴, 名稱)
+    ("brown", "棕"), ("brown2", "深棕"), ("black", "黑"), ("blonde", "金"),
+    ("ashblonde", "灰金"), ("ashplatinum", "銀白"), ("red", "紅"), ("orange", "橘"),
+    ("rosepink", "玫瑰粉"), ("green", "綠"), ("blue", "藍"), ("purple", "紫"),
+]
+
+def _lpc_hair_cell(w, data, row, f):
+    """把 LPC sheet 的 (列, 幀) 那格縮放 LPC_SCALE、對齊我們的頭部，回傳 Canvas(64×64)。"""
+    k = LPC_SCALE
+    dx = round(CHAR_FW / 2 - CHAR_FW / 2 * k)   # 水平置中
+    dy = round(15 - 13 * k)                      # 髮帽頂（LPC y13）對到我們底圖頭頂（y15）
+    cv = Canvas(CHAR_FW, CHAR_FH)
+    for oy in range(round(CHAR_FH * k)):
+        sy = row * CHAR_FH + min(CHAR_FH - 1, int(round(oy / k)))
+        for ox in range(round(CHAR_FW * k)):
+            sx = f * CHAR_FW + min(CHAR_FW - 1, int(round(ox / k)))
+            i = (sy * w + sx) * 4
+            if data[i + 3] > 16:
+                cv.set(ox + dx, oy + dy, (data[i], data[i + 1], data[i + 2], data[i + 3]))
+    return cv
+
+def lpc_hair_sheet(rel):
+    """rel＝相對 client/assets/ 的 LPC 髮型檔（832×1344）→ 遊戲 65 幀髮型 sheet。"""
+    r = read_png_pixels(os.path.join(ASSETS, rel))
+    if r is None:
+        raise SystemExit(f"找不到髮型模組 {rel}")
+    w, h, data = r
+    cache = {}
+    def cell(d, f):
+        key = (d, f)
+        if key not in cache:
+            cache[key] = _lpc_hair_cell(w, data, LPC_ROW_OF[d], f)
+        return cache[key]
+    sheet = Canvas(CHAR_FW * CHAR_FRAMES, CHAR_FH)
+    def blit(fi, cv):
+        for y in range(CHAR_FH):
+            for x in range(CHAR_FW):
+                c = cv.get(x, y)
+                if c[3]:
+                    sheet.set(fi * CHAR_FW + x, y, c)
+    for i, d in enumerate(CHAR_DIRS):
+        for k2 in range(4):
+            blit(i * 8 + k2, cell(d, 0))                 # 待機 4 幀＝站立
+        for k2 in range(4):
+            blit(i * 8 + 4 + k2, cell(d, LPC_PICK[k2]))  # 走路 4 幀
+    blit(CHAR_SIT, cell("down", 0))                      # 坐姿暫用正面站立
+    return sheet
 
 def gear_top_sheet(tid):
     _, main, shd = GEAR_TOPS[tid][0], GEAR_TOPS[tid][1], GEAR_TOPS[tid][2]
@@ -1933,8 +1985,9 @@ def main():
         save(char_body_sheet(key), f"char_body_{key}.png", sub)
     save(basic_top_sheet(), "char_top_basic.png", sub)                              # 便服上衣（形狀與膚色無關，只出一張）
     save(char_bottom_sheet("#a4a5b5", "#6a6c82"), "char_bottom_basic.png", sub)     # 便服褲子（沿用底圖的牛仔褲顏色）
-    for i, (_hid, main, shd) in enumerate(HAIR_STYLES):
-        save(hair_sheet(main, shd), f"char_hair{i + 1}.png", sub)
+    for i, (cid, _cname) in enumerate(KIDOL_HAIR):   # 短髮模組（LPC 格式）12 色
+        save(lpc_hair_sheet(f"external/img2pixel/hair_kidol/kidol_hairstyle_male_{cid}.png"),
+             f"char_hair{i + 1}.png", sub)
     for tid in GEAR_TOPS:
         save(gear_top_sheet(tid), f"char_{tid}.png", sub)
     for bid in GEAR_BOTTOMS:
@@ -1953,9 +2006,9 @@ def main():
                     frameAnchors={}),
         skins=[dict(id=k, name=n, base=SKINS[k][0], shade=SKINS[k][1], sheet=f"char_body_{k}.png")
                for k, n in [("pale", "白皙"), ("light", "自然"), ("tan", "小麥"), ("deep", "深膚")]],
-        hair=[dict(id="hair1", name="短髮", sheet="char_hair1.png"),
-              dict(id="hair2", name="披髮", sheet="char_hair2.png"),
-              dict(id="hair3", name="蓬鬆", sheet="char_hair3.png")],
+        # 髮型：短髮模組（LPC 格式，12 色）；之後加別的髮型＝再加一條
+        hair=[dict(id=f"hair{i + 1}", name=f"短髮（{cname}）", sheet=f"char_hair{i + 1}.png")
+              for i, (_cid, cname) in enumerate(KIDOL_HAIR)],
         # 帽子／上衣／褲子：每件一張 sheet。dye＝可染色的原色（第一個是主色；換色時主色換成玩家選的顏色，其他依明暗比例跟著換）。
         # 職業裝備由 assets/jobs/jobs.json 的 gear 指定；glam＝可當外觀選（沒有 unlock＝一開始就能用；unlock＝解鎖條件，
         # 格式同 titles.json 的 cond；hint＝沒解鎖時顯示的條件說明）；jobs＝限定哪些職業能用（沒寫＝所有職業）。第一款（basic）也是舊客戶端／沒指定時的預設款。

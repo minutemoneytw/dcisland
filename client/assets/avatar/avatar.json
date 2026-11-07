@@ -173,18 +173,63 @@
  "hair": [
   {
    "id": "hair1",
-   "name": "短髮",
+   "name": "短髮（棕）",
    "sheet": "char_hair1.png"
   },
   {
    "id": "hair2",
-   "name": "披髮",
+   "name": "短髮（深棕）",
    "sheet": "char_hair2.png"
   },
   {
    "id": "hair3",
-   "name": "蓬鬆",
+   "name": "短髮（黑）",
    "sheet": "char_hair3.png"
+  },
+  {
+   "id": "hair4",
+   "name": "短髮（金）",
+   "sheet": "char_hair4.png"
+  },
+  {
+   "id": "hair5",
+   "name": "短髮（灰金）",
+   "sheet": "char_hair5.png"
+  },
+  {
+   "id": "hair6",
+   "name": "短髮（銀白）",
+   "sheet": "char_hair6.png"
+  },
+  {
+   "id": "hair7",
+   "name": "短髮（紅）",
+   "sheet": "char_hair7.png"
+  },
+  {
+   "id": "hair8",
+   "name": "短髮（橘）",
+   "sheet": "char_hair8.png"
+  },
+  {
+   "id": "hair9",
+   "name": "短髮（玫瑰粉）",
+   "sheet": "char_hair9.png"
+  },
+  {
+   "id": "hair10",
+   "name": "短髮（綠）",
+   "sheet": "char_hair10.png"
+  },
+  {
+   "id": "hair11",
+   "name": "短髮（藍）",
+   "sheet": "char_hair11.png"
+  },
+  {
+   "id": "hair12",
+   "name": "短髮（紫）",
+   "sheet": "char_hair12.png"
   }
  ],
  "tops": [
