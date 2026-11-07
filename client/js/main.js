@@ -98,7 +98,7 @@ const S = {
   craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
   craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
   gamesDB: null, tableImgs: {},        // 和平島遊戲桌：遊戲定義（assets/games/games.json，手寫）與桌子圖
-  tableOpen: false, tableId: null, tableView: null, tableChoice: false, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
+  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
   titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
@@ -3869,7 +3869,7 @@ function openTable(tb) {
   if (!gameDef(tb.game)) return;
   for (const k of Object.keys(keys)) keys[k] = false;   // 放開所有按住的鍵（畫面蓋住後收不到 keyup，不然回來還在跑）
   S.mouseHeld = false;
-  S.tableOpen = true; S.tableId = tb.id; S.tableView = null;
+  S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null;
   const inf = S.tblInfo?.[tb.id];
   if (!inf || (!inf.play && inf.n < inf.max)) S.tableChoice = true;   // 還有位子：先讓玩家選「入座」或「觀戰」（沒滿人也可以選觀戰）
   else S.net.tbl({ a: 'join', id: tb.id, role: 'spec' });             // 滿人或已開局：直接觀戰
@@ -3985,7 +3985,7 @@ function buildTable() {
 }
 // ---- 五子棋畫面：15×15 棋盤（canvas）；輪到自己時點交叉點下子，滑過會顯示淡淡的預覽棋子 ----
 const GM_N = 15, GM_CELL = 32, GM_MARGIN = 20;
-function gomokuDraw(cv, v, hover) {
+function gomokuDraw(cv, v, hover, rep) {   // rep＝復盤：{board, last, line, nums（到這一步為止的每一手座標，棋子上畫手數）}
   const g = cv.getContext('2d'), size = GM_MARGIN * 2 + GM_CELL * (GM_N - 1);
   g.fillStyle = '#d8a860'; g.fillRect(0, 0, size, size);
   g.strokeStyle = 'rgba(70,40,10,.8)'; g.lineWidth = 1;
@@ -4004,14 +4004,21 @@ function gomokuDraw(cv, v, hover) {
     g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
     g.strokeStyle = 'rgba(0,0,0,.45)'; g.stroke(); g.globalAlpha = 1;
   };
-  const board = v.board || '';
+  const board = rep ? rep.board : (v.board || '');
   for (let i = 0; i < board.length; i++) if (board[i] !== '0') stone(i % GM_N, Math.floor(i / GM_N), Number(board[i]));
-  if (hover && !(board[hover.y * GM_N + hover.x] > 0)) stone(hover.x, hover.y, v.black === v.me ? 1 : 2, .45);   // 預覽：自己的顏色
-  if (v.line) {   // 連成五子：紅圈標出來
-    g.strokeStyle = '#e8402a'; g.lineWidth = 3;
-    for (const [x, y] of v.line) { g.beginPath(); g.arc(GM_MARGIN + x * GM_CELL + .5, GM_MARGIN + y * GM_CELL + .5, GM_CELL * .5, 0, Math.PI * 2); g.stroke(); }
+  if (rep?.nums) {   // 復盤：每顆棋子上寫第幾手
+    g.font = 'bold 12px "Microsoft JhengHei"'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    rep.nums.forEach(([x, y], k) => { g.fillStyle = board[y * GM_N + x] === '1' ? '#f4f0e4' : '#1e1e24'; g.fillText(String(k + 1), GM_MARGIN + x * GM_CELL + .5, GM_MARGIN + y * GM_CELL + 1); });
+    g.textBaseline = 'alphabetic';
   }
-  if (v.last) { g.fillStyle = '#e8402a'; g.beginPath(); g.arc(GM_MARGIN + v.last[0] * GM_CELL + .5, GM_MARGIN + v.last[1] * GM_CELL + .5, 4, 0, Math.PI * 2); g.fill(); }   // 最後一手
+  if (hover && !(board[hover.y * GM_N + hover.x] > 0)) stone(hover.x, hover.y, v.black === v.me ? 1 : 2, .45);   // 預覽：自己的顏色
+  const line = rep ? rep.line : v.line, last = rep ? rep.last : v.last;
+  if (line) {   // 連成五子：紅圈標出來
+    g.strokeStyle = '#e8402a'; g.lineWidth = 3;
+    for (const [x, y] of line) { g.beginPath(); g.arc(GM_MARGIN + x * GM_CELL + .5, GM_MARGIN + y * GM_CELL + .5, GM_CELL * .5, 0, Math.PI * 2); g.stroke(); }
+  }
+  if (last && !rep?.nums) { g.fillStyle = '#e8402a'; g.beginPath(); g.arc(GM_MARGIN + last[0] * GM_CELL + .5, GM_MARGIN + last[1] * GM_CELL + .5, 4, 0, Math.PI * 2); g.fill(); }   // 最後一手
+  else if (last) { g.strokeStyle = '#e8402a'; g.lineWidth = 2; g.strokeRect(GM_MARGIN + last[0] * GM_CELL - 13, GM_MARGIN + last[1] * GM_CELL - 13, 27, 27); }   // 復盤：目前這一手用紅框
 }
 function buildGomoku(box, v, mk) {
   const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
@@ -4030,10 +4037,20 @@ function buildGomoku(box, v, mk) {
   });
   for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
   box.appendChild(row);
+  // 復盤：對局結束後（有結果、不是中途離開）可以用上一步／下一步看剛剛的棋局；新的一局開始就回到即時畫面
+  const moves = v.moves || [], canReplay = !playing && v.board && moves.length > 0;
+  if (!canReplay) S.gmStep = null;
+  else if (S.gmStep == null || S.gmStep > moves.length) S.gmStep = moves.length;
+  let rep = null;
+  if (canReplay) {
+    const arr = new Array(GM_N * GM_N).fill('0');
+    moves.slice(0, S.gmStep).forEach(([x, y], k) => { arr[y * GM_N + x] = k % 2 === 0 ? '1' : '2'; });   // 第 0 手＝黑棋
+    rep = { board: arr.join(''), last: S.gmStep ? moves[S.gmStep - 1] : null, line: S.gmStep === moves.length ? v.line : null, nums: moves.slice(0, S.gmStep) };
+  }
   if (v.board) {   // 棋盤（結束後也留著，到下一局開始才清掉）
     const size = GM_MARGIN * 2 + GM_CELL * (GM_N - 1), cv = document.createElement('canvas');
     cv.width = size; cv.height = size; cv.className = 'gomoku-board';
-    gomokuDraw(cv, v, null);
+    gomokuDraw(cv, v, null, rep);
     const at = e => {
       const r = cv.getBoundingClientRect(), k = size / r.width;
       const x = Math.round(((e.clientX - r.left) * k - GM_MARGIN - .5) / GM_CELL), y = Math.round(((e.clientY - r.top) * k - GM_MARGIN - .5) / GM_CELL);
@@ -4046,6 +4063,14 @@ function buildGomoku(box, v, mk) {
       cv.onclick = e => { const p = at(e); if (p && v.board[p.y * GM_N + p.x] === '0') S.net?.tbl?.({ a: 'move', x: p.x, y: p.y }); };
     }
     box.appendChild(cv);
+  }
+  if (canReplay) {   // 復盤控制列（也可以用鍵盤 ← → Home End）
+    const bar = mk('div', 'table-btns gomoku-replay'), N = moves.length, go = k => { S.gmStep = Math.max(0, Math.min(N, k)); buildTable(); };
+    for (const [label, k, tip] of [['⏮', () => 0, '回到開局（Home）'], ['◀ 上一步', () => S.gmStep - 1, '上一步（←）']]) { const b = mk('button', 'ff-btn small', label); b.title = tip; b.onclick = () => go(k()); bar.appendChild(b); }
+    const who = S.gmStep ? `${(S.gmStep - 1) % 2 === 0 ? '黑' : '白'}棋 (${moves[S.gmStep - 1][0] + 1}, ${moves[S.gmStep - 1][1] + 1})` : '開局';
+    bar.appendChild(mk('span', 'table-tag', `復盤：第 ${S.gmStep}／${N} 手 · ${who}`));
+    for (const [label, k, tip] of [['下一步 ▶', () => S.gmStep + 1, '下一步（→）'], ['⏭', () => N, '跳到最後一手（End）']]) { const b = mk('button', 'ff-btn small', label); b.title = tip; b.onclick = () => go(k()); bar.appendChild(b); }
+    box.appendChild(bar);
   }
   const btns = mk('div', 'table-btns');
   if (v.role === 'seat' && !playing) {
@@ -5276,7 +5301,16 @@ addEventListener('keydown', e => {
     else if (k === 'enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveSign(); }
     return;
   }
-  if (S.tableOpen) { if (k === 'escape') { e.preventDefault(); closeTable(); } return; }   // 遊戲畫面開著：Esc 離開，其他鍵都不處理（不能走路）
+  if (S.tableOpen) {   // 遊戲畫面開著：Esc 離開；五子棋復盤時 ←／→／Home／End 切換步數；其他鍵都不處理（不能走路）
+    if (k === 'escape') { e.preventDefault(); closeTable(); }
+    else if (S.gmStep != null && S.tableView?.moves && ['arrowleft', 'arrowright', 'home', 'end'].includes(k)) {
+      e.preventDefault();
+      const N = S.tableView.moves.length;
+      S.gmStep = k === 'arrowleft' ? Math.max(0, S.gmStep - 1) : k === 'arrowright' ? Math.min(N, S.gmStep + 1) : k === 'home' ? 0 : N;
+      buildTable();
+    }
+    return;
+  }
   const tg = e.target;   // 在輸入框打字（例如選色視窗的色碼）：除了 Esc 之外都不是遊戲按鍵，否則打 a／d／s／w 會讓角色跟著走
   if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA') && k !== 'escape') return;
   keys[k] = true;

@@ -802,7 +802,7 @@ GM_N = 15
 
 def gm_start(t):
     black = random.randrange(2)   # 座位 0／1 誰執黑
-    t["g"] = {"board": [0] * (GM_N * GM_N), "black": black, "last": None, "line": None}   # board：0 空、1 黑、2 白
+    t["g"] = {"board": [0] * (GM_N * GM_N), "black": black, "last": None, "line": None, "moves": []}   # moves：每一手的 [x, y]（第 0 手是黑棋；結束後給客戶端復盤）   # board：0 空、1 黑、2 白
     t["result"] = None
     t["phase"] = "playing"
     t["turn"] = black   # 黑先
@@ -847,6 +847,7 @@ def gm_move(t, cid, x, y):
     color = 1 if i == g["black"] else 2
     g["board"][y * GM_N + x] = color
     g["last"] = [x, y]
+    g["moves"].append([x, y])
     line = gm_line(g["board"], x, y, color)
     if line:
         g["line"] = line
@@ -872,7 +873,7 @@ def tbl_view(t, cid):
     g = t.get("g")
     if g:   # 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
         v["board"] = "".join(str(c) for c in g["board"])
-        v["last"], v["black"], v["line"] = g["last"], g["black"], g["line"]
+        v["last"], v["black"], v["line"], v["moves"] = g["last"], g["black"], g["line"], g["moves"]   # moves：每一手的座標（偶數手＝黑棋）；結束後客戶端用來復盤
     if role == "spec" and playing and t["game"] == "oldmaid":   # 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
         v["hands"] = [list(s["hand"]) for s in t["seats"]]
     if role == "seat" and playing and t["game"] == "oldmaid":

@@ -614,7 +614,7 @@ function omShuffle(t, cid) {
 const GM_N = 15;
 function gmStart(t) {
   const black = Math.floor(Math.random() * 2);   // 座位 0／1 誰執黑
-  t.g = { board: new Array(GM_N * GM_N).fill(0), black, last: null, line: null };   // board：0 空、1 黑、2 白
+  t.g = { board: new Array(GM_N * GM_N).fill(0), black, last: null, line: null, moves: [] };   // board：0 空、1 黑、2 白
   t.result = null; t.phase = "playing"; t.turn = black;   // 黑先
   for (const s of t.seats) s.ready = false;
   tblLog(t, `對局開始，${t.seats[black].name} 執黑先下`);
@@ -648,6 +648,7 @@ function gmMove(t, cid, x, y) {
   const color = i === g.black ? 1 : 2;
   g.board[y * GM_N + x] = color;
   g.last = [x, y];
+  (g.moves || (g.moves = [])).push([x, y]);   // （舊存檔的對局沒有 moves：補上）每一手的座標（第 0 手是黑棋；結束後給客戶端復盤）
   const line = gmLine(g.board, x, y, color);
   if (line) { g.line = line; gmFinish(t, i); }
   else if (g.board.every(c => c)) gmFinish(t, null);
@@ -663,7 +664,7 @@ function tblView(t, cid) {
     specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
   };
   if (t.g) {   // 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
-    v.board = t.g.board.join(""); v.last = t.g.last; v.black = t.g.black; v.line = t.g.line;
+    v.board = t.g.board.join(""); v.last = t.g.last; v.black = t.g.black; v.line = t.g.line; v.moves = t.g.moves || [];   // moves：每一手的座標（偶數手＝黑棋）；結束後客戶端用來復盤
   }
   if (role === "spec" && playing && t.game === "oldmaid") v.hands = t.seats.map(s => [...s.hand]);   // 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
   if (role === "seat" && playing && t.game === "oldmaid") {
