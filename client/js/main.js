@@ -679,7 +679,7 @@ function levelUpFx(p, afterLv) {         // 升級演出（本機記帳與伺服
   p.regenAcc = 0;
   S.floaters.push({ x: p.x, y: p.y - 56, v: `升級！Lv ${afterLv}`, life: 1.6, crit: true });
   S.floaters.push({ x: p.x, y: p.y, gold: true, life: .7 });   // 金光：金環擴散＋小光點
-  toast(`升級了！Lv ${afterLv}（血量上限 +1${afterLv % 3 === 0 ? '、攻擊力 +1' : ''}）`, 3200);
+  toast(`升級了！Lv ${afterLv}（血量上限 +1${afterLv > 1 && afterLv % 3 === 1 ? '、攻擊力 +1' : ''}）`, 3200);
   if (!$('avatarPanel').classList.contains('hidden')) buildAvatarPanel();   // 面板開著就同步進度條
 }
 function grantExp(n, x, y, reason) {     // 拿經驗值：金色 +N XP 飄字；升級＝金光演出＋回滿血（升級獎勵感）
@@ -4753,6 +4753,8 @@ addEventListener('keydown', e => {
     else if (k === 'enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveSign(); }
     return;
   }
+  const tg = e.target;   // 在輸入框打字（例如選色視窗的色碼）：除了 Esc 之外都不是遊戲按鍵，否則打 a／d／s／w 會讓角色跟著走
+  if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA') && k !== 'escape') return;
   keys[k] = true;
   if (MOVE_KEYS.includes(k)) {                                  // 命令檢定：移動輸入記在真實時鐘——keydown（含按住的 OS 重複鍵）
     const me = S.players[0];                                    // 即使 rAF 被 Discord webview 凍結也記得到（2026-11-06 修正「該中沒中」）
