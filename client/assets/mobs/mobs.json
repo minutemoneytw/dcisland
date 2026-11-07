@@ -80,28 +80,34 @@
    ],
    "lineSkills": [
     [
+     "meteor",
      "ring",
      "meteor"
     ],
     [
      "ring",
+     "meteor",
      "meteor"
     ],
     [
      "iron",
-     "ion"
+     "ion",
+     "meteor"
     ],
     [
      "iron",
+     "meteor",
      "ion"
     ],
     [
      "ring",
+     "meteor",
      "ion"
     ],
     [
      "ring",
-     "iron"
+     "iron",
+     "meteor"
     ],
     [
      "meteor",
@@ -112,9 +118,11 @@
      "ion"
     ],
     [
+     "meteor",
      "ring"
     ],
     [
+     "meteor",
      "iron"
     ],
     [

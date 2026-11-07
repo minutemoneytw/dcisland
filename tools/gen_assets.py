@@ -1527,10 +1527,10 @@ MOB_MANIFEST = dict(
 )
 
 # 台詞招式（黃金肥龍）：台詞裡的關鍵字 → 招式 id（使用者定，2026-11-05）。
-# 依關鍵字在句中出現的順序放招；同一招在一句裡重複只放一次；先比對長的（「紅月」不另外算成「月」）。
+# 依關鍵字在句中出現的順序放招；同一招在一句裡重複只放一次（隕石流例外：可放兩次，星降、降臨各算一次）；先比對長的（「紅月」不另外算成「月」）。
 # 招式 id 與名稱、數值見 client/assets/skills/skills.json 的 quotes 與 main.js 的 QUOTE_*；「超新星」不對應招式
 QUOTE_KEYWORDS = [("紅月", "dive"), ("月光", "ring"), ("月亮", "ring"), ("月", "ring"),
-                  ("熾熱", "ion"), ("燃燒", "ion"), ("鐵血", "iron"), ("鋼鐵", "iron"), ("星降", "meteor")]
+                  ("熾熱", "ion"), ("燃燒", "ion"), ("鐵血", "iron"), ("鋼鐵", "iron"), ("星降", "meteor"), ("降臨", "meteor")]
 
 def quote_skills(line):
     """一句台詞 → 依序要放的招式 id 清單（最多 3 個）。"""
@@ -1538,7 +1538,7 @@ def quote_skills(line):
     while i < len(line):
         for kw, sk in QUOTE_KEYWORDS:
             if line.startswith(kw, i):
-                if sk not in out:
+                if sk not in out or (sk == "meteor" and out.count(sk) < 2):   # 其他招同一句只放一次；隕石流可以放兩次（星降、降臨各算一次）
                     out.append(sk)
                 i += len(kw)
                 break
