@@ -58,7 +58,8 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 5. Discord 授權 scope **只有 `identify`**。多加 scope 會讓每次啟動都跳授權畫面，要加先問使用者。
 6. 前端為純 ES module、單一全域狀態物件 `S`（`main.js`）；沿用現有風格，不要為小改動重構整檔。
 7. `localStorage` key 前綴為 `dcisland.m0.*`，改格式時要考慮舊資料。
-8. **使用者做過的設計決定**（例如野外動物刻意不同步、家具開放所有人編輯）記在 `docs/notes.md`，不要自行「修正」。
+8. **和平島不能出現任何敵對 NPC／怪物**（島主、野生敵對怪、釣上來的怪物都不行；使用者定，詳見 `docs/notes.md`「和平島與遊戲桌」）。新增會生成敵對單位的機制時，要排除 `peace`。
+9. **使用者做過的設計決定**（例如野外動物刻意不同步、家具開放所有人編輯）記在 `docs/notes.md`，不要自行「修正」。
 
 ## Git
 - 不要 force push、不要改寫已有歷史；pull/merge 以快轉或正常 merge 為主。
