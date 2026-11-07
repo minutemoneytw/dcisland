@@ -825,6 +825,7 @@ class Room:
         self.lurk_hits = {}      # cid -> (地形, 上次打怪物的時刻 ms)
         self.lurk_seq = {}       # 地形 -> 怪物 tick 序號（只讓最新排程生效）
         self.tables = {}         # 桌 id -> 牌桌狀態（和平島的遊戲桌；只放記憶體）
+        self.tlock = threading.Lock()   # 牌桌操作串行（table_op）
         # 每位玩家各自在某個地形（client["terrain"]）；剛連上時為 None，等 enter
 
     def floor_map(self, terrain):
@@ -2069,6 +2070,11 @@ class Room:
         if info and terr:
             self.broadcast(info, terrain=terr)
 
+    def table_op(self, fn, *args):
+        """牌桌操作（算結果＋送出）整段串行：不同連線的操作在不同執行緒，先算好的 tblinfo 若晚送到，客戶端會停在過期的人數／入座名單。"""
+        with self.tlock:
+            self.table_flush(fn(*args))
+
     def terrain_of(self, cid):
         with self.lock:
             c = self.clients.get(cid)
@@ -2351,7 +2357,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if now - last_tbl < TBL_CD:
                         continue
                     last_tbl = now
-                    room.table_flush(room.table_do(cid, msg))
+                    room.table_op(room.table_do, cid, msg)
                 elif t in ("enter", "terrain"):   # "terrain" 是舊客戶端的訊息名
                     # 每位玩家各自在自己的地形，只有同地形的人看得到彼此
                     v = str(msg.get("v"))
@@ -2360,7 +2366,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     res = room.enter(cid, v)
                     if res is None:
                         continue
-                    room.table_flush(room.table_drop(cid))   # 換地形：離開牌桌
+                    room.table_op(room.table_drop, cid)   # 換地形：離開牌桌
                     old, players, furn, floor, decos, dragon, lurker = res
                     if old:   # leave 帶 to＝去了哪個地形（讓留下的人顯示「XXX 移動到了OO區域」）；斷線的 leave 不帶
                         room.broadcast({"t": "leave", "id": cid, "to": v}, skip=cid, terrain=old)
@@ -2485,7 +2491,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             print(f"[ws] !{cid} {e}", file=sys.stderr, flush=True)
         finally:
             last = room.terrain_of(cid)
-            room.table_flush(room.table_drop(cid))   # 斷線：離開牌桌（牌局進行中就結束這一局）
+            room.table_op(room.table_drop, cid)   # 斷線：離開牌桌（牌局進行中就結束這一局）
             room.remove(cid)
             if last:
                 room.broadcast({"t": "leave", "id": cid}, terrain=last)
