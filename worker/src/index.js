@@ -472,11 +472,11 @@ const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t3: "oldmaid", t4: "g
 const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
 // 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
-// 抽鬼牌：過關者 +4、輸家 +2；五子棋：勝 +5、負 +2、平手 +3（下不到 10 手就結束的不給，擋刷分）。
+// 輸贏經驗一樣（使用者定）：抽鬼牌每位 +4；五子棋勝／負／平手都 +5（下不到 10 手就結束的不給，擋刷分）。
 // 登入者由伺服器記帳（同一帳號兩次得分最短間隔 GAME_XP_CD_MS）；訪客由客戶端看 result.xp 本機補發
 const GAME_XP_CD_MS = 30000;
-const OM_XP = [4, 2];      // [過關, 輸家]
-const GM_XP = [5, 2, 3];   // [勝, 負, 平手]
+const OM_XP = 4;      // 抽鬼牌：每位入座者（過關者與輸家一樣）
+const GM_XP = 5;      // 五子棋：勝／負／平手都一樣
 const GM_XP_MIN_MOVES = 10;
 const OM_SYM = { S: "♠", H: "♥", D: "♦", C: "♣" };
 const omRank = c => (c === "JK" ? null : Number(c.slice(1)));
@@ -582,7 +582,7 @@ function omStart(t) {
 }
 function omFinish(t, loser) {
   const name = t.seats[loser].name;
-  t.result = { loser, name, text: `${name} 抽到鬼牌，輸了！`, rid: Math.floor(Math.random() * 4294967296), xp: t.seats.map((_, i) => (i === loser ? OM_XP[1] : OM_XP[0])) };
+  t.result = { loser, name, text: `${name} 抽到鬼牌，輸了！`, rid: Math.floor(Math.random() * 4294967296), xp: t.seats.map(() => OM_XP) };
   tblLog(t, t.result.text);
   tblResetSeats(t);
 }
@@ -641,8 +641,8 @@ function gmLine(board, x, y, color) {
 // 對局結束：winner＝座位編號，null＝平手。棋盤留著給大家看（到下一局開始才清掉）
 function gmFinish(t, winner) {
   const g = t.g, enough = (g.moves || []).length >= GM_XP_MIN_MOVES, rid = Math.floor(Math.random() * 4294967296);
-  if (winner === null) t.result = { draw: true, text: "棋盤下滿了，平手！", rid, xp: [enough ? GM_XP[2] : 0, enough ? GM_XP[2] : 0] };
-  else { const name = t.seats[winner].name; t.result = { winner, name, text: `${name} 五子連線，獲勝！`, rid, xp: [0, 1].map(i => (enough ? (i === winner ? GM_XP[0] : GM_XP[1]) : 0)) }; }
+  if (winner === null) t.result = { draw: true, text: "棋盤下滿了，平手！", rid, xp: [enough ? GM_XP : 0, enough ? GM_XP : 0] };
+  else { const name = t.seats[winner].name; t.result = { winner, name, text: `${name} 五子連線，獲勝！`, rid, xp: [enough ? GM_XP : 0, enough ? GM_XP : 0] }; }
   tblLog(t, t.result.text);
   tblResetSeats(t);
   t.g = g;

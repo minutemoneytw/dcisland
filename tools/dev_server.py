@@ -617,11 +617,11 @@ TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t3": "oldmaid", "t4": 
 GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
 # 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
-# 抽鬼牌：過關者 +4、輸家 +2；五子棋：勝 +5、負 +2、平手 +3（下不到 10 手就結束的不給，擋刷分）。
+# 輸贏經驗一樣（使用者定）：抽鬼牌每位 +4；五子棋勝／負／平手都 +5（下不到 10 手就結束的不給，擋刷分）。
 # 登入者由伺服器記帳（同一帳號兩次得分最短間隔 GAME_XP_CD 秒）；訪客由客戶端看 result.xp 本機補發
 GAME_XP_CD = 30.0
-OM_XP = (4, 2)        # (過關, 輸家)
-GM_XP = (5, 2, 3)     # (勝, 負, 平手)
+OM_XP = 4             # 抽鬼牌：每位入座者（過關者與輸家一樣）
+GM_XP = 5             # 五子棋：勝／負／平手都一樣
 GM_XP_MIN_MOVES = 10
 OM_SUITS = "SHDC"
 OM_SYM = {"S": "♠", "H": "♥", "D": "♦", "C": "♣"}
@@ -760,7 +760,7 @@ def om_start(t):
 def om_finish(t, loser):
     name = t["seats"][loser]["name"]
     t["result"] = {"loser": loser, "name": name, "text": f"{name} 抽到鬼牌，輸了！", "rid": random.getrandbits(32),
-                   "xp": [OM_XP[1] if i == loser else OM_XP[0] for i in range(len(t["seats"]))]}
+                   "xp": [OM_XP] * len(t["seats"])}
     tbl_log(t, t["result"]["text"])
     tbl_reset_seats(t)
 
@@ -836,11 +836,11 @@ def gm_finish(t, winner, line):
     g = t.get("g")
     enough = len(g["moves"]) >= GM_XP_MIN_MOVES
     if winner is None:
-        t["result"] = {"draw": True, "text": "棋盤下滿了，平手！", "rid": random.getrandbits(32), "xp": [GM_XP[2] if enough else 0] * 2}
+        t["result"] = {"draw": True, "text": "棋盤下滿了，平手！", "rid": random.getrandbits(32), "xp": [GM_XP if enough else 0] * 2}
     else:
         name = t["seats"][winner]["name"]
         t["result"] = {"winner": winner, "name": name, "text": f"{name} 五子連線，獲勝！", "rid": random.getrandbits(32),
-                       "xp": [(GM_XP[0] if i == winner else GM_XP[1]) if enough else 0 for i in range(2)]}
+                       "xp": [GM_XP if enough else 0] * 2}
     tbl_log(t, t["result"]["text"])
     tbl_reset_seats(t)
     t["g"] = g
