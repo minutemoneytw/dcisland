@@ -3772,6 +3772,8 @@ function buildCraft() {
     const list = db.recipes.filter(r => S.craft.rec[r.id]).sort((a, b) => S.craft.rec[a.id] - S.craft.rec[b.id]);
     for (const r of list) {
       const row = mk('div', 'craft-note');
+      row.title = '點一下：跳到合成頁並排好素材';
+      row.onclick = () => { S.craftTab = 'make'; S.craftSlots = [...r.in]; S.craftMsg = `已排好「${outName(r.out)}」的素材，按合成即可`; buildCraft(); };   // 筆記裡的配方：一鍵排進合成格
       r.in.forEach((id, i) => { if (i) row.appendChild(mk('span', 'craft-op', '+')); const c = mk('div', 'craft-mini'); c.append(craftIcon('mat', id, 28), mk('span', null, matDef(id)?.name || id)); row.appendChild(c); });
       row.appendChild(mk('span', 'craft-op', '→'));
       const o = mk('div', 'craft-mini out'); o.append(craftIcon(outKey(r.out), r.out.id, 28), mk('span', null, outName(r.out) + (r.out.kind === 'furniture' ? '（家具）' : '')));
