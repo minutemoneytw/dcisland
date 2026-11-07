@@ -8,7 +8,7 @@
  "water": "water.png",
  "deco": [],
  "mobs": [],
- "uiColor": "#9ad08a",
+ "uiColor": "#d9c9a6",
  "tables": [
   {
    "id": "t1",
@@ -20,5 +20,7 @@
    "w": 3,
    "h": 2
   }
- ]
+ ],
+ "layout": "room",
+ "campfire": false
 }

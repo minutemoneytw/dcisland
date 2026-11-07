@@ -116,7 +116,9 @@ function genWorld(id) {
   const rng = mulberry32(hashStr(id));
   const cx = COLS / 2 - .5, cy = ROWS / 2 - .5, rx = 29, ry = 19.5;   // 放大 5 倍級（2026-11-07 再放大約 24% 面積：原本 26／17.5）
   const types = new Uint8Array(COLS * ROWS);
+  const room = S.terrains[id]?.layout === 'room';   // 和平島：像室內——整張地圖都是地板，只有最外圈（地圖邊緣一格）是水
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    if (room) { types[y * COLS + x] = (x === 0 || y === 0 || x === COLS - 1 || y === ROWS - 1) ? 0 : 2; continue; }
     let d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
     d += (rng() - .5) * .22;
     types[y * COLS + x] = d < .7 ? 2 : d < 1.1 ? 1 : 0;
@@ -650,6 +652,7 @@ function campfireCellFor(terrain, slot) {   // 只挑陸地（types 2；0＝海�
   return cand.length ? cand[Math.floor(rng() * cand.length)] : null;
 }
 function updateCampfire() {   // 每幀呼叫：換時段（或換地形）就重擲一次位置
+  if (S.terrains[S.terrain]?.campfire === false) { S.campfire = null; return; }   // 這座島沒有營火（和平島）
   const slot = campfireSlot(), c = S.campfire;
   if (c && c.terrain === S.terrain && c.slot === slot) return;
   const cell = campfireCellFor(S.terrain, slot);

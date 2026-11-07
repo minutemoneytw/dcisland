@@ -148,6 +148,19 @@ def write_json(path, obj):
     print(f"  {os.path.relpath(path, HERE)}")
 
 # ---------------- 地形 tile ----------------
+def indoor_tile(a, b):
+    """室內地板磚（16×16、可無縫重複）：兩色 8×8 方磚交錯、磚縫較深、磚面上緣一條亮邊。"""
+    cv = Canvas(16, 16)
+    for y in range(16):
+        for x in range(16):
+            c = a if ((x // 8) + (y // 8)) % 2 == 0 else b
+            if x % 8 == 0 or y % 8 == 0:
+                c = shade(c, .86)
+            elif y % 8 == 1:
+                c = shade(c, 1.06)
+            cv.set(x, y, c)
+    return cv
+
 def dither_tile(base, dot, seed, n=None):
     rng = random.Random(seed)
     cv = Canvas(TILE, TILE)
@@ -1171,9 +1184,10 @@ TERRAINS = [
          deco=[("gear.png", 3), ("rock.png", 1)], ui="#8a94a4"),
     # 和平島（2026-11-08）：沒有採集物件、野生動物、NPC、島主、魚；之後當小遊戲區域，中央附近有遊戲桌（TABLES_BY_TERRAIN）
     dict(id="peace", name="和平島",
-         ground=("#9ad08a", "#8cc47c"), edge=("#ecdfb4", "#dfd09e"),
+         ground=("#d9c9a6", "#c8b690"), edge=("#ecdfb4", "#dfd09e"),
          water=("#5ab8d8", "#4aa8c8"), leaf=("#6ab85a", "#58a04a"), trunk="#8a6a46",
-         deco=[], ui="#9ad08a"),
+         deco=[], ui="#d9c9a6",
+         layout="room", campfire=False),   # room＝像室內：整張地圖都是地板，只有最外圈是水；campfire=False＝沒有營火
 ]
 
 # 和平島的遊戲桌：地形 → [桌]。id＝桌 id（兩份伺服器的 TABLE_DEFS 要一致）、game＝client/assets/games/games.json 的遊戲 id、
@@ -2161,7 +2175,7 @@ def main():
     for t in TERRAINS:
         sub = os.path.join("terrain", t["id"])
         la, ld = hx(t["leaf"][0]), hx(t["leaf"][1]); trunk = hx(t["trunk"])
-        save(dither_tile(hx(t["ground"][0]), hx(t["ground"][1]), t["id"] + "g"), "ground.png", sub)
+        save(indoor_tile(hx(t["ground"][0]), hx(t["ground"][1])) if t.get("layout") == "room" else dither_tile(hx(t["ground"][0]), hx(t["ground"][1]), t["id"] + "g"), "ground.png", sub)
         save(dither_tile(hx(t["edge"][0]), hx(t["edge"][1]), t["id"] + "e"), "edge.png", sub)
         save(dither_tile(hx(t["water"][0]), hx(t["water"][1]), t["id"] + "w", n=TILE * TILE // 14), "water.png", sub)
         save(tro := tree(la, ld, trunk), "tree.png", sub)
@@ -2193,6 +2207,10 @@ def main():
             td["owner"] = OWNER_BY_TERRAIN[t["id"]]
         if t["id"] in TABLES_BY_TERRAIN:
             td["tables"] = TABLES_BY_TERRAIN[t["id"]]
+        if t.get("layout"):
+            td["layout"] = t["layout"]
+        if t.get("campfire") is False:
+            td["campfire"] = False
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉
             td["anims"] = t["anims"]
         write_json(os.path.join(ASSETS, sub, "terrain.json"), td)
