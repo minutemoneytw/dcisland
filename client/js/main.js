@@ -3127,6 +3127,18 @@ function drawPerson(p, wi, nameColor) {
     ctx.textAlign = 'center';
     ctx.font = '10px "Microsoft JhengHei"';   // 後面還有用這個字型量寬的地方
   }
+  const tblTag = tableTag(p);   // 和平島：入座中的人，名牌後面加狀態
+  if (tblTag) {
+    const nameW = ctx.measureText(p.name).width;
+    ctx.font = '9px "Microsoft JhengHei"';
+    const lvW = lvTxt ? ctx.measureText(lvTxt).width + 4 : 0;
+    ctx.textAlign = 'left';
+    ctx.strokeText(`〔${tblTag}〕`, p.x + nameW / 2 + 4 + lvW, nameY);
+    ctx.fillStyle = tblTag === '遊戲中' ? '#7fe0a8' : '#c8d8ff';
+    ctx.fillText(`〔${tblTag}〕`, p.x + nameW / 2 + 4 + lvW, nameY);
+    ctx.textAlign = 'center';
+    ctx.font = '10px "Microsoft JhengHei"';
+  }
   // 稱號：名字正上方一行《稱號》（自己看 S.me.title，同島的人看 state 同步來的 id）；有稱號時，泡泡／倒數條／「!」跟著往上移
   const tt = p.npc ? null : titleText(p === S.players[0] ? S.me.title : p.title);
   let headY = nameY;
@@ -3872,6 +3884,14 @@ function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已
   S.tableView = m.v; buildTable();
 }
 function onNetTblInfo(info) { S.tblInfo = info || {}; }
+// 名牌後面的牌桌狀態：入座中的人顯示「入座中」（還沒開局）或「遊戲中」（牌局進行中），讓同島的人知道他們在玩（只看這座地形的桌子）
+function tableTag(p) {
+  if (p.npc) return null;
+  const id = p === S.players[0] ? S.net?.id : p.id;
+  if (id == null) return null;
+  for (const tb of tablesHere()) { const inf = S.tblInfo?.[tb.id]; if (inf?.seated?.includes(id)) return inf.play ? '遊戲中' : '入座中'; }
+  return null;
+}
 const SUIT_SYM = { S: '♠', H: '♥', D: '♦', C: '♣' };
 function cardEl(c) {   // 牌面：c＝'S7'／'H13'／'JK'；null＝牌背
   const e = document.createElement('div');

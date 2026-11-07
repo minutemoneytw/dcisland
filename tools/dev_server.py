@@ -800,7 +800,8 @@ def tbl_view(t, cid):
 
 def tbl_info(t):
     mn, mx = GAME_LIMITS[t["game"]]
-    return {"game": t["game"], "n": len(t["seats"]), "s": len(t["specs"]), "max": mx, "play": t["phase"] == "playing"}
+    return {"game": t["game"], "n": len(t["seats"]), "s": len(t["specs"]), "max": mx, "play": t["phase"] == "playing",
+            "seated": [s["cid"] for s in t["seats"]]}   # 入座中的連線編號：客戶端在他們的名牌後面加「入座中／遊戲中」
 
 class Room:
     """一座島＝一個房間（鍵：guild:channel）。"""
