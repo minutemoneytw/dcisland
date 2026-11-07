@@ -196,7 +196,7 @@
   },
   {
    "id": "world_angler",
-   "name": "釣遍世界",
+   "name": "魚譜大成",
    "desc": "獲得每座島的釣魚筆記",
    "cond": {
     "type": "titles",
