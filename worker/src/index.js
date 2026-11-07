@@ -468,8 +468,9 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t3: "oldmaid", t4: "gomoku" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t3: "oldmaid", t4: "gomoku", t5: "dodge" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8] };           // 遊戲 → [開局最少人數, 入座上限]
+const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
 // 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
 // 輸贏經驗一樣（使用者定）：抽鬼牌每位 +4；五子棋勝／負／平手都 +5（下不到 10 手就結束的不給，擋刷分）。
@@ -528,6 +529,7 @@ function tblLeave(t, cid) {
   if (role === "spec") t.specs.splice(i, 1);
   else if (role === "seat") {
     const name = t.seats[i].name;
+    if (t.phase === "playing" && t.game === "dodge") { dgLeave(t, i, Date.now()); return; }   // 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
     if (t.phase === "playing") {   // 使用者定：有人離開（含斷線）直接結束這一局
       t.result = { aborted: true, text: `${name} 離開了，這一局結束` };
       tblResetSeats(t);
@@ -661,7 +663,64 @@ function gmMove(t, cid, x, y) {
   else if (g.board.every(c => c)) gmFinish(t, null);
   else t.turn = 1 - i;
 }
-const GAME_START = { oldmaid: omStart, gomoku: gmStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+// ---- 躲彈幕（第五桌 t5；2026-11-08，使用者要求）：1～8 人、每人 3 條命、只能躲不能攻擊，依存活秒數評分 ----
+// 彈幕由客戶端用伺服器給的 seed 與開始時間 t0 決定性地各自產生（每個畫面看到的彈幕一樣）；被打到由各客戶端自判並回報 hit（和島主的招式同一原則，信任客戶端），
+// 伺服器管命數（被打後 DG_INV_MS 內不重複扣）、淘汰、評分與結束：入座的人全部淘汰、或滿 DG_DUR 秒（客戶端時間到時送 finish，伺服器核對時鐘）就結束；
+// 中途離開的人視同在離開那一刻淘汰（照該刻的存活秒數計分），遊戲繼續到場上沒有活人為止。與 tools/dev_server.py 的 dg_* 同一套。
+const DG_DUR = 300;          // 最長秒數（使用者定，「暫時」；到了強制結束）
+const DG_LIVES = 3;
+const DG_INV_MS = 1500;      // 被打到後的無敵時間（與客戶端一致）
+const DG_COUNTDOWN_MS = 3000;
+const DG_W = 640, DG_H = 400;   // 場地大小（客戶端畫面用；伺服器只用來夾位置）
+// 存活秒數 → XP：不到 10 秒不給（擋刷分）；之後每 30 秒 +1，起跳 1、上限 10
+const dgXp = sec => (sec < 10 ? 0 : Math.min(10, 1 + Math.floor(sec / 30)));
+const dgElapsed = (t, now) => Math.max(0, Math.min(DG_DUR, (now - t.g.t0) / 1000));
+const round1 = x => Math.round(x * 10) / 10;
+function dgStart(t) {
+  const now = Date.now();
+  t.g = { seed: Math.floor(Math.random() * 2147483648), t0: now + DG_COUNTDOWN_MS };
+  t.result = null; t.phase = "playing";
+  for (const s of t.seats) { s.lives = DG_LIVES; s.out = false; s.died = null; s.lastHit = 0; s.left = false; s.ready = false; }
+  tblLog(t, `挑戰開始！${t.seats.length} 人參加，每人 ${DG_LIVES} 條命`);
+}
+function dgOut(t, s, now, why) {
+  s.out = true; s.died = round1(dgElapsed(t, now));
+  tblLog(t, `${s.name} ${why}，存活 ${s.died} 秒`);
+}
+function dgFinish(t, now) {
+  for (const s of t.seats) if (!s.out) { s.out = true; s.died = round1(dgElapsed(t, now)); }   // 時間到還活著的：存活到最後
+  const ranking = t.seats.map(s => ({ name: s.name, sec: s.died, left: !!s.left })).sort((a, b) => b.sec - a.sec);
+  const stay = t.seats.filter(s => !s.left);
+  const xp = stay.map(s => dgXp(s.died));   // 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
+  const top = ranking[0], text = top ? `挑戰結束！第一名 ${top.name}，存活 ${top.sec} 秒` : "挑戰結束";
+  t.seats = stay;
+  t.result = { text, rid: Math.floor(Math.random() * 4294967296), ranking, xp };
+  tblLog(t, text);
+  tblResetSeats(t);
+  t.g = null;
+}
+// 場上沒有活人，或時間到了：結束
+function dgCheckEnd(t, now) {
+  if (t.game !== "dodge" || t.phase !== "playing" || !t.g) return;
+  if (now >= t.g.t0 + DG_DUR * 1000 || t.seats.every(s => s.out)) dgFinish(t, now);
+}
+function dgHit(t, cid, now) {
+  const [role, i] = tblFind(t, cid);
+  if (t.game !== "dodge" || role !== "seat" || t.phase !== "playing" || !t.g) return;
+  const s = t.seats[i];
+  if (s.out || now < t.g.t0 || now - (s.lastHit || 0) < DG_INV_MS - 400) return;   // 還沒開始、已出局、無敵時間內（留 400ms 的網路抖動餘裕）
+  s.lastHit = now; s.lives -= 1;
+  if (s.lives <= 0) dgOut(t, s, now, "出局");
+  dgCheckEnd(t, now);
+}
+// 遊戲進行中有人離開：視同淘汰（照這一刻的存活秒數計分），遊戲繼續到場上沒有活人為止（使用者定）
+function dgLeave(t, i, now) {
+  const s = t.seats[i];
+  if (!s.out) dgOut(t, s, now, "離開了"); else tblLog(t, `${s.name} 離開了`);
+  s.left = true; s.cid = null;
+  dgCheckEnd(t, now);
+}
+const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 function tblView(t, cid) {
   const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
@@ -670,7 +729,10 @@ function tblView(t, cid) {
     seats: t.seats.map((s, k) => ({ name: s.name, n: playing ? s.hand.length : 0, ready: s.ready, out: playing ? s.out : false, you: role === "seat" && k === i })),
     specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
   };
-  if (t.g) {   // 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
+  if (t.game === "dodge") {   // 躲彈幕：每個座位的命數／淘汰秒數／是否已離開；進行中附上 seed 與開始時間（彈幕由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
+    t.seats.forEach((s, k) => { v.seats[k].lives = s.lives || 0; v.seats[k].died = s.died ?? null; v.seats[k].left = !!s.left; });
+    if (t.g && playing) v.dg = { seed: t.g.seed, t0: t.g.t0, dur: DG_DUR, sn: Date.now() };
+  } else if (t.g) {   // 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
     v.board = t.g.board.join(""); v.last = t.g.last; v.black = t.g.black; v.line = t.g.line; v.moves = t.g.moves || [];   // moves：每一手的座標（偶數手＝黑棋）；結束後客戶端用來復盤
   }
   if (role === "spec" && playing && t.game === "oldmaid") v.hands = t.seats.map(s => [...s.hand]);   // 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
@@ -706,6 +768,7 @@ export class Island {
     this.lastDeathCredit = new Map();   // ws → 上次倒地記帳的時間（DEATH_CREDIT_MIN_MS）
     this.tables = new Map();         // 桌 id → 牌桌狀態（和平島遊戲桌；懶載入 storage，每次變動都寫回）
     this.lastTbl = new Map();        // ws → 上次牌桌操作的時間（TBL_CD_MS）
+    this.lastTblPos = new Map();     // ws → 上次躲彈幕位置回報的時間（TBL_POS_CD_MS）
     this.lastGameXp = new Map();     // 帳號 id → 上次玩小遊戲得 XP 的時間（GAME_XP_CD_MS；只放記憶體，休眠後重置無妨）
     this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
     this.provokes = new Map();       // ws → {terrain, t}：上次挑釁哪座島的島主（冷卻只在成功出手時計）
@@ -1098,17 +1161,38 @@ export class Island {
     try { ws.serializeAttachment(att); } catch { /* 連線已關閉：記憶體裡的 att 已改，不影響後面的清理 */ }
     const t = await this.getTable(tid);
     if (!t) return;
+    const resBefore = t.result;
     tblLeave(t, att.id);
     try { ws.send(JSON.stringify({ t: "table", id: tid, v: null })); } catch { /* 已斷線 */ }
     await this.saveTable(t);
     this.tableNotify(t);
     for (const [terr, defs] of Object.entries(TABLE_DEFS)) if (defs[tid]) await this.tableBroadcastInfo(terr);
+    await this.tableXp(t, resBefore);   // 躲彈幕：最後一個活人離開會結束遊戲，留下的入座者照常得 XP
+  }
+  // 這個操作結束了一局：登入的入座者各得 XP（訪客由客戶端看 result.xp 本機補發）；同一帳號 GAME_XP_CD_MS 內只算一次
+  async tableXp(t, resBefore) {
+    const r = t.result;
+    if (!r || r === resBefore || r.aborted || !r.xp) return;
+    for (let i = 0; i < t.seats.length; i++) {
+      const n = r.xp[i] || 0, ws2 = n > 0 && t.seats[i].cid != null ? this.state.getWebSockets().find(w => (w.deserializeAttachment() || {}).id === t.seats[i].cid) : null;
+      const user = ws2 && (ws2.deserializeAttachment() || {}).user;
+      if (!user) continue;
+      const nowMs = Date.now();
+      if (nowMs - (this.lastGameXp.get(user.id) || 0) < GAME_XP_CD_MS) continue;
+      this.lastGameXp.set(user.id, nowMs);
+      await this.grantXp(ws2, n, "game");
+    }
   }
   async tableMsg(ws, att, msg) {
-    const now = Date.now();
-    if (now - (this.lastTbl.get(ws) || 0) < TBL_CD_MS) return;
-    this.lastTbl.set(ws, now);
-    const terr = att.terrain, a = msg.a;
+    const now = Date.now(), a = msg.a;
+    if (a === "pos") {   // 躲彈幕的位置回報：自己的限流，不影響 hit／finish 等操作
+      if (now - (this.lastTblPos.get(ws) || 0) < TBL_POS_CD_MS) return;
+      this.lastTblPos.set(ws, now);
+    } else {
+      if (now - (this.lastTbl.get(ws) || 0) < TBL_CD_MS) return;
+      this.lastTbl.set(ws, now);
+    }
+    const terr = att.terrain;
     if (!terr) return;
     if (a === "join") {
       const tid = String(msg.id || ""), game = (TABLE_DEFS[terr] || {})[tid];
@@ -1128,29 +1212,33 @@ export class Island {
     if (a === "leave") { await this.tableLeave(ws); return; }
     const t = await this.getTable(tid);
     if (!t) return;
+    if (a === "pos") {   // 躲彈幕：位置回報，轉發給同桌其他人（不存檔、不通知畫面、不廣播 tblinfo）
+      const [role, i] = tblFind(t, att.id);
+      if (t.game === "dodge" && role === "seat" && t.phase === "playing" && !t.seats[i].out) {
+        const x = Math.max(0, Math.min(DG_W, Number(msg.x) || 0)), y = Math.max(0, Math.min(DG_H, Number(msg.y) || 0));
+        const data = JSON.stringify({ t: "tpos", i, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
+        for (const m of [...t.seats, ...t.specs]) {
+          if (m.cid == null || m.cid === att.id) continue;
+          for (const w of this.state.getWebSockets()) if ((w.deserializeAttachment() || {}).id === m.cid) { try { w.send(data); } catch { /* 對方已斷線 */ } }
+        }
+      }
+      return;
+    }
     const resBefore = t.result;
+    dgCheckEnd(t, now);   // 時間到了就先結算（下面的動作若是 finish／hit 就只是確認）
     if (a === "ready") tblReady(t, att.id, msg.v);
     else if (a === "sit") tblSit(t, att.id);
     else if (a === "stand") tblStand(t, att.id);
     else if (a === "draw") omDraw(t, att.id, msg.idx);
     else if (a === "shuffle") omShuffle(t, att.id);
     else if (a === "move") gmMove(t, att.id, msg.x, msg.y);
+    else if (a === "hit") dgHit(t, att.id, now);   // 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
+    else if (a === "finish") dgCheckEnd(t, now + 300);   // 躲彈幕：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）
     else return;
     await this.saveTable(t);
     this.tableNotify(t);
     await this.tableBroadcastInfo(terr);
-    const r = t.result;
-    if (r && r !== resBefore && !r.aborted && r.xp) {   // 這一手結束了對局：登入的入座者各得 XP（訪客由客戶端看 result.xp 本機補發）
-      for (let i = 0; i < t.seats.length; i++) {
-        const n = r.xp[i] || 0, ws2 = n > 0 ? this.state.getWebSockets().find(w => (w.deserializeAttachment() || {}).id === t.seats[i].cid) : null;
-        const user = ws2 && (ws2.deserializeAttachment() || {}).user;
-        if (!user) continue;
-        const nowMs = Date.now();
-        if (nowMs - (this.lastGameXp.get(user.id) || 0) < GAME_XP_CD_MS) continue;
-        this.lastGameXp.set(user.id, nowMs);
-        await this.grantXp(ws2, n, "game");
-      }
-    }
+    await this.tableXp(t, resBefore);
   }
 
   // 簡易限流：超過就丟棄，不回應
@@ -2185,6 +2273,7 @@ export class Island {
     this.lastXpMob.delete(ws);
     this.lastDeathCredit.delete(ws);
     this.lastTbl.delete(ws);
+    this.lastTblPos.delete(ws);
     const att = ws.deserializeAttachment() || {};
     if (att.terrain) this.broadcast({ t: "leave", id: att.id }, ws, att.terrain);
   }

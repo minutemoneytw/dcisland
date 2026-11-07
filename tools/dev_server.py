@@ -613,8 +613,9 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t3": "oldmaid", "t4": "gomoku"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t3": "oldmaid", "t4": "gomoku", "t5": "dodge"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8)}           # 遊戲 → (開局最少人數, 入座上限)
+TBL_POS_CD = 0.06                           # 躲彈幕的位置回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
 # 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
 # 輸贏經驗一樣（使用者定）：抽鬼牌每位 +4；五子棋勝／負／平手都 +5（下不到 10 手就結束的不給，擋刷分）。
@@ -697,6 +698,9 @@ def tbl_leave(t, cid):
         t["specs"].pop(i)
     elif role == "seat":
         name = t["seats"][i]["name"]
+        if t["phase"] == "playing" and t["game"] == "dodge":   # 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
+            dg_leave(t, i, int(time.time() * 1000))
+            return
         if t["phase"] == "playing":   # 使用者定：有人離開（含斷線）直接結束這一局
             t["result"] = {"aborted": True, "text": f"{name} 離開了，這一局結束"}
             tbl_reset_seats(t)
@@ -867,7 +871,84 @@ def gm_move(t, cid, x, y):
     else:
         t["turn"] = 1 - i
 
-GAME_START = {"oldmaid": om_start, "gomoku": gm_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+# ---- 躲彈幕（第五桌 t5；2026-11-08，使用者要求）：1～8 人、每人 3 條命、只能躲不能攻擊，依存活秒數評分 ----
+# 彈幕由客戶端用伺服器給的 seed 與開始時間 t0 決定性地各自產生（每個畫面看到的彈幕一樣）；被打到由各客戶端自判並回報 hit（和島主的招式同一原則，信任客戶端），
+# 伺服器管命數（被打後 DG_INV_MS 內不重複扣）、淘汰、評分與結束：入座的人全部淘汰、或滿 DG_DUR 秒（客戶端時間到時送 finish，伺服器核對時鐘）就結束；
+# 中途離開的人視同在離開那一刻淘汰（照該刻的存活秒數計分），遊戲繼續到場上沒有活人為止。
+DG_DUR = 300          # 最長秒數（使用者定，「暫時」；到了強制結束）
+DG_LIVES = 3
+DG_INV_MS = 1500      # 被打到後的無敵時間（與客戶端一致）
+DG_COUNTDOWN_MS = 3000
+DG_W, DG_H = 640, 400   # 場地大小（客戶端畫面用；伺服器只用來夾位置）
+
+def dg_xp(sec):
+    """存活秒數 → XP：不到 10 秒不給（擋刷分）；之後每 30 秒 +1，起跳 1、上限 10。"""
+    return 0 if sec < 10 else min(10, 1 + int(sec // 30))
+
+def dg_elapsed(t, now):
+    return max(0.0, min(float(DG_DUR), (now - t["g"]["t0"]) / 1000.0))
+
+def dg_start(t):
+    now = int(time.time() * 1000)
+    t["g"] = {"seed": random.getrandbits(31), "t0": now + DG_COUNTDOWN_MS}
+    t["result"] = None
+    t["phase"] = "playing"
+    for s in t["seats"]:
+        s["lives"], s["out"], s["died"], s["last_hit"], s["left"], s["ready"] = DG_LIVES, False, None, 0, False, False
+    tbl_log(t, f"挑戰開始！{len(t['seats'])} 人參加，每人 {DG_LIVES} 條命")
+
+def dg_out(t, s, now, why):
+    s["out"] = True
+    s["died"] = round(dg_elapsed(t, now), 1)
+    tbl_log(t, f"{s['name']} {why}，存活 {s['died']} 秒")
+
+def dg_finish(t, now):
+    for s in t["seats"]:
+        if not s["out"]:   # 時間到還活著的：存活到最後
+            s["out"] = True
+            s["died"] = round(dg_elapsed(t, now), 1)
+    ranking = sorted(({"name": s["name"], "sec": s["died"], "left": bool(s.get("left"))} for s in t["seats"]), key=lambda r: -r["sec"])
+    stay = [s for s in t["seats"] if not s.get("left")]
+    xp = [dg_xp(s["died"]) for s in stay]   # 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
+    top = ranking[0] if ranking else None
+    text = f"挑戰結束！第一名 {top['name']}，存活 {top['sec']} 秒" if top else "挑戰結束"
+    t["seats"] = stay
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp}
+    tbl_log(t, text)
+    tbl_reset_seats(t)
+    t["g"] = None
+
+def dg_check_end(t, now):
+    """場上沒有活人，或時間到了：結束。"""
+    if t["game"] != "dodge" or t["phase"] != "playing" or not t.get("g"):
+        return
+    if now >= t["g"]["t0"] + DG_DUR * 1000 or all(s["out"] for s in t["seats"]):
+        dg_finish(t, now)
+
+def dg_hit(t, cid, now):
+    role, i = tbl_find(t, cid)
+    if t["game"] != "dodge" or role != "seat" or t["phase"] != "playing" or not t.get("g"):
+        return
+    s = t["seats"][i]
+    if s["out"] or now < t["g"]["t0"] or now - s["last_hit"] < DG_INV_MS - 400:   # 還沒開始、已出局、無敵時間內（留 400ms 的網路抖動餘裕）
+        return
+    s["last_hit"] = now
+    s["lives"] -= 1
+    if s["lives"] <= 0:
+        dg_out(t, s, now, "出局")
+    dg_check_end(t, now)
+
+def dg_leave(t, i, now):
+    """遊戲進行中有人離開：視同淘汰（照這一刻的存活秒數計分），遊戲繼續到場上沒有活人為止（使用者定）。"""
+    s = t["seats"][i]
+    if not s["out"]:
+        dg_out(t, s, now, "離開了")
+    else:
+        tbl_log(t, f"{s['name']} 離開了")
+    s["left"], s["cid"] = True, None
+    dg_check_end(t, now)
+
+GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
@@ -881,7 +962,12 @@ def tbl_view(t, cid):
          "turn": t["turn"] if playing else -1, "target": tbl_next_active(t, t["turn"]) if playing else -1,
          "result": t["result"], "log": list(t["log"])}
     g = t.get("g")
-    if g:   # 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
+    if t["game"] == "dodge":   # 躲彈幕：每個座位的命數／淘汰秒數／是否已離開；進行中附上 seed 與開始時間（彈幕由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
+        for k, s in enumerate(t["seats"]):
+            seats[k].update(lives=s.get("lives", 0), died=s.get("died"), left=bool(s.get("left")))
+        if g and playing:
+            v["dg"] = {"seed": g["seed"], "t0": g["t0"], "dur": DG_DUR, "sn": int(time.time() * 1000)}
+    elif g:   # 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
         v["board"] = "".join(str(c) for c in g["board"])
         v["last"], v["black"], v["line"], v["moves"] = g["last"], g["black"], g["line"], g["moves"]   # moves：每一手的座標（偶數手＝黑棋）；結束後客戶端用來復盤
     if role == "spec" and playing and t["game"] == "oldmaid":   # 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
@@ -2081,13 +2167,23 @@ class Room:
         for m in t["seats"] + t["specs"]:
             out.append((m["cid"], {"t": "table", "id": t["id"], "v": tbl_view(t, m["cid"])}))
 
+    def _table_collect_xp(self, t, before):
+        """這個操作結束了一局：把各入座者的 XP 記進待發清單（鎖外發；中途離開的 aborted 結果沒有 xp）。"""
+        r = t.get("result")
+        if r is not None and r is not before and not r.get("aborted") and r.get("xp"):
+            for i, s in enumerate(t["seats"]):
+                if s["cid"] is not None and i < len(r["xp"]) and r["xp"][i] > 0:
+                    self._xp_pending.append((s["cid"], r["xp"][i]))
+
     def _table_leave_locked(self, cid, out):
         c = self.clients.get(cid)
         tid = c.pop("table", None) if c else None
         t = self.tables.get(tid) if tid else None
         if not t:
             return
+        before = t.get("result")
         tbl_leave(t, cid)
+        self._table_collect_xp(t, before)
         out.append((cid, {"t": "table", "id": tid, "v": None}))
         if not t["seats"] and not t["specs"]:
             self.tables.pop(tid, None)   # 沒人了：整桌重來
@@ -2118,9 +2214,20 @@ class Room:
                 if not t:
                     return [], None, None
                 before = t.get("result")
+                now_ms = int(time.time() * 1000)
+                if a == "pos":   # 躲彈幕：位置回報，轉發給同桌其他人（不通知畫面、不廣播 tblinfo）
+                    role, i = tbl_find(t, cid)
+                    if t["game"] == "dodge" and role == "seat" and t["phase"] == "playing" and not t["seats"][i]["out"]:
+                        x = max(0.0, min(float(DG_W), _num(msg.get("x"), -1e6, 1e6, 0.0)))
+                        y = max(0.0, min(float(DG_H), _num(msg.get("y"), -1e6, 1e6, 0.0)))
+                        for m in t["seats"] + t["specs"]:
+                            if m["cid"] is not None and m["cid"] != cid:
+                                out.append((m["cid"], {"t": "tpos", "i": i, "x": round(x, 1), "y": round(y, 1)}))
+                    return out, None, None
                 if a == "leave":
                     self._table_leave_locked(cid, out)
                 else:
+                    dg_check_end(t, now_ms)   # 時間到了就先結算（下面的動作若是 finish／hit 就只是確認）
                     if a == "ready":
                         tbl_ready(t, cid, msg.get("v"))
                     elif a == "sit":
@@ -2133,14 +2240,14 @@ class Room:
                         om_shuffle(t, cid)
                     elif a == "move":
                         gm_move(t, cid, msg.get("x"), msg.get("y"))
+                    elif a == "hit":   # 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
+                        dg_hit(t, cid, now_ms)
+                    elif a == "finish":   # 躲彈幕：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）
+                        dg_check_end(t, now_ms + 300)
                     else:
                         return [], None, None
                     self._table_notify_locked(t, out)
-                    r = t.get("result")
-                    if r is not None and r is not before and not r.get("aborted") and r.get("xp"):   # 這一手結束了對局：收集 XP（鎖外發）
-                        for i, s in enumerate(t["seats"]):
-                            if i < len(r["xp"]) and r["xp"][i] > 0:
-                                self._xp_pending.append((s["cid"], r["xp"][i]))
+                    self._table_collect_xp(t, before)   # 這個操作結束了對局：收集 XP（鎖外發）
             return out, self.table_info_msg(c.get("table_terr") or terr), c.get("table_terr") or terr
 
     def table_drop(self, cid):
@@ -2347,6 +2454,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         win_sec, win_n = 0, 0
         last_hit = 0.0
         last_tbl = 0.0   # 牌桌操作的每連線限流（TBL_CD）
+        last_pos = 0.0   # 躲彈幕位置回報的限流（TBL_POS_CD）
         last_dragon_hit = 0.0   # 打島主的每連線冷卻（與 last_hit 同款）
         last_fish = 0.0         # 釣魚結果的每連線冷卻
         last_xp_mob = 0.0       # 擊倒非主動怪的 XP 冷卻（2026-11-07）
@@ -2471,9 +2579,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             xp_grant(c, 1, "mob")
                 elif t == "tbl":   # 和平島遊戲桌（join／leave／ready／sit／draw）；牌局邏輯全在伺服器
                     now = time.time()
-                    if now - last_tbl < TBL_CD:
-                        continue
-                    last_tbl = now
+                    if msg.get("a") == "pos":   # 躲彈幕的位置回報：自己的限流，不影響 hit／finish 等操作
+                        if now - last_pos < TBL_POS_CD:
+                            continue
+                        last_pos = now
+                    else:
+                        if now - last_tbl < TBL_CD:
+                            continue
+                        last_tbl = now
                     room.table_op(room.table_do, cid, msg)
                 elif t in ("enter", "terrain"):   # "terrain" 是舊客戶端的訊息名
                     # 每位玩家各自在自己的地形，只有同地形的人看得到彼此

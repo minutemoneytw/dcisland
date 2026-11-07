@@ -98,7 +98,7 @@ const S = {
   craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
   craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
   gamesDB: null, tableImgs: {},        // 和平島遊戲桌：遊戲定義（assets/games/games.json，手寫）與桌子圖
-  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
+  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, dg: null, dgRaf: 0, dgLast: 0, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
   titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
@@ -3877,7 +3877,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop();
   $('tableBox').classList.add('hidden');
 }
 function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已離開這桌）
@@ -3935,6 +3935,7 @@ function buildTable() {
   }
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
+  if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
   const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
   // 狀態列
   let status;
@@ -4096,6 +4097,176 @@ function buildGomoku(box, v, mk) {
   for (const l of [...v.log].reverse()) log.appendChild(mk('div', null, l));
   box.appendChild(log);
   const gd = gameDef('gomoku'); if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 躲彈幕（第五桌 t5）：即時遊戲。彈幕由「伺服器給的 seed＋開始時間 t0」決定性地在每個畫面各自產生（所有人看到的彈幕一樣，不用同步彈幕）；
+// 自己的移動與碰撞在本機算，被打到回報 hit，命數／淘汰／評分以伺服器為準；其他人的位置由 tpos 訊息轉發（約 8 次／秒，客戶端內插）----
+const DG_W = 640, DG_H = 400, DG_PLAYER_R = 5, DG_SPEED = 190, DG_INV = 1.5;
+const DG_COLORS = ['#7ae8d0', '#ffb347', '#a8c8ff', '#ff8ab8', '#c8f070', '#d8a8ff', '#ffe08a', '#8affb8'];
+const DG_KEYS = { w: 'up', arrowup: 'up', s: 'down', arrowdown: 'down', a: 'left', arrowleft: 'left', d: 'right', arrowright: 'right' };
+// 決定性的彈幕產生器：同一個 seed 永遠產生同一批彈幕。彈幕＝{ts（出現時間 s）, x0, y0, vx, vy, r}，位置＝起點＋速度×(t−ts)
+function dodgeGen(seed) {
+  const rng = mulberry32(seed >>> 0);
+  const rnd = (a, b) => a + rng() * (b - a), pick = n => Math.floor(rng() * n);
+  const bullets = []; let tw = 2.5;   // 第一波出現的時間（開局後 2.5 秒，讓大家先站好）
+  const add = (ts, x0, y0, vx, vy, r) => bullets.push({ ts, x0, y0, vx, vy, r: r || 4 });
+  return {
+    bullets,
+    fill(until) {   // 產生到時間 until（秒）為止的彈幕；隨時間加快、變密
+      while (tw < until) {
+        const d = Math.min(1, tw / 300), sp = 70 + 110 * d, kind = pick(4);
+        if (kind === 0) {   // 圓環爆發：從場內一點向四周
+          const n = 10 + Math.floor(14 * d), cx = rnd(60, DG_W - 60), cy = rnd(50, DG_H - 50), a0 = rnd(0, 6.28);
+          for (let i = 0; i < n; i++) add(tw, cx, cy, Math.cos(a0 + i * 6.2832 / n) * sp, Math.sin(a0 + i * 6.2832 / n) * sp, 4);
+        } else if (kind === 1) {   // 雨：從上方落下的幾排
+          const n = 5 + Math.floor(7 * d);
+          for (let i = 0; i < n; i++) add(tw, rnd(10, DG_W - 10), -8, rnd(-12, 12), sp * 1.1 + rnd(0, 30), 4);
+        } else if (kind === 2) {   // 彈牆：左或右側整排橫掃，留一個缺口
+          const fromL = rng() < .5, gap = rnd(40, DG_H - 40), gw = 52 - 16 * d, step = 26 - 6 * d;
+          for (let y = 8; y < DG_H; y += step) if (Math.abs(y - gap) > gw / 2) add(tw, fromL ? -8 : DG_W + 8, y, (fromL ? 1 : -1) * (sp * .95), 0, 5);
+        } else {   // 螺旋：一個發射點邊轉邊發（每顆的出現時間錯開）
+          const n = 14 + Math.floor(10 * d), cx = rnd(120, DG_W - 120), cy = rnd(90, DG_H - 90), a0 = rnd(0, 6.28), dir = rng() < .5 ? 1 : -1;
+          for (let i = 0; i < n; i++) add(tw + i * .07, cx, cy, Math.cos(a0 + dir * i * .5) * sp * .9, Math.sin(a0 + dir * i * .5) * sp * .9, 4);
+        }
+        tw += 1.5 - 1.0 * d + rnd(0, .25);   // 下一波：從 1.5 秒間隔逐漸縮到 0.5 秒
+      }
+    },
+  };
+}
+function dodgeStart(v) {   // 一局開始（伺服器給了 dg）：重置本機狀態
+  const dg = v.dg, me = v.me;
+  S.dg = {
+    id: S.tableId, seed: dg.seed, t0: dg.t0, dur: dg.dur, off: dg.sn - Date.now(),   // off：伺服器時間 − 本機時間（毫秒，忽略單程延遲）
+    gen: dodgeGen(dg.seed), act: [],           // act：目前在場上的彈幕
+    pos: [], me, x: DG_W / 2 + (me - (v.seats.length - 1) / 2) * 30, y: DG_H * .75, inv: 0, lives: 3, sent: 0, finished: false, last: 0,
+    keys: {}, hitFlash: 0,
+  };
+  S.dg.pos = v.seats.map(() => null);
+  if (!S.dgRaf) { S.dgLast = performance.now(); S.dgRaf = requestAnimationFrame(dodgeFrame); }
+}
+function dodgeStop() { S.dg = null; if (S.dgRaf) { cancelAnimationFrame(S.dgRaf); S.dgRaf = 0; } }
+const dodgeNow = () => (Date.now() + S.dg.off - S.dg.t0) / 1000;   // 開局後的秒數（開局前是負的＝倒數）
+function dodgeFrame(ts) {
+  const D = S.dg, v = S.tableView;
+  if (!D || !S.tableOpen || !v || v.phase !== 'playing' || v.game !== 'dodge') { S.dgRaf = 0; if (S.tableOpen && v?.game === 'dodge') buildTable(); return; }
+  S.dgRaf = requestAnimationFrame(dodgeFrame);
+  const dt = Math.min(.05, (ts - S.dgLast) / 1000); S.dgLast = ts;
+  const t = dodgeNow(), mySeat = v.role === 'seat' ? v.seats[v.me] : null, alive = mySeat && !mySeat.out;
+  // 自己移動（開局前也可以先動；出局後不能）
+  if (alive) {
+    const k = D.keys;
+    let dx = (k.right ? 1 : 0) - (k.left ? 1 : 0), dy = (k.down ? 1 : 0) - (k.up ? 1 : 0);
+    if (dx && dy) { dx *= .7071; dy *= .7071; }
+    D.x = Math.max(DG_PLAYER_R, Math.min(DG_W - DG_PLAYER_R, D.x + dx * DG_SPEED * dt));
+    D.y = Math.max(DG_PLAYER_R, Math.min(DG_H - DG_PLAYER_R, D.y + dy * DG_SPEED * dt));
+    if (performance.now() - D.sent > 125) { D.sent = performance.now(); S.net?.tbl?.({ a: 'pos', x: Math.round(D.x * 10) / 10, y: Math.round(D.y * 10) / 10 }); }
+  }
+  // 彈幕：產生到 t+3 秒、挑出目前在場上的
+  if (t > -1) {
+    D.gen.fill(Math.max(0, t) + 3);
+    const bl = D.gen.bullets;
+    D.act = [];
+    for (let i = 0; i < bl.length; i++) {
+      const b = bl[i], age = t - b.ts;
+      if (age < 0) continue;
+      const x = b.x0 + b.vx * age, y = b.y0 + b.vy * age;
+      if (x < -20 || x > DG_W + 20 || y < -20 || y > DG_H + 20) { if (age > 12) { bl.splice(i, 1); i--; } continue; }   // 出界很久的丟掉，陣列不會越長越大
+      D.act.push({ x, y, r: b.r });
+    }
+  } else D.act = [];
+  // 碰撞：只有自己、已開局、沒在無敵時間內
+  D.inv = Math.max(0, D.inv - dt);
+  if (alive && t >= 0 && D.inv <= 0) {
+    for (const b of D.act) {
+      const dx = b.x - D.x, dy = b.y - D.y, rr = b.r + DG_PLAYER_R - 1;
+      if (dx * dx + dy * dy < rr * rr) { D.inv = DG_INV; D.hitFlash = .35; S.net?.tbl?.({ a: 'hit' }); break; }
+    }
+  }
+  D.hitFlash = Math.max(0, D.hitFlash - dt);
+  // 時間到：請伺服器結算（伺服器核對時鐘；每秒最多重送一次直到收到結果）
+  if (t >= D.dur && performance.now() - D.last > 1000) { D.last = performance.now(); S.net?.tbl?.({ a: 'finish' }); }
+  // 其他人的位置內插
+  for (const p of D.pos) if (p) { p.x += (p.tx - p.x) * Math.min(1, dt * 14); p.y += (p.ty - p.y) * Math.min(1, dt * 14); }
+  dodgeDraw(t, mySeat);
+  const tm = $('dgTime'); if (tm) tm.textContent = t < 0 ? `開始倒數 ${Math.ceil(-t)}` : `${Math.min(D.dur, t).toFixed(1)} 秒`;
+}
+function onNetTpos(m) {   // 其他人的位置回報（i＝座位編號）
+  const D = S.dg; if (!D || m.i === D.me) return;
+  const p = D.pos[m.i];
+  if (!p) D.pos[m.i] = { x: m.x, y: m.y, tx: m.x, ty: m.y }; else { p.tx = m.x; p.ty = m.y; }
+}
+function dodgeDraw(t, mySeat) {
+  const cv = $('dgCanvas'); if (!cv) return;
+  const g = cv.getContext('2d'), D = S.dg, v = S.tableView;
+  g.fillStyle = '#0c1020'; g.fillRect(0, 0, DG_W, DG_H);
+  g.strokeStyle = 'rgba(120,140,200,.12)'; g.lineWidth = 1;
+  for (let x = 0; x <= DG_W; x += 40) { g.beginPath(); g.moveTo(x + .5, 0); g.lineTo(x + .5, DG_H); g.stroke(); }
+  for (let y = 0; y <= DG_H; y += 40) { g.beginPath(); g.moveTo(0, y + .5); g.lineTo(DG_W, y + .5); g.stroke(); }
+  // 彈幕
+  for (const b of D.act) {
+    g.fillStyle = '#ff5a5a'; g.beginPath(); g.arc(b.x, b.y, b.r, 0, 6.2832); g.fill();
+    g.fillStyle = '#ffe0d0'; g.beginPath(); g.arc(b.x, b.y, b.r * .45, 0, 6.2832); g.fill();
+  }
+  // 玩家：自己（有無敵閃爍）、其他人（內插位置）、已出局的變灰
+  v.seats.forEach((s, i) => {
+    const isMe = i === D.me && v.role === 'seat', p = isMe ? { x: D.x, y: D.y } : D.pos[i];
+    if (!p) return;
+    const out = s.out || s.left, col = DG_COLORS[i % 8];
+    if (isMe && D.inv > 0 && Math.floor(D.inv * 12) % 2 === 0) return;   // 無敵時間閃爍
+    g.globalAlpha = out ? .25 : 1;
+    g.fillStyle = out ? '#8a8a98' : col; g.beginPath(); g.arc(p.x, p.y, DG_PLAYER_R, 0, 6.2832); g.fill();
+    g.strokeStyle = isMe ? '#ffffff' : 'rgba(255,255,255,.4)'; g.lineWidth = isMe ? 2 : 1; g.stroke();
+    g.globalAlpha = out ? .4 : 1; g.font = '10px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillStyle = '#e8e4d8';
+    g.fillText(s.name, p.x, p.y - 10); g.globalAlpha = 1;
+  });
+  if (D.hitFlash > 0) { g.fillStyle = `rgba(255,60,60,${D.hitFlash})`; g.fillRect(0, 0, DG_W, DG_H); }
+  if (t < 0) { g.fillStyle = 'rgba(8,10,20,.55)'; g.fillRect(0, 0, DG_W, DG_H); g.fillStyle = '#ffe08a'; g.font = 'bold 56px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillText(String(Math.ceil(-t)), DG_W / 2, DG_H / 2 + 18); }
+  if (mySeat?.out && v.role === 'seat') { g.fillStyle = 'rgba(8,10,20,.5)'; g.fillRect(0, DG_H / 2 - 36, DG_W, 72); g.fillStyle = '#ffb347'; g.font = 'bold 24px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillText(`你出局了：存活 ${mySeat.died ?? '—'} 秒（可以繼續看其他人）`, DG_W / 2, DG_H / 2 + 8); }
+}
+function buildDodge(box, v, mk, gd) {
+  const playing = v.phase === 'playing', mySeat = v.role === 'seat' ? v.seats[v.me] : null;
+  if (playing && (!S.dg || S.dg.id !== S.tableId || S.dg.t0 !== v.dg?.t0)) dodgeStart(v);   // 新的一局（或剛進來觀戰一局進行中的）：重置本機狀態
+  if (!playing) dodgeStop();
+  let status;
+  if (playing) status = mySeat ? (mySeat.out ? '你已出局' : `挑戰中：WASD／方向鍵移動，躲開所有彈幕（還有 ${mySeat.lives} 條命）`) : '觀戰中';
+  else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始（開局有 3 秒倒數）';
+  box.appendChild(mk('div', 'table-status' + (playing && mySeat && !mySeat.out ? ' mine' : ''), status));
+  if (v.result && !playing) {   // 結算：依存活秒數排名
+    box.appendChild(mk('div', 'table-result', v.result.text + resultXp(v)));
+    const rk = mk('div', 'dodge-rank');
+    v.result.ranking.forEach((r, i) => rk.appendChild(mk('div', null, `${i + 1}. ${r.name}　${r.sec} 秒${r.left ? '（中途離開）' : ''}`)));
+    box.appendChild(rk);
+  }
+  const row = mk('div', 'table-seats dodge-seats');   // 每位玩家：名字、命數（♥）、存活秒數
+  v.seats.forEach((s, i) => {
+    const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && s.out ? ' out' : ''));
+    seat.style.borderColor = playing ? DG_COLORS[i % 8] : '';
+    seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : '')));
+    seat.appendChild(mk('div', 'table-tag', playing ? (s.out ? `出局 · ${s.died ?? '—'} 秒` : '♥'.repeat(Math.max(0, s.lives)) + '♡'.repeat(Math.max(0, 3 - s.lives))) : (s.ready ? '已準備' : '未準備')));
+    row.appendChild(seat);
+  });
+  if (!playing) for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  if (playing) {   // 場地
+    const wrap = mk('div', 'dodge-wrap'), cv = document.createElement('canvas');
+    cv.id = 'dgCanvas'; cv.width = DG_W; cv.height = DG_H; cv.className = 'dodge-canvas';
+    wrap.appendChild(cv); wrap.appendChild(mk('div', 'dodge-time')); wrap.lastChild.id = 'dgTime';
+    box.appendChild(wrap);
+  }
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of [...v.log].reverse()) log.appendChild(mk('div', null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // 島上桌子的繪製：圖＋人數標籤（離得近時提示按 F）
 function tableDrawEntries(list) {
@@ -5317,6 +5488,7 @@ addEventListener('keydown', e => {
   }
   if (S.tableOpen) {   // 遊戲畫面開著：Esc 離開；五子棋復盤時 ←／→／Home／End 切換步數；其他鍵都不處理（不能走路）
     if (k === 'escape') { e.preventDefault(); closeTable(); }
+    else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
     else if (S.gmStep != null && S.tableView?.moves && ['arrowleft', 'arrowright', 'home', 'end'].includes(k)) {
       e.preventDefault();
       const N = S.tableView.moves.length;
@@ -5353,7 +5525,7 @@ addEventListener('keydown', e => {
   if ((k === '1' || k === '2') && !e.repeat) tryJobSkill(+k - 1);   // 1／2：職業技能
   if (k === 'shift' && !e.repeat) toggleSprint();   // Shift：切換疾走／步行（與右下角虛擬按鍵同一個開關）
 });
-addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key.toLowerCase() === 'f') S.holdSkipF = false; });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key.toLowerCase() === 'f') S.holdSkipF = false; if (S.dg && DG_KEYS[e.key.toLowerCase()]) S.dg.keys[DG_KEYS[e.key.toLowerCase()]] = false; });
 // ---------------- 疾走虛擬按鍵（畫面右下角）----------------
 // 圓形＋跑步像素小人；點擊或按 Shift 切換疾走／步行（2026-11-06 使用者要求：點擊後持續生效，再點擊或再按 Shift 切回步行）
 function toggleSprint() {
@@ -5420,7 +5592,7 @@ function drawSprintBtn() {   // 每幀重畫（52×52 小畫布，成本可忽�
   }
 }
 // 切走視窗時放開所有按住的鍵，避免卡住一直揮擊/走路
-addEventListener('blur', () => { for (const k in keys) keys[k] = false; S.mouseHeld = false; S.paint = null; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; S.mouseHeld = false; S.paint = null; if (S.dg) S.dg.keys = {}; });
 addEventListener('mouseup', e => { if (e.button === 0) S.mouseHeld = false; if (e.button === 0 || e.button === 2) S.paint = null; });
 
 canvas.addEventListener('mousemove', e => {
@@ -5735,6 +5907,7 @@ async function boot() {
     onLurker: onNetLurker,   // 釣上來的敵對怪物（spawn/wander/claw/aggro/hp/dead/gone/state 快照）
     onFishResult,            // 釣魚結果（伺服器抽的魚；登入的人已記進伺服器的圖鑑）
     onTable: onNetTable,       // 和平島遊戲桌：伺服器給我的牌桌畫面
+    onTpos: onNetTpos,         // 躲彈幕：其他玩家的位置
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); checkTitles(true); },   // 登入後伺服器送來的圖鑑（稱號跟著重算，不跳提示）

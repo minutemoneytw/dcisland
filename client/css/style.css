@@ -304,3 +304,8 @@ body {
 .table-rules { font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.5; }
 .gomoku-board { display: block; margin: 10px auto; max-width: 100%; height: auto; border: 2px solid #5a3a1a; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
 .gomoku-board.mine { cursor: pointer; }
+.dodge-wrap { position: relative; width: min(640px, 100%); margin: 10px auto; }
+.dodge-canvas { display: block; width: 100%; height: auto; border: 2px solid #3a4a8a; background: #0c1020; }
+.dodge-time { position: absolute; right: 8px; top: 6px; color: #ffe08a; font-size: 14px; font-weight: bold; text-shadow: 0 0 4px #000; }
+.dodge-rank { text-align: center; font-size: 14px; color: var(--text); margin: 6px 0; line-height: 1.7; }
+.dodge-seats .table-seat { min-height: 52px; flex: 1 1 110px; max-width: 150px; }

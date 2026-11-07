@@ -113,6 +113,7 @@ export function connectNet(S, opts = {}) {
       case 'commit_result': if (opts.onCommitResult) opts.onCommitResult(msg); break;
       case 'fish_result': if (opts.onFishResult) opts.onFishResult(msg); break;   // 釣魚結果（伺服器抽）
       case 'table': if (opts.onTable) opts.onTable(msg); break;           // 和平島遊戲桌：我這桌的畫面（v＝null＝我已離開）
+      case 'tpos': if (opts.onTpos) opts.onTpos(msg); break;   // 躲彈幕：其他玩家的位置（i＝座位編號）
       case 'tblinfo': if (opts.onTblInfo) opts.onTblInfo(msg.info); break;   // 和平島各桌的人數／狀態
       case 'craftdb': if (opts.onCraftDb) opts.onCraftDb(msg.craft); break;   // 合成解鎖紀錄（登入後由伺服器送來）
       case 'dex': if (opts.onDex) opts.onDex(msg.dex); break;                     // 魚類圖鑑（登入後由伺服器送來）
@@ -234,7 +235,7 @@ export function connectNet(S, opts = {}) {
   net.xpSync = v => net.connected && send({ t: 'xpsync', v });
   net.xpEvent = k => net.connected && send({ t: 'xpe', k });
   // 合成解鎖（素材圖鑑／配方筆記）：登入者由伺服器存（訪客伺服器會略過）。craftUnlock＝解鎖一筆（k：mat／furn／rec）；craftSync＝補傳本機有、伺服器沒有的
-  // 和平島遊戲桌（牌局由伺服器權威）：a＝join（id；role＝'spec' 表示選觀戰）／leave／stand（入座改觀戰）／ready（v）／sit／draw（idx）／shuffle（抽鬼牌）／move（x, y；五子棋）
+  // 和平島遊戲桌（牌局由伺服器權威）：a＝join（id；role＝'spec' 表示選觀戰）／leave／stand（入座改觀戰）／ready（v）／sit／draw（idx）／shuffle（抽鬼牌）／move（x, y；五子棋）／pos（x, y）、hit、finish（躲彈幕）
   net.tbl = m => net.connected && send({ t: 'tbl', ...m });
   net.craftUnlock = (k, id) => net.connected && send({ t: 'craft', k, id });
   net.craftSync = v => net.connected && send({ t: 'craftsync', mat: v.mat || [], furn: v.furn || [], rec: v.rec || [] });

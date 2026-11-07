@@ -1199,7 +1199,8 @@ TABLES_BY_TERRAIN = {
     "peace": [dict(id="t1", game="oldmaid", cell=[50, 24], w=3, h=2),
               dict(id="t2", game="gomoku", cell=[34, 24], w=3, h=2),
               dict(id="t3", game="oldmaid", cell=[50, 31], w=3, h=2),   # 各遊戲都有兩桌（2026-11-08，使用者要求）：t3 是 t1 的複本、t4 是 t2 的複本
-              dict(id="t4", game="gomoku", cell=[34, 31], w=3, h=2)],
+              dict(id="t4", game="gomoku", cell=[34, 31], w=3, h=2),
+              dict(id="t5", game="dodge", cell=[42, 38], w=3, h=2)],   # 躲彈幕只有一桌（2026-11-08，使用者要求）
 }
 
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
@@ -1218,6 +1219,18 @@ def table_oldmaid():
     cv.rect(9, 12, 14, 19, hx("#f4f0e4")); cv.rect(10, 13, 13, 15, hx("#d83a3a")); cv.rect(11, 17, 12, 18, hx("#d83a3a"))
     cv.rect(34, 11, 39, 18, hx("#f4f0e4")); cv.rect(35, 12, 38, 14, hx("#2a2a30")); cv.rect(36, 16, 37, 17, hx("#2a2a30"))
     cv.set(17, 20, hx("#f4f0e4")); cv.rect(15, 18, 19, 22, hx("#f4f0e4")); cv.rect(16, 19, 18, 21, hx("#e8c050"))
+    cv.outline()
+    return cv
+
+def table_dodge():
+    cv = Canvas(48, 32)
+    wood, screen = hx("#3a3f52"), hx("#141826")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
+    cv.rect(3, 7, 44, 24, screen)
+    for x, y, c in ((8, 10, "#ff5a5a"), (14, 18, "#ffb347"), (20, 9, "#ff5a5a"), (27, 15, "#7ae8d0"), (33, 21, "#ff5a5a"), (38, 11, "#ffb347"), (12, 22, "#7ae8d0"), (30, 8, "#ffb347")):
+        cv.ellipse(x, y, 1.6, 1.6, hx(c))
+    cv.rect(23, 17, 25, 19, hx("#f4f0e4")); cv.set(24, 16, hx("#f4f0e4"))   # 中間一個小小的「玩家」
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
 
@@ -2252,6 +2265,7 @@ def main():
     print("== 和平島遊戲桌 ==")
     save(table_oldmaid(), "table_oldmaid.png", "games")
     save(table_gomoku(), "table_gomoku.png", "games")
+    save(table_dodge(), "table_dodge.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")
