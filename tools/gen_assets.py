@@ -1193,7 +1193,8 @@ TERRAINS = [
 # 和平島的遊戲桌：地形 → [桌]。id＝桌 id（兩份伺服器的 TABLE_DEFS 要一致）、game＝client/assets/games/games.json 的遊戲 id、
 # cell＝左上角格、w／h＝占幾格（圖 48×32 以 scale 2 畫＝3×2 格）。桌子是島上固定物件，不是可擺設的家具
 TABLES_BY_TERRAIN = {
-    "peace": [dict(id="t1", game="oldmaid", cell=[50, 24], w=3, h=2)],
+    "peace": [dict(id="t1", game="oldmaid", cell=[50, 24], w=3, h=2),
+              dict(id="t2", game="gomoku", cell=[34, 24], w=3, h=2)],
 }
 
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
@@ -1212,6 +1213,20 @@ def table_oldmaid():
     cv.rect(9, 12, 14, 19, hx("#f4f0e4")); cv.rect(10, 13, 13, 15, hx("#d83a3a")); cv.rect(11, 17, 12, 18, hx("#d83a3a"))
     cv.rect(34, 11, 39, 18, hx("#f4f0e4")); cv.rect(35, 12, 38, 14, hx("#2a2a30")); cv.rect(36, 16, 37, 17, hx("#2a2a30"))
     cv.set(17, 20, hx("#f4f0e4")); cv.rect(15, 18, 19, 22, hx("#f4f0e4")); cv.rect(16, 19, 18, 21, hx("#e8c050"))
+    cv.outline()
+    return cv
+
+def table_gomoku():
+    cv = Canvas(48, 32)
+    wood, board = hx("#8a5a34"), hx("#d8a860")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.2))
+    cv.rect(2, 6, 45, 25, board)
+    line = shade(board, .55)
+    for x in range(5, 44, 4): cv.vline(x, 8, 23, line)
+    for y in range(9, 24, 3): cv.hline(5, 41, y, line)
+    for x, y in ((13, 12), (17, 15), (21, 12), (25, 15), (29, 18)): cv.ellipse(x, y, 1.7, 1.7, hx("#1e1e24"))
+    for x, y in ((17, 12), (21, 15), (25, 12), (33, 18)): cv.ellipse(x, y, 1.7, 1.7, hx("#f4f0e4"))
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
 
@@ -2229,6 +2244,7 @@ def main():
     print("  furniture/furniture.json")
     print("== 和平島遊戲桌 ==")
     save(table_oldmaid(), "table_oldmaid.png", "games")
+    save(table_gomoku(), "table_gomoku.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")

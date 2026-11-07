@@ -3908,6 +3908,7 @@ function buildTable() {
   $('tableTitle').textContent = gd ? gd.name : '遊戲桌';
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
+  if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
   const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
   // 狀態列
   let status;
@@ -3962,6 +3963,85 @@ function buildTable() {
   for (const l of [...v.log].reverse()) log.appendChild(mk('div', null, l));
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 五子棋畫面：15×15 棋盤（canvas）；輪到自己時點交叉點下子，滑過會顯示淡淡的預覽棋子 ----
+const GM_N = 15, GM_CELL = 32, GM_MARGIN = 20;
+function gomokuDraw(cv, v, hover) {
+  const g = cv.getContext('2d'), size = GM_MARGIN * 2 + GM_CELL * (GM_N - 1);
+  g.fillStyle = '#d8a860'; g.fillRect(0, 0, size, size);
+  g.strokeStyle = 'rgba(70,40,10,.8)'; g.lineWidth = 1;
+  for (let i = 0; i < GM_N; i++) {
+    const p = GM_MARGIN + i * GM_CELL + .5;
+    g.beginPath(); g.moveTo(GM_MARGIN, p); g.lineTo(size - GM_MARGIN, p); g.stroke();
+    g.beginPath(); g.moveTo(p, GM_MARGIN); g.lineTo(p, size - GM_MARGIN); g.stroke();
+  }
+  g.fillStyle = 'rgba(70,40,10,.9)';
+  for (const sx of [3, 7, 11]) for (const sy of [3, 7, 11]) { g.beginPath(); g.arc(GM_MARGIN + sx * GM_CELL + .5, GM_MARGIN + sy * GM_CELL + .5, 3, 0, Math.PI * 2); g.fill(); }
+  const stone = (x, y, color, alpha = 1) => {
+    const cx = GM_MARGIN + x * GM_CELL + .5, cy = GM_MARGIN + y * GM_CELL + .5, r = GM_CELL * .45;
+    g.globalAlpha = alpha;
+    const gr = g.createRadialGradient(cx - r * .35, cy - r * .35, r * .1, cx, cy, r);
+    if (color === 1) { gr.addColorStop(0, '#6a6a74'); gr.addColorStop(1, '#14141a'); } else { gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#c8c4b8'); }
+    g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,.45)'; g.stroke(); g.globalAlpha = 1;
+  };
+  const board = v.board || '';
+  for (let i = 0; i < board.length; i++) if (board[i] !== '0') stone(i % GM_N, Math.floor(i / GM_N), Number(board[i]));
+  if (hover && !(board[hover.y * GM_N + hover.x] > 0)) stone(hover.x, hover.y, v.black === v.me ? 1 : 2, .45);   // 預覽：自己的顏色
+  if (v.line) {   // 連成五子：紅圈標出來
+    g.strokeStyle = '#e8402a'; g.lineWidth = 3;
+    for (const [x, y] of v.line) { g.beginPath(); g.arc(GM_MARGIN + x * GM_CELL + .5, GM_MARGIN + y * GM_CELL + .5, GM_CELL * .5, 0, Math.PI * 2); g.stroke(); }
+  }
+  if (v.last) { g.fillStyle = '#e8402a'; g.beginPath(); g.arc(GM_MARGIN + v.last[0] * GM_CELL + .5, GM_MARGIN + v.last[1] * GM_CELL + .5, 4, 0, Math.PI * 2); g.fill(); }   // 最後一手
+}
+function buildGomoku(box, v, mk) {
+  const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
+  const colorName = i => (v.black == null ? '' : i === v.black ? '黑棋' : '白棋');
+  let status;
+  if (playing) status = v.role === 'spec' ? `觀戰中 · 輪到 ${v.seats[v.turn]?.name}（${colorName(v.turn)}）下子` : myTurn ? `輪到你下子（${colorName(v.me)}）` : `輪到 ${v.seats[v.turn]?.name}（${colorName(v.turn)}）下子`;
+  else status = v.seats.length < v.min ? `等待玩家入座（需要 ${v.min} 人）` : '雙方按「準備」就開始（開局隨機決定誰執黑）';
+  box.appendChild(mk('div', 'table-status' + (myTurn ? ' mine' : ''), status));
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  const row = mk('div', 'table-seats');
+  v.seats.forEach((s, i) => {
+    const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && v.turn === i ? ' turn' : ''));
+    seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '')));
+    seat.appendChild(mk('div', 'table-tag', (v.board ? (i === v.black ? '● 黑棋' : '○ 白棋') + ' · ' : '') + (!playing ? (s.ready ? '已準備' : '未準備') : v.turn === i ? '思考中' : '')));
+    row.appendChild(seat);
+  });
+  for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  if (v.board) {   // 棋盤（結束後也留著，到下一局開始才清掉）
+    const size = GM_MARGIN * 2 + GM_CELL * (GM_N - 1), cv = document.createElement('canvas');
+    cv.width = size; cv.height = size; cv.className = 'gomoku-board';
+    gomokuDraw(cv, v, null);
+    const at = e => {
+      const r = cv.getBoundingClientRect(), k = size / r.width;
+      const x = Math.round(((e.clientX - r.left) * k - GM_MARGIN - .5) / GM_CELL), y = Math.round(((e.clientY - r.top) * k - GM_MARGIN - .5) / GM_CELL);
+      return x >= 0 && x < GM_N && y >= 0 && y < GM_N ? { x, y } : null;
+    };
+    if (myTurn) {
+      cv.classList.add('mine');
+      cv.onmousemove = e => gomokuDraw(cv, v, at(e));
+      cv.onmouseleave = () => gomokuDraw(cv, v, null);
+      cv.onclick = e => { const p = at(e); if (p && v.board[p.y * GM_N + p.x] === '0') S.net?.tbl?.({ a: 'move', x: p.x, y: p.y }); };
+    }
+    box.appendChild(cv);
+  }
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of [...v.log].reverse()) log.appendChild(mk('div', null, l));
+  box.appendChild(log);
+  const gd = gameDef('gomoku'); if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // 島上桌子的繪製：圖＋人數標籤（離得近時提示按 F）
 function tableDrawEntries(list) {

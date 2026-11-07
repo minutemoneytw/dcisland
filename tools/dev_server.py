@@ -613,8 +613,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
 OM_SUITS = "SHDC"
 OM_SYM = {"S": "♠", "H": "♥", "D": "♦", "C": "♣"}
@@ -643,7 +643,7 @@ def om_drop_pairs(hand):
     return keep, gone
 
 def tbl_new(tid, game):
-    return {"id": tid, "game": game, "phase": "lobby", "seats": [], "specs": [], "turn": -1, "result": None, "log": []}
+    return {"id": tid, "game": game, "phase": "lobby", "seats": [], "specs": [], "turn": -1, "result": None, "log": [], "g": None}   # g：遊戲自己的狀態（五子棋的棋盤；抽鬼牌用不到）
 
 def tbl_find(t, cid):
     for i, s in enumerate(t["seats"]):
@@ -670,7 +670,7 @@ def tbl_next_active(t, i):
 def tbl_reset_seats(t):
     for s in t["seats"]:
         s["ready"], s["hand"], s["out"] = False, [], False
-    t["phase"], t["turn"] = "lobby", -1
+    t["phase"], t["turn"], t["g"] = "lobby", -1, None
 
 def tbl_join(t, cid, name):
     if tbl_find(t, cid)[0]:
@@ -713,7 +713,7 @@ def tbl_ready(t, cid, v):
     t["seats"][i]["ready"] = bool(v)
     mn, mx = GAME_LIMITS[t["game"]]
     if len(t["seats"]) >= mn and all(s["ready"] for s in t["seats"]):   # 使用者定：全員按「準備」才開始
-        om_start(t)
+        GAME_START[t["game"]](t)
 
 def om_start(t):
     deck = [f"{s}{r}" for s in OM_SUITS for r in range(1, 14)] + ["JK"]
@@ -744,7 +744,7 @@ def om_finish(t, loser):
 
 def om_draw(t, cid, idx):
     role, i = tbl_find(t, cid)
-    if role != "seat" or t["phase"] != "playing" or i != t["turn"]:
+    if t["game"] != "oldmaid" or role != "seat" or t["phase"] != "playing" or i != t["turn"]:
         return
     tgt = tbl_next_active(t, i)
     if tgt < 0 or tgt == i:
@@ -775,13 +775,74 @@ def om_draw(t, cid, idx):
 def om_shuffle(t, cid):
     """玩家自己洗牌（心理戰：讓對方猜不到鬼牌在哪）；手牌順序就是對方看到的牌背順序。"""
     role, i = tbl_find(t, cid)
-    if role != "seat" or t["phase"] != "playing":
+    if t["game"] != "oldmaid" or role != "seat" or t["phase"] != "playing":
         return
     me = t["seats"][i]
     if len(me["hand"]) < 2:
         return
     random.shuffle(me["hand"])
     tbl_log(t, f"{me['name']} 洗了牌")
+
+# ---- 五子棋（第二桌；2026-11-08，使用者要求）：15×15、兩人、黑棋先下（開局隨機決定誰執黑）、橫直斜連成五子（含以上）就贏、棋盤滿了平手 ----
+GM_N = 15
+
+def gm_start(t):
+    black = random.randrange(2)   # 座位 0／1 誰執黑
+    t["g"] = {"board": [0] * (GM_N * GM_N), "black": black, "last": None, "line": None}   # board：0 空、1 黑、2 白
+    t["result"] = None
+    t["phase"] = "playing"
+    t["turn"] = black   # 黑先
+    for s in t["seats"]:
+        s["ready"] = False
+    tbl_log(t, f"對局開始，{t['seats'][black]['name']} 執黑先下")
+
+def gm_line(board, x, y, color):
+    """剛下在 (x, y) 的棋是否連成五子（含以上）：回連成的那一排（座標清單），沒有回 None。"""
+    for dx, dy in ((1, 0), (0, 1), (1, 1), (1, -1)):
+        cells = [[x, y]]
+        for sgn in (1, -1):
+            cx, cy = x + dx * sgn, y + dy * sgn
+            while 0 <= cx < GM_N and 0 <= cy < GM_N and board[cy * GM_N + cx] == color:
+                cells.append([cx, cy])
+                cx, cy = cx + dx * sgn, cy + dy * sgn
+        if len(cells) >= 5:
+            return sorted(cells)
+    return None
+
+def gm_finish(t, winner, line):
+    """對局結束：winner＝座位編號，None＝平手。棋盤留著給大家看（到下一局開始才清掉）。"""
+    g = t.get("g")
+    if winner is None:
+        t["result"] = {"draw": True, "text": "棋盤下滿了，平手！"}
+    else:
+        name = t["seats"][winner]["name"]
+        t["result"] = {"winner": winner, "name": name, "text": f"{name} 五子連線，獲勝！"}
+    tbl_log(t, t["result"]["text"])
+    tbl_reset_seats(t)
+    t["g"] = g
+
+def gm_move(t, cid, x, y):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "gomoku" or role != "seat" or t["phase"] != "playing" or i != t["turn"] or not g:
+        return
+    if not all(isinstance(v, int) and not isinstance(v, bool) and 0 <= v < GM_N for v in (x, y)):
+        return
+    if g["board"][y * GM_N + x]:
+        return
+    color = 1 if i == g["black"] else 2
+    g["board"][y * GM_N + x] = color
+    g["last"] = [x, y]
+    line = gm_line(g["board"], x, y, color)
+    if line:
+        g["line"] = line
+        gm_finish(t, i, line)
+    elif all(g["board"]):
+        gm_finish(t, None, None)
+    else:
+        t["turn"] = 1 - i
+
+GAME_START = {"oldmaid": om_start, "gomoku": gm_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
@@ -794,7 +855,11 @@ def tbl_view(t, cid):
          "me": i if role == "seat" else -1, "seats": seats, "specs": len(t["specs"]),
          "turn": t["turn"] if playing else -1, "target": tbl_next_active(t, t["turn"]) if playing else -1,
          "result": t["result"], "log": list(t["log"])}
-    if role == "seat" and playing:
+    g = t.get("g")
+    if g:   # 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
+        v["board"] = "".join(str(c) for c in g["board"])
+        v["last"], v["black"], v["line"] = g["last"], g["black"], g["line"]
+    if role == "seat" and playing and t["game"] == "oldmaid":
         v["hand"] = list(t["seats"][i]["hand"])   # 照伺服器順序（不排序）：對方抽的第 k 張牌背＝這裡從左數第 k 張
     return v
 
@@ -2034,6 +2099,8 @@ class Room:
                         om_draw(t, cid, msg.get("idx"))
                     elif a == "shuffle":
                         om_shuffle(t, cid)
+                    elif a == "move":
+                        gm_move(t, cid, msg.get("x"), msg.get("y"))
                     else:
                         return [], None, None
                     self._table_notify_locked(t, out)

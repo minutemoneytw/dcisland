@@ -468,8 +468,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
 const OM_SYM = { S: "♠", H: "♥", D: "♦", C: "♣" };
 const omRank = c => (c === "JK" ? null : Number(c.slice(1)));
@@ -492,7 +492,7 @@ function omDropPairs(hand) {
   }
   return [shuffle(keep), gone];
 }
-const tblNew = (id, game) => ({ id, game, phase: "lobby", seats: [], specs: [], turn: -1, result: null, log: [] });
+const tblNew = (id, game) => ({ id, game, phase: "lobby", seats: [], specs: [], turn: -1, result: null, log: [], g: null });   // g：遊戲自己的狀態（五子棋的棋盤；抽鬼牌用不到）
 function tblFind(t, cid) {
   let i = t.seats.findIndex(s => s.cid === cid);
   if (i >= 0) return ["seat", i];
@@ -507,7 +507,7 @@ function tblNextActive(t, i) {   // 座位 i 之後（順時針）第一個還�
 }
 function tblResetSeats(t) {
   for (const s of t.seats) { s.ready = false; s.hand = []; s.out = false; }
-  t.phase = "lobby"; t.turn = -1;
+  t.phase = "lobby"; t.turn = -1; t.g = null;
 }
 function tblJoin(t, cid, name) {
   if (tblFind(t, cid)[0]) return;
@@ -539,7 +539,7 @@ function tblReady(t, cid, v) {
   const [role, i] = tblFind(t, cid);
   if (role !== "seat" || t.phase !== "lobby") return;
   t.seats[i].ready = !!v;
-  if (t.seats.length >= GAME_LIMITS[t.game][0] && t.seats.every(s => s.ready)) omStart(t);   // 使用者定：全員按「準備」才開始
+  if (t.seats.length >= GAME_LIMITS[t.game][0] && t.seats.every(s => s.ready)) GAME_START[t.game](t);   // 使用者定：全員按「準備」才開始
 }
 function omStart(t) {
   const deck = [];
@@ -568,7 +568,7 @@ function omFinish(t, loser) {
 }
 function omDraw(t, cid, idx) {
   const [role, i] = tblFind(t, cid);
-  if (role !== "seat" || t.phase !== "playing" || i !== t.turn) return;
+  if (t.game !== "oldmaid" || role !== "seat" || t.phase !== "playing" || i !== t.turn) return;
   const tgt = tblNextActive(t, i);
   if (tgt < 0 || tgt === i) return;
   const me = t.seats[i], th = t.seats[tgt];
@@ -593,10 +593,54 @@ function omDraw(t, cid, idx) {
 // 玩家自己洗牌（心理戰：讓對方猜不到鬼牌在哪）；手牌順序就是對方看到的牌背順序
 function omShuffle(t, cid) {
   const [role, i] = tblFind(t, cid);
-  if (role !== "seat" || t.phase !== "playing" || t.seats[i].hand.length < 2) return;
+  if (t.game !== "oldmaid" || role !== "seat" || t.phase !== "playing" || t.seats[i].hand.length < 2) return;
   shuffle(t.seats[i].hand);
   tblLog(t, `${t.seats[i].name} 洗了牌`);
 }
+// ---- 五子棋（第二桌；2026-11-08，使用者要求）：15×15、兩人、黑棋先下（開局隨機決定誰執黑）、橫直斜連成五子（含以上）就贏、棋盤滿了平手 ----
+const GM_N = 15;
+function gmStart(t) {
+  const black = Math.floor(Math.random() * 2);   // 座位 0／1 誰執黑
+  t.g = { board: new Array(GM_N * GM_N).fill(0), black, last: null, line: null };   // board：0 空、1 黑、2 白
+  t.result = null; t.phase = "playing"; t.turn = black;   // 黑先
+  for (const s of t.seats) s.ready = false;
+  tblLog(t, `對局開始，${t.seats[black].name} 執黑先下`);
+}
+// 剛下在 (x, y) 的棋是否連成五子（含以上）：回連成的那一排（座標清單），沒有回 null
+function gmLine(board, x, y, color) {
+  for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [1, -1]]) {
+    const cells = [[x, y]];
+    for (const sgn of [1, -1]) {
+      let cx = x + dx * sgn, cy = y + dy * sgn;
+      while (cx >= 0 && cx < GM_N && cy >= 0 && cy < GM_N && board[cy * GM_N + cx] === color) { cells.push([cx, cy]); cx += dx * sgn; cy += dy * sgn; }
+    }
+    if (cells.length >= 5) return cells.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  }
+  return null;
+}
+// 對局結束：winner＝座位編號，null＝平手。棋盤留著給大家看（到下一局開始才清掉）
+function gmFinish(t, winner) {
+  const g = t.g;
+  if (winner === null) t.result = { draw: true, text: "棋盤下滿了，平手！" };
+  else { const name = t.seats[winner].name; t.result = { winner, name, text: `${name} 五子連線，獲勝！` }; }
+  tblLog(t, t.result.text);
+  tblResetSeats(t);
+  t.g = g;
+}
+function gmMove(t, cid, x, y) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "gomoku" || role !== "seat" || t.phase !== "playing" || i !== t.turn || !g) return;
+  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || x >= GM_N || y < 0 || y >= GM_N) return;
+  if (g.board[y * GM_N + x]) return;
+  const color = i === g.black ? 1 : 2;
+  g.board[y * GM_N + x] = color;
+  g.last = [x, y];
+  const line = gmLine(g.board, x, y, color);
+  if (line) { g.line = line; gmFinish(t, i); }
+  else if (g.board.every(c => c)) gmFinish(t, null);
+  else t.turn = 1 - i;
+}
+const GAME_START = { oldmaid: omStart, gomoku: gmStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 function tblView(t, cid) {
   const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
@@ -605,7 +649,10 @@ function tblView(t, cid) {
     seats: t.seats.map((s, k) => ({ name: s.name, n: playing ? s.hand.length : 0, ready: s.ready, out: playing ? s.out : false, you: role === "seat" && k === i })),
     specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
   };
-  if (role === "seat" && playing) {
+  if (t.g) {   // 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
+    v.board = t.g.board.join(""); v.last = t.g.last; v.black = t.g.black; v.line = t.g.line;
+  }
+  if (role === "seat" && playing && t.game === "oldmaid") {
     v.hand = [...t.seats[i].hand];   // 照伺服器順序（不排序）：對方抽的第 k 張牌背＝這裡從左數第 k 張
   }
   return v;
@@ -1062,6 +1109,7 @@ export class Island {
     else if (a === "sit") tblSit(t, att.id);
     else if (a === "draw") omDraw(t, att.id, msg.idx);
     else if (a === "shuffle") omShuffle(t, att.id);
+    else if (a === "move") gmMove(t, att.id, msg.x, msg.y);
     else return;
     await this.saveTable(t);
     this.tableNotify(t);
