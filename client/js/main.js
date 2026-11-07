@@ -112,7 +112,7 @@ function key(x, y) { return x + ',' + y; }
 
 function genWorld(id) {
   const rng = mulberry32(hashStr(id));
-  const cx = COLS / 2 - .5, cy = ROWS / 2 - .5, rx = 26, ry = 17.5;   // 放大 5 倍級
+  const cx = COLS / 2 - .5, cy = ROWS / 2 - .5, rx = 29, ry = 19.5;   // 放大 5 倍級（2026-11-07 再放大約 24% 面積：原本 26／17.5）
   const types = new Uint8Array(COLS * ROWS);
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
     let d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
@@ -127,7 +127,7 @@ function genWorld(id) {
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
     if (types[y * COLS + x] !== 2) continue;
     if (Math.abs(x - cx) < 2.5 && Math.abs(y - cy) < 2) continue; // 出生區淨空
-    if (rng() < .045) decos.push({ i: decos.length, sprite: pool[Math.floor(rng() * pool.length)], cell: [x, y], flip: rng() < .5 });
+    if (rng() < .036) decos.push({ i: decos.length, sprite: pool[Math.floor(rng() * pool.length)], cell: [x, y], flip: rng() < .5 });
   }
   S.world = { types, decos };
   S.drops = [];
@@ -311,7 +311,7 @@ function applyDecoHit(d, hp, dead, ttl, mine) {
   if (!dead) return;
   d.dead = true; d.respawnAt = S.t + ttl / 1000;
   S.floaters.push({ x: bx, y: r.y + r.h * .5, poof: true, life: .55 });
-  if (mine) { spawnDrops(tgt, bx, by); spawnCraftDrops(S.craftDB?.sources.deco[d.sprite], bx, by); grantExp(1, bx, by - 40, 'mine'); toast(`${tgt.name}被破壞了`, 1600); }   // 採集成功（打壞的人）＋1 XP（登入者由伺服器記）
+  if (mine) { spawnDrops(tgt, bx, by); spawnCraftDrops(craftDecoDrops(d.sprite), bx, by); grantExp(1, bx, by - 40, 'mine'); toast(`${tgt.name}被破壞了`, 1600); }   // 採集成功（打壞的人）＋1 XP（登入者由伺服器記）
 }
 // 進入地形時伺服器給的完整狀態：先全部還原，再套用受損/已破壞的
 function onNetDecos(terrain, list) {
@@ -3683,6 +3683,8 @@ function rollCraftDrops(list) {
   }
   return out;
 }
+// 地形物件的掉落表：「地形/圖檔」（各島專屬，例如 beach/rock.png）優先於「圖檔」
+const craftDecoDrops = sprite => S.craftDB?.sources.deco[`${S.terrain}/${sprite}`] || S.craftDB?.sources.deco[sprite];
 function spawnCraftDrops(list, x, y) {   // 掉在地上、走過去自動撿（與 tools.json 的 drops 同一套）
   for (const { item, n } of rollCraftDrops(list)) for (let i = 0; i < n; i++) S.drops.push({ item, x: x + Math.random() * 30 - 15, y: y + Math.random() * 16 - 4, born: S.t });
 }

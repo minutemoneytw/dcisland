@@ -1276,6 +1276,109 @@ def steel_shelf():
         cv.rect(x, y, x + 1, 7 if y < 8 else y + 2, hx(c))
     cv.outline(); return cv
 
+def _mat_petal(c):
+    cv = Canvas(16, 16)
+    for a in range(5):
+        x = 8 + round(math.cos(a * 2 * math.pi / 5 - math.pi / 2) * 3.6); y = 8 + round(math.sin(a * 2 * math.pi / 5 - math.pi / 2) * 3.6); cv.ellipse(x, y, 2.6, 2.6, c)
+    cv.ellipse(8, 8, 2, 2, hx("#f2d14a")); cv.outline(); return cv
+def _mat_pearl(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 8, 5, 5, c); cv.ellipse(6, 6, 1.6, 1.6, hx("#ffffff")); cv.set(10, 10, shade(c, .8)); cv.outline(hx("#6a6a88")); return cv
+def _mat_cube(c):
+    cv = Canvas(16, 16); cv.rect(3, 4, 12, 13, c); cv.rect(3, 4, 12, 5, shade(c, 1.25)); cv.rect(11, 4, 12, 13, shade(c, .85)); cv.set(5, 8, hx("#ffffff")); cv.set(6, 7, hx("#ffffff")); cv.outline(hx("#3a5a80")); return cv
+def _mat_crystal(c):
+    cv = Canvas(16, 16)
+    for bx, h in ((4, 6), (8, 9), (11, 5)):
+        cv.rect(bx, 13 - h, bx + 1, 13, c); cv.set(bx, 12 - h, shade(c, 1.3)); cv.set(bx + 1, 12 - h, shade(c, 1.3))
+    cv.outline(); return cv
+def _mat_chunk(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 9, 5.5, 4.5, c); cv.ellipse(6, 7, 1.5, 1.2, shade(c, 1.6)); cv.set(10, 10, shade(c, 1.6)); cv.outline(); return cv
+def _mat_ore(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 9, 6, 4.5, hx("#7a7f88"))
+    for x, y in ((5, 8), (8, 11), (10, 7), (7, 6), (11, 10)): cv.rect(x, y, x + 1, y + 1, c)
+    cv.outline(); return cv
+def _mat_sand(c):
+    cv = Canvas(16, 16)
+    for y in range(7, 13):
+        w = 2 + (y - 7) * 1.2
+        cv.rect(int(8 - w), y, int(8 + w), y, c if y % 2 else shade(c, .92))
+    cv.set(6, 11, shade(c, .7)); cv.set(10, 9, shade(c, 1.2)); cv.outline(); return cv
+def _mat_skin(c):
+    cv = Canvas(16, 16); cv.rect(3, 4, 12, 12, c); cv.rect(2, 6, 3, 7, c); cv.rect(12, 9, 13, 10, c)
+    for x, y in ((5, 6), (8, 9), (10, 6), (6, 10)): cv.set(x, y, shade(c, .7)); cv.set(x + 1, y, shade(c, 1.3))
+    cv.outline(); return cv
+def _mat_brick(c):
+    cv = Canvas(16, 16); cv.rect(1, 3, 14, 12, c)
+    for y in (6, 9): cv.hline(1, 14, y, shade(c, .7))
+    for x, y0 in ((5, 3), (10, 3), (3, 7), (8, 7), (12, 7), (5, 10), (10, 10)): cv.vline(x, y0, y0 + 2, shade(c, .7))
+    cv.outline(); return cv
+def _mat_paper(c):
+    cv = Canvas(16, 16); cv.rect(3, 2, 12, 13, c); cv.rect(10, 2, 12, 4, shade(c, .85))
+    for y in (6, 8, 10): cv.hline(5, 10, y, shade(c, .6))
+    cv.outline(); return cv
+def _mat_bark(c):
+    cv = Canvas(16, 16); cv.rect(3, 3, 12, 12, c)
+    for x in (5, 8, 11): cv.vline(x, 3, 12, shade(c, .7))
+    cv.set(6, 7, shade(c, 1.3)); cv.set(9, 5, shade(c, 1.3)); cv.outline(); return cv
+def _mat_leather(c):
+    cv = Canvas(16, 16); cv.rect(2, 4, 13, 12, c); cv.rect(2, 4, 13, 5, shade(c, 1.2))
+    for x in range(3, 13, 2): cv.set(x, 11, shade(c, .6))
+    cv.outline(); return cv
+
+MATERIAL_ICONS.update(
+    petal=(_mat_petal, "#f08ab8"), bark=(_mat_bark, "#8a5e3a"), charcoal=(_mat_chunk, "#3a3a40"), sand=(_mat_sand, "#e8d49a"),
+    sulfur=(_mat_crystal, "#e8e03a"), ice=(_mat_cube, "#bfe6f8"), moonstone=(_mat_chunk, "#b8c0f0"), iron_ore=(_mat_ore, "#d88a4a"),
+    frog_skin=(_mat_skin, "#6ab04a"), pearl=(_mat_pearl, "#f4f0ec"),
+    brick=(_mat_brick, "#c4684a"), paper=(_mat_paper, "#f0ead8"), iron_ingot=(_mat_bar, "#6a7480"), leather=(_mat_leather, "#9a6a40"),
+)
+
+def flower_pot():
+    cv = Canvas(16, 24); pot = hx("#c4684a")
+    cv.rect(4, 16, 11, 21, pot); cv.rect(4, 16, 11, 17, shade(pot, 1.2)); cv.rect(5, 19, 10, 21, shade(pot, .85))
+    cv.rect(7, 9, 8, 15, hx("#4d9e46"))
+    for cx, cy, c in ((8, 6, "#f08ab8"), (5, 9, "#f2d14a"), (11, 9, "#e8e4f0")): cv.ellipse(cx, cy, 2.6, 2.6, hx(c)); cv.set(cx, cy, hx("#f2d14a") if c != "#f2d14a" else hx("#d88a4a"))
+    cv.outline(); return cv
+
+def desk():
+    w = hx("#c89a5a"); cv = Canvas(16, 16)
+    cv.rect(1, 5, 14, 7, shade(w, 1.1)); cv.rect(1, 7, 14, 8, shade(w, .8)); cv.rect(2, 9, 3, 14, shade(w, .8)); cv.rect(12, 9, 13, 14, shade(w, .8)); cv.rect(4, 9, 6, 11, shade(w, .9))
+    cv.rect(8, 3, 11, 4, hx("#f0ead8")); cv.outline(); return cv
+
+def ice_sculpture():
+    cv = Canvas(16, 24); c = hx("#bfe6f8")
+    cv.rect(3, 19, 12, 21, shade(c, .8))
+    cv.rect(6, 8, 9, 18, c); cv.rect(4, 12, 11, 15, c); cv.rect(7, 4, 8, 8, shade(c, 1.2)); cv.set(7, 3, shade(c, 1.2)); cv.set(8, 3, shade(c, 1.2))
+    cv.vline(7, 6, 17, hx("#ffffff")); cv.outline(hx("#3a5a80")); return cv
+
+def moon_lamp():
+    cv = Canvas(16, 24)
+    cv.rect(7, 12, 8, 20, hx("#6e6a78")); cv.rect(4, 20, 11, 22, hx("#55525e"))
+    cv.ellipse(8, 7, 5, 5.5, hx("#dfe4ff")); cv.ellipse(10, 7, 3.4, 4.4, hx("#6a70b8")); cv.set(5, 5, hx("#ffffff"))   # 月牙
+    cv.outline(); return cv
+
+def iron_chair():
+    w = hx("#6a7480"); cv = Canvas(16, 14)
+    cv.rect(2, 3, 13, 5, w); cv.rect(2, 6, 13, 8, shade(w, 1.2)); cv.rect(2, 6, 2, 8, shade(w, .8)); cv.rect(13, 6, 13, 8, shade(w, .8))
+    cv.rect(3, 9, 3, 12, shade(w, .85)); cv.rect(12, 9, 12, 12, shade(w, .85)); cv.hline(3, 12, 5, hx("#d88a4a"))
+    cv.outline(); return cv
+
+def lava_lamp():
+    cv = Canvas(16, 24)
+    cv.rect(4, 20, 11, 22, hx("#55525e")); cv.rect(5, 5, 10, 19, hx("#7a2a1a")); cv.rect(6, 6, 9, 18, hx("#f06a2a"))
+    cv.ellipse(8, 10, 1.8, 1.8, hx("#f8d04a")); cv.ellipse(8, 15, 2, 2, hx("#f8d04a")); cv.rect(5, 3, 10, 4, hx("#55525e")); cv.set(6, 7, hx("#ffe9b0"))
+    cv.outline(); return cv
+
+def leather_chair():
+    w = hx("#9a6a40"); cv = Canvas(16, 14)
+    cv.rect(2, 3, 13, 5, shade(w, 1.1)); cv.rect(2, 6, 13, 8, shade(w, 1.25)); cv.rect(2, 6, 2, 8, shade(w, .8)); cv.rect(13, 6, 13, 8, shade(w, .8))
+    cv.rect(3, 9, 3, 12, hx("#5a3e24")); cv.rect(12, 9, 12, 12, hx("#5a3e24")); cv.set(5, 4, shade(w, .7)); cv.set(10, 4, shade(w, .7))
+    cv.outline(); return cv
+
+def pearl_statue():
+    cv = Canvas(16, 24); b = hx("#c4684a")
+    cv.rect(3, 17, 12, 21, b); cv.rect(3, 17, 12, 18, shade(b, 1.2)); cv.rect(4, 20, 11, 21, shade(b, .8))
+    cv.ellipse(8, 11, 5, 5, hx("#f4f0ec")); cv.ellipse(6, 9, 1.8, 1.8, hx("#ffffff")); cv.set(10, 13, hx("#c8c0e0"))
+    cv.outline(hx("#6a6a88")); return cv
+
 FURN_MANIFEST = dict(
     scale=2, tile=TILE,
     items=[
@@ -1294,6 +1397,14 @@ FURN_MANIFEST = dict(
         dict(id="glow_lamp",   name="螢光燈", w=1, h=1, solid=True,  sprite="glow_lamp.png", craft=True),
         dict(id="fish_tank",   name="魚缸",   w=1, h=1, solid=True,  sprite="fish_tank.png", craft=True),
         dict(id="steel_shelf", name="鋼架",   w=1, h=1, solid=True,  sprite="steel_shelf.png", craft=True),
+        dict(id="flower_pot",     name="花盆",     w=1, h=1, solid=True, sprite="flower_pot.png", craft=True),
+        dict(id="desk",           name="書桌",     w=1, h=1, solid=True, sprite="desk.png", craft=True),
+        dict(id="ice_sculpture",  name="冰雕",     w=1, h=1, solid=True, sprite="ice_sculpture.png", craft=True),
+        dict(id="moon_lamp",      name="月光燈",   w=1, h=1, solid=True, sprite="moon_lamp.png", craft=True),
+        dict(id="iron_chair",     name="鐵椅",     w=1, h=1, solid=True, sprite="iron_chair.png", use="sit", craft=True),
+        dict(id="lava_lamp",      name="熔岩燈",   w=1, h=1, solid=True, sprite="lava_lamp.png", craft=True),
+        dict(id="leather_chair",  name="皮椅",     w=1, h=1, solid=True, sprite="leather_chair.png", use="sit", craft=True),
+        dict(id="pearl_statue",   name="珍珠擺飾", w=1, h=1, solid=True, sprite="pearl_statue.png", craft=True),
     ],
 )
 
@@ -2040,7 +2151,9 @@ def main():
                    ("plant", plant()), ("rug", rug()), ("lamp", lamp()),
                    ("tv", tv()), ("cat", cat()), ("bed", bed()),
                    ("shelf", shelf()), ("sign", sign()),
-                   ("stool", stool()), ("glow_lamp", glow_lamp()), ("fish_tank", fish_tank()), ("steel_shelf", steel_shelf())]:
+                   ("stool", stool()), ("glow_lamp", glow_lamp()), ("fish_tank", fish_tank()), ("steel_shelf", steel_shelf()),
+                   ("flower_pot", flower_pot()), ("desk", desk()), ("ice_sculpture", ice_sculpture()), ("moon_lamp", moon_lamp()),
+                   ("iron_chair", iron_chair()), ("lava_lamp", lava_lamp()), ("leather_chair", leather_chair()), ("pearl_statue", pearl_statue())]:
         save(cv, fn + ".png", "furniture")
     write_json(os.path.join(ASSETS, "furniture", "furniture.json"), FURN_MANIFEST)
     print("  furniture/furniture.json")

@@ -3,66 +3,709 @@
  "_format": "materials：{id, name, group, how（圖鑑裡解鎖後顯示的取得方式）, color（掉落物圓點色，要與 gen_assets.py 的 MATERIAL_ICONS 一致）}。sources.deco：地形物件圖檔名（tools.json 的 targets key）→ 打壞時的掉落 [{item, min, max, chance}]；sources.fish：釣到魚（沒脫鉤、不是怪物）時各抽一次 [{item, chance, terrains?}]；sources.mob：野外動物 id → 擊倒時的掉落 [{item, chance}]。recipes：{id, in（2～maxInputs 個素材 id，不分順序、可重複）, out:{kind:'material'|'furniture', id}}；同一組 in（排序後）不可重複。",
  "maxInputs": 3,
  "groups": [
-  { "id": "grass", "name": "草島" },
-  { "id": "beach", "name": "沙灘島" },
-  { "id": "snow", "name": "雪島" },
-  { "id": "night", "name": "夜光島" },
-  { "id": "forest", "name": "森林島" },
-  { "id": "volcano", "name": "熔岩島" },
-  { "id": "machine", "name": "機械島" },
-  { "id": "wild", "name": "水域與野外" },
-  { "id": "crafted", "name": "合成素材" }
+  {
+   "id": "grass",
+   "name": "草島"
+  },
+  {
+   "id": "beach",
+   "name": "沙灘島"
+  },
+  {
+   "id": "snow",
+   "name": "雪島"
+  },
+  {
+   "id": "night",
+   "name": "夜光島"
+  },
+  {
+   "id": "forest",
+   "name": "森林島"
+  },
+  {
+   "id": "volcano",
+   "name": "熔岩島"
+  },
+  {
+   "id": "machine",
+   "name": "機械島"
+  },
+  {
+   "id": "wild",
+   "name": "水域與野外"
+  },
+  {
+   "id": "crafted",
+   "name": "合成素材"
+  }
  ],
  "materials": [
-  { "id": "wood", "name": "木材", "group": "grass", "how": "砍樹木", "color": "#a9743f" },
-  { "id": "stone", "name": "石塊", "group": "grass", "how": "敲石頭", "color": "#8d939b" },
-  { "id": "palm_leaf", "name": "棕櫚葉", "group": "beach", "how": "砍椰子樹", "color": "#5fae4e" },
-  { "id": "shell", "name": "貝殼", "group": "beach", "how": "敲貝殼", "color": "#f0c4b0" },
-  { "id": "pine_resin", "name": "松脂", "group": "snow", "how": "砍松樹", "color": "#e0a63a" },
-  { "id": "glow_spore", "name": "螢光孢子", "group": "night", "how": "砍發光蘑菇", "color": "#7ae8d0" },
-  { "id": "glass_shard", "name": "玻璃碎片", "group": "night", "how": "敲燈籠", "color": "#9fd8f0" },
-  { "id": "mushroom_cap", "name": "蘑菇傘", "group": "forest", "how": "砍蘑菇", "color": "#c8503c" },
-  { "id": "obsidian", "name": "黑曜石", "group": "volcano", "how": "敲火山岩", "color": "#3a2f4a" },
-  { "id": "gear", "name": "齒輪", "group": "machine", "how": "敲齒輪", "color": "#a8b0b8" },
-  { "id": "fish_scale", "name": "魚鱗", "group": "wild", "how": "釣魚時偶爾得到", "color": "#7fc6e8" },
-  { "id": "wool", "name": "羊毛", "group": "wild", "how": "擊倒波波羊", "color": "#f0ede4" },
-  { "id": "feather", "name": "羽毛", "group": "wild", "how": "擊倒圓喙鳥", "color": "#e8c070" },
-  { "id": "plank", "name": "木板", "group": "crafted", "how": "合成", "color": "#c89a5a" },
-  { "id": "rope", "name": "繩索", "group": "crafted", "how": "合成", "color": "#c9b27a" },
-  { "id": "cloth", "name": "布料", "group": "crafted", "how": "合成", "color": "#d878a0" },
-  { "id": "glue", "name": "樹脂膠", "group": "crafted", "how": "合成", "color": "#e8d890" },
-  { "id": "glass_pane", "name": "玻璃片", "group": "crafted", "how": "合成", "color": "#a8dcf0" },
-  { "id": "steel", "name": "鋼材", "group": "crafted", "how": "合成", "color": "#8aa0b8" }
+  {
+   "id": "wood",
+   "name": "木材",
+   "group": "grass",
+   "how": "砍樹木",
+   "color": "#a9743f"
+  },
+  {
+   "id": "stone",
+   "name": "石塊",
+   "group": "grass",
+   "how": "敲石頭",
+   "color": "#8d939b"
+  },
+  {
+   "id": "palm_leaf",
+   "name": "棕櫚葉",
+   "group": "beach",
+   "how": "砍椰子樹",
+   "color": "#5fae4e"
+  },
+  {
+   "id": "shell",
+   "name": "貝殼",
+   "group": "beach",
+   "how": "敲貝殼",
+   "color": "#f0c4b0"
+  },
+  {
+   "id": "pine_resin",
+   "name": "松脂",
+   "group": "snow",
+   "how": "砍松樹",
+   "color": "#e0a63a"
+  },
+  {
+   "id": "glow_spore",
+   "name": "螢光孢子",
+   "group": "night",
+   "how": "砍發光蘑菇",
+   "color": "#7ae8d0"
+  },
+  {
+   "id": "glass_shard",
+   "name": "玻璃碎片",
+   "group": "night",
+   "how": "敲燈籠",
+   "color": "#9fd8f0"
+  },
+  {
+   "id": "mushroom_cap",
+   "name": "蘑菇傘",
+   "group": "forest",
+   "how": "砍蘑菇",
+   "color": "#c8503c"
+  },
+  {
+   "id": "obsidian",
+   "name": "黑曜石",
+   "group": "volcano",
+   "how": "敲火山岩",
+   "color": "#3a2f4a"
+  },
+  {
+   "id": "gear",
+   "name": "齒輪",
+   "group": "machine",
+   "how": "敲齒輪",
+   "color": "#a8b0b8"
+  },
+  {
+   "id": "petal",
+   "name": "花瓣",
+   "group": "grass",
+   "how": "採花",
+   "color": "#f08ab8"
+  },
+  {
+   "id": "sand",
+   "name": "細沙",
+   "group": "beach",
+   "how": "敲沙灘島的石頭",
+   "color": "#e8d49a"
+  },
+  {
+   "id": "ice",
+   "name": "冰塊",
+   "group": "snow",
+   "how": "敲雪島的石頭",
+   "color": "#bfe6f8"
+  },
+  {
+   "id": "bark",
+   "name": "樹皮",
+   "group": "forest",
+   "how": "砍樹樁（森林島、雪島）",
+   "color": "#8a5e3a"
+  },
+  {
+   "id": "moonstone",
+   "name": "月光石",
+   "group": "night",
+   "how": "敲夜光島的石頭",
+   "color": "#b8c0f0"
+  },
+  {
+   "id": "sulfur",
+   "name": "硫磺",
+   "group": "volcano",
+   "how": "敲熔岩島的石頭",
+   "color": "#e8e03a"
+  },
+  {
+   "id": "charcoal",
+   "name": "木炭",
+   "group": "volcano",
+   "how": "砍熔岩島的樹樁",
+   "color": "#3a3a40"
+  },
+  {
+   "id": "iron_ore",
+   "name": "鐵礦",
+   "group": "machine",
+   "how": "敲機械島的石頭",
+   "color": "#d88a4a"
+  },
+  {
+   "id": "fish_scale",
+   "name": "魚鱗",
+   "group": "wild",
+   "how": "釣魚時偶爾得到",
+   "color": "#7fc6e8"
+  },
+  {
+   "id": "wool",
+   "name": "羊毛",
+   "group": "wild",
+   "how": "擊倒波波羊",
+   "color": "#f0ede4"
+  },
+  {
+   "id": "feather",
+   "name": "羽毛",
+   "group": "wild",
+   "how": "擊倒圓喙鳥",
+   "color": "#e8c070"
+  },
+  {
+   "id": "frog_skin",
+   "name": "蛙皮",
+   "group": "wild",
+   "how": "擊倒大肚蛙",
+   "color": "#6ab04a"
+  },
+  {
+   "id": "pearl",
+   "name": "珍珠",
+   "group": "wild",
+   "how": "釣魚時極少得到",
+   "color": "#f4f0ec"
+  },
+  {
+   "id": "plank",
+   "name": "木板",
+   "group": "crafted",
+   "how": "合成",
+   "color": "#c89a5a"
+  },
+  {
+   "id": "rope",
+   "name": "繩索",
+   "group": "crafted",
+   "how": "合成",
+   "color": "#c9b27a"
+  },
+  {
+   "id": "cloth",
+   "name": "布料",
+   "group": "crafted",
+   "how": "合成",
+   "color": "#d878a0"
+  },
+  {
+   "id": "glue",
+   "name": "樹脂膠",
+   "group": "crafted",
+   "how": "合成",
+   "color": "#e8d890"
+  },
+  {
+   "id": "glass_pane",
+   "name": "玻璃片",
+   "group": "crafted",
+   "how": "合成",
+   "color": "#a8dcf0"
+  },
+  {
+   "id": "steel",
+   "name": "鋼材",
+   "group": "crafted",
+   "how": "合成",
+   "color": "#8aa0b8"
+  },
+  {
+   "id": "brick",
+   "name": "磚塊",
+   "group": "crafted",
+   "how": "合成",
+   "color": "#c4684a"
+  },
+  {
+   "id": "paper",
+   "name": "紙",
+   "group": "crafted",
+   "how": "合成",
+   "color": "#f0ead8"
+  },
+  {
+   "id": "iron_ingot",
+   "name": "鐵錠",
+   "group": "crafted",
+   "how": "合成",
+   "color": "#6a7480"
+  },
+  {
+   "id": "leather",
+   "name": "皮革",
+   "group": "crafted",
+   "how": "合成",
+   "color": "#9a6a40"
+  }
  ],
  "sources": {
   "deco": {
-   "tree.png": [{ "item": "wood", "min": 1, "max": 2, "chance": 1 }],
-   "rock.png": [{ "item": "stone", "min": 1, "max": 1, "chance": 1 }],
-   "palm.png": [{ "item": "palm_leaf", "min": 1, "max": 2, "chance": 1 }],
-   "shell.png": [{ "item": "shell", "min": 1, "max": 1, "chance": 1 }],
-   "pine.png": [{ "item": "pine_resin", "min": 1, "max": 1, "chance": 1 }],
-   "glowshroom.png": [{ "item": "glow_spore", "min": 1, "max": 1, "chance": 1 }],
-   "lantern.png": [{ "item": "glass_shard", "min": 1, "max": 1, "chance": 1 }],
-   "mushroom.png": [{ "item": "mushroom_cap", "min": 1, "max": 1, "chance": 1 }],
-   "volcanic.png": [{ "item": "obsidian", "min": 1, "max": 1, "chance": 1 }],
-   "gear.png": [{ "item": "gear", "min": 1, "max": 1, "chance": 1 }]
+   "tree.png": [
+    {
+     "item": "wood",
+     "min": 1,
+     "max": 2,
+     "chance": 1
+    }
+   ],
+   "rock.png": [
+    {
+     "item": "stone",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "palm.png": [
+    {
+     "item": "palm_leaf",
+     "min": 1,
+     "max": 2,
+     "chance": 1
+    }
+   ],
+   "shell.png": [
+    {
+     "item": "shell",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "pine.png": [
+    {
+     "item": "pine_resin",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "glowshroom.png": [
+    {
+     "item": "glow_spore",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "lantern.png": [
+    {
+     "item": "glass_shard",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "mushroom.png": [
+    {
+     "item": "mushroom_cap",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "volcanic.png": [
+    {
+     "item": "obsidian",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "gear.png": [
+    {
+     "item": "gear",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "flower.png": [
+    {
+     "item": "petal",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "beach/rock.png": [
+    {
+     "item": "sand",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "snow/rock.png": [
+    {
+     "item": "ice",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "night/rock.png": [
+    {
+     "item": "moonstone",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "volcano/rock.png": [
+    {
+     "item": "sulfur",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "machine/rock.png": [
+    {
+     "item": "iron_ore",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "forest/stump.png": [
+    {
+     "item": "bark",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "volcano/stump.png": [
+    {
+     "item": "charcoal",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ],
+   "snow/stump.png": [
+    {
+     "item": "bark",
+     "min": 1,
+     "max": 1,
+     "chance": 1
+    }
+   ]
   },
-  "fish": [{ "item": "fish_scale", "chance": 0.35 }],
+  "fish": [
+   {
+    "item": "fish_scale",
+    "chance": 0.35
+   },
+   {
+    "item": "pearl",
+    "chance": 0.03
+   }
+  ],
   "mob": {
-   "sheep": [{ "item": "wool", "chance": 1 }],
-   "bird": [{ "item": "feather", "chance": 1 }]
+   "sheep": [
+    {
+     "item": "wool",
+     "chance": 1
+    }
+   ],
+   "bird": [
+    {
+     "item": "feather",
+     "chance": 1
+    }
+   ],
+   "frog": [
+    {
+     "item": "frog_skin",
+     "chance": 1
+    }
+   ]
   }
  },
  "recipes": [
-  { "id": "plank", "in": ["wood", "wood"], "out": { "kind": "material", "id": "plank" } },
-  { "id": "rope", "in": ["palm_leaf", "palm_leaf"], "out": { "kind": "material", "id": "rope" } },
-  { "id": "cloth", "in": ["wool", "feather"], "out": { "kind": "material", "id": "cloth" } },
-  { "id": "glue", "in": ["pine_resin", "mushroom_cap"], "out": { "kind": "material", "id": "glue" } },
-  { "id": "glass_pane", "in": ["glass_shard", "stone"], "out": { "kind": "material", "id": "glass_pane" } },
-  { "id": "steel", "in": ["gear", "obsidian"], "out": { "kind": "material", "id": "steel" } },
-  { "id": "stool", "in": ["plank", "rope", "glue"], "out": { "kind": "furniture", "id": "stool" } },
-  { "id": "glow_lamp", "in": ["glass_pane", "glow_spore"], "out": { "kind": "furniture", "id": "glow_lamp" } },
-  { "id": "fish_tank", "in": ["glass_pane", "fish_scale", "shell"], "out": { "kind": "furniture", "id": "fish_tank" } },
-  { "id": "steel_shelf", "in": ["steel", "plank"], "out": { "kind": "furniture", "id": "steel_shelf" } }
+  {
+   "id": "plank",
+   "in": [
+    "wood",
+    "wood"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "plank"
+   }
+  },
+  {
+   "id": "rope",
+   "in": [
+    "palm_leaf",
+    "palm_leaf"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "rope"
+   }
+  },
+  {
+   "id": "cloth",
+   "in": [
+    "wool",
+    "feather"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "cloth"
+   }
+  },
+  {
+   "id": "glue",
+   "in": [
+    "pine_resin",
+    "mushroom_cap"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "glue"
+   }
+  },
+  {
+   "id": "glass_pane",
+   "in": [
+    "glass_shard",
+    "stone"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "glass_pane"
+   }
+  },
+  {
+   "id": "steel",
+   "in": [
+    "gear",
+    "obsidian"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "steel"
+   }
+  },
+  {
+   "id": "stool",
+   "in": [
+    "plank",
+    "rope",
+    "glue"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "stool"
+   }
+  },
+  {
+   "id": "glow_lamp",
+   "in": [
+    "glass_pane",
+    "glow_spore"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "glow_lamp"
+   }
+  },
+  {
+   "id": "fish_tank",
+   "in": [
+    "glass_pane",
+    "fish_scale",
+    "shell"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "fish_tank"
+   }
+  },
+  {
+   "id": "steel_shelf",
+   "in": [
+    "steel",
+    "plank"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "steel_shelf"
+   }
+  },
+  {
+   "id": "brick",
+   "in": [
+    "stone",
+    "sand"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "brick"
+   }
+  },
+  {
+   "id": "paper",
+   "in": [
+    "bark",
+    "bark"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "paper"
+   }
+  },
+  {
+   "id": "iron_ingot",
+   "in": [
+    "iron_ore",
+    "charcoal"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "iron_ingot"
+   }
+  },
+  {
+   "id": "leather",
+   "in": [
+    "frog_skin",
+    "bark"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "leather"
+   }
+  },
+  {
+   "id": "flower_pot",
+   "in": [
+    "petal",
+    "brick"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "flower_pot"
+   }
+  },
+  {
+   "id": "desk",
+   "in": [
+    "plank",
+    "paper"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "desk"
+   }
+  },
+  {
+   "id": "ice_sculpture",
+   "in": [
+    "ice",
+    "ice",
+    "moonstone"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "ice_sculpture"
+   }
+  },
+  {
+   "id": "moon_lamp",
+   "in": [
+    "moonstone",
+    "glass_pane"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "moon_lamp"
+   }
+  },
+  {
+   "id": "iron_chair",
+   "in": [
+    "iron_ingot",
+    "cloth"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "iron_chair"
+   }
+  },
+  {
+   "id": "lava_lamp",
+   "in": [
+    "sulfur",
+    "glass_pane",
+    "obsidian"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "lava_lamp"
+   }
+  },
+  {
+   "id": "leather_chair",
+   "in": [
+    "leather",
+    "plank"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "leather_chair"
+   }
+  },
+  {
+   "id": "pearl_statue",
+   "in": [
+    "pearl",
+    "brick",
+    "shell"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "pearl_statue"
+   }
+  }
  ]
 }
