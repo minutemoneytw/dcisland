@@ -148,15 +148,18 @@ def write_json(path, obj):
     print(f"  {os.path.relpath(path, HERE)}")
 
 # ---------------- 地形 tile ----------------
-def indoor_tile(a, b):
-    """室內地板磚（16×16、可無縫重複）：兩色 8×8 方磚交錯、磚縫較深、磚面上緣一條亮邊。"""
-    cv = Canvas(16, 16)
-    for y in range(16):
-        for x in range(16):
-            c = a if ((x // 8) + (y // 8)) % 2 == 0 else b
-            if x % 8 == 0 or y % 8 == 0:
+INDOOR_REPEAT = 3   # 室內地板的方磚放大倍數：圖是 16n×16n，客戶端用 groundRepeat 分成 n×n 格各畫一塊（方磚邊長＝8n 像素）
+
+def indoor_tile(a, b, n=INDOOR_REPEAT):
+    """室內地板磚（16n×16n、可無縫重複）：兩色方磚交錯（每塊 8n×8n）、磚縫較深、磚面上緣一條亮邊。"""
+    cv = Canvas(16 * n, 16 * n)
+    sq = 8 * n
+    for y in range(16 * n):
+        for x in range(16 * n):
+            c = a if ((x // sq) + (y // sq)) % 2 == 0 else b
+            if x % sq == 0 or y % sq == 0:
                 c = shade(c, .86)
-            elif y % 8 == 1:
+            elif y % sq == 1:
                 c = shade(c, 1.06)
             cv.set(x, y, c)
     return cv
@@ -2224,6 +2227,8 @@ def main():
             td["tables"] = TABLES_BY_TERRAIN[t["id"]]
         if t.get("layout"):
             td["layout"] = t["layout"]
+            if t["layout"] == "room":
+                td["groundRepeat"] = INDOOR_REPEAT   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
         if t.get("campfire") is False:
             td["campfire"] = False
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉

@@ -32,5 +32,6 @@
   }
  ],
  "layout": "room",
+ "groundRepeat": 3,
  "campfire": false
 }
