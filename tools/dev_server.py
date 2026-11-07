@@ -1284,7 +1284,7 @@ class Room:
                 return None
             self.dragon_regen(terrain, now)   # 扣血前先把該補的血補上（之後廣播的 hp 是回血後的值）
             try:
-                dmg = sk["dmg"] if sk else max(1, min(dl_hit_max((c.get("state") or {}).get("lvl") or 1), round(float(msg.get("dmg") or 1))))   # 夾值隨攻擊者等級放寬（dl_hit_max）
+                dmg = sk["dmg"] if sk else max(1, min(dl_hit_max(player_lvl_of(c)), round(float(msg.get("dmg") or 1))))   # 夾值隨攻擊者等級放寬（dl_hit_max）
             except (TypeError, ValueError):
                 dmg = 1
             if now < d.get("vuln_until", 0.0):
@@ -1641,7 +1641,7 @@ class Room:
                 self.lurk_hits[cid] = (terrain, now - D_CD * 1000)   # 技能命中也算攻擊者（仇恨候選），但不佔一般攻擊的間隔
             L["last_hit_at"] = now
             try:
-                dmg = sk["dmg"] if sk else max(1, min(dl_hit_max(st.get("lvl") or 1), round(float(msg.get("dmg") or 1))))   # 夾值隨攻擊者等級放寬（dl_hit_max）
+                dmg = sk["dmg"] if sk else max(1, min(dl_hit_max(player_lvl_of(c)), round(float(msg.get("dmg") or 1))))   # 夾值隨攻擊者等級放寬（dl_hit_max）
             except (TypeError, ValueError):
                 dmg = 1
             L["hp"] -= dmg

@@ -1185,7 +1185,7 @@ export class Island {
     const h = this.dragonHits.get(ws);
     if (!sk && now - (h ? h.t : 0) < D_CD_MS) return;   // 一般攻擊的間隔；職業技能另有自己的冷卻
     this.regenDragon(terrain, now);   // 扣血前先把該補的血補上（之後廣播的 hp 是回血後的值）
-    let dmg = sk ? sk.dmg : Math.max(1, Math.min(dlHitMax(att.state.lvl), Math.round(Number(msg.dmg) || 1)));   // 夾值隨攻擊者等級放寬（dlHitMax）
+    let dmg = sk ? sk.dmg : Math.max(1, Math.min(dlHitMax(this.playerLvlOf(att)), Math.round(Number(msg.dmg) || 1)));   // 夾值隨攻擊者等級放寬（dlHitMax）；等級由伺服器決定（訪客 Lv 1，不信 state.lvl）
     if (now < (d.vulnUntil || 0)) dmg += 1;   // 破綻（近戰輸出的職能技能）：每擊 +1
     const [ph, pos] = this.dragonPhase(terrain, now);
     if (ph === "dash") return;     // 龍衝飛行中打不到（開眼/預警/歇腳與散步時都打得到）
@@ -1705,7 +1705,7 @@ export class Island {
     if (!sk) this.lurkHits.set(ws, { terrain, t: now });
     else if (!h || h.t < now - D_CD_MS) this.lurkHits.set(ws, { terrain, t: now - D_CD_MS });   // 技能命中也算攻擊者（仇恨候選），但不佔一般攻擊的間隔
     L.lastHitAt = now;
-    L.hp -= sk ? sk.dmg : Math.max(1, Math.min(dlHitMax(att.state.lvl), Math.round(Number(msg.dmg) || 1)));   // 夾值隨攻擊者等級放寬（dlHitMax）
+    L.hp -= sk ? sk.dmg : Math.max(1, Math.min(dlHitMax(this.playerLvlOf(att)), Math.round(Number(msg.dmg) || 1)));   // 夾值隨攻擊者等級放寬（dlHitMax）
     if (L.hp <= 0) {
       const killLv = L.lvl || 1;
       this.lurkers.delete(terrain);
