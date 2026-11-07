@@ -228,29 +228,33 @@ def xp_death_loss(xp):
     return min(i["cur"], max(1, math.ceil(i["need"] * .05)))
 
 
-# ---- 島主與深海魚人的等級（第 3 步；與 worker/src/index.js 的 dl* 及 client/js/main.js 同式，三邊一起改）----
-# 島主：等級跟島主狀態存一起（dragon_state 加 "xp" 欄位，本機版重開就清空），永不重置、無上限；擊倒玩家得 XP＝10＋2×受害者等級。
-# 每級需求 20＋10×(Lv−1)；每級血量上限 +25（基礎 D_HP）；爪擊與台詞招式每 2 級 +1（命令檢定不隨等級變強：倒地不看血量）
+# ---- 島主與深海魚人的等級（2026-11-07 改成「強度等級」；與 worker/src/index.js 及 client/js/main.js 同式，三邊一起改）----
+# 島主：不再有 XP、也不再靠玩家倒地成長。**強度等級**＝戰鬥開始（被打／被挑釁，且距離上一次被打超過 D_DROPOUT）那一刻，
+# 依在場玩家（同一座地形、連線中）算一次並鎖定到這場戰鬥結束：round(平均等級 × (1 + 0.15 × (人數−1)))，至少 1、上限 DL_LV_MAX。
+# 玩家等級一律由伺服器決定（player_lvl_of）：登入且有伺服器存檔的用存檔等級，訪客／沒有紀錄的人一律 Lv 1（不信客戶端自報的 state.lvl）。
+# 每級血量上限 +25（基礎 D_HP）；爪擊與台詞招式每 2 級 +1（命令檢定不隨等級變強：倒地不看血量）
 DL_HP_UP = 25
+DL_LV_MAX = 100          # 強度等級上限（保險）
+DL_PER_EXTRA = 0.15      # 每多一位在場玩家，強度 +15%
 
 
-def dl_xp_need(lv):
-    """島主每級需求 XP：20＋10×(Lv−1)。"""
-    return 20 + 10 * (lv - 1)
-
-
-def dl_lv(xp):
-    """島主等級（XP 無上限直算；XP_MAX 200000 也只到約 200 級，迴圈安全）。"""
-    lv, rest = 1, max(0, int(xp or 0))
-    while rest >= dl_xp_need(lv):
-        rest -= dl_xp_need(lv)
-        lv += 1
-    return lv
+def dragon_lv(d):
+    """島主目前的強度等級（戰鬥開始時鎖定）。"""
+    return max(1, int(d.get("lvl") or 1))
 
 
 def dragon_max_hp(d):
-    """目前等級的島主血量上限（回血夾這裡）。"""
-    return D_HP + DL_HP_UP * (dl_lv(d.get("xp", 0)) - 1)
+    """目前強度的島主血量上限（回血夾這裡）。"""
+    return D_HP + DL_HP_UP * (dragon_lv(d) - 1)
+
+
+def strength_level(lvls):
+    """在場玩家等級 → 強度等級：round(平均 × (1 + 0.15 × (人數−1)))，至少 1、上限 DL_LV_MAX（四捨五入與 JS 的 Math.round 一致）。"""
+    n = len(lvls)
+    if not n:
+        return 1
+    avg = sum(lvls) / n
+    return min(DL_LV_MAX, max(1, int(avg * (1 + DL_PER_EXTRA * (n - 1)) + 0.5)))
 
 
 def dl_dmg_bonus(lv):
@@ -258,7 +262,7 @@ def dl_dmg_bonus(lv):
     return (max(1, int(lv)) - 1) // 2
 
 
-# 深海魚人：session 制——等級只在「這一隻」存活期成長（每殺 1 人 +1 級），消失／被打倒就重來（只放記憶體，天然重置）；
+# 深海魚人：等級＝釣到牠的人的等級（出生時決定、一生不變；伺服器依 player_lvl_of：登入者用存檔等級、訪客 Lv 1），不再因殺人升級；
 # 每級血量上限 +5（基礎 L_HP）；爪擊每 3 級 +1
 L_HP_UP = 5
 
@@ -289,7 +293,14 @@ def dl_hit_max(lvl):
 
 def dragon_hp_msg(d):
     """島主 hp 廣播：把等級與血量上限一起帶出（升級時客戶端靠這則跟上）。"""
-    return {"t": "dragon", "ev": "hp", "hp": d["hp"], "lvl": dl_lv(d.get("xp", 0)), "max": dragon_max_hp(d)}
+    return {"t": "dragon", "ev": "hp", "hp": d["hp"], "lvl": dragon_lv(d), "max": dragon_max_hp(d)}
+
+
+def player_lvl_of(c):
+    """玩家等級（強度等級、魚人等級、打島主的傷害上限都用這個）：登入且伺服器有存檔才採用存檔等級，其餘一律 Lv 1（不信客戶端自報的 state.lvl）。"""
+    if c and c.get("user") and c.get("xp_known") and isinstance(c.get("xp"), (int, float)):
+        return xp_info(c["xp"])["lv"]
+    return 1
 
 
 XP_DB = {}               # Discord 使用者 ID -> 總 XP（本機版存記憶體，重開就清空；正式站存在 Registry 的 xp:<uid>）
@@ -391,7 +402,6 @@ D_STAFF_RANGE = 440       # 法杖（遠距詠唱）打島主的最大距離：�
 D_RANGE = 100            # 玩家打島主的攻擊距離（客戶端以武器尖端為準：判定圈 58 + 武器伸出 30 = 88，留延遲）
 D_DRIFT_TOLER = 600      # 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 D_CD = 0.3               # 同一條連線兩次打島主的最短間隔（秒）
-DEATH_CREDIT_MIN = 25.0  # 同一條連線的「倒地記帳」（餵島主 XP／魚人升級）最短間隔（秒；與 worker 的 DEATH_CREDIT_MIN_MS 一致）：復活要 30 秒，正常玩法不會更密；擋住反覆切 state.dead 灌島主等級
 D_HIT_MAX = 4            # 一般攻擊打島主／深海魚人的傷害上限（與 worker 的 D_HIT_MAX 一致；2026-11-05 由 2 放寬）。夾值隨攻擊者等級放寬（每 3 級 +1，見 dl_hit_max）
 D_PROVOKE_CD = 15.0      # 挑釁冷卻（每條連線，秒；與 worker/src/index.js 的 D_PROVOKE_CD_MS 一致）
 D_PROVOKE_RANGE = 240    # 挑釁範圍（比攻擊距離寬：把島主拉過來的是「聲東擊西」，不需要貼臉）
@@ -794,7 +804,7 @@ class Room:
             d = self.dragons[terrain] = {"hp": D_HP, "st": "idle", "pos": list(D_CENTER), "aim_tms": 0.0, "dead_at": 0.0,
                            "gen": 0, "wander": None, "wander_gen": 0, "cooldown_until": 0.0, "say_until": 0.0,
                            "warp": [0, 0], "atk": [0, 0], "unit": [0, 0], "dest": [0, 0], "dash_len": 0.0, "beam": [0, 0],
-                           "regen_t": 0.0, "aggro": None, "last_hit_at": 0.0, "quote": None, "last_line": -1, "xp": 0}
+                           "regen_t": 0.0, "aggro": None, "last_hit_at": 0.0, "quote": None, "last_line": -1, "lvl": 1}
         return d
 
     def dragon_regen(self, terrain, now):
@@ -917,7 +927,7 @@ class Room:
         self.dragon_regen(terrain, now_ms)   # 讀快照前先把該補的血補上（快照帶 hp）
         ph, pos, ms = self.dragon_phase(now_ms, terrain)
         d = self.dragon_state(terrain)
-        o = {"ph": ph, "x": pos[0], "y": pos[1], "hp": d["hp"], "lvl": dl_lv(d.get("xp", 0)), "max": dragon_max_hp(d)}
+        o = {"ph": ph, "x": pos[0], "y": pos[1], "hp": d["hp"], "lvl": dragon_lv(d), "max": dragon_max_hp(d)}
         if d["aggro"]:   # 仇恨中：附上追殺目標（中途進場的人才知道牠在戰鬥）
             o["aggro"] = d["aggro"]["id"]
         if ph == "aim":
@@ -1086,7 +1096,7 @@ class Room:
         d["cooldown_until"] = fires[-1] + D_RAGE_MS   # 不動 wander_gen：仇恨 tick 裡呼叫時，這次 tick 排的下一次還要有效
         print(f"[dragon {time.strftime('%H:%M:%S')}] {terrain} 台詞招式 #{q['line']} {q['skills']}", file=sys.stderr, flush=True)
         return ({"t": "dragon", "ev": "say", "x": d["pos"][0], "y": d["pos"][1], "ms": D_SAY_MS, "line": q["line"],
-                 "lvl": dl_lv(d.get("xp", 0))},
+                 "lvl": dragon_lv(d)},
                 (fires[0] - now) / 1000)
 
     def _quote_targets(self, terrain, skill, d):
@@ -1111,7 +1121,7 @@ class Room:
         while q["fired"] < len(q["skills"]) and now >= q["fires"][q["fired"]] - 30:
             sk = q["skills"][q["fired"]]
             outs.append({"t": "dragon", "ev": "qfire", "skill": sk, "i": q["fired"], "x": d["pos"][0], "y": d["pos"][1],
-                         "lvl": dl_lv(d.get("xp", 0)), "ids": self._quote_targets(terrain, sk, d)})
+                         "lvl": dragon_lv(d), "ids": self._quote_targets(terrain, sk, d)})
             q["fired"] += 1
         if q["fired"] >= len(q["skills"]):
             d["quote"] = None
@@ -1196,7 +1206,7 @@ class Room:
                 d["pos"] = [pos[0], pos[1]]
                 print(f"[dragon {time.strftime('%H:%M:%S')}] {terrain} 爪擊 → {cid}（距離 {dist:.0f}）", file=sys.stderr, flush=True)
                 outs.append({"t": "dragon", "ev": "claw", "x": pos[0], "y": pos[1], "tx": tx, "ty": ty,
-                             "lvl": dl_lv(d.get("xp", 0)), "id": cid})
+                             "lvl": dragon_lv(d), "id": cid})
         else:
             w = d["wander"]
             # 腿走完、或走了 0.6 秒就重新瞄準：緊咬目標現在的位置（否則島主只會抓到幾秒前的舊位置＝抓空氣）
@@ -1298,6 +1308,9 @@ class Room:
             if not near:
                 return self._drej(terrain, f"太遠 dist={dist:.0f}（島主=({pos[0]:.0f},{pos[1]:.0f}) 打擊點=({ax:.0f},{ay:.0f}) ph={ph}）")
             self.dragon_hits[cid] = (terrain, now)   # 仇恨計時用：D_DROPOUT 內打過就算現役攻擊者
+            fight_out = self._ensure_fight(terrain, d, now)   # 新的一場戰鬥：依在場玩家鎖定強度（要在更新 last_hit_at 之前）
+            if fight_out:
+                outs.append(fight_out)
             d["hp"] -= dmg
             d["last_hit_at"] = now
             if d["hp"] <= 0:
@@ -1309,7 +1322,7 @@ class Room:
                 d["aggro"] = None
                 d["wander_gen"] += 1   # 作廢散步 tick
                 dead_gen = d["gen"]
-                award_lv = dl_lv(d["xp"])   # 獎勵按被擊倒當下的等級；xp 不清零（島主等級存一起、永不重置）
+                award_lv = dragon_lv(d)   # 獎勵按被擊倒當下的強度等級
                 outs.append({"t": "dragon", "ev": "dead", "x": pos[0], "y": pos[1], "lvl": award_lv})
             elif ph == "idle" and self.dragon_maps.get(terrain) and now >= d["cooldown_until"] and (q := self._pick_quote(terrain)):
                 # 黃金肥龍：80% 台詞招式（說台詞→依序放招）
@@ -1417,6 +1430,9 @@ class Room:
                 return self._drej(terrain, f"挑釁拒絕: 太遠 dist={dist:.0f}（島主=({pos[0]:.0f},{pos[1]:.0f}) ph={ph}）")
             self.provokes[cid] = now
             self.dragon_hits[cid] = (terrain, now)   # 挑釁者視同現役攻擊者：進仇恨換人的候選池、並重置脫離計時
+            fight_out = self._ensure_fight(terrain, d, now)   # 新的一場戰鬥：依在場玩家鎖定強度（要在更新 last_hit_at 之前）
+            if fight_out:
+                outs.append(fight_out)
             d["last_hit_at"] = now
             if d.get("aggro"):   # 已在追殺別人（含說台詞中）：仇恨直接轉向挑釁者
                 d["aggro"] = {"id": cid, "rotate_at": now + D_AGGRO_MS, "claw_at": now + D_CLAW_MS}
@@ -1483,7 +1499,7 @@ class Room:
             d["cooldown_until"] = now + cast_ms + D_RAGE_MS
             ev = "gaze" if style == "gaze" else "beam" if style == "beam" else "command"
             msg = {"t": "dragon", "ev": ev, "x": d["pos"][0], "y": d["pos"][1], "castMs": cast_ms, "hp": d["hp"],
-                   "lvl": dl_lv(d.get("xp", 0)), "max": dragon_max_hp(d)}
+                   "lvl": dragon_lv(d), "max": dragon_max_hp(d)}
             if style == "command":
                 msg["kind"] = d["command"]
             else:
@@ -1499,7 +1515,7 @@ class Room:
         d["cooldown_until"] = now + D_CAST_MS + d["dash_len"] / D_DASH * 1000 + D_REST_MS + D_RAGE_MS
         return {"t": "dragon", "ev": "aim", "x": warp[0], "y": warp[1], "fx": d["pos"][0], "fy": d["pos"][1],
                 "tx": ax, "ty": ay, "dx": d["dest"][0], "dy": d["dest"][1], "castMs": D_CAST_MS, "hp": d["hp"],
-                "lvl": dl_lv(d.get("xp", 0)), "max": dragon_max_hp(d)}
+                "lvl": dragon_lv(d), "max": dragon_max_hp(d)}
 
     def _dragon_respawn(self, gen, terrain):
         out2 = leg_delay = None
@@ -1509,10 +1525,11 @@ class Room:
                 return
             m = self.dragon_maps.get(terrain)
             pos = dragon_edge(m, random.random() * math.pi * 2) if m else list(D_CENTER)
+            d["lvl"] = 1   # 強度回到 1（下一場戰鬥再依在場玩家算）
             d.update(st="idle", hp=dragon_max_hp(d), pos=pos, aim_tms=0.0, atk=[0, 0], wander=None, aggro=None, quote=None, say_until=0.0, command=None)
             d["wander_gen"] += 1   # 作廢舊散步 tick
             out = {"t": "dragon", "ev": "spawn", "x": pos[0], "y": pos[1], "hp": d["hp"],
-                   "lvl": dl_lv(d.get("xp", 0)), "max": dragon_max_hp(d)}
+                   "lvl": dragon_lv(d), "max": dragon_max_hp(d)}
             if self._has_clients(terrain):
                 out2 = self._dragon_start_leg(terrain)
                 if out2:
@@ -1524,28 +1541,22 @@ class Room:
         if leg_delay is not None:
             self._schedule_wander_tick(leg_delay, wgen, terrain)
 
-    def credit_mob_kill(self, cid, victim_lvl, terrain):
-        """島主／深海魚人擊倒玩家的等級記帳（第 3 步；與 worker/src/index.js 的 creditMobKill 同一套）：
-        死因都是客戶端自判（state.dead 0→1），伺服器用「誰在追他」推斷凶手——該地形魚人的 aggro.id 是死者＝牠殺的
-        （session 等級 +1，血量上限 +5 並回一點血）；否則該地形島主活著就記牠的 XP
-        （爪擊／龍衝／石化／波動砲／台詞招式都可能害死；石化每秒扣 1 的 tick 不隨等級變）。
-        島主得 XP＝10＋2×受害者等級、順手回一點血；xp 存 dragon_state（等級存一起、永不重置）。
-        需在鎖內算（broadcast 不能在鎖內呼叫）；回要廣播的訊息或 None。"""
-        if not terrain:
+    def _ensure_fight(self, terrain, d, now):
+        """戰鬥開始：距離上一次被打／被挑釁超過 D_DROPOUT（或從沒被打過）就是新的一場，依在場玩家重算強度並鎖定到這場結束；
+        強度變了就把血量按比例換算（不會突然滿血或殘血），回 hp 廣播訊息（帶 lvl／max）；沒變回 None。
+        需在鎖內呼叫、且要在更新 last_hit_at 之前（與 worker 的 ensureFight 同一套）。"""
+        if d.get("last_hit_at") and now - d["last_hit_at"] <= D_DROPOUT:
+            return None   # 同一場戰鬥：維持鎖定的強度
+        lvls = [player_lvl_of(c) for c in self.clients.values() if c.get("terrain") == terrain and c.get("state")]
+        b = strength_level(lvls)
+        if b == dragon_lv(d):
             return None
-        with self.lock:
-            L = self.lurkers.get(terrain)
-            if L and isinstance(L.get("aggro"), dict) and L["aggro"].get("id") == cid:
-                L["lvl"] = (L["lvl"] or 1) + 1
-                L["max"] = lurker_max_hp(L)
-                L["hp"] = min(L["max"], L["hp"] + L_HP_UP)
-                return {"t": "lurker", "ev": "hp", "hp": L["hp"], "lvl": L["lvl"], "max": L["max"]}
-            d = self.dragons.get(terrain)
-            if not d or d["st"] == "dead":
-                return None   # 沒有島主／已被擊倒：記不到任何人頭上
-            d["xp"] = max(0, d.get("xp", 0)) + 10 + 2 * max(1, int(victim_lvl or 1))   # 擊倒玩家得 XP＝10＋2×受害者等級
-            d["hp"] = min(dragon_max_hp(d), d["hp"] + DL_HP_UP)
-            return dragon_hp_msg(d)
+        old_max = dragon_max_hp(d)
+        d["lvl"] = b
+        new_max = dragon_max_hp(d)
+        d["hp"] = max(1, min(new_max, int(d["hp"] * new_max / old_max + 0.5)))
+        d["regen_t"] = now
+        return dragon_hp_msg(d)
 
     # ---- 釣上來的敵對怪物（lurker；與 worker/src/index.js 的 spawnLurker／lurkerHit／stepLurker 同一套）----
     def lurker_pos(self, L, now):
@@ -1585,12 +1596,14 @@ class Room:
             land = dragon_nearest_land(m, fx, fy) if m else None
             pos = list(land) if land else [st.get("x", fx), st.get("y", fy)]
             now = time.time() * 1000
-            self.lurkers[terrain] = {"mob": mob, "hp": L_HP, "max": L_HP, "lvl": 1, "pos": pos, "wander": None, "last_hit_at": now,
+            lv = player_lvl_of(c)   # 魚人等級＝釣到牠的人的等級（出生時決定）
+            lmax = lurker_max_hp({"lvl": lv})
+            self.lurkers[terrain] = {"mob": mob, "hp": lmax, "max": lmax, "lvl": lv, "pos": pos, "wander": None, "last_hit_at": now,
                                      "aggro": {"id": cid, "rotate_at": now + D_AGGRO_MS, "claw_at": now + L_CLAW_MS}}
             self.lurk_hits[cid] = (terrain, now)
             print(f"[lurker {time.strftime('%H:%M:%S')}] {terrain} 釣到 {mob} @({pos[0]:.0f},{pos[1]:.0f})", file=sys.stderr, flush=True)
             msg = {"t": "lurker", "ev": "spawn", "terrain": terrain, "mob": mob, "x": pos[0], "y": pos[1], "fx": fx, "fy": fy,
-                   "hp": L_HP, "max": L_HP, "lvl": 1, "id": cid, "name": st.get("name") or "玩家"}
+                   "hp": lmax, "max": lmax, "lvl": lv, "id": cid, "name": st.get("name") or "玩家"}
         self._schedule_lurker_tick(0.06, terrain)
         return terrain, msg
 
@@ -1909,7 +1922,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         last_dragon_hit = 0.0   # 打島主的每連線冷卻（與 last_hit 同款）
         last_fish = 0.0         # 釣魚結果的每連線冷卻
         last_xp_mob = 0.0       # 擊倒非主動怪的 XP 冷卻（2026-11-07）
-        last_death_credit = 0.0   # 倒地記帳的每連線冷卻（DEATH_CREDIT_MIN）
         last_sign = 0.0         # 改看板的每連線冷卻
         commit_tokens, commit_t = float(COMMIT_BURST), time.time()   # 保存擺設的令牌桶
         try:
@@ -1985,16 +1997,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         loss = xp_death_loss(c.get("xp") or 0)
                         if loss > 0 and random.random() < .1:
                             xp_grant(c, -loss, "death")
-                    # 島主／魚人擊倒玩家的等級記帳（第 3 步）：0→1 的那格才判
-                    if not was_dead and st["dead"]:
-                        t_now = time.time()
-                        if t_now - last_death_credit >= DEATH_CREDIT_MIN:   # 同一條連線的最短間隔
-                            last_death_credit = t_now
-                            # 受害者等級：只有登入、且等級是伺服器存檔算出來的才採用；其餘（訪客／還沒有紀錄）客戶端自己報的一律當 Lv 1
-                            victim_lvl = (st.get("lvl") or 1) if (user and c and c.get("xp_known")) else 1
-                            kill_out = room.credit_mob_kill(cid, victim_lvl, cur)
-                            if kill_out and cur:
-                                room.broadcast(kill_out, terrain=cur)
                 elif t == "xpsync":   # 舊存檔一次性上繳（2026-11-07 使用者定 (a)）：伺服器沒有紀錄才收，有就回現值（冪等）
                     c = room.clients.get(cid)
                     user = c.get("user") if c else None
