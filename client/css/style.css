@@ -272,3 +272,33 @@ body {
 .craft-mini canvas { width: 28px; height: 28px; image-rendering: pixelated; }
 .craft-mini.out { color: var(--gold); }
 .craft-note:hover { background: rgba(255, 255, 255, .06); }
+
+/* ---- 和平島遊戲桌的遊戲畫面 ---- */
+#tableBox { position: fixed; inset: 0; z-index: 60; background: rgba(8, 12, 20, .95); display: flex; align-items: center; justify-content: center; overflow: auto; }
+#tableBox.hidden { display: none !important; }
+.table-panel { position: relative; width: min(880px, 96vw); max-height: 96vh; overflow-y: auto; padding: 14px 16px; }
+.table-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.table-status { text-align: center; font-size: 15px; color: var(--text); margin: 6px 0; }
+.table-status.mine { color: #ffe08a; font-weight: bold; }
+.table-result { text-align: center; font-size: 18px; color: #ffb347; font-weight: bold; margin: 6px 0; }
+.table-seats { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 12px 0; }
+.table-seat { flex: 1 1 180px; max-width: 200px; min-height: 96px; border: 1px solid var(--gold-dim); background: rgba(255, 255, 255, .04); padding: 8px; text-align: center; }
+.table-seat.you { border-color: var(--gold); }
+.table-seat.turn { border-color: #ffe08a; box-shadow: 0 0 10px rgba(255, 224, 138, .5); }
+.table-seat.out { opacity: .55; }
+.table-seat.empty { border-style: dashed; color: var(--text-dim); display: flex; align-items: center; justify-content: center; }
+.table-name { font-size: 14px; color: var(--text); }
+.table-tag, .table-count, .table-label { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.table-cards { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; margin-top: 6px; min-height: 40px; }
+.table-cards.big { gap: 6px; }
+.tcard { width: 30px; height: 42px; border-radius: 4px; border: 1px solid #1a1612; background: #f6f2e6; color: #1e1e24; font-size: 12px; font-weight: bold; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.table-cards.big .tcard { width: 44px; height: 62px; font-size: 16px; }
+.tcard.red { color: #d83a3a; }
+.tcard.joker { background: #f3d070; color: #6a2a8a; }
+.tcard.back { background: repeating-linear-gradient(45deg, #a83a38, #a83a38 4px, #c9544f 4px, #c9544f 8px); border-color: #f6f2e6; }
+.tcard.back.pick { cursor: pointer; outline: 2px solid #ffe08a; }
+.tcard.back.pick:hover { transform: translateY(-4px); }
+.table-hand { text-align: center; margin: 10px 0; }
+.table-btns { display: flex; gap: 10px; justify-content: center; margin: 12px 0; }
+.table-log { max-height: 120px; overflow-y: auto; font-size: 12px; color: var(--text-dim); border-top: 1px solid rgba(255, 255, 255, .08); padding-top: 6px; margin-top: 8px; }
+.table-rules { font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.5; }

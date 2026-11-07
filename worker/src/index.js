@@ -464,6 +464,147 @@ async function exchangeToken(request, env) {
   return json({ access_token: tok.access_token, scope: tok.scope, user, session: await signSession(env, user) });
 }
 
+// ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
+// 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
+// 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
+// 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
+const TABLE_DEFS = { peace: { t1: "oldmaid" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4] };           // 遊戲 → [開局最少人數, 入座上限]
+const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
+const OM_SYM = { S: "♠", H: "♥", D: "♦", C: "♣" };
+const omRank = c => (c === "JK" ? null : Number(c.slice(1)));
+const omLabel = c => {
+  const r = omRank(c);
+  return r === null ? "鬼牌" : OM_SYM[c[0]] + ({ 1: "A", 11: "J", 12: "Q", 13: "K" }[r] || String(r));
+};
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+// 丟掉成對的牌（同點數兩張一對；鬼牌不成對）。回 [剩下的牌（已洗亂）, 丟掉的牌]
+function omDropPairs(hand) {
+  const by = new Map(), keep = [], gone = [];
+  for (const c of hand) { const r = omRank(c); if (!by.has(r)) by.set(r, []); by.get(r).push(c); }
+  for (const [r, cs] of by) {
+    if (r === null) { keep.push(...cs); continue; }
+    const n = Math.floor(cs.length / 2) * 2;
+    gone.push(...cs.slice(0, n)); keep.push(...cs.slice(n));
+  }
+  return [shuffle(keep), gone];
+}
+const tblNew = (id, game) => ({ id, game, phase: "lobby", seats: [], specs: [], turn: -1, result: null, log: [] });
+function tblFind(t, cid) {
+  let i = t.seats.findIndex(s => s.cid === cid);
+  if (i >= 0) return ["seat", i];
+  i = t.specs.findIndex(s => s.cid === cid);
+  return i >= 0 ? ["spec", i] : [null, -1];
+}
+function tblLog(t, text) { t.log.push(text); if (t.log.length > 8) t.log.splice(0, t.log.length - 8); }
+function tblNextActive(t, i) {   // 座位 i 之後（順時針）第一個還沒出局的座位；沒有回 -1
+  const n = t.seats.length;
+  for (let k = 1; k <= n; k++) { const j = (i + k) % n; if (!t.seats[j].out) return j; }
+  return -1;
+}
+function tblResetSeats(t) {
+  for (const s of t.seats) { s.ready = false; s.hand = []; s.out = false; }
+  t.phase = "lobby"; t.turn = -1;
+}
+function tblJoin(t, cid, name) {
+  if (tblFind(t, cid)[0]) return;
+  const mx = GAME_LIMITS[t.game][1];
+  if (t.phase === "lobby" && t.seats.length < mx) { t.seats.push({ cid, name, ready: false, hand: [], out: false }); tblLog(t, `${name} 入座了`); }
+  else { t.specs.push({ cid, name }); tblLog(t, `${name} 來觀戰`); }
+}
+function tblLeave(t, cid) {
+  const [role, i] = tblFind(t, cid);
+  if (role === "spec") t.specs.splice(i, 1);
+  else if (role === "seat") {
+    const name = t.seats[i].name;
+    if (t.phase === "playing") {   // 使用者定：有人離開（含斷線）直接結束這一局
+      t.result = { aborted: true, text: `${name} 離開了，這一局結束` };
+      tblResetSeats(t);
+      tblLog(t, t.result.text);
+    } else tblLog(t, `${name} 離開了座位`);
+    t.seats.splice(i, 1);
+  }
+}
+function tblSit(t, cid) {
+  const [role, i] = tblFind(t, cid);
+  if (role !== "spec" || t.phase !== "lobby" || t.seats.length >= GAME_LIMITS[t.game][1]) return;
+  const s = t.specs.splice(i, 1)[0];
+  t.seats.push({ cid, name: s.name, ready: false, hand: [], out: false });
+  tblLog(t, `${s.name} 入座了`);
+}
+function tblReady(t, cid, v) {
+  const [role, i] = tblFind(t, cid);
+  if (role !== "seat" || t.phase !== "lobby") return;
+  t.seats[i].ready = !!v;
+  if (t.seats.length >= GAME_LIMITS[t.game][0] && t.seats.every(s => s.ready)) omStart(t);   // 使用者定：全員按「準備」才開始
+}
+function omStart(t) {
+  const deck = [];
+  for (const s of "SHDC") for (let r = 1; r <= 13; r++) deck.push(`${s}${r}`);
+  deck.push("JK"); shuffle(deck);
+  const n = t.seats.length;
+  t.seats.forEach((s, k) => { s.hand = deck.filter((_, j) => j % n === k); s.out = false; s.ready = false; });
+  t.result = null; t.phase = "playing";
+  tblLog(t, "牌局開始，發牌！");
+  for (const s of t.seats) {
+    const [keep, gone] = omDropPairs(s.hand);
+    s.hand = keep;
+    if (gone.length) tblLog(t, `${s.name} 先丟掉了 ${gone.length / 2} 對牌`);
+    s.out = !s.hand.length;
+  }
+  const alive = t.seats.map((s, i) => (s.out ? -1 : i)).filter(i => i >= 0);
+  if (alive.length <= 1) { omFinish(t, alive[0]); return; }
+  t.turn = alive[Math.floor(Math.random() * alive.length)];
+  tblLog(t, `由 ${t.seats[t.turn].name} 先抽牌`);
+}
+function omFinish(t, loser) {
+  const name = t.seats[loser].name;
+  t.result = { loser, name, text: `${name} 抽到鬼牌，輸了！` };
+  tblLog(t, t.result.text);
+  tblResetSeats(t);
+}
+function omDraw(t, cid, idx) {
+  const [role, i] = tblFind(t, cid);
+  if (role !== "seat" || t.phase !== "playing" || i !== t.turn) return;
+  const tgt = tblNextActive(t, i);
+  if (tgt < 0 || tgt === i) return;
+  const me = t.seats[i], th = t.seats[tgt];
+  if (!Number.isInteger(idx) || idx < 0 || idx >= th.hand.length) return;
+  const card = th.hand.splice(idx, 1)[0];
+  me.hand.push(card);
+  tblLog(t, `${me.name} 從 ${th.name} 手上抽了一張牌`);
+  if (card !== "JK") {
+    const mate = me.hand.find(c => c !== card && omRank(c) === omRank(card));
+    if (mate) {
+      me.hand.splice(me.hand.indexOf(card), 1);
+      me.hand.splice(me.hand.indexOf(mate), 1);
+      tblLog(t, `${me.name} 湊成一對（${omLabel(card)}、${omLabel(mate)}）丟掉`);
+    }
+  }
+  shuffle(me.hand);
+  for (const s of [me, th]) if (!s.hand.length && !s.out) { s.out = true; tblLog(t, `${s.name} 的牌出完了，安全過關！`); }
+  const alive = t.seats.map((s, k) => (s.out ? -1 : k)).filter(k => k >= 0);
+  if (alive.length <= 1) { omFinish(t, alive[0]); return; }
+  t.turn = tblNextActive(t, i);
+}
+// 給某條連線看的版本：自己的手牌完整，別人只有張數
+function tblView(t, cid) {
+  const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
+  const v = {
+    id: t.id, game: t.game, phase: t.phase, min: mn, max: mx, role, me: role === "seat" ? i : -1,
+    seats: t.seats.map((s, k) => ({ name: s.name, n: playing ? s.hand.length : 0, ready: s.ready, out: playing ? s.out : false, you: role === "seat" && k === i })),
+    specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
+  };
+  if (role === "seat" && playing) {
+    v.hand = [...t.seats[i].hand].sort((a, b) => ((a === "JK") - (b === "JK")) || ((omRank(a) || 0) - (omRank(b) || 0)) || (a < b ? -1 : a > b ? 1 : 0));
+  }
+  return v;
+}
+const tblInfo = t => ({ game: t.game, n: t.seats.length, s: t.specs.length, max: GAME_LIMITS[t.game][1], play: t.phase === "playing" });
+
 // ============ 一座島 ============
 // 用 WebSocket Hibernation：沒人講話時 DO 可以休眠，不計費也省資源
 export class Island {
@@ -486,6 +627,8 @@ export class Island {
     this.lastFish = new Map();       // ws → 上次釣魚結果的時間（冷卻）
     this.lastXpMob = new Map();      // ws → 上次擊倒非主動怪的時間（XP 夾頻；2026-11-07）
     this.lastDeathCredit = new Map();   // ws → 上次倒地記帳的時間（DEATH_CREDIT_MIN_MS）
+    this.tables = new Map();         // 桌 id → 牌桌狀態（和平島遊戲桌；懶載入 storage，每次變動都寫回）
+    this.lastTbl = new Map();        // ws → 上次牌桌操作的時間（TBL_CD_MS）
     this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
     this.provokes = new Map();       // ws → {terrain, t}：上次挑釁哪座島的島主（冷卻只在成功出手時計）
     this.debuffs = new Map();        // ws → {vuln: t, weak: t}：上次放破綻／降傷的時刻（冷卻只在成功時計）
@@ -800,6 +943,8 @@ export class Island {
   // 玩家進入某地形：每個人各自在自己的地形，只有同地形的人看得到彼此
   async enter(ws, att, v) {
     if (!TERRAIN_RE.test(v) || att.terrain === v) return;
+    if (att.table) await this.tableLeave(ws);   // 換地形：離開牌桌（牌局進行中就結束這一局）
+    att = ws.deserializeAttachment() || att;
     const old = att.terrain;
     // leave 帶 to＝去了哪個地形（讓留下的人顯示「XXX 移動到了OO區域」）；斷線的 leave 不帶
     if (old) this.broadcast({ t: "leave", id: att.id, to: v }, ws, old);
@@ -822,8 +967,96 @@ export class Island {
     }
     const lurker = this.lurkerSnapshot(v);   // 釣上來的怪物（沒有就是 null，客戶端據此清掉殘留的）
     ws.send(JSON.stringify({ t: "enter", terrain: v, players, furn: await this.getFurn(v), floor: floorToList(await this.getFloor(v)), decos, dragon, lurker }));
+    if (TABLE_DEFS[v]) ws.send(JSON.stringify(await this.tableInfoMsg(v)));   // 和平島：給這位玩家各桌目前的人數／狀態
     this.broadcast({ t: "join", id: att.id, name: att.state && att.state.name }, ws, v);
     if (att.state) this.broadcast({ t: "p", id: att.id, s: att.state }, ws, v);
+  }
+
+
+  // ---- 和平島遊戲桌 ----
+  tableGame(tid) {
+    for (const defs of Object.values(TABLE_DEFS)) if (defs[tid]) return defs[tid];
+    return null;
+  }
+  liveIds() { return new Set(this.state.getWebSockets().map(w => (w.deserializeAttachment() || {}).id)); }
+  // 載入一桌（沒有就建立空桌）；載入時把已經不在線的連線踢出（DO 重啟／斷線當下沒處理到的）
+  async getTable(tid) {
+    let t = this.tables.get(tid);
+    if (t) return t;
+    const game = this.tableGame(tid);
+    if (!game) return null;
+    t = (await this.state.storage.get("table:" + tid)) || tblNew(tid, game);
+    const alive = this.liveIds();
+    for (const m of [...t.seats, ...t.specs]) if (!alive.has(m.cid)) tblLeave(t, m.cid);
+    this.tables.set(tid, t);
+    return t;
+  }
+  async saveTable(t) {
+    if (!t.seats.length && !t.specs.length) { this.tables.delete(t.id); await this.state.storage.delete("table:" + t.id); }
+    else await this.state.storage.put("table:" + t.id, t);
+  }
+  sendToId(cid, msg) {
+    const data = JSON.stringify(msg);
+    for (const w of this.state.getWebSockets()) {
+      if ((w.deserializeAttachment() || {}).id === cid) { try { w.send(data); } catch { /* 對方已斷線 */ } }
+    }
+  }
+  tableNotify(t) { for (const m of [...t.seats, ...t.specs]) this.sendToId(m.cid, { t: "table", id: t.id, v: tblView(t, m.cid) }); }
+  async tableInfoMsg(terrain) {
+    const info = {};
+    for (const [tid, game] of Object.entries(TABLE_DEFS[terrain] || {})) {
+      const t = await this.getTable(tid);
+      info[tid] = t ? tblInfo(t) : { game, n: 0, s: 0, max: GAME_LIMITS[game][1], play: false };
+    }
+    return { t: "tblinfo", info };
+  }
+  async tableBroadcastInfo(terrain) { this.broadcast(await this.tableInfoMsg(terrain), undefined, terrain); }
+  // 離開牌桌（Esc、換地形、斷線）：牌局進行中就結束這一局
+  async tableLeave(ws) {
+    const att = ws.deserializeAttachment() || {};
+    const tid = att.table;
+    if (!tid) return;
+    att.table = null;
+    try { ws.serializeAttachment(att); } catch { /* 連線已關閉：記憶體裡的 att 已改，不影響後面的清理 */ }
+    const t = await this.getTable(tid);
+    if (!t) return;
+    tblLeave(t, att.id);
+    try { ws.send(JSON.stringify({ t: "table", id: tid, v: null })); } catch { /* 已斷線 */ }
+    await this.saveTable(t);
+    this.tableNotify(t);
+    for (const [terr, defs] of Object.entries(TABLE_DEFS)) if (defs[tid]) await this.tableBroadcastInfo(terr);
+  }
+  async tableMsg(ws, att, msg) {
+    const now = Date.now();
+    if (now - (this.lastTbl.get(ws) || 0) < TBL_CD_MS) return;
+    this.lastTbl.set(ws, now);
+    const terr = att.terrain, a = msg.a;
+    if (!terr) return;
+    if (a === "join") {
+      const tid = String(msg.id || ""), game = (TABLE_DEFS[terr] || {})[tid];
+      if (!game) return;
+      if (att.table && att.table !== tid) await this.tableLeave(ws);
+      const t = await this.getTable(tid);
+      const cur = ws.deserializeAttachment() || {};
+      tblJoin(t, att.id, String((att.state && att.state.name) || (att.user && att.user.name) || `玩家${att.id}`).slice(0, 12));
+      cur.table = tid; ws.serializeAttachment(cur);
+      await this.saveTable(t);
+      this.tableNotify(t);
+      await this.tableBroadcastInfo(terr);
+      return;
+    }
+    const tid = (ws.deserializeAttachment() || {}).table;
+    if (!tid) return;
+    if (a === "leave") { await this.tableLeave(ws); return; }
+    const t = await this.getTable(tid);
+    if (!t) return;
+    if (a === "ready") tblReady(t, att.id, msg.v);
+    else if (a === "sit") tblSit(t, att.id);
+    else if (a === "draw") omDraw(t, att.id, msg.idx);
+    else return;
+    await this.saveTable(t);
+    this.tableNotify(t);
+    await this.tableBroadcastInfo(terr);
   }
 
   // 簡易限流：超過就丟棄，不回應
@@ -913,6 +1146,8 @@ export class Island {
           try { ws.send(JSON.stringify({ t: "xp", xp: r.xp, d: 0, k: "init" })); } catch { /* 對方已斷線 */ }
         }
       }
+    } else if (msg.t === "tbl") {   // 和平島遊戲桌（join／leave／ready／sit／draw）；牌局邏輯全在伺服器
+      await this.tableMsg(ws, att, msg);
     } else if (msg.t === "craft") {   // 合成解鎖一筆（素材／家具／配方；客戶端自判，伺服器只存，不驗證 id 是否存在；訪客略過）
       if (att.user && CRAFT_KINDS.includes(msg.k) && ID_RE.test(String(msg.id))) {
         await this.registryCall("/craft", { uid: att.user.id, add: { [msg.k]: [String(msg.id)] } });
@@ -1841,8 +2076,8 @@ export class Island {
     this.broadcast({ t: "furn", items }, null, att.terrain);
   }
 
-  async webSocketClose(ws) { this.leave(ws); await this.flushDragons(true); }   // 有人離線就把節流中的島主狀態全部寫掉（之後可能沒人了，DO 隨時會休眠）
-  async webSocketError(ws) { this.leave(ws); await this.flushDragons(true); }
+  async webSocketClose(ws) { await this.tableLeave(ws); this.leave(ws); await this.flushDragons(true); }   // 有人離線就把節流中的島主狀態全部寫掉（之後可能沒人了，DO 隨時會休眠）
+  async webSocketError(ws) { await this.tableLeave(ws); this.leave(ws); await this.flushDragons(true); }
 
   leave(ws) {
     this.rate.delete(ws);
@@ -1855,6 +2090,7 @@ export class Island {
     this.lastFish.delete(ws);
     this.lastXpMob.delete(ws);
     this.lastDeathCredit.delete(ws);
+    this.lastTbl.delete(ws);
     const att = ws.deserializeAttachment() || {};
     if (att.terrain) this.broadcast({ t: "leave", id: att.id }, ws, att.terrain);
   }

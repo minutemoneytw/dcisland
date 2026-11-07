@@ -610,6 +610,187 @@ def floor_to_list(floor):
     """地板 {(x,y): id} → [[x,y,id],…]（與 Worker 的儲存/廣播格式相同）。"""
     return [[x, y, fid] for (x, y), fid in floor.items()]
 
+# ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
+# 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
+# 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
+TABLE_DEFS = {"peace": {"t1": "oldmaid"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4)}           # 遊戲 → (開局最少人數, 入座上限)
+TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
+OM_SUITS = "SHDC"
+OM_SYM = {"S": "♠", "H": "♥", "D": "♦", "C": "♣"}
+
+def om_rank(card):
+    return None if card == "JK" else int(card[1:])
+
+def om_label(card):
+    r = om_rank(card)
+    return "鬼牌" if r is None else OM_SYM[card[0]] + {1: "A", 11: "J", 12: "Q", 13: "K"}.get(r, str(r))
+
+def om_drop_pairs(hand):
+    """丟掉成對的牌（同點數兩張一對；鬼牌不成對）。回 (剩下的牌（已洗亂）, 丟掉的牌)。"""
+    by = {}
+    for c in hand:
+        by.setdefault(om_rank(c), []).append(c)
+    keep, gone = [], []
+    for r, cs in by.items():
+        if r is None:
+            keep += cs
+            continue
+        n = len(cs) // 2 * 2
+        gone += cs[:n]
+        keep += cs[n:]
+    random.shuffle(keep)
+    return keep, gone
+
+def tbl_new(tid, game):
+    return {"id": tid, "game": game, "phase": "lobby", "seats": [], "specs": [], "turn": -1, "result": None, "log": []}
+
+def tbl_find(t, cid):
+    for i, s in enumerate(t["seats"]):
+        if s["cid"] == cid:
+            return "seat", i
+    for i, s in enumerate(t["specs"]):
+        if s["cid"] == cid:
+            return "spec", i
+    return None, -1
+
+def tbl_log(t, text):
+    t["log"].append(text)
+    del t["log"][:-8]
+
+def tbl_next_active(t, i):
+    """座位 i 之後（順時針）第一個還沒出局的座位；沒有回 -1。"""
+    n = len(t["seats"])
+    for k in range(1, n + 1):
+        j = (i + k) % n
+        if not t["seats"][j]["out"]:
+            return j
+    return -1
+
+def tbl_reset_seats(t):
+    for s in t["seats"]:
+        s["ready"], s["hand"], s["out"] = False, [], False
+    t["phase"], t["turn"] = "lobby", -1
+
+def tbl_join(t, cid, name):
+    if tbl_find(t, cid)[0]:
+        return
+    mn, mx = GAME_LIMITS[t["game"]]
+    if t["phase"] == "lobby" and len(t["seats"]) < mx:
+        t["seats"].append({"cid": cid, "name": name, "ready": False, "hand": [], "out": False})
+        tbl_log(t, f"{name} 入座了")
+    else:
+        t["specs"].append({"cid": cid, "name": name})
+        tbl_log(t, f"{name} 來觀戰")
+
+def tbl_leave(t, cid):
+    role, i = tbl_find(t, cid)
+    if role == "spec":
+        t["specs"].pop(i)
+    elif role == "seat":
+        name = t["seats"][i]["name"]
+        if t["phase"] == "playing":   # 使用者定：有人離開（含斷線）直接結束這一局
+            t["result"] = {"aborted": True, "text": f"{name} 離開了，這一局結束"}
+            tbl_reset_seats(t)
+            tbl_log(t, t["result"]["text"])
+        else:
+            tbl_log(t, f"{name} 離開了座位")
+        t["seats"].pop(i)
+
+def tbl_sit(t, cid):
+    role, i = tbl_find(t, cid)
+    mn, mx = GAME_LIMITS[t["game"]]
+    if role != "spec" or t["phase"] != "lobby" or len(t["seats"]) >= mx:
+        return
+    s = t["specs"].pop(i)
+    t["seats"].append({"cid": cid, "name": s["name"], "ready": False, "hand": [], "out": False})
+    tbl_log(t, f"{s['name']} 入座了")
+
+def tbl_ready(t, cid, v):
+    role, i = tbl_find(t, cid)
+    if role != "seat" or t["phase"] != "lobby":
+        return
+    t["seats"][i]["ready"] = bool(v)
+    mn, mx = GAME_LIMITS[t["game"]]
+    if len(t["seats"]) >= mn and all(s["ready"] for s in t["seats"]):   # 使用者定：全員按「準備」才開始
+        om_start(t)
+
+def om_start(t):
+    deck = [f"{s}{r}" for s in OM_SUITS for r in range(1, 14)] + ["JK"]
+    random.shuffle(deck)
+    n = len(t["seats"])
+    for k, s in enumerate(t["seats"]):
+        s["hand"], s["out"], s["ready"] = deck[k::n], False, False
+    t["result"] = None
+    t["phase"] = "playing"
+    tbl_log(t, "牌局開始，發牌！")
+    for s in t["seats"]:
+        s["hand"], gone = om_drop_pairs(s["hand"])
+        if gone:
+            tbl_log(t, f"{s['name']} 先丟掉了 {len(gone) // 2} 對牌")
+        s["out"] = not s["hand"]
+    alive = [i for i, s in enumerate(t["seats"]) if not s["out"]]
+    if len(alive) <= 1:
+        om_finish(t, alive[0])
+        return
+    t["turn"] = random.choice(alive)
+    tbl_log(t, f"由 {t['seats'][t['turn']]['name']} 先抽牌")
+
+def om_finish(t, loser):
+    name = t["seats"][loser]["name"]
+    t["result"] = {"loser": loser, "name": name, "text": f"{name} 抽到鬼牌，輸了！"}
+    tbl_log(t, t["result"]["text"])
+    tbl_reset_seats(t)
+
+def om_draw(t, cid, idx):
+    role, i = tbl_find(t, cid)
+    if role != "seat" or t["phase"] != "playing" or i != t["turn"]:
+        return
+    tgt = tbl_next_active(t, i)
+    if tgt < 0 or tgt == i:
+        return
+    me, th = t["seats"][i], t["seats"][tgt]
+    if not isinstance(idx, int) or isinstance(idx, bool) or not 0 <= idx < len(th["hand"]):
+        return
+    card = th["hand"].pop(idx)
+    me["hand"].append(card)
+    tbl_log(t, f"{me['name']} 從 {th['name']} 手上抽了一張牌")
+    if card != "JK":
+        mate = next((c for c in me["hand"] if c != card and om_rank(c) == om_rank(card)), None)
+        if mate:
+            me["hand"].remove(card)
+            me["hand"].remove(mate)
+            tbl_log(t, f"{me['name']} 湊成一對（{om_label(card)}、{om_label(mate)}）丟掉")
+    random.shuffle(me["hand"])
+    for s in (me, th):
+        if not s["hand"] and not s["out"]:
+            s["out"] = True
+            tbl_log(t, f"{s['name']} 的牌出完了，安全過關！")
+    alive = [k for k, s in enumerate(t["seats"]) if not s["out"]]
+    if len(alive) <= 1:
+        om_finish(t, alive[0])
+        return
+    t["turn"] = tbl_next_active(t, i)
+
+def tbl_view(t, cid):
+    """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
+    role, i = tbl_find(t, cid)
+    mn, mx = GAME_LIMITS[t["game"]]
+    playing = t["phase"] == "playing"
+    seats = [{"name": s["name"], "n": len(s["hand"]) if playing else 0, "ready": s["ready"], "out": s["out"] if playing else False,
+              "you": role == "seat" and k == i} for k, s in enumerate(t["seats"])]
+    v = {"id": t["id"], "game": t["game"], "phase": t["phase"], "min": mn, "max": mx, "role": role,
+         "me": i if role == "seat" else -1, "seats": seats, "specs": len(t["specs"]),
+         "turn": t["turn"] if playing else -1, "target": tbl_next_active(t, t["turn"]) if playing else -1,
+         "result": t["result"], "log": list(t["log"])}
+    if role == "seat" and playing:
+        v["hand"] = sorted(t["seats"][i]["hand"], key=lambda c: (c == "JK", om_rank(c) or 0, c))
+    return v
+
+def tbl_info(t):
+    mn, mx = GAME_LIMITS[t["game"]]
+    return {"game": t["game"], "n": len(t["seats"]), "s": len(t["specs"]), "max": mx, "play": t["phase"] == "playing"}
+
 class Room:
     """一座島＝一個房間（鍵：guild:channel）。"""
     def __init__(self):
@@ -631,6 +812,7 @@ class Room:
         self.lurkers = {}        # 地形 -> 釣上來的敵對怪物狀態（每個地形同時最多一隻）
         self.lurk_hits = {}      # cid -> (地形, 上次打怪物的時刻 ms)
         self.lurk_seq = {}       # 地形 -> 怪物 tick 序號（只讓最新排程生效）
+        self.tables = {}         # 桌 id -> 牌桌狀態（和平島的遊戲桌；只放記憶體）
         # 每位玩家各自在某個地形（client["terrain"]）；剛連上時為 None，等 enter
 
     def floor_map(self, terrain):
@@ -1779,6 +1961,100 @@ class Room:
             self.debuffs.pop(cid, None)
             self.skill_hits.pop(cid, None)
 
+
+    # ---- 和平島遊戲桌：每個操作回 (待送清單[(cid, 訊息)], tblinfo 訊息或 None, 地形)，由呼叫端在鎖外送出 ----
+    def table_info_msg(self, terrain):
+        info = {}
+        for tid, game in TABLE_DEFS.get(terrain, {}).items():
+            t = self.tables.get(tid)
+            info[tid] = tbl_info(t) if t else {"game": game, "n": 0, "s": 0, "max": GAME_LIMITS[game][1], "play": False}
+        return {"t": "tblinfo", "info": info}
+
+    def _table_notify_locked(self, t, out):
+        for m in t["seats"] + t["specs"]:
+            out.append((m["cid"], {"t": "table", "id": t["id"], "v": tbl_view(t, m["cid"])}))
+
+    def _table_leave_locked(self, cid, out):
+        c = self.clients.get(cid)
+        tid = c.pop("table", None) if c else None
+        t = self.tables.get(tid) if tid else None
+        if not t:
+            return
+        tbl_leave(t, cid)
+        out.append((cid, {"t": "table", "id": tid, "v": None}))
+        if not t["seats"] and not t["specs"]:
+            self.tables.pop(tid, None)   # 沒人了：整桌重來
+        else:
+            self._table_notify_locked(t, out)
+
+    def table_do(self, cid, msg):
+        out = []
+        with self.lock:
+            c = self.clients.get(cid)
+            if not c or not c.get("terrain"):
+                return [], None, None
+            terr, a = c["terrain"], msg.get("a")
+            if a == "join":
+                tid = str(msg.get("id") or "")
+                game = TABLE_DEFS.get(terr, {}).get(tid)
+                if not game:
+                    return [], None, None
+                if c.get("table") and c["table"] != tid:
+                    self._table_leave_locked(cid, out)
+                t = self.tables.setdefault(tid, tbl_new(tid, game))
+                name = str((c.get("state") or {}).get("name") or (c.get("user") or {}).get("name") or f"玩家{cid}")[:12]
+                tbl_join(t, cid, name)
+                c["table"], c["table_terr"] = tid, terr
+                self._table_notify_locked(t, out)
+            else:
+                t = self.tables.get(c.get("table") or "")
+                if not t:
+                    return [], None, None
+                if a == "leave":
+                    self._table_leave_locked(cid, out)
+                else:
+                    if a == "ready":
+                        tbl_ready(t, cid, msg.get("v"))
+                    elif a == "sit":
+                        tbl_sit(t, cid)
+                    elif a == "draw":
+                        om_draw(t, cid, msg.get("idx"))
+                    else:
+                        return [], None, None
+                    self._table_notify_locked(t, out)
+            return out, self.table_info_msg(c.get("table_terr") or terr), c.get("table_terr") or terr
+
+    def table_drop(self, cid):
+        """連線離開地形或斷線：離開牌桌（牌局進行中就結束這一局）。"""
+        out = []
+        with self.lock:
+            c = self.clients.get(cid)
+            terr = c.get("table_terr") if c else None
+            if not c or not c.get("table"):
+                return [], None, None
+            self._table_leave_locked(cid, out)
+            c.pop("table_terr", None)
+            return out, self.table_info_msg(terr), terr
+
+    def send_to(self, cid, msg):
+        with self.lock:
+            c = self.clients.get(cid)
+            sock, lk = (c["sock"], c["send"]) if c else (None, None)
+        if not sock:
+            return
+        try:
+            with lk:
+                ws_send(sock, json.dumps(msg))
+        except Exception:
+            pass
+
+    def table_flush(self, res):
+        out, info, terr = res
+        for cid, m in out:
+            self.send_to(cid, m)
+        if info and terr:
+            self.broadcast(info, terrain=terr)
+
     def terrain_of(self, cid):
         with self.lock:
             c = self.clients.get(cid)
@@ -1933,6 +2209,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         print(f"[ws] +{cid} @{room_name}（{len(room.clients)} 人在線）", file=sys.stderr, flush=True)
         win_sec, win_n = 0, 0
         last_hit = 0.0
+        last_tbl = 0.0   # 牌桌操作的每連線限流（TBL_CD）
         last_dragon_hit = 0.0   # 打島主的每連線冷卻（與 last_hit 同款）
         last_fish = 0.0         # 釣魚結果的每連線冷卻
         last_xp_mob = 0.0       # 擊倒非主動怪的 XP 冷卻（2026-11-07）
@@ -2055,6 +2332,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         if now - last_xp_mob >= XP_MOB_CD:
                             last_xp_mob = now
                             xp_grant(c, 1, "mob")
+                elif t == "tbl":   # 和平島遊戲桌（join／leave／ready／sit／draw）；牌局邏輯全在伺服器
+                    now = time.time()
+                    if now - last_tbl < TBL_CD:
+                        continue
+                    last_tbl = now
+                    room.table_flush(room.table_do(cid, msg))
                 elif t in ("enter", "terrain"):   # "terrain" 是舊客戶端的訊息名
                     # 每位玩家各自在自己的地形，只有同地形的人看得到彼此
                     v = str(msg.get("v"))
@@ -2063,11 +2346,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     res = room.enter(cid, v)
                     if res is None:
                         continue
+                    room.table_flush(room.table_drop(cid))   # 換地形：離開牌桌
                     old, players, furn, floor, decos, dragon, lurker = res
                     if old:   # leave 帶 to＝去了哪個地形（讓留下的人顯示「XXX 移動到了OO區域」）；斷線的 leave 不帶
                         room.broadcast({"t": "leave", "id": cid, "to": v}, skip=cid, terrain=old)
                     with room.clients[cid]["send"]:
                         ws_send(sock, json.dumps({"t": "enter", "terrain": v, "players": players, "furn": furn, "floor": floor, "decos": decos, "dragon": dragon, "lurker": lurker}))
+                    if v in TABLE_DEFS:   # 和平島：給這位玩家各桌目前的人數／狀態
+                        room.send_to(cid, room.table_info_msg(v))
                     st = room.clients[cid]["state"]
                     room.broadcast({"t": "join", "id": cid, "name": st.get("name")}, skip=cid, terrain=v)
                     if st:
@@ -2185,6 +2471,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             print(f"[ws] !{cid} {e}", file=sys.stderr, flush=True)
         finally:
             last = room.terrain_of(cid)
+            room.table_flush(room.table_drop(cid))   # 斷線：離開牌桌（牌局進行中就結束這一局）
             room.remove(cid)
             if last:
                 room.broadcast({"t": "leave", "id": cid}, terrain=last)

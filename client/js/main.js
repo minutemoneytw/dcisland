@@ -42,7 +42,7 @@ function lsSet(key, val) {
 const lsObj = (key, def) => { const v = lsGet(key, null); return v && typeof v === 'object' && !Array.isArray(v) ? v : def; };
 
 // ---------------- 全域狀態 ----------------
-const TERRAIN_IDS = ['grass', 'beach', 'snow', 'night', 'forest', 'volcano', 'machine'];
+const TERRAIN_IDS = ['grass', 'beach', 'snow', 'night', 'forest', 'volcano', 'machine', 'peace'];
 const S = {
   terrain: (t => TERRAIN_IDS.includes(t) ? t : 'grass')(lsRaw('dcisland.m0.terrain')),   // 舊資料是純字串（非 JSON）
   terrains: {},                 // id -> manifest
@@ -97,6 +97,8 @@ const S = {
   craftDB: null, craftImgs: {},         // 合成：assets/craft/craft.json（手寫）與素材圖
   craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
   craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
+  gamesDB: null, tableImgs: {},        // 和平島遊戲桌：遊戲定義（assets/games/games.json，手寫）與桌子圖
+  tableOpen: false, tableId: null, tableView: null, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
   titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
@@ -127,7 +129,7 @@ function genWorld(id) {
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
     if (types[y * COLS + x] !== 2) continue;
     if (Math.abs(x - cx) < 2.5 && Math.abs(y - cy) < 2) continue; // 出生區淨空
-    if (rng() < .036) decos.push({ i: decos.length, sprite: pool[Math.floor(rng() * pool.length)], cell: [x, y], flip: rng() < .5 });
+    if (pool.length && rng() < .036) decos.push({ i: decos.length, sprite: pool[Math.floor(rng() * pool.length)], cell: [x, y], flip: rng() < .5 });
   }
   S.world = { types, decos };
   S.drops = [];
@@ -381,6 +383,8 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
       if (sgn) { S._hits = 1; openSign(sgn); S.holdSkipF = true; return; }
       const seat = quiet ? null : seatNear(p);   // 身邊有椅子/沙發/床就坐下（長按自動連擊不會反覆切換）
       if (seat) { S._hits = 1; usePose(seat); S.holdSkipF = true; return; }
+      const tbl = quiet ? null : tableNear(p);     // 身邊有遊戲桌就入座／觀戰（長按不重複開）
+      if (tbl) { S._hits = 1; openTable(tbl); S.holdSkipF = true; return; }
       const npc = quiet ? null : npcNear(p);       // 身邊有 NPC 就跟他說話
       if (npc) { S._hits = 1; talkTo(npc); S.holdSkipF = true; return; }
     }
@@ -2268,6 +2272,7 @@ function blocked(px, py, ignoreFurn) { // 像素座標（腳底）；ignoreFurn�
   if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return true;
   if (!groundAt(x, y)) return true;   // 水（水上鋪了地板的可以走）
   if (ignoreFurn) return false;
+  if (tableAtCell(x, y)) return true;   // 和平島的遊戲桌擋路
   const fi = S.occ.get(key(x, y));
   if (fi !== undefined) {
     const def = S.furn.items.find(f => f.id === S.furnItems[fi].type);
@@ -3821,6 +3826,142 @@ function onNetCraftDb(c) {
   if (S.mode === 'decor') buildFurnPanel();
 }
 
+// ---- 和平島遊戲桌（2026-11-08，使用者要求）：走近按 F／點桌子進入遊戲畫面（全螢幕），Esc 離開；桌滿人後其他人觀戰 ----
+// 桌子是島上固定物件（terrain.json 的 tables；遊戲定義在 assets/games/games.json）。牌局由伺服器權威（tbl／table／tblinfo 訊息，
+// 見 notes「和平島與遊戲桌」）：客戶端只畫畫面、送操作，手牌只有伺服器給本人的那份。
+const TABLE_RANGE = 56;   // 離桌邊多近才能互動（px）
+const tablesHere = () => S.terrains[S.terrain]?.tables || [];
+const tableRect = tb => ({ x: tb.cell[0] * CELL, y: tb.cell[1] * CELL, w: (tb.w || 3) * CELL, h: (tb.h || 2) * CELL });
+function tableAtCell(x, y) {   // 這格被桌子占著（桌子擋路、也不能擺家具）
+  for (const tb of tablesHere()) if (x >= tb.cell[0] && x < tb.cell[0] + (tb.w || 3) && y >= tb.cell[1] && y < tb.cell[1] + (tb.h || 2)) return tb;
+  return null;
+}
+function tableDist(tb, px, py) {   // 點到桌子矩形的距離
+  const r = tableRect(tb), dx = Math.max(r.x - px, 0, px - (r.x + r.w)), dy = Math.max(r.y - py, 0, py - (r.y + r.h));
+  return Math.hypot(dx, dy);
+}
+function tableNear(p) {   // F 鍵：身邊（桌邊 TABLE_RANGE 內）最近的桌子
+  let best = null, bd = TABLE_RANGE;
+  for (const tb of tablesHere()) { const d = tableDist(tb, p.x, p.y); if (d < bd) { bd = d; best = tb; } }
+  return best;
+}
+function tableAtPoint(wx, wy) {
+  return tablesHere().find(tb => { const r = tableRect(tb); return wx >= r.x && wx < r.x + r.w && wy >= r.y && wy < r.y + r.h; }) || null;
+}
+const gameDef = id => S.gamesDB?.games?.[id] || null;
+function openTable(tb) {
+  if (!netOn()) { toast('遊戲桌需要連線才能玩（單機模式不能玩）', 2400); return; }
+  if (!gameDef(tb.game)) return;
+  for (const k of Object.keys(keys)) keys[k] = false;   // 放開所有按住的鍵（畫面蓋住後收不到 keyup，不然回來還在跑）
+  S.mouseHeld = false;
+  S.tableOpen = true; S.tableId = tb.id; S.tableView = null;
+  S.net.tbl({ a: 'join', id: tb.id });
+  buildTable(); $('tableBox').classList.remove('hidden');
+}
+function closeTable(sendLeave = true) {
+  if (sendLeave) S.net?.tbl?.({ a: 'leave' });
+  S.tableOpen = false; S.tableId = null; S.tableView = null;
+  $('tableBox').classList.add('hidden');
+}
+function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已離開這桌）
+  if (!S.tableOpen || m.id !== S.tableId) return;
+  if (m.v === null) { closeTable(false); return; }
+  S.tableView = m.v; buildTable();
+}
+function onNetTblInfo(info) { S.tblInfo = info || {}; }
+const SUIT_SYM = { S: '♠', H: '♥', D: '♦', C: '♣' };
+function cardEl(c) {   // 牌面：c＝'S7'／'H13'／'JK'；null＝牌背
+  const e = document.createElement('div');
+  if (!c) { e.className = 'tcard back'; return e; }
+  if (c === 'JK') { e.className = 'tcard joker'; e.textContent = '鬼'; return e; }
+  const r = Number(c.slice(1));
+  e.className = 'tcard' + (c[0] === 'H' || c[0] === 'D' ? ' red' : '');
+  e.textContent = SUIT_SYM[c[0]] + ({ 1: 'A', 11: 'J', 12: 'Q', 13: 'K' }[r] || r);
+  return e;
+}
+function buildTable() {
+  const box = $('tableBody'); box.innerHTML = '';
+  const tb = tablesHere().find(t => t.id === S.tableId), gd = tb && gameDef(tb.game), v = S.tableView;
+  $('tableTitle').textContent = gd ? gd.name : '遊戲桌';
+  const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
+  const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
+  // 狀態列
+  let status;
+  if (playing) status = v.role === 'spec' ? `觀戰中 · 輪到 ${v.seats[v.turn]?.name} 抽牌` : myTurn ? `輪到你：點 ${v.seats[v.target]?.name} 的一張牌抽走` : `輪到 ${v.seats[v.turn]?.name} 抽牌`;
+  else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
+  box.appendChild(mk('div', 'table-status' + (myTurn ? ' mine' : ''), status));
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  // 座位：每個人一格（名字、狀態、牌背）；輪到我時，被抽牌的那位的牌背可以點
+  const row = mk('div', 'table-seats');
+  v.seats.forEach((s, i) => {
+    const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && v.turn === i ? ' turn' : '') + (s.out ? ' out' : ''));
+    const tag = !playing ? (s.ready ? '已準備' : '未準備') : s.out ? '已過關' : v.turn === i ? '抽牌中' : (myTurn && v.target === i ? '被抽牌' : '');
+    seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '')));
+    seat.appendChild(mk('div', 'table-tag', tag));
+    const cards = mk('div', 'table-cards');
+    const drawable = myTurn && v.target === i;
+    if (playing) for (let k = 0; k < s.n; k++) {
+      const c = cardEl(null);
+      if (drawable) { c.classList.add('pick'); c.title = '抽這張'; c.onclick = () => S.net?.tbl?.({ a: 'draw', idx: k }); }
+      cards.appendChild(c);
+    }
+    seat.appendChild(cards);
+    if (playing) seat.appendChild(mk('div', 'table-count', s.out ? '' : `${s.n} 張`));
+    row.appendChild(seat);
+  });
+  for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  // 我的手牌
+  if (v.role === 'seat' && playing) {
+    const hand = mk('div', 'table-hand');
+    hand.appendChild(mk('div', 'table-label', '你的手牌'));
+    const cs = mk('div', 'table-cards big');
+    for (const c of v.hand || []) cs.appendChild(cardEl(c));
+    if (!(v.hand || []).length) cs.appendChild(mk('span', 'table-tag', '手牌出完了，安全過關！'));
+    hand.appendChild(cs); box.appendChild(hand);
+  }
+  // 按鈕
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  // 紀錄與規則
+  const log = mk('div', 'table-log');
+  for (const l of [...v.log].reverse()) log.appendChild(mk('div', null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// 島上桌子的繪製：圖＋人數標籤（離得近時提示按 F）
+function tableDrawEntries(list) {
+  for (const tb of tablesHere()) {
+    const img = S.tableImgs[tb.game], r = tableRect(tb), gd = gameDef(tb.game);
+    list.push({
+      y: r.y + r.h, draw: () => {
+        ctx.imageSmoothingEnabled = false;
+        if (img) ctx.drawImage(img, r.x, r.y, r.w, r.h);
+        else { ctx.fillStyle = '#2f8a5a'; ctx.fillRect(r.x, r.y, r.w, r.h); }
+        const inf = S.tblInfo?.[tb.id], p = S.players[0];
+        const txt = `${gd?.name || '遊戲桌'} ${inf ? `${inf.n}/${inf.max}${inf.play ? ' 遊戲中' : ''}${inf.s ? ` · ${inf.s} 人觀戰` : ''}` : ''}`;
+        ctx.save(); ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.textAlign = 'center';
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#ffe08a';
+        ctx.strokeText(txt, r.x + r.w / 2, r.y - 6); ctx.fillText(txt, r.x + r.w / 2, r.y - 6);
+        if (!S.tableOpen && tableDist(tb, p.x, p.y) < TABLE_RANGE) {
+          ctx.font = '11px "Microsoft JhengHei"'; ctx.fillStyle = '#fff6e0';
+          ctx.strokeText('按 F 或點擊入座', r.x + r.w / 2, r.y - 20); ctx.fillText('按 F 或點擊入座', r.x + r.w / 2, r.y - 20);
+        }
+        ctx.restore();
+      }
+    });
+  }
+}
+
 // ---- 稱號：達成條件就解鎖（assets/titles/titles.json），在造型面板的「稱號設定」選一個顯示在名字上方 ----
 // 解鎖純客戶端判斷（與職業同樣信任客戶端）：釣魚類從圖鑑推算（登入的人用伺服器存的圖鑑）；擊倒島主記在 localStorage 的 dcisland.m0.titles。
 // 同步只送稱號 id（state.title），文字由各畫面查 titles.json。
@@ -4027,6 +4168,7 @@ function draw() {
       }
     });
   }
+  tableDrawEntries(list);   // 和平島遊戲桌
   // 掉落物
   for (const dr of S.drops) {
     const def = S.toolsDB.items[dr.item] || matDef(dr.item), icon = S.craftImgs[dr.item];
@@ -4551,7 +4693,7 @@ function canPlaceIn(list, typeId, x, y, floor = S.floorMap) {
   const def = furnitureDef(typeId); if (!def) return false;
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
-    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor)) return false;
+    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor) || tableAtCell(xx, yy)) return false;
   }
   return !list.some(it => { const d = furnitureDef(it.type) || { w: 1, h: 1 };
     return x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h; });
@@ -5009,6 +5151,7 @@ addEventListener('keydown', e => {
     else if (k === 'enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveSign(); }
     return;
   }
+  if (S.tableOpen) { if (k === 'escape') { e.preventDefault(); closeTable(); } return; }   // 遊戲畫面開著：Esc 離開，其他鍵都不處理（不能走路）
   const tg = e.target;   // 在輸入框打字（例如選色視窗的色碼）：除了 Esc 之外都不是遊戲按鍵，否則打 a／d／s／w 會讓角色跟著走
   if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA') && k !== 'escape') return;
   keys[k] = true;
@@ -5127,6 +5270,8 @@ function clickAttack(wx, wy) {
     const f = furnAtPoint(wx, wy);
     if (f && furnitureDef(f.type)?.use) { usePose(f); return; }
     if (f && furnitureDef(f.type)?.text) { openSign(f); return; }
+    const tb = tableAtPoint(wx, wy);
+    if (tb) { if (tableDist(tb, S.players[0].x, S.players[0].y) < TABLE_RANGE) openTable(tb); else toast('走近一點再入座', 1200); return; }   // 點遊戲桌
     const n = npcAt(wx, wy);
     if (n) { talkTo(n); return; }                // 點 NPC：跟他說話（不是攻擊）
   }
@@ -5166,7 +5311,7 @@ function autoAttack() {
   } finally { quiet = false; }
 }
 canvas.addEventListener('mousedown', e => {
-  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.tableOpen) return;
   if (S.mode === 'decor' && S.decorTab === 'floor' && (e.button === 0 || e.button === 2)) {   // 地板模式：長按左鍵鋪、長按右鍵拆
     if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
     const r = canvas.getBoundingClientRect();
@@ -5245,6 +5390,7 @@ document.addEventListener('click', e => {   // 點齒輪與選單以外的地方
 });
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => { closeColor(false); closeGlams(); $('avatarPanel').classList.add('hidden'); };
+$('tableClose').onclick = () => closeTable();
 $('btnCraft').onclick = () => { if (S.craftOpen) closeCraft(); else if (S.craftDB) openCraft(); };
 $('craftClose').onclick = closeCraft;
 $('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑
@@ -5282,7 +5428,7 @@ let welcomeUntil = 0;
 async function boot() {
   $('btnDecor').disabled = false;
   // manifest：互不相依，一次全部並行抓（以前是一個接一個，首次進島要等一長串往返）
-  const [tjson, furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB, craftDB] = await Promise.all([
+  const [tjson, furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB, craftDB, gamesDB] = await Promise.all([
     Promise.all(TERRAIN_IDS.map(id => loadJSON(`assets/terrain/${id}/terrain.json`))),
     loadJSON('assets/furniture/furniture.json'),
     loadJSON('assets/floors/floors.json'),
@@ -5295,11 +5441,13 @@ async function boot() {
     loadJSON('assets/titles/titles.json').catch(() => ({ titles: [] })),   // 稱號；讀不到就沒有稱號可選
     loadJSON('assets/jobs/jobs.json'),          // 職業（職能、職業武器、裝備、技能）
     loadJSON('assets/craft/craft.json').catch(() => null),   // 合成素材與配方；讀不到就沒有合成功能
+    loadJSON('assets/games/games.json').catch(() => null),   // 和平島遊戲桌的遊戲定義；讀不到就沒有遊戲桌
   ]);
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
   Object.assign(S, { furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB });
   loadJobs(jobsDB);
   initCraft(craftDB);
+  S.gamesDB = gamesDB;
   S.myLook = myLook;   // net.js 送 state 時用（自己的顯示造型）
   S.myLvl = () => lvInfo(S.profile.xp).lv;   // net.js 送 state 時用（自己的等級；登入者由伺服器覆寫）
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
@@ -5331,6 +5479,7 @@ async function boot() {
     }),
     ...Object.values(S.fishDB.terrains).flat().map(async f => S.fishImgs[f.id] = await optImg(`assets/fish/${f.sprite}`)),
     ...(S.craftDB?.materials || []).map(async m => S.craftImgs[m.id] = await optImg(`assets/craft/${m.id}.png`)),
+    ...Object.entries(S.gamesDB?.games || {}).map(async ([id, g]) => S.tableImgs[id] = await optImg(`assets/games/${g.sprite}`)),
     ensureTerrain(S.terrain),
   ]);
 
@@ -5412,9 +5561,12 @@ async function boot() {
     onDragon: onNetDragon,   // 島主事件（aim/hp/dead/spawn/state 快照）
     onLurker: onNetLurker,   // 釣上來的敵對怪物（spawn/wander/claw/aggro/hp/dead/gone/state 快照）
     onFishResult,            // 釣魚結果（伺服器抽的魚；登入的人已記進伺服器的圖鑑）
+    onTable: onNetTable,       // 和平島遊戲桌：伺服器給我的牌桌畫面
+    onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); checkTitles(true); },   // 登入後伺服器送來的圖鑑（稱號跟著重算，不跳提示）
     onOpen: net => {
+      if (S.tableOpen) closeTable(false);   // 重連：伺服器已當作我離開牌桌，畫面跟著關
       if (performance.now() >= welcomeUntil) toast(`已連上島（${net.room}）`, 2000);
       // 連上（或重連）時補傳目前地形的陸地位圖（新連線重新算「傳過沒」）
       S.landSent = null;

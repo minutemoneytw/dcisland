@@ -1,0 +1,12 @@
+{
+ "_comment": "和平島遊戲桌的遊戲定義（手寫，不由 gen_assets.py 產生）。key＝遊戲 id（terrain.json 的 tables[].game、兩份伺服器的 TABLE_DEFS／GAME_LIMITS 要一致）。name＝顯示名稱；min／max＝開局最少人數／入座上限（改了要同步兩份伺服器的 GAME_LIMITS）；sprite＝桌子圖（gen_assets.py 的 table_*）；rules＝畫面上的簡短規則說明。",
+ "games": {
+  "oldmaid": {
+   "name": "抽鬼牌",
+   "min": 2,
+   "max": 4,
+   "sprite": "table_oldmaid.png",
+   "rules": "52 張牌加 1 張鬼牌，發完後先丟掉成對（同數字）的牌。輪流從下家手上抽一張，湊成對就丟掉，手牌先出完的人過關，最後手上剩鬼牌的人輸。"
+  }
+ }
+}

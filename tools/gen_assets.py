@@ -1169,7 +1169,37 @@ TERRAINS = [
          ground=("#8a8f98", "#7a7f88"), edge=("#5a5f68", "#4c5058"),
          water=("#2a7ea8", "#226a90"), leaf=("#5a6a7a", "#4a5a6a"), trunk="#4a5058",
          deco=[("gear.png", 3), ("rock.png", 1)], ui="#8a94a4"),
+    # 和平島（2026-11-08）：沒有採集物件、野生動物、NPC、島主、魚；之後當小遊戲區域，中央附近有遊戲桌（TABLES_BY_TERRAIN）
+    dict(id="peace", name="和平島",
+         ground=("#9ad08a", "#8cc47c"), edge=("#ecdfb4", "#dfd09e"),
+         water=("#5ab8d8", "#4aa8c8"), leaf=("#6ab85a", "#58a04a"), trunk="#8a6a46",
+         deco=[], ui="#9ad08a"),
 ]
+
+# 和平島的遊戲桌：地形 → [桌]。id＝桌 id（兩份伺服器的 TABLE_DEFS 要一致）、game＝client/assets/games/games.json 的遊戲 id、
+# cell＝左上角格、w／h＝占幾格（圖 48×32 以 scale 2 畫＝3×2 格）。桌子是島上固定物件，不是可擺設的家具
+TABLES_BY_TERRAIN = {
+    "peace": [dict(id="t1", game="oldmaid", cell=[50, 24], w=3, h=2)],
+}
+
+# ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
+def table_oldmaid():
+    cv = Canvas(48, 32)
+    wood, felt = hx("#8a5a34"), hx("#2f8a5a")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.2))
+    cv.rect(3, 7, 44, 24, felt)
+    for x in range(4, 44, 3):
+        cv.set(x, 8 + (x * 7) % 15, shade(felt, 1.12))
+    cv.rect(3, 7, 44, 7, shade(felt, .8))
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    # 桌上的牌：一疊牌背、幾張散牌（紅心、黑桃）與一張鬼牌
+    for dx in range(3):
+        cv.rect(21 + dx, 13 - dx, 28 + dx, 20 - dx, hx("#c9544f")); cv.rect(22 + dx, 14 - dx, 27 + dx, 19 - dx, hx("#a83a38"))
+    cv.rect(9, 12, 14, 19, hx("#f4f0e4")); cv.rect(10, 13, 13, 15, hx("#d83a3a")); cv.rect(11, 17, 12, 18, hx("#d83a3a"))
+    cv.rect(34, 11, 39, 18, hx("#f4f0e4")); cv.rect(35, 12, 38, 14, hx("#2a2a30")); cv.rect(36, 16, 37, 17, hx("#2a2a30"))
+    cv.set(17, 20, hx("#f4f0e4")); cv.rect(15, 18, 19, 22, hx("#f4f0e4")); cv.rect(16, 19, 18, 21, hx("#e8c050"))
+    cv.outline()
+    return cv
 
 # ---------------- 合成：素材圖示（16×16）與可合成家具 ----------------
 # 素材清單與配方在 client/assets/craft/craft.json（手寫資料，不由這裡產生）；這裡只畫圖。素材 id 與檔名對應：craft/<id>.png
@@ -2161,6 +2191,8 @@ def main():
                   uiColor=t["ui"])
         if t["id"] in OWNER_BY_TERRAIN:
             td["owner"] = OWNER_BY_TERRAIN[t["id"]]
+        if t["id"] in TABLES_BY_TERRAIN:
+            td["tables"] = TABLES_BY_TERRAIN[t["id"]]
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉
             td["anims"] = t["anims"]
         write_json(os.path.join(ASSETS, sub, "terrain.json"), td)
@@ -2177,6 +2209,8 @@ def main():
         save(cv, fn + ".png", "furniture")
     write_json(os.path.join(ASSETS, "furniture", "furniture.json"), FURN_MANIFEST)
     print("  furniture/furniture.json")
+    print("== 和平島遊戲桌 ==")
+    save(table_oldmaid(), "table_oldmaid.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")
