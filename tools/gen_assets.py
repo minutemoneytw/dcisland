@@ -600,7 +600,7 @@ def basic_top_sheet():
 #   每組四列的順序＝朝上/朝左/朝下/朝右（走路＝列 8 上、9 左、10 下、11 右）。
 # 這裡只取走路四列、縮放 LPC_SCALE 對齊我們底圖的頭部，重排成遊戲的 65 幀髮型 sheet（疊在頭髮層）。
 # 之後再加別的 LPC 髮型：把檔名加進 KIDOL_HAIR（或另開清單）呼叫 lpc_hair_sheet 即可。
-LPC_SCALE = 2 / 3                # LPC 模組 → 遊戲底圖的縮放比例（以 64px 底圖的頭部對齊校準；見 docs/notes.md）
+LPC_SCALE = 0.72                 # LPC 模組 → 遊戲底圖的縮放比例（以 64px 底圖的頭部對齊校準；見 docs/notes.md）
 LPC_ROW_OF = {"down": 10, "down_right": 11, "right": 11, "up_right": 11, "up": 8, "up_left": 9, "left": 9, "down_left": 9}
 LPC_PICK = [0, 1, 2, 1]          # 走路 9 幀循環取 4 幀（觸地-通過-觸地-通過）；待機＝站立幀 0
 KIDOL_HAIR = [                   # LPC 短髮模組的 12 種顏色 (檔名後綴, 名稱)
@@ -613,7 +613,7 @@ def _lpc_hair_cell(w, data, row, f):
     """把 LPC sheet 的 (列, 幀) 那格縮放 LPC_SCALE、對齊我們的頭部，回傳 Canvas(64×64)。"""
     k = LPC_SCALE
     dx = round(CHAR_FW / 2 - CHAR_FW / 2 * k)   # 水平置中
-    dy = round(15 - 13 * k)                      # 髮帽頂（LPC y13）對到我們底圖頭頂（y15）
+    dy = round(14 - 13 * k)                      # 髮帽頂（LPC y13）對到我們底圖頭頂上方一點（y14），貼緊頭皮
     cv = Canvas(CHAR_FW, CHAR_FH)
     for oy in range(round(CHAR_FH * k)):
         sy = row * CHAR_FH + min(CHAR_FH - 1, int(round(oy / k)))
@@ -650,6 +650,62 @@ def lpc_hair_sheet(rel):
             blit(i * 8 + 4 + k2, cell(d, LPC_PICK[k2]))  # 走路 4 幀
     blit(CHAR_SIT, cell("down", 0))                      # 坐姿暫用正面站立
     return sheet
+
+# ---------------- LPC 通用格式（2026-11-08 大改：角色整個改用 LPC 通用格式）----------------
+# 角色每個部位都是一張 832×1344＝13 欄 × 21 列、每格 64×64 的 LPC 通用格式 sheet（下載的 LPC 素材可直接用）。
+# 列＝動作組：0-3 施法(7)、4-7 突刺(8)、8-11 走路(9)、12-15 揮砍(6)、16-19 射擊(13)、20 受擊(6)；
+#   每組四列的順序＝上/左/下/右。遊戲只用「走路」組（列 8-11）：待機＝該列第 0 幀、走路＝第 1,3,5,7 幀、斜角沿用同側。
+# 素體＝LPC 的 body＋head＋eyes 三層疊成（source 在 external/img2pixel/lpc/）。
+LPC_COLS, LPC_ROWS = 13, 21
+LPC_WALK_BASE = 8
+LPC_DIR = {"down": 2, "down_right": 3, "right": 3, "up_right": 3, "up": 0, "up_left": 1, "left": 1, "down_left": 1}
+LPC_WALK_COLS = [1, 3, 5, 7]
+
+def char_frame_map():
+    """遊戲 65 個邏輯幀 → LPC sheet 的 [欄, 列]。"""
+    m = []
+    for d in CHAR_DIRS:
+        row = LPC_WALK_BASE + LPC_DIR[d]
+        for _ in range(4):
+            m.append([0, row])                 # 待機 4 幀＝站立
+        for k in range(4):
+            m.append([LPC_WALK_COLS[k], row])   # 走路 4 幀
+    m.append([0, LPC_WALK_BASE + 2])            # 坐姿暫用正面走路幀 0
+    return m
+
+def _lpc_overlay(sheet, rel, oy0):
+    r = read_png_pixels(os.path.join(ASSETS, rel))
+    if r is None:
+        raise SystemExit(f"找不到 LPC 素材 {rel}")
+    w, h, data = r
+    for y in range(h):
+        for x in range(w):
+            i = (y * w + x) * 4
+            if data[i + 3] > 16:
+                sheet.set(x, oy0 + y, (data[i], data[i + 1], data[i + 2], data[i + 3]))
+
+def lpc_base_sheet():
+    """LPC 素體：body＋head＋eyes 疊到走路列（8-11）→ 832×1344。"""
+    sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
+    for rel in ("external/img2pixel/lpc/base_body_walk.png",
+                "external/img2pixel/lpc/base_head_walk.png",
+                "external/img2pixel/lpc/base_eyes_walk.png"):
+        _lpc_overlay(sheet, rel, LPC_WALK_BASE * CHAR_FH)
+    return sheet
+
+def lpc_read_sheet(rel):
+    """直接讀一張 LPC 通用格式 sheet（832×1344）成 Canvas（頭髮等外部素材 1:1，不轉檔）。"""
+    r = read_png_pixels(os.path.join(ASSETS, rel))
+    if r is None:
+        raise SystemExit(f"找不到 LPC 素材 {rel}")
+    w, h, data = r
+    cv = Canvas(w, h)
+    for y in range(h):
+        for x in range(w):
+            i = (y * w + x) * 4
+            if data[i + 3] > 16:
+                cv.set(x, y, (data[i], data[i + 1], data[i + 2], data[i + 3]))
+    return cv
 
 def gear_top_sheet(tid):
     _, main, shd = GEAR_TOPS[tid][0], GEAR_TOPS[tid][1], GEAR_TOPS[tid][2]
@@ -1979,47 +2035,33 @@ def main():
     save(tool_pickaxe(), "tool_pickaxe.png", "tools")
     save(tool_axe(), "tool_axe.png", "tools")
 
-    print("== 角色（分層 sheet）==")
+    print("== 角色（LPC 通用格式）==")
     sub = "avatar"
+    # 素體：LPC 的 body＋head＋eyes 疊成 832×1344（走路列）；4 種膚色暫共用（LPC 膚色重上色之後再做）
     for key in SKINS:
-        save(char_body_sheet(key), f"char_body_{key}.png", sub)
-    save(basic_top_sheet(), "char_top_basic.png", sub)                              # 便服上衣（形狀與膚色無關，只出一張）
-    save(char_bottom_sheet("#a4a5b5", "#6a6c82"), "char_bottom_basic.png", sub)     # 便服褲子（沿用底圖的牛仔褲顏色）
-    for i, (cid, _cname) in enumerate(KIDOL_HAIR):   # 短髮模組（LPC 格式）12 色
-        save(lpc_hair_sheet(f"external/img2pixel/hair_kidol/kidol_hairstyle_male_{cid}.png"),
+        save(lpc_base_sheet(), f"char_body_{key}.png", sub)
+    # 頭髮：LPC 通用格式外部素材（k-idol 短髮 12 色），1:1 直接用
+    for i, (cid, _cname) in enumerate(KIDOL_HAIR):
+        save(lpc_read_sheet(f"external/img2pixel/hair_kidol/kidol_hairstyle_male_{cid}.png"),
              f"char_hair{i + 1}.png", sub)
-    for tid in GEAR_TOPS:
-        save(gear_top_sheet(tid), f"char_{tid}.png", sub)
-    for bid in GEAR_BOTTOMS:
-        save(gear_bottom_sheet(bid), f"char_{bid}.png", sub)
-    for hid in GEAR_HATS:
-        save(gear_hat_sheet(hid), f"char_hat_{hid}.png", sub)
     write_json(os.path.join(ASSETS, sub, "avatar.json"), dict(
         scale=CHAR_SCALE,
-        # 人物分層的幀表（所有層共用）：w×h＝每幀大小、scale＝引擎把每幀放大幾倍畫（現在底圖已是 64px，畫 1 倍）；
-        # states＝狀態 → 幀號（8 方向 × idle/walk，加 sit）；fps＝待機／走路每秒幾幀；
-        # anchors＝武器掛點（sheet 像素座標，腳底中心＝(w/2, h)）：back 背上、backView 背面時背上、waist 腰間、hand 手（揮擊／拋竿轉軸）；
-        # frameAnchors＝{幀號: {掛點: [x, y]}} 逐幀覆寫（素材有上下晃時讓武器跟著動）。碰撞與點擊判定都看腳底，與幀大小無關
+        # 人物分層的幀表（所有層共用）：每層都是 832×1344 的 LPC 通用格式 sheet；map＝65 個邏輯幀 → sheet 的 [欄, 列]；
+        # w/h＝每格大小、scale＝引擎放大倍率；anchors＝武器掛點（格內像素座標，腳底中心＝(w/2, h)）；frameAnchors 逐幀覆寫
         frames=dict(w=CHAR_FW, h=CHAR_FH, scale=CHAR_SCALE, count=CHAR_FRAMES, dirs=CHAR_DIRS, states=char_states(),
+                    map=char_frame_map(),
                     fps=dict(idle=4, walk=6),
-                    anchors=dict(back=[23, 34], backView=[41, 34], waist=[23, 50], hand=[40, 42]),
+                    anchors=dict(back=[23, 32], backView=[41, 32], waist=[23, 48], hand=[40, 40]),
                     frameAnchors={}),
         skins=[dict(id=k, name=n, base=SKINS[k][0], shade=SKINS[k][1], sheet=f"char_body_{k}.png")
                for k, n in [("pale", "白皙"), ("light", "自然"), ("tan", "小麥"), ("deep", "深膚")]],
-        # 髮型：短髮模組（LPC 格式，12 色）；之後加別的髮型＝再加一條
+        # 髮型：LPC 通用格式（k-idol 短髮 12 色）；之後加別的 LPC 髮型＝再加一條
         hair=[dict(id=f"hair{i + 1}", name=f"短髮（{cname}）", sheet=f"char_hair{i + 1}.png")
               for i, (_cid, cname) in enumerate(KIDOL_HAIR)],
-        # 帽子／上衣／褲子：每件一張 sheet。dye＝可染色的原色（第一個是主色；換色時主色換成玩家選的顏色，其他依明暗比例跟著換）。
-        # 職業裝備由 assets/jobs/jobs.json 的 gear 指定；glam＝可當外觀選（沒有 unlock＝一開始就能用；unlock＝解鎖條件，
-        # 格式同 titles.json 的 cond；hint＝沒解鎖時顯示的條件說明）；jobs＝限定哪些職業能用（沒寫＝所有職業）。第一款（basic）也是舊客戶端／沒指定時的預設款。
-        tops=[dict(id="basic", name="便服", sheet="char_top_basic.png", dye=["#d95c68", "#aa474f"], glam=True)] +
-             [dict(id=k, name=v[0], sheet=f"char_{k}.png", dye=[v[1], v[2]]) for k, v in GEAR_TOPS.items()],
-        bottoms=[dict(id="basic", name="便服", sheet="char_bottom_basic.png", dye=["#a4a5b5", "#6a6c82"], glam=True)] +
-                [dict(id=k, name=v[0], sheet=f"char_{k}.png", dye=[v[1], v[2]]) for k, v in GEAR_BOTTOMS.items()],
-        # nohat＝「不戴帽子」：沒有圖的免費外觀（選了就不畫帽子層）
-        hats=[dict(id="nohat", name="不戴帽子", sheet=None, glam=True)] +
-             [dict(id=k, name=v[0], sheet=f"char_hat_{k}.png", dye=[v[1], v[2]])
-              for k, v in GEAR_HATS.items()],
+        # 上衣／褲子／帽子：改用 LPC 通用格式，目前尚未有 LPC 裝備素材 → 先空著（角色＝素體＋頭髮）
+        tops=[],
+        bottoms=[],
+        hats=[dict(id="nohat", name="不戴帽子", sheet=None, glam=True)],
         hairColor="#4a3428",
         shirtColors=['#d95c68', '#4a90d9', '#4aa564', '#c9a227', '#8a5cc9', '#e0e0e0', '#4a4a52', '#d97a3a', '#f2a1b5', '#b5303f', '#f0c93a', '#8fd0e8', '#2e5fa8', '#3a3f8c', '#6fcfc0', '#2f8a78', '#8fc455', '#3e6b3a', '#b48be0', '#6a3f9a', '#8a5a3a', '#c8b08a', '#9aa0aa', '#f4ede0'],
         pantsColors=['#4a54a0', '#2f3548', '#4a4a52', '#8a8f99', '#d8d4c8', '#8a6a46', '#c8b08a', '#5a4a3a', '#3e6b3a', '#6a8a4a', '#2f8a78', '#3a78c8', '#2e5fa8', '#7aa8d8', '#6a3f9a', '#a63d4a', '#d97a3a', '#e0b840', '#e8a0b8', '#b5303f', '#1f1f26', '#f0f0f0', '#6fcfc0', '#b48be0'],

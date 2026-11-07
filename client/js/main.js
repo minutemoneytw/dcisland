@@ -2321,12 +2321,14 @@ function charSprite(look, fi) {
   if (cv) return cv;
   cv = document.createElement('canvas'); cv.width = F.w; cv.height = F.h;
   const g = cv.getContext('2d');
-  // 由下往上：軀幹 → 褲子 → 衣服 → 頭髮 → 帽子
+  // 這一幀在 sheet 上的格子：LPC 通用格式看 frames.map（[欄,列]）；舊格式＝水平排列（fi, 0）
+  const [cc, cr] = F.map ? F.map[fi] : [fi, 0], sx = cc * F.w, sy = cr * F.h;
+  // 由下往上：軀幹（素體）→ 褲子 → 衣服 → 頭髮 → 帽子
   for (const [it, hex] of [[skin], [bottom, pantsHex], [top, shirtHex], [hair], [hat, hatHex]]) {
     const img = it && S.charImgs[it.sheet];
-    if (!img || (fi + 1) * F.w > img.width) continue;   // 缺圖／這張 sheet 沒有這一幀：這層略過
+    if (!img || sx + F.w > img.width || sy + F.h > img.height) continue;   // 缺圖／這張 sheet 沒有這一格：這層略過
     const dye = dyeList(it), src = dye && hex ? dyeSheet(img, dye, hex) : img;
-    g.drawImage(src, fi * F.w, 0, F.w, F.h, 0, 0, F.w, F.h);
+    g.drawImage(src, sx, sy, F.w, F.h, 0, 0, F.w, F.h);
   }
   S.charCache.set(k, cv);
   return cv;

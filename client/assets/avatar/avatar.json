@@ -116,6 +116,268 @@
     64
    ]
   },
+  "map": [
+   [
+    0,
+    10
+   ],
+   [
+    0,
+    10
+   ],
+   [
+    0,
+    10
+   ],
+   [
+    0,
+    10
+   ],
+   [
+    1,
+    10
+   ],
+   [
+    3,
+    10
+   ],
+   [
+    5,
+    10
+   ],
+   [
+    7,
+    10
+   ],
+   [
+    0,
+    11
+   ],
+   [
+    0,
+    11
+   ],
+   [
+    0,
+    11
+   ],
+   [
+    0,
+    11
+   ],
+   [
+    1,
+    11
+   ],
+   [
+    3,
+    11
+   ],
+   [
+    5,
+    11
+   ],
+   [
+    7,
+    11
+   ],
+   [
+    0,
+    11
+   ],
+   [
+    0,
+    11
+   ],
+   [
+    0,
+    11
+   ],
+   [
+    0,
+    11
+   ],
+   [
+    1,
+    11
+   ],
+   [
+    3,
+    11
+   ],
+   [
+    5,
+    11
+   ],
+   [
+    7,
+    11
+   ],
+   [
+    0,
+    11
+   ],
+   [
+    0,
+    11
+   ],
+   [
+    0,
+    11
+   ],
+   [
+    0,
+    11
+   ],
+   [
+    1,
+    11
+   ],
+   [
+    3,
+    11
+   ],
+   [
+    5,
+    11
+   ],
+   [
+    7,
+    11
+   ],
+   [
+    0,
+    8
+   ],
+   [
+    0,
+    8
+   ],
+   [
+    0,
+    8
+   ],
+   [
+    0,
+    8
+   ],
+   [
+    1,
+    8
+   ],
+   [
+    3,
+    8
+   ],
+   [
+    5,
+    8
+   ],
+   [
+    7,
+    8
+   ],
+   [
+    0,
+    9
+   ],
+   [
+    0,
+    9
+   ],
+   [
+    0,
+    9
+   ],
+   [
+    0,
+    9
+   ],
+   [
+    1,
+    9
+   ],
+   [
+    3,
+    9
+   ],
+   [
+    5,
+    9
+   ],
+   [
+    7,
+    9
+   ],
+   [
+    0,
+    9
+   ],
+   [
+    0,
+    9
+   ],
+   [
+    0,
+    9
+   ],
+   [
+    0,
+    9
+   ],
+   [
+    1,
+    9
+   ],
+   [
+    3,
+    9
+   ],
+   [
+    5,
+    9
+   ],
+   [
+    7,
+    9
+   ],
+   [
+    0,
+    9
+   ],
+   [
+    0,
+    9
+   ],
+   [
+    0,
+    9
+   ],
+   [
+    0,
+    9
+   ],
+   [
+    1,
+    9
+   ],
+   [
+    3,
+    9
+   ],
+   [
+    5,
+    9
+   ],
+   [
+    7,
+    9
+   ],
+   [
+    0,
+    10
+   ]
+  ],
   "fps": {
    "idle": 4,
    "walk": 6
@@ -123,19 +385,19 @@
   "anchors": {
    "back": [
     23,
-    34
+    32
    ],
    "backView": [
     41,
-    34
+    32
    ],
    "waist": [
     23,
-    50
+    48
    ],
    "hand": [
     40,
-    42
+    40
    ]
   },
   "frameAnchors": {}
@@ -232,252 +494,14 @@
    "sheet": "char_hair12.png"
   }
  ],
- "tops": [
-  {
-   "id": "basic",
-   "name": "便服",
-   "sheet": "char_top_basic.png",
-   "dye": [
-    "#d95c68",
-    "#aa474f"
-   ],
-   "glam": true
-  },
-  {
-   "id": "knight_top",
-   "name": "騎士鎧甲",
-   "sheet": "char_knight_top.png",
-   "dye": [
-    "#8fa6c8",
-    "#6a7f9e"
-   ]
-  },
-  {
-   "id": "warrior_top",
-   "name": "戰士皮甲",
-   "sheet": "char_warrior_top.png",
-   "dye": [
-    "#b5452f",
-    "#8a3322"
-   ]
-  },
-  {
-   "id": "whitemage_top",
-   "name": "白魔長袍",
-   "sheet": "char_whitemage_top.png",
-   "dye": [
-    "#f0ece0",
-    "#c8c0ac"
-   ]
-  },
-  {
-   "id": "sage_top",
-   "name": "賢者長袍",
-   "sheet": "char_sage_top.png",
-   "dye": [
-    "#3a9a8a",
-    "#2a7466"
-   ]
-  },
-  {
-   "id": "ninja_top",
-   "name": "忍者上衣",
-   "sheet": "char_ninja_top.png",
-   "dye": [
-    "#4a3a6a",
-    "#352a4e"
-   ]
-  },
-  {
-   "id": "dragoon_top",
-   "name": "龍騎士鎧甲",
-   "sheet": "char_dragoon_top.png",
-   "dye": [
-    "#3a4a8a",
-    "#2a3668"
-   ]
-  },
-  {
-   "id": "bard_top",
-   "name": "詩人外衣",
-   "sheet": "char_bard_top.png",
-   "dye": [
-    "#4a8a3a",
-    "#366a2a"
-   ]
-  },
-  {
-   "id": "blackmage_top",
-   "name": "黑魔長袍",
-   "sheet": "char_blackmage_top.png",
-   "dye": [
-    "#2e3a7a",
-    "#1f2858"
-   ]
-  }
- ],
- "bottoms": [
-  {
-   "id": "basic",
-   "name": "便服",
-   "sheet": "char_bottom_basic.png",
-   "dye": [
-    "#a4a5b5",
-    "#6a6c82"
-   ],
-   "glam": true
-  },
-  {
-   "id": "knight_bottom",
-   "name": "騎士腿甲",
-   "sheet": "char_knight_bottom.png",
-   "dye": [
-    "#5a6a88",
-    "#46536c"
-   ]
-  },
-  {
-   "id": "warrior_bottom",
-   "name": "戰士褲",
-   "sheet": "char_warrior_bottom.png",
-   "dye": [
-    "#5a4030",
-    "#45301f"
-   ]
-  },
-  {
-   "id": "whitemage_bottom",
-   "name": "白魔長褲",
-   "sheet": "char_whitemage_bottom.png",
-   "dye": [
-    "#d8d0bc",
-    "#b0a890"
-   ]
-  },
-  {
-   "id": "sage_bottom",
-   "name": "賢者長褲",
-   "sheet": "char_sage_bottom.png",
-   "dye": [
-    "#2e6a62",
-    "#1f4e48"
-   ]
-  },
-  {
-   "id": "ninja_bottom",
-   "name": "忍者褲",
-   "sheet": "char_ninja_bottom.png",
-   "dye": [
-    "#3a2e52",
-    "#2a2140"
-   ]
-  },
-  {
-   "id": "dragoon_bottom",
-   "name": "龍騎士腿甲",
-   "sheet": "char_dragoon_bottom.png",
-   "dye": [
-    "#2e3a6a",
-    "#222b50"
-   ]
-  },
-  {
-   "id": "bard_bottom",
-   "name": "詩人長褲",
-   "sheet": "char_bard_bottom.png",
-   "dye": [
-    "#5a4a3a",
-    "#45382a"
-   ]
-  },
-  {
-   "id": "blackmage_bottom",
-   "name": "黑魔長褲",
-   "sheet": "char_blackmage_bottom.png",
-   "dye": [
-    "#2a3060",
-    "#1d2246"
-   ]
-  }
- ],
+ "tops": [],
+ "bottoms": [],
  "hats": [
   {
    "id": "nohat",
    "name": "不戴帽子",
    "sheet": null,
    "glam": true
-  },
-  {
-   "id": "knight_hat",
-   "name": "騎士頭盔",
-   "sheet": "char_hat_knight_hat.png",
-   "dye": [
-    "#a8b8d0",
-    "#7a8aa4"
-   ]
-  },
-  {
-   "id": "warrior_hat",
-   "name": "戰士角盔",
-   "sheet": "char_hat_warrior_hat.png",
-   "dye": [
-    "#8a5a3a",
-    "#6a4228"
-   ]
-  },
-  {
-   "id": "whitemage_hat",
-   "name": "白魔兜帽",
-   "sheet": "char_hat_whitemage_hat.png",
-   "dye": [
-    "#f0ece0",
-    "#c8c0ac"
-   ]
-  },
-  {
-   "id": "sage_hat",
-   "name": "賢者頭冠",
-   "sheet": "char_hat_sage_hat.png",
-   "dye": [
-    "#e0c040",
-    "#b08a28"
-   ]
-  },
-  {
-   "id": "ninja_hat",
-   "name": "忍者頭巾",
-   "sheet": "char_hat_ninja_hat.png",
-   "dye": [
-    "#4a3a6a",
-    "#352a4e"
-   ]
-  },
-  {
-   "id": "dragoon_hat",
-   "name": "龍騎士頭盔",
-   "sheet": "char_hat_dragoon_hat.png",
-   "dye": [
-    "#3a4a8a",
-    "#2a3668"
-   ]
-  },
-  {
-   "id": "bard_hat",
-   "name": "羽毛帽",
-   "sheet": "char_hat_bard_hat.png",
-   "dye": [
-    "#4a8a3a",
-    "#366a2a"
-   ]
-  },
-  {
-   "id": "blackmage_hat",
-   "name": "黑魔尖帽",
-   "sheet": "char_hat_blackmage_hat.png",
-   "dye": [
-    "#2e3a7a",
-    "#1f2858"
-   ]
   }
  ],
  "hairColor": "#4a3428",
