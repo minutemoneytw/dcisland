@@ -435,67 +435,121 @@
  "hair": [
   {
    "id": "hair1",
-   "name": "短髮（棕）",
+   "name": "棕",
+   "style": "short",
+   "styleName": "短髮",
    "sheet": "char_hair1.png"
   },
   {
    "id": "hair2",
-   "name": "短髮（深棕）",
+   "name": "深棕",
+   "style": "short",
+   "styleName": "短髮",
    "sheet": "char_hair2.png"
   },
   {
    "id": "hair3",
-   "name": "短髮（黑）",
+   "name": "黑",
+   "style": "short",
+   "styleName": "短髮",
    "sheet": "char_hair3.png"
   },
   {
    "id": "hair4",
-   "name": "短髮（金）",
+   "name": "金",
+   "style": "short",
+   "styleName": "短髮",
    "sheet": "char_hair4.png"
   },
   {
    "id": "hair5",
-   "name": "短髮（灰金）",
+   "name": "灰金",
+   "style": "short",
+   "styleName": "短髮",
    "sheet": "char_hair5.png"
   },
   {
    "id": "hair6",
-   "name": "短髮（銀白）",
+   "name": "銀白",
+   "style": "short",
+   "styleName": "短髮",
    "sheet": "char_hair6.png"
   },
   {
    "id": "hair7",
-   "name": "短髮（紅）",
+   "name": "紅",
+   "style": "short",
+   "styleName": "短髮",
    "sheet": "char_hair7.png"
   },
   {
    "id": "hair8",
-   "name": "短髮（橘）",
+   "name": "橘",
+   "style": "short",
+   "styleName": "短髮",
    "sheet": "char_hair8.png"
   },
   {
    "id": "hair9",
-   "name": "短髮（玫瑰粉）",
+   "name": "玫瑰粉",
+   "style": "short",
+   "styleName": "短髮",
    "sheet": "char_hair9.png"
   },
   {
    "id": "hair10",
-   "name": "短髮（綠）",
+   "name": "綠",
+   "style": "short",
+   "styleName": "短髮",
    "sheet": "char_hair10.png"
   },
   {
    "id": "hair11",
-   "name": "短髮（藍）",
+   "name": "藍",
+   "style": "short",
+   "styleName": "短髮",
    "sheet": "char_hair11.png"
   },
   {
    "id": "hair12",
-   "name": "短髮（紫）",
+   "name": "紫",
+   "style": "short",
+   "styleName": "短髮",
    "sheet": "char_hair12.png"
   }
  ],
- "tops": [],
- "bottoms": [],
+ "tops": [
+  {
+   "id": "tshirt_m",
+   "name": "T恤",
+   "sheet": "char_top_tshirt_m.png",
+   "gender": "male",
+   "glam": true
+  },
+  {
+   "id": "tshirt_f",
+   "name": "T恤",
+   "sheet": "char_top_tshirt_f.png",
+   "gender": "female",
+   "glam": true
+  }
+ ],
+ "bottoms": [
+  {
+   "id": "pants_m",
+   "name": "長褲",
+   "sheet": "char_bottom_pants_m.png",
+   "gender": "male",
+   "glam": true
+  },
+  {
+   "id": "pants_f",
+   "name": "長褲",
+   "sheet": "char_bottom_pants_f.png",
+   "gender": "female",
+   "glam": true
+  }
+ ],
  "hats": [
   {
    "id": "nohat",

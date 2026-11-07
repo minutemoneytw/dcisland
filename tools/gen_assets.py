@@ -608,6 +608,11 @@ KIDOL_HAIR = [                   # LPC 短髮模組的 12 種顏色 (檔名後�
     ("ashblonde", "灰金"), ("ashplatinum", "銀白"), ("red", "紅"), ("orange", "橘"),
     ("rosepink", "玫瑰粉"), ("green", "綠"), ("blue", "藍"), ("purple", "紫"),
 ]
+LPC_CLOTHES = [                  # 基本服裝（LPC 原檔）：(遊戲檔名, external 底下的檔名)
+    ("top_tshirt_m", "top_tshirt_m.png"), ("top_tshirt_f", "top_tshirt_f.png"),
+    ("bottom_pants_m", "bottom_pants_m.png"), ("bottom_pants_f", "bottom_pants_f.png"),
+    ("shoes_m", "shoes_m.png"), ("shoes_f", "shoes_f.png"),
+]
 
 def _lpc_hair_cell(w, data, row, f):
     """把 LPC sheet 的 (列, 幀) 那格縮放 LPC_SCALE、對齊我們的頭部，回傳 Canvas(64×64)。"""
@@ -684,13 +689,21 @@ def _lpc_overlay(sheet, rel, oy0):
             if data[i + 3] > 16:
                 sheet.set(x, oy0 + y, (data[i], data[i + 1], data[i + 2], data[i + 3]))
 
-def lpc_base_sheet():
+def lpc_base_sheet(gender="male"):
     """LPC 素體：body＋head＋eyes 疊到走路列（8-11）→ 832×1344。"""
+    body = "base_body_walk.png" if gender == "male" else "base_body_female.png"
+    head = "base_head_walk.png" if gender == "male" else "base_head_female.png"
     sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
-    for rel in ("external/img2pixel/lpc/base_body_walk.png",
-                "external/img2pixel/lpc/base_head_walk.png",
+    for rel in (f"external/img2pixel/lpc/{body}",
+                f"external/img2pixel/lpc/{head}",
                 "external/img2pixel/lpc/base_eyes_walk.png"):
         _lpc_overlay(sheet, rel, LPC_WALK_BASE * CHAR_FH)
+    return sheet
+
+def lpc_cloth_sheet(rel):
+    """LPC 服裝（走路 9 幀×4 向、576×256）→ 疊到走路列 → 832×1344。"""
+    sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
+    _lpc_overlay(sheet, rel, LPC_WALK_BASE * CHAR_FH)
     return sheet
 
 def lpc_read_sheet(rel):
@@ -2037,9 +2050,13 @@ def main():
 
     print("== 角色（LPC 通用格式）==")
     sub = "avatar"
-    # 素體：LPC 的 body＋head＋eyes 疊成 832×1344（走路列）；4 種膚色暫共用（LPC 膚色重上色之後再做）
+    # 素體：LPC 的 body＋head＋eyes 疊成 832×1344（走路列）；男（預設）＋女（之後選性別）；4 種膚色暫共用
     for key in SKINS:
-        save(lpc_base_sheet(), f"char_body_{key}.png", sub)
+        save(lpc_base_sheet("male"), f"char_body_{key}.png", sub)
+        save(lpc_base_sheet("female"), f"char_body_female_{key}.png", sub)
+    # 基本服裝（LPC 原檔，走路列）
+    for cid, rel in LPC_CLOTHES:
+        save(lpc_cloth_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{cid}.png", sub)
     # 頭髮：LPC 通用格式外部素材（k-idol 短髮 12 色），1:1 直接用
     for i, (cid, _cname) in enumerate(KIDOL_HAIR):
         save(lpc_read_sheet(f"external/img2pixel/hair_kidol/kidol_hairstyle_male_{cid}.png"),
@@ -2055,12 +2072,14 @@ def main():
                     frameAnchors={}),
         skins=[dict(id=k, name=n, base=SKINS[k][0], shade=SKINS[k][1], sheet=f"char_body_{k}.png")
                for k, n in [("pale", "白皙"), ("light", "自然"), ("tan", "小麥"), ("deep", "深膚")]],
-        # 髮型：LPC 通用格式（k-idol 短髮 12 色）；之後加別的 LPC 髮型＝再加一條
-        hair=[dict(id=f"hair{i + 1}", name=f"短髮（{cname}）", sheet=f"char_hair{i + 1}.png")
+        # 髮型：一個「造型」一個方框（style／styleName），框裡是顏色（name＝顏色名）；面板分層顯示、點造型再開顏色
+        hair=[dict(id=f"hair{i + 1}", name=cname, style="short", styleName="短髮", sheet=f"char_hair{i + 1}.png")
               for i, (_cid, cname) in enumerate(KIDOL_HAIR)],
-        # 上衣／褲子／帽子：改用 LPC 通用格式，目前尚未有 LPC 裝備素材 → 先空著（角色＝素體＋頭髮）
-        tops=[],
-        bottoms=[],
+        # 基本服裝（LPC 原檔；gender＝之後選性別用）
+        tops=[dict(id="tshirt_m", name="T恤", sheet="char_top_tshirt_m.png", gender="male", glam=True),
+              dict(id="tshirt_f", name="T恤", sheet="char_top_tshirt_f.png", gender="female", glam=True)],
+        bottoms=[dict(id="pants_m", name="長褲", sheet="char_bottom_pants_m.png", gender="male", glam=True),
+                 dict(id="pants_f", name="長褲", sheet="char_bottom_pants_f.png", gender="female", glam=True)],
         hats=[dict(id="nohat", name="不戴帽子", sheet=None, glam=True)],
         hairColor="#4a3428",
         shirtColors=['#d95c68', '#4a90d9', '#4aa564', '#c9a227', '#8a5cc9', '#e0e0e0', '#4a4a52', '#d97a3a', '#f2a1b5', '#b5303f', '#f0c93a', '#8fd0e8', '#2e5fa8', '#3a3f8c', '#6fcfc0', '#2f8a78', '#8fc455', '#3e6b3a', '#b48be0', '#6a3f9a', '#8a5a3a', '#c8b08a', '#9aa0aa', '#f4ede0'],

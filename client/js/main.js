@@ -4589,6 +4589,34 @@ function myLook() {
            shirt: 0, pants: 0 };   // shirt／pants：給舊客戶端的顏色編號（舊版只認這兩個）
 }
 
+// 髮型的「顏色」彈出小框（分層面板用）：一個造型列出各色，點一個就套用；點別處或再點造型關閉
+let hairPop = null;
+function closeHairColors() { if (hairPop) { hairPop.remove(); hairPop = null; } }
+function openHairColors(st, anchor) {
+  const same = hairPop && hairPop.dataset.style === st.id;
+  closeHairColors();
+  if (same) return;   // 再點同一個造型＝關閉
+  const box = document.createElement('div');
+  box.dataset.style = st.id;
+  box.style.cssText = 'position:fixed;z-index:100001;background:#26304a;border:1px solid #6a7fb0;border-radius:6px;padding:8px;display:flex;flex-wrap:wrap;gap:6px;max-width:240px;box-shadow:0 4px 16px rgba(0,0,0,.5)';
+  const r = anchor.getBoundingClientRect();
+  box.style.left = Math.min(window.innerWidth - 260, r.left) + 'px';
+  box.style.top = (r.bottom + 4) + 'px';
+  const title = document.createElement('div');
+  title.textContent = st.name + '（選顏色）';
+  title.style.cssText = 'width:100%;color:#e8e0c8;font-size:12px;margin-bottom:2px';
+  box.appendChild(title);
+  for (const v of st.items) {
+    const b = document.createElement('div');
+    b.className = 'opt' + (S.me.hair === v.id ? ' sel' : '');
+    b.textContent = v.name;
+    b.style.minWidth = '46px'; b.style.textAlign = 'center';
+    b.onclick = () => { S.me.hair = v.id; saveAvatar(); closeHairColors(); buildAvatarPanel(); };
+    box.appendChild(b);
+  }
+  document.body.appendChild(box);
+  hairPop = box;
+}
 function buildAvatarPanel() {
   // 等級：XP 進度條（無上限，每級需求 10 + 5×(Lv−1)；來源＝怪物／釣竿／首捕／採集，2026-11-06）
   const li = lvInfo(S.profile.xp);
@@ -4617,12 +4645,21 @@ function buildAvatarPanel() {
     o.onclick = () => { S.me.skin = s.id; saveAvatar(); buildAvatarPanel(); };
     sk.appendChild(o);
   }
+  // 髮型：分層——一個「造型」（style）一個方框，點下去開顏色（各色是同一造型的變體）；避免十幾個色擠成一排
   const hr = $('hairOpts'); hr.innerHTML = '';
+  const hstyles = [];
   for (const h of S.avatar.hair) {
+    let st = hstyles.find(s => s.id === (h.style || h.id));
+    if (!st) { st = { id: h.style || h.id, name: h.styleName || h.name, items: [] }; hstyles.push(st); }
+    st.items.push(h);
+  }
+  for (const st of hstyles) {
+    const sel = st.items.some(h => h.id === S.me.hair);
     const o = document.createElement('div');
-    o.className = 'opt name' + (S.me.hair === h.id ? ' sel' : '');
-    o.textContent = h.name;
-    o.onclick = () => { S.me.hair = h.id; saveAvatar(); buildAvatarPanel(); };
+    o.className = 'opt name' + (sel ? ' sel' : '');
+    o.textContent = st.name;
+    o.title = '點一下選顏色';
+    o.onclick = () => openHairColors(st, o);
     hr.appendChild(o);
   }
   // 裝備與外觀：每個部位一列——顯示中的那件（裝備，或套了外觀時的外觀名）＋「外觀」鈕（開外觀一覽選）＋換色鈕
