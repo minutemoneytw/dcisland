@@ -351,6 +351,26 @@ def roll_fish(terrain):
     size = round((f["size"][0] + (f["size"][1] - f["size"][0]) * random.random() ** 1.6) * 10) / 10
     return {"terrain": terrain, "id": f["id"], "size": size, "rarity": rar}
 
+CRAFT_KINDS = ("mat", "furn", "rec")   # 合成解鎖紀錄的三類（對應 Worker 的 Registry `craft:<uid>`）
+CRAFT_MAX = 300           # 每類最多存幾筆
+CRAFT_SYNC_MAX = 100      # craftsync 每類一次最多收幾筆
+CRAFT_DB = {}             # Discord 使用者 ID -> {mat: {id: 時間}, furn: {...}, rec: {...}}（只存記憶體）
+CRAFT_LOCK = threading.Lock()
+CRAFT_ID_RE = re.compile(r"^[a-z0-9_-]{1,24}$")
+
+def craft_add(uid, add):
+    """併進解鎖紀錄（已有的不動；每類上限 CRAFT_MAX），回整份（複本）。"""
+    with CRAFT_LOCK:
+        c = CRAFT_DB.setdefault(uid, {})
+        for k in CRAFT_KINDS:
+            m = c.setdefault(k, {})
+            ids = add.get(k) if isinstance(add, dict) else None
+            for i in (ids if isinstance(ids, list) else []):
+                i = str(i)
+                if CRAFT_ID_RE.match(i) and i not in m and len(m) < CRAFT_MAX:
+                    m[i] = int(time.time() * 1000)
+        return json.loads(json.dumps(c))
+
 FISH_DEX = {}            # Discord 使用者 ID -> {地形: {魚id: {max, n, first}}}（對應 Worker 的 Registry）
 FISH_DEX_LOCK = threading.Lock()
 
@@ -1970,6 +1990,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 with FISH_DEX_LOCK:
                                     dex = json.loads(json.dumps(FISH_DEX.get(c["user"]["id"], {})))
                                 ws_send(sock, json.dumps({"t": "dex", "dex": dex}))
+                                ws_send(sock, json.dumps({"t": "craftdb", "craft": craft_add(c["user"]["id"], {})}))   # 合成解鎖紀錄
                                 if xp_known:   # XP 只在「伺服器有紀錄」時送 init；沒有就等 xpsync 上繳
                                     ws_send(sock, json.dumps({"t": "xp", "xp": c.get("xp", 0), "d": 0, "k": "init"}))
                 elif t == "state":
@@ -2016,6 +2037,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             c["state"]["lvl"] = xp_info(nv)["lv"]
                         with c.get("send") or threading.Lock():
                             ws_send(sock, json.dumps({"t": "xp", "xp": nv, "d": 0, "k": "init"}))
+                elif t == "craft":   # 合成解鎖一筆（素材／家具／配方；客戶端自判，伺服器只存，不驗證 id 是否存在；訪客略過）
+                    c = room.clients.get(cid)
+                    if c and c.get("user") and msg.get("k") in CRAFT_KINDS:
+                        craft_add(c["user"]["id"], {msg["k"]: [msg.get("id")]})
+                elif t == "craftsync":   # 補傳本機有、伺服器沒有的解鎖（訪客時期的進度併進帳號）；回整份 craftdb
+                    c = room.clients.get(cid)
+                    if c and c.get("user"):
+                        add = {k: (msg.get(k) if isinstance(msg.get(k), list) else [])[:CRAFT_SYNC_MAX] for k in CRAFT_KINDS}
+                        full = craft_add(c["user"]["id"], add)
+                        with c.get("send") or threading.Lock():
+                            ws_send(sock, json.dumps({"t": "craftdb", "craft": full}))
                 elif t == "xpe":   # 擊倒非主動怪的 XP 事件（伺服器無法驗證：信任事件＋夾頻；2026-11-07 使用者同意）
                     c = room.clients.get(cid)
                     if c and c.get("user") and msg.get("k") == "mob" and room.terrain_of(cid):

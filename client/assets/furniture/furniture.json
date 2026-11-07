@@ -87,6 +87,43 @@
    "solid": true,
    "sprite": "sign.png",
    "text": true
+  },
+  {
+   "id": "stool",
+   "name": "木凳",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "stool.png",
+   "use": "sit",
+   "craft": true
+  },
+  {
+   "id": "glow_lamp",
+   "name": "螢光燈",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "glow_lamp.png",
+   "craft": true
+  },
+  {
+   "id": "fish_tank",
+   "name": "魚缸",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "fish_tank.png",
+   "craft": true
+  },
+  {
+   "id": "steel_shelf",
+   "name": "鋼架",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "steel_shelf.png",
+   "craft": true
   }
  ]
 }

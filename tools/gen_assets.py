@@ -1171,6 +1171,111 @@ TERRAINS = [
          deco=[("gear.png", 3), ("rock.png", 1)], ui="#8a94a4"),
 ]
 
+# ---------------- 合成：素材圖示（16×16）與可合成家具 ----------------
+# 素材清單與配方在 client/assets/craft/craft.json（手寫資料，不由這裡產生）；這裡只畫圖。素材 id 與檔名對應：craft/<id>.png
+def _mat_log(c):
+    cv = Canvas(16, 16); cv.rect(2, 5, 13, 11, c); cv.ellipse(13, 8, 2, 3, shade(c, 1.25)); cv.set(13, 8, shade(c, .8)); cv.hline(3, 11, 7, shade(c, .85)); cv.outline(); return cv
+def _mat_stone(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 9, 6, 4.5, c); cv.ellipse(6, 7, 2.5, 1.6, shade(c, 1.25)); cv.outline(); return cv
+def _mat_leaf(c):
+    cv = Canvas(16, 16)
+    for i in range(10): cv.ellipse(3 + i, 12 - i * .8, 2.2, 1.4, c)
+    for i in range(9): cv.set(3 + i, 12 - int(i * .8), shade(c, .7))
+    cv.outline(); return cv
+def _mat_shell(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 8, 6, 5, c); cv.rect(5, 12, 10, 13, c)
+    for x in (4, 6, 8, 10, 12): cv.vline(x, 5, 11, shade(c, .8))
+    cv.outline(); return cv
+def _mat_drop(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 10, 4, 4, c); cv.rect(7, 3, 8, 6, c); cv.rect(6, 6, 9, 7, c); cv.set(6, 9, shade(c, 1.4)); cv.outline(); return cv
+def _mat_cap(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 7, 6, 4.5, c); cv.rect(0, 8, 15, 8, T8); cv.rect(6, 9, 9, 13, hx("#e8dcc4"))
+    for x, y in ((5, 5), (9, 4), (11, 7)): cv.set(x, y, hx("#fff4e0"))
+    cv.outline(); return cv
+def _mat_shard(c):
+    cv = Canvas(16, 16)
+    for i in range(6): cv.rect(8 - i, 2 + i * 2, 8 + i // 2, 3 + i * 2, c)
+    cv.vline(8, 3, 11, shade(c, 1.35)); cv.outline(); return cv
+def _mat_spark(c):
+    cv = Canvas(16, 16)
+    for i in range(1, 7):
+        cv.set(8, 8 - i, c); cv.set(8, 8 + i, c); cv.set(8 - i, 8, c); cv.set(8 + i, 8, c)
+    cv.ellipse(8, 8, 2.5, 2.5, shade(c, 1.3)); cv.outline(); return cv
+def _mat_gear(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 8, 5, 5, c)
+    for a in range(8):
+        x = 8 + round(math.cos(a * math.pi / 4) * 6); y = 8 + round(math.sin(a * math.pi / 4) * 6); cv.rect(x - 1, y - 1, x + 1, y + 1, c)
+    cv.ellipse(8, 8, 2, 2, T8); cv.outline(); return cv
+def _mat_scale(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 8, 5, 6, c); cv.ellipse(6, 6, 1.5, 2, shade(c, 1.35))
+    for y in (6, 9, 12): cv.hline(5, 11, y, shade(c, .8))
+    cv.outline(); return cv
+def _mat_fluff(c):
+    cv = Canvas(16, 16)
+    for cx, cy in ((5, 8), (8, 6), (11, 8), (7, 10), (10, 11), (5, 11)): cv.ellipse(cx, cy, 3, 3, c)
+    cv.set(6, 6, shade(c, 1.1)); cv.outline(); return cv
+def _mat_feather(c):
+    cv = Canvas(16, 16)
+    for i in range(10): cv.ellipse(4 + i, 11 - i * .8, 2.4, 1.6, c)
+    for i in range(12): cv.set(2 + i, 13 - int(i * .85), shade(c, .6))
+    cv.outline(); return cv
+def _mat_plank(c):
+    cv = Canvas(16, 16); cv.rect(1, 3, 14, 12, c)
+    for y in (6, 9): cv.hline(1, 14, y, shade(c, .8))
+    cv.set(3, 4, shade(c, .6)); cv.set(12, 10, shade(c, .6)); cv.outline(); return cv
+def _mat_rope(c):
+    cv = Canvas(16, 16)
+    for i in range(4): cv.ellipse(8, 8, 6 - i, 5 - i, c if i % 2 == 0 else shade(c, .75))
+    cv.ellipse(8, 8, 1, 1, T8); cv.outline(); return cv
+def _mat_cloth(c):
+    cv = Canvas(16, 16); cv.rect(2, 3, 13, 12, c)
+    for x in range(2, 14, 3): cv.vline(x, 3, 12, shade(c, .88))
+    for y in range(3, 13, 3): cv.hline(2, 13, y, shade(c, 1.1))
+    cv.outline(); return cv
+def _mat_glue(c):
+    cv = Canvas(16, 16); cv.rect(4, 6, 11, 13, c); cv.rect(5, 3, 10, 5, shade(c, .7)); cv.rect(6, 7, 7, 11, shade(c, 1.3)); cv.outline(); return cv
+def _mat_pane(c):
+    cv = Canvas(16, 16); cv.rect(2, 2, 13, 13, c)
+    for i in range(5): cv.set(4 + i, 10 - i, hx("#ffffff"))
+    cv.outline(hx("#3a5a70")); return cv
+def _mat_bar(c):
+    cv = Canvas(16, 16); cv.rect(2, 6, 12, 12, c); cv.rect(2, 6, 12, 7, shade(c, 1.3)); cv.rect(11, 6, 13, 11, shade(c, .8)); cv.outline(); return cv
+
+# 素材 id → (畫法, 顏色)；顏色也寫在 craft.json 的 color（掉落物小圓點用），兩邊要一致
+MATERIAL_ICONS = dict(
+    wood=(_mat_log, "#a9743f"), stone=(_mat_stone, "#8d939b"), palm_leaf=(_mat_leaf, "#5fae4e"), shell=(_mat_shell, "#f0c4b0"),
+    pine_resin=(_mat_drop, "#e0a63a"), mushroom_cap=(_mat_cap, "#c8503c"), glow_spore=(_mat_spark, "#7ae8d0"), glass_shard=(_mat_shard, "#9fd8f0"),
+    obsidian=(_mat_stone, "#3a2f4a"), gear=(_mat_gear, "#a8b0b8"), fish_scale=(_mat_scale, "#7fc6e8"), wool=(_mat_fluff, "#f0ede4"),
+    feather=(_mat_feather, "#e8c070"),
+    plank=(_mat_plank, "#c89a5a"), rope=(_mat_rope, "#c9b27a"), cloth=(_mat_cloth, "#d878a0"), glue=(_mat_glue, "#e8d890"),
+    glass_pane=(_mat_pane, "#a8dcf0"), steel=(_mat_bar, "#8aa0b8"),
+)
+
+def stool():
+    w = hx("#c89a5a"); cv = Canvas(16, 14)
+    cv.rect(3, 4, 12, 6, shade(w, 1.1)); cv.rect(4, 7, 4, 12, shade(w, .8)); cv.rect(11, 7, 11, 12, shade(w, .8)); cv.hline(4, 11, 10, shade(w, .7))
+    cv.outline(); return cv
+
+def glow_lamp():
+    cv = Canvas(16, 24); g = hx("#7ae8d0")
+    cv.rect(7, 10, 8, 20, hx("#6e6a78")); cv.rect(4, 20, 11, 22, hx("#55525e"))
+    cv.ellipse(8, 7, 5, 5.5, hx("#bff8ec")); cv.ellipse(8, 7, 3, 3.5, g); cv.set(6, 5, hx("#ffffff"))
+    cv.outline(); return cv
+
+def fish_tank():
+    cv = Canvas(16, 16)
+    cv.rect(1, 3, 14, 13, hx("#4a7ea0")); cv.rect(2, 4, 13, 12, hx("#8ed0ea"))
+    cv.rect(1, 12, 14, 13, hx("#6b5a4a")); cv.rect(3, 10, 6, 11, hx("#e8c070")); cv.rect(8, 8, 11, 9, hx("#f08a50")); cv.set(12, 7, hx("#f08a50")); cv.set(7, 6, hx("#ffffff"))
+    cv.rect(4, 11, 4, 11, hx("#5a9a50")); cv.outline(); return cv
+
+def steel_shelf():
+    cv = Canvas(16, 24); m = hx("#8aa0b8")
+    cv.rect(2, 2, 13, 22, shade(m, .75)); cv.rect(3, 3, 12, 21, shade(m, 1.1))
+    for y in (8, 14, 20): cv.rect(2, y, 13, y + 1, m)
+    for x, y, c in ((4, 5, "#d4604a"), (7, 5, "#4a8ad4"), (10, 4, "#e8c070"), (5, 11, "#6ac07a"), (9, 11, "#d878a0"), (6, 17, "#e8dcc4")):
+        cv.rect(x, y, x + 1, 7 if y < 8 else y + 2, hx(c))
+    cv.outline(); return cv
+
 FURN_MANIFEST = dict(
     scale=2, tile=TILE,
     items=[
@@ -1184,6 +1289,11 @@ FURN_MANIFEST = dict(
         dict(id="bed",   name="床",    w=1, h=1, solid=True,  sprite="bed.png", use="sleep", quiltRow=13),
         dict(id="shelf", name="書架",  w=1, h=1, solid=True,  sprite="shelf.png"),
         dict(id="sign",  name="看板",  w=1, h=1, solid=True,  sprite="sign.png", text=True),
+        # 以下是「合成家具」：craft=True＝要在合成面板做出來才解鎖（解鎖後無限使用），配方在 client/assets/craft/craft.json
+        dict(id="stool",       name="木凳",   w=1, h=1, solid=True,  sprite="stool.png", use="sit", craft=True),
+        dict(id="glow_lamp",   name="螢光燈", w=1, h=1, solid=True,  sprite="glow_lamp.png", craft=True),
+        dict(id="fish_tank",   name="魚缸",   w=1, h=1, solid=True,  sprite="fish_tank.png", craft=True),
+        dict(id="steel_shelf", name="鋼架",   w=1, h=1, solid=True,  sprite="steel_shelf.png", craft=True),
     ],
 )
 
@@ -1929,10 +2039,14 @@ def main():
     for fn, cv in [("sofa", sofa()), ("table", table()), ("chair", chair()),
                    ("plant", plant()), ("rug", rug()), ("lamp", lamp()),
                    ("tv", tv()), ("cat", cat()), ("bed", bed()),
-                   ("shelf", shelf()), ("sign", sign())]:
+                   ("shelf", shelf()), ("sign", sign()),
+                   ("stool", stool()), ("glow_lamp", glow_lamp()), ("fish_tank", fish_tank()), ("steel_shelf", steel_shelf())]:
         save(cv, fn + ".png", "furniture")
     write_json(os.path.join(ASSETS, "furniture", "furniture.json"), FURN_MANIFEST)
     print("  furniture/furniture.json")
+    print("== 合成素材圖示 ==")
+    for mid, (fn, col) in MATERIAL_ICONS.items():
+        save(fn(hx(col)), mid + ".png", "craft")
 
     print("== 地板 ==")
     save(floor_wood(), "floor_wood.png", "floors")

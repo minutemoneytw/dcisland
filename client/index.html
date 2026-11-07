@@ -26,6 +26,7 @@
 <button id="menuLv" class="settings-item">名牌等級：顯示</button>
         </div>
       </div>
+      <button id="btnCraft" class="ff-btn" style="display:none">合成</button>
       <button id="btnDex" class="ff-btn">圖鑑</button>
       <button id="btnAvatar" class="ff-btn">造型</button>
       <button id="btnDecor" class="ff-btn" style="display:none">裝飾模式</button>
@@ -110,6 +111,15 @@
     <div id="dexHint" class="ff-panel-hint"></div>
     <div id="dexGrid"></div>
     <div class="ff-panel-foot"><button id="dexClose" class="ff-btn small">關閉</button></div>
+  </div>
+
+  <!-- 合成：合成／素材圖鑑／配方筆記 -->
+  <div id="craftBox" class="ff-panel hidden">
+    <div class="ff-panel-title">合成</div>
+    <div id="craftTabs" class="ff-tabs"></div>
+    <div id="craftHint" class="ff-panel-hint"></div>
+    <div id="craftBody"></div>
+    <div class="ff-panel-foot"><button id="craftClose" class="ff-btn small">關閉</button></div>
   </div>
 
   <!-- 稱號一覽：已解鎖的可以選，顯示在名字上方 -->

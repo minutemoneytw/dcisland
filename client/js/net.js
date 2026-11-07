@@ -112,6 +112,7 @@ export function connectNet(S, opts = {}) {
       case 'xp': if (opts.onXp) opts.onXp(msg); break;   // 自己的 XP 記帳結果（伺服器權威；不廣播）
       case 'commit_result': if (opts.onCommitResult) opts.onCommitResult(msg); break;
       case 'fish_result': if (opts.onFishResult) opts.onFishResult(msg); break;   // 釣魚結果（伺服器抽）
+      case 'craftdb': if (opts.onCraftDb) opts.onCraftDb(msg.craft); break;   // 合成解鎖紀錄（登入後由伺服器送來）
       case 'dex': if (opts.onDex) opts.onDex(msg.dex); break;                     // 魚類圖鑑（登入後由伺服器送來）
       case 'enter': {
         // 進入（或切換到）某地形：每個人各自在自己的地形，只看得到同地形的人
@@ -230,6 +231,9 @@ export function connectNet(S, opts = {}) {
   // xpSync：舊存檔一次性上繳（伺服器沒有紀錄才會收）；xpEvent：擊倒非主動怪（伺服器無法驗證，信任＋夾頻）
   net.xpSync = v => net.connected && send({ t: 'xpsync', v });
   net.xpEvent = k => net.connected && send({ t: 'xpe', k });
+  // 合成解鎖（素材圖鑑／配方筆記）：登入者由伺服器存（訪客伺服器會略過）。craftUnlock＝解鎖一筆（k：mat／furn／rec）；craftSync＝補傳本機有、伺服器沒有的
+  net.craftUnlock = (k, id) => net.connected && send({ t: 'craft', k, id });
+  net.craftSync = v => net.connected && send({ t: 'craftsync', mat: v.mat || [], furn: v.furn || [], rec: v.rec || [] });
 
   return net;
 }

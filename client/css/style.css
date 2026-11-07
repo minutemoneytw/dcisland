@@ -246,3 +246,28 @@ body {
 #weaponBar .wrow.cur { background: rgba(40, 36, 20, .92); border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
 #weaponBar .wrow.cur canvas, #weaponBar .wrow.cur .wic { opacity: 1; }
 #weaponBar .wrow.cur::after { content: attr(data-name); position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 4px; white-space: nowrap; padding: 1px 8px; font-size: 12px; letter-spacing: 2px; color: #ffe9a8; background: rgba(22, 25, 34, .85); border: 1px solid var(--gold-dim); text-shadow: 0 0 3px #000; pointer-events: none; }
+
+/* ---- 合成面板 ---- */
+#craftBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 560px; max-height: 500px; display: flex; flex-direction: column; z-index: 31; }
+#craftBox.hidden { display: none !important; }
+#craftBody { overflow-y: auto; margin: 2px 0 8px; min-height: 180px; }
+.craft-slots { display: flex; align-items: center; gap: 8px; justify-content: center; margin: 4px 0 8px; }
+.craft-slot { width: 52px; height: 52px; border: 1px dashed var(--gold-dim); background: rgba(255, 255, 255, .04); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.craft-slot.full { border-style: solid; background: #3a3424; }
+.craft-slot.fail { border-color: #c9544f; }
+.craft-slot canvas, .craft-card canvas { image-rendering: pixelated; }
+.craft-op { color: var(--gold); font-size: 16px; }
+.craft-msg { min-height: 32px; text-align: center; font-size: 12px; color: var(--text-dim); margin-bottom: 8px; line-height: 1.5; }
+.craft-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
+.craft-card { background: rgba(255, 255, 255, .04); border: 1px solid var(--gold-dim); padding: 6px 4px; text-align: center; cursor: pointer; }
+.craft-card:hover { border-color: var(--accent); }
+.craft-card.unknown { opacity: .8; border-style: dashed; cursor: default; }
+.craft-card canvas { width: 40px; height: 40px; display: block; margin: 0 auto 3px; }
+.craft-name { font-size: 12px; color: var(--text); }
+.craft-how { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+.craft-group { font-size: 12px; color: var(--gold); letter-spacing: 1px; margin: 6px 0 4px; }
+.craft-empty { grid-column: 1 / -1; text-align: center; font-size: 12px; color: var(--text-dim); padding: 10px; }
+.craft-note { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-bottom: 1px solid rgba(255, 255, 255, .06); flex-wrap: wrap; }
+.craft-mini { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.craft-mini canvas { width: 28px; height: 28px; image-rendering: pixelated; }
+.craft-mini.out { color: var(--gold); }

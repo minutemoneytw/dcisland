@@ -310,6 +310,9 @@ function sanitizeState(s, prev) {
 
 // ---- 等級與 XP（2026-11-06 規劃；第 2 步：登入者的 XP 由伺服器權威記帳，動值都經 Registry）----
 // 非主動怪是「刻意不同步」的本機動物，伺服器驗證不到擊倒屬實：信任事件＋夾頻（XP_MOB_CD_MS，2026-11-07 使用者同意）
+const CRAFT_KINDS = ["mat", "furn", "rec"];   // 合成解鎖紀錄的三類：素材／家具／配方（素材圖鑑＋配方筆記；2026-11-07）
+const CRAFT_MAX = 300;                    // 每類最多存幾筆（存檔安全閥；客戶端信任事件，不驗證 id 是否真的存在）
+const CRAFT_SYNC_MAX = 100;               // craftsync 每類一次最多收幾筆
 const XP_MAX = 200000;                  // XP 總量上限（防灌分的保險；等級無上限是設計，這裡只是存檔安全閥）
 const XP_MOB_CD_MS = 1000;              // 擊倒非主動怪的 XP 冷卻（每條連線；每來源每秒最多 1 次）
 const DEATH_CREDIT_MIN_MS = 25000;      // 同一條連線的「倒地記帳」（餵島主 XP／魚人升級）最短間隔：復活要 30 秒，正常玩法不會更密；擋住反覆切 state.dead 灌島主等級
@@ -869,6 +872,8 @@ export class Island {
         const r = await this.registryCall("/dex", { uid: user.id });
         if (r) try { ws.send(JSON.stringify({ t: "dex", dex: r.dex || {} })); } catch { /* 對方已斷線 */ }
         if (cur.xpKnown) try { ws.send(JSON.stringify({ t: "xp", xp: cur.xp, d: 0, k: "init" })); } catch { /* 對方已斷線 */ }
+        const cr = await this.registryCall("/craft", { uid: user.id, add: {} });   // 合成解鎖紀錄（素材圖鑑／配方筆記）
+        if (cr) try { ws.send(JSON.stringify({ t: "craftdb", craft: cr.craft || {} })); } catch { /* 對方已斷線 */ }
       }
     } else if (msg.t === "state") {
       const s = sanitizeState(msg.s && typeof msg.s === "object" ? msg.s : {}, att.state);
@@ -907,6 +912,17 @@ export class Island {
           ws.serializeAttachment(cur);
           try { ws.send(JSON.stringify({ t: "xp", xp: r.xp, d: 0, k: "init" })); } catch { /* 對方已斷線 */ }
         }
+      }
+    } else if (msg.t === "craft") {   // 合成解鎖一筆（素材／家具／配方；客戶端自判，伺服器只存，不驗證 id 是否存在；訪客略過）
+      if (att.user && CRAFT_KINDS.includes(msg.k) && ID_RE.test(String(msg.id))) {
+        await this.registryCall("/craft", { uid: att.user.id, add: { [msg.k]: [String(msg.id)] } });
+      }
+    } else if (msg.t === "craftsync") {   // 補傳本機有、伺服器沒有的解鎖（訪客時期的進度併進帳號）；回整份 craftdb
+      if (att.user) {
+        const add = {};
+        for (const k of CRAFT_KINDS) add[k] = (Array.isArray(msg[k]) ? msg[k] : []).slice(0, CRAFT_SYNC_MAX).map(String).filter(id => ID_RE.test(id));
+        const r = await this.registryCall("/craft", { uid: att.user.id, add });
+        if (r) try { ws.send(JSON.stringify({ t: "craftdb", craft: r.craft || {} })); } catch { /* 對方已斷線 */ }
       }
     } else if (msg.t === "xpe") {   // 擊倒非主動怪的 XP 事件（伺服器無法驗證：信任事件＋夾頻；2026-11-07 使用者同意）
       if (att.user && msg.k === "mob" && att.terrain) {
@@ -1848,6 +1864,7 @@ export class Island {
 // 全站只有一個實例（idFromName("global")），只由 Island 透過 REGISTRY 綁定呼叫，沒有對外的路由。
 // 資料：dex:<Discord 使用者 ID> → { 地形: { 魚id: { max（最大尺寸 cm）, n（釣到次數）, first（第一次釣到的時間） } } }
 //       xp:<Discord 使用者 ID> → 總 XP（整數；2026-11-07 腳色等級第 2 步）
+//       craft:<Discord 使用者 ID> → { mat: {素材id: 解鎖時間}, furn: {家具id: 時間}, rec: {配方id: 時間} }（合成：素材圖鑑／配方筆記）
 // 讀寫在同一個請求裡只 await storage，DO 的 input gate 會擋住其他請求插隊，所以同一人同時送兩筆也不會互相覆蓋
 const UID_RE = /^[0-9A-Za-z_-]{1,40}$/;
 export class Registry {
@@ -1873,6 +1890,20 @@ export class Registry {
       t[id] = { max: e ? Math.max(e.max, size) : size, n: (e ? e.n : 0) + 1, first: e ? e.first : Date.now() };
       await this.state.storage.put(key, dex);
       return json({ entry: t[id], isNew, isRecord });
+    }
+    if (url.pathname === "/craft") {   // 合成解鎖：add＝{mat:[id…], furn:[…], rec:[…]} 併進去（已有的不動；每類上限 CRAFT_MAX），回整份；add 空＝只讀
+      const ck = "craft:" + uid, craft = (await this.state.storage.get(ck)) || {};
+      let changed = false;
+      const add = body.add && typeof body.add === "object" ? body.add : {};
+      for (const k of CRAFT_KINDS) {
+        const m = craft[k] || (craft[k] = {});
+        for (const id of Array.isArray(add[k]) ? add[k] : []) {
+          if (!ID_RE.test(String(id)) || m[id] || Object.keys(m).length >= CRAFT_MAX) continue;
+          m[id] = Date.now(); changed = true;
+        }
+      }
+      if (changed) await this.state.storage.put(ck, craft);
+      return json({ craft });
     }
     // ---- 腳色等級 XP（與 Island 的 grantXp／hello／xpsync 搭配）----
     if (url.pathname === "/profile") {

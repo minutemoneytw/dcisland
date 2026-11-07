@@ -74,6 +74,7 @@ python tools/dev_server.py       # 需要 Python 3；不用 Node
 | NPC／嚮導／台詞／操作說明 | `client/assets/npcs/npcs.json`（`terrains.<地圖>` 每張地圖各自的 NPC，`help` 是嚮導的說明視窗） |
 | 魚（釣魚／圖鑑） | `tools/gen_assets.py` 的 `FISH_TABLE` 加一列（地形、id、名稱、稀有度 `common`/`uncommon`/`rare`、尺寸 cm 範圍、畫圖）再重跑，產生 `client/assets/fish/<id>.png` 與 `fish.json`；稀有度權重、脫鉤率（0.2%）與大尺寸門檻 `big`（尺寸範圍的 75% 處）在 `fish_manifest()` |
 | 稱號 | `client/assets/titles/titles.json`（手寫）加一項：`id`、`name`（頭上顯示成《name》）、`desc`（解鎖條件說明）、`cond`（`owner` 參與擊倒島主／`dex` 某地形圖鑑收集 n 種／`big` 釣到過大尺寸的魚種／`titles` 列出的稱號全解鎖，見 `docs/notes.md`「稱號」）；新的條件類型才要改 `main.js` 的 `titleProgress` |
+| 合成素材／配方／合成家具 | `client/assets/craft/craft.json`（手寫）：`materials` 加素材、`sources` 設掉落（地形物件／釣魚／野外動物）、`recipes` 加配方（2～3 個素材不分順序；產出素材或家具）；圖示在 `tools/gen_assets.py` 的 `MATERIAL_ICONS` 加一筆，合成家具另在 `FURN_MANIFEST` 加 `craft=True` 的條目＋畫圖函式。素材採集過一次就解鎖、之後無限使用；合成出的東西同樣解鎖 |
 | 可破壞物件／採集工具／掉落物 | `client/assets/tools/tools.json`（key＝地形 deco 的圖檔名；掉落物目前為空） |
 | 島主招式（倒數條／招式名／放招前要不要講台詞） | `client/assets/skills/skills.json`（手寫；key＝`mobs.json` 的 `atk` 攻擊樣式）：`name` 招式名稱、`bar: true` 預警時在島主頭上顯示黃色倒數條（右上角是招式名稱）、`say: false` 被打不講台詞直接開始預警。兩份伺服器也讀 `say` |
 | 島主 | `terrain.json` 加 `"owner": "<動物id>"`（一張地圖一隻）；動物本體照上面的「動物」方式加，`"owner": true`＋`"big"` 放大倍率。機制見下方「島主」 |

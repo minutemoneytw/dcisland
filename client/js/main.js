@@ -94,6 +94,9 @@ const S = {
   fishDB: null, fishImgs: {},          // 釣魚：魚類 manifest（assets/fish/fish.json）與圖
   dex: lsObj('dcisland.m0.fishdex', {}),   // 魚類圖鑑：地形 -> 魚id -> {max（最大尺寸 cm）, n（釣到次數）}；登入後換成伺服器的
   dexSource: 'local',                  // 'local'＝訪客／未連線（存本機）；'server'＝伺服器依 Discord 帳號保存
+  craftDB: null, craftImgs: {},         // 合成：assets/craft/craft.json（手寫）與素材圖
+  craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
+  craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
   titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
@@ -308,7 +311,7 @@ function applyDecoHit(d, hp, dead, ttl, mine) {
   if (!dead) return;
   d.dead = true; d.respawnAt = S.t + ttl / 1000;
   S.floaters.push({ x: bx, y: r.y + r.h * .5, poof: true, life: .55 });
-  if (mine) { spawnDrops(tgt, bx, by); grantExp(1, bx, by - 40, 'mine'); toast(`${tgt.name}被破壞了`, 1600); }   // 採集成功（打壞的人）＋1 XP（登入者由伺服器記）
+  if (mine) { spawnDrops(tgt, bx, by); spawnCraftDrops(S.craftDB?.sources.deco[d.sprite], bx, by); grantExp(1, bx, by - 40, 'mine'); toast(`${tgt.name}被破壞了`, 1600); }   // 採集成功（打壞的人）＋1 XP（登入者由伺服器記）
 }
 // 進入地形時伺服器給的完整狀態：先全部還原，再套用受損/已破壞的
 function onNetDecos(terrain, list) {
@@ -345,6 +348,7 @@ function stepDrops(dt) {
     const dr = S.drops[i];
     if (S.t - dr.born < .5 || Math.hypot(dr.x - p.x, dr.y - p.y) > 24) continue;
     S.drops.splice(i, 1);
+    if (matDef(dr.item)) { collectMaterial(dr.item, p.x, p.y); continue; }   // 合成素材：解鎖進圖鑑（不進背包、無限使用）
     S.inv[dr.item] = (S.inv[dr.item] || 0) + 1;
     lsSet('dcisland.m0.inv', S.inv);
     toast(`獲得 ${S.toolsDB.items[dr.item].name} ×1（共 ${S.inv[dr.item]}）`, 1600);
@@ -539,7 +543,7 @@ function hitMob(p, a, ranged, force) {
     if (a.hp <= 0) {
       a.dead = true; a.dieT = .6;
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
-      if (p === S.players[0] && !od.owner && !od.lurker) grantExp(1, p.x, p.y - 60, 'mob');   // 非主動怪（羊／鳥／蛙）：擊倒 +1 XP（登入者上報事件由伺服器記；島主／魚人那步由伺服器計）
+      if (p === S.players[0] && !od.owner && !od.lurker) { grantExp(1, p.x, p.y - 60, 'mob'); spawnCraftDrops(S.craftDB?.sources.mob[od.id], a.x, a.y); }   // 合成素材：擊倒野外動物掉落   // 非主動怪（羊／鳥／蛙）：擊倒 +1 XP（登入者上報事件由伺服器記；島主／魚人那步由伺服器計）
       if (!od.owner && !od.lurker) {   // 殺到動物回 1 HP（島主是伺服器權威事件，不算在此；釣上來的怪物也不算）
         const me = S.players[0];
         me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + 1);
@@ -3531,6 +3535,7 @@ function showCatch(p, m) {
   const def = fishDef(m.terrain, m.id), rar = S.fishDB.rarity[m.rarity];
   if (!def) return;
   const { isNew, isRecord } = recordCatch(m);
+  for (const e of S.craftDB?.sources.fish || []) if ((!e.terrains || e.terrains.includes(m.terrain)) && Math.random() < (e.chance ?? 1)) collectMaterial(e.item, p.x, p.y);   // 合成素材：釣魚偶爾得到
   grantExp(isNew ? 5 : 1, p.x, p.y - 80, 'fish');   // 釣到魚 +1 XP；圖鑑首捕 +5（登入者由伺服器記帳——牠自己抽的魚自己知道）
   if (S.fishImgs[m.id]) S.floaters.push({ x: p.x, y: p.y - 64, fishImg: S.fishImgs[m.id], life: 1.8 });
   const big = def.big != null && m.size >= def.big;
@@ -3634,6 +3639,158 @@ function buildDex() {
     }
     grid.appendChild(card);
   }
+}
+
+// ---- 合成：素材圖鑑／合成／配方筆記（2026-11-07，使用者要求）----
+// 資料在 assets/craft/craft.json（手寫）。素材「採集過一次就解鎖進圖鑑、之後無限使用（不消耗）」；合成出的素材／家具同樣解鎖。
+// 成功猜出新配方就記進配方筆記。解鎖紀錄 S.craft = { mat:{素材id:時間}, furn:{家具id:時間}, rec:{配方id:時間} }：
+// 登入者以伺服器為準（craftdb／craft／craftsync，見 notes 的「合成」），訪客／單機存 localStorage（dcisland.m0.craft）。解鎖純客戶端判斷（信任客戶端，使用者定）。
+const CRAFT_KINDS = ['mat', 'furn', 'rec'];
+function craftNorm(c) { const o = {}; for (const k of ['mat', 'furn', 'rec']) o[k] = (c && typeof c[k] === 'object' && c[k] && !Array.isArray(c[k])) ? { ...c[k] } : {}; return o; }   // function 宣告（S 初始化時要用到）
+const craftSave = () => lsSet('dcisland.m0.craft', S.craft);
+const matDef = id => S.craftDB?.matById.get(id) || null;
+const recipeKey = ids => [...ids].sort().join('+');
+function initCraft(db) {
+  if (!db || !Array.isArray(db.materials)) return;
+  db.matById = new Map(db.materials.map(m => [m.id, m]));
+  db.recipeByKey = new Map(db.recipes.map(r => [recipeKey(r.in), r]));
+  S.craftDB = db;
+  $('btnCraft').style.display = '';
+}
+// 解鎖一筆；回傳 true＝這次才解鎖。登入者順手通知伺服器（訪客／沒連線 net 會自己略過）
+function unlockCraft(k, id) {
+  if (S.craft[k][id]) return false;
+  S.craft[k][id] = Date.now();
+  craftSave();
+  S.net?.craftUnlock?.(k, id);
+  if (S.craftOpen) buildCraft();
+  if (k === 'furn' && S.mode === 'decor') buildFurnPanel();
+  return true;
+}
+// 撿到／得到素材：新的就解鎖並提示，已解鎖的只在頭上飄一下名字
+function collectMaterial(id, x, y) {
+  const m = matDef(id); if (!m) return;
+  if (unlockCraft('mat', id)) toast(`解鎖素材：${m.name}！已記入素材圖鑑，之後可無限使用`, 2800);
+  else S.floaters.push({ x, y: y - 50, v: m.name, life: .8 });
+}
+// 擲一次掉落表：[{item,min,max,chance}] → 回傳 [{item, n}]
+function rollCraftDrops(list) {
+  const out = [];
+  for (const e of list || []) {
+    if (!matDef(e.item) || Math.random() >= (e.chance ?? 1)) continue;
+    const lo = e.min ?? 1, n = lo + Math.floor(Math.random() * ((e.max ?? lo) - lo + 1));
+    if (n > 0) out.push({ item: e.item, n });
+  }
+  return out;
+}
+function spawnCraftDrops(list, x, y) {   // 掉在地上、走過去自動撿（與 tools.json 的 drops 同一套）
+  for (const { item, n } of rollCraftDrops(list)) for (let i = 0; i < n; i++) S.drops.push({ item, x: x + Math.random() * 30 - 15, y: y + Math.random() * 16 - 4, born: S.t });
+}
+const furnAvailable = it => !it.craft || !!S.craft.furn[it.id];   // furniture.json 標 craft 的家具要合成解鎖才能擺
+
+// 把素材／家具的圖畫進一個 canvas（家具取第 1 幀、置中縮放）
+function craftIcon(kind, id, size) {
+  const cv = document.createElement('canvas'); cv.width = size; cv.height = size;
+  const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+  if (kind === 'furn') {
+    const spr = S.furnImgs[id];
+    if (spr) { const s2 = Math.min(size / spr.fw, size / spr.fh); const w = spr.fw * s2, h = spr.fh * s2; g.drawImage(spr.img, 0, 0, spr.fw, spr.fh, (size - w) / 2, size - h, w, h); }
+  } else {
+    const im = S.craftImgs[id]; if (im) g.drawImage(im, 0, 0, size, size);
+  }
+  return cv;
+}
+function craftSilhouette(cv) { const g = cv.getContext('2d'); g.globalCompositeOperation = 'source-in'; g.fillStyle = '#07090c'; g.fillRect(0, 0, cv.width, cv.height); return cv; }
+const outName = o => o.kind === 'furniture' ? (furnitureDef(o.id)?.name || o.id) : (matDef(o.id)?.name || o.id);
+const outKey = o => o.kind === 'furniture' ? 'furn' : 'mat';
+
+function openCraft() { S.craftOpen = true; S.craftTab ||= 'make'; S.craftMsg = ''; buildCraft(); $('craftBox').classList.remove('hidden'); }
+function closeCraft() { S.craftOpen = false; $('craftBox').classList.add('hidden'); }
+function craftAddSlot(id) {
+  if (S.craftSlots.length >= (S.craftDB.maxInputs || 3)) { S.craftMsg = '放不下了：最多 ' + (S.craftDB.maxInputs || 3) + ' 個素材'; buildCraft(); return; }
+  S.craftSlots.push(id); S.craftMsg = ''; buildCraft();
+}
+function tryCraft() {
+  const ids = S.craftSlots;
+  if (ids.length < 2) { S.craftMsg = '至少要放 2 個素材'; buildCraft(); return; }
+  const r = S.craftDB.recipeByKey.get(recipeKey(ids));
+  if (!r) { S.craftMsg = '什麼都沒發生……（素材不會消耗，換個組合試試）'; S.craftFail = true; buildCraft(); S.craftFail = false; return; }
+  const newRec = unlockCraft('rec', r.id), newOut = unlockCraft(outKey(r.out), r.out.id);
+  const nm = outName(r.out);
+  S.craftMsg = `合成成功：${nm}！` + (newRec ? '（新配方已記進配方筆記）' : '（已經會這個配方了）') + (newOut ? (r.out.kind === 'furniture' ? ' 家具已解鎖，可在裝飾模式無限擺放。' : ' 素材已解鎖，可無限使用。') : '');
+  if (newRec) toast(`新配方：${r.in.map(i => matDef(i)?.name || i).join(' + ')} → ${nm}`, 3200);
+  S.craftSlots = [];
+  buildCraft();
+}
+function buildCraft() {
+  const db = S.craftDB; if (!db) return;
+  const tabs = $('craftTabs'); tabs.innerHTML = '';
+  for (const [id, name] of [['make', '合成'], ['dex', '素材圖鑑'], ['notes', '配方筆記']]) {
+    const b = document.createElement('button'); b.className = 'ff-btn small' + (S.craftTab === id ? ' active' : ''); b.textContent = name;
+    b.onclick = () => { S.craftTab = id; S.craftMsg = ''; buildCraft(); }; tabs.appendChild(b);
+  }
+  const nMat = db.materials.filter(m => S.craft.mat[m.id]).length, nRec = db.recipes.filter(r => S.craft.rec[r.id]).length;
+  $('craftHint').textContent = `素材 ${nMat}／${db.materials.length} · 配方 ${nRec}／${db.recipes.length}` + (S.net?.uid ? ' · 以 Discord 帳號保存' : ' · 訪客／未連線：只存在這台電腦');
+  const body = $('craftBody'); body.innerHTML = '';
+  const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  if (S.craftTab === 'make') {
+    const row = mk('div', 'craft-slots');
+    const max = db.maxInputs || 3;
+    for (let i = 0; i < max; i++) {
+      const id = S.craftSlots[i], sl = mk('div', 'craft-slot' + (id ? ' full' : '') + (S.craftFail ? ' fail' : ''));
+      if (id) { sl.appendChild(craftIcon('mat', id, 40)); sl.title = matDef(id)?.name + '（點一下取下）'; sl.onclick = () => { S.craftSlots.splice(i, 1); S.craftMsg = ''; buildCraft(); }; }
+      row.appendChild(sl);
+      if (i < max - 1) row.appendChild(mk('span', 'craft-op', '+'));
+    }
+    const go = mk('button', 'ff-btn', '合成'); go.onclick = tryCraft;
+    const clr = mk('button', 'ff-btn small', '清空'); clr.onclick = () => { S.craftSlots = []; S.craftMsg = ''; buildCraft(); };
+    row.append(mk('span', 'craft-op', '→'), go, clr);
+    body.appendChild(row);
+    body.appendChild(mk('div', 'craft-msg', S.craftMsg || '點下面的素材放進合成格（2～' + max + ' 個，不分順序），猜對配方就能做出新東西。素材用不完，錯誤的組合也不會消耗。'));
+    const grid = mk('div', 'craft-grid');
+    const have = db.materials.filter(m => S.craft.mat[m.id]);
+    for (const m of have) {
+      const card = mk('div', 'craft-card'); card.append(craftIcon('mat', m.id, 40), mk('div', 'craft-name', m.name));
+      card.onclick = () => craftAddSlot(m.id); grid.appendChild(card);
+    }
+    if (!have.length) grid.appendChild(mk('div', 'craft-empty', '還沒有素材：去採集（砍樹、敲石頭）、釣魚或打野外動物，蒐集到的素材會解鎖在這裡。'));
+    body.appendChild(grid);
+  } else if (S.craftTab === 'dex') {
+    for (const g of db.groups) {
+      const list = db.materials.filter(m => m.group === g.id); if (!list.length) continue;
+      body.appendChild(mk('div', 'craft-group', `${g.name}　${list.filter(m => S.craft.mat[m.id]).length}／${list.length}`));
+      const grid = mk('div', 'craft-grid');
+      for (const m of list) {
+        const got = !!S.craft.mat[m.id], card = mk('div', 'craft-card' + (got ? '' : ' unknown'));
+        const cv = craftIcon('mat', m.id, 40); card.append(got ? cv : craftSilhouette(cv), mk('div', 'craft-name', got ? m.name : '？？？'));
+        if (got) card.append(mk('div', 'craft-how', m.how));
+        grid.appendChild(card);
+      }
+      body.appendChild(grid);
+    }
+  } else {
+    const list = db.recipes.filter(r => S.craft.rec[r.id]).sort((a, b) => S.craft.rec[a.id] - S.craft.rec[b.id]);
+    for (const r of list) {
+      const row = mk('div', 'craft-note');
+      r.in.forEach((id, i) => { if (i) row.appendChild(mk('span', 'craft-op', '+')); const c = mk('div', 'craft-mini'); c.append(craftIcon('mat', id, 28), mk('span', null, matDef(id)?.name || id)); row.appendChild(c); });
+      row.appendChild(mk('span', 'craft-op', '→'));
+      const o = mk('div', 'craft-mini out'); o.append(craftIcon(outKey(r.out), r.out.id, 28), mk('span', null, outName(r.out) + (r.out.kind === 'furniture' ? '（家具）' : '')));
+      row.appendChild(o); body.appendChild(row);
+    }
+    body.appendChild(mk('div', 'craft-empty', list.length ? `還有 ${db.recipes.length - list.length} 個配方沒發現` : '還沒有發現任何配方：到「合成」分頁試試看吧。'));
+  }
+}
+// 伺服器送來的解鎖紀錄（登入後、craftsync 之後）：和本機取聯集（訪客時期的進度併進帳號），本機有伺服器沒有的補傳
+function onNetCraftDb(c) {
+  const srv = craftNorm(c), merged = craftNorm(S.craft), up = { mat: [], furn: [], rec: [] };
+  for (const k of CRAFT_KINDS) {
+    for (const [id, t] of Object.entries(srv[k])) if (!merged[k][id] || merged[k][id] > t) merged[k][id] = t;
+    for (const id of Object.keys(S.craft[k])) if (!srv[k][id]) up[k].push(id);
+  }
+  S.craft = merged; craftSave();
+  if (up.mat.length || up.furn.length || up.rec.length) S.net?.craftSync?.(up);
+  if (S.craftOpen) buildCraft();
+  if (S.mode === 'decor') buildFurnPanel();
 }
 
 // ---- 稱號：達成條件就解鎖（assets/titles/titles.json），在造型面板的「稱號設定」選一個顯示在名字上方 ----
@@ -3844,12 +4001,13 @@ function draw() {
   }
   // 掉落物
   for (const dr of S.drops) {
-    const def = S.toolsDB.items[dr.item];
+    const def = S.toolsDB.items[dr.item] || matDef(dr.item), icon = S.craftImgs[dr.item];
     list.push({
       y: dr.y, draw: () => {
         const bob = Math.sin(S.t * 5 + dr.x) * 2;
         ctx.fillStyle = 'rgba(10,14,20,.3)';
         ctx.beginPath(); ctx.ellipse(dr.x, dr.y, 5, 2, 0, 0, Math.PI * 2); ctx.fill();
+        if (icon) { ctx.imageSmoothingEnabled = false; ctx.drawImage(icon, dr.x - 10, dr.y - 22 - bob, 20, 20); return; }
         ctx.fillStyle = def?.color || '#fff'; ctx.strokeStyle = 'rgba(20,16,12,.9)'; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(dr.x, dr.y - 7 - bob, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
@@ -4393,7 +4551,8 @@ function updateDecorUI() {
 function enterDecor() {
   S.mode = 'decor'; S.draft = []; S.baseFurn = cloneFurn(S.furnItems); S.baseFloor = new Map(S.floorMap); S.paint = null;
   $('btnDecor').classList.add('active'); $('furnPanel').classList.remove('hidden');
-  S.sel = S.sel || S.furn.items.find(it => S.furnImgs[it.id] && !it.legacy)?.id || null;   // 缺圖／legacy 的種類不列出、也不預選
+  if (S.sel && !furnAvailable(furnitureDef(S.sel) || {})) S.sel = null;   // 合成家具還沒解鎖就不能預選
+  S.sel = S.sel || S.furn.items.find(it => S.furnImgs[it.id] && !it.legacy && furnAvailable(it))?.id || null;   // 缺圖／legacy 的種類不列出、也不預選
   S.selFloor = S.selFloor || S.floors.items.find(it => S.floorImgs[it.id])?.id || null;
   buildFurnPanel(); updateDecorUI();
   toast('裝飾模式：左鍵放置／右鍵移除（按「完成」才會保存）', 2600);
@@ -4520,7 +4679,7 @@ function buildFurnPanel() {
   }
   for (const it of S.furn.items) {
     const img = S.furnImgs[it.id];
-    if (!img || it.legacy) continue;       // 缺圖的家具不列出；legacy＝已改成別的東西（例如地毯改為地板），舊存檔照畫但不能再擺
+    if (!img || it.legacy || !furnAvailable(it)) continue;       // 合成家具要解鎖才列出； 缺圖的家具不列出；legacy＝已改成別的東西（例如地毯改為地板），舊存檔照畫但不能再擺
     const div = document.createElement('div');
     div.className = 'fitem' + (S.sel === it.id ? ' sel' : '');
     const cv = document.createElement('canvas');
@@ -4774,7 +4933,7 @@ function cycleWeapon(step) {
   setWeapon(ws[(i + step + ws.length) % ws.length].id);
 }
 let wheelAcc = 0, wheelAt = 0;
-const wheelBlocked = () => S.mode !== 'walk' || S.helpOpen || S.listOpen || S.dexOpen || S.titleOpen || S.colorOpen || S.glamOpen || S.signOpen || S.confirmOpen;
+const wheelBlocked = () => S.mode !== 'walk' || S.helpOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.colorOpen || S.glamOpen || S.signOpen || S.confirmOpen;
 document.addEventListener('wheel', e => {
   const t = e.target;
   if (t !== canvas && !t.closest?.('#weaponBar')) return;   // 只有在遊戲畫面或武器列上滾才切換（面板、視窗要照常捲動）
@@ -4830,6 +4989,7 @@ addEventListener('keydown', e => {
   }
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   if (S.listOpen) { if (k === 'escape' || k === 'l') closeList(); return; }                // 線上列表開著：Esc / L 關閉
+  if (S.craftOpen) { if (k === 'escape') closeCraft(); return; }                          // 合成面板開著：Esc 關閉（仍可走路）
   if (S.dexOpen) { if (k === 'escape') closeDex(); return; }                               // 圖鑑開著：Esc 關閉（仍可走路）
   if (S.titleOpen) { if (k === 'escape') closeTitles(); return; }                          // 稱號一覽開著：Esc 關閉（仍可走路）
   if (S.colorOpen) { if (k === 'escape') closeColor(false); return; }                      // 選色視窗開著：Esc 取消
@@ -4966,7 +5126,7 @@ function clickAttack(wx, wy) {
 }
 // 長按 F 或左鍵：冷卻一到就自動再揮（每幀呼叫；第一下由按下事件負責，之後這裡接手）
 function autoAttack() {
-  if (S.mode !== 'walk' || S.helpOpen || S.listOpen || S.signOpen || S.dexOpen || S.titleOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
+  if (S.mode !== 'walk' || S.helpOpen || S.listOpen || S.signOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
   if (isRod() || S.players[0].fish) return;   // 釣竿不連擊：長按不會一直拋竿／收竿
   quiet = true;
   try {
@@ -4977,7 +5137,7 @@ function autoAttack() {
   } finally { quiet = false; }
 }
 canvas.addEventListener('mousedown', e => {
-  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.titleOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen) return;
   if (S.mode === 'decor' && S.decorTab === 'floor' && (e.button === 0 || e.button === 2)) {   // 地板模式：長按左鍵鋪、長按右鍵拆
     if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
     const r = canvas.getBoundingClientRect();
@@ -5004,7 +5164,7 @@ canvas.addEventListener('mousedown', e => {
 });
 canvas.addEventListener('contextmenu', e => {
   e.preventDefault();
-  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.titleOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen) return;
   if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身
     const r = canvas.getBoundingClientRect();
     const f = furnAtPoint(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y);
@@ -5056,6 +5216,8 @@ document.addEventListener('click', e => {   // 點齒輪與選單以外的地方
 });
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => { closeColor(false); closeGlams(); $('avatarPanel').classList.add('hidden'); };
+$('btnCraft').onclick = () => { if (S.craftOpen) closeCraft(); else if (S.craftDB) openCraft(); };
+$('craftClose').onclick = closeCraft;
 $('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑
 $('dexClose').onclick = closeDex;
 $('btnTitles').onclick = () => { if (S.titleOpen) closeTitles(); else openTitles(); };   // 造型面板的「稱號設定」：稱號一覽
@@ -5091,7 +5253,7 @@ let welcomeUntil = 0;
 async function boot() {
   $('btnDecor').disabled = false;
   // manifest：互不相依，一次全部並行抓（以前是一個接一個，首次進島要等一長串往返）
-  const [tjson, furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB] = await Promise.all([
+  const [tjson, furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB, craftDB] = await Promise.all([
     Promise.all(TERRAIN_IDS.map(id => loadJSON(`assets/terrain/${id}/terrain.json`))),
     loadJSON('assets/furniture/furniture.json'),
     loadJSON('assets/floors/floors.json'),
@@ -5103,10 +5265,12 @@ async function boot() {
     loadJSON('assets/skills/skills.json').catch(() => ({ skills: {} })),   // 島主招式（倒數條／招式名／要不要講台詞）；讀不到就照舊
     loadJSON('assets/titles/titles.json').catch(() => ({ titles: [] })),   // 稱號；讀不到就沒有稱號可選
     loadJSON('assets/jobs/jobs.json'),          // 職業（職能、職業武器、裝備、技能）
+    loadJSON('assets/craft/craft.json').catch(() => null),   // 合成素材與配方；讀不到就沒有合成功能
   ]);
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
   Object.assign(S, { furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB });
   loadJobs(jobsDB);
+  initCraft(craftDB);
   S.myLook = myLook;   // net.js 送 state 時用（自己的顯示造型）
   S.myLvl = () => lvInfo(S.profile.xp).lv;   // net.js 送 state 時用（自己的等級；登入者由伺服器覆寫）
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
@@ -5137,6 +5301,7 @@ async function boot() {
       S.weaponImgs[w.id] = im;
     }),
     ...Object.values(S.fishDB.terrains).flat().map(async f => S.fishImgs[f.id] = await optImg(`assets/fish/${f.sprite}`)),
+    ...(S.craftDB?.materials || []).map(async m => S.craftImgs[m.id] = await optImg(`assets/craft/${m.id}.png`)),
     ensureTerrain(S.terrain),
   ]);
 
@@ -5218,6 +5383,7 @@ async function boot() {
     onDragon: onNetDragon,   // 島主事件（aim/hp/dead/spawn/state 快照）
     onLurker: onNetLurker,   // 釣上來的敵對怪物（spawn/wander/claw/aggro/hp/dead/gone/state 快照）
     onFishResult,            // 釣魚結果（伺服器抽的魚；登入的人已記進伺服器的圖鑑）
+    onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); checkTitles(true); },   // 登入後伺服器送來的圖鑑（稱號跟著重算，不跳提示）
     onOpen: net => {
       if (performance.now() >= welcomeUntil) toast(`已連上島（${net.room}）`, 2000);
