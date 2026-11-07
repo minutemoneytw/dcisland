@@ -584,11 +584,18 @@ function omDraw(t, cid, idx) {
       tblLog(t, `${me.name} 湊成一對（${omLabel(card)}、${omLabel(mate)}）丟掉`);
     }
   }
-  shuffle(me.hand);
+  // 抽到的牌放在手牌最右邊、不自動洗牌：對方點的是「第幾張牌背」，要和這個人畫面上手牌的順序一致，洗牌是玩家自己的心理戰（omShuffle）
   for (const s of [me, th]) if (!s.hand.length && !s.out) { s.out = true; tblLog(t, `${s.name} 的牌出完了，安全過關！`); }
   const alive = t.seats.map((s, k) => (s.out ? -1 : k)).filter(k => k >= 0);
   if (alive.length <= 1) { omFinish(t, alive[0]); return; }
   t.turn = tblNextActive(t, i);
+}
+// 玩家自己洗牌（心理戰：讓對方猜不到鬼牌在哪）；手牌順序就是對方看到的牌背順序
+function omShuffle(t, cid) {
+  const [role, i] = tblFind(t, cid);
+  if (role !== "seat" || t.phase !== "playing" || t.seats[i].hand.length < 2) return;
+  shuffle(t.seats[i].hand);
+  tblLog(t, `${t.seats[i].name} 洗了牌`);
 }
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 function tblView(t, cid) {
@@ -599,7 +606,7 @@ function tblView(t, cid) {
     specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
   };
   if (role === "seat" && playing) {
-    v.hand = [...t.seats[i].hand].sort((a, b) => ((a === "JK") - (b === "JK")) || ((omRank(a) || 0) - (omRank(b) || 0)) || (a < b ? -1 : a > b ? 1 : 0));
+    v.hand = [...t.seats[i].hand];   // 照伺服器順序（不排序）：對方抽的第 k 張牌背＝這裡從左數第 k 張
   }
   return v;
 }
@@ -1053,6 +1060,7 @@ export class Island {
     if (a === "ready") tblReady(t, att.id, msg.v);
     else if (a === "sit") tblSit(t, att.id);
     else if (a === "draw") omDraw(t, att.id, msg.idx);
+    else if (a === "shuffle") omShuffle(t, att.id);
     else return;
     await this.saveTable(t);
     this.tableNotify(t);

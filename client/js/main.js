@@ -3915,11 +3915,13 @@ function buildTable() {
   // 我的手牌
   if (v.role === 'seat' && playing) {
     const hand = mk('div', 'table-hand');
-    hand.appendChild(mk('div', 'table-label', '你的手牌'));
+    hand.appendChild(mk('div', 'table-label', '你的手牌（順序就是對手看到的牌背順序：他點第幾張，抽走的就是你從左數第幾張）'));
     const cs = mk('div', 'table-cards big');
     for (const c of v.hand || []) cs.appendChild(cardEl(c));
     if (!(v.hand || []).length) cs.appendChild(mk('span', 'table-tag', '手牌出完了，安全過關！'));
-    hand.appendChild(cs); box.appendChild(hand);
+    hand.appendChild(cs);
+    if ((v.hand || []).length > 1) { const sh = mk('button', 'ff-btn small', '洗牌'); sh.onclick = () => S.net?.tbl?.({ a: 'shuffle' }); sh.title = '把手牌順序打亂，讓對手猜不到鬼牌在哪'; hand.appendChild(sh); }
+    box.appendChild(hand);
   }
   // 按鈕
   const btns = mk('div', 'table-btns');

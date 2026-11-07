@@ -761,7 +761,7 @@ def om_draw(t, cid, idx):
             me["hand"].remove(card)
             me["hand"].remove(mate)
             tbl_log(t, f"{me['name']} 湊成一對（{om_label(card)}、{om_label(mate)}）丟掉")
-    random.shuffle(me["hand"])
+    # 抽到的牌放在手牌最右邊、不自動洗牌：對方點的是「第幾張牌背」，要和這個人畫面上手牌的順序一致，洗牌是玩家自己的心理戰（om_shuffle）
     for s in (me, th):
         if not s["hand"] and not s["out"]:
             s["out"] = True
@@ -771,6 +771,17 @@ def om_draw(t, cid, idx):
         om_finish(t, alive[0])
         return
     t["turn"] = tbl_next_active(t, i)
+
+def om_shuffle(t, cid):
+    """玩家自己洗牌（心理戰：讓對方猜不到鬼牌在哪）；手牌順序就是對方看到的牌背順序。"""
+    role, i = tbl_find(t, cid)
+    if role != "seat" or t["phase"] != "playing":
+        return
+    me = t["seats"][i]
+    if len(me["hand"]) < 2:
+        return
+    random.shuffle(me["hand"])
+    tbl_log(t, f"{me['name']} 洗了牌")
 
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
@@ -784,7 +795,7 @@ def tbl_view(t, cid):
          "turn": t["turn"] if playing else -1, "target": tbl_next_active(t, t["turn"]) if playing else -1,
          "result": t["result"], "log": list(t["log"])}
     if role == "seat" and playing:
-        v["hand"] = sorted(t["seats"][i]["hand"], key=lambda c: (c == "JK", om_rank(c) or 0, c))
+        v["hand"] = list(t["seats"][i]["hand"])   # 照伺服器順序（不排序）：對方抽的第 k 張牌背＝這裡從左數第 k 張
     return v
 
 def tbl_info(t):
@@ -2019,6 +2030,8 @@ class Room:
                         tbl_sit(t, cid)
                     elif a == "draw":
                         om_draw(t, cid, msg.get("idx"))
+                    elif a == "shuffle":
+                        om_shuffle(t, cid)
                     else:
                         return [], None, None
                     self._table_notify_locked(t, out)
