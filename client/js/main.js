@@ -98,7 +98,7 @@ const S = {
   craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
   craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
   gamesDB: null, tableImgs: {},        // 和平島遊戲桌：遊戲定義（assets/games/games.json，手寫）與桌子圖
-  tableOpen: false, tableId: null, tableView: null, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
+  tableOpen: false, tableId: null, tableView: null, tableChoice: false, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
   titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
@@ -3870,12 +3870,14 @@ function openTable(tb) {
   for (const k of Object.keys(keys)) keys[k] = false;   // 放開所有按住的鍵（畫面蓋住後收不到 keyup，不然回來還在跑）
   S.mouseHeld = false;
   S.tableOpen = true; S.tableId = tb.id; S.tableView = null;
-  S.net.tbl({ a: 'join', id: tb.id });
+  const inf = S.tblInfo?.[tb.id];
+  if (!inf || (!inf.play && inf.n < inf.max)) S.tableChoice = true;   // 還有位子：先讓玩家選「入座」或「觀戰」（沒滿人也可以選觀戰）
+  else S.net.tbl({ a: 'join', id: tb.id, role: 'spec' });             // 滿人或已開局：直接觀戰
   buildTable(); $('tableBox').classList.remove('hidden');
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false;
   $('tableBox').classList.add('hidden');
 }
 function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已離開這桌）
@@ -3907,6 +3909,21 @@ function buildTable() {
   const tb = tablesHere().find(t => t.id === S.tableId), gd = tb && gameDef(tb.game), v = S.tableView;
   $('tableTitle').textContent = gd ? gd.name : '遊戲桌';
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  if (S.tableChoice) {   // 剛走到桌邊：選入座還是觀戰
+    const inf = S.tblInfo?.[S.tableId];
+    box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　目前 ${inf ? `${inf.n}/${inf.max} 人入座` : '還沒有人入座'}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));
+    box.appendChild(mk('div', 'table-tag', '要加入遊戲，還是先在旁邊看？（觀戰不用等滿人，之後想玩可以再按「入座」）'));
+    const bs = mk('div', 'table-btns');
+    for (const [label, role] of [['入座', 'seat'], ['觀戰', 'spec']]) {
+      const b = mk('button', 'ff-btn', label);
+      b.onclick = () => { S.tableChoice = false; S.net?.tbl?.({ a: 'join', id: S.tableId, role }); buildTable(); };
+      bs.appendChild(b);
+    }
+    const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); bs.appendChild(lv);
+    box.appendChild(bs);
+    if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+    return;
+  }
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
   const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
@@ -3952,6 +3969,7 @@ function buildTable() {
   if (v.role === 'seat' && !playing) {
     const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
     b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
   }
@@ -4032,6 +4050,7 @@ function buildGomoku(box, v, mk) {
   if (v.role === 'seat' && !playing) {
     const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
     b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
   }

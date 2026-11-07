@@ -234,7 +234,7 @@ export function connectNet(S, opts = {}) {
   net.xpSync = v => net.connected && send({ t: 'xpsync', v });
   net.xpEvent = k => net.connected && send({ t: 'xpe', k });
   // 合成解鎖（素材圖鑑／配方筆記）：登入者由伺服器存（訪客伺服器會略過）。craftUnlock＝解鎖一筆（k：mat／furn／rec）；craftSync＝補傳本機有、伺服器沒有的
-  // 和平島遊戲桌（牌局由伺服器權威）：a＝join（id）／leave／ready（v）／sit／draw（idx）／shuffle（抽鬼牌）／move（x, y；五子棋）
+  // 和平島遊戲桌（牌局由伺服器權威）：a＝join（id；role＝'spec' 表示選觀戰）／leave／stand（入座改觀戰）／ready（v）／sit／draw（idx）／shuffle（抽鬼牌）／move（x, y；五子棋）
   net.tbl = m => net.connected && send({ t: 'tbl', ...m });
   net.craftUnlock = (k, id) => net.connected && send({ t: 'craft', k, id });
   net.craftSync = v => net.connected && send({ t: 'craftsync', mat: v.mat || [], furn: v.furn || [], rec: v.rec || [] });

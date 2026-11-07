@@ -509,10 +509,11 @@ function tblResetSeats(t) {
   for (const s of t.seats) { s.ready = false; s.hand = []; s.out = false; }
   t.phase = "lobby"; t.turn = -1; t.g = null;
 }
-function tblJoin(t, cid, name) {
+// want＝"seat"（有空位且還沒開局才會入座，否則自動觀戰）或 "spec"（使用者自己選觀戰：沒滿人也可以）
+function tblJoin(t, cid, name, want) {
   if (tblFind(t, cid)[0]) return;
   const mx = GAME_LIMITS[t.game][1];
-  if (t.phase === "lobby" && t.seats.length < mx) { t.seats.push({ cid, name, ready: false, hand: [], out: false }); tblLog(t, `${name} 入座了`); }
+  if (want !== "spec" && t.phase === "lobby" && t.seats.length < mx) { t.seats.push({ cid, name, ready: false, hand: [], out: false }); tblLog(t, `${name} 入座了`); }
   else { t.specs.push({ cid, name }); tblLog(t, `${name} 來觀戰`); }
 }
 function tblLeave(t, cid) {
@@ -539,7 +540,19 @@ function tblReady(t, cid, v) {
   const [role, i] = tblFind(t, cid);
   if (role !== "seat" || t.phase !== "lobby") return;
   t.seats[i].ready = !!v;
-  if (t.seats.length >= GAME_LIMITS[t.game][0] && t.seats.every(s => s.ready)) GAME_START[t.game](t);   // 使用者定：全員按「準備」才開始
+  tblCheckStart(t);
+}
+function tblCheckStart(t) {
+  if (t.phase === "lobby" && t.seats.length >= GAME_LIMITS[t.game][0] && t.seats.every(s => s.ready)) GAME_START[t.game](t);   // 使用者定：全員按「準備」才開始
+}
+// 入座的人改成觀戰（只有還沒開局時；進行中要離開就是 leave，會結束這一局）。剩下的人若都已準備就開局
+function tblStand(t, cid) {
+  const [role, i] = tblFind(t, cid);
+  if (role !== "seat" || t.phase !== "lobby") return;
+  const s = t.seats.splice(i, 1)[0];
+  t.specs.push({ cid, name: s.name });
+  tblLog(t, `${s.name} 改為觀戰`);
+  tblCheckStart(t);
 }
 function omStart(t) {
   const deck = [];
@@ -1093,7 +1106,7 @@ export class Island {
       if (att.table && att.table !== tid) await this.tableLeave(ws);
       const t = await this.getTable(tid);
       const cur = ws.deserializeAttachment() || {};
-      tblJoin(t, att.id, String((att.state && att.state.name) || (att.user && att.user.name) || `玩家${att.id}`).slice(0, 12));
+      tblJoin(t, att.id, String((att.state && att.state.name) || (att.user && att.user.name) || `玩家${att.id}`).slice(0, 12), msg.role === "spec" ? "spec" : "seat");
       cur.table = tid; ws.serializeAttachment(cur);
       await this.saveTable(t);
       this.tableNotify(t);
@@ -1107,6 +1120,7 @@ export class Island {
     if (!t) return;
     if (a === "ready") tblReady(t, att.id, msg.v);
     else if (a === "sit") tblSit(t, att.id);
+    else if (a === "stand") tblStand(t, att.id);
     else if (a === "draw") omDraw(t, att.id, msg.idx);
     else if (a === "shuffle") omShuffle(t, att.id);
     else if (a === "move") gmMove(t, att.id, msg.x, msg.y);

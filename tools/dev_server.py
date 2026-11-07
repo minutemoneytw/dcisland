@@ -672,11 +672,12 @@ def tbl_reset_seats(t):
         s["ready"], s["hand"], s["out"] = False, [], False
     t["phase"], t["turn"], t["g"] = "lobby", -1, None
 
-def tbl_join(t, cid, name):
+def tbl_join(t, cid, name, want="seat"):
+    """want＝'seat'（有空位且還沒開局才會入座，否則自動觀戰）或 'spec'（使用者自己選觀戰：沒滿人也可以）。"""
     if tbl_find(t, cid)[0]:
         return
     mn, mx = GAME_LIMITS[t["game"]]
-    if t["phase"] == "lobby" and len(t["seats"]) < mx:
+    if want != "spec" and t["phase"] == "lobby" and len(t["seats"]) < mx:
         t["seats"].append({"cid": cid, "name": name, "ready": False, "hand": [], "out": False})
         tbl_log(t, f"{name} 入座了")
     else:
@@ -697,6 +698,21 @@ def tbl_leave(t, cid):
             tbl_log(t, f"{name} 離開了座位")
         t["seats"].pop(i)
 
+def tbl_check_start(t):
+    mn, mx = GAME_LIMITS[t["game"]]
+    if t["phase"] == "lobby" and len(t["seats"]) >= mn and all(s["ready"] for s in t["seats"]):   # 使用者定：全員按「準備」才開始
+        GAME_START[t["game"]](t)
+
+def tbl_stand(t, cid):
+    """入座的人改成觀戰（只有還沒開局時；進行中要離開就是 leave，會結束這一局）。剩下的人若都已準備就開局。"""
+    role, i = tbl_find(t, cid)
+    if role != "seat" or t["phase"] != "lobby":
+        return
+    s = t["seats"].pop(i)
+    t["specs"].append({"cid": cid, "name": s["name"]})
+    tbl_log(t, f"{s['name']} 改為觀戰")
+    tbl_check_start(t)
+
 def tbl_sit(t, cid):
     role, i = tbl_find(t, cid)
     mn, mx = GAME_LIMITS[t["game"]]
@@ -711,9 +727,7 @@ def tbl_ready(t, cid, v):
     if role != "seat" or t["phase"] != "lobby":
         return
     t["seats"][i]["ready"] = bool(v)
-    mn, mx = GAME_LIMITS[t["game"]]
-    if len(t["seats"]) >= mn and all(s["ready"] for s in t["seats"]):   # 使用者定：全員按「準備」才開始
-        GAME_START[t["game"]](t)
+    tbl_check_start(t)
 
 def om_start(t):
     deck = [f"{s}{r}" for s in OM_SUITS for r in range(1, 14)] + ["JK"]
@@ -2081,7 +2095,7 @@ class Room:
                     self._table_leave_locked(cid, out)
                 t = self.tables.setdefault(tid, tbl_new(tid, game))
                 name = str((c.get("state") or {}).get("name") or (c.get("user") or {}).get("name") or f"玩家{cid}")[:12]
-                tbl_join(t, cid, name)
+                tbl_join(t, cid, name, "spec" if msg.get("role") == "spec" else "seat")
                 c["table"], c["table_terr"] = tid, terr
                 self._table_notify_locked(t, out)
             else:
@@ -2095,6 +2109,8 @@ class Room:
                         tbl_ready(t, cid, msg.get("v"))
                     elif a == "sit":
                         tbl_sit(t, cid)
+                    elif a == "stand":
+                        tbl_stand(t, cid)
                     elif a == "draw":
                         om_draw(t, cid, msg.get("idx"))
                     elif a == "shuffle":
