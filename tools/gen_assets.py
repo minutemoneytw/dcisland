@@ -1187,7 +1187,7 @@ TERRAINS = [
          ground=("#d9c9a6", "#c8b690"), edge=("#ecdfb4", "#dfd09e"),
          water=("#5ab8d8", "#4aa8c8"), leaf=("#6ab85a", "#58a04a"), trunk="#8a6a46",
          deco=[], ui="#d9c9a6",
-         layout="room", campfire=False),   # room＝像室內：整張地圖都是地板，只有最外圈是水；campfire=False＝沒有營火
+         layout="room", campfire=False),   # room＝像室內：整張地圖都是地板（沒有水）；campfire=False＝沒有營火
 ]
 
 # 和平島的遊戲桌：地形 → [桌]。id＝桌 id（兩份伺服器的 TABLE_DEFS 要一致）、game＝client/assets/games/games.json 的遊戲 id、
