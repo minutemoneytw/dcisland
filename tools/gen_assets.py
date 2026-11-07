@@ -1903,7 +1903,7 @@ FISH_TABLE = [
     ("beach", "starfish", "海星", U, (10, 30), lambda: starfish("#e88a4a")),
     ("beach", "mahi", "鬼頭刀", R, (80, 180), lambda: fish("#4aa86a", "#f0d84a", L=14, H=6, fin="#3a88c8")),
     ("beach", "golden_turtle", "黃金海龜", R, (60, 120), lambda: turtle("#d8a830", "#a8c870", "#f8e8a0")),
-    # 機械島：周圍是同一片海（魚種沿用近海組合，同 id 共用圖檔；之後要加機械限定魚再擴充）
+    # 機械島：前 10 種沿用近海組合（同 id 共用圖檔）；機械限定的 20 種在最後的第二批
     ("machine", "sardine", "沙丁魚", C, (10, 20), lambda: fish("#6a8ab8", "#e0e8f0", L=10, H=4)),
     ("machine", "horse_mackerel", "竹莢魚", C, (15, 35), lambda: fish("#8aa0a8", "#e8e0c8", L=11, H=5, band="#c8b860")),
     ("machine", "hermit_crab", "寄居蟹", C, (3, 10), lambda: crab("#d8703a", shell="#e8d0a8")),
@@ -2084,7 +2084,27 @@ FISH_TABLE = [
     ("volcano", "magma_dragon", "熔岩龍魚", R, (100, 200), lambda: fish("#b82a2a", "#f8a03a", L=14, H=5, whisker=True, fin="#f8d83a", glow="#fff0a0", spots=((6, 7), (9, 7), (12, 7)))),
     ("volcano", "obsidian_ray", "黑曜魟", R, (70, 150), lambda: ray("#1a1a2a", "#f84a3a")),
     ("volcano", "sun_koi", "烈日錦鯉", R, (50, 100), lambda: fish("#f8c83a", "#fff0b0", L=12, H=6, fin="#f87a2a", glow="#fff8d0", spots=((6, 7), (9, 8), (11, 7)))),
-    ("volcano", "salamander_fish", "火蠑魚", R, (40, 90), lambda: eel("#f84a2a", "#f8d870")),
+    ("volcano", "salamander_fish", "火蠑魚", R, (40, 90), lambda: eel("#f84a2a", "#f8d870")),    # 機械島：機械海（第二批 20 種；前面 10 種沿用近海組合，同 id 共用圖檔）
+    ("machine", "oil_shrimp", "機油蝦", C, (3, 8), lambda: shrimp("#4a4a5a")),
+    ("machine", "verdigris_crab", "銅鏽蟹", C, (5, 12), lambda: crab("#4aa88a")),
+    ("machine", "gear_snail", "齒輪螺", C, (3, 8), lambda: snail("#8a8a98", "#c8a050")),
+    ("machine", "rust_carp", "鐵鏽鯽", C, (10, 30), lambda: fish("#a8603a", "#d8a878", L=10, H=6)),
+    ("machine", "cable_kelp", "電纜藻", C, (20, 90), lambda: kelp("#3a5a6a")),
+    ("machine", "oil_drum", "廢油桶", C, (30, 40), lambda: can("#5a6a7a", "#d8a830")),
+    ("machine", "old_bulb", "舊燈泡", C, (6, 12), lambda: bottle("#e8e0a0", 200)),
+    ("machine", "soda_can", "汽水罐", C, (8, 12), lambda: can("#d84a4a", "#e8e8e8")),
+    ("machine", "bolt_loach", "螺絲鰍", C, (8, 20), lambda: eel("#7a7a88", "#b8b8c8")),
+    ("machine", "iron_goby", "鐵砂鰕虎", C, (5, 12), lambda: fish("#6a6a78", "#a8a8b8", L=9, H=5, spots=((6, 7), (8, 6), (10, 8)))),
+    ("machine", "cog_octopus", "齒輪章魚", U, (30, 80), lambda: octopus("#7a8aa8")),
+    ("machine", "electric_eel", "電鰻", U, (60, 150), lambda: eel("#3a5a8a", "#f8e83a")),
+    ("machine", "steel_turtle", "鋼甲龜", U, (30, 70), lambda: turtle("#7a8aa0", "#a8b4c8", "#d8e0f0")),
+    ("machine", "turbine_squid", "渦輪烏賊", U, (20, 60), lambda: squid("#5a7aa8")),
+    ("machine", "dynamo_ray", "發電魟", U, (50, 120), lambda: ray("#4a6a8a", "#f8e83a")),
+    ("machine", "neon_angler", "霓虹鮟鱇", U, (30, 80), lambda: angler("#3a3a5a", "#4af8c8")),
+    ("machine", "clockwork_fish", "發條魚", R, (30, 60), lambda: fish("#c8a850", "#f0e0a0", L=12, H=6, fin="#a88a3a", spots=((6, 7), (9, 6)), glow="#fff0a0")),
+    ("machine", "circuit_fish", "電路魚", R, (40, 90), lambda: fish("#2a8a6a", "#8af8c8", L=12, H=5, stripes=(5, 8, 11), glow="#8af8e8")),
+    ("machine", "tungsten_marlin", "鎢鋼旗魚", R, (100, 220), lambda: fish("#9aa8b8", "#e0e8f0", L=14, H=5, horn="#e8e8f0")),
+    ("machine", "steam_whale", "蒸汽鯨", R, (150, 300), lambda: fish("#8a98a8", "#e8eef4", L=14, H=7, fin="#c8d0d8", glow="#f0f4f8")),
 ]
 
 def fish_manifest():
