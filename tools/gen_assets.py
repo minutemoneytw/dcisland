@@ -613,6 +613,12 @@ LPC_CLOTHES = [                  # 基本服裝（LPC 原檔）：(遊戲檔名,
     ("bottom_pants_m", "bottom_pants_m.png"), ("bottom_pants_f", "bottom_pants_f.png"),
     ("shoes_m", "shoes_m.png"), ("shoes_f", "shoes_f.png"),
 ]
+LPC_HAIR_STYLES = [              # 其他 LPC 髮型（每個一種顏色；走路列）：(id, 名稱, external 檔名)
+    ("afro", "爆炸頭", "hair_afro.png"),
+    ("bob", "鮑伯頭", "hair_bob.png"),
+    ("curly", "捲長髮", "hair_curly.png"),
+    ("long", "長髮", "hair_long.png"),
+]
 
 def _lpc_hair_cell(w, data, row, f):
     """把 LPC sheet 的 (列, 幀) 那格縮放 LPC_SCALE、對齊我們的頭部，回傳 Canvas(64×64)。"""
@@ -2061,6 +2067,9 @@ def main():
     for i, (cid, _cname) in enumerate(KIDOL_HAIR):
         save(lpc_read_sheet(f"external/img2pixel/hair_kidol/kidol_hairstyle_male_{cid}.png"),
              f"char_hair{i + 1}.png", sub)
+    # 其他 LPC 髮型（走路列；每個一種顏色）
+    for sid, _sname, fn in LPC_HAIR_STYLES:
+        save(lpc_cloth_sheet(f"external/img2pixel/lpc/{fn}"), f"char_hair_{sid}.png", sub)
     write_json(os.path.join(ASSETS, sub, "avatar.json"), dict(
         scale=CHAR_SCALE,
         # 人物分層的幀表（所有層共用）：每層都是 832×1344 的 LPC 通用格式 sheet；map＝65 個邏輯幀 → sheet 的 [欄, 列]；
@@ -2074,7 +2083,9 @@ def main():
                for k, n in [("pale", "白皙"), ("light", "自然"), ("tan", "小麥"), ("deep", "深膚")]],
         # 髮型：一個「造型」一個方框（style／styleName），框裡是顏色（name＝顏色名）；面板分層顯示、點造型再開顏色
         hair=[dict(id=f"hair{i + 1}", name=cname, style="short", styleName="短髮", sheet=f"char_hair{i + 1}.png")
-              for i, (_cid, cname) in enumerate(KIDOL_HAIR)],
+              for i, (_cid, cname) in enumerate(KIDOL_HAIR)] +
+             [dict(id=sid, name="原色", style=sid, styleName=sname, sheet=f"char_hair_{sid}.png")
+              for sid, sname, _fn in LPC_HAIR_STYLES],
         # 基本服裝（LPC 原檔；gender＝之後選性別用）
         tops=[dict(id="tshirt_m", name="T恤", sheet="char_top_tshirt_m.png", gender="male", glam=True),
               dict(id="tshirt_f", name="T恤", sheet="char_top_tshirt_f.png", gender="female", glam=True)],

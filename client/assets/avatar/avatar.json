@@ -516,6 +516,34 @@
    "style": "short",
    "styleName": "短髮",
    "sheet": "char_hair12.png"
+  },
+  {
+   "id": "afro",
+   "name": "原色",
+   "style": "afro",
+   "styleName": "爆炸頭",
+   "sheet": "char_hair_afro.png"
+  },
+  {
+   "id": "bob",
+   "name": "原色",
+   "style": "bob",
+   "styleName": "鮑伯頭",
+   "sheet": "char_hair_bob.png"
+  },
+  {
+   "id": "curly",
+   "name": "原色",
+   "style": "curly",
+   "styleName": "捲長髮",
+   "sheet": "char_hair_curly.png"
+  },
+  {
+   "id": "long",
+   "name": "原色",
+   "style": "long",
+   "styleName": "長髮",
+   "sheet": "char_hair_long.png"
   }
  ],
  "tops": [
