@@ -277,15 +277,18 @@ function sanitizeState(s, prev) {
     name: typeof s.name === "string" ? s.name.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, NAME_MAX) : (prev.name || ""),
     look: {
       skin: idOr(look.skin, pl.skin || "light"),
+      gender: look.gender === "female" ? "female" : "male",   // 性別（素體男女）
       hair: idOr(look.hair, pl.hair || "hair1"),
       shirt: Math.round(num(look.shirt, 0, 99, pl.shirt ?? 0)),
       pants: Math.round(num(look.pants, 0, 99, pl.pants ?? 0)),
       hat: idOr(look.hat, null),          // 顯示中的帽子 id（裝備或外觀，客戶端已決定好；null＝沒戴）
       top: idOr(look.top, null),          // 顯示中的上衣 id（null＝預設款）
       bottom: idOr(look.bottom, null),    // 顯示中的褲子 id（null＝預設款）
+      shoe: idOr(look.shoe, null),        // 顯示中的鞋子 id（null＝預設款）
       hatC: hexOr(look.hatC),             // 換色色碼（null＝原色）
       topC: hexOr(look.topC),
       botC: hexOr(look.botC),
+      shoeC: hexOr(look.shoeC),
       wlook: idOr(look.wlook, null),      // 武器外觀 id（同類型才會畫，由客戶端判斷）
     },
     d8: D8.includes(s.d8) ? s.d8 : null,  // 畫面用的 8 方向朝向（只轉發；玩法看 face）

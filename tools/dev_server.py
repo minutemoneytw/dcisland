@@ -174,15 +174,18 @@ def sanitize_state(s, prev):
         "name": name,
         "look": {
             "skin": _id_or(look.get("skin"), pl.get("skin", "light")),
+            "gender": "female" if look.get("gender") == "female" else "male",
             "hair": _id_or(look.get("hair"), pl.get("hair", "hair1")),
             "shirt": round(_num(look.get("shirt"), 0, 99, pl.get("shirt", 0))),
             "pants": round(_num(look.get("pants"), 0, 99, pl.get("pants", 0))),
             "hat": _id_or(look.get("hat"), None),        # 顯示中的帽子 id（裝備或外觀，客戶端已決定好；None＝沒戴）
             "top": _id_or(look.get("top"), None),        # 顯示中的上衣 id（None＝預設款）
             "bottom": _id_or(look.get("bottom"), None),  # 顯示中的褲子 id（None＝預設款）
+            "shoe": _id_or(look.get("shoe"), None),      # 顯示中的鞋子 id（None＝預設款）
             "hatC": _hex_or(look.get("hatC")),           # 換色色碼（None＝原色）
             "topC": _hex_or(look.get("topC")),
             "botC": _hex_or(look.get("botC")),
+            "shoeC": _hex_or(look.get("shoeC")),
             "wlook": _id_or(look.get("wlook"), None),    # 武器外觀 id
         },
         "d8": s.get("d8") if s.get("d8") in D8 else None,   # 畫面用的 8 方向朝向（只轉發；玩法看 face）

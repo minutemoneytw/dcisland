@@ -2312,19 +2312,23 @@ function charSprite(look, fi) {
   const A = S.avatar, F = A.frames;
   const legacy = (key, idx, list) => key in look ? (look[key] || null) : (list[idx || 0] ?? list[0]);
   const shirtHex = legacy('topC', look.shirt, A.shirtColors), pantsHex = legacy('botC', look.pants, A.pantsColors);
-  const hatHex = look.hatC || null;
+  const hatHex = look.hatC || null, shoeHex = look.shoeC || null;
   const skin = lookItem(A.skins, look.skin) || A.skins[0], hair = lookItem(A.hair, look.hair) || A.hair[0];
   const top = lookItem(A.tops, look.top) || A.tops?.[0], bottom = lookItem(A.bottoms, look.bottom) || A.bottoms?.[0];
+  const shoe = lookItem(A.shoes, look.shoe);
   const hat = lookItem(A.hats, look.hat);
-  const k = [skin.id, hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, fi].join('|');
+  // 性別：素體 sheet 換成女版（char_body_<膚色> → char_body_female_<膚色>）
+  const skinSheet = (look.gender === 'female' && skin.sheet) ? skin.sheet.replace('char_body_', 'char_body_female_') : skin.sheet;
+  const skinIt = skinSheet === skin.sheet ? skin : { ...skin, sheet: skinSheet };
+  const k = [skin.id, skinSheet, look.gender || '', hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, shoe?.id || '', shoeHex, fi].join('|');
   let cv = S.charCache.get(k);
   if (cv) return cv;
   cv = document.createElement('canvas'); cv.width = F.w; cv.height = F.h;
   const g = cv.getContext('2d');
   // 這一幀在 sheet 上的格子：LPC 通用格式看 frames.map（[欄,列]）；舊格式＝水平排列（fi, 0）
   const [cc, cr] = F.map ? F.map[fi] : [fi, 0], sx = cc * F.w, sy = cr * F.h;
-  // 由下往上：軀幹（素體）→ 褲子 → 衣服 → 頭髮 → 帽子
-  for (const [it, hex] of [[skin], [bottom, pantsHex], [top, shirtHex], [hair], [hat, hatHex]]) {
+  // 由下往上：軀幹（素體）→ 褲子 → 鞋子 → 衣服 → 頭髮 → 帽子
+  for (const [it, hex] of [[skinIt], [bottom, pantsHex], [shoe, shoeHex], [top, shirtHex], [hair], [hat, hatHex]]) {
     const img = it && S.charImgs[it.sheet];
     if (!img || sx + F.w > img.width || sy + F.h > img.height) continue;   // 缺圖／這張 sheet 沒有這一格：這層略過
     const dye = dyeList(it), src = dye && hex ? dyeSheet(img, dye, hex) : img;
@@ -4557,8 +4561,8 @@ function swatchOrder(colors) {
 // 部位：帽子／上衣／褲子／武器。裝備＝職業固定的一套（jobs.json 的 gear／weapon）；外觀（avatar.json 標 glam 的那些）每個職業各記一套，
 // 某部位有選外觀就顯示外觀、沒選就顯示裝備。換色（帽子／上衣／褲子）也是每個職業各記一套，套在該部位顯示中的那件。
 // 存檔：S.me.wardrobe[職業 id] = { glam: {hat, top, bottom, weapon}, color: {hat, top, bottom} }（色碼 '#rrggbb'，沒有＝原色）
-const SLOTS = [['hat', '帽子'], ['top', '上衣'], ['bottom', '褲子'], ['weapon', '武器']];
-const slotList = s => s === 'hat' ? S.avatar.hats : s === 'top' ? S.avatar.tops : s === 'bottom' ? S.avatar.bottoms : S.avatar.weapons;
+const SLOTS = [['hat', '帽子'], ['top', '上衣'], ['bottom', '褲子'], ['shoe', '鞋子'], ['weapon', '武器']];
+const slotList = s => s === 'hat' ? S.avatar.hats : s === 'top' ? S.avatar.tops : s === 'bottom' ? S.avatar.bottoms : s === 'shoe' ? S.avatar.shoes : S.avatar.weapons;
 const allGlams = () => SLOTS.flatMap(([s]) => (slotList(s) || []).filter(it => it.glam));
 const glamUnlocked = it => !it.unlock || titleMet(it.unlock);
 const jobWeaponDef = (job = S.me.job) => S.avatar.weapons.find(w => w.id === JOBS[job]?.weapon) || null;
@@ -4577,14 +4581,19 @@ function wardrobe(job = S.me.job) {
 function shownItem(slot, job = S.me.job) {
   const g = wardrobe(job).glam[slot], it = g && lookItem(slotList(slot), g);
   if (it && glamFits(slot, it, job) && glamUnlocked(it)) return it;
-  return slot === 'weapon' ? jobWeaponDef(job) : lookItem(slotList(slot), JOBS[job]?.gear?.[slot]);
+  if (slot === 'weapon') return jobWeaponDef(job);
+  const list = slotList(slot) || [], gid = JOBS[job]?.gear?.[slot];
+  let it2 = lookItem(list, gid);
+  if (it2 && it2.gender && it2.gender !== (S.me.gender || 'male') && gid) it2 = lookItem(list, gid.replace(/_m$/, '_f')) || it2;   // 換性別＝換對應性別的服裝
+  return it2;
 }
 // 自己的顯示造型（畫自己、送給同島的人都用這個；外觀與裝備在這裡就決定好，別人只看結果）
 function myLook() {
   const c = wardrobe().color, w = shownItem('weapon');
-  return { skin: S.me.skin, hair: S.me.hair,
+  return { skin: S.me.skin, hair: S.me.hair, gender: S.me.gender || 'male',
            hat: shownItem('hat')?.id || null, top: shownItem('top')?.id || null, bottom: shownItem('bottom')?.id || null,
-           hatC: c.hat || null, topC: c.top || null, botC: c.bottom || null,
+           shoe: shownItem('shoe')?.id || null,
+           hatC: c.hat || null, topC: c.top || null, botC: c.bottom || null, shoeC: c.shoe || null,
            wlook: w && w.id !== JOBS[S.me.job]?.weapon ? w.id : null,
            shirt: 0, pants: 0 };   // shirt／pants：給舊客戶端的顏色編號（舊版只認這兩個）
 }
@@ -4618,6 +4627,28 @@ function openHairColors(st, anchor) {
   hairPop = box;
 }
 function buildAvatarPanel() {
+  // 分頁：頁1「角色」＝等級/職業/稱號/裝備；頁2「外貌」＝性別/膚色/髮型
+  const tabs = [...document.querySelectorAll('#avTabs .avtab')];
+  const showTab = n => {
+    document.getElementById('avPage1').classList.toggle('hidden', n !== '1');
+    document.getElementById('avPage2').classList.toggle('hidden', n !== '2');
+    for (const t of tabs) { const on = t.dataset.avtab === n; t.classList.toggle('sel', on); t.style.background = on ? '#3a4a6a' : '#1b2436'; }
+    S.avTab = n;
+  };
+  for (const t of tabs) {
+    t.style.cssText = 'flex:1;padding:6px;margin:0 2px;border:1px solid #6a7fb0;border-radius:6px;color:#dbe3f2;cursor:pointer;font-family:inherit';
+    t.onclick = () => { showTab(t.dataset.avtab); closeHairColors(); };
+  }
+  showTab(S.avTab || '1');
+  // 性別（男／女）：換素體與對應性別的服裝
+  const go = $('genderOpts'); go.innerHTML = '';
+  for (const [gid, gname] of [['male', '男'], ['female', '女']]) {
+    const o = document.createElement('div');
+    o.className = 'opt name' + ((S.me.gender || 'male') === gid ? ' sel' : '');
+    o.textContent = gname;
+    o.onclick = () => { S.me.gender = gid; saveAvatar(); S.charCache.clear(); buildAvatarPanel(); };
+    go.appendChild(o);
+  }
   // 等級：XP 進度條（無上限，每級需求 10 + 5×(Lv−1)；來源＝怪物／釣竿／首捕／採集，2026-11-06）
   const li = lvInfo(S.profile.xp);
   $('lvCur').textContent = `Lv.${li.lv}`;

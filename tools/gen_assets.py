@@ -2080,6 +2080,8 @@ def main():
               dict(id="tshirt_f", name="T恤", sheet="char_top_tshirt_f.png", gender="female", glam=True)],
         bottoms=[dict(id="pants_m", name="長褲", sheet="char_bottom_pants_m.png", gender="male", glam=True),
                  dict(id="pants_f", name="長褲", sheet="char_bottom_pants_f.png", gender="female", glam=True)],
+        shoes=[dict(id="shoes_m", name="鞋子", sheet="char_shoes_m.png", gender="male", glam=True),
+               dict(id="shoes_f", name="鞋子", sheet="char_shoes_f.png", gender="female", glam=True)],
         hats=[dict(id="nohat", name="不戴帽子", sheet=None, glam=True)],
         hairColor="#4a3428",
         shirtColors=['#d95c68', '#4a90d9', '#4aa564', '#c9a227', '#8a5cc9', '#e0e0e0', '#4a4a52', '#d97a3a', '#f2a1b5', '#b5303f', '#f0c93a', '#8fd0e8', '#2e5fa8', '#3a3f8c', '#6fcfc0', '#2f8a78', '#8fc455', '#3e6b3a', '#b48be0', '#6a3f9a', '#8a5a3a', '#c8b08a', '#9aa0aa', '#f4ede0'],

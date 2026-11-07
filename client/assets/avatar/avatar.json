@@ -550,6 +550,22 @@
    "glam": true
   }
  ],
+ "shoes": [
+  {
+   "id": "shoes_m",
+   "name": "鞋子",
+   "sheet": "char_shoes_m.png",
+   "gender": "male",
+   "glam": true
+  },
+  {
+   "id": "shoes_f",
+   "name": "鞋子",
+   "sheet": "char_shoes_f.png",
+   "gender": "female",
+   "glam": true
+  }
+ ],
  "hats": [
   {
    "id": "nohat",

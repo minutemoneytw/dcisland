@@ -3,20 +3,20 @@
  "legacy": { "tank": "knight", "healer": "whitemage", "dps": "ninja" },
  "jobs": [
   { "id": "knight", "name": "騎士", "role": "tank", "weapon": "sword",
-    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m" }, "skills": ["guard", "kshield"] },
+    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["guard", "kshield"] },
   { "id": "warrior", "name": "戰士", "role": "tank", "weapon": "waraxe",
-    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m" }, "skills": ["vamp", "wshield"] },
+    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["vamp", "wshield"] },
   { "id": "whitemage", "name": "白魔法師", "role": "healer", "weapon": "staff",
-    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m" }, "skills": ["sheal", "wings"] },
+    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["sheal", "wings"] },
   { "id": "sage", "name": "賢者", "role": "healer", "weapon": "tome",
-    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m" }, "skills": ["care", "save"] },
+    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["care", "save"] },
   { "id": "ninja", "name": "忍者", "role": "melee", "weapon": "daggers",
-    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m" }, "skills": ["ninjutsu", "blink"] },
+    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["ninjutsu", "blink"] },
   { "id": "dragoon", "name": "龍騎士", "role": "melee", "weapon": "lance",
-    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m" }, "skills": ["highjump", "backjump"] },
+    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["highjump", "backjump"] },
   { "id": "bard", "name": "吟遊詩人", "role": "ranged", "weapon": "harpbow",
-    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m" }, "skills": ["song", "poison"] },
+    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["song", "poison"] },
   { "id": "blackmage", "name": "黑魔法師", "role": "ranged", "weapon": "scepter",
-    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m" }, "skills": ["circle", "triple"] }
+    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["circle", "triple"] }
  ]
 }

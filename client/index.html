@@ -61,12 +61,21 @@
   <!-- 造型面板 -->
   <div id="avatarPanel" class="ff-panel hidden">
     <div class="ff-panel-title">造型設定</div>
-    <div class="grp"><label>等級</label><div id="lvRow"><span id="lvCur"></span><div id="lvBar"><span id="lvFill"></span></div></div></div>
-    <div class="grp"><label>職業</label><div id="jobOpts"></div></div>
-    <div class="grp"><label>稱號</label><div class="title-cur"><span id="titleCur"></span><button id="btnTitles" class="ff-btn small">稱號設定</button></div></div>
-    <div class="grp"><label>膚色</label><div id="skinOpts"></div></div>
-    <div class="grp"><label>髮型</label><div id="hairOpts"></div></div>
-    <div class="grp"><label>裝備與外觀</label><div id="gearRows"></div></div>
+    <div id="avTabs">
+      <button class="avtab sel" data-avtab="1">角色</button>
+      <button class="avtab" data-avtab="2">外貌</button>
+    </div>
+    <div id="avPage1">
+      <div class="grp"><label>等級</label><div id="lvRow"><span id="lvCur"></span><div id="lvBar"><span id="lvFill"></span></div></div></div>
+      <div class="grp"><label>職業</label><div id="jobOpts"></div></div>
+      <div class="grp"><label>稱號</label><div class="title-cur"><span id="titleCur"></span><button id="btnTitles" class="ff-btn small">稱號設定</button></div></div>
+      <div class="grp"><label>裝備與外觀</label><div id="gearRows"></div></div>
+    </div>
+    <div id="avPage2" class="hidden">
+      <div class="grp"><label>性別</label><div id="genderOpts"></div></div>
+      <div class="grp"><label>膚色</label><div id="skinOpts"></div></div>
+      <div class="grp"><label>髮型</label><div id="hairOpts"></div></div>
+    </div>
     <div class="ff-panel-foot"><button id="avatarClose" class="ff-btn small">完成</button></div>
   </div>
 
