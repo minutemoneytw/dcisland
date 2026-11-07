@@ -753,7 +753,7 @@ def om_draw(t, cid, idx):
     if not isinstance(idx, int) or isinstance(idx, bool) or not 0 <= idx < len(th["hand"]):
         return
     card = th["hand"].pop(idx)
-    me["hand"].append(card)
+    me["hand"].insert(random.randint(0, len(me["hand"])), card)   # 抽到的牌插在隨機位置（不是固定最右邊，否則對方避開最右邊就不會抽到剛換手的鬼牌）
     tbl_log(t, f"{me['name']} 從 {th['name']} 手上抽了一張牌")
     if card != "JK":
         mate = next((c for c in me["hand"] if c != card and om_rank(c) == om_rank(card)), None)
@@ -761,7 +761,7 @@ def om_draw(t, cid, idx):
             me["hand"].remove(card)
             me["hand"].remove(mate)
             tbl_log(t, f"{me['name']} 湊成一對（{om_label(card)}、{om_label(mate)}）丟掉")
-    # 抽到的牌放在手牌最右邊、不自動洗牌：對方點的是「第幾張牌背」，要和這個人畫面上手牌的順序一致，洗牌是玩家自己的心理戰（om_shuffle）
+    # 不自動洗牌：對方點的是「第幾張牌背」，要和這個人畫面上手牌的順序一致，洗牌是玩家自己的心理戰（om_shuffle）
     for s in (me, th):
         if not s["hand"] and not s["out"]:
             s["out"] = True

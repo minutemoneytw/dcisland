@@ -574,7 +574,7 @@ function omDraw(t, cid, idx) {
   const me = t.seats[i], th = t.seats[tgt];
   if (!Number.isInteger(idx) || idx < 0 || idx >= th.hand.length) return;
   const card = th.hand.splice(idx, 1)[0];
-  me.hand.push(card);
+  me.hand.splice(Math.floor(Math.random() * (me.hand.length + 1)), 0, card);   // 抽到的牌插在隨機位置（不是固定最右邊，否則對方避開最右邊就不會抽到剛換手的鬼牌）
   tblLog(t, `${me.name} 從 ${th.name} 手上抽了一張牌`);
   if (card !== "JK") {
     const mate = me.hand.find(c => c !== card && omRank(c) === omRank(card));
@@ -584,7 +584,7 @@ function omDraw(t, cid, idx) {
       tblLog(t, `${me.name} 湊成一對（${omLabel(card)}、${omLabel(mate)}）丟掉`);
     }
   }
-  // 抽到的牌放在手牌最右邊、不自動洗牌：對方點的是「第幾張牌背」，要和這個人畫面上手牌的順序一致，洗牌是玩家自己的心理戰（omShuffle）
+  // 不自動洗牌：對方點的是「第幾張牌背」，要和這個人畫面上手牌的順序一致，洗牌是玩家自己的心理戰（omShuffle）
   for (const s of [me, th]) if (!s.hand.length && !s.out) { s.out = true; tblLog(t, `${s.name} 的牌出完了，安全過關！`); }
   const alive = t.seats.map((s, k) => (s.out ? -1 : k)).filter(k => k >= 0);
   if (alive.length <= 1) { omFinish(t, alive[0]); return; }
