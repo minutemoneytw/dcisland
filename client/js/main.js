@@ -66,6 +66,8 @@ const S = {
   t: 0,
   cam: { x: 0, y: 0 },
   respawn: [],                  // 動物重生佇列 [{id, at}]
+  campfire: null,               // 島上的營火（世界物件）：{terrain, slot, cell, x, y}；每 3 分鐘換位置
+  campfireSpr: null,            // 營火 8 幀動畫（外部素材 campfire_sheet.png）
   floaters: [],                 // 傷害飄字 {x,y,v,life,poof}
   weaponImgs: {},
   ownerSayIdx: {},              // 照順序說台詞的島主（ownerLinesSeq）目前說到第幾句，key＝島主 id
@@ -621,6 +623,40 @@ const OWNER_AGGRO_MS = 5, OWNER_DROPOUT = 30;                              // �
 const OWNER_PROVOKE_RANGE = 240, OWNER_PROVOKE_CD = 15;                    // 挑釁：有效距離／冷卻（秒；與伺服器 D_PROVOKE_* 一致）
 const PLAYER_REGEN = 1;   // 玩家脫離戰鬥後每秒回幾點血（場上有島主處於仇恨／攻擊狀態、或自己被石化時不回）
 const PLAYER_HP = 10;     // 玩家血量上限：爪擊扣 2（5 下倒地）、龍衝直接倒地、石化每秒扣 1、殺一隻動物回 1、復活即滿血
+
+// ---- 營火（2026-11-07 使用者定）----
+// 島上隨機一處（只在陸地格、不進海裡），每 CAMPFIRE_PERIOD 秒換一個位置；站在 CAMPFIRE_R 內每 CAMPFIRE_HEAL_SEC 秒回 CAMPFIRE_HEAL HP。
+// 位置由「地形＋時段」的種子決定：世界生成對所有玩家一致，所以大家算出來的營火位置一樣（不必動同步協定、不是伺服器狀態）。
+// 回血只算自己（玩家血量本來就是各客戶端自判）；不論有沒有在戰鬥都能回（營火是補血點）。
+const CAMPFIRE_PERIOD = 180, CAMPFIRE_R = 200, CAMPFIRE_HEAL = 1, CAMPFIRE_HEAL_SEC = 3;
+const campfireSlot = () => Math.floor(Date.now() / (CAMPFIRE_PERIOD * 1000));
+function campfireCellFor(terrain, slot) {   // 只挑陸地（types 2；0＝海、1＝岸邊）且沒有點綴物的格子
+  const rng = mulberry32(hashStr(terrain + ':campfire:' + slot));
+  const decos = new Set(S.world.decos.map(d => d.cell[0] + ',' + d.cell[1]));
+  const cand = [];
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    if (S.world.types[y * COLS + x] !== 2) continue;
+    if (decos.has(x + ',' + y)) continue;
+    cand.push([x, y]);
+  }
+  return cand.length ? cand[Math.floor(rng() * cand.length)] : null;
+}
+function updateCampfire() {   // 每幀呼叫：換時段（或換地形）就重擲一次位置
+  const slot = campfireSlot(), c = S.campfire;
+  if (c && c.terrain === S.terrain && c.slot === slot) return;
+  const cell = campfireCellFor(S.terrain, slot);
+  S.campfire = cell ? { terrain: S.terrain, slot, cell, x: cell[0] * CELL + CELL / 2, y: (cell[1] + 1) * CELL } : null;
+}
+function campfireHeal(p, dt) {   // 站在營火範圍內：每 3 秒回 1 HP（自己）
+  const c = S.campfire, capHp = hpCap(p);
+  if (!c || p.dead || (p.hp ?? capHp) >= capHp || Math.hypot(p.x - c.x, p.y - c.y) > CAMPFIRE_R) { p.cfAcc = 0; return; }
+  p.cfAcc = (p.cfAcc || 0) + dt;
+  if (p.cfAcc >= CAMPFIRE_HEAL_SEC) {
+    p.cfAcc -= CAMPFIRE_HEAL_SEC;
+    p.hp = Math.min(capHp, (p.hp ?? capHp) + CAMPFIRE_HEAL);
+    S.floaters.push({ x: p.x + (Math.random() * 12 - 6), y: p.y - 50, v: `+${CAMPFIRE_HEAL}`, life: .8 });
+  }
+}
 // ---------------- 職能與職業 ----------------
 // 職能（ROLES）＝被動特性＋R 鍵職能技能；職業（assets/jobs/jobs.json，boot 時載入到 JOBS）＝職能＋唯一的職業武器＋一套裝備＋1／2 鍵技能。
 // JOBS[id]＝{ ...職能的被動數值, ...jobs.json 的條目, role }，所以原本讀 jd.hpMax／jd.takenHalf／jd.dmgPlus／jd.healHit 的地方不用改。
@@ -2417,6 +2453,7 @@ function regenPlayer(p, dt) {
 function stepPlayer(p, dt) {
   if (p.npc) { stepNPC(p, dt); return; }
   regenPlayer(p, dt);
+  campfireHeal(p, dt);   // 營火範圍內額外回血（與脫離戰鬥回血並存）
   if (p.dead) {   // 死亡：原地長出墓碑，期間不動/不跳/不揮擊
     p.z = 0; p.vz = 0; p.moving = false; p.frame = 0; p.swing = 0;
     if (performance.now() - p.deadAt >= DEAD_SECONDS * 1000) revivePlayer(p);
@@ -3720,6 +3757,23 @@ function drawWeaponSwing(wi, swing, dir = 1) {
   ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();   // 轉軸＝離圖底 3 格的握把
 }
 
+// 營火的橘紅色光暈：地面壓扁的橢圓（透視），半徑＝CAMPFIRE_R（補血範圍），帶一點閃爍；外圈淡淡的範圍線
+function drawCampfireGlow(c) {
+  const pul = .5 + .5 * Math.sin(S.t * 6) + .12 * Math.sin(S.t * 13.7);
+  const gy = c.y - 6;
+  ctx.save();
+  ctx.translate(c.x, gy); ctx.scale(1, .62);
+  const g = ctx.createRadialGradient(0, 0, 3, 0, 0, CAMPFIRE_R);
+  g.addColorStop(0, `rgba(255,178,80,${.30 + .07 * pul})`);
+  g.addColorStop(.45, `rgba(236,112,42,${.17 + .05 * pul})`);
+  g.addColorStop(1, 'rgba(200,60,20,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, CAMPFIRE_R, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle = `rgba(255,152,72,${.10 + .05 * pul})`; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.ellipse(c.x, gy, CAMPFIRE_R, CAMPFIRE_R * .62, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
 function draw() {
   const T = S.terrain, tMan = S.terrains[T], ims = S.tImages[T];
   const SC = tMan.scale;
@@ -3777,6 +3831,17 @@ function draw() {
       }
     });
   }
+  // 營火本體（世界物件，跟其他東西一起 y 排序；影子貼在腳底）
+  if (S.campfire && S.campfireSpr) {
+    const c = S.campfire, spr = S.campfireSpr, size = CELL * 1.5;
+    list.push({
+      y: c.y, draw: () => {
+        ctx.fillStyle = 'rgba(10,14,20,.28)';
+        ctx.beginPath(); ctx.ellipse(c.x, c.y - 1, size * .34, size * .13, 0, 0, Math.PI * 2); ctx.fill();
+        drawSpr(spr, sprFrame(spr, cellPhase(c.cell[0], c.cell[1])), c.x - size / 2, c.y - size, size, size);
+      }
+    });
+  }
   // 掉落物
   for (const dr of S.drops) {
     const def = S.toolsDB.items[dr.item];
@@ -3813,6 +3878,8 @@ function draw() {
       }
     });
   });
+  // 營火的橘紅色光暈（地上，先畫＝在所有角色腳底下；半徑就是 200px 的補血範圍）
+  if (S.campfire) drawCampfireGlow(S.campfire);
   // 黑魔法師的魔法陣（地上，先畫＝在所有角色腳底下）
   if (S.fx.circle && S.t < S.fx.circle.until) drawMagicCircle(S.fx.circle.x, S.fx.circle.y, S.fx.circle.until - S.t);
   for (const r of S.remotes.values()) if (r.circle) drawMagicCircle(r.circle.x, r.circle.y, 99);
@@ -5057,6 +5124,7 @@ async function boot() {
     }),
     ...S.toolsDB.tools.map(async t => S.weaponImgs[t.id] = await optImg(`assets/tools/${t.sprite}`)),
     optImg('assets/tombstone.png').then(im => S.tombImg = im),   // 死亡墓碑（島主龍衝打倒後原地出現）
+    optImg('assets/external/img2pixel/campfire_sheet.png').then(im => { if (im) S.campfireSpr = makeSpr(im, { frames: 8, fps: 8 }); }),   // 營火 8 幀（使用者提供的外部素材；缺圖就只是不畫）
     ...S.furn.items.map(async it => S.furnImgs[it.id] = await loadSpr(`assets/furniture/${it.sprite}`, it.anim)),
     // 人物分層 sheet：軀幹（膚色）是必要的（缺了畫不出人），頭髮／衣服／褲子／帽子缺圖就略過那一層
     ...S.avatar.skins.map(async s => S.charImgs[s.sheet] = await loadImg(`assets/avatar/${s.sheet}`)),
@@ -5087,6 +5155,7 @@ async function boot() {
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     try {
       S.t += dt;
+      updateCampfire();   // 換時段／換地形就重擲營火位置（每 3 分鐘）
       autoAttack();
       for (const p of S.players) stepPlayer(p, dt);
       if (S.mouseCell && S.mouseClient) {      // 裝飾模式邊走邊擺：鏡頭在動，滑鼠指的格子要跟著重算

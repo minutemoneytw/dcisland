@@ -1200,6 +1200,7 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/snake_queen_sheet.png", frames=4, fw=88, fh=85, what="笨蛋蛇女的 4 幀（夜光島島主）"),
     dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fw=88, fh=74, what="蓋老師（究極神兵）的走路 6 幀（熔岩島島主）"),
     dict(sheet="external/img2pixel/alexander_idle_sheet.png", frames=4, fw=88, fh=77, what="壓力山大的待機 4 幀（機械島島主）"),
+    dict(sheet="external/img2pixel/campfire_sheet.png", frames=8, fw=32, fh=32, what="營火 8 幀（世界物件，不是動物：main.js 直接載入，不經 manifest）"),
 ]
 
 def check_external():
