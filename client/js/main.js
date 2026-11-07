@@ -3364,6 +3364,30 @@ function drawOwnerCastBar(frac, name) {
   }
   ctx.restore();
 }
+// 島主台詞的固定字幕（2026-11-08，使用者要求）：島主頭上的泡泡照舊，另外在視窗上方置中（讀條下方）固定顯示同一句，
+// 避免玩家離島主太遠、泡泡跑出畫面就看不到。多隻島主同時說話只顯示最晚說的那一句；台詞裡的換行照換，
+// 單行太寬（超過視窗）時在全形空白（台詞裡刻意的停頓）換行。
+function drawOwnerLineBanner() {
+  let best = null;
+  for (const a of S.mobs) if (a.say && S.t < a.say.until && !a.dead && (!best || a.say.until > best.say.until)) best = a;
+  if (!best) return;
+  const NL = String.fromCharCode(10), name = mobDef(best.id)?.name || '', alpha = Math.min(1, (best.say.until - S.t) / .4);
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.font = 'bold 16px "Microsoft JhengHei"'; ctx.textAlign = 'center';
+  const maxW = canvas.width - 80, rows = [];
+  for (const r of String(best.say.text).split(NL)) {
+    if (ctx.measureText(r).width <= maxW) rows.push(r);
+    else rows.push(...r.split(String.fromCharCode(0x3000)).filter(Boolean));
+  }
+  const lh = 22, w = Math.ceil(Math.max(...rows.map(r => ctx.measureText(r).width), ctx.measureText(name).width)) + 28, h = 22 + rows.length * lh;
+  const x = Math.round(canvas.width / 2 - w / 2), y = 110;   // 讀條（y=84～102）正下方
+  ctx.fillStyle = 'rgba(8,10,14,.78)'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(214,180,96,.9)'; ctx.lineWidth = 1.5; ctx.strokeRect(x + .5, y + .5, w - 1, h - 1);
+  ctx.font = 'bold 11px "Microsoft JhengHei"'; ctx.fillStyle = '#ffe08a'; ctx.fillText(name, canvas.width / 2, y + 14);
+  ctx.font = 'bold 16px "Microsoft JhengHei"'; ctx.fillStyle = '#fff6e0';
+  rows.forEach((r, i) => ctx.fillText(r, canvas.width / 2, y + 20 + (i + 1) * lh - 6));
+  ctx.restore();
+}
 function drawBubble(x, y, text, alpha) {
   ctx.save(); ctx.globalAlpha = alpha;
   ctx.font = '11px "Microsoft JhengHei"'; ctx.textAlign = 'center';
@@ -4367,6 +4391,7 @@ function draw() {
   }
   ctx.restore();
   if (ownerBar) drawOwnerCastBar(ownerBar.frac, ownerBar.name);   // 島主讀條固定在視窗上方置中（世界座標還原後畫，永遠在最上層）
+  drawOwnerLineBanner();   // 島主台詞：除了頭上的泡泡，也固定顯示在視窗上方（離島主太遠、泡泡在畫面外也看得到）
 }
 
 const MAX_FURN = 500;   // 每個地形的擺設上限（與兩份伺服器的 MAX_FURN 一致）
