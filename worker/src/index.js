@@ -62,7 +62,7 @@ const D_RANGE = 100;         // 玩家打島主的攻擊距離（客戶端以武
 const D_DRIFT_TOLER = 600;   // 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 const D_STAFF_RANGE = 440;   // 法杖（遠距詠唱）打島主的最大距離：客戶端射程 320 + 判定圈 58 + 緩衝；只有 state.weapon＝staff 的連線才適用
 const D_CD_MS = 300;         // 同一條連線兩次打島主的最短間隔
-const D_HIT_MAX = 4;         // 一般攻擊打島主／深海魚人的傷害上限（客戶端算好送來；最高＝遠程輸出 2＋1＋唱歌爆擊 1。2026-11-05 由 2 放寬，使用者定：信任客戶端）
+const D_HIT_MAX = 4;         // 一般攻擊打島主／深海魚人的傷害上限（客戶端算好送來；最高＝遠程輸出 2＋1＋唱歌爆擊 1。2026-11-05 由 2 放寬，使用者定：信任客戶端）。夾值隨攻擊者等級放寬（每 3 級 +1，見 dlHitMax）
 const D_PROVOKE_CD_MS = 15000;   // 挑釁冷卻（每條連線；與 dev_server.py 的 D_PROVOKE_CD 一致）
 const D_DEBUFF_MS = 10000;        // 破綻／降傷的持續時間（與 client 的 ROLE_DEBUFF.dur 一致）
 const D_DEBUFF_CD_MS = 30000;     // 破綻／降傷冷卻（每條連線、每種各算）
@@ -321,6 +321,32 @@ function xpInfo(xp) {                   // XP 換等級：與 client 的 lvInfo 
 // 死亡扣款（與 client 的 loseExp 同值）：扣「升這級還需要的 XP」5%，整數、至少 1、最低扣到 0 不掉級
 const xpDeathLoss = xp => { const i = xpInfo(xp); return Math.min(i.cur, Math.max(1, Math.ceil(i.need * .05))); };
 
+// ---- 島主與深海魚人的等級（第 3 步；與 tools/dev_server.py、client/js/main.js 同式，三邊一起改）----
+// 島主：等級跟島主狀態存一起（dragon:<地形> 加 xp 欄位），永不重置、無上限；擊倒玩家得 XP＝10＋2×受害者等級。
+// 每級需求 20＋10×(Lv−1)；每級血量上限 +25（基礎 D_HP）；爪擊與台詞招式每 2 級 +1（命令檢定不隨等級變強：倒地不看血量）
+const DL_HP_UP = 25;
+const dlXpNeed = lv => 20 + 10 * (lv - 1);
+function dlLv(xp) {   // XP 無上限直算：XP_MAX 200000 也只到約 200 級，迴圈安全
+  let lv = 1, rest = Math.max(0, Math.floor(xp ?? 0));
+  while (rest >= dlXpNeed(lv)) { rest -= dlXpNeed(lv); lv++; }
+  return lv;
+}
+const dragonMaxHp = d => D_HP + DL_HP_UP * (dlLv(d.xp) - 1);   // 目前等級的血量上限（回血夾這裡）
+const dlDmgBonus = lv => Math.floor((Math.max(1, Math.floor(lv)) - 1) / 2);   // 島主爪擊／台詞招式的等級傷害加成
+// 深海魚人：session 制——等級只在「這一隻」存活期成長（每殺 1 人 +1 級），消失／被打倒就重來（只放記憶體，天然重置）。
+// 每級血量上限 +5（基礎 L_HP）；爪擊每 3 級 +1
+const L_HP_UP = 5;
+const lurkDmgBonus = lv => Math.floor((Math.max(1, Math.floor(lv)) - 1) / 3);
+const lurkerMaxHp = L => L_HP + L_HP_UP * ((L.lvl || 1) - 1);
+// 擊倒獎勵：玩家擊倒島主／魚人由伺服器發 XP 給「30 秒內打過牠、還在線沒死」的所有參與者（與擊倒稱號的參與擊倒同一批；
+// 訪客不進 Registry，grantXp 自然跳過，客戶端會在 dead 事件本機補發）
+const ownerKillXp = lv => 20 + 5 * lv;
+const lurkKillXp = lv => 4 + 2 * lv;
+// 一般攻擊打島主／魚人的夾值隨攻擊者等級放寬：每 3 級 +1（與 client 的 lvAtkBonus 同式）
+const dlHitMax = lvl => D_HIT_MAX + Math.floor((Math.max(1, Math.floor(lvl)) - 1) / 3);
+// 島主 hp 廣播：把等級與血量上限一起帶出（升級時客戶端靠這則跟上）
+const dragonHpMsg = d => ({ t: "dragon", ev: "hp", hp: d.hp, lvl: dlLv(d.xp), max: dragonMaxHp(d) });
+
 // ---- 釣魚（魚類圖鑑）----
 // 釣到什麼由伺服器抽（client/assets/fish/fish.json）；登入（hello 驗證過）的人記進全域 Registry（依 Discord 帳號），訪客只回結果。
 // 演算法與 client/js/main.js 的 rollFish、dev_server.py 的 roll_fish 一致（改一邊要改另一邊）
@@ -565,7 +591,7 @@ export class Island {
     const fires = q.skills.map((_, i) => d.sayUntil + Q_GAP_MS * (i + 1));
     d.quote = { line: q.line, skills: q.skills, fires, fired: 0 };
     d.cooldownUntil = fires[fires.length - 1] + D_RAGE_MS;
-    this.broadcast({ t: "dragon", ev: "say", x: d.pos[0], y: d.pos[1], ms: D_SAY_MS, line: q.line }, null, terrain);
+    this.broadcast({ t: "dragon", ev: "say", x: d.pos[0], y: d.pos[1], ms: D_SAY_MS, line: q.line, lvl: dlLv(d.xp) }, null, terrain);
   }
   // 台詞招式的目標（放招當下才挑；客戶端同時顯示範圍並自判傷害）：月華衝＝仇恨目標、隕石流＝場上每個人、離子砲＝隨機一人；月環／鋼鐵以島主為中心不需要
   quoteTargets(terrain, skill, d) {
@@ -585,7 +611,7 @@ export class Island {
     const d = this.dragons.get(terrain), q = d.quote;
     while (q.fired < q.skills.length && now >= q.fires[q.fired] - 30) {
       const skill = q.skills[q.fired];
-      this.broadcast({ t: "dragon", ev: "qfire", skill, i: q.fired, x: d.pos[0], y: d.pos[1], ids: this.quoteTargets(terrain, skill, d) }, null, terrain);
+      this.broadcast({ t: "dragon", ev: "qfire", skill, i: q.fired, x: d.pos[0], y: d.pos[1], lvl: dlLv(d.xp), ids: this.quoteTargets(terrain, skill, d) }, null, terrain);
       q.fired++;
     }
     if (q.fired >= q.skills.length) {
@@ -657,6 +683,44 @@ export class Island {
     if (cur.state) cur.state.lvl = xpInfo(r.xp).lv;   // 自己的名牌與之後的 p 廣播即時跟上
     ws.serializeAttachment(cur);
     try { ws.send(JSON.stringify({ t: "xp", xp: r.xp, d, k })); } catch { /* 對方已斷線 */ }
+  }
+  // 擊倒島主：獎勵 XP 給 D_DROPOUT（30 秒）內打過牠、還在線沒死的所有連線（與擊倒稱號「參與擊倒」同一批人）。
+  // 訪客不進 Registry：grantXp 自然跳過，由各客戶端在 dead 事件本機補發
+  async rewardOwnerKill(terrain, lv) {
+    const amt = ownerKillXp(lv);
+    for (const att of this.aggroCandidates(Date.now(), terrain)) {
+      const ws = this.socketById(att.id, terrain);   // aggroCandidates 回 attachment：用連線編號找回 socket
+      if (ws) await this.grantXp(ws, amt, "owner");
+    }
+  }
+  // 擊倒深海魚人：同上（牠的參與者名單用 lurkHits；獎勵按牠被擊倒當下的等級）
+  async rewardLurkerKill(terrain, lv) {
+    const amt = lurkKillXp(lv);
+    for (const att of this.aggroCandidates(Date.now(), terrain, L_DROPOUT, this.lurkHits)) {
+      const ws = this.socketById(att.id, terrain);
+      if (ws) await this.grantXp(ws, amt, "lurk");
+    }
+  }
+  // 島主／深海魚人擊倒玩家的等級記帳（第 3 步）：死因都是客戶端自判（state.dead 0→1），伺服器用「誰在追他」推斷凶手——
+  // 該地形魚人的 aggro.id 是死者＝牠殺的（session 等級 +1、血量上限 +5 並回一點血）；
+  // 否則該地形島主活著就記牠的 XP（爪擊／龍衝／石化／波動砲／台詞招式都可能害死；石化每秒扣 1 的 tick 不隨等級變）。
+  // 島主得 XP＝10＋2×受害者等級、順手回一點血；XP 存在 dragon:<地形>（等級存一起、永不重置）
+  async creditMobKill(att) {
+    const terrain = att.terrain, L = this.lurkers.get(terrain);
+    if (L && L.aggro && L.aggro.id === att.id) {
+      L.lvl = (L.lvl || 1) + 1;
+      L.max = lurkerMaxHp(L);
+      L.hp = Math.min(L.max, L.hp + L_HP_UP);
+      this.broadcast({ t: "lurker", ev: "hp", hp: L.hp, lvl: L.lvl, max: L.max }, null, terrain);
+      return;
+    }
+    const d = this.dragons.get(terrain);
+    if (!d || d.st === "dead") return;   // 沒有島主／已被擊倒：記不到任何人頭上
+    const vl = Math.max(1, Math.floor((att.state && att.state.lvl) || 1));
+    d.xp = Math.max(0, (d.xp ?? 0)) + 10 + 2 * vl;
+    d.hp = Math.min(dragonMaxHp(d), d.hp + DL_HP_UP);
+    await this.saveDragonLazy(terrain);
+    this.broadcast(dragonHpMsg(d), null, terrain);
   }
 
   // 釣魚：魚上鉤後拉竿成功 → 伺服器抽一條魚回給這條連線；登入的人同時記進 Registry 的圖鑑（帶回最新紀錄）
@@ -815,6 +879,7 @@ export class Island {
         const loss = xpDeathLoss(att.xp ?? 0);
         if (loss > 0 && Math.random() < .1) await this.grantXp(ws, -loss, "death");
       }
+      if (!wasDead && s.dead && att.terrain) await this.creditMobKill(att);   // 島主／魚人擊倒玩家的等級記帳（creditMobKill）
     } else if (msg.t === "xpsync") {   // 舊存檔一次性上繳（2026-11-07 使用者定 (a)）：伺服器沒有紀錄才收，有就回現值（冪等）
       const user = att.user;
       if (user) {
@@ -925,9 +990,10 @@ export class Island {
     }
     let d = this.dragons.get(terrain);
     if (!d) {
-      d = { hp: D_HP, st: "idle", pos: [...D_CENTER], aimTms: 0, deadAt: 0, wander: null, cooldownUntil: 0, sayUntil: 0, regenT: 0, aggro: null, lastHitAt: 0 };
+      d = { hp: D_HP, st: "idle", pos: [...D_CENTER], aimTms: 0, deadAt: 0, wander: null, cooldownUntil: 0, sayUntil: 0, regenT: 0, aggro: null, lastHitAt: 0, xp: 0 };
       this.dragons.set(terrain, d);
     }
+    if (d.xp === undefined) d.xp = 0;   // 第 3 步前的舊存檔沒有等級 XP 欄位
     if (d.wander === undefined) d.wander = null;   // 舊存檔沒有這個欄位
     if (d.cooldownUntil === undefined) d.cooldownUntil = 0;
     if (d.sayUntil === undefined) d.sayUntil = 0;
@@ -986,6 +1052,14 @@ export class Island {
     }
     return null;
   }
+  // 依連線編號找回 WebSocket（aggroCandidates 回的是 attachment，獎勵記帳與送訊息需要 socket 本體）
+  socketById(id, terrain) {
+    for (const ws of this.state.getWebSockets()) {
+      const att = ws.deserializeAttachment() || {};
+      if (att.id === id && att.terrain === terrain && att.state) return ws;
+    }
+    return null;
+  }
   // 開始/切換追殺目標：廣播 aggro 事件（id＝被鎖定的連線編號，客戶端用來鎖定自己）；存檔由呼叫端負責
   startAggro(now, att, terrain) {
     const d = this.dragons.get(terrain);
@@ -1000,11 +1074,12 @@ export class Island {
   // 回血：每秒回 D_REGEN 點（用牆鐘 lazy 計算，不需要計時器；滿血或死亡時把錨點重置為現在，扣血後才重新開始累積）
   regenDragon(terrain, now) {
     const d = this.dragons.get(terrain);
-    if (d.st === "dead" || d.hp >= D_HP) { d.regenT = now; return; }
+    const mx = dragonMaxHp(d);
+    if (d.st === "dead" || d.hp >= mx) { d.regenT = now; return; }
     const n = Math.floor((now - d.regenT) / 1000);
     if (n > 0) {
-      d.hp = Math.min(D_HP, d.hp + n * D_REGEN);
-      d.regenT = d.hp >= D_HP ? now : d.regenT + n * 1000;
+      d.hp = Math.min(mx, d.hp + n * D_REGEN);
+      d.regenT = d.hp >= mx ? now : d.regenT + n * 1000;
     }
   }
   // 島形位圖：玩家上傳後存 storage（懒載入）。各客戶端的島相同，誰上傳都一樣。所有地形都有（島主＋擺設的水邊驗證）
@@ -1060,7 +1135,7 @@ export class Island {
     this.regenDragon(terrain, now);   // 讀快照前先把該補的血補上（快照帶 hp）
     const [ph, pos, ms] = this.dragonPhase(terrain, now);
     const d = this.dragons.get(terrain);
-    const o = { ph, x: pos[0], y: pos[1], hp: d.hp };
+    const o = { ph, x: pos[0], y: pos[1], hp: d.hp, lvl: dlLv(d.xp), max: dragonMaxHp(d) };
     if (d.aggro) o.aggro = d.aggro.id;   // 仇恨中：附上追殺目標（中途進場的人才知道牠在戰鬥）
     if (ph === "aim") { o.castMs = Math.round(ms); o.tx = d.atk[0]; o.ty = d.atk[1]; o.dx = d.dest[0]; o.dy = d.dest[1]; }
     if (ph === "cast") {
@@ -1103,7 +1178,7 @@ export class Island {
     const h = this.dragonHits.get(ws);
     if (!sk && now - (h ? h.t : 0) < D_CD_MS) return;   // 一般攻擊的間隔；職業技能另有自己的冷卻
     this.regenDragon(terrain, now);   // 扣血前先把該補的血補上（之後廣播的 hp 是回血後的值）
-    let dmg = sk ? sk.dmg : Math.max(1, Math.min(D_HIT_MAX, Math.round(Number(msg.dmg) || 1)));
+    let dmg = sk ? sk.dmg : Math.max(1, Math.min(dlHitMax(att.state.lvl), Math.round(Number(msg.dmg) || 1)));   // 夾值隨攻擊者等級放寬（dlHitMax）
     if (now < (d.vulnUntil || 0)) dmg += 1;   // 破綻（近戰輸出的職能技能）：每擊 +1
     const [ph, pos] = this.dragonPhase(terrain, now);
     if (ph === "dash") return;     // 龍衝飛行中打不到（開眼/預警/歇腳與散步時都打得到）
@@ -1121,10 +1196,12 @@ export class Island {
     else if (!h || h.t < now - D_CD_MS) this.dragonHits.set(ws, { terrain, t: now - D_CD_MS });   // 技能命中也算現役攻擊者（進仇恨換人的候選池），但不佔一般攻擊的間隔
     d.lastHitAt = now;   // 仇恨計時：D_DROPOUT 內沒有人再打牠就脫離追殺
     d.hp -= dmg;
-    if (d.hp <= 0) {   // 打倒了：全地形廣播死亡，30 秒後用鬧鐘重生
+    if (d.hp <= 0) {   // 打倒了：全地形廣播死亡（帶等級，給訪客本機算獎勵用），30 秒後用鬧鐘重生
+      const killLv = dlLv(d.xp);   // 獎勵按被擊倒當下的等級；xp 不清零（島主等級存一起、永不重置）
       d.st = "dead"; d.hp = 0; d.pos = [pos[0], pos[1]]; d.aimTms = 0; d.deadAt = now; d.wander = null; d.aggro = null; d.quote = null; d.sayUntil = 0;
       await this.saveDragon(terrain);
-      this.broadcast({ t: "dragon", ev: "dead", x: pos[0], y: pos[1] }, null, terrain);
+      this.broadcast({ t: "dragon", ev: "dead", x: pos[0], y: pos[1], lvl: killLv }, null, terrain);
+      await this.rewardOwnerKill(terrain, killLv);   // Registry 的 XP 獎勵（30 秒內的參與者）
       await this.armOwnerAlarm();
       return;
     }
@@ -1160,7 +1237,7 @@ export class Island {
       if (cands.length) this.startAggro(now, cands[Math.floor(Math.random() * cands.length)], terrain);
     }
     await this.saveDragonLazy(terrain);   // 扣血：節流存（多人圍毆每秒會打很多下；漏掉的最多 D_SAVE_MS 內的血量，由 dirty 補寫）
-    this.broadcast({ t: "dragon", ev: "hp", hp: d.hp }, null, terrain);
+    this.broadcast(dragonHpMsg(d), null, terrain);
     await this.armOwnerAlarm();   // 仇恨開始：快點醒來追殺（下一個醒的時間統一在這裡算）
   }
   // 破綻／降傷（R 鍵，近戰／遠程輸出的職能技能）：所在地形島主 D_DEBUFF_MS 內受到的傷害每擊 +1（伺服器加）／
@@ -1300,7 +1377,7 @@ export class Island {
       if (now >= ag.clawAt) {
         ag.clawAt = now + D_CLAW_MS;
         await this.saveDragonLazy(terrain);
-        this.broadcast({ t: "dragon", ev: "claw", x: pos[0], y: pos[1], tx: att.state.x, ty: att.state.y, id: att.id }, null, terrain);
+        this.broadcast({ t: "dragon", ev: "claw", x: pos[0], y: pos[1], tx: att.state.x, ty: att.state.y, lvl: dlLv(d.xp), id: att.id }, null, terrain);
       }
     } else {   // 追殺腿：接着上一腿走完就重新瞄準目標目前位置（ev: wander 重用同一套客户端插值）
       const w = d.wander;
@@ -1342,12 +1419,13 @@ export class Island {
   // 回血同步：補血後若 hp 有變化就廣播 hp 事件（lazy 回血只在被打／快照時結算，血條會卡住不動）
   async syncRegen(terrain, now) {
     const d = this.dragons.get(terrain);
-    if (d.st === "dead" || d.hp >= D_HP) { this.regenDragon(terrain, now); return false; }
+    const mx = dragonMaxHp(d);
+    if (d.st === "dead" || d.hp >= mx) { this.regenDragon(terrain, now); return false; }
     const before = d.hp;
     this.regenDragon(terrain, now);
     if (d.hp !== before) {
       await this.saveDragonLazy(terrain);
-      this.broadcast({ t: "dragon", ev: "hp", hp: d.hp }, null, terrain);
+      this.broadcast(dragonHpMsg(d), null, terrain);
       return true;
     }
     return false;
@@ -1418,8 +1496,9 @@ export class Island {
     const d = this.dragons.get(terrain);
     const w = d.wander;
     let at = w ? w.t0 + w.tms + w.pause : Date.now() + 2000;   // 挑不到路點：2 秒後再試
-    if (d.st !== "dead" && d.hp < D_HP) {   // 帶傷：散步鬧鐘提前到「回滿血時刻」，醒來補滿並廣播一次
-      at = Math.min(at, d.regenT + Math.ceil((D_HP - d.hp) / D_REGEN) * 1000);
+    if (d.st !== "dead") {   // 帶傷：散步鬧鐘提前到「回滿血時刻」，醒來補滿並廣播一次（滿血＝目前等級的血量上限）
+      const mx = dragonMaxHp(d);
+      if (d.hp < mx) at = Math.min(at, d.regenT + Math.ceil((mx - d.hp) / D_REGEN) * 1000);
     }
     return at + 50;
   }
@@ -1444,7 +1523,7 @@ export class Island {
       d.cooldownUntil = now + castMs + D_RAGE_MS;
       await this.saveDragon(terrain);
       const ev = style === "gaze" ? "gaze" : style === "beam" ? "beam" : "command";
-      const msg = { t: "dragon", ev, x: d.pos[0], y: d.pos[1], castMs, hp: d.hp };
+      const msg = { t: "dragon", ev, x: d.pos[0], y: d.pos[1], castMs, hp: d.hp, lvl: dlLv(d.xp), max: dragonMaxHp(d) };
       if (style === "command") msg.kind = d.command;
       else { msg.tx = ax; msg.ty = ay; msg.bx = d.beam[0]; msg.by = d.beam[1]; }
       this.broadcast(msg, null, terrain);
@@ -1459,7 +1538,7 @@ export class Island {
     d.aimTms = now;
     d.cooldownUntil = now + D_CAST_MS + d.dashLen / D_DASH * 1000 + D_REST_MS + D_RAGE_MS;
     await this.saveDragon(terrain);
-    this.broadcast({ t: "dragon", ev: "aim", x: warp[0], y: warp[1], fx: d.pos[0], fy: d.pos[1], tx: ax, ty: ay, dx: d.dest[0], dy: d.dest[1], castMs: D_CAST_MS, hp: d.hp }, null, terrain);
+    this.broadcast({ t: "dragon", ev: "aim", x: warp[0], y: warp[1], fx: d.pos[0], fy: d.pos[1], tx: ax, ty: ay, dx: d.dest[0], dy: d.dest[1], castMs: D_CAST_MS, hp: d.hp, lvl: dlLv(d.xp), max: dragonMaxHp(d) }, null, terrain);
     return true;
   }
   // 島主鬧鐘（唯一一個鬧鐘，多座島共用）：每座有島主的地形各自推進一步（死→重生；說完台詞→反擊；
@@ -1499,9 +1578,9 @@ export class Island {
       if (now < d.deadAt + D_RESPAWN_MS - 500) return d.deadAt + D_RESPAWN_MS;
       const map = await this.getDragonMap(terrain);
       const pos = map ? dragonEdge(map, Math.random() * Math.PI * 2) : [...D_CENTER];
-      d.st = "idle"; d.hp = D_HP; d.pos = pos; d.aimTms = 0; d.wander = null; d.sayUntil = 0; d.aggro = null; d.quote = null; d.command = null;
+      d.st = "idle"; d.hp = dragonMaxHp(d); d.pos = pos; d.aimTms = 0; d.wander = null; d.sayUntil = 0; d.aggro = null; d.quote = null; d.command = null;
       await this.saveDragon(terrain);
-      this.broadcast({ t: "dragon", ev: "spawn", x: pos[0], y: pos[1], hp: d.hp }, null, terrain);
+      this.broadcast({ t: "dragon", ev: "spawn", x: pos[0], y: pos[1], hp: d.hp, lvl: dlLv(d.xp), max: dragonMaxHp(d) }, null, terrain);
       if (!this.hasPlayers(terrain)) return null;   // 沒人看：等 enter 恢復散步
       await this.startWanderLeg(terrain);
       await this.saveDragon(terrain);
@@ -1529,7 +1608,7 @@ export class Island {
         if (style !== "gaze" && style !== "beam" && style !== "command") d.pos = [...d.dest];
       }
       // 帶傷回血：補血（滿血那一刻醒來廣播一次的事由 wanderWake 的提前量處理，不用定期輪詢）
-      const damaged = d.st !== "dead" && d.hp < D_HP;
+      const damaged = d.st !== "dead" && d.hp < dragonMaxHp(d);
       if (damaged) await this.syncRegen(terrain, now);
       const w = d.wander;
       if (w && now < w.t0 + w.tms + w.pause) return this.wanderWake(terrain);   // 腿還沒走完／還在休息：照表再睡
@@ -1576,7 +1655,7 @@ export class Island {
   lurkerSnapshot(terrain) {
     const L = this.lurkers.get(terrain);
     if (!L) return null;
-    const now = Date.now(), pos = this.lurkerPos(L, now), o = { mob: L.mob, x: pos[0], y: pos[1], hp: L.hp, max: L.max, aggro: L.aggro.id };
+    const now = Date.now(), pos = this.lurkerPos(L, now), o = { mob: L.mob, x: pos[0], y: pos[1], hp: L.hp, max: L.max, lvl: L.lvl || 1, aggro: L.aggro.id };
     if (L.wander) o.wleg = { fx: L.wander.fx, fy: L.wander.fy, tx: L.wander.tx, ty: L.wander.ty, tms: L.wander.tms, el: Math.max(0, Math.min(L.wander.tms, now - L.wander.t0)) };
     return o;
   }
@@ -1589,10 +1668,10 @@ export class Island {
     if (!Number.isFinite(fx) || !Number.isFinite(fy)) return false;
     const land = map ? this.nearestLand(fx, fy, map) : null;
     const pos = land || [Number(st.x) || fx, Number(st.y) || fy];
-    this.lurkers.set(terrain, { mob, hp: L_HP, max: L_HP, pos, wander: null, lastHitAt: now,
+    this.lurkers.set(terrain, { mob, hp: L_HP, max: L_HP, lvl: 1, pos, wander: null, lastHitAt: now,
                                 aggro: { id: att.id, rotateAt: now + D_AGGRO_MS, clawAt: now + L_CLAW_MS } });
     this.lurkHits.set(ws, { terrain, t: now });   // 釣到牠的人視同攻擊者（仇恨換人的候選池）
-    this.broadcast({ t: "lurker", ev: "spawn", terrain, mob, x: pos[0], y: pos[1], fx, fy, hp: L_HP, max: L_HP,
+    this.broadcast({ t: "lurker", ev: "spawn", terrain, mob, x: pos[0], y: pos[1], fx, fy, hp: L_HP, max: L_HP, lvl: 1,
                      id: att.id, name: st.name || "玩家" }, null, terrain);
     await this.armOwnerAlarm();
     return true;
@@ -1616,13 +1695,15 @@ export class Island {
     if (!sk) this.lurkHits.set(ws, { terrain, t: now });
     else if (!h || h.t < now - D_CD_MS) this.lurkHits.set(ws, { terrain, t: now - D_CD_MS });   // 技能命中也算攻擊者（仇恨候選），但不佔一般攻擊的間隔
     L.lastHitAt = now;
-    L.hp -= sk ? sk.dmg : Math.max(1, Math.min(D_HIT_MAX, Math.round(Number(msg.dmg) || 1)));
+    L.hp -= sk ? sk.dmg : Math.max(1, Math.min(dlHitMax(att.state.lvl), Math.round(Number(msg.dmg) || 1)));   // 夾值隨攻擊者等級放寬（dlHitMax）
     if (L.hp <= 0) {
+      const killLv = L.lvl || 1;
       this.lurkers.delete(terrain);
-      this.broadcast({ t: "lurker", ev: "dead", x: pos[0], y: pos[1] }, null, terrain);
+      this.broadcast({ t: "lurker", ev: "dead", x: pos[0], y: pos[1], lvl: killLv }, null, terrain);
+      await this.rewardLurkerKill(terrain, killLv);   // Registry 的 XP 獎勵（30 秒內的參與者；訪客由客戶端本機補）
       return;
     }
-    this.broadcast({ t: "lurker", ev: "hp", hp: L.hp }, null, terrain);
+    this.broadcast({ t: "lurker", ev: "hp", hp: L.hp, lvl: L.lvl || 1, max: lurkerMaxHp(L) }, null, terrain);
   }
   // 推進一步（鬧鐘）：沒人看／太久沒人打／目標死了又沒人可換 → 原地消失；否則追殺、貼近就每秒爪擊。回傳下一個要醒的時間
   async stepLurker(terrain, now) {
@@ -1652,7 +1733,7 @@ export class Island {
       L.pos = [pos[0], pos[1]]; L.wander = null;
       if (now >= ag.clawAt) {
         ag.clawAt = now + L_CLAW_MS;
-        this.broadcast({ t: "lurker", ev: "claw", x: pos[0], y: pos[1], tx: att.state.x, ty: att.state.y, id: att.id }, null, terrain);
+        this.broadcast({ t: "lurker", ev: "claw", x: pos[0], y: pos[1], tx: att.state.x, ty: att.state.y, lvl: L.lvl || 1, id: att.id }, null, terrain);
       }
     } else {
       const w = L.wander;

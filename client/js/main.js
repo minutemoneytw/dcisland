@@ -96,7 +96,7 @@ const S = {
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
   titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
   titleOpen: false,                    // 稱號一覽視窗是否開著
-  ownerHitAt: {},                      // 自己最後一次打到各島主的時刻（S.t；「參與擊倒」＝島主倒下前 TITLE_ASSIST 秒內打過）
+  ownerHitAt: {},                      // 自己最後一次打到各島主／魚人的時刻（S.t；「參與擊倒」＝倒下前 TITLE_ASSIST 秒內打過；訪客的擊倒 XP 獎勵也看這個）
 };
 // 舊存檔／被亂改的 localStorage 也要夾在安全範圍：與兩份伺服器的 XP_MAX 同值（2026-11-07 檢查時補）
 S.profile.xp = Math.max(0, Math.min(200000, Math.floor(Number(S.profile.xp) || 0)));
@@ -487,11 +487,11 @@ function hitMob(p, a, ranged, force) {
     let dmg = force ? force.dmg : ranged ? (rangedDef()?.dmg || 2) + (crit ? 1 : 0) : (crit ? 2 : 1);
     const jd = jobOf(p);
     if (jd?.dmgPlus && !force) dmg += jd.dmgPlus;   // 輸出：每擊 +1（打島主也算；伺服器的上限是 4）
-    if (!force) dmg += lvAtkBonus(levelOf(p));      // 等級攻擊加成：每 3 級 +1（島主那步會把兩份伺服器的夾值一起放寬）
+    if (!force) dmg += lvAtkBonus(levelOf(p));      // 等級攻擊加成：每 3 級 +1（兩份伺服器的夾值同式放寬）
     const od = mobDef(a.id);
-    const sendDmg = force ? force.dmg : Math.min(4, dmg);   // 送給伺服器的值（上限 4＝兩份伺服器的 D_HIT_MAX；破綻的 +1 由伺服器自己加）
+    const sendDmg = force ? force.dmg : Math.min(4 + lvAtkBonus(levelOf(p)), dmg);   // 送給伺服器的值（上限 4＋攻擊者等級加成＝兩份伺服器的 dlHitMax；破綻的 +1 由伺服器自己加）
     if (od.owner && S.t < (a.vulnUntil ?? 0)) dmg += 1;      // 破綻：每擊 +1（單機在這裡扣、連線只是飄字）
-    if (od.owner && p === S.players[0]) S.ownerHitAt[a.id] = S.t;   // 稱號「參與擊倒」用
+    if ((od.owner || od.lurker) && p === S.players[0]) S.ownerHitAt[a.id] = S.t;   // 稱號「參與擊倒」＋擊倒獎勵（訪客）用：30 秒內打過牠
     if (od.owner && a.proxy) {   // 島主連線時由伺服器權威：送意圖（座標＋傷害＋我們看到的龍位置），本地不扣血（血量等伺服器廣播）
       S.net?.dragonHit?.(Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, sendDmg, Math.round(a.x * 10) / 10, Math.round(a.y * 10) / 10, ranged, force?.sk);
     } else if (od.lurker && a.proxy) {   // 釣上來的怪物連線時也由伺服器權威扣血
@@ -659,6 +659,19 @@ function lvInfo(xp) {                     // XP 換等級：lv＝目前等級、
 }
 const lvAtkBonus = lv => Math.floor((lv - 1) / 3);   // 攻擊加成：每 3 級 +1
 const levelOf = p => p === S.players[0] ? lvInfo(S.profile.xp).lv : (p.lvl ?? 1);   // 自己看本機資料；別人等 state 廣播 lvl（同步那步），沒有就當 Lv 1
+// ---- 島主／深海魚人的等級（第 3 步；與 worker/src/index.js、tools/dev_server.py 的 helper 同式，三邊一起改）----
+// 連線時等級由伺服器事件帶出（事件欄位 lvl／max）；單機「本地模擬」才在記憶體累積（session 內有效、不存存檔）
+const dlXpNeed = lv => 20 + 10 * (lv - 1);   // 島主每級需求 XP
+function dlLvOf(xp) {                        // 島主等級：XP 無上限直算（僅單機模擬用）
+  let lv = 1, rest = Math.max(0, Math.floor(xp ?? 0));
+  while (rest >= dlXpNeed(lv)) { rest -= dlXpNeed(lv); lv++; }
+  return lv;
+}
+const dlHpUp = 25, lurkHpUp = 5;   // 島主／魚人每級血量上限加成（基礎 200／20，max 取 mobs.json 的 hp）
+const ownerDmgBonus = lv => Math.floor((Math.max(1, lv) - 1) / 2);   // 島主爪擊與台詞招式每 2 級 +1（命令檢定不隨等級變強：倒地不看血量）
+const lurkDmgBonus = lv => Math.floor((Math.max(1, lv) - 1) / 3);    // 魚人爪擊每 3 級 +1
+const ownerKillXp = lv => 20 + 5 * lv;   // 擊倒島主的 XP 獎勵（30 秒內的參與者）
+const lurkKillXp = lv => 4 + 2 * lv;     // 擊倒魚人的 XP 獎勵（登入者由伺服器在 dead 時直給；訪客在本機記）
 function saveProfile() { lsSet('dcisland.m0.profile', S.profile); }
 const xpServer = () => !!(S.net?.connected && S.net.uid);   // 登入＆連線：XP 由伺服器記帳（2026-11-07 第 2 步）；訪客／沒連線照舊本機記
 function levelUpFx(p, afterLv) {         // 升級演出（本機記帳與伺服器回覆共用）：回滿血＋金光＋飄字
@@ -896,9 +909,10 @@ function quoteFire(a, skill, ids, bx, by) {
   const posOf = id => (id === 'me' || id === S.net?.id) ? me : S.remotes.get(id);
   const dist = (p, c) => Math.hypot(p.x - c.x, p.y - c.y);
   const b = { x: bx ?? a.x, y: by ?? a.y };
+  const bon = ownerDmgBonus(a.lvl ?? 1);   // 島主等級傷害加成：每 2 級 +1（單機看本地模擬、連線看事件的 lvl）
   const hurt = dmg => {
     if (me.dead || !(dmg > 0)) return;
-    playerDamage(me, dmg, `${def.name}的${nm}`);
+    playerDamage(me, dmg + bon, `${def.name}的${nm}`);
     S.floaters.push({ x: me.x, y: me.y - 24, ring: true, life: .35 });
   };
   if (skill === 'ring') {
@@ -1007,7 +1021,7 @@ function beamFire(a, def) {   // 讀條結束：發射直線光波（方向＝�
   S.floaters.push({ beamLine: true, x: a.x, y: a.y - H * .5, ang: Math.atan2(uy, ux), len: 1700, wid: W, life: .5 });   // 光波特效：射到畫面外
   const hit = q => !q.dead && inBeam(q, a.x, a.y, ux, uy, half);
   const me = S.players[0];
-  if (hit(me)) { playerDamage(me, OWNER_BEAM_DMG, def.name); S.floaters.push({ x: me.x, y: me.y - 24, ring: true, life: .35 }); }
+  if (hit(me)) { playerDamage(me, OWNER_BEAM_DMG + ownerDmgBonus(a.lvl ?? 1), def.name); S.floaters.push({ x: me.x, y: me.y - 24, ring: true, life: .35 }); }
   for (const r of S.remotes.values()) if (hit(r)) S.floaters.push({ x: r.x, y: r.y - 24, ring: true, life: .35 });   // 遠端由對方自判，這裡只演出
   toast(`${def.name} 的波動砲發射了！`, 2000);
 }
@@ -1072,6 +1086,22 @@ function playerDamage(p, dmg, cause) {
   p.hp = Math.max(0, (p.hp ?? hpCap(p)) - dmg);
   S.floaters.push({ x: p.x + (Math.random() * 20 - 10), y: p.y - 50, v: String(dmg), life: .8, crit: true });
   if (p.hp <= 0) killPlayer(p, cause);
+}
+// 單機本地模擬的島主／魚人擊倒玩家等級（第 3 步；session 內記憶體累積、不寫存檔）：與兩份伺服器的 creditMobKill 同一套數值。
+// 島主：擊倒得 XP＝10＋2×受害者等級、每級血量上限 +25（順手回一點血）；魚人：每殺 1 人 +1 級、上限 +5。只在本機玩家扣到 0 的那一擊記
+function ownerLocalKillCredit(a, t) {
+  if (a.proxy || t !== S.players[0] || !t.dead) return;
+  const def = mobDef(a.id);
+  if (def.owner) {
+    a.xp = (a.xp ?? 0) + 10 + 2 * levelOf(t);
+    const lv = dlLvOf(a.xp);
+    if (lv !== (a.lvl ?? 1)) { a.maxHp = (a.maxHp ?? def.hp) + dlHpUp * (lv - (a.lvl ?? 1)); a.lvl = lv; }
+    a.hp = Math.min(a.maxHp, (a.hp ?? a.maxHp) + dlHpUp);
+  } else if (def.lurker) {
+    a.lvl = (a.lvl ?? 1) + 1;
+    a.maxHp = (a.maxHp ?? def.hp) + lurkHpUp;
+    a.hp = Math.min(a.maxHp, (a.hp ?? a.maxHp) + lurkHpUp);
+  }
 }
 // 補師打倒動物／發動群療時的群體補血（heal 事件）：每個收到的人自判「我在不在補師周遭半徑內」再補自己，
 // 與爪擊「受害者自判」同一原則；來源不是補師（舊客戶端／不可能值）就忽略
@@ -1591,10 +1621,11 @@ function ownerAggroStep(a, dt, def) {
       S.floaters.push({ x: a.x + (t.x - a.x) * .45, y: a.y - 30 + (t.y - a.y) * .45,
                         ang: Math.atan2(t.y - a.y, t.x - a.x), slash: true, life: .45 });
       if (t.remote) {   // 遠端玩家的血量由對方自己的畫面計算（刻意不同步傷害），這裡只演出
-        S.floaters.push({ x: (a.x + t.x) / 2, y: (a.y + t.y) / 2 - 24, v: '2', life: .8, crit: true });
+        S.floaters.push({ x: (a.x + t.x) / 2, y: (a.y + t.y) / 2 - 24, v: String(OWNER_CLAW_DMG + ownerDmgBonus(a.lvl ?? 1)), life: .8, crit: true });
         S.floaters.push({ x: t.x, y: t.y - 24, ring: true, life: .35 });
       } else {
-        playerDamage(t, 2, def.name);
+        playerDamage(t, OWNER_CLAW_DMG + ownerDmgBonus(a.lvl ?? 1), def.name);
+        ownerLocalKillCredit(a, t);
         S.floaters.push({ x: t.x, y: t.y - 24, ring: true, life: .35 });
       }
     }
@@ -1751,6 +1782,8 @@ function applyDragonSnap(o) {
   // 至於伺服器 ph='cast' 的正規命令，下面 cast 分支會用伺服器時間軸重建，不受影響
   const keepCmd = a.command && Date.now() - a.command.t0ms < a.command.castMs;
   a.hp = o.hp; a.dead = false; a.dieT = 0; a.startle = 0; a.target = null; a.wleg = null; a.cycle = null; a.gaze = null; a.beam = null;
+  if (o.lvl != null) a.lvl = o.lvl;   // 快照帶等級與血量上限（島主等級存一起，重生後也保留）
+  if (o.max != null) a.maxHp = o.max;
   if (!keepCmd) a.command = null;
   a.aggro = o.aggro != null;   // 快照帶仇恨目標（連線編號）：中途進場也知道牠在追殺（戰鬥中不自動回血、之後會提示冷靜）
   a.vulnUntil = o.vulnMs ? S.t + o.vulnMs / 1000 : 0; a.weakUntil = o.weakMs ? S.t + o.weakMs / 1000 : 0;   // 破綻／降傷剩餘時間
@@ -1817,8 +1850,8 @@ function onNetDragon(m) {
     if (a && (m.kind === 'vuln' || m.kind === 'weak')) applyDebuff(a, m.kind, (m.ms || 10000) / 1000, m.name || '玩家');
     return;
   }
-  if (m.ev === 'hp') {   // 別人（或自己）打到牠：更新血條
-    if (a) a.hp = m.hp;
+  if (m.ev === 'hp') {   // 別人（或自己）打到牠：更新血條（連 max／lvl 一起跟上＝升級時的血量上限跳升）
+    if (a) { a.hp = m.hp; if (m.max != null) a.maxHp = m.max; if (m.lvl != null) a.lvl = m.lvl; }
     return;
   }
   if (m.ev === 'dead') {   // 被打倒了：原地死亡；重生等伺服器的 spawn 事件，不排本地重生
@@ -1828,6 +1861,8 @@ function onNetDragon(m) {
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
       toast(`${mobDef(a.id).name} 被打倒了！30 秒後重生`, 2200);
       titleOwnerDown(a.id);   // 連線：伺服器宣告島主倒下，最近打過牠的人算參與擊倒
+      // 擊倒獎勵：登入者由伺服器直給（k="owner"，本機不重複記）；訪客在 30 秒內打過牠就本機記
+      if (!xpServer() && S.t - (S.ownerHitAt[a.id] ?? -1e9) <= TITLE_ASSIST) grantExp(ownerKillXp(m.lvl ?? a.lvl ?? 1), a.x, a.y - 46, 'owner');
     }
     return;
   }
@@ -1836,6 +1871,8 @@ function onNetDragon(m) {
     if (na) {
       na.dead = false; na.dieT = 0; na.x = m.x; na.y = m.y; na.hp = m.hp; na.z = 0;
       na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.idle = 1.2; na.wleg = null; na.cycle = null; na.gaze = null; na.command = null; na.beam = null; na.aggro = false;
+      if (m.max != null) na.maxHp = m.max;
+      if (m.lvl != null) na.lvl = m.lvl;   // 等級存一起：重生不清
     }
     toast(`${mobDef(S.terrains[S.terrain].owner).name} 回來了！`, 1600);
     return;
@@ -1845,6 +1882,7 @@ function onNetDragon(m) {
     if (!na) return;
     na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.cast = 0; na.castFrom = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.command = null; na.beam = null; na.wleg = null;
     na.x = m.x; na.y = m.y;
+    if (m.lvl != null) na.lvl = m.lvl;   // 等級跟著事件走（台詞招式的傷害加成看這個）
     ownerSay(na, m.line);   // 台詞招式帶台詞編號（全島同一句）
     return;
   }
@@ -1853,6 +1891,7 @@ function onNetDragon(m) {
     if (!na) return;
     na.cycle = null; na.wleg = null; na.fly = false; na.z = 0;
     na.x = m.x; na.y = m.y;
+    if (m.lvl != null) na.lvl = m.lvl;
     if (m.skill === 'act' || m.skill === 'still') { startCommandCheck(na, m.skill, m.castMs || OWNER_COMMAND_CAST * 1000, true); return; }   // 命令檢定：讀條 2 秒後本地判定；mv＝台詞招式，讀條中照伺服器走（不釘原地）
     quoteFire(na, m.skill, m.ids, m.x, m.y);
     return;
@@ -1863,6 +1902,7 @@ function onNetDragon(m) {
     na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.command = null; na.beam = null; na.wleg = null;
     na.x = m.x; na.y = m.y; na.z = 0;
     if (m.hp != null) na.hp = m.hp;
+    if (m.lvl != null) na.lvl = m.lvl;
     startCommandCheck(na, m.kind || 'act', m.castMs || OWNER_COMMAND_CAST * 1000);
     return;
   }
@@ -1872,6 +1912,7 @@ function onNetDragon(m) {
     na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.rest = 0; na.retHome = false; na.cycle = null; na.wleg = null;
     na.x = m.x; na.y = m.y; na.z = 0;
     if (m.hp != null) na.hp = m.hp;
+    if (m.lvl != null) na.lvl = m.lvl;
     na.dir = m.tx < na.x ? -1 : 1;
     na.gaze = { t0ms: Date.now(), castMs: m.castMs || OWNER_GAZE_CAST * 1000,
                 from: { x: m.tx, y: m.ty }, x: m.x, y: m.y, bx: m.bx, by: m.by };
@@ -1887,6 +1928,7 @@ function onNetDragon(m) {
     na.dead = false; na.dieT = 0; na.fly = false; na.dashU = null; na.rest = 0; na.retHome = false; na.cycle = null; na.gaze = null; na.wleg = null;
     na.x = m.x; na.y = m.y; na.z = 0;
     if (m.hp != null) na.hp = m.hp;
+    if (m.lvl != null) na.lvl = m.lvl;
     na.dir = m.tx < na.x ? -1 : 1;
     na.beam = { t0ms: Date.now(), castMs: m.castMs || OWNER_BEAM_CAST * 1000,
                 from: { x: m.tx, y: m.ty }, x: m.x, y: m.y, bx: m.bx, by: m.by };
@@ -1912,6 +1954,8 @@ function onNetDragon(m) {
     a.x = m.x; a.y = m.y; a.z = 0; a.target = null; a.idle = 0; a.bounce = 0; a.wleg = null; a.rest = 0;
     S.floaters.push({ x: a.x, y: a.y - 40, poof: true, life: .55 });
     a.hp = m.hp;
+    if (m.max != null) a.maxHp = m.max;
+    if (m.lvl != null) a.lvl = m.lvl;
     a.cycle = {   // 整個反擊循環用牆鐘（預警→龍衝→歇腳），與伺服器同軸
       t0ms: Date.now(), castMs: m.castMs || OWNER_CAST * 1000, restMs: 700,
       dashMs: Math.max(1, Math.hypot(m.dx - m.x, m.dy - m.y) / OWNER_DASH_SPEED * 1000),
@@ -1961,7 +2005,7 @@ function onNetDragon(m) {
     const front = (dx * (m.tx - m.x) + dy * (m.ty - m.y)) / (dd * to) >= .15;   // 前方扇形：到我的方向與到目標的方向夾角小於約 80°
     // 伺服器已用它的狀態驗證過距離；事件帶 id：抓的是我就結算（含紅圈），否則只看特效
     if (!me.dead && (m.id === S.net?.id || (dd <= OWNER_CLAW_RANGE && front))) {
-      playerDamage(me, OWNER_CLAW_DMG, mobDef(na.id).name);
+      playerDamage(me, OWNER_CLAW_DMG + ownerDmgBonus(m.lvl ?? 1), mobDef(na.id).name);   // 島主等級傷害：每 2 級 +1
       S.floaters.push({ x: me.x, y: me.y - 24, ring: true, life: .35 });
     }
     return;
@@ -1977,7 +2021,7 @@ const LURK_STALE_MS = 8000;   // 連線時這麼久沒收到牠的任何事件�
 function lurkerNew(mob, x, y, hp, max, proxy) {
   const def = mobDef(mob);
   const a = { id: mob, x, y, dir: 1, target: null, idle: 0, startle: 0, z: 0, bounce: 0,
-              hp: hp ?? def.hp, maxHp: max ?? def.hp, dead: false, dieT: 0, lurker: true, proxy, seenMs: Date.now() };
+              hp: hp ?? def.hp, maxHp: max ?? def.hp, lvl: 1, dead: false, dieT: 0, lurker: true, proxy, seenMs: Date.now() };
   S.mobs.push(a);
   return a;
 }
@@ -2028,7 +2072,8 @@ function stepLurker(a, dt, def) {
     if (S.t >= (a.clawAt ?? 0)) {
       a.clawAt = S.t + LURK_CLAW_CD;
       S.floaters.push({ x: a.x + dx * .45, y: a.y - 20 + dy * .45, ang: Math.atan2(dy, dx), slash: true, life: .45 });
-      playerDamage(t, LURK_CLAW_DMG, def.name);
+      playerDamage(t, LURK_CLAW_DMG + lurkDmgBonus(a.lvl ?? 1), def.name);   // 等級傷害：每 3 級 +1（單機模擬）
+      ownerLocalKillCredit(a, t);   // 單機：被牠抓到倒地＝+1 級（與伺服器 creditMobKill 同套；session 內記憶體）
       S.floaters.push({ x: t.x, y: t.y - 24, ring: true, life: .35 });
     }
     return;
@@ -2046,7 +2091,7 @@ function onNetLurker(m) {
   if (m.ev === 'state' || m.ev === 'spawn') {
     if (!mobDef(m.mob)) return;
     if (!a) a = lurkerNew(m.mob, m.x, m.y, m.hp, m.max, true);
-    Object.assign(a, { x: m.x, y: m.y, hp: m.hp, maxHp: m.max ?? a.maxHp, proxy: true, seenMs: Date.now(), wleg: null });
+    Object.assign(a, { x: m.x, y: m.y, hp: m.hp, maxHp: m.max ?? a.maxHp, lvl: m.lvl ?? (a.lvl ?? 1), proxy: true, seenMs: Date.now(), wleg: null });
     if (m.wleg) a.wleg = { fx: m.wleg.fx, fy: m.wleg.fy, tx: m.wleg.tx, ty: m.wleg.ty, tms: m.wleg.tms, t0ms: Date.now() - (m.wleg.el || 0) };
     if (m.ev === 'spawn') {
       lurkerLeap(a, m.fx, m.fy);
@@ -2058,12 +2103,14 @@ function onNetLurker(m) {
   if (!a) return;   // 沒看過牠（例如剛連線的空檔）：等下一次進場快照
   a.seenMs = Date.now();
   const nm = mobDef(a.id).name;
-  if (m.ev === 'hp') { a.hp = m.hp; return; }
+  if (m.ev === 'hp') { a.hp = m.hp; if (m.max != null) a.maxHp = m.max; if (m.lvl != null) a.lvl = m.lvl; return; }
   if (m.ev === 'dead') {
     a.dead = true; a.dieT = .6; a.wleg = null; a.jump = null; a.z = 0;
     if (m.x !== undefined) { a.x = m.x; a.y = m.y; }
     S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
     toast(`${nm} 被打倒了！`, 2200);
+    // 擊倒獎勵：登入者由伺服器直給（k="lurk"，本機不重複記）；訪客在 30 秒內打過牠就本機記
+    if (!xpServer() && S.t - (S.ownerHitAt[a.id] ?? -1e9) <= TITLE_ASSIST) grantExp(lurkKillXp(m.lvl ?? a.lvl ?? 1), a.x, a.y - 40, 'lurk');
     return;
   }
   if (m.ev === 'gone') { lurkerRemove(a, `${nm} 失去興趣，潛回水裡消失了。`); return; }
@@ -2084,7 +2131,7 @@ function onNetLurker(m) {
     a.dir = m.tx < m.x ? -1 : 1;
     S.floaters.push({ x: m.x + (m.tx - m.x) * .45, y: m.y - 20 + (m.ty - m.y) * .45, ang: Math.atan2(m.ty - m.y, m.tx - m.x), slash: true, life: .45 });
     if (!me.dead && (mine || Math.hypot(me.x - m.x, me.y - m.y) <= LURK_CLAW_RANGE)) {
-      playerDamage(me, LURK_CLAW_DMG, nm);
+      playerDamage(me, LURK_CLAW_DMG + lurkDmgBonus(m.lvl ?? 1), nm);   // 魚人等級傷害：每 3 級 +1
       S.floaters.push({ x: me.x, y: me.y - 24, ring: true, life: .35 });
     }
   }
@@ -3875,6 +3922,15 @@ function draw() {
         ctx.strokeText(def.name, a.x, top);
         ctx.fillStyle = a.startle ? '#e8b2a2' : (def.owner ? '#ffd86b' : def.lurker ? '#ff8f7a' : '#cfd8c8');   // 釣上來的怪物用紅色名牌
         ctx.fillText(def.name, a.x, top);
+        // 等級：名字右邊的金色 Lv.N（島主／魚人；跟玩家名牌同款式。Lv 1 不顯示，有長進才看得到）
+        if ((def.owner || def.lurker) && (a.lvl ?? 1) > 1) {
+          const nameW = ctx.measureText(def.name).width;
+          ctx.font = '9px "Microsoft JhengHei"'; ctx.textAlign = 'left';
+          ctx.strokeText(`Lv.${a.lvl}`, a.x + nameW / 2 + 4, top);
+          ctx.fillStyle = '#ffd86b'; ctx.fillText(`Lv.${a.lvl}`, a.x + nameW / 2 + 4, top);
+          ctx.textAlign = 'center';
+          ctx.font = (bs > 1 ? 'bold 12px ' : '9px ') + '"Microsoft JhengHei"'; ctx.fillStyle = def.owner ? '#ffd86b' : '#ff8f7a';   // 之後可能還有用這個字型量寬的地方
+        }
         // 島主的台詞泡泡（被打反擊前隨機一句；與 NPC 泡泡同款，畫在名牌上方）
         if (a.say && S.t < a.say.until) drawBubble(a.x, top - 8, a.say.text, Math.min(1, (a.say.until - S.t) / .4));
         // 島主放招倒數條（skills.json 標 bar 的招式）：這裡只記錄進度與招名，畫面最後統一疊在視窗上方置中（drawOwnerCastBar）
