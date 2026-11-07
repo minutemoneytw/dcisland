@@ -567,8 +567,9 @@
    "sprite": "weapon_scepter.png",
    "ranged": {
     "range": 320,
-    "cast": 1.6,
-    "dmg": 2
+    "cast": 1.0,
+    "dmg": 2,
+    "gap": 0
    }
   },
   {

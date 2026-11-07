@@ -2027,7 +2027,7 @@ def main():
             dict(id="harpbow", name="豎琴弓", type="bow", sprite="weapon_harpbow.png", carry="back", ranged=dict(range=320, cast=0, dmg=1, shot="arrow")),
             dict(id="lance", name="長槍", type="lance", sprite="weapon_lance.png", carry="back"),
             dict(id="daggers", name="雙劍", type="daggers", sprite="weapon_daggers.png", carry="waist"),
-            dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=320, cast=1.6, dmg=2)),
+            dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=320, cast=1.0, dmg=2, gap=0)),   # gap：詠唱放完到下一次能開始的間隔（秒）；沒寫＝ATK_CD（0.45）。咒杖 gap=0＝連續施放，間隔就是詠唱時間
             dict(id="rod", name="釣竿", type="rod", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
             # 武器外觀（glam）：只換樣子，玩法照職業武器；type 要和職業武器相同才能選
             dict(id="goldsword", name="金劍", type="sword", sprite="weapon_goldsword.png", carry="back", back="hilt",

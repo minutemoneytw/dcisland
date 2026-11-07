@@ -471,7 +471,7 @@ function stepCast(p) {   // 每幀（只有本機玩家）：檢查中斷條件�
   if (!inCastRange(p, a, rg)) { cancelCast(p, '詠唱中斷：目標超出射程'); return; }
   if (Math.abs(a.x - p.x) > 6) p.dir = Math.sign(a.x - p.x);   // 面向目標
   if (S.t - c.t0 < c.dur) return;
-  p.cast = null; p.lastAtk = S.t;
+  p.cast = null; p.lastAtk = S.t - (ATK_CD - Math.min(ATK_CD, rg.gap ?? ATK_CD));   // 放完到下一次的間隔：預設 ATK_CD；武器的 ranged.gap 可縮短（咒杖 0＝連續施放）
   S.net?.notifyAttack?.();   // 讓同島的人看到你出手
   S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: a.y - 24 * (mobDef(a.id).big || 1) * .6, life: .22 });
   hitMob(p, a, true);
