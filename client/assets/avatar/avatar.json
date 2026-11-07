@@ -1,8 +1,9 @@
 {
- "scale": 2,
+ "scale": 1,
  "frames": {
-  "w": 24,
-  "h": 24,
+  "w": 64,
+  "h": 64,
+  "scale": 1,
   "count": 65,
   "dirs": [
    "down",
@@ -121,20 +122,20 @@
   },
   "anchors": {
    "back": [
-    6.5,
-    11
+    23,
+    34
    ],
    "backView": [
-    9.5,
-    11
+    41,
+    34
    ],
    "waist": [
-    8,
-    15
+    23,
+    50
    ],
    "hand": [
-    13.5,
-    11
+    40,
+    42
    ]
   },
   "frameAnchors": {}
@@ -276,8 +277,8 @@
    "name": "便服",
    "sheet": "char_bottom_basic.png",
    "dye": [
-    "#4a54a0",
-    "#38417c"
+    "#a4a5b5",
+    "#6a6c82"
    ],
    "glam": true
   },
@@ -500,20 +501,23 @@
    "type": "sword",
    "sprite": "weapon_sword.png",
    "carry": "back",
-   "back": "hilt"
+   "back": "hilt",
+   "scale": 2
   },
   {
    "id": "waraxe",
    "name": "戰斧",
    "type": "axe",
    "sprite": "weapon_waraxe.png",
-   "carry": "back"
+   "carry": "back",
+   "scale": 2
   },
   {
    "id": "staff",
    "name": "法杖",
    "type": "staff",
    "sprite": "weapon_staff.png",
+   "scale": 2,
    "ranged": {
     "range": 320,
     "cast": 1.2,
@@ -526,6 +530,7 @@
    "type": "tome",
    "sprite": "weapon_tome.png",
    "carry": "waist",
+   "scale": 2,
    "ranged": {
     "range": 320,
     "cast": 0,
@@ -539,6 +544,7 @@
    "type": "bow",
    "sprite": "weapon_harpbow.png",
    "carry": "back",
+   "scale": 2,
    "ranged": {
     "range": 320,
     "cast": 0,
@@ -551,20 +557,23 @@
    "name": "長槍",
    "type": "lance",
    "sprite": "weapon_lance.png",
-   "carry": "back"
+   "carry": "back",
+   "scale": 2
   },
   {
    "id": "daggers",
    "name": "雙劍",
    "type": "daggers",
    "sprite": "weapon_daggers.png",
-   "carry": "waist"
+   "carry": "waist",
+   "scale": 2
   },
   {
    "id": "scepter",
    "name": "咒杖",
    "type": "scepter",
    "sprite": "weapon_scepter.png",
+   "scale": 2,
    "ranged": {
     "range": 320,
     "cast": 1.6,
@@ -577,6 +586,7 @@
    "type": "rod",
    "sprite": "weapon_rod.png",
    "carry": "back",
+   "scale": 2,
    "fishing": true
   },
   {
@@ -586,6 +596,7 @@
    "sprite": "weapon_goldsword.png",
    "carry": "back",
    "back": "hilt",
+   "scale": 2,
    "glam": true,
    "unlock": {
     "type": "owner",

@@ -2350,10 +2350,11 @@ function charFrame(p) {
   p.animPhase ??= Math.random() * 4;
   return { fi: list[Math.floor((S.t + p.animPhase) * (F.fps?.[mode] || 6)) % list.length], mirror };
 }
-// 武器掛點（back／backView／waist／hand）換成相對腳底的畫面座標（2 倍）；frameAnchors 可逐幀覆寫
+// 武器掛點（back／backView／waist／hand）換成相對腳底的畫面座標；frameAnchors 可逐幀覆寫
+// 放大倍率＝avatar.json 的 frames.scale（底圖 64px、畫 1 倍；舊 24px 素材是 2 倍），沒寫時退回 2
 function charAnchor(fi, kind) {
-  const F = S.avatar.frames, a = F.frameAnchors?.[fi]?.[kind] || F.anchors[kind];
-  return [(a[0] - F.w / 2) * 2, (a[1] - F.h) * 2];
+  const F = S.avatar.frames, a = F.frameAnchors?.[fi]?.[kind] || F.anchors[kind], s = F.scale || 2;
+  return [(a[0] - F.w / 2) * s, (a[1] - F.h) * s];
 }
 
 // ---------------- 玩家 ----------------
@@ -2996,9 +2997,9 @@ function drawFxFloater(f) {
       }
       break;
     case 'after': {   // 縮地殘影：自己的身影淡淡留在原地
-      const F = S.avatar.frames, fi = (F.states[`${f.d8}_idle`] || F.states.down_idle)[0];
+      const F = S.avatar.frames, fi = (F.states[`${f.d8}_idle`] || F.states.down_idle)[0], cs = F.scale || 2;
       ctx.globalAlpha = .4 * al; ctx.filter = 'brightness(1.6) saturate(.3)';
-      ctx.drawImage(charSprite(myLook(), fi), f.x - F.w, f.y - F.h * 2, F.w * 2, F.h * 2);
+      ctx.drawImage(charSprite(myLook(), fi), f.x - F.w * cs / 2, f.y - F.h * cs, F.w * cs, F.h * cs);
       break;
     }
     case 'boom': {   // 忍術：範圍圈＋紫紅色煙爆
@@ -3080,7 +3081,8 @@ function drawPerson(p, wi, nameColor) {
     if (pfx?.length) drawPersonFx(p, pfx, backView, 'back');
     ctx.save();
     if (cf.mirror) ctx.scale(-1, 1);
-    ctx.drawImage(img, -F.w, -F.h * 2, F.w * 2, F.h * 2);   // 錨點＝腳底中央，畫 2 倍
+    const cs = F.scale || 2;   // 錨點＝腳底中央，放大倍率看 avatar.json 的 frames.scale
+    ctx.drawImage(img, -F.w * cs / 2, -F.h * cs, F.w * cs, F.h * cs);
     ctx.restore();
     if (carry && backView) drawCarry(true);
     if (pfx?.length) drawPersonFx(p, pfx, backView, 'front');
@@ -3188,8 +3190,10 @@ function drawGazeEye(x, y, r, pul) {
 }
 // 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）
 function drawSleeper(p) {
-  const F = S.avatar.frames, img = playerSpriteDiv(p, (F.states.down_idle || [0])[0]);   // 用正面待機的第 1 幀切出頭與肩膀
-  ctx.drawImage(img, F.w / 2 - 8, 2, 16, 11, p.x - 16, p.y - 33, 32, 22);   // 頭的水平中心對準枕頭（單人床中央）
+  const F = S.avatar.frames, s = F.scale || 2, img = playerSpriteDiv(p, (F.states.down_idle || [0])[0]);   // 用正面待機的第 1 幀切出頭與肩膀
+  // 頭與肩膀那塊：由底圖實測——人佔幀內 x 22..40、y 20..63（高 44），頭約在上 30%
+  const sw = Math.round(F.w * .30), sh = Math.round(F.h * .21), sx = Math.round(F.w * .36), sy = Math.round(F.h * .30);
+  ctx.drawImage(img, sx, sy, sw, sh, p.x - sw * s / 2, p.y - 33, sw * s, sh * s);   // 頭的水平中心對準枕頭（單人床中央）
   const def = furnitureDef(p.seatType || 'bed'), bed = S.furnImgs[p.seatType || 'bed'];
   if (bed && def?.quiltRow) {   // 被子：從床的「同一幀」切出被子那幾列蓋回去（床有動畫時才對得上）
     const rows = bed.height - def.quiltRow, fi = sprFrame(bed, p.seat ? cellPhase(p.seat.cell[0], p.seat.cell[1]) : 0);
@@ -3543,10 +3547,10 @@ function rodAngle(f) {
 }
 // 詠唱中：雙手高舉法杖過頭，杖頂的寶珠隨進度聚光（ctx 已 translate 到角色腳底並依 dir 翻轉）
 function drawStaffRaise(wi, q) {
-  const [hx, hy] = charAnch.hand;
+  const [hx, hy] = charAnch.hand, s = wi.wscale || 2;
   ctx.save(); ctx.translate(hx, hy - 10); ctx.rotate(Math.sin(S.t * 9) * .05);
-  ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2);
-  const ty = -(wi.height - 3) * 2;   // 杖頂
+  ctx.drawImage(wi, -wi.width * s / 2, -(wi.height - 3) * s, wi.width * s, wi.height * s);
+  const ty = -(wi.height - 3) * s;   // 杖頂
   ctx.globalCompositeOperation = 'lighter';
   const r = 3 + 7 * q + Math.sin(S.t * 24) * 1.2;
   const g = ctx.createRadialGradient(0, ty, 0, 0, ty, r);
@@ -3556,12 +3560,13 @@ function drawStaffRaise(wi, q) {
 }
 // 畫拋出去的釣竿（ctx 已 translate 到角色腳底並依 dir 翻轉；轉軸同揮擊＝握把）
 function drawRodCast(wi, a) {
+  const s = wi.wscale || 2;
   ctx.save(); ctx.translate(charAnch.hand[0], charAnch.hand[1]); ctx.rotate(a);
-  ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();
+  ctx.drawImage(wi, -wi.width * s / 2, -(wi.height - 3) * s, wi.width * s, wi.height * s); ctx.restore();
 }
 // 釣線與浮標（世界座標）：從竿尖拉到浮標；上鉤時浮標沉下去、水面起漣漪；拉扯時浮標往人這邊收
 function drawLineAndBobber(p, wi, f) {
-  const a = rodAngle(f), L = (wi.height - 3) * 2 - 2, dir = p.dir < 0 ? -1 : 1;
+  const a = rodAngle(f), L = (wi.height - 3) * (wi.wscale || 2) - 2, dir = p.dir < 0 ? -1 : 1;
   const tx = p.x + dir * (charAnch.hand[0] + L * Math.sin(a)), ty = p.y - p.z + charAnch.hand[1] - L * Math.cos(a);
   let bx = f.x, by = f.y;
   const since = S.t - (f.t ?? S.t);
@@ -3728,17 +3733,17 @@ const WEAPON_BACK_BOTTOM = 27, WEAPON_HILT_LIFT = 0;
 let charAnch = { back: [-11, -26], backView: [-5, -26], waist: [-8, -18], hand: [3, -26] };
 // onBack＝背面視角（畫在身體之上）：用 backView 掛點（往背的中間靠，看起來是斜背在背上）
 function drawWeaponBack(wi, onBack) {
-  const [ax, ay] = onBack ? charAnch.backView : charAnch.back;
+  const [ax, ay] = onBack ? charAnch.backView : charAnch.back, s = wi.wscale || 2, wb = WEAPON_BACK_BOTTOM * s / 2;
   ctx.save(); ctx.translate(ax, ay); ctx.rotate(-.55);
-  if (wi.hiltUp) { ctx.scale(1, -1); ctx.drawImage(wi, -wi.width, WEAPON_HILT_LIFT - WEAPON_BACK_BOTTOM, wi.width * 2, wi.height * 2); }
-  else ctx.drawImage(wi, -wi.width, WEAPON_BACK_BOTTOM - wi.height * 2, wi.width * 2, wi.height * 2);
+  if (wi.hiltUp) { ctx.scale(1, -1); ctx.drawImage(wi, -wi.width * s / 2, WEAPON_HILT_LIFT * s / 2 - wb, wi.width * s, wi.height * s); }
+  else ctx.drawImage(wi, -wi.width * s / 2, wb - wi.height * s, wi.width * s, wi.height * s);
   ctx.restore();
 }
 // 掛在腰間（avatar.json 的 carry: "waist"）：握把在腰的掛點，武器頭朝下、往身後斜（劍柄朝上，像插在腰帶上）
 function drawWeaponWaist(wi) {
-  const [ax, ay] = charAnch.waist;
+  const [ax, ay] = charAnch.waist, s = wi.wscale || 2;
   ctx.save(); ctx.translate(ax, ay); ctx.rotate(Math.PI + .45);
-  ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();   // 轉軸＝離圖底 3 格的握把
+  ctx.drawImage(wi, -wi.width * s / 2, -(wi.height - 3) * s, wi.width * s, wi.height * s); ctx.restore();   // 轉軸＝離圖底 3 格的握把
 }
 // 揮擊：握住劍柄（以握把為轉軸）、刀刃朝外，由後上方往前下方揮，畫在身體之後（身前）
 // 劍柄朝上背著的（hiltUp）或掛腰間的：前 35% 手從掛著的位置（背上劍柄＝back 掛點往左上 2,3；腰間＝waist 掛點）移到手的掛點，看起來是拔出來再揮。
@@ -3752,8 +3757,9 @@ function drawWeaponSwing(wi, swing, dir = 1) {
     const k = Math.min(1, q / SWING_HILT_DRAW), fx = from[0] * dir;
     px = fx + (px - fx) * k; py = from[1] + (py - from[1]) * k;
   }
+  const s = wi.wscale || 2;
   ctx.save(); ctx.translate(px, py); ctx.rotate(-.9 + q * 2.8);
-  ctx.drawImage(wi, -wi.width, -(wi.height - 3) * 2, wi.width * 2, wi.height * 2); ctx.restore();   // 轉軸＝離圖底 3 格的握把
+  ctx.drawImage(wi, -wi.width * s / 2, -(wi.height - 3) * s, wi.width * s, wi.height * s); ctx.restore();   // 轉軸＝離圖底 3 格的握把
 }
 
 // 營火的橘紅色光暈：地面壓扁的橢圓（透視），半徑＝CAMPFIRE_R（補血範圍），帶一點閃爍；外圈淡淡的範圍線
@@ -5119,7 +5125,7 @@ async function boot() {
       const sh = await optImg(`assets/${a.anim.sheet}`);
       if (sh) S.mobAnims[a.id] = loadAnim(sh, a.anim);
     }),
-    ...S.toolsDB.tools.map(async t => S.weaponImgs[t.id] = await optImg(`assets/tools/${t.sprite}`)),
+    ...S.toolsDB.tools.map(async t => { const im = await optImg(`assets/tools/${t.sprite}`); if (im) im.wscale = 2; S.weaponImgs[t.id] = im; }),   // 採集工具仍是舊 24px 規格（畫 2 倍）；換成 64px 模組時改 wscale
     optImg('assets/tombstone.png').then(im => S.tombImg = im),   // 死亡墓碑（島主龍衝打倒後原地出現）
     optImg('assets/external/img2pixel/campfire_sheet.png').then(im => { if (im) S.campfireSpr = makeSpr(im, { frames: 8, fps: 8 }); }),   // 營火 8 幀（使用者提供的外部素材；缺圖就只是不畫）
     ...S.furn.items.map(async it => S.furnImgs[it.id] = await loadSpr(`assets/furniture/${it.sprite}`, it.anim)),
@@ -5131,6 +5137,7 @@ async function boot() {
       const im = await optImg(`assets/avatar/${w.sprite}`);
       if (im && w.back === 'hilt') im.hiltUp = true;   // 背在背上時劍柄朝上（drawWeaponBack 看這個旗標）
       if (im) im.carry = w.carry === 'waist' ? 'waist' : 'back';   // 不拿在手上時掛哪裡
+      if (im) im.wscale = w.scale || (S.avatar.frames.scale || 2);   // 畫幾倍：新 64px 模組預設與人物同倍率（1），舊 placeholder 標 scale: 2
       S.weaponImgs[w.id] = im;
     }),
     ...Object.values(S.fishDB.terrains).flat().map(async f => S.fishImgs[f.id] = await optImg(`assets/fish/${f.sprite}`)),
