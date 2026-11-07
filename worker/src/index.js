@@ -665,6 +665,7 @@ function tblView(t, cid) {
   if (t.g) {   // 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
     v.board = t.g.board.join(""); v.last = t.g.last; v.black = t.g.black; v.line = t.g.line;
   }
+  if (role === "spec" && playing && t.game === "oldmaid") v.hands = t.seats.map(s => [...s.hand]);   // 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
   if (role === "seat" && playing && t.game === "oldmaid") {
     v.hand = [...t.seats[i].hand];   // 照伺服器順序（不排序）：對方抽的第 k 張牌背＝這裡從左數第 k 張
   }

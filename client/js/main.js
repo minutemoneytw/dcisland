@@ -3942,7 +3942,8 @@ function buildTable() {
     seat.appendChild(mk('div', 'table-tag', tag));
     const cards = mk('div', 'table-cards');
     const drawable = myTurn && v.target === i;
-    if (playing) for (let k = 0; k < s.n; k++) {
+    if (playing && v.hands) for (const c of v.hands[i] || []) cards.appendChild(cardEl(c));   // 觀戰：每個人的牌都翻開
+    else if (playing) for (let k = 0; k < s.n; k++) {
       const c = cardEl(null);
       if (drawable) { c.classList.add('pick'); c.title = '抽這張'; c.onclick = () => S.net?.tbl?.({ a: 'draw', idx: k }); }
       cards.appendChild(c);

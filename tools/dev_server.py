@@ -873,6 +873,8 @@ def tbl_view(t, cid):
     if g:   # 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
         v["board"] = "".join(str(c) for c in g["board"])
         v["last"], v["black"], v["line"] = g["last"], g["black"], g["line"]
+    if role == "spec" and playing and t["game"] == "oldmaid":   # 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
+        v["hands"] = [list(s["hand"]) for s in t["seats"]]
     if role == "seat" and playing and t["game"] == "oldmaid":
         v["hand"] = list(t["seats"][i]["hand"])   # 照伺服器順序（不排序）：對方抽的第 k 張牌背＝這裡從左數第 k 張
     return v
