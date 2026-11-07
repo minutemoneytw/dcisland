@@ -312,6 +312,7 @@ function sanitizeState(s, prev) {
 // 非主動怪是「刻意不同步」的本機動物，伺服器驗證不到擊倒屬實：信任事件＋夾頻（XP_MOB_CD_MS，2026-11-07 使用者同意）
 const XP_MAX = 200000;                  // XP 總量上限（防灌分的保險；等級無上限是設計，這裡只是存檔安全閥）
 const XP_MOB_CD_MS = 1000;              // 擊倒非主動怪的 XP 冷卻（每條連線；每來源每秒最多 1 次）
+const DEATH_CREDIT_MIN_MS = 25000;      // 同一條連線的「倒地記帳」（餵島主 XP／魚人升級）最短間隔：復活要 30 秒，正常玩法不會更密；擋住反覆切 state.dead 灌島主等級
 const XP_NEED = lv => 10 + 5 * (lv - 1);   // 每級需求 XP；與 client/js/main.js、dev_server.py 相同（改記得三邊都改）
 function xpInfo(xp) {                   // XP 換等級：與 client 的 lvInfo 同演算法
   let lv = 1, rest = Math.max(0, Math.floor(xp ?? 0));
@@ -481,6 +482,7 @@ export class Island {
     this.fishDB = null;              // 釣魚：fish.json（懶載入）
     this.lastFish = new Map();       // ws → 上次釣魚結果的時間（冷卻）
     this.lastXpMob = new Map();      // ws → 上次擊倒非主動怪的時間（XP 夾頻；2026-11-07）
+    this.lastDeathCredit = new Map();   // ws → 上次倒地記帳的時間（DEATH_CREDIT_MIN_MS）
     this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
     this.provokes = new Map();       // ws → {terrain, t}：上次挑釁哪座島的島主（冷卻只在成功出手時計）
     this.debuffs = new Map();        // ws → {vuln: t, weak: t}：上次放破綻／降傷的時刻（冷卻只在成功時計）
@@ -716,7 +718,8 @@ export class Island {
     }
     const d = this.dragons.get(terrain);
     if (!d || d.st === "dead") return;   // 沒有島主／已被擊倒：記不到任何人頭上
-    const vl = Math.max(1, Math.floor((att.state && att.state.lvl) || 1));
+    // 受害者等級：只有登入、且等級是伺服器存檔算出來的才採用；訪客／還沒有紀錄的人 state.lvl 是客戶端自己報的，一律當 Lv 1（防謊報灌島主 XP）
+    const vl = att.user && att.xpKnown ? Math.max(1, Math.floor((att.state && att.state.lvl) || 1)) : 1;
     d.xp = Math.max(0, (d.xp ?? 0)) + 10 + 2 * vl;
     d.hp = Math.min(dragonMaxHp(d), d.hp + DL_HP_UP);
     await this.saveDragonLazy(terrain);
@@ -879,7 +882,13 @@ export class Island {
         const loss = xpDeathLoss(att.xp ?? 0);
         if (loss > 0 && Math.random() < .1) await this.grantXp(ws, -loss, "death");
       }
-      if (!wasDead && s.dead && att.terrain) await this.creditMobKill(att);   // 島主／魚人擊倒玩家的等級記帳（creditMobKill）
+      if (!wasDead && s.dead && att.terrain) {   // 島主／魚人擊倒玩家的等級記帳（creditMobKill）；同一條連線最短間隔 DEATH_CREDIT_MIN_MS
+        const nowD = Date.now();
+        if (nowD - (this.lastDeathCredit.get(ws) || 0) >= DEATH_CREDIT_MIN_MS) {
+          this.lastDeathCredit.set(ws, nowD);
+          await this.creditMobKill(att);
+        }
+      }
     } else if (msg.t === "xpsync") {   // 舊存檔一次性上繳（2026-11-07 使用者定 (a)）：伺服器沒有紀錄才收，有就回現值（冪等）
       const user = att.user;
       if (user) {
@@ -1824,6 +1833,7 @@ export class Island {
     this.skillHits.delete(ws);
     this.lastFish.delete(ws);
     this.lastXpMob.delete(ws);
+    this.lastDeathCredit.delete(ws);
     const att = ws.deserializeAttachment() || {};
     if (att.terrain) this.broadcast({ t: "leave", id: att.id }, ws, att.terrain);
   }

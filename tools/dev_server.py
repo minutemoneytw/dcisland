@@ -391,6 +391,7 @@ D_STAFF_RANGE = 440       # 法杖（遠距詠唱）打島主的最大距離：�
 D_RANGE = 100            # 玩家打島主的攻擊距離（客戶端以武器尖端為準：判定圈 58 + 武器伸出 30 = 88，留延遲）
 D_DRIFT_TOLER = 600      # 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 D_CD = 0.3               # 同一條連線兩次打島主的最短間隔（秒）
+DEATH_CREDIT_MIN = 25.0  # 同一條連線的「倒地記帳」（餵島主 XP／魚人升級）最短間隔（秒；與 worker 的 DEATH_CREDIT_MIN_MS 一致）：復活要 30 秒，正常玩法不會更密；擋住反覆切 state.dead 灌島主等級
 D_HIT_MAX = 4            # 一般攻擊打島主／深海魚人的傷害上限（與 worker 的 D_HIT_MAX 一致；2026-11-05 由 2 放寬）。夾值隨攻擊者等級放寬（每 3 級 +1，見 dl_hit_max）
 D_PROVOKE_CD = 15.0      # 挑釁冷卻（每條連線，秒；與 worker/src/index.js 的 D_PROVOKE_CD_MS 一致）
 D_PROVOKE_RANGE = 240    # 挑釁範圍（比攻擊距離寬：把島主拉過來的是「聲東擊西」，不需要貼臉）
@@ -1523,7 +1524,7 @@ class Room:
         if leg_delay is not None:
             self._schedule_wander_tick(leg_delay, wgen, terrain)
 
-    def credit_mob_kill(self, cid, st, terrain):
+    def credit_mob_kill(self, cid, victim_lvl, terrain):
         """島主／深海魚人擊倒玩家的等級記帳（第 3 步；與 worker/src/index.js 的 creditMobKill 同一套）：
         死因都是客戶端自判（state.dead 0→1），伺服器用「誰在追他」推斷凶手——該地形魚人的 aggro.id 是死者＝牠殺的
         （session 等級 +1，血量上限 +5 並回一點血）；否則該地形島主活著就記牠的 XP
@@ -1542,7 +1543,7 @@ class Room:
             d = self.dragons.get(terrain)
             if not d or d["st"] == "dead":
                 return None   # 沒有島主／已被擊倒：記不到任何人頭上
-            d["xp"] = max(0, d.get("xp", 0)) + 10 + 2 * max(1, int(st.get("lvl") or 1))   # 擊倒玩家得 XP＝10＋2×受害者等級
+            d["xp"] = max(0, d.get("xp", 0)) + 10 + 2 * max(1, int(victim_lvl or 1))   # 擊倒玩家得 XP＝10＋2×受害者等級
             d["hp"] = min(dragon_max_hp(d), d["hp"] + DL_HP_UP)
             return dragon_hp_msg(d)
 
@@ -1908,6 +1909,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         last_dragon_hit = 0.0   # 打島主的每連線冷卻（與 last_hit 同款）
         last_fish = 0.0         # 釣魚結果的每連線冷卻
         last_xp_mob = 0.0       # 擊倒非主動怪的 XP 冷卻（2026-11-07）
+        last_death_credit = 0.0   # 倒地記帳的每連線冷卻（DEATH_CREDIT_MIN）
         last_sign = 0.0         # 改看板的每連線冷卻
         commit_tokens, commit_t = float(COMMIT_BURST), time.time()   # 保存擺設的令牌桶
         try:
@@ -1985,9 +1987,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             xp_grant(c, -loss, "death")
                     # 島主／魚人擊倒玩家的等級記帳（第 3 步）：0→1 的那格才判
                     if not was_dead and st["dead"]:
-                        kill_out = room.credit_mob_kill(cid, st, cur)
-                        if kill_out and cur:
-                            room.broadcast(kill_out, terrain=cur)
+                        t_now = time.time()
+                        if t_now - last_death_credit >= DEATH_CREDIT_MIN:   # 同一條連線的最短間隔
+                            last_death_credit = t_now
+                            # 受害者等級：只有登入、且等級是伺服器存檔算出來的才採用；其餘（訪客／還沒有紀錄）客戶端自己報的一律當 Lv 1
+                            victim_lvl = (st.get("lvl") or 1) if (user and c and c.get("xp_known")) else 1
+                            kill_out = room.credit_mob_kill(cid, victim_lvl, cur)
+                            if kill_out and cur:
+                                room.broadcast(kill_out, terrain=cur)
                 elif t == "xpsync":   # 舊存檔一次性上繳（2026-11-07 使用者定 (a)）：伺服器沒有紀錄才收，有就回現值（冪等）
                     c = room.clients.get(cid)
                     user = c.get("user") if c else None
