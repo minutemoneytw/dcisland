@@ -1194,6 +1194,7 @@ Object.assign(JOB_SKILLS, {
               } },
   care:     { name: '關心', cd: 20, amt: .5, range: 320, desc: '指定滑鼠方向最近的一位玩家（附近沒人就是自己）：永久有效，賢者每造成 2 次傷害，對方回 1 血；再施放會改關新的對象',
               run(me) {
+                const prev = S.fx.care;   // 改關對象前的舊關心（判斷要不要解除自己頭上的愛心）
                 const t = pickHealTarget(me, this.range);
                 S.fx.care = { id: t === me ? null : String(t.id), self: t === me, name: t === me ? '自己' : t.name, acc: 0 };
                 S.floaters.push({ fxk: 'heart', x1: me.x, y1: me.y - 40, x2: t.x, y2: t.y - 30, life: .6 });
@@ -1203,7 +1204,11 @@ Object.assign(JOB_SKILLS, {
                     S.floaters.push({ fxk: 'carego', sx: slots.map(s => s.x), sy: slots.map(s => s.y), x2: t.x, y2: t.y - 24, p: me, life: .7 });
                   }
                 }
-                S.fx.cared = Infinity;   // 永久有效：心形顯示與補血資格沒有時限
+                if (t === me) {   // 關心作用在誰身上，誰才有愛心（2026-11-07 使用者定）：關自己＝愛心在自己頭上（永久有效：心形顯示與補血資格沒有時限）
+                  S.fx.cared = Infinity;
+                } else if (prev && prev.self) {   // 改關別人：解除「自己關自己」的愛心；被其他賢者關心的愛心不動，由那位賢者改關時才解除（收 care 事件那段）
+                  S.fx.cared = 0;
+                }
                 S.net?.skillEvent?.(`care:${S.net?.id}:${t === me ? me.id : t.id}`);   // 廣播新對象（帶賢者 id：原本被這位賢者關心的人收到就解除）
                 toast(`關心了 ${S.fx.care.name}（永久，直到改關別人）`, 1400);
                 return true;
@@ -4723,7 +4728,8 @@ function setJob(id) {
     if (S.jobSwapUsed) { toast('戰鬥中只能換一次職業，等仇恨解除後才能再換', 2200); return; }
     S.jobSwapUsed = true;
   }
-  if (id !== 'sage' && S.fx.care) {   // 轉職離開賢者：永久關心跟著解除（告知原本被關心的人）
+  if (id !== 'sage' && S.fx.care) {   // 轉職離開賢者：永久關心跟著解除（告知原本被關心的人）；「自己關自己」的愛心也一起拿掉（被其他賢者關心的愛心不動）
+    if (S.fx.care.self) S.fx.cared = 0;
     S.fx.care = null;
     S.net?.skillEvent?.(`care:${S.net?.id}:-`);
   }
