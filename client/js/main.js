@@ -524,7 +524,6 @@ function hitMob(p, a, ranged, force) {
       if (!a.proxy) {
         // 單機：記住攻擊者（仇恨換人用）與最後被打時刻；龍衝 CD 中被打是進仇恨追殺
         a.hitBook = a.hitBook || new Map(); a.hitBook.set(p, S.t);
-        ownerLocalFight(a);   // 新的一場戰鬥：鎖定強度（要在更新 lastHitAt 之前）
         a.lastHitAt = S.t;
         if (!a.fly && !a.cast && !a.rest && !a.sayPhase && S.t >= (a.rageCd ?? 0)) ownerTakeoff(a, p);
         else if (!a.aggro && !a.fly && !a.cast && !a.rest && !a.sayPhase && !a.wleg && S.t < (a.rageCd ?? 0)) ownerAggroStart(a, p);
@@ -661,17 +660,14 @@ function lvInfo(xp) {                     // XP 換等級：lv＝目前等級、
 const HIT_MAX_BASE = 6;   // 打島主／魚人的單擊上限基底（與兩份伺服器的 D_HIT_MAX 一致；實際上限＝這個＋lvAtkBonus）
 const lvAtkBonus = lv => Math.floor((lv - 1) / 3);   // 攻擊加成：每 3 級 +1
 const levelOf = p => p === S.players[0] ? lvInfo(S.profile.xp).lv : (p.lvl ?? 1);   // 自己看本機資料；別人等 state 廣播 lvl（同步那步），沒有就當 Lv 1
-// ---- 島主／深海魚人的等級（2026-11-07 改成「強度等級」；與 worker/src/index.js、tools/dev_server.py 的 helper 同式，三邊一起改）----
-// 連線時等級由伺服器事件帶出（事件欄位 lvl／max）；單機「本地模擬」自己算（只有自己在場）。
-// 島主：戰鬥開始（距離上一次被打超過 OWNER_DROPOUT）那一刻依在場玩家算一次並鎖定：round(平均等級 × (1 + 0.15 × (人數−1)))，至少 1、上限 DL_LV_MAX；
-// 深海魚人：等級＝釣到牠的人的等級（出生時決定）。訪客一律 Lv 1 是伺服器的規則（客戶端自報的 lvl 不採信），單機本地模擬沒有這個問題
-const DL_LV_MAX = 100, DL_PER_EXTRA = 0.15;
-const strengthLevel = lvls => {
-  const n = lvls.length;
-  if (!n) return 1;
-  const avg = lvls.reduce((a, b) => a + b, 0) / n;
-  return Math.min(DL_LV_MAX, Math.max(1, Math.round(avg * (1 + DL_PER_EXTRA * (n - 1)))));
-};
+// ---- 島主／深海魚人的等級（第 3 步；與 worker/src/index.js、tools/dev_server.py 的 helper 同式，三邊一起改）----
+// 連線時等級由伺服器事件帶出（事件欄位 lvl／max）；單機「本地模擬」才在記憶體累積（session 內有效、不存存檔）
+const dlXpNeed = lv => 20 + 10 * (lv - 1);   // 島主每級需求 XP
+function dlLvOf(xp) {                        // 島主等級：XP 無上限直算（僅單機模擬用）
+  let lv = 1, rest = Math.max(0, Math.floor(xp ?? 0));
+  while (rest >= dlXpNeed(lv)) { rest -= dlXpNeed(lv); lv++; }
+  return lv;
+}
 const dlHpUp = 25, lurkHpUp = 5;   // 島主／魚人每級血量上限加成（基礎 200／20，max 取 mobs.json 的 hp）
 const ownerDmgBonus = lv => Math.floor((Math.max(1, lv) - 1) / 2);   // 島主爪擊與台詞招式每 2 級 +1（命令檢定不隨等級變強：倒地不看血量）
 const lurkDmgBonus = lv => Math.floor((Math.max(1, lv) - 1) / 3);    // 魚人爪擊每 3 級 +1
@@ -1092,15 +1088,21 @@ function playerDamage(p, dmg, cause) {
   S.floaters.push({ x: p.x + (Math.random() * 20 - 10), y: p.y - 50, v: String(dmg), life: .8, crit: true });
   if (p.hp <= 0) killPlayer(p, cause);
 }
-// 單機本地模擬：島主新的一場戰鬥（距離上一次被打超過 OWNER_DROPOUT 或從沒被打過）依在場玩家（只有自己）鎖定強度，
-// 血量按比例換算；與兩份伺服器的 ensureFight／_ensure_fight 同一套。要在更新 a.lastHitAt 之前呼叫
-function ownerLocalFight(a) {
-  if (a.proxy || (a.lastHitAt && S.t - a.lastHitAt <= OWNER_DROPOUT)) return;
-  const def = mobDef(a.id), b = strengthLevel([levelOf(S.players[0])]);
-  if (b === (a.lvl ?? 1)) return;
-  const oldMax = a.maxHp ?? def.hp;
-  a.lvl = b; a.maxHp = def.hp + dlHpUp * (b - 1);
-  a.hp = Math.max(1, Math.min(a.maxHp, Math.round((a.hp ?? oldMax) * a.maxHp / oldMax)));
+// 單機本地模擬的島主／魚人擊倒玩家等級（第 3 步；session 內記憶體累積、不寫存檔）：與兩份伺服器的 creditMobKill 同一套數值。
+// 島主：擊倒得 XP＝10＋2×受害者等級、每級血量上限 +25（順手回一點血）；魚人：每殺 1 人 +1 級、上限 +5。只在本機玩家扣到 0 的那一擊記
+function ownerLocalKillCredit(a, t) {
+  if (a.proxy || t !== S.players[0] || !t.dead) return;
+  const def = mobDef(a.id);
+  if (def.owner) {
+    a.xp = (a.xp ?? 0) + 10 + 2 * levelOf(t);
+    const lv = dlLvOf(a.xp);
+    if (lv !== (a.lvl ?? 1)) { a.maxHp = (a.maxHp ?? def.hp) + dlHpUp * (lv - (a.lvl ?? 1)); a.lvl = lv; }
+    a.hp = Math.min(a.maxHp, (a.hp ?? a.maxHp) + dlHpUp);
+  } else if (def.lurker) {
+    a.lvl = (a.lvl ?? 1) + 1;
+    a.maxHp = (a.maxHp ?? def.hp) + lurkHpUp;
+    a.hp = Math.min(a.maxHp, (a.hp ?? a.maxHp) + lurkHpUp);
+  }
 }
 // 補師打倒動物／發動群療時的群體補血（heal 事件）：每個收到的人自判「我在不在補師周遭半徑內」再補自己，
 // 與爪擊「受害者自判」同一原則；來源不是補師（舊客戶端／不可能值）就忽略
@@ -1444,7 +1446,6 @@ function tryProvoke() {
   // ---- 以下單機本地模擬（與 worker/dev_server 的 dragon_provoke 同一套流程）----
   if (a.fly || a.cast || a.rest || a.sayPhase) { provokeCd = 0; return; }   // 反擊循環中：不打斷（不消耗冷卻）
   a.hitBook = a.hitBook || new Map(); a.hitBook.set(me, S.t);   // 挑釁者視同現役攻擊者
-  ownerLocalFight(a);   // 新的一場戰鬥：鎖定強度（要在更新 lastHitAt 之前）
   a.lastHitAt = S.t;
   if (a.aggro) {   // 已在追殺別人（含說台詞中）：仇恨轉向挑釁者
     ownerAggroStart(a, me);
@@ -1630,6 +1631,7 @@ function ownerAggroStep(a, dt, def) {
         S.floaters.push({ x: t.x, y: t.y - 24, ring: true, life: .35 });
       } else {
         playerDamage(t, OWNER_CLAW_DMG + ownerDmgBonus(a.lvl ?? 1), def.name);
+        ownerLocalKillCredit(a, t);
         S.floaters.push({ x: t.x, y: t.y - 24, ring: true, life: .35 });
       }
     }
@@ -2045,8 +2047,6 @@ function lurkerSpawnLocal(mob, bx, by) {   // 單機：落在浮標旁最近的�
   if (!mobDef(mob)) return;
   const land = nearestLand({ x: bx, y: by }) || { x: bx, y: by };
   const a = lurkerNew(mob, land.x, land.y, null, null, false);
-  const lv = levelOf(S.players[0]);   // 魚人等級＝釣到牠的人的等級（出生時決定）
-  a.lvl = lv; a.maxHp = mobDef(mob).hp + lurkHpUp * (lv - 1); a.hp = a.maxHp;
   a.lastHitAt = S.t; a.clawAt = S.t + LURK_CLAW_CD; a.prey = S.players[0];
   lurkerLeap(a, bx, by);
   toast(`釣上來的不是魚——是${mobDef(mob).name}！快逃或打倒牠！`, 3200);
@@ -2079,6 +2079,7 @@ function stepLurker(a, dt, def) {
       a.clawAt = S.t + LURK_CLAW_CD;
       S.floaters.push({ x: a.x + dx * .45, y: a.y - 20 + dy * .45, ang: Math.atan2(dy, dx), slash: true, life: .45 });
       playerDamage(t, LURK_CLAW_DMG + lurkDmgBonus(a.lvl ?? 1), def.name);   // 等級傷害：每 3 級 +1（單機模擬）
+      ownerLocalKillCredit(a, t);   // 單機：被牠抓到倒地＝+1 級（與伺服器 creditMobKill 同套；session 內記憶體）
       S.floaters.push({ x: t.x, y: t.y - 24, ring: true, life: .35 });
     }
     return;
