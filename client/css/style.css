@@ -309,3 +309,4 @@ body {
 .dodge-time { position: absolute; right: 8px; top: 6px; color: #ffe08a; font-size: 14px; font-weight: bold; text-shadow: 0 0 4px #000; }
 .dodge-rank { text-align: center; font-size: 14px; color: var(--text); margin: 6px 0; line-height: 1.7; }
 .dodge-seats .table-seat { min-height: 52px; flex: 1 1 110px; max-width: 150px; }
+.table-xp { color: #ffd86b; font-weight: bold; }

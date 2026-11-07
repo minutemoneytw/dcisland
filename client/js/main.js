@@ -762,6 +762,7 @@ function onNetXp(m) {
   }
   const d = Math.round(m.d || 0);
   if (!d) return;
+  if (m.k === 'game' && d > 0) tableXpLine(d);   // 玩小遊戲得到的 XP：登入者由伺服器記，這裡把提示放進牌桌下方的系統訊息
   const p = S.players[0], before = lvInfo(S.profile.xp).lv;
   S.profile.xp = Math.max(0, Math.floor(m.xp));
   saveProfile();
@@ -3869,7 +3870,7 @@ function openTable(tb) {
   if (!gameDef(tb.game)) return;
   for (const k of Object.keys(keys)) keys[k] = false;   // 放開所有按住的鍵（畫面蓋住後收不到 keyup，不然回來還在跑）
   S.mouseHeld = false;
-  S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null; S.gamePlayed = false;
+  S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null; S.gamePlayed = false; S.tableLocalLog = [];
   const inf = S.tblInfo?.[tb.id];
   if (!inf || (!inf.play && inf.n < inf.max)) S.tableChoice = true;   // 還有位子：先讓玩家選「入座」或「觀戰」（沒滿人也可以選觀戰）
   else S.net.tbl({ a: 'join', id: tb.id, role: 'spec' });             // 滿人或已開局：直接觀戰
@@ -3884,16 +3885,19 @@ function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已
   if (!S.tableOpen || m.id !== S.tableId) return;
   if (m.v === null) { closeTable(false); return; }
   // 玩小遊戲得 XP：登入者由伺服器記（收到 xp 訊息飄字）；訪客（本機記帳）在這裡依 result.xp 補發。只算「我自己坐著打完的那一局」
+  if (m.v.phase === 'playing') S.tableLocalLog = [];   // 新的一局開始：清掉上一局的 XP 提示
   if (m.v.phase === 'playing' && m.v.role === 'seat') S.gamePlayed = true;
   const rs = m.v.result;
   if (S.gamePlayed && rs && rs.rid && rs.rid !== S.gameXpSeen && m.v.phase !== 'playing') {
     S.gameXpSeen = rs.rid; S.gamePlayed = false;
     const n = rs.xp?.[m.v.me] || 0;
-    if (n > 0 && !xpServer()) { const p0 = S.players[0]; grantExp(n, p0.x, p0.y - 60, 'game'); }
+    if (n > 0 && !xpServer()) { const p0 = S.players[0]; grantExp(n, p0.x, p0.y - 60, 'game'); tableXpLine(n); }   // 訪客：本機補發，提示放進牌桌下方的系統訊息
   }
   S.tableView = m.v; buildTable();
 }
-const resultXp = v => { const n = v.role === 'seat' && v.result?.xp?.[v.me]; return n > 0 ? `　（你獲得 ${n} XP）` : ''; };   // 結果旁邊顯示自己這一局得到的 XP
+// 牌桌下方的系統訊息：伺服器的紀錄（新的在上）＋本機加的「你獲得 N XP」（放最上面；新的一局開始就清掉）
+function tableXpLine(n) { (S.tableLocalLog ||= []).unshift(`你獲得 ${n} XP`); if (S.tableOpen && S.tableView) buildTable(); }
+const tableLogLines = v => [...(S.tableLocalLog || []), ...[...v.log].reverse()];
 function onNetTblInfo(info) { S.tblInfo = info || {}; }
 // 名牌後面的牌桌狀態：入座中的人顯示「入座中」（還沒開局）或「遊戲中」（牌局進行中），讓同島的人知道他們在玩（只看這座地形的桌子）
 function tableTag(p) {
@@ -3942,7 +3946,7 @@ function buildTable() {
   if (playing) status = v.role === 'spec' ? `觀戰中 · 輪到 ${v.seats[v.turn]?.name} 抽牌` : myTurn ? `輪到你：點 ${v.seats[v.target]?.name} 的一張牌抽走` : `輪到 ${v.seats[v.turn]?.name} 抽牌`;
   else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
   box.appendChild(mk('div', 'table-status' + (myTurn ? ' mine' : ''), status));
-  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text + resultXp(v)));
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
   // 座位：每個人一格（名字、狀態、牌背）；輪到我時，被抽牌的那位的牌背可以點
   const row = mk('div', 'table-seats');
   v.seats.forEach((s, i) => {
@@ -3989,7 +3993,7 @@ function buildTable() {
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   // 紀錄與規則
   const log = mk('div', 'table-log');
-  for (const l of [...v.log].reverse()) log.appendChild(mk('div', null, l));
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
@@ -4037,7 +4041,7 @@ function buildGomoku(box, v, mk) {
   if (playing) status = v.role === 'spec' ? `觀戰中 · 輪到 ${v.seats[v.turn]?.name}（${colorName(v.turn)}）下子` : myTurn ? `輪到你下子（${colorName(v.me)}）` : `輪到 ${v.seats[v.turn]?.name}（${colorName(v.turn)}）下子`;
   else status = v.seats.length < v.min ? `等待玩家入座（需要 ${v.min} 人）` : '雙方按「準備」就開始（開局隨機決定誰執黑）';
   box.appendChild(mk('div', 'table-status' + (myTurn ? ' mine' : ''), status));
-  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text + resultXp(v)));
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
   const row = mk('div', 'table-seats');
   v.seats.forEach((s, i) => {
     const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && v.turn === i ? ' turn' : ''));
@@ -4094,7 +4098,7 @@ function buildGomoku(box, v, mk) {
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log');
-  for (const l of [...v.log].reverse()) log.appendChild(mk('div', null, l));
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
   const gd = gameDef('gomoku'); if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
@@ -4220,18 +4224,18 @@ function dodgeDraw(t, mySeat) {
   });
   if (D.hitFlash > 0) { g.fillStyle = `rgba(255,60,60,${D.hitFlash})`; g.fillRect(0, 0, DG_W, DG_H); }
   if (t < 0) { g.fillStyle = 'rgba(8,10,20,.55)'; g.fillRect(0, 0, DG_W, DG_H); g.fillStyle = '#ffe08a'; g.font = 'bold 56px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillText(String(Math.ceil(-t)), DG_W / 2, DG_H / 2 + 18); }
-  if (mySeat?.out && v.role === 'seat') { g.fillStyle = 'rgba(8,10,20,.5)'; g.fillRect(0, DG_H / 2 - 36, DG_W, 72); g.fillStyle = '#ffb347'; g.font = 'bold 24px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillText(`你出局了：存活 ${mySeat.died ?? '—'} 秒（可以繼續看其他人）`, DG_W / 2, DG_H / 2 + 8); }
+  if (mySeat?.out && v.role === 'seat') { g.fillStyle = 'rgba(8,10,20,.5)'; g.fillRect(0, DG_H / 2 - 36, DG_W, 72); g.fillStyle = '#ffb347'; g.font = 'bold 24px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillText(`你出局了：存活 ${mySeat.died ?? '—'} 秒`, DG_W / 2, DG_H / 2 + 8); }
 }
 function buildDodge(box, v, mk, gd) {
   const playing = v.phase === 'playing', mySeat = v.role === 'seat' ? v.seats[v.me] : null;
   if (playing && (!S.dg || S.dg.id !== S.tableId || S.dg.t0 !== v.dg?.t0)) dodgeStart(v);   // 新的一局（或剛進來觀戰一局進行中的）：重置本機狀態
   if (!playing) dodgeStop();
   let status;
-  if (playing) status = mySeat ? (mySeat.out ? '你已出局' : `挑戰中：WASD／方向鍵移動，躲開所有彈幕（還有 ${mySeat.lives} 條命）`) : '觀戰中';
-  else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始（開局有 3 秒倒數）';
+  if (playing) status = mySeat ? (mySeat.out ? '你已出局' : '挑戰中：WASD／方向鍵移動，躲開所有彈幕') : '觀戰中';
+  else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
   box.appendChild(mk('div', 'table-status' + (playing && mySeat && !mySeat.out ? ' mine' : ''), status));
   if (v.result && !playing) {   // 結算：依存活秒數排名
-    box.appendChild(mk('div', 'table-result', v.result.text + resultXp(v)));
+    box.appendChild(mk('div', 'table-result', v.result.text));
     const rk = mk('div', 'dodge-rank');
     v.result.ranking.forEach((r, i) => rk.appendChild(mk('div', null, `${i + 1}. ${r.name}　${r.sec} 秒${r.left ? '（中途離開）' : ''}`)));
     box.appendChild(rk);
@@ -4264,7 +4268,7 @@ function buildDodge(box, v, mk, gd) {
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log');
-  for (const l of [...v.log].reverse()) log.appendChild(mk('div', null, l));
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
