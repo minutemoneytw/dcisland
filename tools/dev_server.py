@@ -616,6 +616,13 @@ def floor_to_list(floor):
 TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
 GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
+# 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
+# 抽鬼牌：過關者 +4、輸家 +2；五子棋：勝 +5、負 +2、平手 +3（下不到 10 手就結束的不給，擋刷分）。
+# 登入者由伺服器記帳（同一帳號兩次得分最短間隔 GAME_XP_CD 秒）；訪客由客戶端看 result.xp 本機補發
+GAME_XP_CD = 30.0
+OM_XP = (4, 2)        # (過關, 輸家)
+GM_XP = (5, 2, 3)     # (勝, 負, 平手)
+GM_XP_MIN_MOVES = 10
 OM_SUITS = "SHDC"
 OM_SYM = {"S": "♠", "H": "♥", "D": "♦", "C": "♣"}
 
@@ -752,7 +759,8 @@ def om_start(t):
 
 def om_finish(t, loser):
     name = t["seats"][loser]["name"]
-    t["result"] = {"loser": loser, "name": name, "text": f"{name} 抽到鬼牌，輸了！"}
+    t["result"] = {"loser": loser, "name": name, "text": f"{name} 抽到鬼牌，輸了！", "rid": random.getrandbits(32),
+                   "xp": [OM_XP[1] if i == loser else OM_XP[0] for i in range(len(t["seats"]))]}
     tbl_log(t, t["result"]["text"])
     tbl_reset_seats(t)
 
@@ -826,11 +834,13 @@ def gm_line(board, x, y, color):
 def gm_finish(t, winner, line):
     """對局結束：winner＝座位編號，None＝平手。棋盤留著給大家看（到下一局開始才清掉）。"""
     g = t.get("g")
+    enough = len(g["moves"]) >= GM_XP_MIN_MOVES
     if winner is None:
-        t["result"] = {"draw": True, "text": "棋盤下滿了，平手！"}
+        t["result"] = {"draw": True, "text": "棋盤下滿了，平手！", "rid": random.getrandbits(32), "xp": [GM_XP[2] if enough else 0] * 2}
     else:
         name = t["seats"][winner]["name"]
-        t["result"] = {"winner": winner, "name": name, "text": f"{name} 五子連線，獲勝！"}
+        t["result"] = {"winner": winner, "name": name, "text": f"{name} 五子連線，獲勝！", "rid": random.getrandbits(32),
+                       "xp": [(GM_XP[0] if i == winner else GM_XP[1]) if enough else 0 for i in range(2)]}
     tbl_log(t, t["result"]["text"])
     tbl_reset_seats(t)
     t["g"] = g
@@ -908,6 +918,8 @@ class Room:
         self.lurk_seq = {}       # 地形 -> 怪物 tick 序號（只讓最新排程生效）
         self.tables = {}         # 桌 id -> 牌桌狀態（和平島的遊戲桌；只放記憶體）
         self.tlock = threading.Lock()   # 牌桌操作串行（table_op）
+        self._xp_pending = []           # 對局結束待發的 XP：[(連線編號, XP)]（table_do 在鎖內收集、table_op 在鎖外發）
+        self.game_xp_at = {}            # 帳號 id -> 上次玩小遊戲得 XP 的時間（GAME_XP_CD）
         # 每位玩家各自在某個地形（client["terrain"]）；剛連上時為 None，等 enter
 
     def floor_map(self, terrain):
@@ -2105,6 +2117,7 @@ class Room:
                 t = self.tables.get(c.get("table") or "")
                 if not t:
                     return [], None, None
+                before = t.get("result")
                 if a == "leave":
                     self._table_leave_locked(cid, out)
                 else:
@@ -2123,6 +2136,11 @@ class Room:
                     else:
                         return [], None, None
                     self._table_notify_locked(t, out)
+                    r = t.get("result")
+                    if r is not None and r is not before and not r.get("aborted") and r.get("xp"):   # 這一手結束了對局：收集 XP（鎖外發）
+                        for i, s in enumerate(t["seats"]):
+                            if i < len(r["xp"]) and r["xp"][i] > 0:
+                                self._xp_pending.append((s["cid"], r["xp"][i]))
             return out, self.table_info_msg(c.get("table_terr") or terr), c.get("table_terr") or terr
 
     def table_drop(self, cid):
@@ -2160,6 +2178,19 @@ class Room:
         """牌桌操作（算結果＋送出）整段串行：不同連線的操作在不同執行緒，先算好的 tblinfo 若晚送到，客戶端會停在過期的人數／入座名單。"""
         with self.tlock:
             self.table_flush(fn(*args))
+            pend, self._xp_pending = self._xp_pending, []
+            for cid, n in pend:   # 對局結束：登入者的 XP 由伺服器記（同一帳號 GAME_XP_CD 內只算一次）；訪客由客戶端本機補發
+                with self.lock:
+                    c = self.clients.get(cid)
+                user = c.get("user") if c else None
+                now = time.time()
+                if not user or now - self.game_xp_at.get(user["id"], 0) < GAME_XP_CD:
+                    continue
+                self.game_xp_at[user["id"]] = now
+                try:
+                    xp_grant(c, n, "game")
+                except Exception:
+                    pass
 
     def terrain_of(self, cid):
         with self.lock:

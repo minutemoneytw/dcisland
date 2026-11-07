@@ -98,7 +98,7 @@ const S = {
   craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
   craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
   gamesDB: null, tableImgs: {},        // 和平島遊戲桌：遊戲定義（assets/games/games.json，手寫）與桌子圖
-  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
+  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
   titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
@@ -3869,7 +3869,7 @@ function openTable(tb) {
   if (!gameDef(tb.game)) return;
   for (const k of Object.keys(keys)) keys[k] = false;   // 放開所有按住的鍵（畫面蓋住後收不到 keyup，不然回來還在跑）
   S.mouseHeld = false;
-  S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null;
+  S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null; S.gamePlayed = false;
   const inf = S.tblInfo?.[tb.id];
   if (!inf || (!inf.play && inf.n < inf.max)) S.tableChoice = true;   // 還有位子：先讓玩家選「入座」或「觀戰」（沒滿人也可以選觀戰）
   else S.net.tbl({ a: 'join', id: tb.id, role: 'spec' });             // 滿人或已開局：直接觀戰
@@ -3883,8 +3883,17 @@ function closeTable(sendLeave = true) {
 function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已離開這桌）
   if (!S.tableOpen || m.id !== S.tableId) return;
   if (m.v === null) { closeTable(false); return; }
+  // 玩小遊戲得 XP：登入者由伺服器記（收到 xp 訊息飄字）；訪客（本機記帳）在這裡依 result.xp 補發。只算「我自己坐著打完的那一局」
+  if (m.v.phase === 'playing' && m.v.role === 'seat') S.gamePlayed = true;
+  const rs = m.v.result;
+  if (S.gamePlayed && rs && rs.rid && rs.rid !== S.gameXpSeen && m.v.phase !== 'playing') {
+    S.gameXpSeen = rs.rid; S.gamePlayed = false;
+    const n = rs.xp?.[m.v.me] || 0;
+    if (n > 0 && !xpServer()) { const p0 = S.players[0]; grantExp(n, p0.x, p0.y - 60, 'game'); }
+  }
   S.tableView = m.v; buildTable();
 }
+const resultXp = v => { const n = v.role === 'seat' && v.result?.xp?.[v.me]; return n > 0 ? `　（你獲得 ${n} XP）` : ''; };   // 結果旁邊顯示自己這一局得到的 XP
 function onNetTblInfo(info) { S.tblInfo = info || {}; }
 // 名牌後面的牌桌狀態：入座中的人顯示「入座中」（還沒開局）或「遊戲中」（牌局進行中），讓同島的人知道他們在玩（只看這座地形的桌子）
 function tableTag(p) {
@@ -3932,7 +3941,7 @@ function buildTable() {
   if (playing) status = v.role === 'spec' ? `觀戰中 · 輪到 ${v.seats[v.turn]?.name} 抽牌` : myTurn ? `輪到你：點 ${v.seats[v.target]?.name} 的一張牌抽走` : `輪到 ${v.seats[v.turn]?.name} 抽牌`;
   else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
   box.appendChild(mk('div', 'table-status' + (myTurn ? ' mine' : ''), status));
-  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text + resultXp(v)));
   // 座位：每個人一格（名字、狀態、牌背）；輪到我時，被抽牌的那位的牌背可以點
   const row = mk('div', 'table-seats');
   v.seats.forEach((s, i) => {
@@ -4027,7 +4036,7 @@ function buildGomoku(box, v, mk) {
   if (playing) status = v.role === 'spec' ? `觀戰中 · 輪到 ${v.seats[v.turn]?.name}（${colorName(v.turn)}）下子` : myTurn ? `輪到你下子（${colorName(v.me)}）` : `輪到 ${v.seats[v.turn]?.name}（${colorName(v.turn)}）下子`;
   else status = v.seats.length < v.min ? `等待玩家入座（需要 ${v.min} 人）` : '雙方按「準備」就開始（開局隨機決定誰執黑）';
   box.appendChild(mk('div', 'table-status' + (myTurn ? ' mine' : ''), status));
-  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text + resultXp(v)));
   const row = mk('div', 'table-seats');
   v.seats.forEach((s, i) => {
     const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && v.turn === i ? ' turn' : ''));
