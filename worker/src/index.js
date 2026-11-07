@@ -774,12 +774,15 @@ export class Island {
       const user = await verifySession(this.env, msg.s);
       // 驗證期間（await）其他訊息（state／enter）可能已改過 attachment：要重讀再合併，
       // 否則用開頭讀到的舊 att 寫回會蓋掉剛設好的 terrain／state（玩家就會卡在「沒進任何地形」）
-      const cur = ws.deserializeAttachment() || {};
+      let cur = ws.deserializeAttachment() || {};
       cur.user = user;
       cur.admin = !!user && isAdminId(this.env, user.id);
       let xpKnown = false;
       if (user) {   // 登入者：把伺服器存檔的 XP 讀回來（之後 state.lvl 與記帳都靠它）
         const r = await this.registryCall("/profile", { uid: user.id });
+        cur = ws.deserializeAttachment() || {};   // 重讀：等 Registry 的期間可能有 state／enter 進來改過 attachment（不能用 await 前的舊值蓋掉）
+        cur.user = user;
+        cur.admin = !!user && isAdminId(this.env, user.id);
         if (r && typeof r.xp === "number") {
           cur.xp = Math.max(0, Math.min(XP_MAX, Math.floor(r.xp)));
           cur.xpKnown = xpKnown = !!r.has;

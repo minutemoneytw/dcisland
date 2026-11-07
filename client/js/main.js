@@ -98,6 +98,9 @@ const S = {
   titleOpen: false,                    // 稱號一覽視窗是否開著
   ownerHitAt: {},                      // 自己最後一次打到各島主的時刻（S.t；「參與擊倒」＝島主倒下前 TITLE_ASSIST 秒內打過）
 };
+// 舊存檔／被亂改的 localStorage 也要夾在安全範圍：與兩份伺服器的 XP_MAX 同值（2026-11-07 檢查時補）
+S.profile.xp = Math.max(0, Math.min(200000, Math.floor(Number(S.profile.xp) || 0)));
+if (typeof S.profile.showLv !== 'boolean') S.profile.showLv = true;
 
 // ---------------- 世界生成 ----------------
 function key(x, y) { return x + ',' + y; }
@@ -651,7 +654,7 @@ const allowedWeapons = () => S.avatar.weapons.filter(w => !w.glam && weaponAllow
 const xpNeed = lv => 10 + 5 * (lv - 1);   // 從 lv 升到 lv+1 所需 XP
 function lvInfo(xp) {                     // XP 換等級：lv＝目前等級、cur＝這級累積、need＝這級需求
   let lv = 1, rest = Math.max(0, Math.floor(xp ?? 0));
-  while (rest >= xpNeed(lv)) { rest -= xpNeed(lv); lv++; }
+  while (lv < 2000 && rest >= xpNeed(lv)) { rest -= xpNeed(lv); lv++; }   // 上限 2000 級：與兩份伺服器一致，也防亂改的存檔讓迴圈跑不完
   return { lv, cur: rest, need: xpNeed(lv) };
 }
 const lvAtkBonus = lv => Math.floor((lv - 1) / 3);   // 攻擊加成：每 3 級 +1
