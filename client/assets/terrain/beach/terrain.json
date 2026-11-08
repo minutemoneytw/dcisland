@@ -28,6 +28,14 @@
   {
    "id": "frog",
    "weight": 1
+  },
+  {
+   "id": "bunny",
+   "weight": 2
+  },
+  {
+   "id": "slime_beach",
+   "weight": 1
   }
  ],
  "uiColor": "#e6cf96"

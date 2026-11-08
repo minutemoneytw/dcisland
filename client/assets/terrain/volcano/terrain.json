@@ -28,6 +28,10 @@
   {
    "id": "bird",
    "weight": 1
+  },
+  {
+   "id": "slime_volcano",
+   "weight": 1
   }
  ],
  "uiColor": "#6c5a58",

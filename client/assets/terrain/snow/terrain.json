@@ -28,6 +28,14 @@
   {
    "id": "bird",
    "weight": 1
+  },
+  {
+   "id": "bunny_snow",
+   "weight": 2
+  },
+  {
+   "id": "slime_snow",
+   "weight": 1
   }
  ],
  "uiColor": "#ecf2f8"

@@ -28,6 +28,14 @@
   {
    "id": "bird",
    "weight": 2
+  },
+  {
+   "id": "chicken",
+   "weight": 2
+  },
+  {
+   "id": "slime_forest",
+   "weight": 1
   }
  ],
  "uiColor": "#5b8f46"

@@ -32,6 +32,286 @@
    "line": "「大肚蛙」的眼神飄向遠方。"
   },
   {
+   "id": "chicken",
+   "name": "咕咕雞",
+   "fixed": 3,
+   "speed": 30,
+   "flee": 80,
+   "hp": 2,
+   "anim": {
+    "sheet": "external/img2pixel/chicken_sheet.png",
+    "frames": 3,
+    "rows": 4,
+    "fw": 32,
+    "fh": 32,
+    "rowDir": [
+     "up",
+     "right",
+     "down",
+     "left"
+    ],
+    "fps": 6,
+    "scale": 1.6
+   },
+   "line": "「咕咕雞」歪著頭啄了啄地面。",
+   "footDy": 5
+  },
+  {
+   "id": "slime_grass",
+   "name": "史萊姆",
+   "fixed": 3,
+   "speed": 22,
+   "flee": 70,
+   "hp": 3,
+   "anim": {
+    "sheet": "external/img2pixel/slime_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 48,
+    "fh": 48,
+    "rowDir": [
+     "up",
+     "right",
+     "down"
+    ],
+    "fps": 5,
+    "scale": 1.1
+   },
+   "tintBase": "#ff8080",
+   "tint": "#58b24a",
+   "line": "「史萊姆」果凍般晃了兩下。",
+   "footDy": 9
+  },
+  {
+   "id": "slime_forest",
+   "name": "史萊姆",
+   "fixed": 3,
+   "speed": 22,
+   "flee": 70,
+   "hp": 3,
+   "anim": {
+    "sheet": "external/img2pixel/slime_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 48,
+    "fh": 48,
+    "rowDir": [
+     "up",
+     "right",
+     "down"
+    ],
+    "fps": 5,
+    "scale": 1.1
+   },
+   "tintBase": "#ff8080",
+   "tint": "#2f8a4a",
+   "line": "「史萊姆」果凍般晃了兩下。",
+   "footDy": 9
+  },
+  {
+   "id": "slime_beach",
+   "name": "史萊姆",
+   "fixed": 3,
+   "speed": 22,
+   "flee": 70,
+   "hp": 3,
+   "anim": {
+    "sheet": "external/img2pixel/slime_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 48,
+    "fh": 48,
+    "rowDir": [
+     "up",
+     "right",
+     "down"
+    ],
+    "fps": 5,
+    "scale": 1.1
+   },
+   "tintBase": "#ff8080",
+   "tint": "#3aa0d8",
+   "line": "「史萊姆」果凍般晃了兩下。",
+   "footDy": 9
+  },
+  {
+   "id": "slime_snow",
+   "name": "史萊姆",
+   "fixed": 3,
+   "speed": 22,
+   "flee": 70,
+   "hp": 3,
+   "anim": {
+    "sheet": "external/img2pixel/slime_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 48,
+    "fh": 48,
+    "rowDir": [
+     "up",
+     "right",
+     "down"
+    ],
+    "fps": 5,
+    "scale": 1.1
+   },
+   "tintBase": "#ff8080",
+   "tint": "#bfe6f5",
+   "line": "「史萊姆」果凍般晃了兩下。",
+   "footDy": 9
+  },
+  {
+   "id": "slime_night",
+   "name": "史萊姆",
+   "fixed": 3,
+   "speed": 22,
+   "flee": 70,
+   "hp": 3,
+   "anim": {
+    "sheet": "external/img2pixel/slime_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 48,
+    "fh": 48,
+    "rowDir": [
+     "up",
+     "right",
+     "down"
+    ],
+    "fps": 5,
+    "scale": 1.1
+   },
+   "tintBase": "#ff8080",
+   "tint": "#8a5ad8",
+   "line": "「史萊姆」果凍般晃了兩下。",
+   "footDy": 9
+  },
+  {
+   "id": "slime_volcano",
+   "name": "史萊姆",
+   "fixed": 3,
+   "speed": 22,
+   "flee": 70,
+   "hp": 3,
+   "anim": {
+    "sheet": "external/img2pixel/slime_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 48,
+    "fh": 48,
+    "rowDir": [
+     "up",
+     "right",
+     "down"
+    ],
+    "fps": 5,
+    "scale": 1.1
+   },
+   "tintBase": "#ff8080",
+   "tint": "#ff6a2a",
+   "line": "「史萊姆」果凍般晃了兩下。",
+   "footDy": 9
+  },
+  {
+   "id": "slime_machine",
+   "name": "史萊姆",
+   "fixed": 3,
+   "speed": 22,
+   "flee": 70,
+   "hp": 3,
+   "anim": {
+    "sheet": "external/img2pixel/slime_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 48,
+    "fh": 48,
+    "rowDir": [
+     "up",
+     "right",
+     "down"
+    ],
+    "fps": 5,
+    "scale": 1.1
+   },
+   "tintBase": "#ff8080",
+   "tint": "#9aa4b0",
+   "line": "「史萊姆」果凍般晃了兩下。",
+   "footDy": 9
+  },
+  {
+   "id": "bunny",
+   "name": "跳跳兔",
+   "fixed": 3,
+   "speed": 44,
+   "flee": 110,
+   "hp": 2,
+   "anim": {
+    "sheet": "external/img2pixel/bunny_sheet.png",
+    "frames": 4,
+    "rows": 2,
+    "row0": 0,
+    "fw": 48,
+    "fh": 32,
+    "rowDir": [
+     "left",
+     "right"
+    ],
+    "fps": 9,
+    "scale": 1.1
+   },
+   "line": "「跳跳兔」豎起耳朵，隨時準備蹦走。"
+  },
+  {
+   "id": "bunny_snow",
+   "name": "跳跳兔",
+   "fixed": 3,
+   "speed": 44,
+   "flee": 110,
+   "hp": 2,
+   "anim": {
+    "sheet": "external/img2pixel/bunny_sheet.png",
+    "frames": 4,
+    "rows": 2,
+    "row0": 0,
+    "fw": 48,
+    "fh": 32,
+    "rowDir": [
+     "left",
+     "right"
+    ],
+    "fps": 9,
+    "scale": 1.1
+   },
+   "tint": "#f2f6ff",
+   "tintBase": "#ab7943",
+   "line": "「跳跳兔」豎起耳朵，隨時準備蹦走。"
+  },
+  {
+   "id": "bunny_machine",
+   "name": "跳跳兔",
+   "fixed": 3,
+   "speed": 44,
+   "flee": 110,
+   "hp": 2,
+   "anim": {
+    "sheet": "external/img2pixel/bunny_sheet.png",
+    "frames": 4,
+    "rows": 2,
+    "row0": 0,
+    "fw": 48,
+    "fh": 32,
+    "rowDir": [
+     "left",
+     "right"
+    ],
+    "fps": 9,
+    "scale": 1.1
+   },
+   "tint": "#9aa4b0",
+   "tintBase": "#ab7943",
+   "line": "「跳跳兔」豎起耳朵，隨時準備蹦走。"
+  },
+  {
    "id": "fishman",
    "name": "深海魚人",
    "sprite": "fishman.png",

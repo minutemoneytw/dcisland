@@ -32,6 +32,14 @@
   {
    "id": "frog",
    "weight": 1
+  },
+  {
+   "id": "chicken",
+   "weight": 2
+  },
+  {
+   "id": "slime_grass",
+   "weight": 1
   }
  ],
  "uiColor": "#6aaa5a",

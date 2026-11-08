@@ -1692,6 +1692,10 @@ FURN_MANIFEST = dict(
 #   3. 在 MOB_MANIFEST 的動物／島主條目加 anim（sheet／frames／fps／scale／keyBg）；是島主就再登記 OWNER_BY_TERRAIN
 #   4. 素材來源與授權記到 docs/assets-license.md
 EXTERNAL_BUNDLES = [
+    # 小動物（方向網格；見 docs/notes.md「野外動物」的新增怪物規範）：rows＝列數（每個方向一列）、row0＝從第幾列開始用
+    dict(sheet="external/img2pixel/chicken_sheet.png", frames=3, rows=4, fw=32, fh=32, what="咕咕雞的 4 方向 × 3 幀（草島／森林島）"),
+    dict(sheet="external/img2pixel/slime_sheet.png", frames=3, rows=3, fw=48, fh=48, what="史萊姆的 3 方向（背／側／前）× 3 幀（各島不同色，靠 tint）"),
+    dict(sheet="external/img2pixel/bunny_sheet.png", frames=4, rows=2, row0=0, fw=48, fh=32, what="跳跳兔的左／右各 4 幀（沙灘／雪島白／機械島灰；sheet 第 3 列 2 幀沒用到）"),
     dict(sheet="external/img2pixel/bahamut_fly_sheet.png", frames=6, fw=88, fh=59, what="黃金肥龍的飛行 6 幀（草島島主）"),
     dict(sheet="external/img2pixel/snake_queen_sheet.png", frames=4, fw=88, fh=85, what="笨蛋蛇女的 4 幀（夜光島島主）"),
     dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fw=88, fh=74, what="蓋老師（究極神兵）的走路 6 幀（熔岩島島主）"),
@@ -1700,18 +1704,26 @@ EXTERNAL_BUNDLES = [
 ]
 
 def check_external():
-    """重跑開頭的健檢：sheet 存在、寬＝frames×fw、高＝fh；對不上只印警告（錯的 anim 設定不擋重跑，但要在輸出裡看得見）"""
+    """重跑開頭的健檢：sheet 存在、寬＝frames×fw、高至少涵蓋用到的列（row0+rows）；對不上只印警告（錯的 anim 設定不擋重跑，但要在輸出裡看得見）"""
     for e in EXTERNAL_BUNDLES:
         px = read_png_pixels(os.path.join(ASSETS, e["sheet"]))
         if px is None:
             print(f"  ⚠ {e['sheet']}：不存在或無法解碼")
             continue
         w, h = px[0], px[1]
-        if w != e["frames"] * e["fw"] or h != e["fh"]:
-            print(f"  ⚠ {e['sheet']}：實際 {w}x{h}，與登記（{e['frames']} 幀 × 每幀 {e['fw']}x{e['fh']}）不符")
+        rows, row0 = e.get("rows", 1), e.get("row0", 0)
+        if w != e["frames"] * e["fw"] or h < (row0 + rows) * e["fh"]:
+            print(f"  ⚠ {e['sheet']}：實際 {w}x{h}，與登記（{e['frames']} 幀 × {rows} 列 × 每格 {e['fw']}x{e['fh']}）不符")
             continue
-        print(f"  {e['sheet']}: {e['frames']} 幀 x {e['fw']}x{e['fh']} — {e['what']}")
+        print(f"  {e['sheet']}: {e['frames']} 幀 x {rows} 列 x {e['fw']}x{e['fh']} — {e['what']}")
 
+# 新怪物（使用者提供的 img2pixel 素材，方向網格）：anim 用 fw／fh 指定單格尺寸、row0／rows 用哪幾列、
+# rowDir＝每一列是哪個方向（順序＝列的順序），沒畫的方向由程式用對向那一列左右鏡像；tint／tintBase＝一張基準圖調成不同色系。
+# 史萊姆每個地形一種顏色（同一張紅史萊姆 sheet 調色），id＝slime_<地形>
+SLIME_TINTS = {
+    "grass": "#58b24a", "forest": "#2f8a4a", "beach": "#3aa0d8", "snow": "#bfe6f5",
+    "night": "#8a5ad8", "volcano": "#ff6a2a", "machine": "#9aa4b0",
+}
 MOB_MANIFEST = dict(
     scale=2, respawn=30,
     mobs=[
@@ -1721,6 +1733,25 @@ MOB_MANIFEST = dict(
              line="「波波羊」慢悠悠地嚼著草。"),
         dict(id="frog",  name="大肚蛙", sprite="frog.png",  swim=True, speed=26, flee=70, hp=3,
              line="「大肚蛙」的眼神飄向遠方。"),
+        # 咕咕雞：草島／森林島（4 方向：後／右／前／左，各 3 幀）
+        dict(id="chicken", name="咕咕雞", fixed=3, speed=30, flee=80, hp=2,
+             anim=dict(sheet="external/img2pixel/chicken_sheet.png", frames=3, rows=4, fw=32, fh=32,
+                       rowDir=["up", "right", "down", "left"], fps=6, scale=1.6),
+             line="「咕咕雞」歪著頭啄了啄地面。"),
+        # 史萊姆：所有地形各一種顏色（和平島除外），同一張 sheet 依島調色；3 方向（背／右／前），往左用「右」那一列鏡像
+        *[dict(id=f"slime_{isl}", name="史萊姆", fixed=3, speed=22, flee=70, hp=3,
+               anim=dict(sheet="external/img2pixel/slime_sheet.png", frames=3, rows=3, fw=48, fh=48,
+                         rowDir=["up", "right", "down"], fps=5, scale=1.1),
+               tintBase="#ff8080", tint=col,
+               line="「史萊姆」果凍般晃了兩下。")
+          for isl, col in SLIME_TINTS.items()],
+        # 跳跳兔：沙灘島（原色棕）、雪島（白）、機械島（灰）；左／右各有專屬列不鏡像（sheet 第 3 列 2 幀未用到）
+        *[dict(id=bid, name="跳跳兔", fixed=3, speed=44, flee=110, hp=2,
+               anim=dict(sheet="external/img2pixel/bunny_sheet.png", frames=4, rows=2, row0=0, fw=48, fh=32,
+                         rowDir=["left", "right"], fps=9, scale=1.1),
+               **({"tint": tint, "tintBase": "#ab7943"} if tint else {}),
+               line="「跳跳兔」豎起耳朵，隨時準備蹦走。")
+          for bid, tint in [("bunny", None), ("bunny_snow", "#f2f6ff"), ("bunny_machine", "#9aa4b0")]],
         # 釣上來的敵對怪物（lurker=True）：不在任何地形的 mobs 裡自然出現，只會在釣魚時以 fish.json 的 lurkerChance 機率被釣上來；
         # 落在浮標旁的陸地、直接追殺釣到牠的人（與島主同一套仇恨／爪擊），30 秒沒人打就原地消失，被打倒也消失（不重生、沒有獎勵）
         dict(id="fishman", name="深海魚人", sprite="fishman.png", lurker=True, swim=True, big=2,
@@ -1825,6 +1856,34 @@ for _m in MOB_MANIFEST["mobs"]:
     if _m.get("id") == "gold_dragon":
         _m["lineSkills"] = [quote_skills(l) for l in _m["ownerLines"]]   # 與 ownerLines 一一對應
 
+def anim_bottom_pad(sheet, fw, fh, frames, rows, row0):
+    """量方向網格 sheet 每格「底部留白」的最大值（像素）：腳沒踩到格子底時，畫面上要往下挪這麼多才會踩到影子。
+    （素材每格大小固定，底部常有幾列透明；島主／飛行怪不套用，牠們另有調好的影子偏移。）"""
+    px = read_png_pixels(os.path.join(ASSETS, sheet))
+    if px is None:
+        return 0
+    w, h, data = px
+    pad = 0
+    for r in range(row0, min(row0 + rows, h // fh)):
+        for c in range(frames):
+            last = -1
+            for y in range(fh):
+                base = ((r * fh + y) * w + c * fw) * 4
+                if any(data[base + x * 4 + 3] > 16 for x in range(fw)):
+                    last = y
+            if last >= 0:
+                pad = max(pad, fh - 1 - last)
+    return pad
+
+# 小動物（方向網格）：自動量底部留白 → footDy（像素＝留白 × scale），讓腳／底部踩到地面（島主、釣上來的怪不套用）
+for _m in MOB_MANIFEST["mobs"]:
+    _a = _m.get("anim")
+    if not _a or "footDy" in _m or _m.get("owner") or _m.get("lurker"):
+        continue
+    _pad = anim_bottom_pad(_a["sheet"], _a["fw"], _a["fh"], _a["frames"], _a.get("rows", 1), _a.get("row0", 0))
+    if _pad:
+        _m["footDy"] = round(_pad * (_a.get("scale", 2)))
+
 # 每座地形的島主（id＝mobs.json 裡的動物 id；沒列的就是還沒有島主）
 OWNER_BY_TERRAIN = {
     "grass": "gold_dragon",
@@ -1835,13 +1894,13 @@ OWNER_BY_TERRAIN = {
 
 # 各地形出現的小動物（id=權重）
 MOBS_BY_TERRAIN = {
-    "grass":   [("sheep", 2), ("bird", 1), ("frog", 1)],
-    "beach":   [("bird", 2), ("frog", 1)],
-    "snow":    [("sheep", 2), ("bird", 1)],
-    "night":   [("frog", 2), ("sheep", 1)],
-    "forest":  [("sheep", 2), ("bird", 2)],
-    "volcano": [("frog", 1), ("bird", 1)],
-    "machine": [],   # 機械島：沒有野生小動物（只有島主）
+    "grass":   [("sheep", 2), ("bird", 1), ("frog", 1), ("chicken", 2), ("slime_grass", 1)],
+    "beach":   [("bird", 2), ("frog", 1), ("bunny", 2), ("slime_beach", 1)],
+    "snow":    [("sheep", 2), ("bird", 1), ("bunny_snow", 2), ("slime_snow", 1)],
+    "night":   [("frog", 2), ("sheep", 1), ("slime_night", 1)],
+    "forest":  [("sheep", 2), ("bird", 2), ("chicken", 2), ("slime_forest", 1)],
+    "volcano": [("frog", 1), ("bird", 1), ("slime_volcano", 1)],
+    "machine": [("bunny_machine", 2), ("slime_machine", 1)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）
 }
 
 # ---------------- 地板（裝飾模式的地板層，16×16 無縫磚，畫在地面與家具之間）----------------
