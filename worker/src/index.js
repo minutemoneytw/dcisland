@@ -62,7 +62,7 @@ const D_RANGE = 100;         // 玩家打島主的攻擊距離（客戶端以武
 const D_DRIFT_TOLER = 600;   // 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 const D_STAFF_RANGE = 440;   // 法杖（遠距詠唱）打島主的最大距離：客戶端射程 320 + 判定圈 58 + 緩衝；只有 state.weapon＝staff 的連線才適用
 const D_CD_MS = 300;         // 同一條連線兩次打島主的最短間隔
-const D_HIT_MAX = 4;         // 一般攻擊打島主／深海魚人的傷害上限（客戶端算好送來；最高＝遠程輸出 2＋1＋唱歌爆擊 1。2026-11-05 由 2 放寬，使用者定：信任客戶端）。夾值隨攻擊者等級放寬（每 3 級 +1，見 dlHitMax）
+const D_HIT_MAX = 6;         // 一般攻擊打島主／深海魚人的傷害上限（客戶端算好送來；2026-11-05 由 2 放寬到 4，2026-11-07 再放寬到 6，使用者定：信任客戶端；最高＝黑魔法師咒杖 4＋輸出 1＝5，留 1 的餘裕）。夾值隨攻擊者等級放寬（每 3 級 +1，見 dlHitMax）
 const D_PROVOKE_CD_MS = 15000;   // 挑釁冷卻（每條連線；與 dev_server.py 的 D_PROVOKE_CD 一致）
 const D_DEBUFF_MS = 10000;        // 破綻／降傷的持續時間（與 client 的 ROLE_DEBUFF.dur 一致）
 const D_DEBUFF_CD_MS = 30000;     // 破綻／降傷冷卻（每條連線、每種各算）
@@ -316,8 +316,12 @@ function sanitizeState(s, prev) {
 
 // ---- 等級與 XP（2026-11-06 規劃；第 2 步：登入者的 XP 由伺服器權威記帳，動值都經 Registry）----
 // 非主動怪是「刻意不同步」的本機動物，伺服器驗證不到擊倒屬實：信任事件＋夾頻（XP_MOB_CD_MS，2026-11-07 使用者同意）
+const CRAFT_KINDS = ["mat", "furn", "rec"];   // 合成解鎖紀錄的三類：素材／家具／配方（素材圖鑑＋配方筆記；2026-11-07）
+const CRAFT_MAX = 300;                    // 每類最多存幾筆（存檔安全閥；客戶端信任事件，不驗證 id 是否真的存在）
+const CRAFT_SYNC_MAX = 100;               // craftsync 每類一次最多收幾筆
 const XP_MAX = 200000;                  // XP 總量上限（防灌分的保險；等級無上限是設計，這裡只是存檔安全閥）
 const XP_MOB_CD_MS = 1000;              // 擊倒非主動怪的 XP 冷卻（每條連線；每來源每秒最多 1 次）
+const DEATH_CREDIT_MIN_MS = 25000;      // 同一條連線的「倒地記帳」（餵島主 XP／魚人升級）最短間隔：復活要 30 秒，正常玩法不會更密；擋住反覆切 state.dead 灌島主等級
 const XP_NEED = lv => 10 + 5 * (lv - 1);   // 每級需求 XP；與 client/js/main.js、dev_server.py 相同（改記得三邊都改）
 function xpInfo(xp) {                   // XP 換等級：與 client 的 lvInfo 同演算法
   let lv = 1, rest = Math.max(0, Math.floor(xp ?? 0));
@@ -466,6 +470,500 @@ async function exchangeToken(request, env) {
   return json({ access_token: tok.access_token, scope: tok.scope, user, session: await signSession(env, user) });
 }
 
+// ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
+// 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
+// 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
+// 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t3: "oldmaid", t4: "gomoku", t5: "dodge", t6: "uno" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6] };           // 遊戲 → [開局最少人數, 入座上限]
+const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報：每條連線最短間隔（客戶端實際約 8 次／秒）
+const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
+// 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
+// 輸贏經驗一樣（使用者定）：抽鬼牌每位 +4；五子棋勝／負／平手都 +5（下不到 10 手就結束的不給，擋刷分）。
+// 登入者由伺服器記帳（同一帳號兩次得分最短間隔 GAME_XP_CD_MS）；訪客由客戶端看 result.xp 本機補發
+const GAME_XP_CD_MS = 30000;
+const OM_XP = 4;      // 抽鬼牌：每位入座者（過關者與輸家一樣）
+const GM_XP = 5;      // 五子棋：勝／負／平手都一樣
+const GM_XP_MIN_MOVES = 10;
+const OM_SYM = { S: "♠", H: "♥", D: "♦", C: "♣" };
+const omRank = c => (c === "JK" ? null : Number(c.slice(1)));
+const omLabel = c => {
+  const r = omRank(c);
+  return r === null ? "鬼牌" : OM_SYM[c[0]] + ({ 1: "A", 11: "J", 12: "Q", 13: "K" }[r] || String(r));
+};
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+// 丟掉成對的牌（同點數兩張一對；鬼牌不成對）。回 [剩下的牌（已洗亂）, 丟掉的牌]
+function omDropPairs(hand) {
+  const by = new Map(), keep = [], gone = [];
+  for (const c of hand) { const r = omRank(c); if (!by.has(r)) by.set(r, []); by.get(r).push(c); }
+  for (const [r, cs] of by) {
+    if (r === null) { keep.push(...cs); continue; }
+    const n = Math.floor(cs.length / 2) * 2;
+    gone.push(...cs.slice(0, n)); keep.push(...cs.slice(n));
+  }
+  return [shuffle(keep), gone];
+}
+const tblNew = (id, game) => ({ id, game, phase: "lobby", seats: [], specs: [], turn: -1, result: null, log: [], g: null });   // g：遊戲自己的狀態（五子棋的棋盤；抽鬼牌用不到）
+function tblFind(t, cid) {
+  let i = t.seats.findIndex(s => s.cid === cid);
+  if (i >= 0) return ["seat", i];
+  i = t.specs.findIndex(s => s.cid === cid);
+  return i >= 0 ? ["spec", i] : [null, -1];
+}
+function tblLog(t, text) { t.log.push(text); if (t.log.length > 8) t.log.splice(0, t.log.length - 8); }
+function tblNextActive(t, i) {   // 座位 i 之後（順時針）第一個還沒出局的座位；沒有回 -1
+  const n = t.seats.length;
+  for (let k = 1; k <= n; k++) { const j = (i + k) % n; if (!t.seats[j].out) return j; }
+  return -1;
+}
+function tblResetSeats(t) {
+  for (const s of t.seats) { s.ready = false; s.hand = []; s.out = false; }
+  t.phase = "lobby"; t.turn = -1; t.g = null;
+}
+// want＝"seat"（有空位且還沒開局才會入座，否則自動觀戰）或 "spec"（使用者自己選觀戰：沒滿人也可以）
+function tblJoin(t, cid, name, want) {
+  if (tblFind(t, cid)[0]) return;
+  const mx = GAME_LIMITS[t.game][1];
+  if (want !== "spec" && t.phase === "lobby" && t.seats.length < mx) { t.seats.push({ cid, name, ready: false, hand: [], out: false }); tblLog(t, `${name} 入座了`); }
+  else { t.specs.push({ cid, name }); tblLog(t, `${name} 來觀戰`); }
+}
+function tblLeave(t, cid) {
+  const [role, i] = tblFind(t, cid);
+  if (role === "spec") t.specs.splice(i, 1);
+  else if (role === "seat") {
+    const name = t.seats[i].name;
+    if (t.phase === "playing" && t.game === "dodge") { dgLeave(t, i, Date.now()); return; }   // 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
+    if (t.phase === "playing" && t.game === "uno") { unLeave(t, i, Date.now()); return; }   // UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
+    if (t.phase === "playing") {   // 使用者定：有人離開（含斷線）直接結束這一局
+      t.result = { aborted: true, text: `${name} 離開了，這一局結束` };
+      tblResetSeats(t);
+      tblLog(t, t.result.text);
+    } else tblLog(t, `${name} 離開了座位`);
+    t.seats.splice(i, 1);
+  }
+}
+function tblSit(t, cid) {
+  const [role, i] = tblFind(t, cid);
+  if (role !== "spec" || t.phase !== "lobby" || t.seats.length >= GAME_LIMITS[t.game][1]) return;
+  const s = t.specs.splice(i, 1)[0];
+  t.seats.push({ cid, name: s.name, ready: false, hand: [], out: false });
+  tblLog(t, `${s.name} 入座了`);
+}
+function tblReady(t, cid, v) {
+  const [role, i] = tblFind(t, cid);
+  if (role !== "seat" || t.phase !== "lobby") return;
+  t.seats[i].ready = !!v;
+  tblCheckStart(t);
+}
+function tblCheckStart(t) {
+  if (t.phase === "lobby" && t.seats.length >= GAME_LIMITS[t.game][0] && t.seats.every(s => s.ready)) GAME_START[t.game](t);   // 使用者定：全員按「準備」才開始
+}
+// 入座的人改成觀戰（只有還沒開局時；進行中要離開就是 leave，會結束這一局）。剩下的人若都已準備就開局
+function tblStand(t, cid) {
+  const [role, i] = tblFind(t, cid);
+  if (role !== "seat" || t.phase !== "lobby") return;
+  const s = t.seats.splice(i, 1)[0];
+  t.specs.push({ cid, name: s.name });
+  tblLog(t, `${s.name} 改為觀戰`);
+  tblCheckStart(t);
+}
+function omStart(t) {
+  const deck = [];
+  for (const s of "SHDC") for (let r = 1; r <= 13; r++) deck.push(`${s}${r}`);
+  deck.push("JK"); shuffle(deck);
+  const n = t.seats.length;
+  t.seats.forEach((s, k) => { s.hand = deck.filter((_, j) => j % n === k); s.out = false; s.ready = false; });
+  t.result = null; t.phase = "playing";
+  tblLog(t, "牌局開始，發牌！");
+  for (const s of t.seats) {
+    const [keep, gone] = omDropPairs(s.hand);
+    s.hand = keep;
+    if (gone.length) tblLog(t, `${s.name} 先丟掉了 ${gone.length / 2} 對牌`);
+    s.out = !s.hand.length;
+  }
+  const alive = t.seats.map((s, i) => (s.out ? -1 : i)).filter(i => i >= 0);
+  if (alive.length <= 1) { omFinish(t, alive[0]); return; }
+  t.turn = alive[Math.floor(Math.random() * alive.length)];
+  tblLog(t, `由 ${t.seats[t.turn].name} 先抽牌`);
+}
+function omFinish(t, loser) {
+  const name = t.seats[loser].name;
+  t.result = { loser, name, text: `${name} 抽到鬼牌，輸了！`, rid: Math.floor(Math.random() * 4294967296), xp: t.seats.map(() => OM_XP) };
+  tblLog(t, t.result.text);
+  tblResetSeats(t);
+}
+function omDraw(t, cid, idx) {
+  const [role, i] = tblFind(t, cid);
+  if (t.game !== "oldmaid" || role !== "seat" || t.phase !== "playing" || i !== t.turn) return;
+  const tgt = tblNextActive(t, i);
+  if (tgt < 0 || tgt === i) return;
+  const me = t.seats[i], th = t.seats[tgt];
+  if (!Number.isInteger(idx) || idx < 0 || idx >= th.hand.length) return;
+  const card = th.hand.splice(idx, 1)[0];
+  me.hand.splice(Math.floor(Math.random() * (me.hand.length + 1)), 0, card);   // 抽到的牌插在隨機位置（不是固定最右邊，否則對方避開最右邊就不會抽到剛換手的鬼牌）
+  tblLog(t, `${me.name} 從 ${th.name} 手上抽了一張牌`);
+  if (card !== "JK") {
+    const mate = me.hand.find(c => c !== card && omRank(c) === omRank(card));
+    if (mate) {
+      me.hand.splice(me.hand.indexOf(card), 1);
+      me.hand.splice(me.hand.indexOf(mate), 1);
+      tblLog(t, `${me.name} 湊成一對（${omLabel(card)}、${omLabel(mate)}）丟掉`);
+    }
+  }
+  // 不自動洗牌：對方點的是「第幾張牌背」，要和這個人畫面上手牌的順序一致，洗牌是玩家自己的心理戰（omShuffle）
+  for (const s of [me, th]) if (!s.hand.length && !s.out) { s.out = true; tblLog(t, `${s.name} 的牌出完了，安全過關！`); }
+  const alive = t.seats.map((s, k) => (s.out ? -1 : k)).filter(k => k >= 0);
+  if (alive.length <= 1) { omFinish(t, alive[0]); return; }
+  t.turn = tblNextActive(t, i);
+}
+// 玩家自己洗牌（心理戰：讓對方猜不到鬼牌在哪）；手牌順序就是對方看到的牌背順序
+function omShuffle(t, cid) {
+  const [role, i] = tblFind(t, cid);
+  if (t.game !== "oldmaid" || role !== "seat" || t.phase !== "playing" || t.seats[i].hand.length < 2) return;
+  shuffle(t.seats[i].hand);
+  tblLog(t, `${t.seats[i].name} 洗了牌`);
+}
+// ---- 五子棋（第二桌；2026-11-08，使用者要求）：15×15、兩人、黑棋先下（開局隨機決定誰執黑）、橫直斜連成五子（含以上）就贏、棋盤滿了平手 ----
+const GM_N = 15;
+function gmStart(t) {
+  const black = Math.floor(Math.random() * 2);   // 座位 0／1 誰執黑
+  t.g = { board: new Array(GM_N * GM_N).fill(0), black, last: null, line: null, moves: [] };   // board：0 空、1 黑、2 白
+  t.result = null; t.phase = "playing"; t.turn = black;   // 黑先
+  for (const s of t.seats) s.ready = false;
+  tblLog(t, `對局開始，${t.seats[black].name} 執黑先下`);
+}
+// 剛下在 (x, y) 的棋是否連成五子（含以上）：回連成的那一排（座標清單），沒有回 null
+function gmLine(board, x, y, color) {
+  for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [1, -1]]) {
+    const cells = [[x, y]];
+    for (const sgn of [1, -1]) {
+      let cx = x + dx * sgn, cy = y + dy * sgn;
+      while (cx >= 0 && cx < GM_N && cy >= 0 && cy < GM_N && board[cy * GM_N + cx] === color) { cells.push([cx, cy]); cx += dx * sgn; cy += dy * sgn; }
+    }
+    if (cells.length >= 5) return cells.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  }
+  return null;
+}
+// 對局結束：winner＝座位編號，null＝平手。棋盤留著給大家看（到下一局開始才清掉）
+function gmFinish(t, winner) {
+  const g = t.g, enough = (g.moves || []).length >= GM_XP_MIN_MOVES, rid = Math.floor(Math.random() * 4294967296);
+  if (winner === null) t.result = { draw: true, text: "棋盤下滿了，平手！", rid, xp: [enough ? GM_XP : 0, enough ? GM_XP : 0] };
+  else { const name = t.seats[winner].name; t.result = { winner, name, text: `${name} 五子連線，獲勝！`, rid, xp: [enough ? GM_XP : 0, enough ? GM_XP : 0] }; }
+  tblLog(t, t.result.text);
+  tblResetSeats(t);
+  t.g = g;
+}
+function gmMove(t, cid, x, y) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "gomoku" || role !== "seat" || t.phase !== "playing" || i !== t.turn || !g) return;
+  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || x >= GM_N || y < 0 || y >= GM_N) return;
+  if (g.board[y * GM_N + x]) return;
+  const color = i === g.black ? 1 : 2;
+  g.board[y * GM_N + x] = color;
+  g.last = [x, y];
+  (g.moves || (g.moves = [])).push([x, y]);   // （舊存檔的對局沒有 moves：補上）每一手的座標（第 0 手是黑棋；結束後給客戶端復盤）
+  const line = gmLine(g.board, x, y, color);
+  if (line) { g.line = line; gmFinish(t, i); }
+  else if (g.board.every(c => c)) gmFinish(t, null);
+  else t.turn = 1 - i;
+}
+// ---- 躲彈幕（第五桌 t5；2026-11-08，使用者要求）：1～8 人、每人 3 條命、只能躲不能攻擊，依存活秒數評分 ----
+// 彈幕由客戶端用伺服器給的 seed 與開始時間 t0 決定性地各自產生（每個畫面看到的彈幕一樣）；被打到由各客戶端自判並回報 hit（和島主的招式同一原則，信任客戶端），
+// 伺服器管命數（被打後 DG_INV_MS 內不重複扣）、淘汰、評分與結束：入座的人全部淘汰、或滿 DG_DUR 秒（客戶端時間到時送 finish，伺服器核對時鐘）就結束；
+// 中途離開的人視同在離開那一刻淘汰（照該刻的存活秒數計分），遊戲繼續到場上沒有活人為止。與 tools/dev_server.py 的 dg_* 同一套。
+const DG_DUR = 300;          // 最長秒數（使用者定，「暫時」；到了強制結束）
+const DG_LIVES = 3;
+const DG_INV_MS = 1500;      // 被打到後的無敵時間（與客戶端一致）
+const DG_COUNTDOWN_MS = 3000;
+const DG_W = 640, DG_H = 400;   // 場地大小（客戶端畫面用；伺服器只用來夾位置）
+// 存活秒數 → XP：不到 10 秒不給（擋刷分）；之後每 30 秒 +1，起跳 1、上限 10
+const dgXp = sec => (sec < 10 ? 0 : Math.min(10, 1 + Math.floor(sec / 30)));
+const dgElapsed = (t, now) => Math.max(0, Math.min(DG_DUR, (now - t.g.t0) / 1000));
+const round1 = x => Math.round(x * 10) / 10;
+function dgStart(t) {
+  const now = Date.now();
+  t.g = { seed: Math.floor(Math.random() * 2147483648), t0: now + DG_COUNTDOWN_MS };
+  t.result = null; t.phase = "playing";
+  for (const s of t.seats) { s.lives = DG_LIVES; s.out = false; s.died = null; s.lastHit = 0; s.left = false; s.ready = false; }
+  tblLog(t, `挑戰開始！${t.seats.length} 人參加，每人 ${DG_LIVES} 條命`);
+}
+function dgOut(t, s, now, why) {
+  s.out = true; s.died = round1(dgElapsed(t, now));
+  tblLog(t, `${s.name} ${why}，存活 ${s.died} 秒`);
+}
+function dgFinish(t, now) {
+  for (const s of t.seats) if (!s.out) { s.out = true; s.died = round1(dgElapsed(t, now)); }   // 時間到還活著的：存活到最後
+  const ranking = t.seats.map(s => ({ name: s.name, sec: s.died, left: !!s.left })).sort((a, b) => b.sec - a.sec);
+  const stay = t.seats.filter(s => !s.left);
+  const xp = stay.map(s => dgXp(s.died));   // 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
+  const top = ranking[0], text = top ? `挑戰結束！第一名 ${top.name}，存活 ${top.sec} 秒` : "挑戰結束";
+  t.seats = stay;
+  t.result = { text, rid: Math.floor(Math.random() * 4294967296), ranking, xp };
+  tblLog(t, text);
+  tblResetSeats(t);
+  t.g = null;
+}
+// 場上沒有活人，或時間到了：結束
+function dgCheckEnd(t, now) {
+  if (t.game !== "dodge" || t.phase !== "playing" || !t.g) return;
+  if (now >= t.g.t0 + DG_DUR * 1000 || t.seats.every(s => s.out)) dgFinish(t, now);
+}
+function dgHit(t, cid, now) {
+  const [role, i] = tblFind(t, cid);
+  if (t.game !== "dodge" || role !== "seat" || t.phase !== "playing" || !t.g) return;
+  const s = t.seats[i];
+  if (s.out || now < t.g.t0 || now - (s.lastHit || 0) < DG_INV_MS - 400) return;   // 還沒開始、已出局、無敵時間內（留 400ms 的網路抖動餘裕）
+  s.lastHit = now; s.lives -= 1;
+  if (s.lives <= 0) dgOut(t, s, now, "出局");
+  dgCheckEnd(t, now);
+}
+// 遊戲進行中有人離開：視同淘汰（照這一刻的存活秒數計分），遊戲繼續到場上沒有活人為止（使用者定）
+function dgLeave(t, i, now) {
+  const s = t.seats[i];
+  if (!s.out) dgOut(t, s, now, "離開了"); else tblLog(t, `${s.name} 離開了`);
+  s.left = true; s.cid = null;
+  dgCheckEnd(t, now);
+}
+// ---- UNO（第六桌 t6；2026-11-08，使用者要求，名稱沿用 UNO（商標風險由使用者決定）；牌面是原創繪製）：2～6 人、標準 108 張、手牌剩 1 張要喊 UNO ----
+// 與 tools/dev_server.py 的 un_* 同一套（規則說明見那邊）：傳統 classic／無限制 wild（+2／+4 可無限累積傳遞、跳過可傳遞、沒牌可出時抽牌不限次數）。
+// 牌的編碼：顏色字母 RYGB＋點數 0～9／s（跳過）／r（反轉）／d（+2），例如 R5、Gs；W＝變色牌、F＝變色 +4。
+const UN_COLORS = "RYGB";
+const UN_TURN_MS = 30000;
+const UN_XP = 5;   // 輸贏一樣（使用者定）：每位入座者 +5
+const UN_MODES = ["classic", "wild"];
+function unDeck() {
+  const d = [];
+  for (const c of UN_COLORS) { d.push(c + "0"); for (const v of "123456789srd") d.push(c + v, c + v); }
+  return d.concat(Array(4).fill("W"), Array(4).fill("F"));
+}
+const unCname = c => ({ R: "紅", Y: "黃", G: "綠", B: "藍" }[c] || "");
+const unLabel = card => (card === "W" ? "變色牌" : card === "F" ? "變色 +4" : unCname(card[0]) + ({ s: "跳過", r: "反轉", d: "+2" }[card.slice(1)] || card.slice(1)));
+const unIsPlus = card => card === "F" || (card !== "W" && card.slice(1) === "d");
+const unIsSkip = card => card !== "W" && card !== "F" && card.slice(1) === "s";
+// 目前情境下這張牌能不能出（含無限制玩法的累積加牌／跳過傳遞）
+function unPlayable(g, hand, card) {
+  if (g.pending > 0) return unIsPlus(card);   // 無限制：只能接著出 + 牌（不看顏色）傳下去
+  if (g.skip) return unIsSkip(card);          // 無限制：被跳過時只能出跳過牌（不看顏色）傳下去
+  if (card === "W") return true;
+  if (card === "F") return g.mode === "wild" || !hand.some(c => c !== "W" && c !== "F" && c[0] === g.color);   // 傳統：+4 只能在手上沒有「目前顏色」的牌時出
+  return card[0] === g.color || card.slice(1) === g.topval;
+}
+const unActive = t => t.seats.map((s, i) => (s.left ? -1 : i)).filter(i => i >= 0);
+function unNext(t, i, steps = 1) {
+  const n = t.seats.length; let j = i, moved = 0;
+  while (moved < steps) { j = (j + t.g.dir + n) % n; if (!t.seats[j].left) moved++; }
+  return j;
+}
+function unSetTurn(t, i, now) { t.turn = i; t.g.drawn = false; t.g.deadline = now + UN_TURN_MS; }
+function unDrawCards(t, i, n) {
+  const g = t.g, hand = t.seats[i].hand;
+  for (let k = 0; k < n; k++) {
+    if (!g.deck.length) {   // 牌堆空了：把棄牌堆（留最上面那張）洗回去
+      const top = g.discard.pop();
+      g.deck = shuffle(g.discard); g.discard = [top];
+    }
+    if (!g.deck.length) break;
+    hand.push(g.deck.pop());
+  }
+}
+const unHasPlayable = (t, i) => t.seats[i].hand.some(c => unPlayable(t.g, t.seats[i].hand, c));
+function unStart(t) {
+  const now = Date.now(), deck = shuffle(unDeck()), n = t.seats.length;
+  for (const s of t.seats) { s.hand = deck.splice(deck.length - 7, 7); s.out = false; s.ready = false; s.left = false; s.said = false; }
+  while (!("RYGB".includes(deck[deck.length - 1][0]) && "0123456789".includes(deck[deck.length - 1].slice(1)) && deck[deck.length - 1] !== "W" && deck[deck.length - 1] !== "F")) shuffle(deck);   // 起始牌一律是數字牌
+  const top = deck.pop(), mode = UN_MODES.includes(t.mode) ? t.mode : "classic";
+  t.g = { deck, discard: [top], color: top[0], topval: top.slice(1), dir: 1, drawn: false, pend: -1, deadline: 0, mode, pending: 0, skip: false };   // pending：無限制玩法累積的加牌張數；skip：輪到的人正被跳過、可以傳遞
+  t.result = null; t.phase = "playing";
+  unSetTurn(t, Math.floor(Math.random() * n), now);
+  tblLog(t, `牌局開始（${mode === "wild" ? "無限制玩法" : "傳統玩法"}）！每人 7 張，起始牌 ${unLabel(top)}，由 ${t.seats[t.turn].name} 先出`);
+}
+function unFinish(t, winner, xp) {
+  const name = t.seats[winner].name, stay = t.seats.filter(s => !s.left);
+  t.result = { winner, name, text: `${name} 出完手牌，獲勝！`, rid: Math.floor(Math.random() * 4294967296), xp: stay.map(() => (xp ? UN_XP : 0)) };
+  tblLog(t, t.result.text);
+  t.seats = stay;
+  tblResetSeats(t);
+  t.g = null;
+}
+// 只剩 1 位玩家：那位獲勝（其他人都離開了；無 XP，擋「開了就等別人離開」的刷分）；一個人都不剩就直接清桌
+function unCheckLast(t) {
+  const act = unActive(t);
+  if (t.phase !== "playing" || act.length > 1) return false;
+  if (act.length) unFinish(t, act[0], false);
+  else { t.seats = []; tblResetSeats(t); t.g = null; }
+  return true;
+}
+// 輪到 v 面對累積加牌／跳過：v 手上沒有能接的牌就直接吃下、換下一位（不用等他按）；有就把決定權交給 v
+function unPassOn(t, v, now) {
+  const g = t.g, hand = t.seats[v].hand;
+  if (g.pending > 0) {
+    if (hand.some(unIsPlus)) { unSetTurn(t, v, now); return; }
+    const n = g.pending;
+    unDrawCards(t, v, n); g.pending = 0;
+    tblLog(t, `${t.seats[v].name} 抽 ${n} 張`);
+    unSetTurn(t, unNext(t, v), now);
+  } else if (g.skip) {
+    if (hand.some(unIsSkip)) { unSetTurn(t, v, now); return; }
+    g.skip = false;
+    tblLog(t, `${t.seats[v].name} 被跳過`);
+    unSetTurn(t, unNext(t, v), now);
+  } else unSetTurn(t, v, now);
+}
+function unPlay(t, cid, idx, color, now) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "uno" || role !== "seat" || t.phase !== "playing" || !g || i !== t.turn) return;
+  const s = t.seats[i];
+  if (!Number.isInteger(idx) || idx < 0 || idx >= s.hand.length) return;
+  if (g.drawn && idx !== s.hand.length - 1) return;   // 傳統：剛抽的牌只能出那一張（或放棄）
+  const card = s.hand[idx];
+  if (!unPlayable(g, s.hand, card)) return;
+  if ((card === "W" || card === "F") && !(typeof color === "string" && color.length === 1 && UN_COLORS.includes(color))) return;   // 變色牌要指定四色之一
+  const wild = g.mode === "wild";
+  s.hand.splice(idx, 1);
+  g.pend = -1;   // 輪到下一個人動作了：上一位忘記喊 UNO 的抓不到了
+  g.discard.push(card);
+  if (card === "W" || card === "F") { g.color = color; g.topval = card; tblLog(t, `${s.name} 出了 ${unLabel(card)}，選了${unCname(color)}色`); }
+  else { g.color = card[0]; g.topval = card.slice(1); tblLog(t, `${s.name} 出了 ${unLabel(card)}`); }
+  if (!s.hand.length) { unFinish(t, i, true); return; }   // 出完了：獲勝
+  if (s.hand.length === 1) { if (s.said) s.said = false; else g.pend = i; }   // 還沒喊 UNO：下一個人動作前，任何人可以抓
+  const nActive = unActive(t).length;
+  g.skip = false;
+  if (unIsSkip(card)) {   // 跳過
+    const v = unNext(t, i);
+    if (wild) { g.skip = true; unPassOn(t, v, now); }
+    else { tblLog(t, `${t.seats[v].name} 被跳過`); unSetTurn(t, unNext(t, i, 2), now); }
+  } else if (card !== "W" && card !== "F" && card.slice(1) === "r") {   // 反轉（兩人時等於跳過）
+    g.dir = -g.dir; tblLog(t, "方向反轉");
+    unSetTurn(t, nActive === 2 ? i : unNext(t, i), now);
+  } else if (unIsPlus(card)) {   // +2／+4
+    const n = card === "F" ? 4 : 2, v = unNext(t, i);
+    if (wild) { g.pending += n; tblLog(t, `累積 ${g.pending} 張`); unPassOn(t, v, now); }   // 累積：傳給下一位，他有 + 牌就可以接著傳
+    else { unDrawCards(t, v, n); tblLog(t, `${t.seats[v].name} 抽 ${n} 張`); unSetTurn(t, unNext(t, i, 2), now); }
+  } else unSetTurn(t, unNext(t, i), now);
+}
+function unDraw(t, cid, now) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "uno" || role !== "seat" || t.phase !== "playing" || !g || i !== t.turn) return;
+  const s = t.seats[i], wild = g.mode === "wild";
+  if (wild && g.pending > 0) {   // 無限制：吃下累積的加牌，被跳過這一回合
+    const n = g.pending;
+    g.pend = -1; unDrawCards(t, i, n); g.pending = 0;
+    if (s.hand.length > 2) s.said = false;
+    tblLog(t, `${s.name} 抽 ${n} 張`);
+    unSetTurn(t, unNext(t, i), now);
+    return;
+  }
+  if (wild && g.skip) return;   // 被跳過要用 pass 放棄，不能抽牌
+  if (wild) {   // 無限制：手上沒有能出的牌時可以一直抽（有能出的牌就不能抽）
+    if (unHasPlayable(t, i)) return;
+    g.pend = -1; unDrawCards(t, i, 1);
+    if (s.hand.length > 2) s.said = false;
+    tblLog(t, `${s.name} 抽了一張牌`);
+    return;
+  }
+  if (g.drawn) return;
+  g.pend = -1; unDrawCards(t, i, 1);
+  if (s.hand.length > 2) s.said = false;
+  const card = s.hand.length ? s.hand[s.hand.length - 1] : null;
+  if (card && unPlayable(g, s.hand, card)) { g.drawn = true; tblLog(t, `${s.name} 抽了一張牌`); }   // 抽到的牌能出：可以出、也可以放棄（pass）
+  else { tblLog(t, `${s.name} 抽了一張牌，沒有可以出的牌`); unSetTurn(t, unNext(t, i), now); }
+}
+function unPass(t, cid, now) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "uno" || role !== "seat" || t.phase !== "playing" || !g || i !== t.turn) return;
+  const s = t.seats[i];
+  if (g.mode === "wild" && g.skip) { g.pend = -1; g.skip = false; tblLog(t, `${s.name} 被跳過`); unSetTurn(t, unNext(t, i), now); return; }   // 無限制：接受被跳過
+  if (g.mode === "wild" && g.pending === 0 && !g.drawn && !unHasPlayable(t, i) && !g.deck.length && g.discard.length <= 1) {   // 牌抽光了、也沒牌可出：只能放棄
+    g.pend = -1; tblLog(t, `${s.name} 沒有牌可出也沒牌可抽，放棄`); unSetTurn(t, unNext(t, i), now); return;
+  }
+  if (!g.drawn) return;
+  g.pend = -1; tblLog(t, `${s.name} 放棄出牌`); unSetTurn(t, unNext(t, i), now);
+}
+// 喊 UNO：剛出到只剩 1 張時（pend）補喊；或手上只剩 1～2 張時先喊好（出到 1 張就不會被抓）
+function unSay(t, cid) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "uno" || role !== "seat" || t.phase !== "playing" || !g) return;
+  const s = t.seats[i];
+  if (g.pend === i) { g.pend = -1; tblLog(t, `${s.name} 喊了 UNO！`); }
+  else if (s.hand.length <= 2) { s.said = true; tblLog(t, `${s.name} 喊了 UNO！`); }
+}
+function unCatch(t, cid) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "uno" || role !== "seat" || t.phase !== "playing" || !g || g.pend < 0 || g.pend === i) return;
+  const v = g.pend;
+  g.pend = -1; unDrawCards(t, v, 2);
+  tblLog(t, `${t.seats[i].name} 抓到 ${t.seats[v].name} 沒喊 UNO，罰抽 2 張`);
+}
+// 回合限時到了（客戶端送 timeout，伺服器核對時鐘）：有累積加牌就吃下、被跳過就放棄、否則抽 1 張並跳過（剛抽過就直接跳過）
+function unTimeout(t, now) {
+  const g = t.g;
+  if (t.game !== "uno" || t.phase !== "playing" || !g || now < g.deadline - 300) return;
+  const i = t.turn, s = t.seats[i];
+  g.pend = -1;
+  if (g.pending > 0) { const n = g.pending; unDrawCards(t, i, n); g.pending = 0; tblLog(t, `${s.name} 超時，吃下 ${n} 張`); }
+  else if (g.skip) { g.skip = false; tblLog(t, `${s.name} 超時，被跳過`); }
+  else { if (!g.drawn) unDrawCards(t, i, 1); tblLog(t, `${s.name} 超時，自動${g.drawn ? "" : "抽牌並"}跳過`); }
+  unSetTurn(t, unNext(t, i), now);
+}
+// 遊戲進行中有人離開：手牌收回牌堆，遊戲繼續；只剩 1 人時那人獲勝（無 XP）
+function unLeave(t, i, now) {
+  const g = t.g, s = t.seats[i];
+  g.deck = shuffle(g.deck.concat(s.hand));
+  s.hand = []; s.left = true; s.cid = null;
+  tblLog(t, `${s.name} 離開了，手牌收回牌堆`);
+  if (g.pend === i) g.pend = -1;
+  if (unCheckLast(t)) return;
+  if (i === t.turn) { g.pending = 0; g.skip = false; unSetTurn(t, unNext(t, i), now); }   // 正在被加牌／被跳過的人離開：累積的懲罰作廢
+}
+// 桌主（第一位入座者）在開局前選玩法；換玩法會讓大家的「準備」重來
+function unSetMode(t, cid, mode) {
+  const [role, i] = tblFind(t, cid);
+  if (t.game !== "uno" || role !== "seat" || i !== 0 || t.phase !== "lobby" || !UN_MODES.includes(mode) || (t.mode || "classic") === mode) return;
+  t.mode = mode;
+  for (const s of t.seats) s.ready = false;
+  tblLog(t, `${t.seats[0].name} 把玩法改成${mode === "wild" ? "無限制" : "傳統"}`);
+}
+const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+// 給某條連線看的版本：自己的手牌完整，別人只有張數
+function tblView(t, cid) {
+  const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
+  const v = {
+    id: t.id, game: t.game, phase: t.phase, min: mn, max: mx, role, me: role === "seat" ? i : -1,
+    seats: t.seats.map((s, k) => ({ name: s.name, n: playing ? s.hand.length : 0, ready: s.ready, out: playing ? s.out : false, you: role === "seat" && k === i })),
+    specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
+  };
+  if (t.game === "dodge") {   // 躲彈幕：每個座位的命數／淘汰秒數／是否已離開；進行中附上 seed 與開始時間（彈幕由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
+    t.seats.forEach((s, k) => { v.seats[k].lives = s.lives || 0; v.seats[k].died = s.died ?? null; v.seats[k].left = !!s.left; });
+    if (t.g && playing) v.dg = { seed: t.g.seed, t0: t.g.t0, dur: DG_DUR, sn: Date.now() };
+  } else if (t.g && t.game === "gomoku") {   // 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
+    v.board = t.g.board.join(""); v.last = t.g.last; v.black = t.g.black; v.line = t.g.line; v.moves = t.g.moves || [];   // moves：每一手的座標（偶數手＝黑棋）；結束後客戶端用來復盤
+  }
+  if (t.game === "uno") v.mode = t.mode || "classic";   // 玩法（桌主在開局前選）：classic 傳統／wild 無限制
+  if (t.game === "uno" && playing && t.g) {   // UNO：目前顏色、方向、最上面一張、牌堆張數、這回合的期限（sn＝伺服器現在時間，客戶端對時用）、誰沒喊 UNO（可以抓）、累積加牌張數、是否正被跳過
+    const g = t.g;
+    v.un = { color: g.color, dir: g.dir, top: g.discard[g.discard.length - 1], deck: g.deck.length, drawn: g.drawn, pend: g.pend, pending: g.pending, skip: g.skip, deadline: g.deadline, sn: Date.now() };
+    t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; });
+    if (role === "seat") {
+      const me = t.seats[i], mine = i === t.turn;
+      v.playable = mine ? me.hand.map((c, k) => k).filter(k => unPlayable(g, me.hand, me.hand[k]) && (!g.drawn || k === me.hand.length - 1)) : [];
+      if (g.mode === "wild") {   // 無限制：有累積加牌時可以吃下；沒牌可出時可以一直抽；被跳過時只能出跳過牌或放棄
+        v.canDraw = mine && (g.pending > 0 || (!g.skip && !unHasPlayable(t, i)));
+        v.canPass = mine && (g.skip || (g.pending === 0 && !unHasPlayable(t, i) && !g.deck.length && g.discard.length <= 1));
+      } else { v.canDraw = mine && !g.drawn; v.canPass = mine && g.drawn; }
+    }
+  }
+  if (role === "spec" && playing && (t.game === "oldmaid" || t.game === "uno")) v.hands = t.seats.map(s => [...s.hand]);   // 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
+  if (role === "seat" && playing && (t.game === "oldmaid" || t.game === "uno")) {
+    v.hand = [...t.seats[i].hand];   // 照伺服器順序（不排序）：對方抽的第 k 張牌背＝這裡從左數第 k 張
+  }
+  return v;
+}
+// seated＝入座中的連線編號：客戶端在他們的名牌後面加「入座中／遊戲中」
+const tblInfo = t => ({ game: t.game, n: t.seats.length, s: t.specs.length, max: GAME_LIMITS[t.game][1], play: t.phase === "playing", seated: t.seats.map(s => s.cid) });
+
 // ============ 一座島 ============
 // 用 WebSocket Hibernation：沒人講話時 DO 可以休眠，不計費也省資源
 export class Island {
@@ -487,6 +985,11 @@ export class Island {
     this.fishDB = null;              // 釣魚：fish.json（懶載入）
     this.lastFish = new Map();       // ws → 上次釣魚結果的時間（冷卻）
     this.lastXpMob = new Map();      // ws → 上次擊倒非主動怪的時間（XP 夾頻；2026-11-07）
+    this.lastDeathCredit = new Map();   // ws → 上次倒地記帳的時間（DEATH_CREDIT_MIN_MS）
+    this.tables = new Map();         // 桌 id → 牌桌狀態（和平島遊戲桌；懶載入 storage，每次變動都寫回）
+    this.lastTbl = new Map();        // ws → 上次牌桌操作的時間（TBL_CD_MS）
+    this.lastTblPos = new Map();     // ws → 上次躲彈幕位置回報的時間（TBL_POS_CD_MS）
+    this.lastGameXp = new Map();     // 帳號 id → 上次玩小遊戲得 XP 的時間（GAME_XP_CD_MS；只放記憶體，休眠後重置無妨）
     this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
     this.provokes = new Map();       // ws → {terrain, t}：上次挑釁哪座島的島主（冷卻只在成功出手時計）
     this.debuffs = new Map();        // ws → {vuln: t, weak: t}：上次放破綻／降傷的時刻（冷卻只在成功時計）
@@ -722,11 +1225,17 @@ export class Island {
     }
     const d = this.dragons.get(terrain);
     if (!d || d.st === "dead") return;   // 沒有島主／已被擊倒：記不到任何人頭上
-    const vl = Math.max(1, Math.floor((att.state && att.state.lvl) || 1));
+    // 受害者等級：只有登入、且等級是伺服器存檔算出來的才採用；訪客／還沒有紀錄的人 state.lvl 是客戶端自己報的，一律當 Lv 1（防謊報灌島主 XP）
+    const vl = att.user && att.xpKnown ? Math.max(1, Math.floor((att.state && att.state.lvl) || 1)) : 1;
     d.xp = Math.max(0, (d.xp ?? 0)) + 10 + 2 * vl;
     d.hp = Math.min(dragonMaxHp(d), d.hp + DL_HP_UP);
     await this.saveDragonLazy(terrain);
     this.broadcast(dragonHpMsg(d), null, terrain);
+  }
+
+  // 玩家等級（打島主／魚人的傷害上限用）：登入且伺服器有存檔才採用存檔等級，其餘一律 Lv 1（不信客戶端自報的 state.lvl）
+  playerLvlOf(att) {
+    return att && att.user && att.xpKnown && typeof att.xp === "number" ? xpInfo(att.xp).lv : 1;
   }
 
   // 釣魚：魚上鉤後拉竿成功 → 伺服器抽一條魚回給這條連線；登入的人同時記進 Registry 的圖鑑（帶回最新紀錄）
@@ -795,6 +1304,8 @@ export class Island {
   // 玩家進入某地形：每個人各自在自己的地形，只有同地形的人看得到彼此
   async enter(ws, att, v) {
     if (!TERRAIN_RE.test(v) || att.terrain === v) return;
+    if (att.table) await this.tableLeave(ws);   // 換地形：離開牌桌（牌局進行中就結束這一局）
+    att = ws.deserializeAttachment() || att;
     const old = att.terrain;
     // leave 帶 to＝去了哪個地形（讓留下的人顯示「XXX 移動到了OO區域」）；斷線的 leave 不帶
     if (old) this.broadcast({ t: "leave", id: att.id, to: v }, ws, old);
@@ -817,8 +1328,143 @@ export class Island {
     }
     const lurker = this.lurkerSnapshot(v);   // 釣上來的怪物（沒有就是 null，客戶端據此清掉殘留的）
     ws.send(JSON.stringify({ t: "enter", terrain: v, players, furn: await this.getFurn(v), floor: floorToList(await this.getFloor(v)), decos, dragon, lurker }));
+    if (TABLE_DEFS[v]) ws.send(JSON.stringify(await this.tableInfoMsg(v)));   // 和平島：給這位玩家各桌目前的人數／狀態
     this.broadcast({ t: "join", id: att.id, name: att.state && att.state.name }, ws, v);
     if (att.state) this.broadcast({ t: "p", id: att.id, s: att.state }, ws, v);
+  }
+
+
+  // ---- 和平島遊戲桌 ----
+  tableGame(tid) {
+    for (const defs of Object.values(TABLE_DEFS)) if (defs[tid]) return defs[tid];
+    return null;
+  }
+  liveIds() { return new Set(this.state.getWebSockets().map(w => (w.deserializeAttachment() || {}).id)); }
+  // 載入一桌（沒有就建立空桌）；載入時把已經不在線的連線踢出（DO 重啟／斷線當下沒處理到的）
+  async getTable(tid) {
+    let t = this.tables.get(tid);
+    if (t) return t;
+    const game = this.tableGame(tid);
+    if (!game) return null;
+    t = (await this.state.storage.get("table:" + tid)) || tblNew(tid, game);
+    const alive = this.liveIds();
+    for (const m of [...t.seats, ...t.specs]) if (!alive.has(m.cid)) tblLeave(t, m.cid);
+    this.tables.set(tid, t);
+    return t;
+  }
+  async saveTable(t) {
+    if (!t.seats.length && !t.specs.length) { this.tables.delete(t.id); await this.state.storage.delete("table:" + t.id); }
+    else await this.state.storage.put("table:" + t.id, t);
+  }
+  sendToId(cid, msg) {
+    const data = JSON.stringify(msg);
+    for (const w of this.state.getWebSockets()) {
+      if ((w.deserializeAttachment() || {}).id === cid) { try { w.send(data); } catch { /* 對方已斷線 */ } }
+    }
+  }
+  tableNotify(t) { for (const m of [...t.seats, ...t.specs]) this.sendToId(m.cid, { t: "table", id: t.id, v: tblView(t, m.cid) }); }
+  async tableInfoMsg(terrain) {
+    const info = {};
+    for (const [tid, game] of Object.entries(TABLE_DEFS[terrain] || {})) {
+      const t = await this.getTable(tid);
+      info[tid] = t ? tblInfo(t) : { game, n: 0, s: 0, max: GAME_LIMITS[game][1], play: false };
+    }
+    return { t: "tblinfo", info };
+  }
+  async tableBroadcastInfo(terrain) { this.broadcast(await this.tableInfoMsg(terrain), undefined, terrain); }
+  // 離開牌桌（Esc、換地形、斷線）：牌局進行中就結束這一局
+  async tableLeave(ws) {
+    const att = ws.deserializeAttachment() || {};
+    const tid = att.table;
+    if (!tid) return;
+    att.table = null;
+    try { ws.serializeAttachment(att); } catch { /* 連線已關閉：記憶體裡的 att 已改，不影響後面的清理 */ }
+    const t = await this.getTable(tid);
+    if (!t) return;
+    const resBefore = t.result;
+    tblLeave(t, att.id);
+    try { ws.send(JSON.stringify({ t: "table", id: tid, v: null })); } catch { /* 已斷線 */ }
+    await this.saveTable(t);
+    this.tableNotify(t);
+    for (const [terr, defs] of Object.entries(TABLE_DEFS)) if (defs[tid]) await this.tableBroadcastInfo(terr);
+    await this.tableXp(t, resBefore);   // 躲彈幕：最後一個活人離開會結束遊戲，留下的入座者照常得 XP
+  }
+  // 這個操作結束了一局：登入的入座者各得 XP（訪客由客戶端看 result.xp 本機補發）；同一帳號 GAME_XP_CD_MS 內只算一次
+  async tableXp(t, resBefore) {
+    const r = t.result;
+    if (!r || r === resBefore || r.aborted || !r.xp) return;
+    for (let i = 0; i < t.seats.length; i++) {
+      const n = r.xp[i] || 0, ws2 = n > 0 && t.seats[i].cid != null ? this.state.getWebSockets().find(w => (w.deserializeAttachment() || {}).id === t.seats[i].cid) : null;
+      const user = ws2 && (ws2.deserializeAttachment() || {}).user;
+      if (!user) continue;
+      const nowMs = Date.now();
+      if (nowMs - (this.lastGameXp.get(user.id) || 0) < GAME_XP_CD_MS) continue;
+      this.lastGameXp.set(user.id, nowMs);
+      await this.grantXp(ws2, n, "game");
+    }
+  }
+  async tableMsg(ws, att, msg) {
+    const now = Date.now(), a = msg.a;
+    if (a === "pos") {   // 躲彈幕的位置回報：自己的限流，不影響 hit／finish 等操作
+      if (now - (this.lastTblPos.get(ws) || 0) < TBL_POS_CD_MS) return;
+      this.lastTblPos.set(ws, now);
+    } else {
+      if (now - (this.lastTbl.get(ws) || 0) < TBL_CD_MS) return;
+      this.lastTbl.set(ws, now);
+    }
+    const terr = att.terrain;
+    if (!terr) return;
+    if (a === "join") {
+      const tid = String(msg.id || ""), game = (TABLE_DEFS[terr] || {})[tid];
+      if (!game) return;
+      if (att.table && att.table !== tid) await this.tableLeave(ws);
+      const t = await this.getTable(tid);
+      const cur = ws.deserializeAttachment() || {};
+      tblJoin(t, att.id, String((att.state && att.state.name) || (att.user && att.user.name) || `玩家${att.id}`).slice(0, 12), msg.role === "spec" ? "spec" : "seat");
+      cur.table = tid; ws.serializeAttachment(cur);
+      await this.saveTable(t);
+      this.tableNotify(t);
+      await this.tableBroadcastInfo(terr);
+      return;
+    }
+    const tid = (ws.deserializeAttachment() || {}).table;
+    if (!tid) return;
+    if (a === "leave") { await this.tableLeave(ws); return; }
+    const t = await this.getTable(tid);
+    if (!t) return;
+    if (a === "pos") {   // 躲彈幕：位置回報，轉發給同桌其他人（不存檔、不通知畫面、不廣播 tblinfo）
+      const [role, i] = tblFind(t, att.id);
+      if (t.game === "dodge" && role === "seat" && t.phase === "playing" && !t.seats[i].out) {
+        const x = Math.max(0, Math.min(DG_W, Number(msg.x) || 0)), y = Math.max(0, Math.min(DG_H, Number(msg.y) || 0));
+        const data = JSON.stringify({ t: "tpos", i, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
+        for (const m of [...t.seats, ...t.specs]) {
+          if (m.cid == null || m.cid === att.id) continue;
+          for (const w of this.state.getWebSockets()) if ((w.deserializeAttachment() || {}).id === m.cid) { try { w.send(data); } catch { /* 對方已斷線 */ } }
+        }
+      }
+      return;
+    }
+    const resBefore = t.result;
+    dgCheckEnd(t, now);   // 時間到了就先結算（下面的動作若是 finish／hit 就只是確認）
+    if (a === "ready") tblReady(t, att.id, msg.v);
+    else if (a === "sit") tblSit(t, att.id);
+    else if (a === "stand") tblStand(t, att.id);
+    else if (a === "draw") { if (t.game === "uno") unDraw(t, att.id, now); else omDraw(t, att.id, msg.idx); }   // UNO：抽牌；抽鬼牌：抽對方的牌
+    else if (a === "shuffle") omShuffle(t, att.id);
+    else if (a === "move") gmMove(t, att.id, msg.x, msg.y);
+    else if (a === "play") unPlay(t, att.id, msg.idx, msg.color, now);   // UNO：出牌（idx、變色牌帶 color）
+    else if (a === "pass") unPass(t, att.id, now);
+    else if (a === "uno") unSay(t, att.id);
+    else if (a === "catch") unCatch(t, att.id);
+    else if (a === "timeout") unTimeout(t, now);
+    else if (a === "mode") unSetMode(t, att.id, msg.v);   // UNO：桌主在開局前選玩法（classic／wild）
+    else if (a === "hit") dgHit(t, att.id, now);   // 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
+    else if (a === "finish") dgCheckEnd(t, now + 300);   // 躲彈幕：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）
+    else return;
+    await this.saveTable(t);
+    this.tableNotify(t);
+    await this.tableBroadcastInfo(terr);
+    await this.tableXp(t, resBefore);
   }
 
   // 簡易限流：超過就丟棄，不回應
@@ -867,6 +1513,8 @@ export class Island {
         const r = await this.registryCall("/dex", { uid: user.id });
         if (r) try { ws.send(JSON.stringify({ t: "dex", dex: r.dex || {} })); } catch { /* 對方已斷線 */ }
         if (cur.xpKnown) try { ws.send(JSON.stringify({ t: "xp", xp: cur.xp, d: 0, k: "init" })); } catch { /* 對方已斷線 */ }
+        const cr = await this.registryCall("/craft", { uid: user.id, add: {} });   // 合成解鎖紀錄（素材圖鑑／配方筆記）
+        if (cr) try { ws.send(JSON.stringify({ t: "craftdb", craft: cr.craft || {} })); } catch { /* 對方已斷線 */ }
       }
     } else if (msg.t === "state") {
       const s = sanitizeState(msg.s && typeof msg.s === "object" ? msg.s : {}, att.state);
@@ -885,7 +1533,13 @@ export class Island {
         const loss = xpDeathLoss(att.xp ?? 0);
         if (loss > 0 && Math.random() < .1) await this.grantXp(ws, -loss, "death");
       }
-      if (!wasDead && s.dead && att.terrain) await this.creditMobKill(att);   // 島主／魚人擊倒玩家的等級記帳（creditMobKill）
+      if (!wasDead && s.dead && att.terrain) {   // 島主／魚人擊倒玩家的等級記帳（creditMobKill）；同一條連線最短間隔 DEATH_CREDIT_MIN_MS
+        const nowD = Date.now();
+        if (nowD - (this.lastDeathCredit.get(ws) || 0) >= DEATH_CREDIT_MIN_MS) {
+          this.lastDeathCredit.set(ws, nowD);
+          await this.creditMobKill(att);
+        }
+      }
     } else if (msg.t === "xpsync") {   // 舊存檔一次性上繳（2026-11-07 使用者定 (a)）：伺服器沒有紀錄才收，有就回現值（冪等）
       const user = att.user;
       if (user) {
@@ -899,6 +1553,19 @@ export class Island {
           ws.serializeAttachment(cur);
           try { ws.send(JSON.stringify({ t: "xp", xp: r.xp, d: 0, k: "init" })); } catch { /* 對方已斷線 */ }
         }
+      }
+    } else if (msg.t === "tbl") {   // 和平島遊戲桌（join／leave／ready／sit／draw）；牌局邏輯全在伺服器
+      await this.tableMsg(ws, att, msg);
+    } else if (msg.t === "craft") {   // 合成解鎖一筆（素材／家具／配方；客戶端自判，伺服器只存，不驗證 id 是否存在；訪客略過）
+      if (att.user && CRAFT_KINDS.includes(msg.k) && ID_RE.test(String(msg.id))) {
+        await this.registryCall("/craft", { uid: att.user.id, add: { [msg.k]: [String(msg.id)] } });
+      }
+    } else if (msg.t === "craftsync") {   // 補傳本機有、伺服器沒有的解鎖（訪客時期的進度併進帳號）；回整份 craftdb
+      if (att.user) {
+        const add = {};
+        for (const k of CRAFT_KINDS) add[k] = (Array.isArray(msg[k]) ? msg[k] : []).slice(0, CRAFT_SYNC_MAX).map(String).filter(id => ID_RE.test(id));
+        const r = await this.registryCall("/craft", { uid: att.user.id, add });
+        if (r) try { ws.send(JSON.stringify({ t: "craftdb", craft: r.craft || {} })); } catch { /* 對方已斷線 */ }
       }
     } else if (msg.t === "xpe") {   // 擊倒非主動怪的 XP 事件（伺服器無法驗證：信任事件＋夾頻；2026-11-07 使用者同意）
       if (att.user && msg.k === "mob" && att.terrain) {
@@ -1184,7 +1851,7 @@ export class Island {
     const h = this.dragonHits.get(ws);
     if (!sk && now - (h ? h.t : 0) < D_CD_MS) return;   // 一般攻擊的間隔；職業技能另有自己的冷卻
     this.regenDragon(terrain, now);   // 扣血前先把該補的血補上（之後廣播的 hp 是回血後的值）
-    let dmg = sk ? sk.dmg : Math.max(1, Math.min(dlHitMax(att.state.lvl), Math.round(Number(msg.dmg) || 1)));   // 夾值隨攻擊者等級放寬（dlHitMax）
+    let dmg = sk ? sk.dmg : Math.max(1, Math.min(dlHitMax(this.playerLvlOf(att)), Math.round(Number(msg.dmg) || 1)));   // 夾值隨攻擊者等級放寬（dlHitMax）；等級由伺服器決定（訪客 Lv 1，不信 state.lvl）
     if (now < (d.vulnUntil || 0)) dmg += 1;   // 破綻（近戰輸出的職能技能）：每擊 +1
     const [ph, pos] = this.dragonPhase(terrain, now);
     if (ph === "dash") return;     // 龍衝飛行中打不到（開眼/預警/歇腳與散步時都打得到）
@@ -1701,7 +2368,7 @@ export class Island {
     if (!sk) this.lurkHits.set(ws, { terrain, t: now });
     else if (!h || h.t < now - D_CD_MS) this.lurkHits.set(ws, { terrain, t: now - D_CD_MS });   // 技能命中也算攻擊者（仇恨候選），但不佔一般攻擊的間隔
     L.lastHitAt = now;
-    L.hp -= sk ? sk.dmg : Math.max(1, Math.min(dlHitMax(att.state.lvl), Math.round(Number(msg.dmg) || 1)));   // 夾值隨攻擊者等級放寬（dlHitMax）
+    L.hp -= sk ? sk.dmg : Math.max(1, Math.min(dlHitMax(this.playerLvlOf(att)), Math.round(Number(msg.dmg) || 1)));   // 夾值隨攻擊者等級放寬（dlHitMax）
     if (L.hp <= 0) {
       const killLv = L.lvl || 1;
       this.lurkers.delete(terrain);
@@ -1817,8 +2484,8 @@ export class Island {
     this.broadcast({ t: "furn", items }, null, att.terrain);
   }
 
-  async webSocketClose(ws) { this.leave(ws); await this.flushDragons(true); }   // 有人離線就把節流中的島主狀態全部寫掉（之後可能沒人了，DO 隨時會休眠）
-  async webSocketError(ws) { this.leave(ws); await this.flushDragons(true); }
+  async webSocketClose(ws) { await this.tableLeave(ws); this.leave(ws); await this.flushDragons(true); }   // 有人離線就把節流中的島主狀態全部寫掉（之後可能沒人了，DO 隨時會休眠）
+  async webSocketError(ws) { await this.tableLeave(ws); this.leave(ws); await this.flushDragons(true); }
 
   leave(ws) {
     this.rate.delete(ws);
@@ -1830,6 +2497,9 @@ export class Island {
     this.skillHits.delete(ws);
     this.lastFish.delete(ws);
     this.lastXpMob.delete(ws);
+    this.lastDeathCredit.delete(ws);
+    this.lastTbl.delete(ws);
+    this.lastTblPos.delete(ws);
     const att = ws.deserializeAttachment() || {};
     if (att.terrain) this.broadcast({ t: "leave", id: att.id }, ws, att.terrain);
   }
@@ -1839,6 +2509,7 @@ export class Island {
 // 全站只有一個實例（idFromName("global")），只由 Island 透過 REGISTRY 綁定呼叫，沒有對外的路由。
 // 資料：dex:<Discord 使用者 ID> → { 地形: { 魚id: { max（最大尺寸 cm）, n（釣到次數）, first（第一次釣到的時間） } } }
 //       xp:<Discord 使用者 ID> → 總 XP（整數；2026-11-07 腳色等級第 2 步）
+//       craft:<Discord 使用者 ID> → { mat: {素材id: 解鎖時間}, furn: {家具id: 時間}, rec: {配方id: 時間} }（合成：素材圖鑑／配方筆記）
 // 讀寫在同一個請求裡只 await storage，DO 的 input gate 會擋住其他請求插隊，所以同一人同時送兩筆也不會互相覆蓋
 const UID_RE = /^[0-9A-Za-z_-]{1,40}$/;
 export class Registry {
@@ -1864,6 +2535,20 @@ export class Registry {
       t[id] = { max: e ? Math.max(e.max, size) : size, n: (e ? e.n : 0) + 1, first: e ? e.first : Date.now() };
       await this.state.storage.put(key, dex);
       return json({ entry: t[id], isNew, isRecord });
+    }
+    if (url.pathname === "/craft") {   // 合成解鎖：add＝{mat:[id…], furn:[…], rec:[…]} 併進去（已有的不動；每類上限 CRAFT_MAX），回整份；add 空＝只讀
+      const ck = "craft:" + uid, craft = (await this.state.storage.get(ck)) || {};
+      let changed = false;
+      const add = body.add && typeof body.add === "object" ? body.add : {};
+      for (const k of CRAFT_KINDS) {
+        const m = craft[k] || (craft[k] = {});
+        for (const id of Array.isArray(add[k]) ? add[k] : []) {
+          if (!ID_RE.test(String(id)) || m[id] || Object.keys(m).length >= CRAFT_MAX) continue;
+          m[id] = Date.now(); changed = true;
+        }
+      }
+      if (changed) await this.state.storage.put(ck, craft);
+      return json({ craft });
     }
     // ---- 腳色等級 XP（與 Island 的 grantXp／hello／xpsync 搭配）----
     if (url.pathname === "/profile") {

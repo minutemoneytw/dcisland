@@ -52,13 +52,14 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 
 ## 慣例
 1. **加內容走 manifest，不改程式**：新家具/動物/造型＝manifest 加條目＋圖檔。新地形＝`assets/terrain/<id>/` 資料夾＋在 `main.js` 的 `TERRAIN_IDS` 登記（見 README「內容擴充」）。
-2. **素材先改 `gen_assets.py` 再重跑**，不要手改 PNG。產生器採**內容感知寫檔**：PNG（像素）與 manifest（JSON，一律 LF）一模一樣就不重寫，重跑後 `git status` 只會列出真的改到的檔案，不需要再 `git checkout` 還原不相干素材。`assets/tools/tools.json`、`assets/skills/skills.json`、`assets/titles/titles.json`、`assets/jobs/jobs.json` 是手寫資料，不由產生器產生。
+2. **素材先改 `gen_assets.py` 再重跑**，不要手改 PNG。產生器採**內容感知寫檔**：PNG（像素）與 manifest（JSON，一律 LF）一模一樣就不重寫，重跑後 `git status` 只會列出真的改到的檔案，不需要再 `git checkout` 還原不相干素材。`assets/tools/tools.json`、`assets/skills/skills.json`、`assets/titles/titles.json`、`assets/jobs/jobs.json`、`assets/craft/craft.json`、`assets/games/games.json` 是手寫資料，不由產生器產生。
 3. **引入外部素材必須在 `docs/assets-license.md` 補記錄**；不得使用 SE/FFXIV 的素材、圖示、字體或商標（HUD 僅風格參考）。使用者自製（img2pixel）素材的導入流程：先 `python tools/import_external.py` 拼 sheet 放進 `client/assets/external/img2pixel/`，再到 `tools/gen_assets.py` 的 `EXTERNAL_BUNDLES` 登記（重跑開頭會健檢尺寸）並接好 `MOB_MANIFEST` 的 `anim`（島主再加 `OWNER_BY_TERRAIN`）；細節見該資料夾的 `README.md`。
 4. **地形是「每位玩家各自在哪」**，不是房間共用狀態；廣播只給同地形的連線（細節見 `docs/notes.md`「同步協定與伺服器」）。
 5. Discord 授權 scope **只有 `identify`**。多加 scope 會讓每次啟動都跳授權畫面，要加先問使用者。
 6. 前端為純 ES module、單一全域狀態物件 `S`（`main.js`）；沿用現有風格，不要為小改動重構整檔。
 7. `localStorage` key 前綴為 `dcisland.m0.*`，改格式時要考慮舊資料。
-8. **使用者做過的設計決定**（例如野外動物刻意不同步、家具開放所有人編輯）記在 `docs/notes.md`，不要自行「修正」。
+8. **和平島不能出現任何敵對 NPC／怪物**（島主、野生敵對怪、釣上來的怪物都不行；使用者定，詳見 `docs/notes.md`「和平島與遊戲桌」）。新增會生成敵對單位的機制時，要排除 `peace`。
+9. **使用者做過的設計決定**（例如野外動物刻意不同步、家具開放所有人編輯）記在 `docs/notes.md`，不要自行「修正」。
 
 ## Git
 - 不要 force push、不要改寫已有歷史；pull/merge 以快轉或正常 merge 為主。
@@ -73,6 +74,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 | 島主（`OWNER_*`、`D_*`）、仇恨、玩家血量、營火、**職能與職業（`ROLES`、`jobs.json`、`JOB_SKILLS`、`JOB_ROLE`、技能列、技能特效）**、**法杖／咒杖遠距詠唱**、**武器列**、新增島主 | 島主與戰鬥 |
 | `mobs.json`、動物游泳、捕捉/牧養規劃、釣上來的敵對怪物（lurker） | 野外動物 |
 | 裝飾模式、地板、看板、坐下/睡覺、家具碰撞 | 裝飾、家具、地板、看板 |
-| 採集工具、釣魚與圖鑑、稱號、NPC、操作說明 | 玩法：採集、釣魚、NPC |
+| 採集工具、釣魚與圖鑑、稱號、NPC、操作說明、**合成（素材圖鑑／配方筆記／合成家具）** | 玩法：採集、釣魚、NPC |
+| **和平島、遊戲桌、抽鬼牌（`tbl`／`table`／`tblinfo` 訊息、`TABLE_DEFS`、`games.json`）** | 玩法：採集、釣魚、NPC（「和平島與遊戲桌」） |
 | `makeSpr`／`drawSpr`、`anim`、人物分層 sheet、`avatar.json` 的 `frames`、**裝備／外觀／換色（`dye`、`glam`、`wardrobe`）** | 美術：多幀動畫與人物分層 |
 | 本機 Python／Node 環境、Discord CSP、`dev_server.py` 的 HTTP 設定 | 環境與部署地雷 |

@@ -88,7 +88,7 @@ export async function hookDiscord() {
   } catch (e) {
     beacon('dc-fail', String(e && e.stack || e.message || e));
     console.warn('Discord init failed:', e);
-    window.toast?.('Discord 連線失敗，先進入本機模式');
+    window.toast?.('未完成 Discord 授權，先進入訪客模式：等級只存在這台裝置、不會同步，打島主一律以 Lv 1 計算；重新開啟活動並授權即可升等', 6000);   // 訪客提醒（2026-11-07 使用者要求）
     return 'discord-failed:' + (e.message || e);
   }
 }

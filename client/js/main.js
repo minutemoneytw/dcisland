@@ -42,7 +42,7 @@ function lsSet(key, val) {
 const lsObj = (key, def) => { const v = lsGet(key, null); return v && typeof v === 'object' && !Array.isArray(v) ? v : def; };
 
 // ---------------- 全域狀態 ----------------
-const TERRAIN_IDS = ['grass', 'beach', 'snow', 'night', 'forest', 'volcano', 'machine'];
+const TERRAIN_IDS = ['grass', 'beach', 'snow', 'night', 'forest', 'volcano', 'machine', 'peace'];
 const S = {
   terrain: (t => TERRAIN_IDS.includes(t) ? t : 'grass')(lsRaw('dcisland.m0.terrain')),   // 舊資料是純字串（非 JSON）
   terrains: {},                 // id -> manifest
@@ -94,6 +94,11 @@ const S = {
   fishDB: null, fishImgs: {},          // 釣魚：魚類 manifest（assets/fish/fish.json）與圖
   dex: lsObj('dcisland.m0.fishdex', {}),   // 魚類圖鑑：地形 -> 魚id -> {max（最大尺寸 cm）, n（釣到次數）}；登入後換成伺服器的
   dexSource: 'local',                  // 'local'＝訪客／未連線（存本機）；'server'＝伺服器依 Discord 帳號保存
+  craftDB: null, craftImgs: {},         // 合成：assets/craft/craft.json（手寫）與素材圖
+  craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
+  craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
+  gamesDB: null, tableImgs: {},        // 和平島遊戲桌：遊戲定義（assets/games/games.json，手寫）與桌子圖
+  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, unTimer: 0, unOff: 0, unTimeoutAt: 0, unPick: null, dg: null, dgRaf: 0, dgLast: 0, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
   titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
@@ -109,9 +114,11 @@ function key(x, y) { return x + ',' + y; }
 
 function genWorld(id) {
   const rng = mulberry32(hashStr(id));
-  const cx = COLS / 2 - .5, cy = ROWS / 2 - .5, rx = 26, ry = 17.5;   // 放大 5 倍級
+  const cx = COLS / 2 - .5, cy = ROWS / 2 - .5, rx = 29, ry = 19.5;   // 放大 5 倍級（2026-11-07 再放大約 24% 面積：原本 26／17.5）
   const types = new Uint8Array(COLS * ROWS);
+  const room = S.terrains[id]?.layout === 'room';   // 和平島：像室內——整張地圖都是地板，沒有水（2026-11-08 使用者要求移除最外圈的水；地圖邊界本來就走不出去）
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    if (room) { types[y * COLS + x] = 2; continue; }
     let d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
     d += (rng() - .5) * .22;
     types[y * COLS + x] = d < .7 ? 2 : d < 1.1 ? 1 : 0;
@@ -124,7 +131,7 @@ function genWorld(id) {
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
     if (types[y * COLS + x] !== 2) continue;
     if (Math.abs(x - cx) < 2.5 && Math.abs(y - cy) < 2) continue; // 出生區淨空
-    if (rng() < .045) decos.push({ i: decos.length, sprite: pool[Math.floor(rng() * pool.length)], cell: [x, y], flip: rng() < .5 });
+    if (pool.length && rng() < .036) decos.push({ i: decos.length, sprite: pool[Math.floor(rng() * pool.length)], cell: [x, y], flip: rng() < .5 });
   }
   S.world = { types, decos };
   S.drops = [];
@@ -308,7 +315,7 @@ function applyDecoHit(d, hp, dead, ttl, mine) {
   if (!dead) return;
   d.dead = true; d.respawnAt = S.t + ttl / 1000;
   S.floaters.push({ x: bx, y: r.y + r.h * .5, poof: true, life: .55 });
-  if (mine) { spawnDrops(tgt, bx, by); grantExp(1, bx, by - 40, 'mine'); toast(`${tgt.name}被破壞了`, 1600); }   // 採集成功（打壞的人）＋1 XP（登入者由伺服器記）
+  if (mine) { spawnDrops(tgt, bx, by); spawnCraftDrops(craftDecoDrops(d.sprite), bx, by); grantExp(1, bx, by - 40, 'mine'); toast(`${tgt.name}被破壞了`, 1600); }   // 採集成功（打壞的人）＋1 XP（登入者由伺服器記）
 }
 // 進入地形時伺服器給的完整狀態：先全部還原，再套用受損/已破壞的
 function onNetDecos(terrain, list) {
@@ -345,6 +352,7 @@ function stepDrops(dt) {
     const dr = S.drops[i];
     if (S.t - dr.born < .5 || Math.hypot(dr.x - p.x, dr.y - p.y) > 24) continue;
     S.drops.splice(i, 1);
+    if (matDef(dr.item)) { collectMaterial(dr.item, p.x, p.y); continue; }   // 合成素材：解鎖進圖鑑（不進背包、無限使用）
     S.inv[dr.item] = (S.inv[dr.item] || 0) + 1;
     lsSet('dcisland.m0.inv', S.inv);
     toast(`獲得 ${S.toolsDB.items[dr.item].name} ×1（共 ${S.inv[dr.item]}）`, 1600);
@@ -377,6 +385,8 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
       if (sgn) { S._hits = 1; openSign(sgn); S.holdSkipF = true; return; }
       const seat = quiet ? null : seatNear(p);   // 身邊有椅子/沙發/床就坐下（長按自動連擊不會反覆切換）
       if (seat) { S._hits = 1; usePose(seat); S.holdSkipF = true; return; }
+      const tbl = quiet ? null : tableNear(p);     // 身邊有遊戲桌就入座／觀戰（長按不重複開）
+      if (tbl) { S._hits = 1; openTable(tbl); S.holdSkipF = true; return; }
       const npc = quiet ? null : npcNear(p);       // 身邊有 NPC 就跟他說話
       if (npc) { S._hits = 1; talkTo(npc); S.holdSkipF = true; return; }
     }
@@ -473,7 +483,7 @@ function stepCast(p) {   // 每幀（只有本機玩家）：檢查中斷條件�
   if (!inCastRange(p, a, rg)) { cancelCast(p, '詠唱中斷：目標超出射程'); return; }
   if (Math.abs(a.x - p.x) > 6) p.dir = Math.sign(a.x - p.x);   // 面向目標
   if (S.t - c.t0 < c.dur) return;
-  p.cast = null; p.lastAtk = S.t;
+  p.cast = null; p.lastAtk = S.t - (ATK_CD - Math.min(ATK_CD, rg.gap ?? ATK_CD));   // 放完到下一次的間隔：預設 ATK_CD；武器的 ranged.gap 可縮短（咒杖 0＝連續施放）
   S.net?.notifyAttack?.();   // 讓同島的人看到你出手
   S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: a.y - 24 * (mobDef(a.id).big || 1) * .6, life: .22 });
   hitMob(p, a, true);
@@ -488,10 +498,10 @@ function hitMob(p, a, ranged, force) {
     const crit = !force && Math.random() < critP;
     let dmg = force ? force.dmg : ranged ? (rangedDef()?.dmg || 2) + (crit ? 1 : 0) : (crit ? 2 : 1);
     const jd = jobOf(p);
-    if (jd?.dmgPlus && !force) dmg += jd.dmgPlus;   // 輸出：每擊 +1（打島主也算；伺服器的上限是 4）
+    if (jd?.dmgPlus && !force) dmg += jd.dmgPlus;   // 輸出：每擊 +1（打島主也算；伺服器的上限是 HIT_MAX_BASE＝6）
     if (!force) dmg += lvAtkBonus(levelOf(p));      // 等級攻擊加成：每 3 級 +1（兩份伺服器的夾值同式放寬）
     const od = mobDef(a.id);
-    const sendDmg = force ? force.dmg : Math.min(4 + lvAtkBonus(levelOf(p)), dmg);   // 送給伺服器的值（上限 4＋攻擊者等級加成＝兩份伺服器的 dlHitMax；破綻的 +1 由伺服器自己加）
+    const sendDmg = force ? force.dmg : Math.min(HIT_MAX_BASE + lvAtkBonus(levelOf(p)), dmg);   // 送給伺服器的值（上限 4＋攻擊者等級加成＝兩份伺服器的 dlHitMax；破綻的 +1 由伺服器自己加）
     if (od.owner && S.t < (a.vulnUntil ?? 0)) dmg += 1;      // 破綻：每擊 +1（單機在這裡扣、連線只是飄字）
     if ((od.owner || od.lurker) && p === S.players[0]) S.ownerHitAt[a.id] = S.t;   // 稱號「參與擊倒」＋擊倒獎勵（訪客）用：30 秒內打過牠
     if (od.owner && a.proxy) {   // 島主連線時由伺服器權威：送意圖（座標＋傷害＋我們看到的龍位置），本地不扣血（血量等伺服器廣播）
@@ -539,7 +549,7 @@ function hitMob(p, a, ranged, force) {
     if (a.hp <= 0) {
       a.dead = true; a.dieT = .6;
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
-      if (p === S.players[0] && !od.owner && !od.lurker) grantExp(1, p.x, p.y - 60, 'mob');   // 非主動怪（羊／鳥／蛙）：擊倒 +1 XP（登入者上報事件由伺服器記；島主／魚人那步由伺服器計）
+      if (p === S.players[0] && !od.owner && !od.lurker) { grantExp(1, p.x, p.y - 60, 'mob'); spawnCraftDrops(S.craftDB?.sources.mob[od.id], a.x, a.y); }   // 合成素材：擊倒野外動物掉落   // 非主動怪（羊／鳥／蛙）：擊倒 +1 XP（登入者上報事件由伺服器記；島主／魚人那步由伺服器計）
       if (!od.owner && !od.lurker) {   // 殺到動物回 1 HP（島主是伺服器權威事件，不算在此；釣上來的怪物也不算）
         const me = S.players[0];
         me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + 1);
@@ -642,6 +652,7 @@ function campfireCellFor(terrain, slot) {   // 只挑陸地（types 2；0＝海�
   return cand.length ? cand[Math.floor(rng() * cand.length)] : null;
 }
 function updateCampfire() {   // 每幀呼叫：換時段（或換地形）就重擲一次位置
+  if (S.terrains[S.terrain]?.campfire === false) { S.campfire = null; return; }   // 這座島沒有營火（和平島）
   const slot = campfireSlot(), c = S.campfire;
   if (c && c.terrain === S.terrain && c.slot === slot) return;
   const cell = campfireCellFor(S.terrain, slot);
@@ -693,6 +704,7 @@ function lvInfo(xp) {                     // XP 換等級：lv＝目前等級、
   while (lv < 2000 && rest >= xpNeed(lv)) { rest -= xpNeed(lv); lv++; }   // 上限 2000 級：與兩份伺服器一致，也防亂改的存檔讓迴圈跑不完
   return { lv, cur: rest, need: xpNeed(lv) };
 }
+const HIT_MAX_BASE = 6;   // 打島主／魚人的單擊上限基底（與兩份伺服器的 D_HIT_MAX 一致；實際上限＝這個＋lvAtkBonus）
 const lvAtkBonus = lv => Math.floor((lv - 1) / 3);   // 攻擊加成：每 3 級 +1
 const levelOf = p => p === S.players[0] ? lvInfo(S.profile.xp).lv : (p.lvl ?? 1);   // 自己看本機資料；別人等 state 廣播 lvl（同步那步），沒有就當 Lv 1
 // ---- 島主／深海魚人的等級（第 3 步；與 worker/src/index.js、tools/dev_server.py 的 helper 同式，三邊一起改）----
@@ -715,7 +727,7 @@ function levelUpFx(p, afterLv) {         // 升級演出（本機記帳與伺服
   p.regenAcc = 0;
   S.floaters.push({ x: p.x, y: p.y - 56, v: `升級！Lv ${afterLv}`, life: 1.6, crit: true });
   S.floaters.push({ x: p.x, y: p.y, gold: true, life: .7 });   // 金光：金環擴散＋小光點
-  toast(`升級了！Lv ${afterLv}（血量上限 +1${afterLv % 3 === 0 ? '、攻擊力 +1' : ''}）`, 3200);
+  toast(`升級了！Lv ${afterLv}（血量上限 +1${afterLv > 1 && afterLv % 3 === 1 ? '、攻擊力 +1' : ''}）`, 3200);
   if (!$('avatarPanel').classList.contains('hidden')) buildAvatarPanel();   // 面板開著就同步進度條
 }
 function grantExp(n, x, y, reason) {     // 拿經驗值：金色 +N XP 飄字；升級＝金光演出＋回滿血（升級獎勵感）
@@ -750,6 +762,7 @@ function onNetXp(m) {
   }
   const d = Math.round(m.d || 0);
   if (!d) return;
+  if (m.k === 'game' && d > 0) tableXpLine(d);   // 玩小遊戲得到的 XP：登入者由伺服器記，這裡把提示放進牌桌下方的系統訊息
   const p = S.players[0], before = lvInfo(S.profile.xp).lv;
   S.profile.xp = Math.max(0, Math.floor(m.xp));
   saveProfile();
@@ -2263,6 +2276,7 @@ function blocked(px, py, ignoreFurn) { // 像素座標（腳底）；ignoreFurn�
   if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return true;
   if (!groundAt(x, y)) return true;   // 水（水上鋪了地板的可以走）
   if (ignoreFurn) return false;
+  if (tableAtCell(x, y)) return true;   // 和平島的遊戲桌擋路
   const fi = S.occ.get(key(x, y));
   if (fi !== undefined) {
     const def = S.furn.items.find(f => f.id === S.furnItems[fi].type);
@@ -3168,6 +3182,18 @@ function drawPerson(p, wi, nameColor) {
     ctx.textAlign = 'center';
     ctx.font = '10px "Microsoft JhengHei"';   // 後面還有用這個字型量寬的地方
   }
+  const tblTag = tableTag(p);   // 和平島：入座中的人，名牌後面加狀態
+  if (tblTag) {
+    const nameW = ctx.measureText(p.name).width;
+    ctx.font = '9px "Microsoft JhengHei"';
+    const lvW = lvTxt ? ctx.measureText(lvTxt).width + 4 : 0;
+    ctx.textAlign = 'left';
+    ctx.strokeText(`〔${tblTag}〕`, p.x + nameW / 2 + 4 + lvW, nameY);
+    ctx.fillStyle = tblTag === '遊戲中' ? '#7fe0a8' : '#c8d8ff';
+    ctx.fillText(`〔${tblTag}〕`, p.x + nameW / 2 + 4 + lvW, nameY);
+    ctx.textAlign = 'center';
+    ctx.font = '10px "Microsoft JhengHei"';
+  }
   // 稱號：名字正上方一行《稱號》（自己看 S.me.title，同島的人看 state 同步來的 id）；有稱號時，泡泡／倒數條／「!」跟著往上移
   const tt = p.npc ? null : titleText(p === S.players[0] ? S.me.title : p.title);
   let headY = nameY;
@@ -3415,6 +3441,30 @@ function drawOwnerCastBar(frac, name) {
   }
   ctx.restore();
 }
+// 島主台詞的固定字幕（2026-11-08，使用者要求）：島主頭上的泡泡照舊，另外在視窗上方置中（讀條下方）固定顯示同一句，
+// 避免玩家離島主太遠、泡泡跑出畫面就看不到。多隻島主同時說話只顯示最晚說的那一句；台詞裡的換行照換，
+// 單行太寬（超過視窗）時在全形空白（台詞裡刻意的停頓）換行。
+function drawOwnerLineBanner() {
+  let best = null;
+  for (const a of S.mobs) if (a.say && S.t < a.say.until && !a.dead && (!best || a.say.until > best.say.until)) best = a;
+  if (!best) return;
+  const NL = String.fromCharCode(10), name = mobDef(best.id)?.name || '', alpha = Math.min(1, (best.say.until - S.t) / .4);
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.font = 'bold 16px "Microsoft JhengHei"'; ctx.textAlign = 'center';
+  const maxW = canvas.width - 80, rows = [];
+  for (const r of String(best.say.text).split(NL)) {
+    if (ctx.measureText(r).width <= maxW) rows.push(r);
+    else rows.push(...r.split(String.fromCharCode(0x3000)).filter(Boolean));
+  }
+  const lh = 22, w = Math.ceil(Math.max(...rows.map(r => ctx.measureText(r).width), ctx.measureText(name).width)) + 28, h = 22 + rows.length * lh;
+  const x = Math.round(canvas.width / 2 - w / 2), y = 110;   // 讀條（y=84～102）正下方
+  ctx.fillStyle = 'rgba(8,10,14,.78)'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(214,180,96,.9)'; ctx.lineWidth = 1.5; ctx.strokeRect(x + .5, y + .5, w - 1, h - 1);
+  ctx.font = 'bold 11px "Microsoft JhengHei"'; ctx.fillStyle = '#ffe08a'; ctx.fillText(name, canvas.width / 2, y + 14);
+  ctx.font = 'bold 16px "Microsoft JhengHei"'; ctx.fillStyle = '#fff6e0';
+  rows.forEach((r, i) => ctx.fillText(r, canvas.width / 2, y + 20 + (i + 1) * lh - 6));
+  ctx.restore();
+}
 function drawBubble(x, y, text, alpha) {
   ctx.save(); ctx.globalAlpha = alpha;
   ctx.font = '11px "Microsoft JhengHei"'; ctx.textAlign = 'center';
@@ -3586,6 +3636,7 @@ function showCatch(p, m) {
   const def = fishDef(m.terrain, m.id), rar = S.fishDB.rarity[m.rarity];
   if (!def) return;
   const { isNew, isRecord } = recordCatch(m);
+  for (const e of S.craftDB?.sources.fish || []) if ((!e.terrains || e.terrains.includes(m.terrain)) && Math.random() < (e.chance ?? 1)) collectMaterial(e.item, p.x, p.y);   // 合成素材：釣魚偶爾得到
   grantExp(isNew ? 5 : 1, p.x, p.y - 80, 'fish');   // 釣到魚 +1 XP；圖鑑首捕 +5（登入者由伺服器記帳——牠自己抽的魚自己知道）
   if (S.fishImgs[m.id]) S.floaters.push({ x: p.x, y: p.y - 64, fishImg: S.fishImgs[m.id], life: 1.8 });
   const big = def.big != null && m.size >= def.big;
@@ -3689,6 +3740,761 @@ function buildDex() {
       card.append(r, s);
     }
     grid.appendChild(card);
+  }
+}
+
+// ---- 合成：素材圖鑑／合成／配方筆記（2026-11-07，使用者要求）----
+// 資料在 assets/craft/craft.json（手寫）。素材「採集過一次就解鎖進圖鑑、之後無限使用（不消耗）」；合成出的素材／家具同樣解鎖。
+// 成功猜出新配方就記進配方筆記。解鎖紀錄 S.craft = { mat:{素材id:時間}, furn:{家具id:時間}, rec:{配方id:時間} }：
+// 登入者以伺服器為準（craftdb／craft／craftsync，見 notes 的「合成」），訪客／單機存 localStorage（dcisland.m0.craft）。解鎖純客戶端判斷（信任客戶端，使用者定）。
+const CRAFT_KINDS = ['mat', 'furn', 'rec'];
+function craftNorm(c) { const o = {}; for (const k of ['mat', 'furn', 'rec']) o[k] = (c && typeof c[k] === 'object' && c[k] && !Array.isArray(c[k])) ? { ...c[k] } : {}; return o; }   // function 宣告（S 初始化時要用到）
+const craftSave = () => lsSet('dcisland.m0.craft', S.craft);
+const matDef = id => S.craftDB?.matById.get(id) || null;
+const recipeKey = ids => [...ids].sort().join('+');
+function initCraft(db) {
+  if (!db || !Array.isArray(db.materials)) return;
+  db.matById = new Map(db.materials.map(m => [m.id, m]));
+  db.recipeByKey = new Map(db.recipes.map(r => [recipeKey(r.in), r]));
+  S.craftDB = db;
+  $('btnCraft').style.display = '';
+}
+// 解鎖一筆；回傳 true＝這次才解鎖。登入者順手通知伺服器（訪客／沒連線 net 會自己略過）
+function unlockCraft(k, id) {
+  if (S.craft[k][id]) return false;
+  S.craft[k][id] = Date.now();
+  craftSave();
+  S.net?.craftUnlock?.(k, id);
+  if (S.craftOpen) buildCraft();
+  if (k === 'furn' && S.mode === 'decor') buildFurnPanel();
+  return true;
+}
+// 撿到／得到素材：新的就解鎖並提示，已解鎖的只在頭上飄一下名字
+function collectMaterial(id, x, y) {
+  const m = matDef(id); if (!m) return;
+  if (unlockCraft('mat', id)) toast(`解鎖素材：${m.name}！已記入素材圖鑑，之後可無限使用`, 2800);
+  else S.floaters.push({ x, y: y - 50, v: m.name, life: .8 });
+}
+// 擲一次掉落表：[{item,min,max,chance}] → 回傳 [{item, n}]
+function rollCraftDrops(list) {
+  const out = [];
+  for (const e of list || []) {
+    if (!matDef(e.item) || Math.random() >= (e.chance ?? 1)) continue;
+    const lo = e.min ?? 1, n = lo + Math.floor(Math.random() * ((e.max ?? lo) - lo + 1));
+    if (n > 0) out.push({ item: e.item, n });
+  }
+  return out;
+}
+// 地形物件的掉落表：「地形/圖檔」（各島專屬，例如 beach/rock.png）優先於「圖檔」
+const craftDecoDrops = sprite => S.craftDB?.sources.deco[`${S.terrain}/${sprite}`] || S.craftDB?.sources.deco[sprite];
+function spawnCraftDrops(list, x, y) {   // 掉在地上、走過去自動撿（與 tools.json 的 drops 同一套）
+  for (const { item, n } of rollCraftDrops(list)) for (let i = 0; i < n; i++) S.drops.push({ item, x: x + Math.random() * 30 - 15, y: y + Math.random() * 16 - 4, born: S.t });
+}
+const furnAvailable = it => !it.craft || !!S.craft.furn[it.id];   // furniture.json 標 craft 的家具要合成解鎖才能擺
+
+// 把素材／家具的圖畫進一個 canvas（家具取第 1 幀、置中縮放）
+function craftIcon(kind, id, size) {
+  const cv = document.createElement('canvas'); cv.width = size; cv.height = size;
+  const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+  if (kind === 'furn') {
+    const spr = S.furnImgs[id];
+    if (spr) { const s2 = Math.min(size / spr.fw, size / spr.fh); const w = spr.fw * s2, h = spr.fh * s2; g.drawImage(spr.img, 0, 0, spr.fw, spr.fh, (size - w) / 2, size - h, w, h); }
+  } else {
+    const im = S.craftImgs[id]; if (im) g.drawImage(im, 0, 0, size, size);
+  }
+  return cv;
+}
+function craftSilhouette(cv) { const g = cv.getContext('2d'); g.globalCompositeOperation = 'source-in'; g.fillStyle = '#07090c'; g.fillRect(0, 0, cv.width, cv.height); return cv; }
+const outName = o => o.kind === 'furniture' ? (furnitureDef(o.id)?.name || o.id) : (matDef(o.id)?.name || o.id);
+const outKey = o => o.kind === 'furniture' ? 'furn' : 'mat';
+
+function openCraft() { S.craftOpen = true; S.craftTab ||= 'make'; S.craftMsg = ''; buildCraft(); $('craftBox').classList.remove('hidden'); }
+function closeCraft() { S.craftOpen = false; $('craftBox').classList.add('hidden'); }
+function craftAddSlot(id) {
+  if (S.craftSlots.length >= (S.craftDB.maxInputs || 3)) { S.craftMsg = '放不下了：最多 ' + (S.craftDB.maxInputs || 3) + ' 個素材'; buildCraft(); return; }
+  S.craftSlots.push(id); S.craftMsg = ''; buildCraft();
+}
+function tryCraft() {
+  const ids = S.craftSlots;
+  if (ids.length < 2) { S.craftMsg = '至少要放 2 個素材'; buildCraft(); return; }
+  const r = S.craftDB.recipeByKey.get(recipeKey(ids));
+  if (!r) { S.craftMsg = '什麼都沒發生……（素材不會消耗，換個組合試試）'; S.craftFail = true; buildCraft(); S.craftFail = false; return; }
+  const newRec = unlockCraft('rec', r.id), newOut = unlockCraft(outKey(r.out), r.out.id);
+  const nm = outName(r.out);
+  S.craftMsg = `合成成功：${nm}！` + (newRec ? '（新配方已記進配方筆記）' : '（已經會這個配方了）') + (newOut ? (r.out.kind === 'furniture' ? ' 家具已解鎖，可在裝飾模式無限擺放。' : ' 素材已解鎖，可無限使用。') : '');
+  if (newRec) toast(`新配方：${r.in.map(i => matDef(i)?.name || i).join(' + ')} → ${nm}`, 3200);
+  S.craftSlots = [];
+  buildCraft();
+}
+function buildCraft() {
+  const db = S.craftDB; if (!db) return;
+  const tabs = $('craftTabs'); tabs.innerHTML = '';
+  for (const [id, name] of [['make', '合成'], ['dex', '素材圖鑑'], ['notes', '配方筆記']]) {
+    const b = document.createElement('button'); b.className = 'ff-btn small' + (S.craftTab === id ? ' active' : ''); b.textContent = name;
+    b.onclick = () => { S.craftTab = id; S.craftMsg = ''; buildCraft(); }; tabs.appendChild(b);
+  }
+  const nMat = db.materials.filter(m => S.craft.mat[m.id]).length, nRec = db.recipes.filter(r => S.craft.rec[r.id]).length;
+  $('craftHint').textContent = `素材 ${nMat}／${db.materials.length} · 配方 ${nRec}／${db.recipes.length}` + (S.net?.uid ? ' · 以 Discord 帳號保存' : ' · 訪客／未連線：只存在這台電腦');
+  const body = $('craftBody'); body.innerHTML = '';
+  const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  if (S.craftTab === 'make') {
+    const row = mk('div', 'craft-slots');
+    const max = db.maxInputs || 3;
+    for (let i = 0; i < max; i++) {
+      const id = S.craftSlots[i], sl = mk('div', 'craft-slot' + (id ? ' full' : '') + (S.craftFail ? ' fail' : ''));
+      if (id) { sl.appendChild(craftIcon('mat', id, 40)); sl.title = matDef(id)?.name + '（點一下取下）'; sl.onclick = () => { S.craftSlots.splice(i, 1); S.craftMsg = ''; buildCraft(); }; }
+      row.appendChild(sl);
+      if (i < max - 1) row.appendChild(mk('span', 'craft-op', '+'));
+    }
+    const go = mk('button', 'ff-btn', '合成'); go.onclick = tryCraft;
+    const clr = mk('button', 'ff-btn small', '清空'); clr.onclick = () => { S.craftSlots = []; S.craftMsg = ''; buildCraft(); };
+    row.append(mk('span', 'craft-op', '→'), go, clr);
+    body.appendChild(row);
+    body.appendChild(mk('div', 'craft-msg', S.craftMsg || '點下面的素材放進合成格（2～' + max + ' 個，不分順序），猜對配方就能做出新東西。素材用不完，錯誤的組合也不會消耗。'));
+    const grid = mk('div', 'craft-grid');
+    const have = db.materials.filter(m => S.craft.mat[m.id]);
+    for (const m of have) {
+      const card = mk('div', 'craft-card'); card.append(craftIcon('mat', m.id, 40), mk('div', 'craft-name', m.name));
+      card.onclick = () => craftAddSlot(m.id); grid.appendChild(card);
+    }
+    if (!have.length) grid.appendChild(mk('div', 'craft-empty', '還沒有素材：去採集（砍樹、敲石頭）、釣魚或打野外動物，蒐集到的素材會解鎖在這裡。'));
+    body.appendChild(grid);
+  } else if (S.craftTab === 'dex') {
+    for (const g of db.groups) {
+      const list = db.materials.filter(m => m.group === g.id); if (!list.length) continue;
+      body.appendChild(mk('div', 'craft-group', `${g.name}　${list.filter(m => S.craft.mat[m.id]).length}／${list.length}`));
+      const grid = mk('div', 'craft-grid');
+      for (const m of list) {
+        const got = !!S.craft.mat[m.id], card = mk('div', 'craft-card' + (got ? '' : ' unknown'));
+        const cv = craftIcon('mat', m.id, 40); card.append(got ? cv : craftSilhouette(cv), mk('div', 'craft-name', got ? m.name : '？？？'));
+        if (got) card.append(mk('div', 'craft-how', m.how));
+        grid.appendChild(card);
+      }
+      body.appendChild(grid);
+    }
+  } else {
+    const list = db.recipes.filter(r => S.craft.rec[r.id]).sort((a, b) => S.craft.rec[a.id] - S.craft.rec[b.id]);
+    for (const r of list) {
+      const row = mk('div', 'craft-note');
+      row.title = '點一下：跳到合成頁並排好素材';
+      row.onclick = () => { S.craftTab = 'make'; S.craftSlots = [...r.in]; S.craftMsg = `已排好「${outName(r.out)}」的素材，按合成即可`; buildCraft(); };   // 筆記裡的配方：一鍵排進合成格
+      r.in.forEach((id, i) => { if (i) row.appendChild(mk('span', 'craft-op', '+')); const c = mk('div', 'craft-mini'); c.append(craftIcon('mat', id, 28), mk('span', null, matDef(id)?.name || id)); row.appendChild(c); });
+      row.appendChild(mk('span', 'craft-op', '→'));
+      const o = mk('div', 'craft-mini out'); o.append(craftIcon(outKey(r.out), r.out.id, 28), mk('span', null, outName(r.out) + (r.out.kind === 'furniture' ? '（家具）' : '')));
+      row.appendChild(o); body.appendChild(row);
+    }
+    body.appendChild(mk('div', 'craft-empty', list.length ? `還有 ${db.recipes.length - list.length} 個配方沒發現` : '還沒有發現任何配方：到「合成」分頁試試看吧。'));
+  }
+}
+// 伺服器送來的解鎖紀錄（登入後、craftsync 之後）：和本機取聯集（訪客時期的進度併進帳號），本機有伺服器沒有的補傳
+function onNetCraftDb(c) {
+  const srv = craftNorm(c), merged = craftNorm(S.craft), up = { mat: [], furn: [], rec: [] };
+  for (const k of CRAFT_KINDS) {
+    for (const [id, t] of Object.entries(srv[k])) if (!merged[k][id] || merged[k][id] > t) merged[k][id] = t;
+    for (const id of Object.keys(S.craft[k])) if (!srv[k][id]) up[k].push(id);
+  }
+  S.craft = merged; craftSave();
+  if (up.mat.length || up.furn.length || up.rec.length) S.net?.craftSync?.(up);
+  if (S.craftOpen) buildCraft();
+  if (S.mode === 'decor') buildFurnPanel();
+}
+
+// ---- 和平島遊戲桌（2026-11-08，使用者要求）：走近按 F／點桌子進入遊戲畫面（全螢幕），Esc 離開；桌滿人後其他人觀戰 ----
+// 桌子是島上固定物件（terrain.json 的 tables；遊戲定義在 assets/games/games.json）。牌局由伺服器權威（tbl／table／tblinfo 訊息，
+// 見 notes「和平島與遊戲桌」）：客戶端只畫畫面、送操作，手牌只有伺服器給本人的那份。
+const TABLE_RANGE = 56;   // 離桌邊多近才能互動（px）
+const tablesHere = () => S.terrains[S.terrain]?.tables || [];
+const tableRect = tb => ({ x: tb.cell[0] * CELL, y: tb.cell[1] * CELL, w: (tb.w || 3) * CELL, h: (tb.h || 2) * CELL });
+function tableAtCell(x, y) {   // 這格被桌子占著（桌子擋路、也不能擺家具）
+  for (const tb of tablesHere()) if (x >= tb.cell[0] && x < tb.cell[0] + (tb.w || 3) && y >= tb.cell[1] && y < tb.cell[1] + (tb.h || 2)) return tb;
+  return null;
+}
+function tableDist(tb, px, py) {   // 點到桌子矩形的距離
+  const r = tableRect(tb), dx = Math.max(r.x - px, 0, px - (r.x + r.w)), dy = Math.max(r.y - py, 0, py - (r.y + r.h));
+  return Math.hypot(dx, dy);
+}
+function tableNear(p) {   // F 鍵：身邊（桌邊 TABLE_RANGE 內）最近的桌子
+  let best = null, bd = TABLE_RANGE;
+  for (const tb of tablesHere()) { const d = tableDist(tb, p.x, p.y); if (d < bd) { bd = d; best = tb; } }
+  return best;
+}
+function tableAtPoint(wx, wy) {
+  return tablesHere().find(tb => { const r = tableRect(tb); return wx >= r.x && wx < r.x + r.w && wy >= r.y && wy < r.y + r.h; }) || null;
+}
+const gameDef = id => S.gamesDB?.games?.[id] || null;
+function openTable(tb) {
+  if (!netOn()) { toast('遊戲桌需要連線才能玩（單機模式不能玩）', 2400); return; }
+  if (!gameDef(tb.game)) return;
+  for (const k of Object.keys(keys)) keys[k] = false;   // 放開所有按住的鍵（畫面蓋住後收不到 keyup，不然回來還在跑）
+  S.mouseHeld = false;
+  S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null; S.gamePlayed = false; S.tableLocalLog = [];
+  const inf = S.tblInfo?.[tb.id];
+  if (!inf || (!inf.play && inf.n < inf.max)) S.tableChoice = true;   // 還有位子：先讓玩家選「入座」或「觀戰」（沒滿人也可以選觀戰）
+  else S.net.tbl({ a: 'join', id: tb.id, role: 'spec' });             // 滿人或已開局：直接觀戰
+  buildTable(); $('tableBox').classList.remove('hidden');
+}
+function closeTable(sendLeave = true) {
+  if (sendLeave) S.net?.tbl?.({ a: 'leave' });
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); unStopTimer(); S.unPick = null;
+  $('tableBox').classList.add('hidden');
+}
+function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已離開這桌）
+  if (!S.tableOpen || m.id !== S.tableId) return;
+  if (m.v === null) { closeTable(false); return; }
+  // 玩小遊戲得 XP：登入者由伺服器記（收到 xp 訊息飄字）；訪客（本機記帳）在這裡依 result.xp 補發。只算「我自己坐著打完的那一局」
+  if (m.v.phase === 'playing') S.tableLocalLog = [];   // 新的一局開始：清掉上一局的 XP 提示
+  if (m.v.phase === 'playing' && m.v.role === 'seat') S.gamePlayed = true;
+  const rs = m.v.result;
+  if (S.gamePlayed && rs && rs.rid && rs.rid !== S.gameXpSeen && m.v.phase !== 'playing') {
+    S.gameXpSeen = rs.rid; S.gamePlayed = false;
+    const n = rs.xp?.[m.v.me] || 0;
+    if (n > 0 && !xpServer()) { const p0 = S.players[0]; grantExp(n, p0.x, p0.y - 60, 'game'); tableXpLine(n); }   // 訪客：本機補發，提示放進牌桌下方的系統訊息
+  }
+  S.tableView = m.v; buildTable();
+}
+// 牌桌下方的系統訊息：伺服器的紀錄（新的在上）＋本機加的「你獲得 N XP」（放最上面；新的一局開始就清掉）
+function tableXpLine(n) { (S.tableLocalLog ||= []).unshift(`你獲得 ${n} XP`); if (S.tableOpen && S.tableView) buildTable(); }
+const tableLogLines = v => [...(S.tableLocalLog || []), ...[...v.log].reverse()];
+function onNetTblInfo(info) { S.tblInfo = info || {}; }
+// 名牌後面的牌桌狀態：入座中的人顯示「入座中」（還沒開局）或「遊戲中」（牌局進行中），讓同島的人知道他們在玩（只看這座地形的桌子）
+function tableTag(p) {
+  if (p.npc) return null;
+  const id = p === S.players[0] ? S.net?.id : p.id;
+  if (id == null) return null;
+  for (const tb of tablesHere()) { const inf = S.tblInfo?.[tb.id]; if (inf?.seated?.includes(id)) return inf.play ? '遊戲中' : '入座中'; }
+  return null;
+}
+const SUIT_SYM = { S: '♠', H: '♥', D: '♦', C: '♣' };
+function cardEl(c) {   // 牌面：c＝'S7'／'H13'／'JK'；null＝牌背
+  const e = document.createElement('div');
+  if (!c) { e.className = 'tcard back'; return e; }
+  if (c === 'JK') { e.className = 'tcard joker'; e.textContent = '鬼'; return e; }
+  const r = Number(c.slice(1));
+  e.className = 'tcard' + (c[0] === 'H' || c[0] === 'D' ? ' red' : '');
+  e.textContent = SUIT_SYM[c[0]] + ({ 1: 'A', 11: 'J', 12: 'Q', 13: 'K' }[r] || r);
+  return e;
+}
+function buildTable() {
+  const box = $('tableBody'); box.innerHTML = '';
+  const tb = tablesHere().find(t => t.id === S.tableId), gd = tb && gameDef(tb.game), v = S.tableView;
+  $('tableTitle').textContent = gd ? gd.name : '遊戲桌';
+  const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  if (S.tableChoice) {   // 剛走到桌邊：選入座還是觀戰
+    const inf = S.tblInfo?.[S.tableId];
+    box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　目前 ${inf ? `${inf.n}/${inf.max} 人入座` : '還沒有人入座'}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));
+    box.appendChild(mk('div', 'table-tag', '要加入遊戲，還是先在旁邊看？（觀戰不用等滿人，之後想玩可以再按「入座」）'));
+    const bs = mk('div', 'table-btns');
+    for (const [label, role] of [['入座', 'seat'], ['觀戰', 'spec']]) {
+      const b = mk('button', 'ff-btn', label);
+      b.onclick = () => { S.tableChoice = false; S.net?.tbl?.({ a: 'join', id: S.tableId, role }); buildTable(); };
+      bs.appendChild(b);
+    }
+    const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); bs.appendChild(lv);
+    box.appendChild(bs);
+    if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+    return;
+  }
+  if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
+  if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
+  if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
+  if (tb?.game === 'uno') { buildUno(box, v, mk, gd); return; }   // UNO 有自己的畫面（牌桌）
+  const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
+  // 狀態列
+  let status;
+  if (playing) status = v.role === 'spec' ? `觀戰中 · 輪到 ${v.seats[v.turn]?.name} 抽牌` : myTurn ? `輪到你：點 ${v.seats[v.target]?.name} 的一張牌抽走` : `輪到 ${v.seats[v.turn]?.name} 抽牌`;
+  else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
+  box.appendChild(mk('div', 'table-status' + (myTurn ? ' mine' : ''), status));
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  // 座位：每個人一格（名字、狀態、牌背）；輪到我時，被抽牌的那位的牌背可以點
+  const row = mk('div', 'table-seats');
+  v.seats.forEach((s, i) => {
+    const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && v.turn === i ? ' turn' : '') + (s.out ? ' out' : ''));
+    const tag = !playing ? (s.ready ? '已準備' : '未準備') : s.out ? '已過關' : v.turn === i ? '抽牌中' : (myTurn && v.target === i ? '被抽牌' : '');
+    seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '')));
+    seat.appendChild(mk('div', 'table-tag', tag));
+    const cards = mk('div', 'table-cards');
+    const drawable = myTurn && v.target === i;
+    if (playing && v.hands) for (const c of v.hands[i] || []) cards.appendChild(cardEl(c));   // 觀戰：每個人的牌都翻開
+    else if (playing) for (let k = 0; k < s.n; k++) {
+      const c = cardEl(null);
+      if (drawable) { c.classList.add('pick'); c.title = '抽這張'; c.onclick = () => S.net?.tbl?.({ a: 'draw', idx: k }); }
+      cards.appendChild(c);
+    }
+    seat.appendChild(cards);
+    if (playing) seat.appendChild(mk('div', 'table-count', s.out ? '' : `${s.n} 張`));
+    row.appendChild(seat);
+  });
+  for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  // 我的手牌
+  if (v.role === 'seat' && playing) {
+    const hand = mk('div', 'table-hand');
+    hand.appendChild(mk('div', 'table-label', '你的手牌（順序就是對手看到的牌背順序：他點第幾張，抽走的就是你從左數第幾張）'));
+    const cs = mk('div', 'table-cards big');
+    for (const c of v.hand || []) cs.appendChild(cardEl(c));
+    if (!(v.hand || []).length) cs.appendChild(mk('span', 'table-tag', '手牌出完了，安全過關！'));
+    hand.appendChild(cs);
+    if ((v.hand || []).length > 1) { const sh = mk('button', 'ff-btn small', '洗牌'); sh.onclick = () => S.net?.tbl?.({ a: 'shuffle' }); sh.title = '把手牌順序打亂，讓對手猜不到鬼牌在哪'; hand.appendChild(sh); }
+    box.appendChild(hand);
+  }
+  // 按鈕
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  // 紀錄與規則
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 五子棋畫面：15×15 棋盤（canvas）；輪到自己時點交叉點下子，滑過會顯示淡淡的預覽棋子 ----
+const GM_N = 15, GM_CELL = 32, GM_MARGIN = 20;
+function gomokuDraw(cv, v, hover, rep) {   // rep＝復盤：{board, last, line, nums（到這一步為止的每一手座標，棋子上畫手數）}
+  const g = cv.getContext('2d'), size = GM_MARGIN * 2 + GM_CELL * (GM_N - 1);
+  g.fillStyle = '#d8a860'; g.fillRect(0, 0, size, size);
+  g.strokeStyle = 'rgba(70,40,10,.8)'; g.lineWidth = 1;
+  for (let i = 0; i < GM_N; i++) {
+    const p = GM_MARGIN + i * GM_CELL + .5;
+    g.beginPath(); g.moveTo(GM_MARGIN, p); g.lineTo(size - GM_MARGIN, p); g.stroke();
+    g.beginPath(); g.moveTo(p, GM_MARGIN); g.lineTo(p, size - GM_MARGIN); g.stroke();
+  }
+  g.fillStyle = 'rgba(70,40,10,.9)';
+  for (const sx of [3, 7, 11]) for (const sy of [3, 7, 11]) { g.beginPath(); g.arc(GM_MARGIN + sx * GM_CELL + .5, GM_MARGIN + sy * GM_CELL + .5, 3, 0, Math.PI * 2); g.fill(); }
+  const stone = (x, y, color, alpha = 1) => {
+    const cx = GM_MARGIN + x * GM_CELL + .5, cy = GM_MARGIN + y * GM_CELL + .5, r = GM_CELL * .45;
+    g.globalAlpha = alpha;
+    const gr = g.createRadialGradient(cx - r * .35, cy - r * .35, r * .1, cx, cy, r);
+    if (color === 1) { gr.addColorStop(0, '#6a6a74'); gr.addColorStop(1, '#14141a'); } else { gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#c8c4b8'); }
+    g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,.45)'; g.stroke(); g.globalAlpha = 1;
+  };
+  const board = rep ? rep.board : (v.board || '');
+  for (let i = 0; i < board.length; i++) if (board[i] !== '0') stone(i % GM_N, Math.floor(i / GM_N), Number(board[i]));
+  if (rep?.nums) {   // 復盤：每顆棋子上寫第幾手
+    g.font = 'bold 12px "Microsoft JhengHei"'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    rep.nums.forEach(([x, y], k) => { g.fillStyle = board[y * GM_N + x] === '1' ? '#f4f0e4' : '#1e1e24'; g.fillText(String(k + 1), GM_MARGIN + x * GM_CELL + .5, GM_MARGIN + y * GM_CELL + 1); });
+    g.textBaseline = 'alphabetic';
+  }
+  if (hover && !(board[hover.y * GM_N + hover.x] > 0)) stone(hover.x, hover.y, v.black === v.me ? 1 : 2, .45);   // 預覽：自己的顏色
+  const line = rep ? rep.line : v.line, last = rep ? rep.last : v.last;
+  if (line) {   // 連成五子：紅圈標出來
+    g.strokeStyle = '#e8402a'; g.lineWidth = 3;
+    for (const [x, y] of line) { g.beginPath(); g.arc(GM_MARGIN + x * GM_CELL + .5, GM_MARGIN + y * GM_CELL + .5, GM_CELL * .5, 0, Math.PI * 2); g.stroke(); }
+  }
+  if (last && !rep?.nums) { g.fillStyle = '#e8402a'; g.beginPath(); g.arc(GM_MARGIN + last[0] * GM_CELL + .5, GM_MARGIN + last[1] * GM_CELL + .5, 4, 0, Math.PI * 2); g.fill(); }   // 最後一手
+  else if (last) { g.strokeStyle = '#e8402a'; g.lineWidth = 2; g.strokeRect(GM_MARGIN + last[0] * GM_CELL - 13, GM_MARGIN + last[1] * GM_CELL - 13, 27, 27); }   // 復盤：目前這一手用紅框
+}
+function buildGomoku(box, v, mk) {
+  const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
+  const colorName = i => (v.black == null ? '' : i === v.black ? '黑棋' : '白棋');
+  let status;
+  if (playing) status = v.role === 'spec' ? `觀戰中 · 輪到 ${v.seats[v.turn]?.name}（${colorName(v.turn)}）下子` : myTurn ? `輪到你下子（${colorName(v.me)}）` : `輪到 ${v.seats[v.turn]?.name}（${colorName(v.turn)}）下子`;
+  else status = v.seats.length < v.min ? `等待玩家入座（需要 ${v.min} 人）` : '雙方按「準備」就開始（開局隨機決定誰執黑）';
+  box.appendChild(mk('div', 'table-status' + (myTurn ? ' mine' : ''), status));
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  const row = mk('div', 'table-seats');
+  v.seats.forEach((s, i) => {
+    const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && v.turn === i ? ' turn' : ''));
+    seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '')));
+    seat.appendChild(mk('div', 'table-tag', (v.board ? (i === v.black ? '● 黑棋' : '○ 白棋') + ' · ' : '') + (!playing ? (s.ready ? '已準備' : '未準備') : v.turn === i ? '思考中' : '')));
+    row.appendChild(seat);
+  });
+  for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  // 復盤：對局結束後（有結果、不是中途離開）可以用上一步／下一步看剛剛的棋局；新的一局開始就回到即時畫面
+  const moves = v.moves || [], canReplay = !playing && v.board && moves.length > 0;
+  if (!canReplay) S.gmStep = null;
+  else if (S.gmStep == null || S.gmStep > moves.length) S.gmStep = moves.length;
+  let rep = null;
+  if (canReplay) {
+    const arr = new Array(GM_N * GM_N).fill('0');
+    moves.slice(0, S.gmStep).forEach(([x, y], k) => { arr[y * GM_N + x] = k % 2 === 0 ? '1' : '2'; });   // 第 0 手＝黑棋
+    rep = { board: arr.join(''), last: S.gmStep ? moves[S.gmStep - 1] : null, line: S.gmStep === moves.length ? v.line : null, nums: moves.slice(0, S.gmStep) };
+  }
+  if (v.board) {   // 棋盤（結束後也留著，到下一局開始才清掉）
+    const size = GM_MARGIN * 2 + GM_CELL * (GM_N - 1), cv = document.createElement('canvas');
+    cv.width = size; cv.height = size; cv.className = 'gomoku-board';
+    gomokuDraw(cv, v, null, rep);
+    const at = e => {
+      const r = cv.getBoundingClientRect(), k = size / r.width;
+      const x = Math.round(((e.clientX - r.left) * k - GM_MARGIN - .5) / GM_CELL), y = Math.round(((e.clientY - r.top) * k - GM_MARGIN - .5) / GM_CELL);
+      return x >= 0 && x < GM_N && y >= 0 && y < GM_N ? { x, y } : null;
+    };
+    if (myTurn) {
+      cv.classList.add('mine');
+      cv.onmousemove = e => gomokuDraw(cv, v, at(e));
+      cv.onmouseleave = () => gomokuDraw(cv, v, null);
+      cv.onclick = e => { const p = at(e); if (p && v.board[p.y * GM_N + p.x] === '0') S.net?.tbl?.({ a: 'move', x: p.x, y: p.y }); };
+    }
+    box.appendChild(cv);
+  }
+  if (canReplay) {   // 復盤控制列（也可以用鍵盤 ← → Home End）
+    const bar = mk('div', 'table-btns gomoku-replay'), N = moves.length, go = k => { S.gmStep = Math.max(0, Math.min(N, k)); buildTable(); };
+    for (const [label, k, tip] of [['⏮', () => 0, '回到開局（Home）'], ['◀ 上一步', () => S.gmStep - 1, '上一步（←）']]) { const b = mk('button', 'ff-btn small', label); b.title = tip; b.onclick = () => go(k()); bar.appendChild(b); }
+    const who = S.gmStep ? `${(S.gmStep - 1) % 2 === 0 ? '黑' : '白'}棋 (${moves[S.gmStep - 1][0] + 1}, ${moves[S.gmStep - 1][1] + 1})` : '開局';
+    bar.appendChild(mk('span', 'table-tag', `復盤：第 ${S.gmStep}／${N} 手 · ${who}`));
+    for (const [label, k, tip] of [['下一步 ▶', () => S.gmStep + 1, '下一步（→）'], ['⏭', () => N, '跳到最後一手（End）']]) { const b = mk('button', 'ff-btn small', label); b.title = tip; b.onclick = () => go(k()); bar.appendChild(b); }
+    box.appendChild(bar);
+  }
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  const gd = gameDef('gomoku'); if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 躲彈幕（第五桌 t5）：即時遊戲。彈幕由「伺服器給的 seed＋開始時間 t0」決定性地在每個畫面各自產生（所有人看到的彈幕一樣，不用同步彈幕）；
+// 自己的移動與碰撞在本機算，被打到回報 hit，命數／淘汰／評分以伺服器為準；其他人的位置由 tpos 訊息轉發（約 8 次／秒，客戶端內插）----
+const DG_W = 640, DG_H = 400, DG_PLAYER_R = 5, DG_SPEED = 190, DG_INV = 1.5;
+const DG_COLORS = ['#7ae8d0', '#ffb347', '#a8c8ff', '#ff8ab8', '#c8f070', '#d8a8ff', '#ffe08a', '#8affb8'];
+const DG_KEYS = { w: 'up', arrowup: 'up', s: 'down', arrowdown: 'down', a: 'left', arrowleft: 'left', d: 'right', arrowright: 'right' };
+// 決定性的彈幕產生器：同一個 seed 永遠產生同一批彈幕。彈幕＝{ts（出現時間 s）, x0, y0, vx, vy, r, c（顏色編號 0～2）}，位置＝起點＋速度×(t−ts)
+// 所有彈幕一律從場外出發（2026-11-08，使用者要求）：起點都在場地外，才不會剛好出在玩家身上來不及躲
+const DG_BULLET_SPEED = 1.25;   // 彈幕速度倍率（使用者要求比原本快約 1.25 倍）
+const DG_BULLET_COLORS = [['#ff5a5a', '#ffe0d0'], ['#ffb347', '#fff2c8'], ['#5ab8ff', '#d8f0ff']];   // 三種顏色：紅、橘黃、藍（外圈、內點）；只是好看，不影響判定
+function dodgeGen(seed) {
+  const rng = mulberry32(seed >>> 0);
+  const rnd = (a, b) => a + rng() * (b - a), pick = n => Math.floor(rng() * n);
+  const bullets = []; let tw = 2.5;   // 第一波出現的時間（開局後 2.5 秒，讓大家先站好）
+  const add = (ts, x0, y0, vx, vy, r, c) => bullets.push({ ts, x0, y0, vx, vy, r: r || 4, c });
+  const cx = DG_W / 2, cy = DG_H / 2, OUT = 16;
+  // 場外的發射點：side 0 上、1 右、2 下、3 左；u（0～1）＝沿那一邊的位置；回傳 {x, y, a}（a＝從發射點朝場地中心的角度）
+  const edge = (side, u) => {
+    const x = side === 1 ? DG_W + OUT : side === 3 ? -OUT : u * DG_W, y = side === 0 ? -OUT : side === 2 ? DG_H + OUT : u * DG_H;
+    return { x, y, a: Math.atan2(cy - y, cx - x) };
+  };
+  return {
+    bullets,
+    fill(until) {   // 產生到時間 until（秒）為止的彈幕；隨時間加快、變密
+      while (tw < until) {
+        const d = Math.min(1, tw / 300), sp = (70 + 110 * d) * DG_BULLET_SPEED, kind = pick(4), c = pick(3);
+        if (kind === 0) {   // 扇形：從場外一點朝場內散開
+          const e = edge(pick(4), rnd(.15, .85)), n = 8 + Math.floor(12 * d), spread = rnd(.5, .9);
+          for (let i = 0; i < n; i++) { const a = e.a + (n > 1 ? (i / (n - 1) - .5) * 2 * spread : 0); add(tw, e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp, 4, c); }
+        } else if (kind === 1) {   // 雨：從某一邊的場外整排落進來（略帶側飄）
+          const side = pick(4), n = 5 + Math.floor(7 * d), vert = side === 0 || side === 2, sgn = side === 0 || side === 3 ? 1 : -1;
+          for (let i = 0; i < n; i++) {
+            const along = rnd(10, (vert ? DG_W : DG_H) - 10), drift = rnd(-12, 12) * DG_BULLET_SPEED, v = (sp * 1.1 + rnd(0, 30)) * sgn;
+            if (vert) add(tw, along, side === 0 ? -8 : DG_H + 8, drift, v, 4, c); else add(tw, side === 3 ? -8 : DG_W + 8, along, v, drift, 4, c);
+          }
+        } else if (kind === 2) {   // 彈牆：左或右側（或上或下）整排橫掃，留一個缺口
+          const side = pick(4), vert = side === 0 || side === 2, gap = rnd(40, (vert ? DG_W : DG_H) - 40), gw = 52 - 16 * d, step = 26 - 6 * d;
+          const len = vert ? DG_W : DG_H, sgn = side === 0 || side === 3 ? 1 : -1;
+          for (let u = 8; u < len; u += step) if (Math.abs(u - gap) > gw / 2) {
+            if (vert) add(tw, u, side === 0 ? -8 : DG_H + 8, 0, sgn * sp * .95, 5, c); else add(tw, side === 3 ? -8 : DG_W + 8, u, sgn * sp * .95, 0, 5, c);
+          }
+        } else {   // 螺旋：場外一個發射點，邊掃過場內的方向邊發（每顆的出現時間錯開）
+          const e = edge(pick(4), rnd(.2, .8)), n = 14 + Math.floor(10 * d), dir = rng() < .5 ? 1 : -1, step = 2.4 / n;
+          for (let i = 0; i < n; i++) { const a = e.a + dir * (i - n / 2) * step; add(tw + i * .07, e.x, e.y, Math.cos(a) * sp * .9, Math.sin(a) * sp * .9, 4, c); }
+        }
+        tw += 1.5 - 1.0 * d + rnd(0, .25);   // 下一波：從 1.5 秒間隔逐漸縮到 0.5 秒
+      }
+    },
+  };
+}
+function dodgeStart(v) {   // 一局開始（伺服器給了 dg）：重置本機狀態
+  const dg = v.dg, me = v.me;
+  S.dg = {
+    id: S.tableId, seed: dg.seed, t0: dg.t0, dur: dg.dur, off: dg.sn - Date.now(),   // off：伺服器時間 − 本機時間（毫秒，忽略單程延遲）
+    gen: dodgeGen(dg.seed), act: [],           // act：目前在場上的彈幕
+    pos: [], me, x: DG_W / 2 + (me - (v.seats.length - 1) / 2) * 30, y: DG_H * .75, inv: 0, lives: 3, sent: 0, finished: false, last: 0,
+    keys: {}, hitFlash: 0,
+  };
+  S.dg.pos = v.seats.map(() => null);
+  if (!S.dgRaf) { S.dgLast = performance.now(); S.dgRaf = requestAnimationFrame(dodgeFrame); }
+}
+function dodgeStop() { S.dg = null; if (S.dgRaf) { cancelAnimationFrame(S.dgRaf); S.dgRaf = 0; } }
+const dodgeNow = () => (Date.now() + S.dg.off - S.dg.t0) / 1000;   // 開局後的秒數（開局前是負的＝倒數）
+function dodgeFrame(ts) {
+  const D = S.dg, v = S.tableView;
+  if (!D || !S.tableOpen || !v || v.phase !== 'playing' || v.game !== 'dodge') { S.dgRaf = 0; if (S.tableOpen && v?.game === 'dodge') buildTable(); return; }
+  S.dgRaf = requestAnimationFrame(dodgeFrame);
+  const dt = Math.min(.05, (ts - S.dgLast) / 1000); S.dgLast = ts;
+  const t = dodgeNow(), mySeat = v.role === 'seat' ? v.seats[v.me] : null, alive = mySeat && !mySeat.out;
+  // 自己移動（開局前也可以先動；出局後不能）
+  if (alive) {
+    const k = D.keys;
+    let dx = (k.right ? 1 : 0) - (k.left ? 1 : 0), dy = (k.down ? 1 : 0) - (k.up ? 1 : 0);
+    if (dx && dy) { dx *= .7071; dy *= .7071; }
+    D.x = Math.max(DG_PLAYER_R, Math.min(DG_W - DG_PLAYER_R, D.x + dx * DG_SPEED * dt));
+    D.y = Math.max(DG_PLAYER_R, Math.min(DG_H - DG_PLAYER_R, D.y + dy * DG_SPEED * dt));
+    if (performance.now() - D.sent > 125) { D.sent = performance.now(); S.net?.tbl?.({ a: 'pos', x: Math.round(D.x * 10) / 10, y: Math.round(D.y * 10) / 10 }); }
+  }
+  // 彈幕：產生到 t+3 秒、挑出目前在場上的
+  if (t > -1) {
+    D.gen.fill(Math.max(0, t) + 3);
+    const bl = D.gen.bullets;
+    D.act = [];
+    for (let i = 0; i < bl.length; i++) {
+      const b = bl[i], age = t - b.ts;
+      if (age < 0) continue;
+      const x = b.x0 + b.vx * age, y = b.y0 + b.vy * age;
+      if (x < -20 || x > DG_W + 20 || y < -20 || y > DG_H + 20) { if (age > 12) { bl.splice(i, 1); i--; } continue; }   // 出界很久的丟掉，陣列不會越長越大
+      D.act.push({ x, y, r: b.r, c: b.c });
+    }
+  } else D.act = [];
+  // 碰撞：只有自己、已開局、沒在無敵時間內
+  D.inv = Math.max(0, D.inv - dt);
+  if (alive && t >= 0 && D.inv <= 0) {
+    for (const b of D.act) {
+      const dx = b.x - D.x, dy = b.y - D.y, rr = b.r + DG_PLAYER_R - 1;
+      if (dx * dx + dy * dy < rr * rr) { D.inv = DG_INV; D.hitFlash = .35; S.net?.tbl?.({ a: 'hit' }); break; }
+    }
+  }
+  D.hitFlash = Math.max(0, D.hitFlash - dt);
+  // 時間到：請伺服器結算（伺服器核對時鐘；每秒最多重送一次直到收到結果）
+  if (t >= D.dur && performance.now() - D.last > 1000) { D.last = performance.now(); S.net?.tbl?.({ a: 'finish' }); }
+  // 其他人的位置內插
+  for (const p of D.pos) if (p) { p.x += (p.tx - p.x) * Math.min(1, dt * 14); p.y += (p.ty - p.y) * Math.min(1, dt * 14); }
+  dodgeDraw(t, mySeat);
+  const tm = $('dgTime'); if (tm) tm.textContent = t < 0 ? `開始倒數 ${Math.ceil(-t)}` : `${Math.min(D.dur, t).toFixed(1)} 秒`;
+}
+function onNetTpos(m) {   // 其他人的位置回報（i＝座位編號）
+  const D = S.dg; if (!D || m.i === D.me) return;
+  const p = D.pos[m.i];
+  if (!p) D.pos[m.i] = { x: m.x, y: m.y, tx: m.x, ty: m.y }; else { p.tx = m.x; p.ty = m.y; }
+}
+function dodgeDraw(t, mySeat) {
+  const cv = $('dgCanvas'); if (!cv) return;
+  const g = cv.getContext('2d'), D = S.dg, v = S.tableView;
+  g.fillStyle = '#0c1020'; g.fillRect(0, 0, DG_W, DG_H);
+  g.strokeStyle = 'rgba(120,140,200,.12)'; g.lineWidth = 1;
+  for (let x = 0; x <= DG_W; x += 40) { g.beginPath(); g.moveTo(x + .5, 0); g.lineTo(x + .5, DG_H); g.stroke(); }
+  for (let y = 0; y <= DG_H; y += 40) { g.beginPath(); g.moveTo(0, y + .5); g.lineTo(DG_W, y + .5); g.stroke(); }
+  // 彈幕
+  for (const b of D.act) {
+    const bc = DG_BULLET_COLORS[b.c] || DG_BULLET_COLORS[0];
+    g.fillStyle = bc[0]; g.beginPath(); g.arc(b.x, b.y, b.r, 0, 6.2832); g.fill();
+    g.fillStyle = bc[1]; g.beginPath(); g.arc(b.x, b.y, b.r * .45, 0, 6.2832); g.fill();
+  }
+  // 玩家：自己（有無敵閃爍）、其他人（內插位置）、已出局的變灰
+  v.seats.forEach((s, i) => {
+    const isMe = i === D.me && v.role === 'seat', p = isMe ? { x: D.x, y: D.y } : D.pos[i];
+    if (!p) return;
+    const out = s.out || s.left, col = DG_COLORS[i % 8];
+    if (isMe && D.inv > 0 && Math.floor(D.inv * 12) % 2 === 0) return;   // 無敵時間閃爍
+    g.globalAlpha = out ? .25 : 1;
+    g.fillStyle = out ? '#8a8a98' : col; g.beginPath(); g.arc(p.x, p.y, DG_PLAYER_R, 0, 6.2832); g.fill();
+    g.strokeStyle = isMe ? '#ffffff' : 'rgba(255,255,255,.4)'; g.lineWidth = isMe ? 2 : 1; g.stroke();
+    g.globalAlpha = out ? .4 : 1; g.font = '10px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillStyle = '#e8e4d8';
+    g.fillText(s.name, p.x, p.y - 10); g.globalAlpha = 1;
+  });
+  if (D.hitFlash > 0) { g.fillStyle = `rgba(255,60,60,${D.hitFlash})`; g.fillRect(0, 0, DG_W, DG_H); }
+  if (t < 0) { g.fillStyle = 'rgba(8,10,20,.55)'; g.fillRect(0, 0, DG_W, DG_H); g.fillStyle = '#ffe08a'; g.font = 'bold 56px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillText(String(Math.ceil(-t)), DG_W / 2, DG_H / 2 + 18); }
+  if (mySeat?.out && v.role === 'seat') { g.fillStyle = 'rgba(8,10,20,.5)'; g.fillRect(0, DG_H / 2 - 36, DG_W, 72); g.fillStyle = '#ffb347'; g.font = 'bold 24px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillText(`你出局了：存活 ${mySeat.died ?? '—'} 秒`, DG_W / 2, DG_H / 2 + 8); }
+}
+function buildDodge(box, v, mk, gd) {
+  const playing = v.phase === 'playing', mySeat = v.role === 'seat' ? v.seats[v.me] : null;
+  if (playing && (!S.dg || S.dg.id !== S.tableId || S.dg.t0 !== v.dg?.t0)) dodgeStart(v);   // 新的一局（或剛進來觀戰一局進行中的）：重置本機狀態
+  if (!playing) dodgeStop();
+  let status;
+  if (playing) status = mySeat ? (mySeat.out ? '你已出局' : '挑戰中：WASD／方向鍵移動，躲開所有彈幕') : '觀戰中';
+  else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
+  box.appendChild(mk('div', 'table-status' + (playing && mySeat && !mySeat.out ? ' mine' : ''), status));
+  if (v.result && !playing) {   // 結算：依存活秒數排名
+    box.appendChild(mk('div', 'table-result', v.result.text));
+    const rk = mk('div', 'dodge-rank');
+    v.result.ranking.forEach((r, i) => rk.appendChild(mk('div', null, `${i + 1}. ${r.name}　${r.sec} 秒${r.left ? '（中途離開）' : ''}`)));
+    box.appendChild(rk);
+  }
+  const row = mk('div', 'table-seats dodge-seats');   // 每位玩家：名字、命數（♥）、存活秒數
+  v.seats.forEach((s, i) => {
+    const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && s.out ? ' out' : ''));
+    seat.style.borderColor = playing ? DG_COLORS[i % 8] : '';
+    seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : '')));
+    seat.appendChild(mk('div', 'table-tag', playing ? (s.out ? `出局 · ${s.died ?? '—'} 秒` : '♥'.repeat(Math.max(0, s.lives)) + '♡'.repeat(Math.max(0, 3 - s.lives))) : (s.ready ? '已準備' : '未準備')));
+    row.appendChild(seat);
+  });
+  if (!playing) for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  if (playing) {   // 場地
+    const wrap = mk('div', 'dodge-wrap'), cv = document.createElement('canvas');
+    cv.id = 'dgCanvas'; cv.width = DG_W; cv.height = DG_H; cv.className = 'dodge-canvas';
+    wrap.appendChild(cv); wrap.appendChild(mk('div', 'dodge-time')); wrap.lastChild.id = 'dgTime';
+    box.appendChild(wrap);
+  }
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- UNO（第六桌 t6）：牌面用 DOM 畫（原創設計：圓角色塊＋大符號）；規則與狀態全在伺服器，客戶端只畫畫面、送 play／draw／pass／uno／catch／timeout／mode ----
+const UN_FILL = { R: '#d83a3a', Y: '#e8b820', G: '#2ea84a', B: '#2f66d8' };
+const UN_CNAME = { R: '紅', Y: '黃', G: '綠', B: '藍' };
+function unCardEl(c, opts = {}) {   // c＝'R5'／'Gs'／'Br'／'Yd'／'W'／'F'；null＝牌背
+  const e = document.createElement('div');
+  if (!c) { e.className = 'ucard back'; return e; }
+  e.className = 'ucard' + (opts.big ? ' big' : '');
+  const wild = c === 'W' || c === 'F', v = wild ? c : c.slice(1);
+  if (wild) e.classList.add('wild'); else e.style.background = UN_FILL[c[0]];
+  const sym = { s: '⊘', r: '⇄', d: '+2', W: '★', F: '+4' }[v] || v;
+  e.textContent = sym;
+  if (opts.color && wild) e.style.boxShadow = `inset 0 0 0 4px ${UN_FILL[opts.color]}`;   // 變色牌打出後，用邊框顯示選的顏色
+  return e;
+}
+const unSortKey = c => (c === 'W' || c === 'F' ? 9 : 'RYGB'.indexOf(c[0])) * 100 + ({ s: 10, r: 11, d: 12 }[c.slice(1)] ?? (c === 'W' ? 20 : c === 'F' ? 21 : Number(c.slice(1))));
+function unStopTimer() { if (S.unTimer) { clearInterval(S.unTimer); S.unTimer = 0; } }
+function unStartTimer(v) {
+  unStopTimer();
+  S.unOff = v.un.sn - Date.now();   // 伺服器時間 − 本機時間（毫秒，忽略單程延遲）
+  S.unTimer = setInterval(() => {
+    const cur = S.tableView;
+    if (!S.tableOpen || !cur || cur.game !== 'uno' || cur.phase !== 'playing') { unStopTimer(); return; }
+    const left = (cur.un.deadline - (Date.now() + S.unOff)) / 1000;
+    const el = $('unTimer'); if (el) el.textContent = left > 0 ? `${Math.ceil(left)} 秒` : '時間到';
+    if (left <= 0 && Date.now() - (S.unTimeoutAt || 0) > 1000) { S.unTimeoutAt = Date.now(); S.net?.tbl?.({ a: 'timeout' }); }
+  }, 250);
+}
+function buildUno(box, v, mk, gd) {
+  const playing = v.phase === 'playing', mySeat = v.role === 'seat' ? v.seats[v.me] : null, un = v.un;
+  const myTurn = playing && v.role === 'seat' && v.turn === v.me;
+  const modeName = m => (m === 'wild' ? '無限制玩法' : '傳統玩法');
+  if (!playing) unStopTimer();
+  // 狀態列
+  let status;
+  if (playing) {
+    const who = v.seats[v.turn]?.name;
+    status = v.role === 'spec' ? `觀戰中 · 輪到 ${who}` : myTurn ? '輪到你出牌' : `輪到 ${who}`;
+    if (un.pending > 0) status += `　累積 ${un.pending} 張，${myTurn ? '接著出 + 牌傳下去，或吃下' : '等他決定'}`;
+    else if (un.skip) status += `　${myTurn ? '你被跳過了：可以出跳過牌傳下去，或放棄' : '被跳過中'}`;
+    else if (myTurn && un.drawn) status += '　抽到的牌可以出，或放棄';
+  } else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
+  box.appendChild(mk('div', 'table-status' + (myTurn ? ' mine' : ''), status));
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  // 玩法（開局前由桌主＝第一位入座者選）
+  if (!playing) {
+    const mrow = mk('div', 'table-btns');
+    const isHost = v.role === 'seat' && v.me === 0;
+    for (const [m, desc] of [['classic', '傳統玩法'], ['wild', '無限制玩法']]) {
+      const b = mk('button', 'ff-btn small' + (v.mode === m ? ' active' : ''), desc);
+      if (isHost) b.onclick = () => S.net?.tbl?.({ a: 'mode', v: m }); else b.disabled = true;
+      mrow.appendChild(b);
+    }
+    box.appendChild(mrow);
+    box.appendChild(mk('div', 'table-tag', (isHost ? '你是桌主，可以選玩法。' : '玩法由桌主（第一位入座的人）選。') + (v.mode === 'wild' ? ' 無限制：+2／+4 可以無限累積傳遞、跳過可以傳遞、沒牌可出時可以一直抽牌。' : ' 傳統：+2／+4 不可疊加、沒牌可出時抽 1 張。')));
+  }
+  // 座位
+  const row = mk('div', 'table-seats');
+  v.seats.forEach((s, i) => {
+    const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && v.turn === i ? ' turn' : '') + (s.left ? ' out' : ''));
+    seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : '')));
+    seat.appendChild(mk('div', 'table-tag', playing ? (s.left ? '' : `${s.n} 張${s.n === 1 ? ' · UNO!' : ''}${v.turn === i ? ' · 出牌中' : ''}`) : (s.ready ? '已準備' : '未準備')));
+    if (playing && !s.left) {
+      const cards = mk('div', 'table-cards');
+      if (v.hands) for (const c of v.hands[i] || []) cards.appendChild(unCardEl(c));   // 觀戰：每個人的牌都翻開
+      else if (!s.you) for (let k = 0; k < Math.min(s.n, 14); k++) cards.appendChild(unCardEl(null));
+      seat.appendChild(cards);
+    }
+    row.appendChild(seat);
+  });
+  if (!playing) for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  // 桌面：最上面一張、目前顏色、方向、牌堆張數、倒數
+  if (playing) {
+    const mid = mk('div', 'uno-mid');
+    const pile = mk('div', 'uno-pile'); pile.appendChild(unCardEl(un.top, { big: true, color: (un.top === 'W' || un.top === 'F') ? un.color : null }));
+    mid.appendChild(pile);
+    const info = mk('div', 'uno-info');
+    const col = mk('div', 'uno-color', `目前顏色：${UN_CNAME[un.color]}`); col.style.color = UN_FILL[un.color]; info.appendChild(col);
+    info.appendChild(mk('div', 'table-tag', `方向：${un.dir > 0 ? '順時針 ↻' : '逆時針 ↺'}　牌堆剩 ${un.deck} 張`));
+    const tm = mk('div', 'uno-timer'); tm.id = 'unTimer'; info.appendChild(tm);
+    mid.appendChild(info); box.appendChild(mid);
+    unStartTimer(v);
+  }
+  // 我的手牌（照顏色與點數排列；每張帶原本的位置編號 idx，出牌時送給伺服器）
+  if (v.role === 'seat' && playing) {
+    const hand = mk('div', 'table-hand'), cs = mk('div', 'table-cards big uno-hand');
+    const order = (v.hand || []).map((c, idx) => ({ c, idx })).sort((a, b) => unSortKey(a.c) - unSortKey(b.c));
+    for (const { c, idx } of order) {
+      const el = unCardEl(c, { big: true }), ok = myTurn && (v.playable || []).includes(idx);
+      el.classList.add(ok ? 'playable' : 'dim');
+      if (ok) el.onclick = () => {
+        if (c === 'W' || c === 'F') { S.unPick = idx; buildTable(); return; }   // 變色牌：先選顏色
+        S.net?.tbl?.({ a: 'play', idx });
+      };
+      cs.appendChild(el);
+    }
+    hand.appendChild(cs); box.appendChild(hand);
+    if (S.unPick != null && (v.hand || [])[S.unPick] && myTurn) {   // 選顏色
+      const pk = mk('div', 'table-btns');
+      pk.appendChild(mk('span', 'table-tag', '選一個顏色：'));
+      for (const c of 'RYGB') { const b = mk('button', 'ff-btn small', UN_CNAME[c]); b.style.background = UN_FILL[c]; b.style.color = '#fff'; b.onclick = () => { const idx = S.unPick; S.unPick = null; S.net?.tbl?.({ a: 'play', idx, color: c }); }; pk.appendChild(b); }
+      const cancel = mk('button', 'ff-btn small', '取消'); cancel.onclick = () => { S.unPick = null; buildTable(); }; pk.appendChild(cancel);
+      box.appendChild(pk);
+    } else S.unPick = null;
+  } else S.unPick = null;
+  // 操作按鈕
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && playing) {
+    if (v.canDraw) btns.appendChild(Object.assign(mk('button', 'ff-btn', un.pending > 0 ? `吃下 ${un.pending} 張` : '抽牌'), { onclick: () => S.net?.tbl?.({ a: 'draw' }) }));
+    if (v.canPass) btns.appendChild(Object.assign(mk('button', 'ff-btn', un.skip ? '接受被跳過' : '放棄'), { onclick: () => S.net?.tbl?.({ a: 'pass' }) }));
+    const myHand = mySeat?.n ?? 0;
+    if (un.pend === v.me || myHand <= 2) btns.appendChild(Object.assign(mk('button', 'ff-btn' + (un.pend === v.me ? ' uno-alert' : ''), 'UNO！'), { onclick: () => S.net?.tbl?.({ a: 'uno' }) }));
+    if (un.pend >= 0 && un.pend !== v.me) btns.appendChild(Object.assign(mk('button', 'ff-btn uno-alert', `抓！${v.seats[un.pend]?.name} 沒喊 UNO`), { onclick: () => S.net?.tbl?.({ a: 'catch' }) }));
+  } else if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// 島上桌子的繪製：圖＋人數標籤（離得近時提示按 F）
+function tableDrawEntries(list) {
+  for (const tb of tablesHere()) {
+    const img = S.tableImgs[tb.game], r = tableRect(tb), gd = gameDef(tb.game);
+    list.push({
+      y: r.y + r.h, draw: () => {
+        ctx.imageSmoothingEnabled = false;
+        if (img) ctx.drawImage(img, r.x, r.y, r.w, r.h);
+        else { ctx.fillStyle = '#2f8a5a'; ctx.fillRect(r.x, r.y, r.w, r.h); }
+        const inf = S.tblInfo?.[tb.id], p = S.players[0];
+        const txt = `${gd?.name || '遊戲桌'} ${inf ? `${inf.n}/${inf.max}${inf.play ? ' 遊戲中' : ''}${inf.s ? ` · ${inf.s} 人觀戰` : ''}` : ''}`;
+        ctx.save(); ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.textAlign = 'center';
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#ffe08a';
+        ctx.strokeText(txt, r.x + r.w / 2, r.y - 6); ctx.fillText(txt, r.x + r.w / 2, r.y - 6);
+        if (!S.tableOpen && tableDist(tb, p.x, p.y) < TABLE_RANGE) {
+          ctx.font = '11px "Microsoft JhengHei"'; ctx.fillStyle = '#fff6e0';
+          ctx.strokeText('按 F 或點擊入座', r.x + r.w / 2, r.y - 20); ctx.fillText('按 F 或點擊入座', r.x + r.w / 2, r.y - 20);
+        }
+        ctx.restore();
+      }
+    });
   }
 }
 
@@ -3845,10 +4651,15 @@ function draw() {
   ctx.save();
   ctx.translate(-S.cam.x, -S.cam.y);
   // 底：地面／岸邊／水（可動畫：每種磚這一幀先算好，整張地圖同步；stagger 的各格再錯開）
-  const tiles = [ims[tMan.water], ims[tMan.edge], ims[tMan.ground]], tileFi = tiles.map(s => s ? sprFrame(s) : 0);
+  const tiles = [ims[tMan.water], ims[tMan.edge], ims[tMan.ground]], tileFi = tiles.map(s => s ? sprFrame(s) : 0), groundRep = tMan.groundRepeat || 1;
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
     const t = S.world.types[y * COLS + x], spr = tiles[t];
     if (!spr) continue;
+    if (t === 2 && groundRep > 1) {   // 地面圖是 n×n 格的大圖（和平島室內地板的方磚放大 n 倍）：每格畫其中對應的一塊
+      const fw = spr.fw / groundRep, fh = spr.fh / groundRep;
+      ctx.drawImage(spr.img, (x % groundRep) * fw, (y % groundRep) * fh, fw, fh, x * CELL, y * CELL, CELL, CELL);
+      continue;
+    }
     drawSpr(spr, spr.stagger ? (tileFi[t] + x * 7 + y * 13) % spr.frames : tileFi[t], x * CELL, y * CELL, CELL, CELL);
   }
   // 地板層：蓋在地面上、家具與角色之下（多格地板從錨點畫整張，錨點在鏡頭左上外也要畫，所以往外多看幾格）
@@ -3899,14 +4710,16 @@ function draw() {
       }
     });
   }
+  tableDrawEntries(list);   // 和平島遊戲桌
   // 掉落物
   for (const dr of S.drops) {
-    const def = S.toolsDB.items[dr.item];
+    const def = S.toolsDB.items[dr.item] || matDef(dr.item), icon = S.craftImgs[dr.item];
     list.push({
       y: dr.y, draw: () => {
         const bob = Math.sin(S.t * 5 + dr.x) * 2;
         ctx.fillStyle = 'rgba(10,14,20,.3)';
         ctx.beginPath(); ctx.ellipse(dr.x, dr.y, 5, 2, 0, 0, Math.PI * 2); ctx.fill();
+        if (icon) { ctx.imageSmoothingEnabled = false; ctx.drawImage(icon, dr.x - 10, dr.y - 22 - bob, 20, 20); return; }
         ctx.fillStyle = def?.color || '#fff'; ctx.strokeStyle = 'rgba(20,16,12,.9)'; ctx.lineWidth = 1.5;
         ctx.beginPath(); ctx.arc(dr.x, dr.y - 7 - bob, 4, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
@@ -4262,6 +5075,7 @@ function draw() {
   }
   ctx.restore();
   if (ownerBar) drawOwnerCastBar(ownerBar.frac, ownerBar.name);   // 島主讀條固定在視窗上方置中（世界座標還原後畫，永遠在最上層）
+  drawOwnerLineBanner();   // 島主台詞：除了頭上的泡泡，也固定顯示在視窗上方（離島主太遠、泡泡在畫面外也看得到）
 }
 
 const MAX_FURN = 500;   // 每個地形的擺設上限（與兩份伺服器的 MAX_FURN 一致）
@@ -4421,7 +5235,7 @@ function canPlaceIn(list, typeId, x, y, floor = S.floorMap) {
   const def = furnitureDef(typeId); if (!def) return false;
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
-    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor)) return false;
+    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor) || tableAtCell(xx, yy)) return false;
   }
   return !list.some(it => { const d = furnitureDef(it.type) || { w: 1, h: 1 };
     return x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h; });
@@ -4450,7 +5264,8 @@ function updateDecorUI() {
 function enterDecor() {
   S.mode = 'decor'; S.draft = []; S.baseFurn = cloneFurn(S.furnItems); S.baseFloor = new Map(S.floorMap); S.paint = null;
   $('btnDecor').classList.add('active'); $('furnPanel').classList.remove('hidden');
-  S.sel = S.sel || S.furn.items.find(it => S.furnImgs[it.id] && !it.legacy)?.id || null;   // 缺圖／legacy 的種類不列出、也不預選
+  if (S.sel && !furnAvailable(furnitureDef(S.sel) || {})) S.sel = null;   // 合成家具還沒解鎖就不能預選
+  S.sel = S.sel || S.furn.items.find(it => S.furnImgs[it.id] && !it.legacy && furnAvailable(it))?.id || null;   // 缺圖／legacy 的種類不列出、也不預選
   S.selFloor = S.selFloor || S.floors.items.find(it => S.floorImgs[it.id])?.id || null;
   buildFurnPanel(); updateDecorUI();
   toast('裝飾模式：左鍵放置／右鍵移除（按「完成」才會保存）', 2600);
@@ -4577,7 +5392,7 @@ function buildFurnPanel() {
   }
   for (const it of S.furn.items) {
     const img = S.furnImgs[it.id];
-    if (!img || it.legacy) continue;       // 缺圖的家具不列出；legacy＝已改成別的東西（例如地毯改為地板），舊存檔照畫但不能再擺
+    if (!img || it.legacy || !furnAvailable(it)) continue;       // 合成家具要解鎖才列出； 缺圖的家具不列出；legacy＝已改成別的東西（例如地毯改為地板），舊存檔照畫但不能再擺
     const div = document.createElement('div');
     div.className = 'fitem' + (S.sel === it.id ? ' sel' : '');
     const cv = document.createElement('canvas');
@@ -4949,7 +5764,7 @@ function cycleWeapon(step) {
   setWeapon(ws[(i + step + ws.length) % ws.length].id);
 }
 let wheelAcc = 0, wheelAt = 0;
-const wheelBlocked = () => S.mode !== 'walk' || S.helpOpen || S.listOpen || S.dexOpen || S.titleOpen || S.colorOpen || S.glamOpen || S.signOpen || S.confirmOpen;
+const wheelBlocked = () => S.mode !== 'walk' || S.helpOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.colorOpen || S.glamOpen || S.signOpen || S.confirmOpen;
 document.addEventListener('wheel', e => {
   const t = e.target;
   if (t !== canvas && !t.closest?.('#weaponBar')) return;   // 只有在遊戲畫面或武器列上滾才切換（面板、視窗要照常捲動）
@@ -4996,6 +5811,19 @@ addEventListener('keydown', e => {
     else if (k === 'enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveSign(); }
     return;
   }
+  if (S.tableOpen) {   // 遊戲畫面開著：Esc 離開；五子棋復盤時 ←／→／Home／End 切換步數；其他鍵都不處理（不能走路）
+    if (k === 'escape') { e.preventDefault(); closeTable(); }
+    else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
+    else if (S.gmStep != null && S.tableView?.moves && ['arrowleft', 'arrowright', 'home', 'end'].includes(k)) {
+      e.preventDefault();
+      const N = S.tableView.moves.length;
+      S.gmStep = k === 'arrowleft' ? Math.max(0, S.gmStep - 1) : k === 'arrowright' ? Math.min(N, S.gmStep + 1) : k === 'home' ? 0 : N;
+      buildTable();
+    }
+    return;
+  }
+  const tg = e.target;   // 在輸入框打字（例如選色視窗的色碼）：除了 Esc 之外都不是遊戲按鍵，否則打 a／d／s／w 會讓角色跟著走
+  if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA') && k !== 'escape') return;
   keys[k] = true;
   if (MOVE_KEYS.includes(k)) {                                  // 命令檢定：移動輸入記在真實時鐘——keydown（含按住的 OS 重複鍵）
     const me = S.players[0];                                    // 即使 rAF 被 Discord webview 凍結也記得到（2026-11-06 修正「該中沒中」）
@@ -5003,6 +5831,7 @@ addEventListener('keydown', e => {
   }
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   if (S.listOpen) { if (k === 'escape' || k === 'l') closeList(); return; }                // 線上列表開著：Esc / L 關閉
+  if (S.craftOpen) { if (k === 'escape') closeCraft(); return; }                          // 合成面板開著：Esc 關閉（仍可走路）
   if (S.dexOpen) { if (k === 'escape') closeDex(); return; }                               // 圖鑑開著：Esc 關閉（仍可走路）
   if (S.titleOpen) { if (k === 'escape') closeTitles(); return; }                          // 稱號一覽開著：Esc 關閉（仍可走路）
   if (S.colorOpen) { if (k === 'escape') closeColor(false); return; }                      // 選色視窗開著：Esc 取消
@@ -5021,7 +5850,7 @@ addEventListener('keydown', e => {
   if ((k === '1' || k === '2') && !e.repeat) tryJobSkill(+k - 1);   // 1／2：職業技能
   if (k === 'shift' && !e.repeat) toggleSprint();   // Shift：切換疾走／步行（與右下角虛擬按鍵同一個開關）
 });
-addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key.toLowerCase() === 'f') S.holdSkipF = false; });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key.toLowerCase() === 'f') S.holdSkipF = false; if (S.dg && DG_KEYS[e.key.toLowerCase()]) S.dg.keys[DG_KEYS[e.key.toLowerCase()]] = false; });
 // ---------------- 疾走虛擬按鍵（畫面右下角）----------------
 // 圓形＋跑步像素小人；點擊或按 Shift 切換疾走／步行（2026-11-06 使用者要求：點擊後持續生效，再點擊或再按 Shift 切回步行）
 function toggleSprint() {
@@ -5088,7 +5917,7 @@ function drawSprintBtn() {   // 每幀重畫（52×52 小畫布，成本可忽�
   }
 }
 // 切走視窗時放開所有按住的鍵，避免卡住一直揮擊/走路
-addEventListener('blur', () => { for (const k in keys) keys[k] = false; S.mouseHeld = false; S.paint = null; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; S.mouseHeld = false; S.paint = null; if (S.dg) S.dg.keys = {}; });
 addEventListener('mouseup', e => { if (e.button === 0) S.mouseHeld = false; if (e.button === 0 || e.button === 2) S.paint = null; });
 
 canvas.addEventListener('mousemove', e => {
@@ -5111,6 +5940,8 @@ function clickAttack(wx, wy) {
     const f = furnAtPoint(wx, wy);
     if (f && furnitureDef(f.type)?.use) { usePose(f); return; }
     if (f && furnitureDef(f.type)?.text) { openSign(f); return; }
+    const tb = tableAtPoint(wx, wy);
+    if (tb) { if (tableDist(tb, S.players[0].x, S.players[0].y) < TABLE_RANGE) openTable(tb); else toast('走近一點再入座', 1200); return; }   // 點遊戲桌
     const n = npcAt(wx, wy);
     if (n) { talkTo(n); return; }                // 點 NPC：跟他說話（不是攻擊）
   }
@@ -5139,7 +5970,7 @@ function clickAttack(wx, wy) {
 }
 // 長按 F 或左鍵：冷卻一到就自動再揮（每幀呼叫；第一下由按下事件負責，之後這裡接手）
 function autoAttack() {
-  if (S.mode !== 'walk' || S.helpOpen || S.listOpen || S.signOpen || S.dexOpen || S.titleOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
+  if (S.mode !== 'walk' || S.helpOpen || S.listOpen || S.signOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
   if (isRod() || S.players[0].fish) return;   // 釣竿不連擊：長按不會一直拋竿／收竿
   quiet = true;
   try {
@@ -5150,7 +5981,7 @@ function autoAttack() {
   } finally { quiet = false; }
 }
 canvas.addEventListener('mousedown', e => {
-  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.titleOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.tableOpen) return;
   if (S.mode === 'decor' && S.decorTab === 'floor' && (e.button === 0 || e.button === 2)) {   // 地板模式：長按左鍵鋪、長按右鍵拆
     if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
     const r = canvas.getBoundingClientRect();
@@ -5177,7 +6008,7 @@ canvas.addEventListener('mousedown', e => {
 });
 canvas.addEventListener('contextmenu', e => {
   e.preventDefault();
-  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.titleOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen) return;
   if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身
     const r = canvas.getBoundingClientRect();
     const f = furnAtPoint(e.clientX - r.left + S.cam.x, e.clientY - r.top + S.cam.y);
@@ -5229,6 +6060,9 @@ document.addEventListener('click', e => {   // 點齒輪與選單以外的地方
 });
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => { closeColor(false); closeGlams(); $('avatarPanel').classList.add('hidden'); };
+$('tableClose').onclick = () => closeTable();
+$('btnCraft').onclick = () => { if (S.craftOpen) closeCraft(); else if (S.craftDB) openCraft(); };
+$('craftClose').onclick = closeCraft;
 $('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑
 $('dexClose').onclick = closeDex;
 $('btnTitles').onclick = () => { if (S.titleOpen) closeTitles(); else openTitles(); };   // 造型面板的「稱號設定」：稱號一覽
@@ -5264,7 +6098,7 @@ let welcomeUntil = 0;
 async function boot() {
   $('btnDecor').disabled = false;
   // manifest：互不相依，一次全部並行抓（以前是一個接一個，首次進島要等一長串往返）
-  const [tjson, furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB] = await Promise.all([
+  const [tjson, furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB, craftDB, gamesDB] = await Promise.all([
     Promise.all(TERRAIN_IDS.map(id => loadJSON(`assets/terrain/${id}/terrain.json`))),
     loadJSON('assets/furniture/furniture.json'),
     loadJSON('assets/floors/floors.json'),
@@ -5276,10 +6110,14 @@ async function boot() {
     loadJSON('assets/skills/skills.json').catch(() => ({ skills: {} })),   // 島主招式（倒數條／招式名／要不要講台詞）；讀不到就照舊
     loadJSON('assets/titles/titles.json').catch(() => ({ titles: [] })),   // 稱號；讀不到就沒有稱號可選
     loadJSON('assets/jobs/jobs.json'),          // 職業（職能、職業武器、裝備、技能）
+    loadJSON('assets/craft/craft.json').catch(() => null),   // 合成素材與配方；讀不到就沒有合成功能
+    loadJSON('assets/games/games.json').catch(() => null),   // 和平島遊戲桌的遊戲定義；讀不到就沒有遊戲桌
   ]);
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
   Object.assign(S, { furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB });
   loadJobs(jobsDB);
+  initCraft(craftDB);
+  S.gamesDB = gamesDB;
   S.myLook = myLook;   // net.js 送 state 時用（自己的顯示造型）
   S.myLvl = () => lvInfo(S.profile.xp).lv;   // net.js 送 state 時用（自己的等級；登入者由伺服器覆寫）
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
@@ -5317,6 +6155,8 @@ async function boot() {
       S.weaponImgs[w.id] = im;
     }),
     ...Object.values(S.fishDB.terrains).flat().map(async f => S.fishImgs[f.id] = await optImg(`assets/fish/${f.sprite}`)),
+    ...(S.craftDB?.materials || []).map(async m => S.craftImgs[m.id] = await optImg(`assets/craft/${m.id}.png`)),
+    ...Object.entries(S.gamesDB?.games || {}).map(async ([id, g]) => S.tableImgs[id] = await optImg(`assets/games/${g.sprite}`)),
     ensureTerrain(S.terrain),
   ]);
 
@@ -5398,8 +6238,13 @@ async function boot() {
     onDragon: onNetDragon,   // 島主事件（aim/hp/dead/spawn/state 快照）
     onLurker: onNetLurker,   // 釣上來的敵對怪物（spawn/wander/claw/aggro/hp/dead/gone/state 快照）
     onFishResult,            // 釣魚結果（伺服器抽的魚；登入的人已記進伺服器的圖鑑）
+    onTable: onNetTable,       // 和平島遊戲桌：伺服器給我的牌桌畫面
+    onTpos: onNetTpos,         // 躲彈幕：其他玩家的位置
+    onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
+    onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); checkTitles(true); },   // 登入後伺服器送來的圖鑑（稱號跟著重算，不跳提示）
     onOpen: net => {
+      if (S.tableOpen) closeTable(false);   // 重連：伺服器已當作我離開牌桌，畫面跟著關
       if (performance.now() >= welcomeUntil) toast(`已連上島（${net.room}）`, 2000);
       // 連上（或重連）時補傳目前地形的陸地位圖（新連線重新算「傳過沒」）
       S.landSent = null;

@@ -797,6 +797,226 @@
     ],
     "big": 105,
     "sprite": "golden_turtle.png"
+   },
+   {
+    "id": "oil_shrimp",
+    "name": "機油蝦",
+    "rarity": "common",
+    "size": [
+     3,
+     8
+    ],
+    "big": 7,
+    "sprite": "oil_shrimp.png"
+   },
+   {
+    "id": "verdigris_crab",
+    "name": "銅鏽蟹",
+    "rarity": "common",
+    "size": [
+     5,
+     12
+    ],
+    "big": 10,
+    "sprite": "verdigris_crab.png"
+   },
+   {
+    "id": "gear_snail",
+    "name": "齒輪螺",
+    "rarity": "common",
+    "size": [
+     3,
+     8
+    ],
+    "big": 7,
+    "sprite": "gear_snail.png"
+   },
+   {
+    "id": "rust_carp",
+    "name": "鐵鏽鯽",
+    "rarity": "common",
+    "size": [
+     10,
+     30
+    ],
+    "big": 25,
+    "sprite": "rust_carp.png"
+   },
+   {
+    "id": "cable_kelp",
+    "name": "電纜藻",
+    "rarity": "common",
+    "size": [
+     20,
+     90
+    ],
+    "big": 72,
+    "sprite": "cable_kelp.png"
+   },
+   {
+    "id": "oil_drum",
+    "name": "廢油桶",
+    "rarity": "common",
+    "size": [
+     30,
+     40
+    ],
+    "big": 38,
+    "sprite": "oil_drum.png"
+   },
+   {
+    "id": "old_bulb",
+    "name": "舊燈泡",
+    "rarity": "common",
+    "size": [
+     6,
+     12
+    ],
+    "big": 10,
+    "sprite": "old_bulb.png"
+   },
+   {
+    "id": "soda_can",
+    "name": "汽水罐",
+    "rarity": "common",
+    "size": [
+     8,
+     12
+    ],
+    "big": 11,
+    "sprite": "soda_can.png"
+   },
+   {
+    "id": "bolt_loach",
+    "name": "螺絲鰍",
+    "rarity": "common",
+    "size": [
+     8,
+     20
+    ],
+    "big": 17,
+    "sprite": "bolt_loach.png"
+   },
+   {
+    "id": "iron_goby",
+    "name": "鐵砂鰕虎",
+    "rarity": "common",
+    "size": [
+     5,
+     12
+    ],
+    "big": 10,
+    "sprite": "iron_goby.png"
+   },
+   {
+    "id": "cog_octopus",
+    "name": "齒輪章魚",
+    "rarity": "uncommon",
+    "size": [
+     30,
+     80
+    ],
+    "big": 68,
+    "sprite": "cog_octopus.png"
+   },
+   {
+    "id": "electric_eel",
+    "name": "電鰻",
+    "rarity": "uncommon",
+    "size": [
+     60,
+     150
+    ],
+    "big": 128,
+    "sprite": "electric_eel.png"
+   },
+   {
+    "id": "steel_turtle",
+    "name": "鋼甲龜",
+    "rarity": "uncommon",
+    "size": [
+     30,
+     70
+    ],
+    "big": 60,
+    "sprite": "steel_turtle.png"
+   },
+   {
+    "id": "turbine_squid",
+    "name": "渦輪烏賊",
+    "rarity": "uncommon",
+    "size": [
+     20,
+     60
+    ],
+    "big": 50,
+    "sprite": "turbine_squid.png"
+   },
+   {
+    "id": "dynamo_ray",
+    "name": "發電魟",
+    "rarity": "uncommon",
+    "size": [
+     50,
+     120
+    ],
+    "big": 102,
+    "sprite": "dynamo_ray.png"
+   },
+   {
+    "id": "neon_angler",
+    "name": "霓虹鮟鱇",
+    "rarity": "uncommon",
+    "size": [
+     30,
+     80
+    ],
+    "big": 68,
+    "sprite": "neon_angler.png"
+   },
+   {
+    "id": "clockwork_fish",
+    "name": "發條魚",
+    "rarity": "rare",
+    "size": [
+     30,
+     60
+    ],
+    "big": 52,
+    "sprite": "clockwork_fish.png"
+   },
+   {
+    "id": "circuit_fish",
+    "name": "電路魚",
+    "rarity": "rare",
+    "size": [
+     40,
+     90
+    ],
+    "big": 78,
+    "sprite": "circuit_fish.png"
+   },
+   {
+    "id": "tungsten_marlin",
+    "name": "鎢鋼旗魚",
+    "rarity": "rare",
+    "size": [
+     100,
+     220
+    ],
+    "big": 190,
+    "sprite": "tungsten_marlin.png"
+   },
+   {
+    "id": "steam_whale",
+    "name": "蒸汽鯨",
+    "rarity": "rare",
+    "size": [
+     150,
+     300
+    ],
+    "big": 262,
+    "sprite": "steam_whale.png"
    }
   ],
   "snow": [

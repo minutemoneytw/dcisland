@@ -246,3 +246,81 @@ body {
 #weaponBar .wrow.cur { background: rgba(40, 36, 20, .92); border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
 #weaponBar .wrow.cur canvas, #weaponBar .wrow.cur .wic { opacity: 1; }
 #weaponBar .wrow.cur::after { content: attr(data-name); position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 4px; white-space: nowrap; padding: 1px 8px; font-size: 12px; letter-spacing: 2px; color: #ffe9a8; background: rgba(22, 25, 34, .85); border: 1px solid var(--gold-dim); text-shadow: 0 0 3px #000; pointer-events: none; }
+
+/* ---- 合成面板 ---- */
+#craftBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 560px; max-height: 500px; display: flex; flex-direction: column; z-index: 31; }
+#craftBox.hidden { display: none !important; }
+#craftBody { overflow-y: auto; margin: 2px 0 8px; min-height: 180px; }
+.craft-slots { display: flex; align-items: center; gap: 8px; justify-content: center; margin: 4px 0 8px; }
+.craft-slot { width: 52px; height: 52px; border: 1px dashed var(--gold-dim); background: rgba(255, 255, 255, .04); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.craft-slot.full { border-style: solid; background: #3a3424; }
+.craft-slot.fail { border-color: #c9544f; }
+.craft-slot canvas, .craft-card canvas { image-rendering: pixelated; }
+.craft-op { color: var(--gold); font-size: 16px; }
+.craft-msg { min-height: 32px; text-align: center; font-size: 12px; color: var(--text-dim); margin-bottom: 8px; line-height: 1.5; }
+.craft-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px; }
+.craft-card { background: rgba(255, 255, 255, .04); border: 1px solid var(--gold-dim); padding: 6px 4px; text-align: center; cursor: pointer; }
+.craft-card:hover { border-color: var(--accent); }
+.craft-card.unknown { opacity: .8; border-style: dashed; cursor: default; }
+.craft-card canvas { width: 40px; height: 40px; display: block; margin: 0 auto 3px; }
+.craft-name { font-size: 12px; color: var(--text); }
+.craft-how { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+.craft-group { font-size: 12px; color: var(--gold); letter-spacing: 1px; margin: 6px 0 4px; }
+.craft-empty { grid-column: 1 / -1; text-align: center; font-size: 12px; color: var(--text-dim); padding: 10px; }
+.craft-note { cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-bottom: 1px solid rgba(255, 255, 255, .06); flex-wrap: wrap; }
+.craft-mini { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.craft-mini canvas { width: 28px; height: 28px; image-rendering: pixelated; }
+.craft-mini.out { color: var(--gold); }
+.craft-note:hover { background: rgba(255, 255, 255, .06); }
+
+/* ---- 和平島遊戲桌的遊戲畫面 ---- */
+#tableBox { position: fixed; inset: 0; z-index: 60; background: rgba(8, 12, 20, .95); display: flex; align-items: center; justify-content: center; overflow: auto; }
+#tableBox.hidden { display: none !important; }
+.table-panel { position: relative; width: min(880px, 96vw); max-height: 96vh; overflow-y: auto; padding: 14px 16px; }
+.table-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.table-status { text-align: center; font-size: 15px; color: var(--text); margin: 6px 0; }
+.table-status.mine { color: #ffe08a; font-weight: bold; }
+.table-result { text-align: center; font-size: 18px; color: #ffb347; font-weight: bold; margin: 6px 0; }
+.table-seats { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 12px 0; }
+.table-seat { flex: 1 1 180px; max-width: 200px; min-height: 96px; border: 1px solid var(--gold-dim); background: rgba(255, 255, 255, .04); padding: 8px; text-align: center; }
+.table-seat.you { border-color: var(--gold); }
+.table-seat.turn { border-color: #ffe08a; box-shadow: 0 0 10px rgba(255, 224, 138, .5); }
+.table-seat.out { opacity: .55; }
+.table-seat.empty { border-style: dashed; color: var(--text-dim); display: flex; align-items: center; justify-content: center; }
+.table-name { font-size: 14px; color: var(--text); }
+.table-tag, .table-count, .table-label { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.table-cards { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; margin-top: 6px; min-height: 40px; }
+.table-cards.big { gap: 6px; }
+.tcard { width: 30px; height: 42px; border-radius: 4px; border: 1px solid #1a1612; background: #f6f2e6; color: #1e1e24; font-size: 12px; font-weight: bold; display: flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.table-cards.big .tcard { width: 44px; height: 62px; font-size: 16px; }
+.tcard.red { color: #d83a3a; }
+.tcard.joker { background: #f3d070; color: #6a2a8a; }
+.tcard.back { background: repeating-linear-gradient(45deg, #a83a38, #a83a38 4px, #c9544f 4px, #c9544f 8px); border-color: #f6f2e6; }
+.tcard.back.pick { cursor: pointer; outline: 2px solid #ffe08a; }
+.tcard.back.pick:hover { transform: translateY(-4px); }
+.table-hand { text-align: center; margin: 10px 0; }
+.table-btns { display: flex; gap: 10px; justify-content: center; margin: 12px 0; }
+.table-log { max-height: 120px; overflow-y: auto; font-size: 12px; color: var(--text-dim); border-top: 1px solid rgba(255, 255, 255, .08); padding-top: 6px; margin-top: 8px; }
+.table-rules { font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.5; }
+.gomoku-board { display: block; margin: 10px auto; max-width: 100%; height: auto; border: 2px solid #5a3a1a; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+.gomoku-board.mine { cursor: pointer; }
+.dodge-wrap { position: relative; width: min(640px, 100%); margin: 10px auto; }
+.dodge-canvas { display: block; width: 100%; height: auto; border: 2px solid #3a4a8a; background: #0c1020; }
+.dodge-time { position: absolute; right: 8px; top: 6px; color: #ffe08a; font-size: 14px; font-weight: bold; text-shadow: 0 0 4px #000; }
+.dodge-rank { text-align: center; font-size: 14px; color: var(--text); margin: 6px 0; line-height: 1.7; }
+.dodge-seats .table-seat { min-height: 52px; flex: 1 1 110px; max-width: 150px; }
+.table-xp { color: #ffd86b; font-weight: bold; }
+.ucard { width: 30px; height: 44px; border-radius: 5px; border: 2px solid #f4f0e4; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 14px; box-sizing: border-box; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.ucard.big { width: 56px; height: 82px; font-size: 24px; border-width: 3px; border-radius: 8px; }
+.ucard.back { background: repeating-linear-gradient(45deg, #1e1e24, #1e1e24 5px, #d83a3a 5px, #d83a3a 10px); border-color: #f4f0e4; }
+.ucard.wild { background: conic-gradient(#d83a3a 0 25%, #e8b820 0 50%, #2ea84a 0 75%, #2f66d8 0); }
+.ucard.dim { opacity: .45; }
+.ucard.playable { cursor: pointer; box-shadow: 0 0 0 2px #ffe08a, 0 0 10px rgba(255,224,138,.6); }
+.ucard.playable:hover { transform: translateY(-8px); }
+.uno-hand { flex-wrap: wrap; }
+.uno-mid { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 8px 0; }
+.uno-info { text-align: left; }
+.uno-color { font-size: 16px; font-weight: bold; }
+.uno-timer { font-size: 22px; color: #ffe08a; font-weight: bold; margin-top: 4px; }
+.uno-alert { background: #a83a38; color: #fff; }
+.ff-btn.active { background: #3a3424; border-color: var(--gold); color: var(--gold); }

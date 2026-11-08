@@ -298,6 +298,13 @@ def dragon_hp_msg(d):
     return {"t": "dragon", "ev": "hp", "hp": d["hp"], "lvl": dl_lv(d.get("xp", 0)), "max": dragon_max_hp(d)}
 
 
+def player_lvl_of(c):
+    """玩家等級（打島主／魚人的傷害上限用）：登入且伺服器有存檔才採用存檔等級，其餘一律 Lv 1（不信客戶端自報的 state.lvl）。"""
+    if c and c.get("user") and c.get("xp_known") and isinstance(c.get("xp"), (int, float)):
+        return xp_info(c["xp"])["lv"]
+    return 1
+
+
 XP_DB = {}               # Discord 使用者 ID -> 總 XP（本機版存記憶體，重開就清空；正式站存在 Registry 的 xp:<uid>）
 XP_DB_LOCK = threading.Lock()
 
@@ -350,6 +357,26 @@ def roll_fish(terrain):
     size = round((f["size"][0] + (f["size"][1] - f["size"][0]) * random.random() ** 1.6) * 10) / 10
     return {"terrain": terrain, "id": f["id"], "size": size, "rarity": rar}
 
+CRAFT_KINDS = ("mat", "furn", "rec")   # 合成解鎖紀錄的三類（對應 Worker 的 Registry `craft:<uid>`）
+CRAFT_MAX = 300           # 每類最多存幾筆
+CRAFT_SYNC_MAX = 100      # craftsync 每類一次最多收幾筆
+CRAFT_DB = {}             # Discord 使用者 ID -> {mat: {id: 時間}, furn: {...}, rec: {...}}（只存記憶體）
+CRAFT_LOCK = threading.Lock()
+CRAFT_ID_RE = re.compile(r"^[a-z0-9_-]{1,24}$")
+
+def craft_add(uid, add):
+    """併進解鎖紀錄（已有的不動；每類上限 CRAFT_MAX），回整份（複本）。"""
+    with CRAFT_LOCK:
+        c = CRAFT_DB.setdefault(uid, {})
+        for k in CRAFT_KINDS:
+            m = c.setdefault(k, {})
+            ids = add.get(k) if isinstance(add, dict) else None
+            for i in (ids if isinstance(ids, list) else []):
+                i = str(i)
+                if CRAFT_ID_RE.match(i) and i not in m and len(m) < CRAFT_MAX:
+                    m[i] = int(time.time() * 1000)
+        return json.loads(json.dumps(c))
+
 FISH_DEX = {}            # Discord 使用者 ID -> {地形: {魚id: {max, n, first}}}（對應 Worker 的 Registry）
 FISH_DEX_LOCK = threading.Lock()
 
@@ -397,7 +424,8 @@ D_STAFF_RANGE = 440       # 法杖（遠距詠唱）打島主的最大距離：�
 D_RANGE = 100            # 玩家打島主的攻擊距離（客戶端以武器尖端為準：判定圈 58 + 武器伸出 30 = 88，留延遲）
 D_DRIFT_TOLER = 600      # 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 D_CD = 0.3               # 同一條連線兩次打島主的最短間隔（秒）
-D_HIT_MAX = 4            # 一般攻擊打島主／深海魚人的傷害上限（與 worker 的 D_HIT_MAX 一致；2026-11-05 由 2 放寬）。夾值隨攻擊者等級放寬（每 3 級 +1，見 dl_hit_max）
+DEATH_CREDIT_MIN = 25.0  # 同一條連線的「倒地記帳」（餵島主 XP／魚人升級）最短間隔（秒；與 worker 的 DEATH_CREDIT_MIN_MS 一致）：復活要 30 秒，正常玩法不會更密；擋住反覆切 state.dead 灌島主等級
+D_HIT_MAX = 6            # 一般攻擊打島主／深海魚人的傷害上限（與 worker 的 D_HIT_MAX 一致；2026-11-05 由 2 放寬到 4，2026-11-07 再放寬到 6：黑魔法師咒杖 4＋輸出 1＝5，留 1 的餘裕）。夾值隨攻擊者等級放寬（每 3 級 +1，見 dl_hit_max）
 D_PROVOKE_CD = 15.0      # 挑釁冷卻（每條連線，秒；與 worker/src/index.js 的 D_PROVOKE_CD_MS 一致）
 D_PROVOKE_RANGE = 240    # 挑釁範圍（比攻擊距離寬：把島主拉過來的是「聲東擊西」，不需要貼臉）
 D_WALK = 34              # 閒晃散步速度 px/s（與 client 的 OWNER_WALK_SPEED 一致）
@@ -588,6 +616,739 @@ def floor_to_list(floor):
     """地板 {(x,y): id} → [[x,y,id],…]（與 Worker 的儲存/廣播格式相同）。"""
     return [[x, y, fid] for (x, y), fid in floor.items()]
 
+# ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
+# 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
+# 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t3": "oldmaid", "t4": "gomoku", "t5": "dodge", "t6": "uno"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6)}           # 遊戲 → (開局最少人數, 入座上限)
+TBL_POS_CD = 0.06                           # 躲彈幕的位置回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
+TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
+# 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
+# 輸贏經驗一樣（使用者定）：抽鬼牌每位 +4；五子棋勝／負／平手都 +5（下不到 10 手就結束的不給，擋刷分）。
+# 登入者由伺服器記帳（同一帳號兩次得分最短間隔 GAME_XP_CD 秒）；訪客由客戶端看 result.xp 本機補發
+GAME_XP_CD = 30.0
+OM_XP = 4             # 抽鬼牌：每位入座者（過關者與輸家一樣）
+GM_XP = 5             # 五子棋：勝／負／平手都一樣
+GM_XP_MIN_MOVES = 10
+OM_SUITS = "SHDC"
+OM_SYM = {"S": "♠", "H": "♥", "D": "♦", "C": "♣"}
+
+def om_rank(card):
+    return None if card == "JK" else int(card[1:])
+
+def om_label(card):
+    r = om_rank(card)
+    return "鬼牌" if r is None else OM_SYM[card[0]] + {1: "A", 11: "J", 12: "Q", 13: "K"}.get(r, str(r))
+
+def om_drop_pairs(hand):
+    """丟掉成對的牌（同點數兩張一對；鬼牌不成對）。回 (剩下的牌（已洗亂）, 丟掉的牌)。"""
+    by = {}
+    for c in hand:
+        by.setdefault(om_rank(c), []).append(c)
+    keep, gone = [], []
+    for r, cs in by.items():
+        if r is None:
+            keep += cs
+            continue
+        n = len(cs) // 2 * 2
+        gone += cs[:n]
+        keep += cs[n:]
+    random.shuffle(keep)
+    return keep, gone
+
+def tbl_new(tid, game):
+    return {"id": tid, "game": game, "phase": "lobby", "seats": [], "specs": [], "turn": -1, "result": None, "log": [], "g": None}   # g：遊戲自己的狀態（五子棋的棋盤；抽鬼牌用不到）
+
+def tbl_find(t, cid):
+    for i, s in enumerate(t["seats"]):
+        if s["cid"] == cid:
+            return "seat", i
+    for i, s in enumerate(t["specs"]):
+        if s["cid"] == cid:
+            return "spec", i
+    return None, -1
+
+def tbl_log(t, text):
+    t["log"].append(text)
+    del t["log"][:-8]
+
+def tbl_next_active(t, i):
+    """座位 i 之後（順時針）第一個還沒出局的座位；沒有回 -1。"""
+    n = len(t["seats"])
+    for k in range(1, n + 1):
+        j = (i + k) % n
+        if not t["seats"][j]["out"]:
+            return j
+    return -1
+
+def tbl_reset_seats(t):
+    for s in t["seats"]:
+        s["ready"], s["hand"], s["out"] = False, [], False
+    t["phase"], t["turn"], t["g"] = "lobby", -1, None
+
+def tbl_join(t, cid, name, want="seat"):
+    """want＝'seat'（有空位且還沒開局才會入座，否則自動觀戰）或 'spec'（使用者自己選觀戰：沒滿人也可以）。"""
+    if tbl_find(t, cid)[0]:
+        return
+    mn, mx = GAME_LIMITS[t["game"]]
+    if want != "spec" and t["phase"] == "lobby" and len(t["seats"]) < mx:
+        t["seats"].append({"cid": cid, "name": name, "ready": False, "hand": [], "out": False})
+        tbl_log(t, f"{name} 入座了")
+    else:
+        t["specs"].append({"cid": cid, "name": name})
+        tbl_log(t, f"{name} 來觀戰")
+
+def tbl_leave(t, cid):
+    role, i = tbl_find(t, cid)
+    if role == "spec":
+        t["specs"].pop(i)
+    elif role == "seat":
+        name = t["seats"][i]["name"]
+        if t["phase"] == "playing" and t["game"] == "dodge":   # 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
+            dg_leave(t, i, int(time.time() * 1000))
+            return
+        if t["phase"] == "playing" and t["game"] == "uno":   # UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
+            un_leave(t, i, int(time.time() * 1000))
+            return
+        if t["phase"] == "playing":   # 使用者定：有人離開（含斷線）直接結束這一局
+            t["result"] = {"aborted": True, "text": f"{name} 離開了，這一局結束"}
+            tbl_reset_seats(t)
+            tbl_log(t, t["result"]["text"])
+        else:
+            tbl_log(t, f"{name} 離開了座位")
+        t["seats"].pop(i)
+
+def tbl_check_start(t):
+    mn, mx = GAME_LIMITS[t["game"]]
+    if t["phase"] == "lobby" and len(t["seats"]) >= mn and all(s["ready"] for s in t["seats"]):   # 使用者定：全員按「準備」才開始
+        GAME_START[t["game"]](t)
+
+def tbl_stand(t, cid):
+    """入座的人改成觀戰（只有還沒開局時；進行中要離開就是 leave，會結束這一局）。剩下的人若都已準備就開局。"""
+    role, i = tbl_find(t, cid)
+    if role != "seat" or t["phase"] != "lobby":
+        return
+    s = t["seats"].pop(i)
+    t["specs"].append({"cid": cid, "name": s["name"]})
+    tbl_log(t, f"{s['name']} 改為觀戰")
+    tbl_check_start(t)
+
+def tbl_sit(t, cid):
+    role, i = tbl_find(t, cid)
+    mn, mx = GAME_LIMITS[t["game"]]
+    if role != "spec" or t["phase"] != "lobby" or len(t["seats"]) >= mx:
+        return
+    s = t["specs"].pop(i)
+    t["seats"].append({"cid": cid, "name": s["name"], "ready": False, "hand": [], "out": False})
+    tbl_log(t, f"{s['name']} 入座了")
+
+def tbl_ready(t, cid, v):
+    role, i = tbl_find(t, cid)
+    if role != "seat" or t["phase"] != "lobby":
+        return
+    t["seats"][i]["ready"] = bool(v)
+    tbl_check_start(t)
+
+def om_start(t):
+    deck = [f"{s}{r}" for s in OM_SUITS for r in range(1, 14)] + ["JK"]
+    random.shuffle(deck)
+    n = len(t["seats"])
+    for k, s in enumerate(t["seats"]):
+        s["hand"], s["out"], s["ready"] = deck[k::n], False, False
+    t["result"] = None
+    t["phase"] = "playing"
+    tbl_log(t, "牌局開始，發牌！")
+    for s in t["seats"]:
+        s["hand"], gone = om_drop_pairs(s["hand"])
+        if gone:
+            tbl_log(t, f"{s['name']} 先丟掉了 {len(gone) // 2} 對牌")
+        s["out"] = not s["hand"]
+    alive = [i for i, s in enumerate(t["seats"]) if not s["out"]]
+    if len(alive) <= 1:
+        om_finish(t, alive[0])
+        return
+    t["turn"] = random.choice(alive)
+    tbl_log(t, f"由 {t['seats'][t['turn']]['name']} 先抽牌")
+
+def om_finish(t, loser):
+    name = t["seats"][loser]["name"]
+    t["result"] = {"loser": loser, "name": name, "text": f"{name} 抽到鬼牌，輸了！", "rid": random.getrandbits(32),
+                   "xp": [OM_XP] * len(t["seats"])}
+    tbl_log(t, t["result"]["text"])
+    tbl_reset_seats(t)
+
+def om_draw(t, cid, idx):
+    role, i = tbl_find(t, cid)
+    if t["game"] != "oldmaid" or role != "seat" or t["phase"] != "playing" or i != t["turn"]:
+        return
+    tgt = tbl_next_active(t, i)
+    if tgt < 0 or tgt == i:
+        return
+    me, th = t["seats"][i], t["seats"][tgt]
+    if not isinstance(idx, int) or isinstance(idx, bool) or not 0 <= idx < len(th["hand"]):
+        return
+    card = th["hand"].pop(idx)
+    me["hand"].insert(random.randint(0, len(me["hand"])), card)   # 抽到的牌插在隨機位置（不是固定最右邊，否則對方避開最右邊就不會抽到剛換手的鬼牌）
+    tbl_log(t, f"{me['name']} 從 {th['name']} 手上抽了一張牌")
+    if card != "JK":
+        mate = next((c for c in me["hand"] if c != card and om_rank(c) == om_rank(card)), None)
+        if mate:
+            me["hand"].remove(card)
+            me["hand"].remove(mate)
+            tbl_log(t, f"{me['name']} 湊成一對（{om_label(card)}、{om_label(mate)}）丟掉")
+    # 不自動洗牌：對方點的是「第幾張牌背」，要和這個人畫面上手牌的順序一致，洗牌是玩家自己的心理戰（om_shuffle）
+    for s in (me, th):
+        if not s["hand"] and not s["out"]:
+            s["out"] = True
+            tbl_log(t, f"{s['name']} 的牌出完了，安全過關！")
+    alive = [k for k, s in enumerate(t["seats"]) if not s["out"]]
+    if len(alive) <= 1:
+        om_finish(t, alive[0])
+        return
+    t["turn"] = tbl_next_active(t, i)
+
+def om_shuffle(t, cid):
+    """玩家自己洗牌（心理戰：讓對方猜不到鬼牌在哪）；手牌順序就是對方看到的牌背順序。"""
+    role, i = tbl_find(t, cid)
+    if t["game"] != "oldmaid" or role != "seat" or t["phase"] != "playing":
+        return
+    me = t["seats"][i]
+    if len(me["hand"]) < 2:
+        return
+    random.shuffle(me["hand"])
+    tbl_log(t, f"{me['name']} 洗了牌")
+
+# ---- 五子棋（第二桌；2026-11-08，使用者要求）：15×15、兩人、黑棋先下（開局隨機決定誰執黑）、橫直斜連成五子（含以上）就贏、棋盤滿了平手 ----
+GM_N = 15
+
+def gm_start(t):
+    black = random.randrange(2)   # 座位 0／1 誰執黑
+    t["g"] = {"board": [0] * (GM_N * GM_N), "black": black, "last": None, "line": None, "moves": []}   # moves：每一手的 [x, y]（第 0 手是黑棋；結束後給客戶端復盤）   # board：0 空、1 黑、2 白
+    t["result"] = None
+    t["phase"] = "playing"
+    t["turn"] = black   # 黑先
+    for s in t["seats"]:
+        s["ready"] = False
+    tbl_log(t, f"對局開始，{t['seats'][black]['name']} 執黑先下")
+
+def gm_line(board, x, y, color):
+    """剛下在 (x, y) 的棋是否連成五子（含以上）：回連成的那一排（座標清單），沒有回 None。"""
+    for dx, dy in ((1, 0), (0, 1), (1, 1), (1, -1)):
+        cells = [[x, y]]
+        for sgn in (1, -1):
+            cx, cy = x + dx * sgn, y + dy * sgn
+            while 0 <= cx < GM_N and 0 <= cy < GM_N and board[cy * GM_N + cx] == color:
+                cells.append([cx, cy])
+                cx, cy = cx + dx * sgn, cy + dy * sgn
+        if len(cells) >= 5:
+            return sorted(cells)
+    return None
+
+def gm_finish(t, winner, line):
+    """對局結束：winner＝座位編號，None＝平手。棋盤留著給大家看（到下一局開始才清掉）。"""
+    g = t.get("g")
+    enough = len(g["moves"]) >= GM_XP_MIN_MOVES
+    if winner is None:
+        t["result"] = {"draw": True, "text": "棋盤下滿了，平手！", "rid": random.getrandbits(32), "xp": [GM_XP if enough else 0] * 2}
+    else:
+        name = t["seats"][winner]["name"]
+        t["result"] = {"winner": winner, "name": name, "text": f"{name} 五子連線，獲勝！", "rid": random.getrandbits(32),
+                       "xp": [GM_XP if enough else 0] * 2}
+    tbl_log(t, t["result"]["text"])
+    tbl_reset_seats(t)
+    t["g"] = g
+
+def gm_move(t, cid, x, y):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "gomoku" or role != "seat" or t["phase"] != "playing" or i != t["turn"] or not g:
+        return
+    if not all(isinstance(v, int) and not isinstance(v, bool) and 0 <= v < GM_N for v in (x, y)):
+        return
+    if g["board"][y * GM_N + x]:
+        return
+    color = 1 if i == g["black"] else 2
+    g["board"][y * GM_N + x] = color
+    g["last"] = [x, y]
+    g["moves"].append([x, y])
+    line = gm_line(g["board"], x, y, color)
+    if line:
+        g["line"] = line
+        gm_finish(t, i, line)
+    elif all(g["board"]):
+        gm_finish(t, None, None)
+    else:
+        t["turn"] = 1 - i
+
+# ---- 躲彈幕（第五桌 t5；2026-11-08，使用者要求）：1～8 人、每人 3 條命、只能躲不能攻擊，依存活秒數評分 ----
+# 彈幕由客戶端用伺服器給的 seed 與開始時間 t0 決定性地各自產生（每個畫面看到的彈幕一樣）；被打到由各客戶端自判並回報 hit（和島主的招式同一原則，信任客戶端），
+# 伺服器管命數（被打後 DG_INV_MS 內不重複扣）、淘汰、評分與結束：入座的人全部淘汰、或滿 DG_DUR 秒（客戶端時間到時送 finish，伺服器核對時鐘）就結束；
+# 中途離開的人視同在離開那一刻淘汰（照該刻的存活秒數計分），遊戲繼續到場上沒有活人為止。
+DG_DUR = 300          # 最長秒數（使用者定，「暫時」；到了強制結束）
+DG_LIVES = 3
+DG_INV_MS = 1500      # 被打到後的無敵時間（與客戶端一致）
+DG_COUNTDOWN_MS = 3000
+DG_W, DG_H = 640, 400   # 場地大小（客戶端畫面用；伺服器只用來夾位置）
+
+def dg_xp(sec):
+    """存活秒數 → XP：不到 10 秒不給（擋刷分）；之後每 30 秒 +1，起跳 1、上限 10。"""
+    return 0 if sec < 10 else min(10, 1 + int(sec // 30))
+
+def dg_elapsed(t, now):
+    return max(0.0, min(float(DG_DUR), (now - t["g"]["t0"]) / 1000.0))
+
+def dg_start(t):
+    now = int(time.time() * 1000)
+    t["g"] = {"seed": random.getrandbits(31), "t0": now + DG_COUNTDOWN_MS}
+    t["result"] = None
+    t["phase"] = "playing"
+    for s in t["seats"]:
+        s["lives"], s["out"], s["died"], s["last_hit"], s["left"], s["ready"] = DG_LIVES, False, None, 0, False, False
+    tbl_log(t, f"挑戰開始！{len(t['seats'])} 人參加，每人 {DG_LIVES} 條命")
+
+def dg_out(t, s, now, why):
+    s["out"] = True
+    s["died"] = round(dg_elapsed(t, now), 1)
+    tbl_log(t, f"{s['name']} {why}，存活 {s['died']} 秒")
+
+def dg_finish(t, now):
+    for s in t["seats"]:
+        if not s["out"]:   # 時間到還活著的：存活到最後
+            s["out"] = True
+            s["died"] = round(dg_elapsed(t, now), 1)
+    ranking = sorted(({"name": s["name"], "sec": s["died"], "left": bool(s.get("left"))} for s in t["seats"]), key=lambda r: -r["sec"])
+    stay = [s for s in t["seats"] if not s.get("left")]
+    xp = [dg_xp(s["died"]) for s in stay]   # 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
+    top = ranking[0] if ranking else None
+    text = f"挑戰結束！第一名 {top['name']}，存活 {top['sec']} 秒" if top else "挑戰結束"
+    t["seats"] = stay
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp}
+    tbl_log(t, text)
+    tbl_reset_seats(t)
+    t["g"] = None
+
+def dg_check_end(t, now):
+    """場上沒有活人，或時間到了：結束。"""
+    if t["game"] != "dodge" or t["phase"] != "playing" or not t.get("g"):
+        return
+    if now >= t["g"]["t0"] + DG_DUR * 1000 or all(s["out"] for s in t["seats"]):
+        dg_finish(t, now)
+
+def dg_hit(t, cid, now):
+    role, i = tbl_find(t, cid)
+    if t["game"] != "dodge" or role != "seat" or t["phase"] != "playing" or not t.get("g"):
+        return
+    s = t["seats"][i]
+    if s["out"] or now < t["g"]["t0"] or now - s["last_hit"] < DG_INV_MS - 400:   # 還沒開始、已出局、無敵時間內（留 400ms 的網路抖動餘裕）
+        return
+    s["last_hit"] = now
+    s["lives"] -= 1
+    if s["lives"] <= 0:
+        dg_out(t, s, now, "出局")
+    dg_check_end(t, now)
+
+def dg_leave(t, i, now):
+    """遊戲進行中有人離開：視同淘汰（照這一刻的存活秒數計分），遊戲繼續到場上沒有活人為止（使用者定）。"""
+    s = t["seats"][i]
+    if not s["out"]:
+        dg_out(t, s, now, "離開了")
+    else:
+        tbl_log(t, f"{s['name']} 離開了")
+    s["left"], s["cid"] = True, None
+    dg_check_end(t, now)
+
+# ---- UNO（第六桌 t6；2026-11-08，使用者要求，名稱沿用 UNO（商標風險由使用者決定）；牌面是原創繪製）：2～6 人、標準 108 張、手牌剩 1 張要喊 UNO ----
+# 牌的編碼：顏色字母 RYGB（紅黃綠藍）＋點數 0～9／s（跳過）／r（反轉）／d（+2），例如 R5、Gs；W＝變色牌、F＝變色 +4（沒有顏色）。
+# 兩種玩法（桌主＝第一位入座者在開局前選，t["mode"]）：
+#   傳統 classic：出牌要同色或同點數（或變色牌）；+4 只能在手上沒有「目前顏色」的牌時出；+2／+4 不可疊加（受罰者直接抽牌並跳過回合）；跳過直接生效；
+#     沒牌可出時抽 1 張，抽到的牌能出就可以出、也可以放棄。
+#   無限制 wild（使用者定）：① +2／+4 沒有上限：被加牌的人手上有任何 + 牌（+2 或 +4，不看顏色）就可以接著出，累積 pending 張數傳給下一位，沒有 + 牌的人一次抽完累積的張數並跳過；
+#     ② 跳過也可以傳遞：被跳過的人手上有跳過牌（不看顏色）可以再出，讓下一位被跳過，沒有（或選擇放棄）就被跳過；
+#     ③ 沒牌可出時，抽牌沒有限制：可以一直抽到有牌可出為止；+4 也沒有「手上沒有目前顏色」的限制。
+# 共通：出到手牌剩 1 張時要在下一個人動作前喊 UNO（uno），沒喊被別人抓到（catch）罰抽 2 張；先出完手牌的人獲勝。起始牌一律是數字牌。
+# 回合限時 UN_TURN_MS，超時由客戶端送 timeout（伺服器核對時鐘）：有累積加牌就吃下、被跳過就放棄、否則抽 1 張並跳過；中途離開的人手牌收回牌堆，遊戲繼續，只剩 1 人時那人獲勝（無 XP）。
+UN_COLORS = "RYGB"
+UN_TURN_MS = 30000
+UN_XP = 5   # 輸贏一樣（使用者定）：每位入座者 +5
+UN_MODES = ("classic", "wild")
+
+def un_deck():
+    d = []
+    for c in UN_COLORS:
+        d.append(c + "0")
+        for v in "123456789srd":
+            d += [c + v, c + v]
+    return d + ["W"] * 4 + ["F"] * 4
+
+def un_cname(c):
+    return {"R": "紅", "Y": "黃", "G": "綠", "B": "藍"}.get(c, "")
+
+def un_label(card):
+    if card == "W":
+        return "變色牌"
+    if card == "F":
+        return "變色 +4"
+    return un_cname(card[0]) + {"s": "跳過", "r": "反轉", "d": "+2"}.get(card[1:], card[1:])
+
+def un_is_plus(card):
+    return card == "F" or (card not in ("W",) and card[1:] == "d")
+
+def un_is_skip(card):
+    return card not in ("W", "F") and card[1:] == "s"
+
+def un_playable(g, hand, card):
+    """目前情境下這張牌能不能出（含無限制玩法的累積加牌／跳過傳遞）。"""
+    if g["pending"] > 0:   # 無限制：只能接著出 + 牌（不看顏色）傳下去
+        return un_is_plus(card)
+    if g["skip"]:          # 無限制：被跳過時只能出跳過牌（不看顏色）傳下去
+        return un_is_skip(card)
+    if card == "W":
+        return True
+    if card == "F":        # 傳統：+4 只能在手上沒有「目前顏色」的牌時出；無限制沒有這個限制
+        return g["mode"] == "wild" or not any(c[0] == g["color"] for c in hand if c not in ("W", "F"))
+    return card[0] == g["color"] or card[1:] == g["topval"]
+
+def un_active(t):
+    return [i for i, s in enumerate(t["seats"]) if not s.get("left")]
+
+def un_next(t, i, steps=1):
+    n, j, moved = len(t["seats"]), i, 0
+    while moved < steps:
+        j = (j + t["g"]["dir"]) % n
+        if not t["seats"][j].get("left"):
+            moved += 1
+    return j
+
+def un_set_turn(t, i, now):
+    t["turn"] = i
+    t["g"]["drawn"] = False
+    t["g"]["deadline"] = now + UN_TURN_MS
+
+def un_draw_cards(t, i, n):
+    g, hand = t["g"], t["seats"][i]["hand"]
+    for _ in range(n):
+        if not g["deck"]:   # 牌堆空了：把棄牌堆（留最上面那張）洗回去
+            top = g["discard"].pop()
+            g["deck"], g["discard"] = g["discard"], [top]
+            random.shuffle(g["deck"])
+        if not g["deck"]:
+            break
+        hand.append(g["deck"].pop())
+
+def un_has_playable(t, i):
+    g, hand = t["g"], t["seats"][i]["hand"]
+    return any(un_playable(g, hand, c) for c in hand)
+
+def un_start(t):
+    now = int(time.time() * 1000)
+    deck = un_deck()
+    random.shuffle(deck)
+    n = len(t["seats"])
+    for s in t["seats"]:
+        s["hand"], s["out"], s["ready"], s["left"], s["said"] = [deck.pop() for _ in range(7)], False, False, False, False
+    while deck[-1][0] not in UN_COLORS or deck[-1][1:] not in list("0123456789"):   # 起始牌一律是數字牌：功能牌／變色牌放回去重洗
+        random.shuffle(deck)
+    top = deck.pop()
+    mode = t.get("mode") if t.get("mode") in UN_MODES else "classic"
+    t["g"] = {"deck": deck, "discard": [top], "color": top[0], "topval": top[1:], "dir": 1, "drawn": False, "pend": -1, "deadline": 0,
+              "mode": mode, "pending": 0, "skip": False}   # pending：無限制玩法累積的加牌張數；skip：輪到的人正被跳過、可以傳遞
+    t["result"] = None
+    t["phase"] = "playing"
+    un_set_turn(t, random.randrange(n), now)
+    tbl_log(t, f"牌局開始（{'無限制玩法' if mode == 'wild' else '傳統玩法'}）！每人 7 張，起始牌 {un_label(top)}，由 {t['seats'][t['turn']]['name']} 先出")
+
+def un_finish(t, winner, xp):
+    name = t["seats"][winner]["name"]
+    stay = [s for s in t["seats"] if not s.get("left")]
+    t["result"] = {"winner": winner, "name": name, "text": f"{name} 出完手牌，獲勝！", "rid": random.getrandbits(32), "xp": [UN_XP if xp else 0] * len(stay)}
+    tbl_log(t, t["result"]["text"])
+    t["seats"] = stay
+    tbl_reset_seats(t)
+    t["g"] = None
+
+def un_check_last(t):
+    """只剩 1 位玩家：那位獲勝（其他人都離開了；無 XP，擋「開了就等別人離開」的刷分）；一個人都不剩就直接清桌。"""
+    act = un_active(t)
+    if t["phase"] != "playing" or len(act) > 1:
+        return False
+    if act:
+        un_finish(t, act[0], False)
+    else:
+        t["seats"] = []
+        tbl_reset_seats(t)
+        t["g"] = None
+    return True
+
+def un_pass_on(t, v, now):
+    """輪到 v 面對累積加牌／跳過：v 手上沒有能接的牌就直接吃下、換下一位（不用等他按）；有就把決定權交給 v。"""
+    g, hand = t["g"], t["seats"][v]["hand"]
+    if g["pending"] > 0:
+        if any(un_is_plus(c) for c in hand):
+            un_set_turn(t, v, now)
+            return
+        n = g["pending"]
+        un_draw_cards(t, v, n)
+        g["pending"] = 0
+        tbl_log(t, f"{t['seats'][v]['name']} 抽 {n} 張")
+        un_set_turn(t, un_next(t, v), now)
+    elif g["skip"]:
+        if any(un_is_skip(c) for c in hand):
+            un_set_turn(t, v, now)
+            return
+        g["skip"] = False
+        tbl_log(t, f"{t['seats'][v]['name']} 被跳過")
+        un_set_turn(t, un_next(t, v), now)
+    else:
+        un_set_turn(t, v, now)
+
+def un_play(t, cid, idx, color, now):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "uno" or role != "seat" or t["phase"] != "playing" or not g or i != t["turn"]:
+        return
+    s = t["seats"][i]
+    if not isinstance(idx, int) or isinstance(idx, bool) or not 0 <= idx < len(s["hand"]):
+        return
+    if g["drawn"] and idx != len(s["hand"]) - 1:   # 傳統：剛抽的牌只能出那一張（或放棄）
+        return
+    card = s["hand"][idx]
+    if not un_playable(g, s["hand"], card):
+        return
+    if card in ("W", "F") and (not isinstance(color, str) or len(color) != 1 or color not in UN_COLORS):   # 變色牌要指定四色之一（型別／長度要檢查：None 會出錯、"RY" 會被當成子字串通過）
+        return
+    wild = g["mode"] == "wild"
+    s["hand"].pop(idx)
+    g["pend"] = -1   # 輪到下一個人動作了：上一位忘記喊 UNO 的抓不到了
+    g["discard"].append(card)
+    if card in ("W", "F"):
+        g["color"], g["topval"] = color, card
+        tbl_log(t, f"{s['name']} 出了 {un_label(card)}，選了{un_cname(color)}色")
+    else:
+        g["color"], g["topval"] = card[0], card[1:]
+        tbl_log(t, f"{s['name']} 出了 {un_label(card)}")
+    if not s["hand"]:   # 出完了：獲勝
+        un_finish(t, i, True)
+        return
+    if len(s["hand"]) == 1:
+        if s.get("said"):
+            s["said"] = False
+        else:
+            g["pend"] = i   # 還沒喊 UNO：下一個人動作前，任何人可以抓
+    n_active = len(un_active(t))
+    g["skip"] = False
+    if un_is_skip(card):    # 跳過
+        v = un_next(t, i)
+        if wild:
+            g["skip"] = True
+            un_pass_on(t, v, now)
+        else:
+            tbl_log(t, f"{t['seats'][v]['name']} 被跳過")
+            un_set_turn(t, un_next(t, i, 2), now)
+    elif card not in ("W", "F") and card[1:] == "r":   # 反轉（兩人時等於跳過）
+        g["dir"] = -g["dir"]
+        tbl_log(t, "方向反轉")
+        un_set_turn(t, i if n_active == 2 else un_next(t, i), now)
+    elif un_is_plus(card):   # +2／+4
+        n = 4 if card == "F" else 2
+        v = un_next(t, i)
+        if wild:   # 累積：傳給下一位，他有 + 牌就可以接著傳
+            g["pending"] += n
+            tbl_log(t, f"累積 {g['pending']} 張")
+            un_pass_on(t, v, now)
+        else:
+            un_draw_cards(t, v, n)
+            tbl_log(t, f"{t['seats'][v]['name']} 抽 {n} 張")
+            un_set_turn(t, un_next(t, i, 2), now)
+    else:
+        un_set_turn(t, un_next(t, i), now)
+
+def un_draw(t, cid, now):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "uno" or role != "seat" or t["phase"] != "playing" or not g or i != t["turn"]:
+        return
+    s = t["seats"][i]
+    wild = g["mode"] == "wild"
+    if wild and g["pending"] > 0:   # 無限制：吃下累積的加牌，被跳過這一回合
+        n = g["pending"]
+        g["pend"] = -1
+        un_draw_cards(t, i, n)
+        g["pending"] = 0
+        if len(s["hand"]) > 2:
+            s["said"] = False
+        tbl_log(t, f"{s['name']} 抽 {n} 張")
+        un_set_turn(t, un_next(t, i), now)
+        return
+    if wild and g["skip"]:   # 被跳過要用 pass 放棄，不能抽牌
+        return
+    if wild:   # 無限制：手上沒有能出的牌時可以一直抽（有能出的牌就不能抽）
+        if un_has_playable(t, i):
+            return
+        g["pend"] = -1
+        un_draw_cards(t, i, 1)
+        if len(s["hand"]) > 2:
+            s["said"] = False
+        tbl_log(t, f"{s['name']} 抽了一張牌")
+        return
+    if g["drawn"]:
+        return
+    g["pend"] = -1
+    un_draw_cards(t, i, 1)
+    if len(s["hand"]) > 2:
+        s["said"] = False
+    card = s["hand"][-1] if s["hand"] else None
+    if card and un_playable(g, s["hand"], card):
+        g["drawn"] = True   # 抽到的牌能出：可以出、也可以放棄（pass）
+        tbl_log(t, f"{s['name']} 抽了一張牌")
+    else:
+        tbl_log(t, f"{s['name']} 抽了一張牌，沒有可以出的牌")
+        un_set_turn(t, un_next(t, i), now)
+
+def un_pass(t, cid, now):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "uno" or role != "seat" or t["phase"] != "playing" or not g or i != t["turn"]:
+        return
+    s = t["seats"][i]
+    if g["mode"] == "wild" and g["skip"]:   # 無限制：接受被跳過
+        g["pend"] = -1
+        g["skip"] = False
+        tbl_log(t, f"{s['name']} 被跳過")
+        un_set_turn(t, un_next(t, i), now)
+        return
+    if g["mode"] == "wild" and g["pending"] == 0 and not g["drawn"] and not un_has_playable(t, i) and not g["deck"] and len(g["discard"]) <= 1:
+        g["pend"] = -1   # 牌抽光了、也沒牌可出：只能放棄
+        tbl_log(t, f"{s['name']} 沒有牌可出也沒牌可抽，放棄")
+        un_set_turn(t, un_next(t, i), now)
+        return
+    if not g["drawn"]:
+        return
+    g["pend"] = -1
+    tbl_log(t, f"{s['name']} 放棄出牌")
+    un_set_turn(t, un_next(t, i), now)
+
+def un_say(t, cid):
+    """喊 UNO：剛出到只剩 1 張時（pend）補喊；或手上只剩 1～2 張時先喊好（出到 1 張就不會被抓）。"""
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "uno" or role != "seat" or t["phase"] != "playing" or not g:
+        return
+    s = t["seats"][i]
+    if g["pend"] == i:
+        g["pend"] = -1
+        tbl_log(t, f"{s['name']} 喊了 UNO！")
+    elif len(s["hand"]) <= 2:
+        s["said"] = True
+        tbl_log(t, f"{s['name']} 喊了 UNO！")
+
+def un_catch(t, cid):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "uno" or role != "seat" or t["phase"] != "playing" or not g or g["pend"] < 0 or g["pend"] == i:
+        return
+    v = g["pend"]
+    g["pend"] = -1
+    un_draw_cards(t, v, 2)
+    tbl_log(t, f"{t['seats'][i]['name']} 抓到 {t['seats'][v]['name']} 沒喊 UNO，罰抽 2 張")
+
+def un_timeout(t, now):
+    """回合限時到了（客戶端送 timeout，伺服器核對時鐘）：有累積加牌就吃下、被跳過就放棄、否則抽 1 張並跳過（剛抽過就直接跳過）。"""
+    g = t.get("g")
+    if t["game"] != "uno" or t["phase"] != "playing" or not g or now < g["deadline"] - 300:
+        return
+    i = t["turn"]
+    s = t["seats"][i]
+    g["pend"] = -1
+    if g["pending"] > 0:
+        n = g["pending"]
+        un_draw_cards(t, i, n)
+        g["pending"] = 0
+        tbl_log(t, f"{s['name']} 超時，吃下 {n} 張")
+    elif g["skip"]:
+        g["skip"] = False
+        tbl_log(t, f"{s['name']} 超時，被跳過")
+    else:
+        if not g["drawn"]:
+            un_draw_cards(t, i, 1)
+        tbl_log(t, f"{s['name']} 超時，自動{'' if g['drawn'] else '抽牌並'}跳過")
+    un_set_turn(t, un_next(t, i), now)
+
+def un_leave(t, i, now):
+    """遊戲進行中有人離開：手牌收回牌堆，遊戲繼續；只剩 1 人時那人獲勝（無 XP）。"""
+    g, s = t["g"], t["seats"][i]
+    g["deck"] += s["hand"]
+    random.shuffle(g["deck"])
+    s["hand"], s["left"], s["cid"] = [], True, None
+    tbl_log(t, f"{s['name']} 離開了，手牌收回牌堆")
+    if g["pend"] == i:
+        g["pend"] = -1
+    if un_check_last(t):
+        return
+    if i == t["turn"]:
+        g["pending"], g["skip"] = 0, False   # 正在被加牌／被跳過的人離開：累積的懲罰作廢
+        un_set_turn(t, un_next(t, i), now)
+
+def un_set_mode(t, cid, mode):
+    """桌主（第一位入座者）在開局前選玩法；換玩法會讓大家的「準備」重來。"""
+    role, i = tbl_find(t, cid)
+    if t["game"] != "uno" or role != "seat" or i != 0 or t["phase"] != "lobby" or mode not in UN_MODES or t.get("mode", "classic") == mode:
+        return
+    t["mode"] = mode
+    for s in t["seats"]:
+        s["ready"] = False
+    tbl_log(t, f"{t['seats'][0]['name']} 把玩法改成{'無限制' if mode == 'wild' else '傳統'}")
+
+GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+
+def tbl_view(t, cid):
+    """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
+    role, i = tbl_find(t, cid)
+    mn, mx = GAME_LIMITS[t["game"]]
+    playing = t["phase"] == "playing"
+    seats = [{"name": s["name"], "n": len(s["hand"]) if playing else 0, "ready": s["ready"], "out": s["out"] if playing else False,
+              "you": role == "seat" and k == i} for k, s in enumerate(t["seats"])]
+    v = {"id": t["id"], "game": t["game"], "phase": t["phase"], "min": mn, "max": mx, "role": role,
+         "me": i if role == "seat" else -1, "seats": seats, "specs": len(t["specs"]),
+         "turn": t["turn"] if playing else -1, "target": tbl_next_active(t, t["turn"]) if playing else -1,
+         "result": t["result"], "log": list(t["log"])}
+    g = t.get("g")
+    if t["game"] == "dodge":   # 躲彈幕：每個座位的命數／淘汰秒數／是否已離開；進行中附上 seed 與開始時間（彈幕由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
+        for k, s in enumerate(t["seats"]):
+            seats[k].update(lives=s.get("lives", 0), died=s.get("died"), left=bool(s.get("left")))
+        if g and playing:
+            v["dg"] = {"seed": g["seed"], "t0": g["t0"], "dur": DG_DUR, "sn": int(time.time() * 1000)}
+    elif g and t["game"] == "gomoku":   # 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
+        v["board"] = "".join(str(c) for c in g["board"])
+        v["last"], v["black"], v["line"], v["moves"] = g["last"], g["black"], g["line"], g["moves"]   # moves：每一手的座標（偶數手＝黑棋）；結束後客戶端用來復盤
+    if t["game"] == "uno":
+        v["mode"] = t.get("mode", "classic")   # 玩法（桌主在開局前選）：classic 傳統／wild 無限制
+    if t["game"] == "uno" and playing and t.get("g"):   # UNO：目前顏色、方向、最上面一張、牌堆張數、這回合的期限（sn＝伺服器現在時間，客戶端對時用）、誰沒喊 UNO（可以抓）、累積加牌張數、是否正被跳過
+        g = t["g"]
+        v["un"] = {"color": g["color"], "dir": g["dir"], "top": g["discard"][-1], "deck": len(g["deck"]), "drawn": g["drawn"], "pend": g["pend"],
+                   "pending": g["pending"], "skip": g["skip"], "deadline": g["deadline"], "sn": int(time.time() * 1000)}
+        for k, s in enumerate(t["seats"]):
+            seats[k]["left"] = bool(s.get("left"))
+        if role == "seat":
+            me = t["seats"][i]
+            mine = i == t["turn"]
+            v["playable"] = [k for k, c in enumerate(me["hand"]) if un_playable(g, me["hand"], c) and (not g["drawn"] or k == len(me["hand"]) - 1)] if mine else []
+            if g["mode"] == "wild":   # 無限制：有累積加牌時可以吃下；沒牌可出時可以一直抽；被跳過時只能出跳過牌或放棄
+                v["canDraw"] = mine and (g["pending"] > 0 or (not g["skip"] and not un_has_playable(t, i)))
+                v["canPass"] = mine and (g["skip"] or (g["pending"] == 0 and not un_has_playable(t, i) and not g["deck"] and len(g["discard"]) <= 1))
+            else:
+                v["canDraw"] = mine and not g["drawn"]
+                v["canPass"] = mine and g["drawn"]
+    if role == "spec" and playing and t["game"] in ("oldmaid", "uno"):   # 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
+        v["hands"] = [list(s["hand"]) for s in t["seats"]]
+    if role == "seat" and playing and t["game"] in ("oldmaid", "uno"):
+        v["hand"] = list(t["seats"][i]["hand"])   # 照伺服器順序（不排序）：對方抽的第 k 張牌背＝這裡從左數第 k 張
+    return v
+
+def tbl_info(t):
+    mn, mx = GAME_LIMITS[t["game"]]
+    return {"game": t["game"], "n": len(t["seats"]), "s": len(t["specs"]), "max": mx, "play": t["phase"] == "playing",
+            "seated": [s["cid"] for s in t["seats"]]}   # 入座中的連線編號：客戶端在他們的名牌後面加「入座中／遊戲中」
+
 class Room:
     """一座島＝一個房間（鍵：guild:channel）。"""
     def __init__(self):
@@ -609,6 +1370,10 @@ class Room:
         self.lurkers = {}        # 地形 -> 釣上來的敵對怪物狀態（每個地形同時最多一隻）
         self.lurk_hits = {}      # cid -> (地形, 上次打怪物的時刻 ms)
         self.lurk_seq = {}       # 地形 -> 怪物 tick 序號（只讓最新排程生效）
+        self.tables = {}         # 桌 id -> 牌桌狀態（和平島的遊戲桌；只放記憶體）
+        self.tlock = threading.Lock()   # 牌桌操作串行（table_op）
+        self._xp_pending = []           # 對局結束待發的 XP：[(連線編號, XP)]（table_do 在鎖內收集、table_op 在鎖外發）
+        self.game_xp_at = {}            # 帳號 id -> 上次玩小遊戲得 XP 的時間（GAME_XP_CD）
         # 每位玩家各自在某個地形（client["terrain"]）；剛連上時為 None，等 enter
 
     def floor_map(self, terrain):
@@ -1279,7 +2044,7 @@ class Room:
                 return None
             self.dragon_regen(terrain, now)   # 扣血前先把該補的血補上（之後廣播的 hp 是回血後的值）
             try:
-                dmg = sk["dmg"] if sk else max(1, min(dl_hit_max((c.get("state") or {}).get("lvl") or 1), round(float(msg.get("dmg") or 1))))   # 夾值隨攻擊者等級放寬（dl_hit_max）
+                dmg = sk["dmg"] if sk else max(1, min(dl_hit_max(player_lvl_of(c)), round(float(msg.get("dmg") or 1))))   # 夾值隨攻擊者等級放寬（dl_hit_max）
             except (TypeError, ValueError):
                 dmg = 1
             if now < d.get("vuln_until", 0.0):
@@ -1529,7 +2294,7 @@ class Room:
         if leg_delay is not None:
             self._schedule_wander_tick(leg_delay, wgen, terrain)
 
-    def credit_mob_kill(self, cid, st, terrain):
+    def credit_mob_kill(self, cid, victim_lvl, terrain):
         """島主／深海魚人擊倒玩家的等級記帳（第 3 步；與 worker/src/index.js 的 creditMobKill 同一套）：
         死因都是客戶端自判（state.dead 0→1），伺服器用「誰在追他」推斷凶手——該地形魚人的 aggro.id 是死者＝牠殺的
         （session 等級 +1，血量上限 +5 並回一點血）；否則該地形島主活著就記牠的 XP
@@ -1548,7 +2313,7 @@ class Room:
             d = self.dragons.get(terrain)
             if not d or d["st"] == "dead":
                 return None   # 沒有島主／已被擊倒：記不到任何人頭上
-            d["xp"] = max(0, d.get("xp", 0)) + 10 + 2 * max(1, int(st.get("lvl") or 1))   # 擊倒玩家得 XP＝10＋2×受害者等級
+            d["xp"] = max(0, d.get("xp", 0)) + 10 + 2 * max(1, int(victim_lvl or 1))   # 擊倒玩家得 XP＝10＋2×受害者等級
             d["hp"] = min(dragon_max_hp(d), d["hp"] + DL_HP_UP)
             return dragon_hp_msg(d)
 
@@ -1633,7 +2398,7 @@ class Room:
                 self.lurk_hits[cid] = (terrain, now - D_CD * 1000)   # 技能命中也算攻擊者（仇恨候選），但不佔一般攻擊的間隔
             L["last_hit_at"] = now
             try:
-                dmg = sk["dmg"] if sk else max(1, min(dl_hit_max(st.get("lvl") or 1), round(float(msg.get("dmg") or 1))))   # 夾值隨攻擊者等級放寬（dl_hit_max）
+                dmg = sk["dmg"] if sk else max(1, min(dl_hit_max(player_lvl_of(c)), round(float(msg.get("dmg") or 1))))   # 夾值隨攻擊者等級放寬（dl_hit_max）
             except (TypeError, ValueError):
                 dmg = 1
             L["hp"] -= dmg
@@ -1756,6 +2521,166 @@ class Room:
             self.lurk_hits.pop(cid, None)
             self.debuffs.pop(cid, None)
             self.skill_hits.pop(cid, None)
+
+
+    # ---- 和平島遊戲桌：每個操作回 (待送清單[(cid, 訊息)], tblinfo 訊息或 None, 地形)，由呼叫端在鎖外送出 ----
+    def table_info_msg(self, terrain):
+        info = {}
+        for tid, game in TABLE_DEFS.get(terrain, {}).items():
+            t = self.tables.get(tid)
+            info[tid] = tbl_info(t) if t else {"game": game, "n": 0, "s": 0, "max": GAME_LIMITS[game][1], "play": False}
+        return {"t": "tblinfo", "info": info}
+
+    def _table_notify_locked(self, t, out):
+        for m in t["seats"] + t["specs"]:
+            out.append((m["cid"], {"t": "table", "id": t["id"], "v": tbl_view(t, m["cid"])}))
+
+    def _table_collect_xp(self, t, before):
+        """這個操作結束了一局：把各入座者的 XP 記進待發清單（鎖外發；中途離開的 aborted 結果沒有 xp）。"""
+        r = t.get("result")
+        if r is not None and r is not before and not r.get("aborted") and r.get("xp"):
+            for i, s in enumerate(t["seats"]):
+                if s["cid"] is not None and i < len(r["xp"]) and r["xp"][i] > 0:
+                    self._xp_pending.append((s["cid"], r["xp"][i]))
+
+    def _table_leave_locked(self, cid, out):
+        c = self.clients.get(cid)
+        tid = c.pop("table", None) if c else None
+        t = self.tables.get(tid) if tid else None
+        if not t:
+            return
+        before = t.get("result")
+        tbl_leave(t, cid)
+        self._table_collect_xp(t, before)
+        out.append((cid, {"t": "table", "id": tid, "v": None}))
+        if not t["seats"] and not t["specs"]:
+            self.tables.pop(tid, None)   # 沒人了：整桌重來
+        else:
+            self._table_notify_locked(t, out)
+
+    def table_do(self, cid, msg):
+        out = []
+        with self.lock:
+            c = self.clients.get(cid)
+            if not c or not c.get("terrain"):
+                return [], None, None
+            terr, a = c["terrain"], msg.get("a")
+            if a == "join":
+                tid = str(msg.get("id") or "")
+                game = TABLE_DEFS.get(terr, {}).get(tid)
+                if not game:
+                    return [], None, None
+                if c.get("table") and c["table"] != tid:
+                    self._table_leave_locked(cid, out)
+                t = self.tables.setdefault(tid, tbl_new(tid, game))
+                name = str((c.get("state") or {}).get("name") or (c.get("user") or {}).get("name") or f"玩家{cid}")[:12]
+                tbl_join(t, cid, name, "spec" if msg.get("role") == "spec" else "seat")
+                c["table"], c["table_terr"] = tid, terr
+                self._table_notify_locked(t, out)
+            else:
+                t = self.tables.get(c.get("table") or "")
+                if not t:
+                    return [], None, None
+                before = t.get("result")
+                now_ms = int(time.time() * 1000)
+                if a == "pos":   # 躲彈幕：位置回報，轉發給同桌其他人（不通知畫面、不廣播 tblinfo）
+                    role, i = tbl_find(t, cid)
+                    if t["game"] == "dodge" and role == "seat" and t["phase"] == "playing" and not t["seats"][i]["out"]:
+                        x = max(0.0, min(float(DG_W), _num(msg.get("x"), -1e6, 1e6, 0.0)))
+                        y = max(0.0, min(float(DG_H), _num(msg.get("y"), -1e6, 1e6, 0.0)))
+                        for m in t["seats"] + t["specs"]:
+                            if m["cid"] is not None and m["cid"] != cid:
+                                out.append((m["cid"], {"t": "tpos", "i": i, "x": round(x, 1), "y": round(y, 1)}))
+                    return out, None, None
+                if a == "leave":
+                    self._table_leave_locked(cid, out)
+                else:
+                    dg_check_end(t, now_ms)   # 時間到了就先結算（下面的動作若是 finish／hit 就只是確認）
+                    if a == "ready":
+                        tbl_ready(t, cid, msg.get("v"))
+                    elif a == "sit":
+                        tbl_sit(t, cid)
+                    elif a == "stand":
+                        tbl_stand(t, cid)
+                    elif a == "draw":
+                        if t["game"] == "uno":
+                            un_draw(t, cid, now_ms)   # UNO：抽牌
+                        else:
+                            om_draw(t, cid, msg.get("idx"))
+                    elif a == "shuffle":
+                        om_shuffle(t, cid)
+                    elif a == "move":
+                        gm_move(t, cid, msg.get("x"), msg.get("y"))
+                    elif a == "play":   # UNO：出牌（idx、變色牌帶 color）
+                        un_play(t, cid, msg.get("idx"), msg.get("color"), now_ms)
+                    elif a == "pass":
+                        un_pass(t, cid, now_ms)
+                    elif a == "uno":
+                        un_say(t, cid)
+                    elif a == "catch":
+                        un_catch(t, cid)
+                    elif a == "timeout":
+                        un_timeout(t, now_ms)
+                    elif a == "mode":   # UNO：桌主在開局前選玩法（classic／wild）
+                        un_set_mode(t, cid, msg.get("v"))
+                    elif a == "hit":   # 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
+                        dg_hit(t, cid, now_ms)
+                    elif a == "finish":   # 躲彈幕：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）
+                        dg_check_end(t, now_ms + 300)
+                    else:
+                        return [], None, None
+                    self._table_notify_locked(t, out)
+                    self._table_collect_xp(t, before)   # 這個操作結束了對局：收集 XP（鎖外發）
+            return out, self.table_info_msg(c.get("table_terr") or terr), c.get("table_terr") or terr
+
+    def table_drop(self, cid):
+        """連線離開地形或斷線：離開牌桌（牌局進行中就結束這一局）。"""
+        out = []
+        with self.lock:
+            c = self.clients.get(cid)
+            terr = c.get("table_terr") if c else None
+            if not c or not c.get("table"):
+                return [], None, None
+            self._table_leave_locked(cid, out)
+            c.pop("table_terr", None)
+            return out, self.table_info_msg(terr), terr
+
+    def send_to(self, cid, msg):
+        with self.lock:
+            c = self.clients.get(cid)
+            sock, lk = (c["sock"], c["send"]) if c else (None, None)
+        if not sock:
+            return
+        try:
+            with lk:
+                ws_send(sock, json.dumps(msg))
+        except Exception:
+            pass
+
+    def table_flush(self, res):
+        out, info, terr = res
+        for cid, m in out:
+            self.send_to(cid, m)
+        if info and terr:
+            self.broadcast(info, terrain=terr)
+
+    def table_op(self, fn, *args):
+        """牌桌操作（算結果＋送出）整段串行：不同連線的操作在不同執行緒，先算好的 tblinfo 若晚送到，客戶端會停在過期的人數／入座名單。"""
+        with self.tlock:
+            self.table_flush(fn(*args))
+            pend, self._xp_pending = self._xp_pending, []
+            for cid, n in pend:   # 對局結束：登入者的 XP 由伺服器記（同一帳號 GAME_XP_CD 內只算一次）；訪客由客戶端本機補發
+                with self.lock:
+                    c = self.clients.get(cid)
+                user = c.get("user") if c else None
+                now = time.time()
+                if not user or now - self.game_xp_at.get(user["id"], 0) < GAME_XP_CD:
+                    continue
+                self.game_xp_at[user["id"]] = now
+                try:
+                    xp_grant(c, n, "game")
+                except Exception:
+                    pass
 
     def terrain_of(self, cid):
         with self.lock:
@@ -1911,9 +2836,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         print(f"[ws] +{cid} @{room_name}（{len(room.clients)} 人在線）", file=sys.stderr, flush=True)
         win_sec, win_n = 0, 0
         last_hit = 0.0
+        last_tbl = 0.0   # 牌桌操作的每連線限流（TBL_CD）
+        last_pos = 0.0   # 躲彈幕位置回報的限流（TBL_POS_CD）
         last_dragon_hit = 0.0   # 打島主的每連線冷卻（與 last_hit 同款）
         last_fish = 0.0         # 釣魚結果的每連線冷卻
         last_xp_mob = 0.0       # 擊倒非主動怪的 XP 冷卻（2026-11-07）
+        last_death_credit = 0.0   # 倒地記帳的每連線冷卻（DEATH_CREDIT_MIN）
         last_sign = 0.0         # 改看板的每連線冷卻
         commit_tokens, commit_t = float(COMMIT_BURST), time.time()   # 保存擺設的令牌桶
         try:
@@ -1967,6 +2895,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 with FISH_DEX_LOCK:
                                     dex = json.loads(json.dumps(FISH_DEX.get(c["user"]["id"], {})))
                                 ws_send(sock, json.dumps({"t": "dex", "dex": dex}))
+                                ws_send(sock, json.dumps({"t": "craftdb", "craft": craft_add(c["user"]["id"], {})}))   # 合成解鎖紀錄
                                 if xp_known:   # XP 只在「伺服器有紀錄」時送 init；沒有就等 xpsync 上繳
                                     ws_send(sock, json.dumps({"t": "xp", "xp": c.get("xp", 0), "d": 0, "k": "init"}))
                 elif t == "state":
@@ -1991,9 +2920,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             xp_grant(c, -loss, "death")
                     # 島主／魚人擊倒玩家的等級記帳（第 3 步）：0→1 的那格才判
                     if not was_dead and st["dead"]:
-                        kill_out = room.credit_mob_kill(cid, st, cur)
-                        if kill_out and cur:
-                            room.broadcast(kill_out, terrain=cur)
+                        t_now = time.time()
+                        if t_now - last_death_credit >= DEATH_CREDIT_MIN:   # 同一條連線的最短間隔
+                            last_death_credit = t_now
+                            # 受害者等級：只有登入、且等級是伺服器存檔算出來的才採用；其餘（訪客／還沒有紀錄）客戶端自己報的一律當 Lv 1
+                            victim_lvl = (st.get("lvl") or 1) if (user and c and c.get("xp_known")) else 1
+                            kill_out = room.credit_mob_kill(cid, victim_lvl, cur)
+                            if kill_out and cur:
+                                room.broadcast(kill_out, terrain=cur)
                 elif t == "xpsync":   # 舊存檔一次性上繳（2026-11-07 使用者定 (a)）：伺服器沒有紀錄才收，有就回現值（冪等）
                     c = room.clients.get(cid)
                     user = c.get("user") if c else None
@@ -2008,6 +2942,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             c["state"]["lvl"] = xp_info(nv)["lv"]
                         with c.get("send") or threading.Lock():
                             ws_send(sock, json.dumps({"t": "xp", "xp": nv, "d": 0, "k": "init"}))
+                elif t == "craft":   # 合成解鎖一筆（素材／家具／配方；客戶端自判，伺服器只存，不驗證 id 是否存在；訪客略過）
+                    c = room.clients.get(cid)
+                    if c and c.get("user") and msg.get("k") in CRAFT_KINDS:
+                        craft_add(c["user"]["id"], {msg["k"]: [msg.get("id")]})
+                elif t == "craftsync":   # 補傳本機有、伺服器沒有的解鎖（訪客時期的進度併進帳號）；回整份 craftdb
+                    c = room.clients.get(cid)
+                    if c and c.get("user"):
+                        add = {k: (msg.get(k) if isinstance(msg.get(k), list) else [])[:CRAFT_SYNC_MAX] for k in CRAFT_KINDS}
+                        full = craft_add(c["user"]["id"], add)
+                        with c.get("send") or threading.Lock():
+                            ws_send(sock, json.dumps({"t": "craftdb", "craft": full}))
                 elif t == "xpe":   # 擊倒非主動怪的 XP 事件（伺服器無法驗證：信任事件＋夾頻；2026-11-07 使用者同意）
                     c = room.clients.get(cid)
                     if c and c.get("user") and msg.get("k") == "mob" and room.terrain_of(cid):
@@ -2015,6 +2960,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         if now - last_xp_mob >= XP_MOB_CD:
                             last_xp_mob = now
                             xp_grant(c, 1, "mob")
+                elif t == "tbl":   # 和平島遊戲桌（join／leave／ready／sit／draw）；牌局邏輯全在伺服器
+                    now = time.time()
+                    if msg.get("a") == "pos":   # 躲彈幕的位置回報：自己的限流，不影響 hit／finish 等操作
+                        if now - last_pos < TBL_POS_CD:
+                            continue
+                        last_pos = now
+                    else:
+                        if now - last_tbl < TBL_CD:
+                            continue
+                        last_tbl = now
+                    room.table_op(room.table_do, cid, msg)
                 elif t in ("enter", "terrain"):   # "terrain" 是舊客戶端的訊息名
                     # 每位玩家各自在自己的地形，只有同地形的人看得到彼此
                     v = str(msg.get("v"))
@@ -2023,11 +2979,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     res = room.enter(cid, v)
                     if res is None:
                         continue
+                    room.table_op(room.table_drop, cid)   # 換地形：離開牌桌
                     old, players, furn, floor, decos, dragon, lurker = res
                     if old:   # leave 帶 to＝去了哪個地形（讓留下的人顯示「XXX 移動到了OO區域」）；斷線的 leave 不帶
                         room.broadcast({"t": "leave", "id": cid, "to": v}, skip=cid, terrain=old)
                     with room.clients[cid]["send"]:
                         ws_send(sock, json.dumps({"t": "enter", "terrain": v, "players": players, "furn": furn, "floor": floor, "decos": decos, "dragon": dragon, "lurker": lurker}))
+                    if v in TABLE_DEFS:   # 和平島：給這位玩家各桌目前的人數／狀態
+                        room.send_to(cid, room.table_info_msg(v))
                     st = room.clients[cid]["state"]
                     room.broadcast({"t": "join", "id": cid, "name": st.get("name")}, skip=cid, terrain=v)
                     if st:
@@ -2145,6 +3104,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             print(f"[ws] !{cid} {e}", file=sys.stderr, flush=True)
         finally:
             last = room.terrain_of(cid)
+            room.table_op(room.table_drop, cid)   # 斷線：離開牌桌（牌局進行中就結束這一局）
             room.remove(cid)
             if last:
                 room.broadcast({"t": "leave", "id": cid}, terrain=last)

@@ -87,6 +87,117 @@
    "solid": true,
    "sprite": "sign.png",
    "text": true
+  },
+  {
+   "id": "stool",
+   "name": "木凳",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "stool.png",
+   "use": "sit",
+   "craft": true
+  },
+  {
+   "id": "glow_lamp",
+   "name": "螢光燈",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "glow_lamp.png",
+   "craft": true
+  },
+  {
+   "id": "fish_tank",
+   "name": "魚缸",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "fish_tank.png",
+   "craft": true
+  },
+  {
+   "id": "steel_shelf",
+   "name": "鋼架",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "steel_shelf.png",
+   "craft": true
+  },
+  {
+   "id": "flower_pot",
+   "name": "花盆",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "flower_pot.png",
+   "craft": true
+  },
+  {
+   "id": "desk",
+   "name": "書桌",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "desk.png",
+   "craft": true
+  },
+  {
+   "id": "ice_sculpture",
+   "name": "冰雕",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "ice_sculpture.png",
+   "craft": true
+  },
+  {
+   "id": "moon_lamp",
+   "name": "月光燈",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "moon_lamp.png",
+   "craft": true
+  },
+  {
+   "id": "iron_chair",
+   "name": "鐵椅",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "iron_chair.png",
+   "use": "sit",
+   "craft": true
+  },
+  {
+   "id": "lava_lamp",
+   "name": "熔岩燈",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "lava_lamp.png",
+   "craft": true
+  },
+  {
+   "id": "leather_chair",
+   "name": "皮椅",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "leather_chair.png",
+   "use": "sit",
+   "craft": true
+  },
+  {
+   "id": "pearl_statue",
+   "name": "珍珠擺飾",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "pearl_statue.png",
+   "craft": true
   }
  ]
 }

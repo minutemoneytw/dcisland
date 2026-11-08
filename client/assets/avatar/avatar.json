@@ -1639,8 +1639,9 @@
    "scale": 2,
    "ranged": {
     "range": 320,
-    "cast": 1.6,
-    "dmg": 2
+    "cast": 1.0,
+    "dmg": 4,
+    "gap": 0
    }
   },
   {

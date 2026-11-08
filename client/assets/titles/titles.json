@@ -98,6 +98,16 @@
    }
   },
   {
+   "id": "angler_machine",
+   "name": "機械島釣魚能手",
+   "desc": "機械島的魚類圖鑑收集 10 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "machine",
+    "n": 10
+   }
+  },
+  {
    "id": "notes_grass",
    "name": "專研草島釣魚筆記",
    "desc": "草島的魚類圖鑑收集 30 種",
@@ -158,6 +168,16 @@
    }
   },
   {
+   "id": "notes_machine",
+   "name": "專研機械島釣魚筆記",
+   "desc": "機械島的魚類圖鑑收集 30 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "machine",
+    "n": 30
+   }
+  },
+  {
    "id": "heart_hook",
    "name": "勾人心魄",
    "desc": "獲得每座島的釣魚能手",
@@ -169,13 +189,14 @@
      "angler_snow",
      "angler_night",
      "angler_forest",
-     "angler_volcano"
+     "angler_volcano",
+     "angler_machine"
     ]
    }
   },
   {
    "id": "world_angler",
-   "name": "釣遍世界",
+   "name": "魚譜大成",
    "desc": "獲得每座島的釣魚筆記",
    "cond": {
     "type": "titles",
@@ -185,7 +206,8 @@
      "notes_snow",
      "notes_night",
      "notes_forest",
-     "notes_volcano"
+     "notes_volcano",
+     "notes_machine"
     ]
    }
   },
