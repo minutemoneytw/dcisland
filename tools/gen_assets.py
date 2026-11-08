@@ -629,6 +629,7 @@ LPC_EYES = [                     # 眼睛（表情）：(id, 名稱, external �
     ("default", "預設", "e_default.png"), ("angry", "生氣", "e_angry.png"), ("sad", "難過", "e_sad.png"),
     ("lookl", "看左", "e_lookl.png"), ("lookr", "看右", "e_lookr.png"),
 ]
+LPC_EYE_IRIS = [(126, 78, 32), (84, 76, 46)]   # LPC 眼睛的虹膜兩階（主色＋暗部）；瞳孔輪廓（35,32,23）不動
 LPC_EARS = [                     # 種族耳朵圖層：(遊戲檔名, external 檔名)
     ("ears_elven", "ear_elven.png"), ("ears_cat_bg", "ear_cat_bg.png"), ("ears_cat_fg", "ear_cat_fg.png"),
 ]
@@ -759,6 +760,21 @@ def lpc_layer_sheet(rel):
     """把一張 LPC 走路圖層（頭/眼睛/…576×256）疊到走路列 → 832×1344（原色，不重上色）。"""
     sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
     _lpc_overlay(sheet, rel, LPC_WALK_BASE * CHAR_FH)
+    return sheet
+
+def lpc_eyes_sheet(rel, target):
+    """眼睛圖層：虹膜兩階（LPC_EYE_IRIS）重上色成目標色（跟髮色 12 色同一套）→ 832×1344。眼白／瞳孔輪廓不動。"""
+    sheet = lpc_layer_sheet(f"external/img2pixel/lpc/{rel}")
+    tr = hx(target)
+    b0 = 0.299 * LPC_EYE_IRIS[0][0] + 0.587 * LPC_EYE_IRIS[0][1] + 0.114 * LPC_EYE_IRIS[0][2]
+    ir = [tuple(c) for c in LPC_EYE_IRIS]
+    for y in range(sheet.h):
+        for x in range(sheet.w):
+            c = sheet.get(x, y)
+            if c[3] == 0 or (c[0], c[1], c[2]) not in ir:
+                continue
+            f = (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / b0
+            sheet.set(x, y, (min(255, round(tr[0] * f)), min(255, round(tr[1] * f)), min(255, round(tr[2] * f)), c[3]))
     return sheet
 
 def lpc_cloth_sheet(rel):
@@ -2136,8 +2152,6 @@ def main():
         save(lpc_body_sheet("female", key), f"char_body_female_{key}.png", sub)
     for fid, _fname, rel in LPC_FACES:               # 臉型（頭型；原色，跟膚色用 dye 重上色）
         save(lpc_layer_sheet(f"external/img2pixel/lpc/{rel}"), f"char_face_{fid}.png", sub)
-    for eid, _ename, rel in LPC_EYES:                # 眼睛（固定色）
-        save(lpc_layer_sheet(f"external/img2pixel/lpc/{rel}"), f"char_eyes_{eid}.png", sub)
     for eid, rel in LPC_EARS:                        # 種族耳朵（精靈／貓）
         save(lpc_layer_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{eid}.png", sub)
     # 基本服裝（LPC 原檔，走路列）
@@ -2153,6 +2167,10 @@ def main():
     for sid, _sname, fn in LPC_HAIR_STYLES:
         for cid, _cname, chex in hair_colors:
             save(lpc_hair_tinted(f"external/img2pixel/lpc/{fn}", chex), f"char_hair_{sid}_{cid}.png", sub)
+    # 眼睛：5 種表情 × 12 色（虹膜重上色成與髮型相同的 12 色系；眼白／瞳孔輪廓不動）
+    for eid, _ename, rel in LPC_EYES:
+        for cid, _cname in KIDOL_HAIR:
+            save(lpc_eyes_sheet(rel, kidol_hex[cid]), f"char_eyes_{eid}_{cid}.png", sub)
     write_json(os.path.join(ASSETS, sub, "avatar.json"), dict(
         scale=CHAR_SCALE,
         # 人物分層的幀表（所有層共用）：每層都是 832×1344 的 LPC 通用格式 sheet；map＝65 個邏輯幀 → sheet 的 [欄, 列]；
@@ -2166,7 +2184,9 @@ def main():
                for k, n in [("pale", "白皙"), ("light", "自然"), ("tan", "小麥"), ("deep", "深膚")]],
         # 臉型（頭型；原色，執行時用 dye 跟膚色重上色）與眼睛（固定色）
         faces=[dict(id=fid, name=fn, sheet=f"char_face_{fid}.png", dye=LPC_SKIN_DYE) for fid, fn, _r in LPC_FACES],
-        eyes=[dict(id=eid, name=en, sheet=f"char_eyes_{eid}.png") for eid, en, _r in LPC_EYES],
+        # 眼睛：5 種表情 × 12 色（虹膜＝髮色同一套；面板「眼睛」按鈕 → 表情 → 顏色，比照髮型）
+        eyes=[dict(id=f"{eid}_{cid}", name=cname, style=eid, styleName=en, sheet=f"char_eyes_{eid}_{cid}.png")
+              for eid, en, _rel in LPC_EYES for cid, cname in KIDOL_HAIR],
         races=LPC_RACES,
         # 髮型：一個「造型」一個方框（style／styleName），框裡是顏色（name＝顏色名）；面板分層顯示、點造型再開顏色
         # hex＝該款髮色的主色（貓耳跟髮色重上色用）

@@ -496,29 +496,424 @@
  ],
  "eyes": [
   {
-   "id": "default",
-   "name": "預設",
-   "sheet": "char_eyes_default.png"
+   "id": "default_brown",
+   "name": "棕",
+   "style": "default",
+   "styleName": "預設",
+   "sheet": "char_eyes_default_brown.png"
   },
   {
-   "id": "angry",
-   "name": "生氣",
-   "sheet": "char_eyes_angry.png"
+   "id": "default_brown2",
+   "name": "深棕",
+   "style": "default",
+   "styleName": "預設",
+   "sheet": "char_eyes_default_brown2.png"
   },
   {
-   "id": "sad",
-   "name": "難過",
-   "sheet": "char_eyes_sad.png"
+   "id": "default_black",
+   "name": "黑",
+   "style": "default",
+   "styleName": "預設",
+   "sheet": "char_eyes_default_black.png"
   },
   {
-   "id": "lookl",
-   "name": "看左",
-   "sheet": "char_eyes_lookl.png"
+   "id": "default_blonde",
+   "name": "金",
+   "style": "default",
+   "styleName": "預設",
+   "sheet": "char_eyes_default_blonde.png"
   },
   {
-   "id": "lookr",
-   "name": "看右",
-   "sheet": "char_eyes_lookr.png"
+   "id": "default_ashblonde",
+   "name": "灰金",
+   "style": "default",
+   "styleName": "預設",
+   "sheet": "char_eyes_default_ashblonde.png"
+  },
+  {
+   "id": "default_ashplatinum",
+   "name": "銀白",
+   "style": "default",
+   "styleName": "預設",
+   "sheet": "char_eyes_default_ashplatinum.png"
+  },
+  {
+   "id": "default_red",
+   "name": "紅",
+   "style": "default",
+   "styleName": "預設",
+   "sheet": "char_eyes_default_red.png"
+  },
+  {
+   "id": "default_orange",
+   "name": "橘",
+   "style": "default",
+   "styleName": "預設",
+   "sheet": "char_eyes_default_orange.png"
+  },
+  {
+   "id": "default_rosepink",
+   "name": "玫瑰粉",
+   "style": "default",
+   "styleName": "預設",
+   "sheet": "char_eyes_default_rosepink.png"
+  },
+  {
+   "id": "default_green",
+   "name": "綠",
+   "style": "default",
+   "styleName": "預設",
+   "sheet": "char_eyes_default_green.png"
+  },
+  {
+   "id": "default_blue",
+   "name": "藍",
+   "style": "default",
+   "styleName": "預設",
+   "sheet": "char_eyes_default_blue.png"
+  },
+  {
+   "id": "default_purple",
+   "name": "紫",
+   "style": "default",
+   "styleName": "預設",
+   "sheet": "char_eyes_default_purple.png"
+  },
+  {
+   "id": "angry_brown",
+   "name": "棕",
+   "style": "angry",
+   "styleName": "生氣",
+   "sheet": "char_eyes_angry_brown.png"
+  },
+  {
+   "id": "angry_brown2",
+   "name": "深棕",
+   "style": "angry",
+   "styleName": "生氣",
+   "sheet": "char_eyes_angry_brown2.png"
+  },
+  {
+   "id": "angry_black",
+   "name": "黑",
+   "style": "angry",
+   "styleName": "生氣",
+   "sheet": "char_eyes_angry_black.png"
+  },
+  {
+   "id": "angry_blonde",
+   "name": "金",
+   "style": "angry",
+   "styleName": "生氣",
+   "sheet": "char_eyes_angry_blonde.png"
+  },
+  {
+   "id": "angry_ashblonde",
+   "name": "灰金",
+   "style": "angry",
+   "styleName": "生氣",
+   "sheet": "char_eyes_angry_ashblonde.png"
+  },
+  {
+   "id": "angry_ashplatinum",
+   "name": "銀白",
+   "style": "angry",
+   "styleName": "生氣",
+   "sheet": "char_eyes_angry_ashplatinum.png"
+  },
+  {
+   "id": "angry_red",
+   "name": "紅",
+   "style": "angry",
+   "styleName": "生氣",
+   "sheet": "char_eyes_angry_red.png"
+  },
+  {
+   "id": "angry_orange",
+   "name": "橘",
+   "style": "angry",
+   "styleName": "生氣",
+   "sheet": "char_eyes_angry_orange.png"
+  },
+  {
+   "id": "angry_rosepink",
+   "name": "玫瑰粉",
+   "style": "angry",
+   "styleName": "生氣",
+   "sheet": "char_eyes_angry_rosepink.png"
+  },
+  {
+   "id": "angry_green",
+   "name": "綠",
+   "style": "angry",
+   "styleName": "生氣",
+   "sheet": "char_eyes_angry_green.png"
+  },
+  {
+   "id": "angry_blue",
+   "name": "藍",
+   "style": "angry",
+   "styleName": "生氣",
+   "sheet": "char_eyes_angry_blue.png"
+  },
+  {
+   "id": "angry_purple",
+   "name": "紫",
+   "style": "angry",
+   "styleName": "生氣",
+   "sheet": "char_eyes_angry_purple.png"
+  },
+  {
+   "id": "sad_brown",
+   "name": "棕",
+   "style": "sad",
+   "styleName": "難過",
+   "sheet": "char_eyes_sad_brown.png"
+  },
+  {
+   "id": "sad_brown2",
+   "name": "深棕",
+   "style": "sad",
+   "styleName": "難過",
+   "sheet": "char_eyes_sad_brown2.png"
+  },
+  {
+   "id": "sad_black",
+   "name": "黑",
+   "style": "sad",
+   "styleName": "難過",
+   "sheet": "char_eyes_sad_black.png"
+  },
+  {
+   "id": "sad_blonde",
+   "name": "金",
+   "style": "sad",
+   "styleName": "難過",
+   "sheet": "char_eyes_sad_blonde.png"
+  },
+  {
+   "id": "sad_ashblonde",
+   "name": "灰金",
+   "style": "sad",
+   "styleName": "難過",
+   "sheet": "char_eyes_sad_ashblonde.png"
+  },
+  {
+   "id": "sad_ashplatinum",
+   "name": "銀白",
+   "style": "sad",
+   "styleName": "難過",
+   "sheet": "char_eyes_sad_ashplatinum.png"
+  },
+  {
+   "id": "sad_red",
+   "name": "紅",
+   "style": "sad",
+   "styleName": "難過",
+   "sheet": "char_eyes_sad_red.png"
+  },
+  {
+   "id": "sad_orange",
+   "name": "橘",
+   "style": "sad",
+   "styleName": "難過",
+   "sheet": "char_eyes_sad_orange.png"
+  },
+  {
+   "id": "sad_rosepink",
+   "name": "玫瑰粉",
+   "style": "sad",
+   "styleName": "難過",
+   "sheet": "char_eyes_sad_rosepink.png"
+  },
+  {
+   "id": "sad_green",
+   "name": "綠",
+   "style": "sad",
+   "styleName": "難過",
+   "sheet": "char_eyes_sad_green.png"
+  },
+  {
+   "id": "sad_blue",
+   "name": "藍",
+   "style": "sad",
+   "styleName": "難過",
+   "sheet": "char_eyes_sad_blue.png"
+  },
+  {
+   "id": "sad_purple",
+   "name": "紫",
+   "style": "sad",
+   "styleName": "難過",
+   "sheet": "char_eyes_sad_purple.png"
+  },
+  {
+   "id": "lookl_brown",
+   "name": "棕",
+   "style": "lookl",
+   "styleName": "看左",
+   "sheet": "char_eyes_lookl_brown.png"
+  },
+  {
+   "id": "lookl_brown2",
+   "name": "深棕",
+   "style": "lookl",
+   "styleName": "看左",
+   "sheet": "char_eyes_lookl_brown2.png"
+  },
+  {
+   "id": "lookl_black",
+   "name": "黑",
+   "style": "lookl",
+   "styleName": "看左",
+   "sheet": "char_eyes_lookl_black.png"
+  },
+  {
+   "id": "lookl_blonde",
+   "name": "金",
+   "style": "lookl",
+   "styleName": "看左",
+   "sheet": "char_eyes_lookl_blonde.png"
+  },
+  {
+   "id": "lookl_ashblonde",
+   "name": "灰金",
+   "style": "lookl",
+   "styleName": "看左",
+   "sheet": "char_eyes_lookl_ashblonde.png"
+  },
+  {
+   "id": "lookl_ashplatinum",
+   "name": "銀白",
+   "style": "lookl",
+   "styleName": "看左",
+   "sheet": "char_eyes_lookl_ashplatinum.png"
+  },
+  {
+   "id": "lookl_red",
+   "name": "紅",
+   "style": "lookl",
+   "styleName": "看左",
+   "sheet": "char_eyes_lookl_red.png"
+  },
+  {
+   "id": "lookl_orange",
+   "name": "橘",
+   "style": "lookl",
+   "styleName": "看左",
+   "sheet": "char_eyes_lookl_orange.png"
+  },
+  {
+   "id": "lookl_rosepink",
+   "name": "玫瑰粉",
+   "style": "lookl",
+   "styleName": "看左",
+   "sheet": "char_eyes_lookl_rosepink.png"
+  },
+  {
+   "id": "lookl_green",
+   "name": "綠",
+   "style": "lookl",
+   "styleName": "看左",
+   "sheet": "char_eyes_lookl_green.png"
+  },
+  {
+   "id": "lookl_blue",
+   "name": "藍",
+   "style": "lookl",
+   "styleName": "看左",
+   "sheet": "char_eyes_lookl_blue.png"
+  },
+  {
+   "id": "lookl_purple",
+   "name": "紫",
+   "style": "lookl",
+   "styleName": "看左",
+   "sheet": "char_eyes_lookl_purple.png"
+  },
+  {
+   "id": "lookr_brown",
+   "name": "棕",
+   "style": "lookr",
+   "styleName": "看右",
+   "sheet": "char_eyes_lookr_brown.png"
+  },
+  {
+   "id": "lookr_brown2",
+   "name": "深棕",
+   "style": "lookr",
+   "styleName": "看右",
+   "sheet": "char_eyes_lookr_brown2.png"
+  },
+  {
+   "id": "lookr_black",
+   "name": "黑",
+   "style": "lookr",
+   "styleName": "看右",
+   "sheet": "char_eyes_lookr_black.png"
+  },
+  {
+   "id": "lookr_blonde",
+   "name": "金",
+   "style": "lookr",
+   "styleName": "看右",
+   "sheet": "char_eyes_lookr_blonde.png"
+  },
+  {
+   "id": "lookr_ashblonde",
+   "name": "灰金",
+   "style": "lookr",
+   "styleName": "看右",
+   "sheet": "char_eyes_lookr_ashblonde.png"
+  },
+  {
+   "id": "lookr_ashplatinum",
+   "name": "銀白",
+   "style": "lookr",
+   "styleName": "看右",
+   "sheet": "char_eyes_lookr_ashplatinum.png"
+  },
+  {
+   "id": "lookr_red",
+   "name": "紅",
+   "style": "lookr",
+   "styleName": "看右",
+   "sheet": "char_eyes_lookr_red.png"
+  },
+  {
+   "id": "lookr_orange",
+   "name": "橘",
+   "style": "lookr",
+   "styleName": "看右",
+   "sheet": "char_eyes_lookr_orange.png"
+  },
+  {
+   "id": "lookr_rosepink",
+   "name": "玫瑰粉",
+   "style": "lookr",
+   "styleName": "看右",
+   "sheet": "char_eyes_lookr_rosepink.png"
+  },
+  {
+   "id": "lookr_green",
+   "name": "綠",
+   "style": "lookr",
+   "styleName": "看右",
+   "sheet": "char_eyes_lookr_green.png"
+  },
+  {
+   "id": "lookr_blue",
+   "name": "藍",
+   "style": "lookr",
+   "styleName": "看右",
+   "sheet": "char_eyes_lookr_blue.png"
+  },
+  {
+   "id": "lookr_purple",
+   "name": "紫",
+   "style": "lookr",
+   "styleName": "看右",
+   "sheet": "char_eyes_lookr_purple.png"
   }
  ],
  "races": [
