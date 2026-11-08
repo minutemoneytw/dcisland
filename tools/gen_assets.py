@@ -660,7 +660,9 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
 ]
 
 def kidol_main_hex(cid):
-    """取 k-idol 短髮某色 sheet 的「主色」（走路列中最常見的髮色，排除深色輪廓）→ '#rrggbb'。其他髮型照這 12 色重上色。"""
+    """取 k-idol 短髮某色 sheet 的「主色」（走路列）→ '#rrggbb'。其他髮型照這 12 色重上色。
+    取色法：先排除深色輪廓（亮度 < 55）；「最亮」的常見色（升列 ≥ 2%）當上限，
+    不是直接取最常見——最常見的常是暗階陰影（例如銀白取到棕色會變「褐色銀白」）。"""
     r = read_png_pixels(os.path.join(ASSETS, f"external/img2pixel/hair_kidol/kidol_hairstyle_male_{cid}.png"))
     if r is None:
         raise SystemExit(f"找不到 k-idol 髮型 {cid}")
@@ -675,7 +677,11 @@ def kidol_main_hex(cid):
                 continue   # 輪廓／陰影不算
             k = (data[i] >> 3, data[i + 1] >> 3, data[i + 2] >> 3)
             cnt[k] = cnt.get(k, 0) + 1
-    k = max(cnt, key=cnt.get)
+    tot = sum(cnt.values())
+    top_lum = max((0.299 * (k[0] << 3) + 0.587 * (k[1] << 3) + 0.114 * (k[2] << 3)) for k, n in cnt.items() if n >= tot * .02)
+    k = max((k for k, n in cnt.items()
+             if 0.299 * (k[0] << 3) + 0.587 * (k[1] << 3) + 0.114 * (k[2] << 3) >= top_lum * .45),
+            key=lambda k: cnt[k])   # 常見色裡取「亮度 ≥ 上限 45%」的最常見者
     return "#%02x%02x%02x" % (k[0] << 3, k[1] << 3, k[2] << 3)
 
 def _lpc_hair_cell(w, data, row, f):
@@ -816,7 +822,13 @@ def lpc_hair_tinted(rel, target_hex):
             if data[i + 3] <= 16:
                 continue
             f = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / ref
-            sheet.set(x, oy0 + y, (min(255, round(tr[0] * f)), min(255, round(tr[1] * f)), min(255, round(tr[2] * f)), data[i + 3]))
+            # ≤1＝乘上比例（變暗）；>1＝往白色推（與 dyeSheet 同步，避免各通道各自封頂造成偏色）
+            if f <= 1:
+                out = (min(255, round(tr[0] * f)), min(255, round(tr[1] * f)), min(255, round(tr[2] * f)))
+            else:
+                w2 = min(1.0, f - 1)
+                out = (round(tr[0] + (255 - tr[0]) * w2), round(tr[1] + (255 - tr[1]) * w2), round(tr[2] + (255 - tr[2]) * w2))
+            sheet.set(x, oy0 + y, (out[0], out[1], out[2], data[i + 3]))
     return sheet
 
 def lpc_read_sheet(rel):

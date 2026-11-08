@@ -999,7 +999,7 @@
    "style": "short",
    "styleName": "短髮",
    "sheet": "char_hair5.png",
-   "hex": "#604018"
+   "hex": "#c0a880"
   },
   {
    "id": "hair6",
@@ -1007,7 +1007,7 @@
    "style": "short",
    "styleName": "短髮",
    "sheet": "char_hair6.png",
-   "hex": "#684028"
+   "hex": "#c8b8a8"
   },
   {
    "id": "hair7",
@@ -1047,7 +1047,7 @@
    "style": "short",
    "styleName": "短髮",
    "sheet": "char_hair11.png",
-   "hex": "#004888"
+   "hex": "#20a8b8"
   },
   {
    "id": "hair12",
@@ -1095,7 +1095,7 @@
    "style": "afro",
    "styleName": "爆炸頭",
    "sheet": "char_hair_afro_ashblonde.png",
-   "hex": "#604018"
+   "hex": "#c0a880"
   },
   {
    "id": "afro_ashplatinum",
@@ -1103,7 +1103,7 @@
    "style": "afro",
    "styleName": "爆炸頭",
    "sheet": "char_hair_afro_ashplatinum.png",
-   "hex": "#684028"
+   "hex": "#c8b8a8"
   },
   {
    "id": "afro_red",
@@ -1143,7 +1143,7 @@
    "style": "afro",
    "styleName": "爆炸頭",
    "sheet": "char_hair_afro_blue.png",
-   "hex": "#004888"
+   "hex": "#20a8b8"
   },
   {
    "id": "afro_purple",
@@ -1191,7 +1191,7 @@
    "style": "bob",
    "styleName": "鮑伯頭",
    "sheet": "char_hair_bob_ashblonde.png",
-   "hex": "#604018"
+   "hex": "#c0a880"
   },
   {
    "id": "bob_ashplatinum",
@@ -1199,7 +1199,7 @@
    "style": "bob",
    "styleName": "鮑伯頭",
    "sheet": "char_hair_bob_ashplatinum.png",
-   "hex": "#684028"
+   "hex": "#c8b8a8"
   },
   {
    "id": "bob_red",
@@ -1239,7 +1239,7 @@
    "style": "bob",
    "styleName": "鮑伯頭",
    "sheet": "char_hair_bob_blue.png",
-   "hex": "#004888"
+   "hex": "#20a8b8"
   },
   {
    "id": "bob_purple",
@@ -1287,7 +1287,7 @@
    "style": "curly",
    "styleName": "捲長髮",
    "sheet": "char_hair_curly_ashblonde.png",
-   "hex": "#604018"
+   "hex": "#c0a880"
   },
   {
    "id": "curly_ashplatinum",
@@ -1295,7 +1295,7 @@
    "style": "curly",
    "styleName": "捲長髮",
    "sheet": "char_hair_curly_ashplatinum.png",
-   "hex": "#684028"
+   "hex": "#c8b8a8"
   },
   {
    "id": "curly_red",
@@ -1335,7 +1335,7 @@
    "style": "curly",
    "styleName": "捲長髮",
    "sheet": "char_hair_curly_blue.png",
-   "hex": "#004888"
+   "hex": "#20a8b8"
   },
   {
    "id": "curly_purple",
@@ -1383,7 +1383,7 @@
    "style": "long",
    "styleName": "長髮",
    "sheet": "char_hair_long_ashblonde.png",
-   "hex": "#604018"
+   "hex": "#c0a880"
   },
   {
    "id": "long_ashplatinum",
@@ -1391,7 +1391,7 @@
    "style": "long",
    "styleName": "長髮",
    "sheet": "char_hair_long_ashplatinum.png",
-   "hex": "#684028"
+   "hex": "#c8b8a8"
   },
   {
    "id": "long_red",
@@ -1431,7 +1431,7 @@
    "style": "long",
    "styleName": "長髮",
    "sheet": "char_hair_long_blue.png",
-   "hex": "#004888"
+   "hex": "#20a8b8"
   },
   {
    "id": "long_purple",
