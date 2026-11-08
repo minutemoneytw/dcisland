@@ -713,8 +713,8 @@ def _lpc_overlay(sheet, rel, oy0):
             if data[i + 3] > 16:
                 sheet.set(x, oy0 + y, (data[i], data[i + 1], data[i + 2], data[i + 3]))
 
-def lpc_base_sheet(gender="male"):
-    """LPC 素體：body＋head＋eyes 疊到走路列（8-11）→ 832×1344。"""
+def lpc_base_sheet(gender="male", skin_key="light"):
+    """LPC 素體：body＋head＋eyes 疊到走路列（8-11）→ 832×1344；再把膚色重上色成目標膚色。"""
     body = "base_body_walk.png" if gender == "male" else "base_body_female.png"
     head = "base_head_walk.png" if gender == "male" else "base_head_female.png"
     sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
@@ -722,6 +722,18 @@ def lpc_base_sheet(gender="male"):
                 f"external/img2pixel/lpc/{head}",
                 "external/img2pixel/lpc/base_eyes_walk.png"):
         _lpc_overlay(sheet, rel, LPC_WALK_BASE * CHAR_FH)
+    # 膚色重上色：LPC 膚色以主色 (249,213,186) 的亮度為基準，換成目標膚色（保留明暗）
+    tr = hx(SKINS[skin_key][0])
+    ref = 0.299 * 249 + 0.587 * 213 + 0.114 * 186
+    for y in range(sheet.h):
+        for x in range(sheet.w):
+            c = sheet.get(x, y)
+            if c[3] == 0:
+                continue
+            r, g, b = c[0], c[1], c[2]
+            if r > 110 and r >= g and g >= b - 12:   # 膚色系才換（眼睛／輪廓不動）
+                f = (0.299 * r + 0.587 * g + 0.114 * b) / ref
+                sheet.set(x, y, (min(255, round(tr[0] * f)), min(255, round(tr[1] * f)), min(255, round(tr[2] * f)), c[3]))
     return sheet
 
 def lpc_cloth_sheet(rel):
@@ -2095,8 +2107,8 @@ def main():
     sub = "avatar"
     # 素體：LPC 的 body＋head＋eyes 疊成 832×1344（走路列）；男（預設）＋女（之後選性別）；4 種膚色暫共用
     for key in SKINS:
-        save(lpc_base_sheet("male"), f"char_body_{key}.png", sub)
-        save(lpc_base_sheet("female"), f"char_body_female_{key}.png", sub)
+        save(lpc_base_sheet("male", key), f"char_body_{key}.png", sub)
+        save(lpc_base_sheet("female", key), f"char_body_female_{key}.png", sub)
     # 基本服裝（LPC 原檔，走路列）
     for cid, rel in LPC_CLOTHES:
         save(lpc_cloth_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{cid}.png", sub)
