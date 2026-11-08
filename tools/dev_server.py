@@ -182,6 +182,8 @@ def sanitize_state(s, prev):
             "top": _id_or(look.get("top"), None),        # 顯示中的上衣 id（None＝預設款）
             "bottom": _id_or(look.get("bottom"), None),  # 顯示中的褲子 id（None＝預設款）
             "shoe": _id_or(look.get("shoe"), None),      # 顯示中的鞋子 id（None＝預設款）
+            "face": _id_or(look.get("face"), "normal"),  # 臉型（頭型）id
+            "eyes": _id_or(look.get("eyes"), "default"), # 眼睛（表情）id
             "hatC": _hex_or(look.get("hatC")),           # 換色色碼（None＝原色）
             "topC": _hex_or(look.get("topC")),
             "botC": _hex_or(look.get("botC")),

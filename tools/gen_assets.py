@@ -619,6 +619,16 @@ LPC_HAIR_STYLES = [              # 其他 LPC 髮型（走路列，原檔是單�
     ("curly", "捲長髮", "hair_curly.png"),
     ("long", "長髮", "hair_long.png"),
 ]
+LPC_SKIN_DYE = ["#f9d5ba", "#e4a47c", "#cc8665", "#99423c", "#faecd7"]   # LPC 膚色調色盤（臉型跟膚色重上色用）
+LPC_FACES = [                    # 臉型（頭型）：(id, 名稱, external 檔名)
+    ("normal", "普通", "f_normal.png"), ("gaunt", "瘦長", "f_gaunt.png"),
+    ("plump", "圓胖", "f_plump.png"), ("small", "小頭", "f_small.png"), ("old", "老臉", "f_old.png"),
+]
+LPC_EYES = [                     # 眼睛（表情）：(id, 名稱, external 檔名)
+    ("default", "預設", "e_default.png"), ("angry", "生氣", "e_angry.png"), ("sad", "難過", "e_sad.png"),
+    ("lookl", "看左", "e_lookl.png"), ("lookr", "看右", "e_lookr.png"),
+]
+
 def kidol_main_hex(cid):
     """取 k-idol 短髮某色 sheet 的「主色」（走路列中最常見的髮色，排除深色輪廓）→ '#rrggbb'。其他髮型照這 12 色重上色。"""
     r = read_png_pixels(os.path.join(ASSETS, f"external/img2pixel/hair_kidol/kidol_hairstyle_male_{cid}.png"))
@@ -713,15 +723,11 @@ def _lpc_overlay(sheet, rel, oy0):
             if data[i + 3] > 16:
                 sheet.set(x, oy0 + y, (data[i], data[i + 1], data[i + 2], data[i + 3]))
 
-def lpc_base_sheet(gender="male", skin_key="light"):
-    """LPC 素體：body＋head＋eyes 疊到走路列（8-11）→ 832×1344；再把膚色重上色成目標膚色。"""
+def lpc_body_sheet(gender="male", skin_key="light"):
+    """身體（不含頭與眼睛）→ 832×1344；再把膚色重上色成目標膚色。頭/眼睛是另外的圖層（臉型/眼睛）。"""
     body = "base_body_walk.png" if gender == "male" else "base_body_female.png"
-    head = "base_head_walk.png" if gender == "male" else "base_head_female.png"
     sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
-    for rel in (f"external/img2pixel/lpc/{body}",
-                f"external/img2pixel/lpc/{head}",
-                "external/img2pixel/lpc/base_eyes_walk.png"):
-        _lpc_overlay(sheet, rel, LPC_WALK_BASE * CHAR_FH)
+    _lpc_overlay(sheet, f"external/img2pixel/lpc/{body}", LPC_WALK_BASE * CHAR_FH)
     # 膚色重上色：LPC 膚色以主色 (249,213,186) 的亮度為基準，換成目標膚色（保留明暗）
     tr = hx(SKINS[skin_key][0])
     ref = 0.299 * 249 + 0.587 * 213 + 0.114 * 186
@@ -731,9 +737,15 @@ def lpc_base_sheet(gender="male", skin_key="light"):
             if c[3] == 0:
                 continue
             r, g, b = c[0], c[1], c[2]
-            if r > 110 and r >= g and g >= b - 12:   # 膚色系才換（眼睛／輪廓不動）
+            if r > 110 and r >= g and g >= b - 12:   # 膚色系才換
                 f = (0.299 * r + 0.587 * g + 0.114 * b) / ref
                 sheet.set(x, y, (min(255, round(tr[0] * f)), min(255, round(tr[1] * f)), min(255, round(tr[2] * f)), c[3]))
+    return sheet
+
+def lpc_layer_sheet(rel):
+    """把一張 LPC 走路圖層（頭/眼睛/…576×256）疊到走路列 → 832×1344（原色，不重上色）。"""
+    sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
+    _lpc_overlay(sheet, rel, LPC_WALK_BASE * CHAR_FH)
     return sheet
 
 def lpc_cloth_sheet(rel):
@@ -2107,8 +2119,12 @@ def main():
     sub = "avatar"
     # 素體：LPC 的 body＋head＋eyes 疊成 832×1344（走路列）；男（預設）＋女（之後選性別）；4 種膚色暫共用
     for key in SKINS:
-        save(lpc_base_sheet("male", key), f"char_body_{key}.png", sub)
-        save(lpc_base_sheet("female", key), f"char_body_female_{key}.png", sub)
+        save(lpc_body_sheet("male", key), f"char_body_{key}.png", sub)
+        save(lpc_body_sheet("female", key), f"char_body_female_{key}.png", sub)
+    for fid, _fname, rel in LPC_FACES:               # 臉型（頭型；原色，跟膚色用 dye 重上色）
+        save(lpc_layer_sheet(f"external/img2pixel/lpc/{rel}"), f"char_face_{fid}.png", sub)
+    for eid, _ename, rel in LPC_EYES:                # 眼睛（固定色）
+        save(lpc_layer_sheet(f"external/img2pixel/lpc/{rel}"), f"char_eyes_{eid}.png", sub)
     # 基本服裝（LPC 原檔，走路列）
     for cid, rel in LPC_CLOTHES:
         save(lpc_cloth_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{cid}.png", sub)
@@ -2132,6 +2148,9 @@ def main():
                     frameAnchors={}),
         skins=[dict(id=k, name=n, base=SKINS[k][0], shade=SKINS[k][1], sheet=f"char_body_{k}.png")
                for k, n in [("pale", "白皙"), ("light", "自然"), ("tan", "小麥"), ("deep", "深膚")]],
+        # 臉型（頭型；原色，執行時用 dye 跟膚色重上色）與眼睛（固定色）
+        faces=[dict(id=fid, name=fn, sheet=f"char_face_{fid}.png", dye=LPC_SKIN_DYE) for fid, fn, _r in LPC_FACES],
+        eyes=[dict(id=eid, name=en, sheet=f"char_eyes_{eid}.png") for eid, en, _r in LPC_EYES],
         # 髮型：一個「造型」一個方框（style／styleName），框裡是顏色（name＝顏色名）；面板分層顯示、點造型再開顏色
         hair=[dict(id=f"hair{i + 1}", name=cname, style="short", styleName="短髮", sheet=f"char_hair{i + 1}.png")
               for i, (_cid, cname) in enumerate(KIDOL_HAIR)] +

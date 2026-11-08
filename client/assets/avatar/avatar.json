@@ -432,6 +432,95 @@
    "sheet": "char_body_deep.png"
   }
  ],
+ "faces": [
+  {
+   "id": "normal",
+   "name": "普通",
+   "sheet": "char_face_normal.png",
+   "dye": [
+    "#f9d5ba",
+    "#e4a47c",
+    "#cc8665",
+    "#99423c",
+    "#faecd7"
+   ]
+  },
+  {
+   "id": "gaunt",
+   "name": "瘦長",
+   "sheet": "char_face_gaunt.png",
+   "dye": [
+    "#f9d5ba",
+    "#e4a47c",
+    "#cc8665",
+    "#99423c",
+    "#faecd7"
+   ]
+  },
+  {
+   "id": "plump",
+   "name": "圓胖",
+   "sheet": "char_face_plump.png",
+   "dye": [
+    "#f9d5ba",
+    "#e4a47c",
+    "#cc8665",
+    "#99423c",
+    "#faecd7"
+   ]
+  },
+  {
+   "id": "small",
+   "name": "小頭",
+   "sheet": "char_face_small.png",
+   "dye": [
+    "#f9d5ba",
+    "#e4a47c",
+    "#cc8665",
+    "#99423c",
+    "#faecd7"
+   ]
+  },
+  {
+   "id": "old",
+   "name": "老臉",
+   "sheet": "char_face_old.png",
+   "dye": [
+    "#f9d5ba",
+    "#e4a47c",
+    "#cc8665",
+    "#99423c",
+    "#faecd7"
+   ]
+  }
+ ],
+ "eyes": [
+  {
+   "id": "default",
+   "name": "預設",
+   "sheet": "char_eyes_default.png"
+  },
+  {
+   "id": "angry",
+   "name": "生氣",
+   "sheet": "char_eyes_angry.png"
+  },
+  {
+   "id": "sad",
+   "name": "難過",
+   "sheet": "char_eyes_sad.png"
+  },
+  {
+   "id": "lookl",
+   "name": "看左",
+   "sheet": "char_eyes_lookl.png"
+  },
+  {
+   "id": "lookr",
+   "name": "看右",
+   "sheet": "char_eyes_lookr.png"
+  }
+ ],
  "hair": [
   {
    "id": "hair1",

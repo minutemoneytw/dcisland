@@ -285,6 +285,8 @@ function sanitizeState(s, prev) {
       top: idOr(look.top, null),          // 顯示中的上衣 id（null＝預設款）
       bottom: idOr(look.bottom, null),    // 顯示中的褲子 id（null＝預設款）
       shoe: idOr(look.shoe, null),        // 顯示中的鞋子 id（null＝預設款）
+      face: idOr(look.face, "normal"),    // 臉型（頭型）id
+      eyes: idOr(look.eyes, "default"),   // 眼睛（表情）id
       hatC: hexOr(look.hatC),             // 換色色碼（null＝原色）
       topC: hexOr(look.topC),
       botC: hexOr(look.botC),
