@@ -812,7 +812,7 @@ function unPassOn(t, v, now) {
     unSetTurn(t, unNext(t, v), now);
   } else unSetTurn(t, v, now);
 }
-function unPlay(t, cid, idx, color, now) {
+function unPlay(t, cid, idx, color, now, say = false) {
   const [role, i] = tblFind(t, cid), g = t.g;
   if (t.game !== "uno" || role !== "seat" || t.phase !== "playing" || !g || i !== t.turn) return;
   const s = t.seats[i];
@@ -828,16 +828,15 @@ function unPlay(t, cid, idx, color, now) {
   if (card === "W" || card === "F") { g.color = color; g.topval = card; tblLog(t, `${s.name} 出了 ${unLabel(card)}，選了${unCname(color)}色`); }
   else { g.color = card[0]; g.topval = card.slice(1); tblLog(t, `${s.name} 出了 ${unLabel(card)}`); }
   if (!s.hand.length) { unFinish(t, i, true); return; }   // 出完了：獲勝
-  if (s.hand.length === 1) { if (s.said) s.said = false; else g.pend = i; }   // 還沒喊 UNO：下一個人動作前，任何人可以抓
-  const nActive = unActive(t).length;
+  if (s.hand.length === 1) { if (s.said || say) { s.said = false; if (say) tblLog(t, `${s.name} 喊了 UNO！`); } else g.pend = i; }   // say＝「出牌並喊 UNO」   // 還沒喊 UNO：下一個人動作前，任何人可以抓
   g.skip = false;
   if (unIsSkip(card)) {   // 跳過
     const v = unNext(t, i);
     if (wild) { g.skip = true; unPassOn(t, v, now); }
     else { tblLog(t, `${t.seats[v].name} 被跳過`); unSetTurn(t, unNext(t, i, 2), now); }
-  } else if (card !== "W" && card !== "F" && card.slice(1) === "r") {   // 反轉（兩人時等於跳過）
+  } else if (card !== "W" && card !== "F" && card.slice(1) === "r") {   // 反轉（兩人時也是換對方出牌，使用者定）
     g.dir = -g.dir; tblLog(t, "方向反轉");
-    unSetTurn(t, nActive === 2 ? i : unNext(t, i), now);
+    unSetTurn(t, unNext(t, i), now);
   } else if (unIsPlus(card)) {   // +2／+4
     const n = card === "F" ? 4 : 2, v = unNext(t, i);
     if (wild) { g.pending += n; tblLog(t, `累積 ${g.pending} 張`); unPassOn(t, v, now); }   // 累積：傳給下一位，他有 + 牌就可以接著傳
@@ -1452,7 +1451,7 @@ export class Island {
     else if (a === "draw") { if (t.game === "uno") unDraw(t, att.id, now); else omDraw(t, att.id, msg.idx); }   // UNO：抽牌；抽鬼牌：抽對方的牌
     else if (a === "shuffle") omShuffle(t, att.id);
     else if (a === "move") gmMove(t, att.id, msg.x, msg.y);
-    else if (a === "play") unPlay(t, att.id, msg.idx, msg.color, now);   // UNO：出牌（idx、變色牌帶 color）
+    else if (a === "play") unPlay(t, att.id, msg.idx, msg.color, now, msg.uno === true);   // UNO：出牌（idx、變色牌帶 color）
     else if (a === "pass") unPass(t, att.id, now);
     else if (a === "uno") unSay(t, att.id);
     else if (a === "catch") unCatch(t, att.id);
