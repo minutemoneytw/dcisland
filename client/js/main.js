@@ -2365,7 +2365,7 @@ function charSprite(look, fi) {
   const skinHex = skin.base || null;   // 臉型（頭型）跟膚色重上色
   const hairHex = hair.hex || null;    // 髮色主色（貓耳跟髮色重上色用）
   const race = lookItem(A.races, look.race) || A.races?.[0] || { id: 'human', scale: 1 };
-  const k = [skin.id, skinSheet, look.gender || '', race, hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, shoe?.id || '', shoeHex, face?.id || '', eyes?.id || '', fi].join('|');
+  const k = [skin.id, skinSheet, look.gender || '', race.id, hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, shoe?.id || '', shoeHex, face?.id || '', eyes?.id || '', fi].join('|');
   let cv = S.charCache.get(k);
   if (cv) return cv;
   cv = document.createElement('canvas'); cv.width = F.w; cv.height = F.h;
@@ -5531,7 +5531,7 @@ function buildAvatarPanel() {
     b.className = 'opt name';
     b.textContent = cur?.name + (cur?.scale && cur.scale !== 1 ? `（×${cur.scale}）` : '') || '選擇種族';
     b.title = '點一下選種族';
-    b.onclick = () => openPick('種族', S.avatar.races || [], S.me.race || 'human', v => { S.me.race = v; saveAvatar(); }, b);
+    b.onclick = () => openPick('種族', S.avatar.races || [], S.me.race || 'human', v => { S.me.race = v; saveAvatar(); S.charCache.clear(); buildAvatarPanel(); }, b);
     rbs.appendChild(b);
   }
   // 性別（男／女）：換素體與對應性別的服裝
