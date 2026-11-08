@@ -518,32 +518,340 @@
    "sheet": "char_hair12.png"
   },
   {
-   "id": "afro",
-   "name": "原色",
+   "id": "afro_brown",
+   "name": "棕",
    "style": "afro",
    "styleName": "爆炸頭",
-   "sheet": "char_hair_afro.png"
+   "sheet": "char_hair_afro_brown.png"
   },
   {
-   "id": "bob",
-   "name": "原色",
+   "id": "afro_brown2",
+   "name": "深棕",
+   "style": "afro",
+   "styleName": "爆炸頭",
+   "sheet": "char_hair_afro_brown2.png"
+  },
+  {
+   "id": "afro_black",
+   "name": "黑",
+   "style": "afro",
+   "styleName": "爆炸頭",
+   "sheet": "char_hair_afro_black.png"
+  },
+  {
+   "id": "afro_blonde",
+   "name": "金",
+   "style": "afro",
+   "styleName": "爆炸頭",
+   "sheet": "char_hair_afro_blonde.png"
+  },
+  {
+   "id": "afro_ashblonde",
+   "name": "灰金",
+   "style": "afro",
+   "styleName": "爆炸頭",
+   "sheet": "char_hair_afro_ashblonde.png"
+  },
+  {
+   "id": "afro_ashplatinum",
+   "name": "銀白",
+   "style": "afro",
+   "styleName": "爆炸頭",
+   "sheet": "char_hair_afro_ashplatinum.png"
+  },
+  {
+   "id": "afro_red",
+   "name": "紅",
+   "style": "afro",
+   "styleName": "爆炸頭",
+   "sheet": "char_hair_afro_red.png"
+  },
+  {
+   "id": "afro_orange",
+   "name": "橘",
+   "style": "afro",
+   "styleName": "爆炸頭",
+   "sheet": "char_hair_afro_orange.png"
+  },
+  {
+   "id": "afro_rosepink",
+   "name": "玫瑰粉",
+   "style": "afro",
+   "styleName": "爆炸頭",
+   "sheet": "char_hair_afro_rosepink.png"
+  },
+  {
+   "id": "afro_green",
+   "name": "綠",
+   "style": "afro",
+   "styleName": "爆炸頭",
+   "sheet": "char_hair_afro_green.png"
+  },
+  {
+   "id": "afro_blue",
+   "name": "藍",
+   "style": "afro",
+   "styleName": "爆炸頭",
+   "sheet": "char_hair_afro_blue.png"
+  },
+  {
+   "id": "afro_purple",
+   "name": "紫",
+   "style": "afro",
+   "styleName": "爆炸頭",
+   "sheet": "char_hair_afro_purple.png"
+  },
+  {
+   "id": "bob_brown",
+   "name": "棕",
    "style": "bob",
    "styleName": "鮑伯頭",
-   "sheet": "char_hair_bob.png"
+   "sheet": "char_hair_bob_brown.png"
   },
   {
-   "id": "curly",
-   "name": "原色",
+   "id": "bob_brown2",
+   "name": "深棕",
+   "style": "bob",
+   "styleName": "鮑伯頭",
+   "sheet": "char_hair_bob_brown2.png"
+  },
+  {
+   "id": "bob_black",
+   "name": "黑",
+   "style": "bob",
+   "styleName": "鮑伯頭",
+   "sheet": "char_hair_bob_black.png"
+  },
+  {
+   "id": "bob_blonde",
+   "name": "金",
+   "style": "bob",
+   "styleName": "鮑伯頭",
+   "sheet": "char_hair_bob_blonde.png"
+  },
+  {
+   "id": "bob_ashblonde",
+   "name": "灰金",
+   "style": "bob",
+   "styleName": "鮑伯頭",
+   "sheet": "char_hair_bob_ashblonde.png"
+  },
+  {
+   "id": "bob_ashplatinum",
+   "name": "銀白",
+   "style": "bob",
+   "styleName": "鮑伯頭",
+   "sheet": "char_hair_bob_ashplatinum.png"
+  },
+  {
+   "id": "bob_red",
+   "name": "紅",
+   "style": "bob",
+   "styleName": "鮑伯頭",
+   "sheet": "char_hair_bob_red.png"
+  },
+  {
+   "id": "bob_orange",
+   "name": "橘",
+   "style": "bob",
+   "styleName": "鮑伯頭",
+   "sheet": "char_hair_bob_orange.png"
+  },
+  {
+   "id": "bob_rosepink",
+   "name": "玫瑰粉",
+   "style": "bob",
+   "styleName": "鮑伯頭",
+   "sheet": "char_hair_bob_rosepink.png"
+  },
+  {
+   "id": "bob_green",
+   "name": "綠",
+   "style": "bob",
+   "styleName": "鮑伯頭",
+   "sheet": "char_hair_bob_green.png"
+  },
+  {
+   "id": "bob_blue",
+   "name": "藍",
+   "style": "bob",
+   "styleName": "鮑伯頭",
+   "sheet": "char_hair_bob_blue.png"
+  },
+  {
+   "id": "bob_purple",
+   "name": "紫",
+   "style": "bob",
+   "styleName": "鮑伯頭",
+   "sheet": "char_hair_bob_purple.png"
+  },
+  {
+   "id": "curly_brown",
+   "name": "棕",
    "style": "curly",
    "styleName": "捲長髮",
-   "sheet": "char_hair_curly.png"
+   "sheet": "char_hair_curly_brown.png"
   },
   {
-   "id": "long",
-   "name": "原色",
+   "id": "curly_brown2",
+   "name": "深棕",
+   "style": "curly",
+   "styleName": "捲長髮",
+   "sheet": "char_hair_curly_brown2.png"
+  },
+  {
+   "id": "curly_black",
+   "name": "黑",
+   "style": "curly",
+   "styleName": "捲長髮",
+   "sheet": "char_hair_curly_black.png"
+  },
+  {
+   "id": "curly_blonde",
+   "name": "金",
+   "style": "curly",
+   "styleName": "捲長髮",
+   "sheet": "char_hair_curly_blonde.png"
+  },
+  {
+   "id": "curly_ashblonde",
+   "name": "灰金",
+   "style": "curly",
+   "styleName": "捲長髮",
+   "sheet": "char_hair_curly_ashblonde.png"
+  },
+  {
+   "id": "curly_ashplatinum",
+   "name": "銀白",
+   "style": "curly",
+   "styleName": "捲長髮",
+   "sheet": "char_hair_curly_ashplatinum.png"
+  },
+  {
+   "id": "curly_red",
+   "name": "紅",
+   "style": "curly",
+   "styleName": "捲長髮",
+   "sheet": "char_hair_curly_red.png"
+  },
+  {
+   "id": "curly_orange",
+   "name": "橘",
+   "style": "curly",
+   "styleName": "捲長髮",
+   "sheet": "char_hair_curly_orange.png"
+  },
+  {
+   "id": "curly_rosepink",
+   "name": "玫瑰粉",
+   "style": "curly",
+   "styleName": "捲長髮",
+   "sheet": "char_hair_curly_rosepink.png"
+  },
+  {
+   "id": "curly_green",
+   "name": "綠",
+   "style": "curly",
+   "styleName": "捲長髮",
+   "sheet": "char_hair_curly_green.png"
+  },
+  {
+   "id": "curly_blue",
+   "name": "藍",
+   "style": "curly",
+   "styleName": "捲長髮",
+   "sheet": "char_hair_curly_blue.png"
+  },
+  {
+   "id": "curly_purple",
+   "name": "紫",
+   "style": "curly",
+   "styleName": "捲長髮",
+   "sheet": "char_hair_curly_purple.png"
+  },
+  {
+   "id": "long_brown",
+   "name": "棕",
    "style": "long",
    "styleName": "長髮",
-   "sheet": "char_hair_long.png"
+   "sheet": "char_hair_long_brown.png"
+  },
+  {
+   "id": "long_brown2",
+   "name": "深棕",
+   "style": "long",
+   "styleName": "長髮",
+   "sheet": "char_hair_long_brown2.png"
+  },
+  {
+   "id": "long_black",
+   "name": "黑",
+   "style": "long",
+   "styleName": "長髮",
+   "sheet": "char_hair_long_black.png"
+  },
+  {
+   "id": "long_blonde",
+   "name": "金",
+   "style": "long",
+   "styleName": "長髮",
+   "sheet": "char_hair_long_blonde.png"
+  },
+  {
+   "id": "long_ashblonde",
+   "name": "灰金",
+   "style": "long",
+   "styleName": "長髮",
+   "sheet": "char_hair_long_ashblonde.png"
+  },
+  {
+   "id": "long_ashplatinum",
+   "name": "銀白",
+   "style": "long",
+   "styleName": "長髮",
+   "sheet": "char_hair_long_ashplatinum.png"
+  },
+  {
+   "id": "long_red",
+   "name": "紅",
+   "style": "long",
+   "styleName": "長髮",
+   "sheet": "char_hair_long_red.png"
+  },
+  {
+   "id": "long_orange",
+   "name": "橘",
+   "style": "long",
+   "styleName": "長髮",
+   "sheet": "char_hair_long_orange.png"
+  },
+  {
+   "id": "long_rosepink",
+   "name": "玫瑰粉",
+   "style": "long",
+   "styleName": "長髮",
+   "sheet": "char_hair_long_rosepink.png"
+  },
+  {
+   "id": "long_green",
+   "name": "綠",
+   "style": "long",
+   "styleName": "長髮",
+   "sheet": "char_hair_long_green.png"
+  },
+  {
+   "id": "long_blue",
+   "name": "藍",
+   "style": "long",
+   "styleName": "長髮",
+   "sheet": "char_hair_long_blue.png"
+  },
+  {
+   "id": "long_purple",
+   "name": "紫",
+   "style": "long",
+   "styleName": "長髮",
+   "sheet": "char_hair_long_purple.png"
   }
  ],
  "tops": [

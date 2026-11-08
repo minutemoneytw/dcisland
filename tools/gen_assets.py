@@ -613,12 +613,30 @@ LPC_CLOTHES = [                  # 基本服裝（LPC 原檔）：(遊戲檔名,
     ("bottom_pants_m", "bottom_pants_m.png"), ("bottom_pants_f", "bottom_pants_f.png"),
     ("shoes_m", "shoes_m.png"), ("shoes_f", "shoes_f.png"),
 ]
-LPC_HAIR_STYLES = [              # 其他 LPC 髮型（每個一種顏色；走路列）：(id, 名稱, external 檔名)
+LPC_HAIR_STYLES = [              # 其他 LPC 髮型（走路列，原檔是單色，這裡依亮度重上色成多色）：(id, 名稱, external 檔名)
     ("afro", "爆炸頭", "hair_afro.png"),
     ("bob", "鮑伯頭", "hair_bob.png"),
     ("curly", "捲長髮", "hair_curly.png"),
     ("long", "長髮", "hair_long.png"),
 ]
+def kidol_main_hex(cid):
+    """取 k-idol 短髮某色 sheet 的「主色」（走路列中最常見的髮色，排除深色輪廓）→ '#rrggbb'。其他髮型照這 12 色重上色。"""
+    r = read_png_pixels(os.path.join(ASSETS, f"external/img2pixel/hair_kidol/kidol_hairstyle_male_{cid}.png"))
+    if r is None:
+        raise SystemExit(f"找不到 k-idol 髮型 {cid}")
+    w, h, data = r
+    cnt = {}
+    for y in range(LPC_WALK_BASE * CHAR_FH, min(h, (LPC_WALK_BASE + 4) * CHAR_FH)):
+        for x in range(w):
+            i = (y * w + x) * 4
+            if data[i + 3] <= 16:
+                continue
+            if 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2] < 55:
+                continue   # 輪廓／陰影不算
+            k = (data[i] >> 3, data[i + 1] >> 3, data[i + 2] >> 3)
+            cnt[k] = cnt.get(k, 0) + 1
+    k = max(cnt, key=cnt.get)
+    return "#%02x%02x%02x" % (k[0] << 3, k[1] << 3, k[2] << 3)
 
 def _lpc_hair_cell(w, data, row, f):
     """把 LPC sheet 的 (列, 幀) 那格縮放 LPC_SCALE、對齊我們的頭部，回傳 Canvas(64×64)。"""
@@ -710,6 +728,25 @@ def lpc_cloth_sheet(rel):
     """LPC 服裝（走路 9 幀×4 向、576×256）→ 疊到走路列 → 832×1344。"""
     sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
     _lpc_overlay(sheet, rel, LPC_WALK_BASE * CHAR_FH)
+    return sheet
+
+def lpc_hair_tinted(rel, target_hex):
+    """LPC 髮型原檔是單色（ginger）；依每個像素亮度相對主色縮放目標色＝重上色成指定顏色，排到走路列。"""
+    r = read_png_pixels(os.path.join(ASSETS, rel))
+    if r is None:
+        raise SystemExit(f"找不到 LPC 髮型 {rel}")
+    w, h, data = r
+    tr = hx(target_hex)
+    ref = 0.299 * 229 + 0.587 * 86 + 0.114 * 0     # 下載檔主色 (229,86,0) 的亮度當基準
+    sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
+    oy0 = LPC_WALK_BASE * CHAR_FH
+    for y in range(h):
+        for x in range(w):
+            i = (y * w + x) * 4
+            if data[i + 3] <= 16:
+                continue
+            f = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / ref
+            sheet.set(x, oy0 + y, (min(255, round(tr[0] * f)), min(255, round(tr[1] * f)), min(255, round(tr[2] * f)), data[i + 3]))
     return sheet
 
 def lpc_read_sheet(rel):
@@ -2067,9 +2104,11 @@ def main():
     for i, (cid, _cname) in enumerate(KIDOL_HAIR):
         save(lpc_read_sheet(f"external/img2pixel/hair_kidol/kidol_hairstyle_male_{cid}.png"),
              f"char_hair{i + 1}.png", sub)
-    # 其他 LPC 髮型（走路列；每個一種顏色）
+    # 其他 LPC 髮型（走路列；依亮度重上色成「與短髮相同的 12 色」）
+    hair_colors = [(cid, cname, kidol_main_hex(cid)) for cid, cname in KIDOL_HAIR]
     for sid, _sname, fn in LPC_HAIR_STYLES:
-        save(lpc_cloth_sheet(f"external/img2pixel/lpc/{fn}"), f"char_hair_{sid}.png", sub)
+        for cid, _cname, chex in hair_colors:
+            save(lpc_hair_tinted(f"external/img2pixel/lpc/{fn}", chex), f"char_hair_{sid}_{cid}.png", sub)
     write_json(os.path.join(ASSETS, sub, "avatar.json"), dict(
         scale=CHAR_SCALE,
         # 人物分層的幀表（所有層共用）：每層都是 832×1344 的 LPC 通用格式 sheet；map＝65 個邏輯幀 → sheet 的 [欄, 列]；
@@ -2084,8 +2123,8 @@ def main():
         # 髮型：一個「造型」一個方框（style／styleName），框裡是顏色（name＝顏色名）；面板分層顯示、點造型再開顏色
         hair=[dict(id=f"hair{i + 1}", name=cname, style="short", styleName="短髮", sheet=f"char_hair{i + 1}.png")
               for i, (_cid, cname) in enumerate(KIDOL_HAIR)] +
-             [dict(id=sid, name="原色", style=sid, styleName=sname, sheet=f"char_hair_{sid}.png")
-              for sid, sname, _fn in LPC_HAIR_STYLES],
+             [dict(id=f"{sid}_{cid}", name=cname, style=sid, styleName=sname, sheet=f"char_hair_{sid}_{cid}.png")
+              for sid, sname, _fn in LPC_HAIR_STYLES for cid, cname, _hex in hair_colors],
         # 基本服裝（LPC 原檔；gender＝之後選性別用）
         tops=[dict(id="tshirt_m", name="T恤", sheet="char_top_tshirt_m.png", gender="male", glam=True),
               dict(id="tshirt_f", name="T恤", sheet="char_top_tshirt_f.png", gender="female", glam=True)],
