@@ -4698,7 +4698,7 @@ function buildAvatarPanel() {
   }
   const hb = document.createElement('div');
   hb.className = 'opt name';
-  { const cur = S.avatar.hair.find(h => h.id === S.me.hair); hb.textContent = '髮型：' + (cur?.styleName || '未選'); }
+  { const cur = S.avatar.hair.find(h => h.id === S.me.hair); hb.textContent = cur?.styleName || '選擇髮型'; }
   hb.title = '點一下選髮型';
   hb.onclick = () => openHairMenu(hstyles, hb);
   hr.appendChild(hb);
