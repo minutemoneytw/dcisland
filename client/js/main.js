@@ -150,8 +150,13 @@ function mobDef(id) { return S.mobsDB.mobs.find(x => x.id === id); }
 // 沒有 anim＝單張圖＝1 幀的 sheet，畫法完全相同；之後只要準備 sheet、在 manifest 加 anim，不用改程式。
 // 描述物件：{img, frames, fps, stagger, fw, fh, width, height}；width/height＝單幀大小（讓原本讀「圖片大小」的程式不用改）
 function makeSpr(img, spec) {
-  const frames = Math.max(1, (spec && spec.frames | 0) || 1), fw = Math.floor(img.width / frames), fh = img.height;
-  return { img: spec?.keyBg ? keyBackground(img) : img, frames, fps: spec?.fps || 8, stagger: !!spec?.stagger, fw, fh, width: fw, height: fh };
+  const frames = Math.max(1, (spec && spec.frames | 0) || 1);
+  const rows = Math.max(1, (spec && spec.rows | 0) || 1);
+  // 單格尺寸：manifest 明確給 fw／fh 就用（多列 sheet、或素材有留邊／多餘的列），否則由圖片大小推（欄＝frames、列＝rows）
+  const fw = (spec && spec.fw | 0) || Math.floor(img.width / frames);
+  const fh = (spec && spec.fh | 0) || Math.floor(img.height / rows);
+  return { img: spec?.keyBg ? keyBackground(img) : img, frames, rows, row0: (spec && spec.row0 | 0) || 0,
+           fps: spec?.fps || 8, stagger: !!spec?.stagger, fw, fh, width: fw, height: fh };
 }
 // 載入一張可動畫的圖：manifest 有 anim.sheet 就載 sheet（失敗退回單張 url），否則載單張
 async function loadSpr(url, spec) {
@@ -167,15 +172,28 @@ function sprFrame(s, phase = 0, fps = s.fps) {
   return s.frames > 1 ? Math.floor((S.t + phase) * fps) % s.frames : 0;
 }
 // 畫第 fi 幀（ctx 座標）
-function drawSpr(s, fi, dx, dy, dw = s.fw, dh = s.fh) {
-  ctx.drawImage(s.img, fi * s.fw, 0, s.fw, s.fh, dx, dy, dw, dh);
+function drawSpr(s, fi, dx, dy, dw = s.fw, dh = s.fh, row = 0) {
+  ctx.drawImage(s.img, fi * s.fw, (s.row0 + row) * s.fh, s.fw, s.fh, dx, dy, dw, dh);
 }
 // 依格子決定的固定相位（地形點綴物、家具：各自錯開，但每個人畫面一樣、重新整理也不變）
 const cellPhase = (x, y) => ((x * 7 + y * 13) % 29) * .137;
 
-// 動物多幀動畫（mobs.json 的 anim）：除了共通欄位，還有 dashFps（龍衝／飛行時）與 scale（1 個 sheet 像素畫幾 px，只管外觀）
+// 動物多幀動畫（mobs.json 的 anim）：除了共通欄位，還有 dashFps（龍衝／飛行時）與 scale（1 個 sheet 像素畫幾 px，只管外觀）。
+// 方向網格（選用）：rows／row0＝用哪幾列、rowDir＝每列是哪個方向（例如 ["up","right","down","left"]），
+// 程式依動物的移動方向挑列、素材沒畫的方向用對向那一列左右鏡像（見 mobRowFor）。
 function loadAnim(sheet, spec) {
-  return { ...makeSpr(sheet, spec), dashFps: spec.dashFps || spec.fps || 8, scale: spec.scale || 2 };
+  return { ...makeSpr(sheet, spec), dashFps: spec.dashFps || spec.fps || 8, scale: spec.scale || 2, rowDir: spec.rowDir || null };
+}
+// 方向網格：依朝向挑第幾列並決定要不要左右鏡像。素材只有「右」沒「左」時，往左＝畫右邊那一列再鏡像
+const MOB_OPP = { left: 'right', right: 'left', up: 'down', down: 'up' };
+function mobRowFor(an, face) {
+  const rd = an.rowDir;
+  let i = rd.indexOf(face);
+  if (i >= 0) return { row: i, flip: false };
+  i = rd.indexOf(MOB_OPP[face]);
+  if (i >= 0) return { row: i, flip: true };
+  i = rd.indexOf('right');                 // 上下等沒有專屬列：退回側面（朝右）
+  return { row: i >= 0 ? i : 0, flip: false };
 }
 // 去背：素材不是透明底時，從圖的四邊開始，把和角落顏色相近且連在一起的像素變透明（被輪廓線圍住的亮色不會被吃掉）
 function keyBackground(img) {
@@ -210,11 +228,8 @@ function spawnMobs() {
   S.mobs = [];
   const td = S.terrains[S.terrain];
   if (!S.mobsDB || !td.mobs?.length) return;
-  const pool = [];
-  for (const a of td.mobs) for (let i = 0; i < a.weight; i++) pool.push(a.id);
   const cx = COLS / 2 - .5, cy = ROWS / 2 - .5;
-  for (let n = 0; n < 6; n++) {
-    const id = pool[Math.floor(Math.random() * pool.length)];
+  const spawnWild = (id) => {   // 找一塊陸地空格生一隻野外動物（生不下就放棄）
     for (let tries = 0; tries < 40; tries++) {
       const x = Math.floor(Math.random() * COLS), y = Math.floor(Math.random() * ROWS);
       if (S.world.types[y * COLS + x] !== 2) continue;
@@ -222,9 +237,16 @@ function spawnMobs() {
       if (S.occ.get(key(x, y)) !== undefined) continue;
       S.mobs.push({ id, x: x * CELL + CELL / 2, y: y * CELL + CELL / 2, dir: 1, target: null, idle: Math.random() * 2, startle: 0, z: 0, bounce: 0,
                        hp: mobDef(id).hp, maxHp: mobDef(id).hp, dead: false, dieT: 0 });
-      break;
+      return true;
     }
-  }
+    return false;
+  };
+  // mobs.json 標 fixed: N 的種類（例如新怪）：在該島固定生 N 隻（保證一定看得到），不參與下面的隨機池
+  for (const a of td.mobs) { const n = mobDef(a.id)?.fixed || 0; for (let i = 0; i < n; i++) spawnWild(a.id); }
+  // 其他種類照舊：從權重池隨機抽 6 隻
+  const pool = [];
+  for (const a of td.mobs) if (!mobDef(a.id)?.fixed) for (let i = 0; i < a.weight; i++) pool.push(a.id);
+  for (let n = 0; n < 6 && pool.length; n++) spawnWild(pool[Math.floor(Math.random() * pool.length)]);
   // 島主：terrain.json 的 owner 指定的動物，每座地形固定一隻（不會被嚇跑、被打倒會重生；攻擊方式照 mobs.json 的 atk）
   // 連線時島主由伺服器同步（進場快照與事件），只在單機時本地生成
   const odef = td.owner && mobDef(td.owner);
@@ -2274,6 +2296,8 @@ function stepMob(a, dt) {
   const sp = (a.startle ? def.speed * 2.6 : def.speed) * dt;
   const dx = a.target.x - a.x, dy = a.target.y - a.y, len = Math.hypot(dx, dy) || 1;
   if (dx) a.dir = Math.sign(dx);
+  // 視覺朝向（4 方向）：給「方向網格」的怪物挑列用；取移動量大的那一軸（靜止時保留上一次）
+  if (dx || dy) a.face4 = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');
   const nx = clamp(a.x + dx / len * sp, CELL, (COLS - 1) * CELL), ny = clamp(a.y + dy / len * sp, CELL, (ROWS - 1) * CELL);
   const ox = a.x, oy = a.y;
   if (mobCanStand(def, nx, a.y)) a.x = nx;
@@ -2376,6 +2400,37 @@ function dyeSheet(img, dye, hex) {  const key = img.src + '|' + dye.join(',') + 
   g.putImageData(d, 0, 0);
   S.recolorCache.set(key, cv);
   return cv;
+}
+// 動物調色（mobs.json 的 tint）：整張 sheet 依明暗重上色成目標色——一張基準圖就能做各島不同色系、白兔、灰兔……
+// baseHex＝基準圖「主色」（亮度當 1.0）：比它暗的等比變暗、比它亮的往白色推，輪廓自然維持深色（跟髮色／眼睛同一套作法）
+function tintSheet(img, baseHex, hex) {
+  const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+  const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, cv.width, cv.height), p = d.data;
+  const T = hexRGB(hex), b = Math.max(1, lum(hexRGB(baseHex)));
+  for (let i = 0; i < p.length; i += 4) {
+    if (!p[i + 3]) continue;
+    const k = lum([p[i], p[i + 1], p[i + 2]]) / b;
+    for (let c = 0; c < 3; c++) p[i + c] = Math.round(k <= 1 ? T[c] * k : T[c] + (255 - T[c]) * Math.min(1, k - 1));
+  }
+  g.putImageData(d, 0, 0);
+  return cv;
+}
+// 取一張 sheet 的「主色」（最常見的中亮度色，排除輪廓與高光）→ tint 沒寫 tintBase 時自動用它當基準
+function sheetMainHex(img) {
+  const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+  const p = g.getImageData(0, 0, c.width, c.height).data, cnt = new Map();
+  for (let i = 0; i < p.length; i += 4) {
+    if (p[i + 3] < 16) continue;
+    const l = lum([p[i], p[i + 1], p[i + 2]]);
+    if (l < 45 || l > 235) continue;   // 太暗（輪廓）／太亮（高光）不算
+    const k = ((p[i] >> 3) << 10) | ((p[i + 1] >> 3) << 5) | (p[i + 2] >> 3);
+    cnt.set(k, (cnt.get(k) || 0) + 1);
+  }
+  let best = 0, bn = -1;
+  for (const [k, n] of cnt) if (n > bn) { bn = n; best = k; }
+  return '#' + [(best >> 10) & 31, (best >> 5) & 31, best & 31].map(v => (v << 3).toString(16).padStart(2, '0')).join('');
 }
 // 合成一幀（24×24 之類，大小看 frames.w/h），依 (造型, 幀號) 快取。
 // look：{skin, hair, hat, top, bottom（顯示用的款式 id，裝備／外觀已在送出前決定好）, hatC／topC／botC（換色色碼，null＝原色）}；
@@ -4797,7 +4852,9 @@ function draw() {
         // 影子：預設依 big 算大小、貼在腳底中央；素材的腳印寬度與 big 不成比例、或腳不在正中央時（例如蓋老師），
         // mobs.json 可寫 shadow:{rx, ry, dx, dy}（px，ry/rx 是半徑，dx/dy 是相對腳底中央的位移，dy 負＝往上；dx 以素材原本的朝向為準，圖翻轉時跟著翻）
         // 素材預設面向右邊（往左走才左右翻轉）；mobs.json 標 faceLeft: true 的素材本身面向左邊（例如壓力山大），翻轉條件相反
-        const flip = (a.dir < 0) !== !!def.faceLeft;
+        // 方向網格（an.rowDir）：依視覺朝向挑列、素材沒畫的方向用對向列鏡像；否則沿用舊規則（往左就左右翻轉）
+        let flip = (a.dir < 0) !== !!def.faceLeft, row = 0;
+        if (an?.rowDir) { const rr = mobRowFor(an, a.face4 || 'down'); row = rr.row; flip = rr.flip; }
         const sd = def.shadow;
         ctx.fillStyle = `rgba(10,14,20,${.26 * shs + .03})`;
         ctx.beginPath(); ctx.ellipse(a.x + (sd?.dx || 0) * (flip ? -1 : 1), a.y + (sd ? sd.dy : 1), (sd ? sd.rx : 9 * bs) * shs, (sd ? sd.ry : 3 * Math.max(1, bs * .6)) * shs, 0, 0, Math.PI * 2); ctx.fill();
@@ -4810,9 +4867,11 @@ function draw() {
         if (flip) ctx.scale(-1, 1);
         // footDx：素材的腳底中心不在圖的正中央時（px，以素材原本的朝向為準，負＝偏左），把圖往反方向挪，讓腳底中心對準 a.x——
         // 判定圈、影子、名牌、血條都以 a.x 為準，這樣才會在正腳下（翻轉時 ctx 已經左右翻，挪的方向自動跟著翻）
-        const fdx = def.footDx || 0;
-        if (an) drawSpr(an, animFrame(a, an), -W / 2 - fdx, -H, W, H);
-        else ctx.drawImage(img, -W / 2 - fdx, -H, W, H);
+        // footDy：素材每格底部留白（產生器自動量測寫進 mobs.json）——把圖往下挪，腳／底部才會踩到地面（影子在 a.y）。
+        // 飛行中的怪物不挪（牠本來就離地）。footDx 則同舊：腳底中心不在圖正中時往反方向挪。
+        const fdx = def.footDx || 0, fdy = a.fly ? 0 : (def.footDy || 0);
+        if (an) drawSpr(an, animFrame(a, an), -W / 2 - fdx, -H + fdy, W, H, row);
+        else ctx.drawImage(img, -W / 2 - fdx, -H + fdy, W, H);
         ctx.restore();
         if (a.dead) return;
         if (def.owner && (S.t < (a.vulnUntil ?? 0) || S.t < (a.weakUntil ?? 0))) drawOwnerDebuff(a, W, H);
@@ -6175,7 +6234,10 @@ async function boot() {
     ...S.mobsDB.mobs.filter(a => a.sprite).map(async a => S.mobImgs[a.id] = await optImg(`assets/mobs/${a.sprite}`)),   // 外部素材為主的島主可以沒有 sprite（沒有圖可退回）
     ...S.mobsDB.mobs.filter(a => a.anim?.sheet).map(async a => {   // 多幀動畫：sheet 載入失敗就退回單張 sprite
       const sh = await optImg(`assets/${a.anim.sheet}`);
-      if (sh) S.mobAnims[a.id] = loadAnim(sh, a.anim);
+      if (!sh) return;
+      const an = loadAnim(sh, a.anim);
+      if (a.tint) an.img = tintSheet(an.img, a.tintBase || sheetMainHex(an.img), a.tint);   // 調色：一張基準圖 → 各島不同色系
+      S.mobAnims[a.id] = an;
     }),
     ...S.toolsDB.tools.map(async t => { const im = await optImg(`assets/tools/${t.sprite}`); if (im) im.wscale = 2; S.weaponImgs[t.id] = im; }),   // 採集工具仍是舊 24px 規格（畫 2 倍）；換成 64px 模組時改 wscale
     optImg('assets/tombstone.png').then(im => S.tombImg = im),   // 死亡墓碑（島主龍衝打倒後原地出現）
