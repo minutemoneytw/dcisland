@@ -620,7 +620,7 @@ LPC_HAIR_STYLES = [              # 其他 LPC 髮型（走路列，原檔是單�
     ("long", "長髮", "hair_long.png"),
 ]
 LPC_SKIN_DYE = ["#f9d5ba", "#e4a47c", "#cc8665", "#99423c", "#faecd7"]   # LPC 膚色調色盤（臉型跟膚色重上色用）
-LPC_CAT_EAR_DYE = ["#260d14", "#6a1108", "#a42600", "#bf4000", "#e55600", "#ff8a00", "#ffffff"]   # LPC 貓耳色盤（貓耳跟髮色重上色用）
+LPC_CAT_FUR = ["#ff8a00", "#e55600", "#bf4000", "#a42600"]   # LPC 貓耳毛色（依亮度映射成髮色；深色輪廓與耳內白不在此列＝保留／粉肉色）
 LPC_FACES = [                    # 臉型（頭型）：(id, 名稱, external 檔名)
     ("normal", "普通", "f_normal.png"), ("gaunt", "瘦長", "f_gaunt.png"),
     ("plump", "圓胖", "f_plump.png"), ("small", "小頭", "f_small.png"), ("old", "老臉", "f_old.png"),
@@ -637,7 +637,7 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
     dict(id="human", name="人類", scale=1.0),
     dict(id="elf", name="精靈", scale=1.0, ear="char_ears_elven.png", earDye=LPC_SKIN_DYE),   # 精靈耳跟膚色
     dict(id="cat", name="貓族", scale=1.0, earBg="char_ears_cat_bg.png", earFg="char_ears_cat_fg.png",
-         earDye=LPC_CAT_EAR_DYE),   # 貓耳跟髮色重上色（執行時用髮型主色）
+         earFur=LPC_CAT_FUR, earInner="#f5b8ad"),   # 貓耳：毛色跟髮色（earFur）、耳內白眼底＝粉肉色（earInner）、深色輪廓保留原色
     dict(id="lalafell", name="拉拉肥", scale=0.5),    # LPC 沒有小人體型 → 人類模組縮小
     dict(id="giant", name="巨人", scale=1.5),         # LPC 沒有巨人體型 → 人類模組放大
 ]

@@ -546,15 +546,13 @@
    "scale": 1.0,
    "earBg": "char_ears_cat_bg.png",
    "earFg": "char_ears_cat_fg.png",
-   "earDye": [
-    "#260d14",
-    "#6a1108",
-    "#a42600",
-    "#bf4000",
-    "#e55600",
+   "earFur": [
     "#ff8a00",
-    "#ffffff"
-   ]
+    "#e55600",
+    "#bf4000",
+    "#a42600"
+   ],
+   "earInner": "#f5b8ad"
   },
   {
    "id": "lalafell",

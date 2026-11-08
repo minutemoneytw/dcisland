@@ -2283,8 +2283,35 @@ const lookItem = (list, id) => list?.find(it => it.id === id) || null;
 // （比主色暗的乘上比例、比主色亮的往白色推）。舊格式 recolor: {base, shade} 視同 dye: [base, shade]。結果依 (sheet, 顏色) 快取整張
 const dyeList = it => it?.dye || (it?.recolor ? [it.recolor.base, it.recolor.shade].filter(Boolean) : null);
 const lum = ([r, g, b]) => .299 * r + .587 * g + .114 * b;
-function dyeSheet(img, dye, hex) {
-  const key = img.src + '|' + dye.join(',') + '|' + hex;
+// 雙色染色（貓耳用）：pairs＝[原色清單, 目標色] 多組——每組內的顏色依與該組首色的明暗比例映射到目標色；
+// 沒列進任何一組的顏色（貓耳的深色輪廓）保留原色。結果同樣進 recolorCache
+function duotoneSheet(img, pairs) {
+  const key = 'duo|' + img.src + '|' + pairs.map(p => p[1] + '(' + p[0].join(',') + ')').join(' ');
+  let cv = S.recolorCache.get(key);
+  if (cv) return cv;
+  cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+  const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, cv.width, cv.height), p = d.data;
+  const map = new Map();
+  for (const [dye, hex] of pairs) {
+    if (!hex) continue;   // 沒有目標色（沒髮色）＝這組不映射，保留原色
+    const T = hexRGB(hex), base = Math.max(1, lum(hexRGB(dye[0])));
+    for (const c of dye) {
+      const src = hexRGB(c), k = lum(src) / base;
+      const out = T.map(v => Math.round(k <= 1 ? v * k : v + (255 - v) * Math.min(1, k - 1)));
+      map.set((src[0] << 16) | (src[1] << 8) | src[2], out);
+    }
+  }
+  for (let i = 0; i < p.length; i += 4) {
+    if (!p[i + 3]) continue;
+    const o = map.get((p[i] << 16) | (p[i + 1] << 8) | p[i + 2]);
+    if (o) { p[i] = o[0]; p[i + 1] = o[1]; p[i + 2] = o[2]; }
+  }
+  g.putImageData(d, 0, 0);
+  S.recolorCache.set(key, cv);
+  return cv;
+}
+function dyeSheet(img, dye, hex) {  const key = img.src + '|' + dye.join(',') + '|' + hex;
   let cv = S.recolorCache.get(key);
   if (cv) return cv;
   cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
@@ -2334,14 +2361,20 @@ function charSprite(look, fi) {
   // 由下往上：身體 → 褲子 → 鞋子 → 衣服 → 臉型(頭) → 眼睛 →（種族耳後層）→ 頭髮 →（種族耳前層）→ 帽子
   const layers = [[skinIt], [bottom, pantsHex], [shoe, shoeHex], [top, shirtHex], [face, skinHex], [eyes]];
   if (race.ear) layers.push([{ sheet: race.ear, dye: race.earDye }, skinHex]);   // 精靈耳（跟膚色）
-  if (race.earBg) layers.push([{ sheet: race.earBg, dye: race.earDye }, hairHex]);   // 貓耳後層（髮下面；跟髮色）
+  const catTint = race.earFur ? hx2 => [[race.earFur, hx2 || null], [['#ffffff'], race.earInner || '#f5b8ad']] : null;
+  if (race.earBg) layers.push([{ sheet: race.earBg, tint: catTint, hx: hairHex || null }]);   // 貓耳後層（髮下面；毛色跟髮色、耳內粉肉色）
   layers.push([hair]);
-  if (race.earFg) layers.push([{ sheet: race.earFg, dye: race.earDye }, hairHex]);   // 貓耳前層（髮上面；跟髮色）
+  if (race.earFg) layers.push([{ sheet: race.earFg, tint: catTint, hx: hairHex || null }]);   // 貓耳前層（髮上面；同上）
   layers.push([hat, hatHex]);
   for (const [it, hex] of layers) {
     const img = it && S.charImgs[it.sheet];
     if (!img || sx + F.w > img.width || sy + F.h > img.height) continue;   // 缺圖／這張 sheet 沒有這一格：這層略過
-    const dye = dyeList(it), src = dye && hex ? dyeSheet(img, dye, hex) : img;
+    let src;
+    if (it.tint) src = duotoneSheet(img, it.tint(it.hx));   // 雙色染色（貓耳：毛→髮色、耳內→粉肉色）
+    else {
+      const dye = dyeList(it);
+      src = dye && hex ? dyeSheet(img, dye, hex) : img;
+    }
     g.drawImage(src, sx, sy, F.w, F.h, 0, 0, F.w, F.h);
   }
   S.charCache.set(k, cv);
