@@ -2282,8 +2282,8 @@ function stepMob(a, dt) {
     if (a.target?.flee) { a.idle = 1 + Math.random() * 2; a.target = null; return; }
     const home = nearestLand(a);
     if (home) a.target = home;
-    else for (let t = 0; t < 20; t++) { // 漫一步（限制活動半徑 6 格）
-      const nx = a.x + (Math.random() * 2 - 1) * 6, ny = a.y + (Math.random() * 2 - 1) * 6;
+    else for (let t = 0; t < 20; t++) { // 漫一步（限制活動半徑 6 格；2026-11-08 修正：原本誤寫成 ±6「px」，一步不到 1 格，怪物幾乎只是走回自己格子中心＝看起來站著不動）
+      const nx = a.x + (Math.random() * 2 - 1) * 6 * CELL, ny = a.y + (Math.random() * 2 - 1) * 6 * CELL;
       const gx = Math.floor(nx / CELL), gy = Math.floor(ny / CELL);
       if (gx < 0 || gy < 0 || gx >= COLS || gy >= ROWS) continue;
       if (S.world.types[gy * COLS + gx] !== 2) continue;
