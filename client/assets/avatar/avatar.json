@@ -1607,7 +1607,6 @@
    "type": "bow",
    "sprite": "weapon_harpbow.png",
    "carry": "back",
-   "scale": 2,
    "ranged": {
     "range": 320,
     "cast": 0,
@@ -1620,23 +1619,20 @@
    "name": "長槍",
    "type": "lance",
    "sprite": "weapon_lance.png",
-   "carry": "back",
-   "scale": 2
+   "carry": "back"
   },
   {
    "id": "daggers",
    "name": "雙劍",
    "type": "daggers",
    "sprite": "weapon_daggers.png",
-   "carry": "waist",
-   "scale": 2
+   "carry": "waist"
   },
   {
    "id": "scepter",
    "name": "咒杖",
    "type": "scepter",
    "sprite": "weapon_scepter.png",
-   "scale": 2,
    "ranged": {
     "range": 320,
     "cast": 1.0,
@@ -1650,7 +1646,6 @@
    "type": "rod",
    "sprite": "weapon_rod.png",
    "carry": "back",
-   "scale": 2,
    "fishing": true
   },
   {
