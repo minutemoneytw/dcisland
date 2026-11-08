@@ -613,8 +613,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t3": "oldmaid", "t4": "gomoku", "t5": "dodge"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t3": "oldmaid", "t4": "gomoku", "t5": "dodge", "t6": "uno"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
 # 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
@@ -700,6 +700,9 @@ def tbl_leave(t, cid):
         name = t["seats"][i]["name"]
         if t["phase"] == "playing" and t["game"] == "dodge":   # 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
             dg_leave(t, i, int(time.time() * 1000))
+            return
+        if t["phase"] == "playing" and t["game"] == "uno":   # UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
+            un_leave(t, i, int(time.time() * 1000))
             return
         if t["phase"] == "playing":   # 使用者定：有人離開（含斷線）直接結束這一局
             t["result"] = {"aborted": True, "text": f"{name} 離開了，這一局結束"}
@@ -948,7 +951,348 @@ def dg_leave(t, i, now):
     s["left"], s["cid"] = True, None
     dg_check_end(t, now)
 
-GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+# ---- UNO（第六桌 t6；2026-11-08，使用者要求，名稱沿用 UNO（商標風險由使用者決定）；牌面是原創繪製）：2～6 人、標準 108 張、手牌剩 1 張要喊 UNO ----
+# 牌的編碼：顏色字母 RYGB（紅黃綠藍）＋點數 0～9／s（跳過）／r（反轉）／d（+2），例如 R5、Gs；W＝變色牌、F＝變色 +4（沒有顏色）。
+# 兩種玩法（桌主＝第一位入座者在開局前選，t["mode"]）：
+#   傳統 classic：出牌要同色或同點數（或變色牌）；+4 只能在手上沒有「目前顏色」的牌時出；+2／+4 不可疊加（受罰者直接抽牌並跳過回合）；跳過直接生效；
+#     沒牌可出時抽 1 張，抽到的牌能出就可以出、也可以放棄。
+#   無限制 wild（使用者定）：① +2／+4 沒有上限：被加牌的人手上有任何 + 牌（+2 或 +4，不看顏色）就可以接著出，累積 pending 張數傳給下一位，沒有 + 牌的人一次抽完累積的張數並跳過；
+#     ② 跳過也可以傳遞：被跳過的人手上有跳過牌（不看顏色）可以再出，讓下一位被跳過，沒有（或選擇放棄）就被跳過；
+#     ③ 沒牌可出時，抽牌沒有限制：可以一直抽到有牌可出為止；+4 也沒有「手上沒有目前顏色」的限制。
+# 共通：出到手牌剩 1 張時要在下一個人動作前喊 UNO（uno），沒喊被別人抓到（catch）罰抽 2 張；先出完手牌的人獲勝。起始牌一律是數字牌。
+# 回合限時 UN_TURN_MS，超時由客戶端送 timeout（伺服器核對時鐘）：有累積加牌就吃下、被跳過就放棄、否則抽 1 張並跳過；中途離開的人手牌收回牌堆，遊戲繼續，只剩 1 人時那人獲勝（無 XP）。
+UN_COLORS = "RYGB"
+UN_TURN_MS = 30000
+UN_XP = 5   # 輸贏一樣（使用者定）：每位入座者 +5
+UN_MODES = ("classic", "wild")
+
+def un_deck():
+    d = []
+    for c in UN_COLORS:
+        d.append(c + "0")
+        for v in "123456789srd":
+            d += [c + v, c + v]
+    return d + ["W"] * 4 + ["F"] * 4
+
+def un_cname(c):
+    return {"R": "紅", "Y": "黃", "G": "綠", "B": "藍"}.get(c, "")
+
+def un_label(card):
+    if card == "W":
+        return "變色牌"
+    if card == "F":
+        return "變色 +4"
+    return un_cname(card[0]) + {"s": "跳過", "r": "反轉", "d": "+2"}.get(card[1:], card[1:])
+
+def un_is_plus(card):
+    return card == "F" or (card not in ("W",) and card[1:] == "d")
+
+def un_is_skip(card):
+    return card not in ("W", "F") and card[1:] == "s"
+
+def un_playable(g, hand, card):
+    """目前情境下這張牌能不能出（含無限制玩法的累積加牌／跳過傳遞）。"""
+    if g["pending"] > 0:   # 無限制：只能接著出 + 牌（不看顏色）傳下去
+        return un_is_plus(card)
+    if g["skip"]:          # 無限制：被跳過時只能出跳過牌（不看顏色）傳下去
+        return un_is_skip(card)
+    if card == "W":
+        return True
+    if card == "F":        # 傳統：+4 只能在手上沒有「目前顏色」的牌時出；無限制沒有這個限制
+        return g["mode"] == "wild" or not any(c[0] == g["color"] for c in hand if c not in ("W", "F"))
+    return card[0] == g["color"] or card[1:] == g["topval"]
+
+def un_active(t):
+    return [i for i, s in enumerate(t["seats"]) if not s.get("left")]
+
+def un_next(t, i, steps=1):
+    n, j, moved = len(t["seats"]), i, 0
+    while moved < steps:
+        j = (j + t["g"]["dir"]) % n
+        if not t["seats"][j].get("left"):
+            moved += 1
+    return j
+
+def un_set_turn(t, i, now):
+    t["turn"] = i
+    t["g"]["drawn"] = False
+    t["g"]["deadline"] = now + UN_TURN_MS
+
+def un_draw_cards(t, i, n):
+    g, hand = t["g"], t["seats"][i]["hand"]
+    for _ in range(n):
+        if not g["deck"]:   # 牌堆空了：把棄牌堆（留最上面那張）洗回去
+            top = g["discard"].pop()
+            g["deck"], g["discard"] = g["discard"], [top]
+            random.shuffle(g["deck"])
+        if not g["deck"]:
+            break
+        hand.append(g["deck"].pop())
+
+def un_has_playable(t, i):
+    g, hand = t["g"], t["seats"][i]["hand"]
+    return any(un_playable(g, hand, c) for c in hand)
+
+def un_start(t):
+    now = int(time.time() * 1000)
+    deck = un_deck()
+    random.shuffle(deck)
+    n = len(t["seats"])
+    for s in t["seats"]:
+        s["hand"], s["out"], s["ready"], s["left"], s["said"] = [deck.pop() for _ in range(7)], False, False, False, False
+    while deck[-1][0] not in UN_COLORS or deck[-1][1:] not in list("0123456789"):   # 起始牌一律是數字牌：功能牌／變色牌放回去重洗
+        random.shuffle(deck)
+    top = deck.pop()
+    mode = t.get("mode") if t.get("mode") in UN_MODES else "classic"
+    t["g"] = {"deck": deck, "discard": [top], "color": top[0], "topval": top[1:], "dir": 1, "drawn": False, "pend": -1, "deadline": 0,
+              "mode": mode, "pending": 0, "skip": False}   # pending：無限制玩法累積的加牌張數；skip：輪到的人正被跳過、可以傳遞
+    t["result"] = None
+    t["phase"] = "playing"
+    un_set_turn(t, random.randrange(n), now)
+    tbl_log(t, f"牌局開始（{'無限制玩法' if mode == 'wild' else '傳統玩法'}）！每人 7 張，起始牌 {un_label(top)}，由 {t['seats'][t['turn']]['name']} 先出")
+
+def un_finish(t, winner, xp):
+    name = t["seats"][winner]["name"]
+    stay = [s for s in t["seats"] if not s.get("left")]
+    t["result"] = {"winner": winner, "name": name, "text": f"{name} 出完手牌，獲勝！", "rid": random.getrandbits(32), "xp": [UN_XP if xp else 0] * len(stay)}
+    tbl_log(t, t["result"]["text"])
+    t["seats"] = stay
+    tbl_reset_seats(t)
+    t["g"] = None
+
+def un_check_last(t):
+    """只剩 1 位玩家：那位獲勝（其他人都離開了；無 XP，擋「開了就等別人離開」的刷分）；一個人都不剩就直接清桌。"""
+    act = un_active(t)
+    if t["phase"] != "playing" or len(act) > 1:
+        return False
+    if act:
+        un_finish(t, act[0], False)
+    else:
+        t["seats"] = []
+        tbl_reset_seats(t)
+        t["g"] = None
+    return True
+
+def un_pass_on(t, v, now):
+    """輪到 v 面對累積加牌／跳過：v 手上沒有能接的牌就直接吃下、換下一位（不用等他按）；有就把決定權交給 v。"""
+    g, hand = t["g"], t["seats"][v]["hand"]
+    if g["pending"] > 0:
+        if any(un_is_plus(c) for c in hand):
+            un_set_turn(t, v, now)
+            return
+        n = g["pending"]
+        un_draw_cards(t, v, n)
+        g["pending"] = 0
+        tbl_log(t, f"{t['seats'][v]['name']} 抽 {n} 張")
+        un_set_turn(t, un_next(t, v), now)
+    elif g["skip"]:
+        if any(un_is_skip(c) for c in hand):
+            un_set_turn(t, v, now)
+            return
+        g["skip"] = False
+        tbl_log(t, f"{t['seats'][v]['name']} 被跳過")
+        un_set_turn(t, un_next(t, v), now)
+    else:
+        un_set_turn(t, v, now)
+
+def un_play(t, cid, idx, color, now):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "uno" or role != "seat" or t["phase"] != "playing" or not g or i != t["turn"]:
+        return
+    s = t["seats"][i]
+    if not isinstance(idx, int) or isinstance(idx, bool) or not 0 <= idx < len(s["hand"]):
+        return
+    if g["drawn"] and idx != len(s["hand"]) - 1:   # 傳統：剛抽的牌只能出那一張（或放棄）
+        return
+    card = s["hand"][idx]
+    if not un_playable(g, s["hand"], card):
+        return
+    if card in ("W", "F") and (not isinstance(color, str) or len(color) != 1 or color not in UN_COLORS):   # 變色牌要指定四色之一（型別／長度要檢查：None 會出錯、"RY" 會被當成子字串通過）
+        return
+    wild = g["mode"] == "wild"
+    s["hand"].pop(idx)
+    g["pend"] = -1   # 輪到下一個人動作了：上一位忘記喊 UNO 的抓不到了
+    g["discard"].append(card)
+    if card in ("W", "F"):
+        g["color"], g["topval"] = color, card
+        tbl_log(t, f"{s['name']} 出了 {un_label(card)}，選了{un_cname(color)}色")
+    else:
+        g["color"], g["topval"] = card[0], card[1:]
+        tbl_log(t, f"{s['name']} 出了 {un_label(card)}")
+    if not s["hand"]:   # 出完了：獲勝
+        un_finish(t, i, True)
+        return
+    if len(s["hand"]) == 1:
+        if s.get("said"):
+            s["said"] = False
+        else:
+            g["pend"] = i   # 還沒喊 UNO：下一個人動作前，任何人可以抓
+    n_active = len(un_active(t))
+    g["skip"] = False
+    if un_is_skip(card):    # 跳過
+        v = un_next(t, i)
+        if wild:
+            g["skip"] = True
+            un_pass_on(t, v, now)
+        else:
+            tbl_log(t, f"{t['seats'][v]['name']} 被跳過")
+            un_set_turn(t, un_next(t, i, 2), now)
+    elif card not in ("W", "F") and card[1:] == "r":   # 反轉（兩人時等於跳過）
+        g["dir"] = -g["dir"]
+        tbl_log(t, "方向反轉")
+        un_set_turn(t, i if n_active == 2 else un_next(t, i), now)
+    elif un_is_plus(card):   # +2／+4
+        n = 4 if card == "F" else 2
+        v = un_next(t, i)
+        if wild:   # 累積：傳給下一位，他有 + 牌就可以接著傳
+            g["pending"] += n
+            tbl_log(t, f"累積 {g['pending']} 張")
+            un_pass_on(t, v, now)
+        else:
+            un_draw_cards(t, v, n)
+            tbl_log(t, f"{t['seats'][v]['name']} 抽 {n} 張")
+            un_set_turn(t, un_next(t, i, 2), now)
+    else:
+        un_set_turn(t, un_next(t, i), now)
+
+def un_draw(t, cid, now):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "uno" or role != "seat" or t["phase"] != "playing" or not g or i != t["turn"]:
+        return
+    s = t["seats"][i]
+    wild = g["mode"] == "wild"
+    if wild and g["pending"] > 0:   # 無限制：吃下累積的加牌，被跳過這一回合
+        n = g["pending"]
+        g["pend"] = -1
+        un_draw_cards(t, i, n)
+        g["pending"] = 0
+        if len(s["hand"]) > 2:
+            s["said"] = False
+        tbl_log(t, f"{s['name']} 抽 {n} 張")
+        un_set_turn(t, un_next(t, i), now)
+        return
+    if wild and g["skip"]:   # 被跳過要用 pass 放棄，不能抽牌
+        return
+    if wild:   # 無限制：手上沒有能出的牌時可以一直抽（有能出的牌就不能抽）
+        if un_has_playable(t, i):
+            return
+        g["pend"] = -1
+        un_draw_cards(t, i, 1)
+        if len(s["hand"]) > 2:
+            s["said"] = False
+        tbl_log(t, f"{s['name']} 抽了一張牌")
+        return
+    if g["drawn"]:
+        return
+    g["pend"] = -1
+    un_draw_cards(t, i, 1)
+    if len(s["hand"]) > 2:
+        s["said"] = False
+    card = s["hand"][-1] if s["hand"] else None
+    if card and un_playable(g, s["hand"], card):
+        g["drawn"] = True   # 抽到的牌能出：可以出、也可以放棄（pass）
+        tbl_log(t, f"{s['name']} 抽了一張牌")
+    else:
+        tbl_log(t, f"{s['name']} 抽了一張牌，沒有可以出的牌")
+        un_set_turn(t, un_next(t, i), now)
+
+def un_pass(t, cid, now):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "uno" or role != "seat" or t["phase"] != "playing" or not g or i != t["turn"]:
+        return
+    s = t["seats"][i]
+    if g["mode"] == "wild" and g["skip"]:   # 無限制：接受被跳過
+        g["pend"] = -1
+        g["skip"] = False
+        tbl_log(t, f"{s['name']} 被跳過")
+        un_set_turn(t, un_next(t, i), now)
+        return
+    if g["mode"] == "wild" and g["pending"] == 0 and not g["drawn"] and not un_has_playable(t, i) and not g["deck"] and len(g["discard"]) <= 1:
+        g["pend"] = -1   # 牌抽光了、也沒牌可出：只能放棄
+        tbl_log(t, f"{s['name']} 沒有牌可出也沒牌可抽，放棄")
+        un_set_turn(t, un_next(t, i), now)
+        return
+    if not g["drawn"]:
+        return
+    g["pend"] = -1
+    tbl_log(t, f"{s['name']} 放棄出牌")
+    un_set_turn(t, un_next(t, i), now)
+
+def un_say(t, cid):
+    """喊 UNO：剛出到只剩 1 張時（pend）補喊；或手上只剩 1～2 張時先喊好（出到 1 張就不會被抓）。"""
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "uno" or role != "seat" or t["phase"] != "playing" or not g:
+        return
+    s = t["seats"][i]
+    if g["pend"] == i:
+        g["pend"] = -1
+        tbl_log(t, f"{s['name']} 喊了 UNO！")
+    elif len(s["hand"]) <= 2:
+        s["said"] = True
+        tbl_log(t, f"{s['name']} 喊了 UNO！")
+
+def un_catch(t, cid):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "uno" or role != "seat" or t["phase"] != "playing" or not g or g["pend"] < 0 or g["pend"] == i:
+        return
+    v = g["pend"]
+    g["pend"] = -1
+    un_draw_cards(t, v, 2)
+    tbl_log(t, f"{t['seats'][i]['name']} 抓到 {t['seats'][v]['name']} 沒喊 UNO，罰抽 2 張")
+
+def un_timeout(t, now):
+    """回合限時到了（客戶端送 timeout，伺服器核對時鐘）：有累積加牌就吃下、被跳過就放棄、否則抽 1 張並跳過（剛抽過就直接跳過）。"""
+    g = t.get("g")
+    if t["game"] != "uno" or t["phase"] != "playing" or not g or now < g["deadline"] - 300:
+        return
+    i = t["turn"]
+    s = t["seats"][i]
+    g["pend"] = -1
+    if g["pending"] > 0:
+        n = g["pending"]
+        un_draw_cards(t, i, n)
+        g["pending"] = 0
+        tbl_log(t, f"{s['name']} 超時，吃下 {n} 張")
+    elif g["skip"]:
+        g["skip"] = False
+        tbl_log(t, f"{s['name']} 超時，被跳過")
+    else:
+        if not g["drawn"]:
+            un_draw_cards(t, i, 1)
+        tbl_log(t, f"{s['name']} 超時，自動{'' if g['drawn'] else '抽牌並'}跳過")
+    un_set_turn(t, un_next(t, i), now)
+
+def un_leave(t, i, now):
+    """遊戲進行中有人離開：手牌收回牌堆，遊戲繼續；只剩 1 人時那人獲勝（無 XP）。"""
+    g, s = t["g"], t["seats"][i]
+    g["deck"] += s["hand"]
+    random.shuffle(g["deck"])
+    s["hand"], s["left"], s["cid"] = [], True, None
+    tbl_log(t, f"{s['name']} 離開了，手牌收回牌堆")
+    if g["pend"] == i:
+        g["pend"] = -1
+    if un_check_last(t):
+        return
+    if i == t["turn"]:
+        g["pending"], g["skip"] = 0, False   # 正在被加牌／被跳過的人離開：累積的懲罰作廢
+        un_set_turn(t, un_next(t, i), now)
+
+def un_set_mode(t, cid, mode):
+    """桌主（第一位入座者）在開局前選玩法；換玩法會讓大家的「準備」重來。"""
+    role, i = tbl_find(t, cid)
+    if t["game"] != "uno" or role != "seat" or i != 0 or t["phase"] != "lobby" or mode not in UN_MODES or t.get("mode", "classic") == mode:
+        return
+    t["mode"] = mode
+    for s in t["seats"]:
+        s["ready"] = False
+    tbl_log(t, f"{t['seats'][0]['name']} 把玩法改成{'無限制' if mode == 'wild' else '傳統'}")
+
+GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
@@ -967,12 +1311,30 @@ def tbl_view(t, cid):
             seats[k].update(lives=s.get("lives", 0), died=s.get("died"), left=bool(s.get("left")))
         if g and playing:
             v["dg"] = {"seed": g["seed"], "t0": g["t0"], "dur": DG_DUR, "sn": int(time.time() * 1000)}
-    elif g:   # 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
+    elif g and t["game"] == "gomoku":   # 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
         v["board"] = "".join(str(c) for c in g["board"])
         v["last"], v["black"], v["line"], v["moves"] = g["last"], g["black"], g["line"], g["moves"]   # moves：每一手的座標（偶數手＝黑棋）；結束後客戶端用來復盤
-    if role == "spec" and playing and t["game"] == "oldmaid":   # 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
+    if t["game"] == "uno":
+        v["mode"] = t.get("mode", "classic")   # 玩法（桌主在開局前選）：classic 傳統／wild 無限制
+    if t["game"] == "uno" and playing and t.get("g"):   # UNO：目前顏色、方向、最上面一張、牌堆張數、這回合的期限（sn＝伺服器現在時間，客戶端對時用）、誰沒喊 UNO（可以抓）、累積加牌張數、是否正被跳過
+        g = t["g"]
+        v["un"] = {"color": g["color"], "dir": g["dir"], "top": g["discard"][-1], "deck": len(g["deck"]), "drawn": g["drawn"], "pend": g["pend"],
+                   "pending": g["pending"], "skip": g["skip"], "deadline": g["deadline"], "sn": int(time.time() * 1000)}
+        for k, s in enumerate(t["seats"]):
+            seats[k]["left"] = bool(s.get("left"))
+        if role == "seat":
+            me = t["seats"][i]
+            mine = i == t["turn"]
+            v["playable"] = [k for k, c in enumerate(me["hand"]) if un_playable(g, me["hand"], c) and (not g["drawn"] or k == len(me["hand"]) - 1)] if mine else []
+            if g["mode"] == "wild":   # 無限制：有累積加牌時可以吃下；沒牌可出時可以一直抽；被跳過時只能出跳過牌或放棄
+                v["canDraw"] = mine and (g["pending"] > 0 or (not g["skip"] and not un_has_playable(t, i)))
+                v["canPass"] = mine and (g["skip"] or (g["pending"] == 0 and not un_has_playable(t, i) and not g["deck"] and len(g["discard"]) <= 1))
+            else:
+                v["canDraw"] = mine and not g["drawn"]
+                v["canPass"] = mine and g["drawn"]
+    if role == "spec" and playing and t["game"] in ("oldmaid", "uno"):   # 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
         v["hands"] = [list(s["hand"]) for s in t["seats"]]
-    if role == "seat" and playing and t["game"] == "oldmaid":
+    if role == "seat" and playing and t["game"] in ("oldmaid", "uno"):
         v["hand"] = list(t["seats"][i]["hand"])   # 照伺服器順序（不排序）：對方抽的第 k 張牌背＝這裡從左數第 k 張
     return v
 
@@ -2235,11 +2597,26 @@ class Room:
                     elif a == "stand":
                         tbl_stand(t, cid)
                     elif a == "draw":
-                        om_draw(t, cid, msg.get("idx"))
+                        if t["game"] == "uno":
+                            un_draw(t, cid, now_ms)   # UNO：抽牌
+                        else:
+                            om_draw(t, cid, msg.get("idx"))
                     elif a == "shuffle":
                         om_shuffle(t, cid)
                     elif a == "move":
                         gm_move(t, cid, msg.get("x"), msg.get("y"))
+                    elif a == "play":   # UNO：出牌（idx、變色牌帶 color）
+                        un_play(t, cid, msg.get("idx"), msg.get("color"), now_ms)
+                    elif a == "pass":
+                        un_pass(t, cid, now_ms)
+                    elif a == "uno":
+                        un_say(t, cid)
+                    elif a == "catch":
+                        un_catch(t, cid)
+                    elif a == "timeout":
+                        un_timeout(t, now_ms)
+                    elif a == "mode":   # UNO：桌主在開局前選玩法（classic／wild）
+                        un_set_mode(t, cid, msg.get("v"))
                     elif a == "hit":   # 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
                         dg_hit(t, cid, now_ms)
                     elif a == "finish":   # 躲彈幕：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）

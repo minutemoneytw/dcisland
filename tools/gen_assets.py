@@ -1200,7 +1200,8 @@ TABLES_BY_TERRAIN = {
               dict(id="t2", game="gomoku", cell=[34, 24], w=3, h=2),
               dict(id="t3", game="oldmaid", cell=[50, 31], w=3, h=2),   # 各遊戲都有兩桌（2026-11-08，使用者要求）：t3 是 t1 的複本、t4 是 t2 的複本
               dict(id="t4", game="gomoku", cell=[34, 31], w=3, h=2),
-              dict(id="t5", game="dodge", cell=[42, 38], w=3, h=2)],   # 躲彈幕只有一桌（2026-11-08，使用者要求）
+              dict(id="t5", game="dodge", cell=[42, 38], w=3, h=2),
+              dict(id="t6", game="uno", cell=[34, 38], w=3, h=2)],   # UNO（2026-11-08，使用者要求）   # 躲彈幕只有一桌（2026-11-08，使用者要求）
 }
 
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
@@ -1219,6 +1220,19 @@ def table_oldmaid():
     cv.rect(9, 12, 14, 19, hx("#f4f0e4")); cv.rect(10, 13, 13, 15, hx("#d83a3a")); cv.rect(11, 17, 12, 18, hx("#d83a3a"))
     cv.rect(34, 11, 39, 18, hx("#f4f0e4")); cv.rect(35, 12, 38, 14, hx("#2a2a30")); cv.rect(36, 16, 37, 17, hx("#2a2a30"))
     cv.set(17, 20, hx("#f4f0e4")); cv.rect(15, 18, 19, 22, hx("#f4f0e4")); cv.rect(16, 19, 18, 21, hx("#e8c050"))
+    cv.outline()
+    return cv
+
+def table_uno():
+    cv = Canvas(48, 32)
+    wood, felt = hx("#6a4a2a"), hx("#7a2a2a")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.25))
+    cv.rect(3, 7, 44, 24, felt); cv.rect(3, 7, 44, 7, shade(felt, .8))
+    # 桌上一疊牌背與四張散開的色牌（紅黃綠藍）
+    cv.rect(20, 12, 27, 20, hx("#1e1e24")); cv.rect(21, 13, 26, 19, hx("#f4f0e4")); cv.ellipse(23.5, 16, 2, 3, hx("#d83a3a"))
+    for x, y, c in ((7, 11, "#d83a3a"), (13, 15, "#e8b820"), (32, 11, "#2ea84a"), (37, 16, "#2f66d8")):
+        cv.rect(x, y, x + 5, y + 7, hx(c)); cv.rect(x, y, x + 5, y, shade(hx(c), 1.3)); cv.set(x + 2, y + 3, hx("#ffffff")); cv.set(x + 3, y + 3, hx("#ffffff"))
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
 
@@ -2266,6 +2280,7 @@ def main():
     save(table_oldmaid(), "table_oldmaid.png", "games")
     save(table_gomoku(), "table_gomoku.png", "games")
     save(table_dodge(), "table_dodge.png", "games")
+    save(table_uno(), "table_uno.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")

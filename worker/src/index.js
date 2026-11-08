@@ -468,8 +468,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t3: "oldmaid", t4: "gomoku", t5: "dodge" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t3: "oldmaid", t4: "gomoku", t5: "dodge", t6: "uno" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
 // 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
@@ -530,6 +530,7 @@ function tblLeave(t, cid) {
   else if (role === "seat") {
     const name = t.seats[i].name;
     if (t.phase === "playing" && t.game === "dodge") { dgLeave(t, i, Date.now()); return; }   // 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
+    if (t.phase === "playing" && t.game === "uno") { unLeave(t, i, Date.now()); return; }   // UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
     if (t.phase === "playing") {   // 使用者定：有人離開（含斷線）直接結束這一局
       t.result = { aborted: true, text: `${name} 離開了，這一局結束` };
       tblResetSeats(t);
@@ -720,7 +721,206 @@ function dgLeave(t, i, now) {
   s.left = true; s.cid = null;
   dgCheckEnd(t, now);
 }
-const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+// ---- UNO（第六桌 t6；2026-11-08，使用者要求，名稱沿用 UNO（商標風險由使用者決定）；牌面是原創繪製）：2～6 人、標準 108 張、手牌剩 1 張要喊 UNO ----
+// 與 tools/dev_server.py 的 un_* 同一套（規則說明見那邊）：傳統 classic／無限制 wild（+2／+4 可無限累積傳遞、跳過可傳遞、沒牌可出時抽牌不限次數）。
+// 牌的編碼：顏色字母 RYGB＋點數 0～9／s（跳過）／r（反轉）／d（+2），例如 R5、Gs；W＝變色牌、F＝變色 +4。
+const UN_COLORS = "RYGB";
+const UN_TURN_MS = 30000;
+const UN_XP = 5;   // 輸贏一樣（使用者定）：每位入座者 +5
+const UN_MODES = ["classic", "wild"];
+function unDeck() {
+  const d = [];
+  for (const c of UN_COLORS) { d.push(c + "0"); for (const v of "123456789srd") d.push(c + v, c + v); }
+  return d.concat(Array(4).fill("W"), Array(4).fill("F"));
+}
+const unCname = c => ({ R: "紅", Y: "黃", G: "綠", B: "藍" }[c] || "");
+const unLabel = card => (card === "W" ? "變色牌" : card === "F" ? "變色 +4" : unCname(card[0]) + ({ s: "跳過", r: "反轉", d: "+2" }[card.slice(1)] || card.slice(1)));
+const unIsPlus = card => card === "F" || (card !== "W" && card.slice(1) === "d");
+const unIsSkip = card => card !== "W" && card !== "F" && card.slice(1) === "s";
+// 目前情境下這張牌能不能出（含無限制玩法的累積加牌／跳過傳遞）
+function unPlayable(g, hand, card) {
+  if (g.pending > 0) return unIsPlus(card);   // 無限制：只能接著出 + 牌（不看顏色）傳下去
+  if (g.skip) return unIsSkip(card);          // 無限制：被跳過時只能出跳過牌（不看顏色）傳下去
+  if (card === "W") return true;
+  if (card === "F") return g.mode === "wild" || !hand.some(c => c !== "W" && c !== "F" && c[0] === g.color);   // 傳統：+4 只能在手上沒有「目前顏色」的牌時出
+  return card[0] === g.color || card.slice(1) === g.topval;
+}
+const unActive = t => t.seats.map((s, i) => (s.left ? -1 : i)).filter(i => i >= 0);
+function unNext(t, i, steps = 1) {
+  const n = t.seats.length; let j = i, moved = 0;
+  while (moved < steps) { j = (j + t.g.dir + n) % n; if (!t.seats[j].left) moved++; }
+  return j;
+}
+function unSetTurn(t, i, now) { t.turn = i; t.g.drawn = false; t.g.deadline = now + UN_TURN_MS; }
+function unDrawCards(t, i, n) {
+  const g = t.g, hand = t.seats[i].hand;
+  for (let k = 0; k < n; k++) {
+    if (!g.deck.length) {   // 牌堆空了：把棄牌堆（留最上面那張）洗回去
+      const top = g.discard.pop();
+      g.deck = shuffle(g.discard); g.discard = [top];
+    }
+    if (!g.deck.length) break;
+    hand.push(g.deck.pop());
+  }
+}
+const unHasPlayable = (t, i) => t.seats[i].hand.some(c => unPlayable(t.g, t.seats[i].hand, c));
+function unStart(t) {
+  const now = Date.now(), deck = shuffle(unDeck()), n = t.seats.length;
+  for (const s of t.seats) { s.hand = deck.splice(deck.length - 7, 7); s.out = false; s.ready = false; s.left = false; s.said = false; }
+  while (!("RYGB".includes(deck[deck.length - 1][0]) && "0123456789".includes(deck[deck.length - 1].slice(1)) && deck[deck.length - 1] !== "W" && deck[deck.length - 1] !== "F")) shuffle(deck);   // 起始牌一律是數字牌
+  const top = deck.pop(), mode = UN_MODES.includes(t.mode) ? t.mode : "classic";
+  t.g = { deck, discard: [top], color: top[0], topval: top.slice(1), dir: 1, drawn: false, pend: -1, deadline: 0, mode, pending: 0, skip: false };   // pending：無限制玩法累積的加牌張數；skip：輪到的人正被跳過、可以傳遞
+  t.result = null; t.phase = "playing";
+  unSetTurn(t, Math.floor(Math.random() * n), now);
+  tblLog(t, `牌局開始（${mode === "wild" ? "無限制玩法" : "傳統玩法"}）！每人 7 張，起始牌 ${unLabel(top)}，由 ${t.seats[t.turn].name} 先出`);
+}
+function unFinish(t, winner, xp) {
+  const name = t.seats[winner].name, stay = t.seats.filter(s => !s.left);
+  t.result = { winner, name, text: `${name} 出完手牌，獲勝！`, rid: Math.floor(Math.random() * 4294967296), xp: stay.map(() => (xp ? UN_XP : 0)) };
+  tblLog(t, t.result.text);
+  t.seats = stay;
+  tblResetSeats(t);
+  t.g = null;
+}
+// 只剩 1 位玩家：那位獲勝（其他人都離開了；無 XP，擋「開了就等別人離開」的刷分）；一個人都不剩就直接清桌
+function unCheckLast(t) {
+  const act = unActive(t);
+  if (t.phase !== "playing" || act.length > 1) return false;
+  if (act.length) unFinish(t, act[0], false);
+  else { t.seats = []; tblResetSeats(t); t.g = null; }
+  return true;
+}
+// 輪到 v 面對累積加牌／跳過：v 手上沒有能接的牌就直接吃下、換下一位（不用等他按）；有就把決定權交給 v
+function unPassOn(t, v, now) {
+  const g = t.g, hand = t.seats[v].hand;
+  if (g.pending > 0) {
+    if (hand.some(unIsPlus)) { unSetTurn(t, v, now); return; }
+    const n = g.pending;
+    unDrawCards(t, v, n); g.pending = 0;
+    tblLog(t, `${t.seats[v].name} 抽 ${n} 張`);
+    unSetTurn(t, unNext(t, v), now);
+  } else if (g.skip) {
+    if (hand.some(unIsSkip)) { unSetTurn(t, v, now); return; }
+    g.skip = false;
+    tblLog(t, `${t.seats[v].name} 被跳過`);
+    unSetTurn(t, unNext(t, v), now);
+  } else unSetTurn(t, v, now);
+}
+function unPlay(t, cid, idx, color, now) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "uno" || role !== "seat" || t.phase !== "playing" || !g || i !== t.turn) return;
+  const s = t.seats[i];
+  if (!Number.isInteger(idx) || idx < 0 || idx >= s.hand.length) return;
+  if (g.drawn && idx !== s.hand.length - 1) return;   // 傳統：剛抽的牌只能出那一張（或放棄）
+  const card = s.hand[idx];
+  if (!unPlayable(g, s.hand, card)) return;
+  if ((card === "W" || card === "F") && !(typeof color === "string" && color.length === 1 && UN_COLORS.includes(color))) return;   // 變色牌要指定四色之一
+  const wild = g.mode === "wild";
+  s.hand.splice(idx, 1);
+  g.pend = -1;   // 輪到下一個人動作了：上一位忘記喊 UNO 的抓不到了
+  g.discard.push(card);
+  if (card === "W" || card === "F") { g.color = color; g.topval = card; tblLog(t, `${s.name} 出了 ${unLabel(card)}，選了${unCname(color)}色`); }
+  else { g.color = card[0]; g.topval = card.slice(1); tblLog(t, `${s.name} 出了 ${unLabel(card)}`); }
+  if (!s.hand.length) { unFinish(t, i, true); return; }   // 出完了：獲勝
+  if (s.hand.length === 1) { if (s.said) s.said = false; else g.pend = i; }   // 還沒喊 UNO：下一個人動作前，任何人可以抓
+  const nActive = unActive(t).length;
+  g.skip = false;
+  if (unIsSkip(card)) {   // 跳過
+    const v = unNext(t, i);
+    if (wild) { g.skip = true; unPassOn(t, v, now); }
+    else { tblLog(t, `${t.seats[v].name} 被跳過`); unSetTurn(t, unNext(t, i, 2), now); }
+  } else if (card !== "W" && card !== "F" && card.slice(1) === "r") {   // 反轉（兩人時等於跳過）
+    g.dir = -g.dir; tblLog(t, "方向反轉");
+    unSetTurn(t, nActive === 2 ? i : unNext(t, i), now);
+  } else if (unIsPlus(card)) {   // +2／+4
+    const n = card === "F" ? 4 : 2, v = unNext(t, i);
+    if (wild) { g.pending += n; tblLog(t, `累積 ${g.pending} 張`); unPassOn(t, v, now); }   // 累積：傳給下一位，他有 + 牌就可以接著傳
+    else { unDrawCards(t, v, n); tblLog(t, `${t.seats[v].name} 抽 ${n} 張`); unSetTurn(t, unNext(t, i, 2), now); }
+  } else unSetTurn(t, unNext(t, i), now);
+}
+function unDraw(t, cid, now) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "uno" || role !== "seat" || t.phase !== "playing" || !g || i !== t.turn) return;
+  const s = t.seats[i], wild = g.mode === "wild";
+  if (wild && g.pending > 0) {   // 無限制：吃下累積的加牌，被跳過這一回合
+    const n = g.pending;
+    g.pend = -1; unDrawCards(t, i, n); g.pending = 0;
+    if (s.hand.length > 2) s.said = false;
+    tblLog(t, `${s.name} 抽 ${n} 張`);
+    unSetTurn(t, unNext(t, i), now);
+    return;
+  }
+  if (wild && g.skip) return;   // 被跳過要用 pass 放棄，不能抽牌
+  if (wild) {   // 無限制：手上沒有能出的牌時可以一直抽（有能出的牌就不能抽）
+    if (unHasPlayable(t, i)) return;
+    g.pend = -1; unDrawCards(t, i, 1);
+    if (s.hand.length > 2) s.said = false;
+    tblLog(t, `${s.name} 抽了一張牌`);
+    return;
+  }
+  if (g.drawn) return;
+  g.pend = -1; unDrawCards(t, i, 1);
+  if (s.hand.length > 2) s.said = false;
+  const card = s.hand.length ? s.hand[s.hand.length - 1] : null;
+  if (card && unPlayable(g, s.hand, card)) { g.drawn = true; tblLog(t, `${s.name} 抽了一張牌`); }   // 抽到的牌能出：可以出、也可以放棄（pass）
+  else { tblLog(t, `${s.name} 抽了一張牌，沒有可以出的牌`); unSetTurn(t, unNext(t, i), now); }
+}
+function unPass(t, cid, now) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "uno" || role !== "seat" || t.phase !== "playing" || !g || i !== t.turn) return;
+  const s = t.seats[i];
+  if (g.mode === "wild" && g.skip) { g.pend = -1; g.skip = false; tblLog(t, `${s.name} 被跳過`); unSetTurn(t, unNext(t, i), now); return; }   // 無限制：接受被跳過
+  if (g.mode === "wild" && g.pending === 0 && !g.drawn && !unHasPlayable(t, i) && !g.deck.length && g.discard.length <= 1) {   // 牌抽光了、也沒牌可出：只能放棄
+    g.pend = -1; tblLog(t, `${s.name} 沒有牌可出也沒牌可抽，放棄`); unSetTurn(t, unNext(t, i), now); return;
+  }
+  if (!g.drawn) return;
+  g.pend = -1; tblLog(t, `${s.name} 放棄出牌`); unSetTurn(t, unNext(t, i), now);
+}
+// 喊 UNO：剛出到只剩 1 張時（pend）補喊；或手上只剩 1～2 張時先喊好（出到 1 張就不會被抓）
+function unSay(t, cid) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "uno" || role !== "seat" || t.phase !== "playing" || !g) return;
+  const s = t.seats[i];
+  if (g.pend === i) { g.pend = -1; tblLog(t, `${s.name} 喊了 UNO！`); }
+  else if (s.hand.length <= 2) { s.said = true; tblLog(t, `${s.name} 喊了 UNO！`); }
+}
+function unCatch(t, cid) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "uno" || role !== "seat" || t.phase !== "playing" || !g || g.pend < 0 || g.pend === i) return;
+  const v = g.pend;
+  g.pend = -1; unDrawCards(t, v, 2);
+  tblLog(t, `${t.seats[i].name} 抓到 ${t.seats[v].name} 沒喊 UNO，罰抽 2 張`);
+}
+// 回合限時到了（客戶端送 timeout，伺服器核對時鐘）：有累積加牌就吃下、被跳過就放棄、否則抽 1 張並跳過（剛抽過就直接跳過）
+function unTimeout(t, now) {
+  const g = t.g;
+  if (t.game !== "uno" || t.phase !== "playing" || !g || now < g.deadline - 300) return;
+  const i = t.turn, s = t.seats[i];
+  g.pend = -1;
+  if (g.pending > 0) { const n = g.pending; unDrawCards(t, i, n); g.pending = 0; tblLog(t, `${s.name} 超時，吃下 ${n} 張`); }
+  else if (g.skip) { g.skip = false; tblLog(t, `${s.name} 超時，被跳過`); }
+  else { if (!g.drawn) unDrawCards(t, i, 1); tblLog(t, `${s.name} 超時，自動${g.drawn ? "" : "抽牌並"}跳過`); }
+  unSetTurn(t, unNext(t, i), now);
+}
+// 遊戲進行中有人離開：手牌收回牌堆，遊戲繼續；只剩 1 人時那人獲勝（無 XP）
+function unLeave(t, i, now) {
+  const g = t.g, s = t.seats[i];
+  g.deck = shuffle(g.deck.concat(s.hand));
+  s.hand = []; s.left = true; s.cid = null;
+  tblLog(t, `${s.name} 離開了，手牌收回牌堆`);
+  if (g.pend === i) g.pend = -1;
+  if (unCheckLast(t)) return;
+  if (i === t.turn) { g.pending = 0; g.skip = false; unSetTurn(t, unNext(t, i), now); }   // 正在被加牌／被跳過的人離開：累積的懲罰作廢
+}
+// 桌主（第一位入座者）在開局前選玩法；換玩法會讓大家的「準備」重來
+function unSetMode(t, cid, mode) {
+  const [role, i] = tblFind(t, cid);
+  if (t.game !== "uno" || role !== "seat" || i !== 0 || t.phase !== "lobby" || !UN_MODES.includes(mode) || (t.mode || "classic") === mode) return;
+  t.mode = mode;
+  for (const s of t.seats) s.ready = false;
+  tblLog(t, `${t.seats[0].name} 把玩法改成${mode === "wild" ? "無限制" : "傳統"}`);
+}
+const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 function tblView(t, cid) {
   const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
@@ -732,11 +932,25 @@ function tblView(t, cid) {
   if (t.game === "dodge") {   // 躲彈幕：每個座位的命數／淘汰秒數／是否已離開；進行中附上 seed 與開始時間（彈幕由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
     t.seats.forEach((s, k) => { v.seats[k].lives = s.lives || 0; v.seats[k].died = s.died ?? null; v.seats[k].left = !!s.left; });
     if (t.g && playing) v.dg = { seed: t.g.seed, t0: t.g.t0, dur: DG_DUR, sn: Date.now() };
-  } else if (t.g) {   // 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
+  } else if (t.g && t.game === "gomoku") {   // 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
     v.board = t.g.board.join(""); v.last = t.g.last; v.black = t.g.black; v.line = t.g.line; v.moves = t.g.moves || [];   // moves：每一手的座標（偶數手＝黑棋）；結束後客戶端用來復盤
   }
-  if (role === "spec" && playing && t.game === "oldmaid") v.hands = t.seats.map(s => [...s.hand]);   // 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
-  if (role === "seat" && playing && t.game === "oldmaid") {
+  if (t.game === "uno") v.mode = t.mode || "classic";   // 玩法（桌主在開局前選）：classic 傳統／wild 無限制
+  if (t.game === "uno" && playing && t.g) {   // UNO：目前顏色、方向、最上面一張、牌堆張數、這回合的期限（sn＝伺服器現在時間，客戶端對時用）、誰沒喊 UNO（可以抓）、累積加牌張數、是否正被跳過
+    const g = t.g;
+    v.un = { color: g.color, dir: g.dir, top: g.discard[g.discard.length - 1], deck: g.deck.length, drawn: g.drawn, pend: g.pend, pending: g.pending, skip: g.skip, deadline: g.deadline, sn: Date.now() };
+    t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; });
+    if (role === "seat") {
+      const me = t.seats[i], mine = i === t.turn;
+      v.playable = mine ? me.hand.map((c, k) => k).filter(k => unPlayable(g, me.hand, me.hand[k]) && (!g.drawn || k === me.hand.length - 1)) : [];
+      if (g.mode === "wild") {   // 無限制：有累積加牌時可以吃下；沒牌可出時可以一直抽；被跳過時只能出跳過牌或放棄
+        v.canDraw = mine && (g.pending > 0 || (!g.skip && !unHasPlayable(t, i)));
+        v.canPass = mine && (g.skip || (g.pending === 0 && !unHasPlayable(t, i) && !g.deck.length && g.discard.length <= 1));
+      } else { v.canDraw = mine && !g.drawn; v.canPass = mine && g.drawn; }
+    }
+  }
+  if (role === "spec" && playing && (t.game === "oldmaid" || t.game === "uno")) v.hands = t.seats.map(s => [...s.hand]);   // 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
+  if (role === "seat" && playing && (t.game === "oldmaid" || t.game === "uno")) {
     v.hand = [...t.seats[i].hand];   // 照伺服器順序（不排序）：對方抽的第 k 張牌背＝這裡從左數第 k 張
   }
   return v;
@@ -1229,9 +1443,15 @@ export class Island {
     if (a === "ready") tblReady(t, att.id, msg.v);
     else if (a === "sit") tblSit(t, att.id);
     else if (a === "stand") tblStand(t, att.id);
-    else if (a === "draw") omDraw(t, att.id, msg.idx);
+    else if (a === "draw") { if (t.game === "uno") unDraw(t, att.id, now); else omDraw(t, att.id, msg.idx); }   // UNO：抽牌；抽鬼牌：抽對方的牌
     else if (a === "shuffle") omShuffle(t, att.id);
     else if (a === "move") gmMove(t, att.id, msg.x, msg.y);
+    else if (a === "play") unPlay(t, att.id, msg.idx, msg.color, now);   // UNO：出牌（idx、變色牌帶 color）
+    else if (a === "pass") unPass(t, att.id, now);
+    else if (a === "uno") unSay(t, att.id);
+    else if (a === "catch") unCatch(t, att.id);
+    else if (a === "timeout") unTimeout(t, now);
+    else if (a === "mode") unSetMode(t, att.id, msg.v);   // UNO：桌主在開局前選玩法（classic／wild）
     else if (a === "hit") dgHit(t, att.id, now);   // 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
     else if (a === "finish") dgCheckEnd(t, now + 300);   // 躲彈幕：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）
     else return;

@@ -310,3 +310,17 @@ body {
 .dodge-rank { text-align: center; font-size: 14px; color: var(--text); margin: 6px 0; line-height: 1.7; }
 .dodge-seats .table-seat { min-height: 52px; flex: 1 1 110px; max-width: 150px; }
 .table-xp { color: #ffd86b; font-weight: bold; }
+.ucard { width: 30px; height: 44px; border-radius: 5px; border: 2px solid #f4f0e4; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 14px; box-sizing: border-box; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.ucard.big { width: 56px; height: 82px; font-size: 24px; border-width: 3px; border-radius: 8px; }
+.ucard.back { background: repeating-linear-gradient(45deg, #1e1e24, #1e1e24 5px, #d83a3a 5px, #d83a3a 10px); border-color: #f4f0e4; }
+.ucard.wild { background: conic-gradient(#d83a3a 0 25%, #e8b820 0 50%, #2ea84a 0 75%, #2f66d8 0); }
+.ucard.dim { opacity: .45; }
+.ucard.playable { cursor: pointer; box-shadow: 0 0 0 2px #ffe08a, 0 0 10px rgba(255,224,138,.6); }
+.ucard.playable:hover { transform: translateY(-8px); }
+.uno-hand { flex-wrap: wrap; }
+.uno-mid { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 8px 0; }
+.uno-info { text-align: left; }
+.uno-color { font-size: 16px; font-weight: bold; }
+.uno-timer { font-size: 22px; color: #ffe08a; font-weight: bold; margin-top: 4px; }
+.uno-alert { background: #a83a38; color: #fff; }
+.ff-btn.active { background: #3a3424; border-color: var(--gold); color: var(--gold); }

@@ -98,7 +98,7 @@ const S = {
   craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
   craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
   gamesDB: null, tableImgs: {},        // 和平島遊戲桌：遊戲定義（assets/games/games.json，手寫）與桌子圖
-  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, dg: null, dgRaf: 0, dgLast: 0, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
+  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, unTimer: 0, unOff: 0, unTimeoutAt: 0, unPick: null, dg: null, dgRaf: 0, dgLast: 0, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
   titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
@@ -3878,7 +3878,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop();
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); unStopTimer(); S.unPick = null;
   $('tableBox').classList.add('hidden');
 }
 function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已離開這桌）
@@ -3940,6 +3940,7 @@ function buildTable() {
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
+  if (tb?.game === 'uno') { buildUno(box, v, mk, gd); return; }   // UNO 有自己的畫面（牌桌）
   const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
   // 狀態列
   let status;
@@ -4274,6 +4275,134 @@ function buildDodge(box, v, mk, gd) {
   }
   const btns = mk('div', 'table-btns');
   if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- UNO（第六桌 t6）：牌面用 DOM 畫（原創設計：圓角色塊＋大符號）；規則與狀態全在伺服器，客戶端只畫畫面、送 play／draw／pass／uno／catch／timeout／mode ----
+const UN_FILL = { R: '#d83a3a', Y: '#e8b820', G: '#2ea84a', B: '#2f66d8' };
+const UN_CNAME = { R: '紅', Y: '黃', G: '綠', B: '藍' };
+function unCardEl(c, opts = {}) {   // c＝'R5'／'Gs'／'Br'／'Yd'／'W'／'F'；null＝牌背
+  const e = document.createElement('div');
+  if (!c) { e.className = 'ucard back'; return e; }
+  e.className = 'ucard' + (opts.big ? ' big' : '');
+  const wild = c === 'W' || c === 'F', v = wild ? c : c.slice(1);
+  if (wild) e.classList.add('wild'); else e.style.background = UN_FILL[c[0]];
+  const sym = { s: '⊘', r: '⇄', d: '+2', W: '★', F: '+4' }[v] || v;
+  e.textContent = sym;
+  if (opts.color && wild) e.style.boxShadow = `inset 0 0 0 4px ${UN_FILL[opts.color]}`;   // 變色牌打出後，用邊框顯示選的顏色
+  return e;
+}
+const unSortKey = c => (c === 'W' || c === 'F' ? 9 : 'RYGB'.indexOf(c[0])) * 100 + ({ s: 10, r: 11, d: 12 }[c.slice(1)] ?? (c === 'W' ? 20 : c === 'F' ? 21 : Number(c.slice(1))));
+function unStopTimer() { if (S.unTimer) { clearInterval(S.unTimer); S.unTimer = 0; } }
+function unStartTimer(v) {
+  unStopTimer();
+  S.unOff = v.un.sn - Date.now();   // 伺服器時間 − 本機時間（毫秒，忽略單程延遲）
+  S.unTimer = setInterval(() => {
+    const cur = S.tableView;
+    if (!S.tableOpen || !cur || cur.game !== 'uno' || cur.phase !== 'playing') { unStopTimer(); return; }
+    const left = (cur.un.deadline - (Date.now() + S.unOff)) / 1000;
+    const el = $('unTimer'); if (el) el.textContent = left > 0 ? `${Math.ceil(left)} 秒` : '時間到';
+    if (left <= 0 && Date.now() - (S.unTimeoutAt || 0) > 1000) { S.unTimeoutAt = Date.now(); S.net?.tbl?.({ a: 'timeout' }); }
+  }, 250);
+}
+function buildUno(box, v, mk, gd) {
+  const playing = v.phase === 'playing', mySeat = v.role === 'seat' ? v.seats[v.me] : null, un = v.un;
+  const myTurn = playing && v.role === 'seat' && v.turn === v.me;
+  const modeName = m => (m === 'wild' ? '無限制玩法' : '傳統玩法');
+  if (!playing) unStopTimer();
+  // 狀態列
+  let status;
+  if (playing) {
+    const who = v.seats[v.turn]?.name;
+    status = v.role === 'spec' ? `觀戰中 · 輪到 ${who}` : myTurn ? '輪到你出牌' : `輪到 ${who}`;
+    if (un.pending > 0) status += `　累積 ${un.pending} 張，${myTurn ? '接著出 + 牌傳下去，或吃下' : '等他決定'}`;
+    else if (un.skip) status += `　${myTurn ? '你被跳過了：可以出跳過牌傳下去，或放棄' : '被跳過中'}`;
+    else if (myTurn && un.drawn) status += '　抽到的牌可以出，或放棄';
+  } else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
+  box.appendChild(mk('div', 'table-status' + (myTurn ? ' mine' : ''), status));
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  // 玩法（開局前由桌主＝第一位入座者選）
+  if (!playing) {
+    const mrow = mk('div', 'table-btns');
+    const isHost = v.role === 'seat' && v.me === 0;
+    for (const [m, desc] of [['classic', '傳統玩法'], ['wild', '無限制玩法']]) {
+      const b = mk('button', 'ff-btn small' + (v.mode === m ? ' active' : ''), desc);
+      if (isHost) b.onclick = () => S.net?.tbl?.({ a: 'mode', v: m }); else b.disabled = true;
+      mrow.appendChild(b);
+    }
+    box.appendChild(mrow);
+    box.appendChild(mk('div', 'table-tag', (isHost ? '你是桌主，可以選玩法。' : '玩法由桌主（第一位入座的人）選。') + (v.mode === 'wild' ? ' 無限制：+2／+4 可以無限累積傳遞、跳過可以傳遞、沒牌可出時可以一直抽牌。' : ' 傳統：+2／+4 不可疊加、沒牌可出時抽 1 張。')));
+  }
+  // 座位
+  const row = mk('div', 'table-seats');
+  v.seats.forEach((s, i) => {
+    const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && v.turn === i ? ' turn' : '') + (s.left ? ' out' : ''));
+    seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : '')));
+    seat.appendChild(mk('div', 'table-tag', playing ? (s.left ? '' : `${s.n} 張${s.n === 1 ? ' · UNO!' : ''}${v.turn === i ? ' · 出牌中' : ''}`) : (s.ready ? '已準備' : '未準備')));
+    if (playing && !s.left) {
+      const cards = mk('div', 'table-cards');
+      if (v.hands) for (const c of v.hands[i] || []) cards.appendChild(unCardEl(c));   // 觀戰：每個人的牌都翻開
+      else if (!s.you) for (let k = 0; k < Math.min(s.n, 14); k++) cards.appendChild(unCardEl(null));
+      seat.appendChild(cards);
+    }
+    row.appendChild(seat);
+  });
+  if (!playing) for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  // 桌面：最上面一張、目前顏色、方向、牌堆張數、倒數
+  if (playing) {
+    const mid = mk('div', 'uno-mid');
+    const pile = mk('div', 'uno-pile'); pile.appendChild(unCardEl(un.top, { big: true, color: (un.top === 'W' || un.top === 'F') ? un.color : null }));
+    mid.appendChild(pile);
+    const info = mk('div', 'uno-info');
+    const col = mk('div', 'uno-color', `目前顏色：${UN_CNAME[un.color]}`); col.style.color = UN_FILL[un.color]; info.appendChild(col);
+    info.appendChild(mk('div', 'table-tag', `方向：${un.dir > 0 ? '順時針 ↻' : '逆時針 ↺'}　牌堆剩 ${un.deck} 張`));
+    const tm = mk('div', 'uno-timer'); tm.id = 'unTimer'; info.appendChild(tm);
+    mid.appendChild(info); box.appendChild(mid);
+    unStartTimer(v);
+  }
+  // 我的手牌（照顏色與點數排列；每張帶原本的位置編號 idx，出牌時送給伺服器）
+  if (v.role === 'seat' && playing) {
+    const hand = mk('div', 'table-hand'), cs = mk('div', 'table-cards big uno-hand');
+    const order = (v.hand || []).map((c, idx) => ({ c, idx })).sort((a, b) => unSortKey(a.c) - unSortKey(b.c));
+    for (const { c, idx } of order) {
+      const el = unCardEl(c, { big: true }), ok = myTurn && (v.playable || []).includes(idx);
+      el.classList.add(ok ? 'playable' : 'dim');
+      if (ok) el.onclick = () => {
+        if (c === 'W' || c === 'F') { S.unPick = idx; buildTable(); return; }   // 變色牌：先選顏色
+        S.net?.tbl?.({ a: 'play', idx });
+      };
+      cs.appendChild(el);
+    }
+    hand.appendChild(cs); box.appendChild(hand);
+    if (S.unPick != null && (v.hand || [])[S.unPick] && myTurn) {   // 選顏色
+      const pk = mk('div', 'table-btns');
+      pk.appendChild(mk('span', 'table-tag', '選一個顏色：'));
+      for (const c of 'RYGB') { const b = mk('button', 'ff-btn small', UN_CNAME[c]); b.style.background = UN_FILL[c]; b.style.color = '#fff'; b.onclick = () => { const idx = S.unPick; S.unPick = null; S.net?.tbl?.({ a: 'play', idx, color: c }); }; pk.appendChild(b); }
+      const cancel = mk('button', 'ff-btn small', '取消'); cancel.onclick = () => { S.unPick = null; buildTable(); }; pk.appendChild(cancel);
+      box.appendChild(pk);
+    } else S.unPick = null;
+  } else S.unPick = null;
+  // 操作按鈕
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && playing) {
+    if (v.canDraw) btns.appendChild(Object.assign(mk('button', 'ff-btn', un.pending > 0 ? `吃下 ${un.pending} 張` : '抽牌'), { onclick: () => S.net?.tbl?.({ a: 'draw' }) }));
+    if (v.canPass) btns.appendChild(Object.assign(mk('button', 'ff-btn', un.skip ? '接受被跳過' : '放棄'), { onclick: () => S.net?.tbl?.({ a: 'pass' }) }));
+    const myHand = mySeat?.n ?? 0;
+    if (un.pend === v.me || myHand <= 2) btns.appendChild(Object.assign(mk('button', 'ff-btn' + (un.pend === v.me ? ' uno-alert' : ''), 'UNO！'), { onclick: () => S.net?.tbl?.({ a: 'uno' }) }));
+    if (un.pend >= 0 && un.pend !== v.me) btns.appendChild(Object.assign(mk('button', 'ff-btn uno-alert', `抓！${v.seats[un.pend]?.name} 沒喊 UNO`), { onclick: () => S.net?.tbl?.({ a: 'catch' }) }));
+  } else if (v.role === 'seat' && !playing) {
     const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
     b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
     const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
