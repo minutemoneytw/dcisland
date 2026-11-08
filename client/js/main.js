@@ -108,6 +108,8 @@ const S = {
 // 舊存檔／被亂改的 localStorage 也要夾在安全範圍：與兩份伺服器的 XP_MAX 同值（2026-11-07 檢查時補）
 S.profile.xp = Math.max(0, Math.min(200000, Math.floor(Number(S.profile.xp) || 0)));
 if (typeof S.profile.showLv !== 'boolean') S.profile.showLv = true;
+if (typeof S.profile.showHp !== 'boolean') S.profile.showHp = true;   // 底部 HUD：血量條（設定可關）
+if (typeof S.profile.showXp !== 'boolean') S.profile.showXp = true;   // 底部 HUD：經驗條（設定可關）
 
 // ---------------- 世界生成 ----------------
 function key(x, y) { return x + ',' + y; }
@@ -1599,8 +1601,19 @@ function drawSkillIcon(c, id) {
     default: bg('#333');
   }
 }
+// 底部 HUD（#skillBar）＝上排技能格＋下排血量條／經驗條；任一可見就顯示整個容器
+const showHpBar = () => S.profile.showHp !== false, showXpBar = () => S.profile.showXp !== false;
+function syncHud() {
+  const slots = skillUI.slots.length > 0, stat = showHpBar() || showXpBar();
+  $('skillBar').classList.toggle('hidden', !slots && !stat);
+  $('skillSlots').style.display = slots ? '' : 'none';
+  $('statHp').classList.toggle('hidden', !showHpBar());
+  $('statXp').classList.toggle('hidden', !showXpBar());
+  $('app').classList.toggle('has-skill', slots);
+  $('app').classList.toggle('has-stat', stat);
+}
 function buildSkillBar() {
-  const bar = $('skillBar'); bar.innerHTML = '';
+  const bar = $('skillSlots'); bar.innerHTML = '';
   skillUI.slots = skillSlots().map(sk => {
     const el = document.createElement('div'); el.className = 'skslot';
     el.innerHTML = '<div class="skbtn"><canvas width="40" height="40"></canvas><div class="skcd"></div><div class="sknum"></div><span class="skkey"></span></div><div class="skname"></div>';
@@ -1610,8 +1623,26 @@ function buildSkillBar() {
     bar.appendChild(el);
     return { sk, btn: el.querySelector('.skbtn'), cd: el.querySelector('.skcd'), num: el.querySelector('.sknum'), cdLeft: 0, dim: null, ready: null, n: '' };
   });
-  const on = skillUI.slots.length > 0;
-  bar.classList.toggle('hidden', !on); $('app').classList.toggle('has-skill', on);
+  syncHud();
+}
+// 血量條（血條＋數字；30% 以下轉紅）與經驗條（Lv＋這級進度）：每幀呼叫，值沒變就不動 DOM
+const statUI = { hp: '', hpPct: -1, hpLow: null, xp: '', xpPct: -1 };
+function updateStatBars() {
+  const me = S.players[0];
+  if (!me) return;
+  if (showHpBar()) {
+    const cap = Math.max(1, hpCap(me)), hp = Math.max(0, Math.min(cap, me.hp ?? cap));
+    const txt = `${hp} / ${cap}`, pct = Math.round(hp / cap * 100), low = hp / cap <= .3;
+    if (txt !== statUI.hp) { $('statHp').querySelector('span').textContent = txt; statUI.hp = txt; }
+    if (pct !== statUI.hpPct) { $('statHp').querySelector('i').style.width = pct + '%'; statUI.hpPct = pct; }
+    if (low !== statUI.hpLow) { $('statHp').classList.toggle('low', low); statUI.hpLow = low; }
+  }
+  if (showXpBar()) {
+    const li = lvInfo(S.profile.xp);
+    const txt = `Lv.${li.lv}  ${li.cur} / ${li.need}`, pct = Math.round(li.cur / li.need * 100);
+    if (txt !== statUI.xp) { $('statXp').querySelector('span').textContent = txt; statUI.xp = txt; }
+    if (pct !== statUI.xpPct) { $('statXp').querySelector('i').style.width = pct + '%'; statUI.xpPct = pct; }
+  }
 }
 function updateSkillBar() {   // 每幀：換職業就重建三格；更新冷卻扇形與秒數（只在值變了才改 DOM）
   if (skillUI.job !== S.me.job) { skillUI.job = S.me.job; buildSkillBar(); }
@@ -6055,6 +6086,19 @@ $('menuLv').onclick = () => {   // 設定 → 名牌等級顯示開關（2026-11
   saveProfile(); menuLvLabel();
   $('settingsMenu').classList.add('hidden');
 };
+const menuHpLabel = () => $('menuHp').textContent = `血量條：${S.profile.showHp === false ? '隱藏' : '顯示'}`;
+const menuXpLabel = () => $('menuXp').textContent = `經驗條：${S.profile.showXp === false ? '隱藏' : '顯示'}`;
+menuHpLabel(); menuXpLabel();   // 開先把開關文字對齊存檔
+$('menuHp').onclick = () => {   // 設定 → 底部血量條顯示開關
+  S.profile.showHp = S.profile.showHp === false;
+  saveProfile(); menuHpLabel(); syncHud();
+  $('settingsMenu').classList.add('hidden');
+};
+$('menuXp').onclick = () => {   // 設定 → 底部經驗條顯示開關
+  S.profile.showXp = S.profile.showXp === false;
+  saveProfile(); menuXpLabel(); syncHud();
+  $('settingsMenu').classList.add('hidden');
+};
 document.addEventListener('click', e => {   // 點齒輪與選單以外的地方就收起來
   if (!(e.target instanceof Element) || !e.target.closest('#settingsBox')) $('settingsMenu')?.classList.add('hidden');
 });
@@ -6209,6 +6253,7 @@ async function boot() {
       }
       stepSkills();
       updateSkillBar();
+      updateStatBars();
       updateWeaponBar();
       drawSprintBtn();
       draw();

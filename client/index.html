@@ -24,6 +24,8 @@
         <div id="settingsMenu" class="hidden">
           <button id="menuHelp" class="settings-item">操作說明</button>
 <button id="menuLv" class="settings-item">名牌等級：顯示</button>
+<button id="menuHp" class="settings-item">血量條：顯示</button>
+<button id="menuXp" class="settings-item">經驗條：顯示</button>
         </div>
       </div>
       <button id="btnCraft" class="ff-btn" style="display:none">合成</button>
@@ -165,7 +167,14 @@
   <div id="weaponBar" class="hidden" title="滑鼠滾輪切換武器"></div>
 
   <!-- 職業技能列（R 鍵）：畫面底部正中間，冷卻時有順時針退去的暗色扇形與秒數 -->
-  <div id="skillBar" class="hidden"></div>
+  <!-- 技能列下方：血量條（血條＋數字）與經驗條；兩者可在右上「設定」各自開關 -->
+  <div id="skillBar" class="hidden">
+    <div id="skillSlots"></div>
+    <div id="statBars">
+      <div id="statHp" class="statbar"><i></i><span></span></div>
+      <div id="statXp" class="statbar"><i></i><span></span></div>
+    </div>
+  </div>
   <!-- 疾走虛擬按鍵：點擊或按 Shift 切換跑步／步行 -->
   <div id="sprintBtn" title="疾走（點擊或按 Shift 切換）"><canvas id="sprintIcon" width="52" height="52"></canvas></div>
 
