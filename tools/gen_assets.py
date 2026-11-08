@@ -620,6 +620,7 @@ LPC_HAIR_STYLES = [              # 其他 LPC 髮型（走路列，原檔是單�
     ("long", "長髮", "hair_long.png"),
 ]
 LPC_SKIN_DYE = ["#f9d5ba", "#e4a47c", "#cc8665", "#99423c", "#faecd7"]   # LPC 膚色調色盤（臉型跟膚色重上色用）
+LPC_CAT_EAR_DYE = ["#260d14", "#6a1108", "#a42600", "#bf4000", "#e55600", "#ff8a00", "#ffffff"]   # LPC 貓耳色盤（貓耳跟髮色重上色用）
 LPC_FACES = [                    # 臉型（頭型）：(id, 名稱, external 檔名)
     ("normal", "普通", "f_normal.png"), ("gaunt", "瘦長", "f_gaunt.png"),
     ("plump", "圓胖", "f_plump.png"), ("small", "小頭", "f_small.png"), ("old", "老臉", "f_old.png"),
@@ -627,6 +628,18 @@ LPC_FACES = [                    # 臉型（頭型）：(id, 名稱, external �
 LPC_EYES = [                     # 眼睛（表情）：(id, 名稱, external 檔名)
     ("default", "預設", "e_default.png"), ("angry", "生氣", "e_angry.png"), ("sad", "難過", "e_sad.png"),
     ("lookl", "看左", "e_lookl.png"), ("lookr", "看右", "e_lookr.png"),
+]
+LPC_EARS = [                     # 種族耳朵圖層：(遊戲檔名, external 檔名)
+    ("ears_elven", "ear_elven.png"), ("ears_cat_bg", "ear_cat_bg.png"), ("ears_cat_fg", "ear_cat_fg.png"),
+]
+# 種族：人類＝無耳朵；精靈＝精靈耳（跟膚色）；貓族＝貓耳（bg+fg）；拉拉肥/巨人＝找人類模組縮放（LPC 沒有專用體型）
+LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ears）；scale＝人類模組整體縮放倍率
+    dict(id="human", name="人類", scale=1.0),
+    dict(id="elf", name="精靈", scale=1.0, ear="char_ears_elven.png", earDye=LPC_SKIN_DYE),   # 精靈耳跟膚色
+    dict(id="cat", name="貓族", scale=1.0, earBg="char_ears_cat_bg.png", earFg="char_ears_cat_fg.png",
+         earDye=LPC_CAT_EAR_DYE),   # 貓耳跟髮色重上色（執行時用髮型主色）
+    dict(id="lalafell", name="拉拉肥", scale=0.5),    # LPC 沒有小人體型 → 人類模組縮小
+    dict(id="giant", name="巨人", scale=1.5),         # LPC 沒有巨人體型 → 人類模組放大
 ]
 
 def kidol_main_hex(cid):
@@ -2125,6 +2138,8 @@ def main():
         save(lpc_layer_sheet(f"external/img2pixel/lpc/{rel}"), f"char_face_{fid}.png", sub)
     for eid, _ename, rel in LPC_EYES:                # 眼睛（固定色）
         save(lpc_layer_sheet(f"external/img2pixel/lpc/{rel}"), f"char_eyes_{eid}.png", sub)
+    for eid, rel in LPC_EARS:                        # 種族耳朵（精靈／貓）
+        save(lpc_layer_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{eid}.png", sub)
     # 基本服裝（LPC 原檔，走路列）
     for cid, rel in LPC_CLOTHES:
         save(lpc_cloth_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{cid}.png", sub)
@@ -2134,6 +2149,7 @@ def main():
              f"char_hair{i + 1}.png", sub)
     # 其他 LPC 髮型（走路列；依亮度重上色成「與短髮相同的 12 色」）
     hair_colors = [(cid, cname, kidol_main_hex(cid)) for cid, cname in KIDOL_HAIR]
+    kidol_hex = {cid: chex for cid, _cname, chex in hair_colors}   # 髮色主色（manifest 帶給面板／貓耳染色用）
     for sid, _sname, fn in LPC_HAIR_STYLES:
         for cid, _cname, chex in hair_colors:
             save(lpc_hair_tinted(f"external/img2pixel/lpc/{fn}", chex), f"char_hair_{sid}_{cid}.png", sub)
@@ -2151,11 +2167,13 @@ def main():
         # 臉型（頭型；原色，執行時用 dye 跟膚色重上色）與眼睛（固定色）
         faces=[dict(id=fid, name=fn, sheet=f"char_face_{fid}.png", dye=LPC_SKIN_DYE) for fid, fn, _r in LPC_FACES],
         eyes=[dict(id=eid, name=en, sheet=f"char_eyes_{eid}.png") for eid, en, _r in LPC_EYES],
+        races=LPC_RACES,
         # 髮型：一個「造型」一個方框（style／styleName），框裡是顏色（name＝顏色名）；面板分層顯示、點造型再開顏色
-        hair=[dict(id=f"hair{i + 1}", name=cname, style="short", styleName="短髮", sheet=f"char_hair{i + 1}.png")
-              for i, (_cid, cname) in enumerate(KIDOL_HAIR)] +
-             [dict(id=f"{sid}_{cid}", name=cname, style=sid, styleName=sname, sheet=f"char_hair_{sid}_{cid}.png")
-              for sid, sname, _fn in LPC_HAIR_STYLES for cid, cname, _hex in hair_colors],
+        # hex＝該款髮色的主色（貓耳跟髮色重上色用）
+        hair=[dict(id=f"hair{i + 1}", name=cname, style="short", styleName="短髮", sheet=f"char_hair{i + 1}.png", hex=kidol_hex[cid])
+              for i, (cid, cname) in enumerate(KIDOL_HAIR)] +
+             [dict(id=f"{sid}_{cid}", name=cname, style=sid, styleName=sname, sheet=f"char_hair_{sid}_{cid}.png", hex=kidol_hex[cid])
+              for sid, sname, _fn in LPC_HAIR_STYLES for cid, cname, _hx in hair_colors],
         # 基本服裝（LPC 原檔；gender＝之後選性別用）
         tops=[dict(id="tshirt_m", name="T恤", sheet="char_top_tshirt_m.png", gender="male", glam=True),
               dict(id="tshirt_f", name="T恤", sheet="char_top_tshirt_f.png", gender="female", glam=True)],

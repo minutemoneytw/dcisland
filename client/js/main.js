@@ -52,7 +52,7 @@ const S = {
   charImgs: {},                 // 人物分層 sheet：檔名 -> Image（軀幹／頭髮／衣服／褲子／帽子）
   charCache: new Map(),         // (造型, 幀號) -> 合成好的一幀
   recolorCache: new Map(),      // (sheet, 顏色) -> 換好色的整張 sheet
-  me: lsObj('dcisland.m0.avatar', null) || { skin: 'light', hair: 'hair1', shirt: 0, weapon: 'sword' },
+  me: lsObj('dcisland.m0.avatar', null) || { skin: 'light', hair: 'hair1', race: 'human', gender: 'male', shirt: 0, weapon: 'sword' },
   profile: lsObj('dcisland.m0.profile', null) || { xp: 0, showLv: true },   // 等級等個人資料（跟著人走，換職業繼承；key＝dcisland.m0.profile）
   world: null,                  // {types: Uint8Array, decos: []}
   furnItems: [],                // [{type, cell:[x,y]}]
@@ -2322,15 +2322,23 @@ function charSprite(look, fi) {
   const skinSheet = (look.gender === 'female' && skin.sheet) ? skin.sheet.replace('char_body_', 'char_body_female_') : skin.sheet;
   const skinIt = skinSheet === skin.sheet ? skin : { ...skin, sheet: skinSheet };
   const skinHex = skin.base || null;   // 臉型（頭型）跟膚色重上色
-  const k = [skin.id, skinSheet, look.gender || '', hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, shoe?.id || '', shoeHex, face?.id || '', eyes?.id || '', fi].join('|');
+  const hairHex = hair.hex || null;    // 髮色主色（貓耳跟髮色重上色用）
+  const race = lookItem(A.races, look.race) || A.races?.[0] || { id: 'human', scale: 1 };
+  const k = [skin.id, skinSheet, look.gender || '', race, hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, shoe?.id || '', shoeHex, face?.id || '', eyes?.id || '', fi].join('|');
   let cv = S.charCache.get(k);
   if (cv) return cv;
   cv = document.createElement('canvas'); cv.width = F.w; cv.height = F.h;
   const g = cv.getContext('2d');
   // 這一幀在 sheet 上的格子：LPC 通用格式看 frames.map（[欄,列]）；舊格式＝水平排列（fi, 0）
   const [cc, cr] = F.map ? F.map[fi] : [fi, 0], sx = cc * F.w, sy = cr * F.h;
-  // 由下往上：身體 → 褲子 → 鞋子 → 衣服 → 臉型(頭) → 眼睛 → 頭髮 → 帽子
-  for (const [it, hex] of [[skinIt], [bottom, pantsHex], [shoe, shoeHex], [top, shirtHex], [face, skinHex], [eyes], [hair], [hat, hatHex]]) {
+  // 由下往上：身體 → 褲子 → 鞋子 → 衣服 → 臉型(頭) → 眼睛 →（種族耳後層）→ 頭髮 →（種族耳前層）→ 帽子
+  const layers = [[skinIt], [bottom, pantsHex], [shoe, shoeHex], [top, shirtHex], [face, skinHex], [eyes]];
+  if (race.ear) layers.push([{ sheet: race.ear, dye: race.earDye }, skinHex]);   // 精靈耳（跟膚色）
+  if (race.earBg) layers.push([{ sheet: race.earBg, dye: race.earDye }, hairHex]);   // 貓耳後層（髮下面；跟髮色）
+  layers.push([hair]);
+  if (race.earFg) layers.push([{ sheet: race.earFg, dye: race.earDye }, hairHex]);   // 貓耳前層（髮上面；跟髮色）
+  layers.push([hat, hatHex]);
+  for (const [it, hex] of layers) {
     const img = it && S.charImgs[it.sheet];
     if (!img || sx + F.w > img.width || sy + F.h > img.height) continue;   // 缺圖／這張 sheet 沒有這一格：這層略過
     const dye = dyeList(it), src = dye && hex ? dyeSheet(img, dye, hex) : img;
@@ -2340,6 +2348,7 @@ function charSprite(look, fi) {
   return cv;
 }
 // 8 方向視覺朝向：移動時依 (dx, dy) 的角度取最近的方向（鍵盤 8 向剛好一一對應）；玩法（石化等）仍看 face
+const LPC_SKIN_DYE_JS = ['#f9d5ba', '#e4a47c', '#cc8665', '#99423c', '#faecd7'];   // 精靈耳跟膚色重上色用
 function dir8Of(dx, dy) {
   const s = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));   // 扇區：0＝右、2＝下、-2＝上、±4＝左（畫面 y 向下）
   return CHAR_DIR8[((2 - s) % 8 + 8) % 8];
@@ -3063,15 +3072,17 @@ function drawFxFloater(f) {
 
 function drawPerson(p, wi, nameColor) {
   const pose = p.pose === 'sit' || p.pose === 'sleep' ? p.pose : null;
-  let nameY = p.y - p.z - 52;
+  const race = (p === S.players[0] ? S.me.race : p.look?.race) || 'human';
+  const raceScale = (S.avatar.races?.find(r => r.id === race)?.scale) || 1;   // 種族倍率：拉拉肥 0.5／巨人 1.5（整個模組一起縮）
+  let nameY = p.y - p.z - Math.round(52 * raceScale);   // 名牌跟著身高（種族倍率）移
   if (pose === 'sleep') {
     drawSleeper(p);
-    nameY = p.y - 46;
+    nameY = p.y - Math.round(46 * raceScale);
   } else {
     if (!pose) {   // 影子（跳起來時縮小變淡）；坐著的不畫（會蓋在椅子上）
       const shs = 1 - Math.min(.55, p.z / 80);
       ctx.fillStyle = `rgba(10,14,20,${.32 * shs + .04})`;
-      ctx.beginPath(); ctx.ellipse(p.x, p.y + 1, 11 * shs, 4 * shs, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(p.x, p.y + 1, 11 * shs * raceScale, 4 * shs * raceScale, 0, 0, Math.PI * 2); ctx.fill();
     }
     const cf = charFrame(p), img = playerSpriteDiv(p, cf.fi), F = S.avatar.frames;   // 方向已畫在幀裡，只有借用另一邊的幀時才左右翻轉
     charAnch = { back: charAnchor(cf.fi, 'back'), backView: charAnchor(cf.fi, 'backView'), waist: charAnchor(cf.fi, 'waist'), hand: charAnchor(cf.fi, 'hand') };
@@ -3089,7 +3100,7 @@ function drawPerson(p, wi, nameColor) {
     if (pfx?.length) drawPersonFx(p, pfx, backView, 'back');
     ctx.save();
     if (cf.mirror) ctx.scale(-1, 1);
-    const cs = F.scale || 2;   // 錨點＝腳底中央，放大倍率看 avatar.json 的 frames.scale
+    const cs = (F.scale || 2) * raceScale;   // 錨點＝腳底中央；放大＝frames.scale × 種族倍率
     ctx.drawImage(img, -F.w * cs / 2, -F.h * cs, F.w * cs, F.h * cs);
     ctx.restore();
     if (carry && backView) drawCarry(true);
@@ -4592,7 +4603,7 @@ function shownItem(slot, job = S.me.job) {
 // 自己的顯示造型（畫自己、送給同島的人都用這個；外觀與裝備在這裡就決定好，別人只看結果）
 function myLook() {
   const c = wardrobe().color, w = shownItem('weapon');
-  return { skin: S.me.skin, hair: S.me.hair, gender: S.me.gender || 'male',
+  return { skin: S.me.skin, hair: S.me.hair, gender: S.me.gender || 'male', race: S.me.race || 'human',
            hat: shownItem('hat')?.id || null, top: shownItem('top')?.id || null, bottom: shownItem('bottom')?.id || null,
            shoe: shownItem('shoe')?.id || null,
            face: S.me.face || 'normal', eyes: S.me.eyes || 'default',
@@ -4664,6 +4675,17 @@ function buildAvatarPanel() {
     t.onclick = () => { showTab(t.dataset.avtab); closeHairColors(); };
   }
   showTab(S.avTab || '1');
+  // 種族（在性別上面）：按鈕 → 彈出 5 種可選（人類/精靈/貓族/拉拉肥/巨人）
+  const rbs = $('raceOpts'); rbs.innerHTML = '';
+  {
+    const cur = (S.avatar.races || []).find(r => r.id === (S.me.race || 'human'));
+    const b = document.createElement('div');
+    b.className = 'opt name';
+    b.textContent = cur?.name + (cur?.scale && cur.scale !== 1 ? `（×${cur.scale}）` : '') || '選擇種族';
+    b.title = '點一下選種族';
+    b.onclick = () => openPick('種族', S.avatar.races || [], S.me.race || 'human', v => { S.me.race = v; saveAvatar(); }, b);
+    rbs.appendChild(b);
+  }
   // 性別（男／女）：換素體與對應性別的服裝
   const go = $('genderOpts'); go.innerHTML = '';
   for (const [gid, gname] of [['male', '男'], ['female', '女']]) {
@@ -5240,6 +5262,8 @@ async function boot() {
     }),
     ...[...S.avatar.hair, ...(S.avatar.tops || []), ...(S.avatar.bottoms || []), ...(S.avatar.shoes || []), ...(S.avatar.faces || []), ...(S.avatar.eyes || []), ...(S.avatar.hats || [])].filter(it => it.sheet)   // 沒有圖的（不戴帽子的 nohat）不用載
       .map(async it => S.charImgs[it.sheet] = await optImg(`assets/avatar/${it.sheet}`)),
+    ...(S.avatar.races || []).flatMap(r => [r.ear, r.earBg, r.earFg]).filter(Boolean)   // 種族耳朵圖層（精靈耳／貓耳前後層）
+      .map(async f => S.charImgs[f] = await loadImg(`assets/avatar/${f}`)),
     ...S.avatar.weapons.filter(w => w.sprite).map(async w => {
       const im = await optImg(`assets/avatar/${w.sprite}`);
       if (im && w.back === 'hilt') im.hiltUp = true;   // 背在背上時劍柄朝上（drawWeaponBack 看這個旗標）

@@ -521,426 +521,532 @@
    "sheet": "char_eyes_lookr.png"
   }
  ],
+ "races": [
+  {
+   "id": "human",
+   "name": "人類",
+   "scale": 1.0
+  },
+  {
+   "id": "elf",
+   "name": "精靈",
+   "scale": 1.0,
+   "ear": "char_ears_elven.png",
+   "earDye": [
+    "#f9d5ba",
+    "#e4a47c",
+    "#cc8665",
+    "#99423c",
+    "#faecd7"
+   ]
+  },
+  {
+   "id": "cat",
+   "name": "貓族",
+   "scale": 1.0,
+   "earBg": "char_ears_cat_bg.png",
+   "earFg": "char_ears_cat_fg.png",
+   "earDye": [
+    "#260d14",
+    "#6a1108",
+    "#a42600",
+    "#bf4000",
+    "#e55600",
+    "#ff8a00",
+    "#ffffff"
+   ]
+  },
+  {
+   "id": "lalafell",
+   "name": "拉拉肥",
+   "scale": 0.5
+  },
+  {
+   "id": "giant",
+   "name": "巨人",
+   "scale": 1.5
+  }
+ ],
  "hair": [
   {
    "id": "hair1",
    "name": "棕",
    "style": "short",
    "styleName": "短髮",
-   "sheet": "char_hair1.png"
+   "sheet": "char_hair1.png",
+   "hex": "#684018"
   },
   {
    "id": "hair2",
    "name": "深棕",
    "style": "short",
    "styleName": "短髮",
-   "sheet": "char_hair2.png"
+   "sheet": "char_hair2.png",
+   "hex": "#604820"
   },
   {
    "id": "hair3",
    "name": "黑",
    "style": "short",
    "styleName": "短髮",
-   "sheet": "char_hair3.png"
+   "sheet": "char_hair3.png",
+   "hex": "#585858"
   },
   {
    "id": "hair4",
    "name": "金",
    "style": "short",
    "styleName": "短髮",
-   "sheet": "char_hair4.png"
+   "sheet": "char_hair4.png",
+   "hex": "#b88830"
   },
   {
    "id": "hair5",
    "name": "灰金",
    "style": "short",
    "styleName": "短髮",
-   "sheet": "char_hair5.png"
+   "sheet": "char_hair5.png",
+   "hex": "#604018"
   },
   {
    "id": "hair6",
    "name": "銀白",
    "style": "short",
    "styleName": "短髮",
-   "sheet": "char_hair6.png"
+   "sheet": "char_hair6.png",
+   "hex": "#684028"
   },
   {
    "id": "hair7",
    "name": "紅",
    "style": "short",
    "styleName": "短髮",
-   "sheet": "char_hair7.png"
+   "sheet": "char_hair7.png",
+   "hex": "#a00830"
   },
   {
    "id": "hair8",
    "name": "橘",
    "style": "short",
    "styleName": "短髮",
-   "sheet": "char_hair8.png"
+   "sheet": "char_hair8.png",
+   "hex": "#b83000"
   },
   {
    "id": "hair9",
    "name": "玫瑰粉",
    "style": "short",
    "styleName": "短髮",
-   "sheet": "char_hair9.png"
+   "sheet": "char_hair9.png",
+   "hex": "#b87070"
   },
   {
    "id": "hair10",
    "name": "綠",
    "style": "short",
    "styleName": "短髮",
-   "sheet": "char_hair10.png"
+   "sheet": "char_hair10.png",
+   "hex": "#008050"
   },
   {
    "id": "hair11",
    "name": "藍",
    "style": "short",
    "styleName": "短髮",
-   "sheet": "char_hair11.png"
+   "sheet": "char_hair11.png",
+   "hex": "#004888"
   },
   {
    "id": "hair12",
    "name": "紫",
    "style": "short",
    "styleName": "短髮",
-   "sheet": "char_hair12.png"
+   "sheet": "char_hair12.png",
+   "hex": "#702078"
   },
   {
    "id": "afro_brown",
    "name": "棕",
    "style": "afro",
    "styleName": "爆炸頭",
-   "sheet": "char_hair_afro_brown.png"
+   "sheet": "char_hair_afro_brown.png",
+   "hex": "#684018"
   },
   {
    "id": "afro_brown2",
    "name": "深棕",
    "style": "afro",
    "styleName": "爆炸頭",
-   "sheet": "char_hair_afro_brown2.png"
+   "sheet": "char_hair_afro_brown2.png",
+   "hex": "#604820"
   },
   {
    "id": "afro_black",
    "name": "黑",
    "style": "afro",
    "styleName": "爆炸頭",
-   "sheet": "char_hair_afro_black.png"
+   "sheet": "char_hair_afro_black.png",
+   "hex": "#585858"
   },
   {
    "id": "afro_blonde",
    "name": "金",
    "style": "afro",
    "styleName": "爆炸頭",
-   "sheet": "char_hair_afro_blonde.png"
+   "sheet": "char_hair_afro_blonde.png",
+   "hex": "#b88830"
   },
   {
    "id": "afro_ashblonde",
    "name": "灰金",
    "style": "afro",
    "styleName": "爆炸頭",
-   "sheet": "char_hair_afro_ashblonde.png"
+   "sheet": "char_hair_afro_ashblonde.png",
+   "hex": "#604018"
   },
   {
    "id": "afro_ashplatinum",
    "name": "銀白",
    "style": "afro",
    "styleName": "爆炸頭",
-   "sheet": "char_hair_afro_ashplatinum.png"
+   "sheet": "char_hair_afro_ashplatinum.png",
+   "hex": "#684028"
   },
   {
    "id": "afro_red",
    "name": "紅",
    "style": "afro",
    "styleName": "爆炸頭",
-   "sheet": "char_hair_afro_red.png"
+   "sheet": "char_hair_afro_red.png",
+   "hex": "#a00830"
   },
   {
    "id": "afro_orange",
    "name": "橘",
    "style": "afro",
    "styleName": "爆炸頭",
-   "sheet": "char_hair_afro_orange.png"
+   "sheet": "char_hair_afro_orange.png",
+   "hex": "#b83000"
   },
   {
    "id": "afro_rosepink",
    "name": "玫瑰粉",
    "style": "afro",
    "styleName": "爆炸頭",
-   "sheet": "char_hair_afro_rosepink.png"
+   "sheet": "char_hair_afro_rosepink.png",
+   "hex": "#b87070"
   },
   {
    "id": "afro_green",
    "name": "綠",
    "style": "afro",
    "styleName": "爆炸頭",
-   "sheet": "char_hair_afro_green.png"
+   "sheet": "char_hair_afro_green.png",
+   "hex": "#008050"
   },
   {
    "id": "afro_blue",
    "name": "藍",
    "style": "afro",
    "styleName": "爆炸頭",
-   "sheet": "char_hair_afro_blue.png"
+   "sheet": "char_hair_afro_blue.png",
+   "hex": "#004888"
   },
   {
    "id": "afro_purple",
    "name": "紫",
    "style": "afro",
    "styleName": "爆炸頭",
-   "sheet": "char_hair_afro_purple.png"
+   "sheet": "char_hair_afro_purple.png",
+   "hex": "#702078"
   },
   {
    "id": "bob_brown",
    "name": "棕",
    "style": "bob",
    "styleName": "鮑伯頭",
-   "sheet": "char_hair_bob_brown.png"
+   "sheet": "char_hair_bob_brown.png",
+   "hex": "#684018"
   },
   {
    "id": "bob_brown2",
    "name": "深棕",
    "style": "bob",
    "styleName": "鮑伯頭",
-   "sheet": "char_hair_bob_brown2.png"
+   "sheet": "char_hair_bob_brown2.png",
+   "hex": "#604820"
   },
   {
    "id": "bob_black",
    "name": "黑",
    "style": "bob",
    "styleName": "鮑伯頭",
-   "sheet": "char_hair_bob_black.png"
+   "sheet": "char_hair_bob_black.png",
+   "hex": "#585858"
   },
   {
    "id": "bob_blonde",
    "name": "金",
    "style": "bob",
    "styleName": "鮑伯頭",
-   "sheet": "char_hair_bob_blonde.png"
+   "sheet": "char_hair_bob_blonde.png",
+   "hex": "#b88830"
   },
   {
    "id": "bob_ashblonde",
    "name": "灰金",
    "style": "bob",
    "styleName": "鮑伯頭",
-   "sheet": "char_hair_bob_ashblonde.png"
+   "sheet": "char_hair_bob_ashblonde.png",
+   "hex": "#604018"
   },
   {
    "id": "bob_ashplatinum",
    "name": "銀白",
    "style": "bob",
    "styleName": "鮑伯頭",
-   "sheet": "char_hair_bob_ashplatinum.png"
+   "sheet": "char_hair_bob_ashplatinum.png",
+   "hex": "#684028"
   },
   {
    "id": "bob_red",
    "name": "紅",
    "style": "bob",
    "styleName": "鮑伯頭",
-   "sheet": "char_hair_bob_red.png"
+   "sheet": "char_hair_bob_red.png",
+   "hex": "#a00830"
   },
   {
    "id": "bob_orange",
    "name": "橘",
    "style": "bob",
    "styleName": "鮑伯頭",
-   "sheet": "char_hair_bob_orange.png"
+   "sheet": "char_hair_bob_orange.png",
+   "hex": "#b83000"
   },
   {
    "id": "bob_rosepink",
    "name": "玫瑰粉",
    "style": "bob",
    "styleName": "鮑伯頭",
-   "sheet": "char_hair_bob_rosepink.png"
+   "sheet": "char_hair_bob_rosepink.png",
+   "hex": "#b87070"
   },
   {
    "id": "bob_green",
    "name": "綠",
    "style": "bob",
    "styleName": "鮑伯頭",
-   "sheet": "char_hair_bob_green.png"
+   "sheet": "char_hair_bob_green.png",
+   "hex": "#008050"
   },
   {
    "id": "bob_blue",
    "name": "藍",
    "style": "bob",
    "styleName": "鮑伯頭",
-   "sheet": "char_hair_bob_blue.png"
+   "sheet": "char_hair_bob_blue.png",
+   "hex": "#004888"
   },
   {
    "id": "bob_purple",
    "name": "紫",
    "style": "bob",
    "styleName": "鮑伯頭",
-   "sheet": "char_hair_bob_purple.png"
+   "sheet": "char_hair_bob_purple.png",
+   "hex": "#702078"
   },
   {
    "id": "curly_brown",
    "name": "棕",
    "style": "curly",
    "styleName": "捲長髮",
-   "sheet": "char_hair_curly_brown.png"
+   "sheet": "char_hair_curly_brown.png",
+   "hex": "#684018"
   },
   {
    "id": "curly_brown2",
    "name": "深棕",
    "style": "curly",
    "styleName": "捲長髮",
-   "sheet": "char_hair_curly_brown2.png"
+   "sheet": "char_hair_curly_brown2.png",
+   "hex": "#604820"
   },
   {
    "id": "curly_black",
    "name": "黑",
    "style": "curly",
    "styleName": "捲長髮",
-   "sheet": "char_hair_curly_black.png"
+   "sheet": "char_hair_curly_black.png",
+   "hex": "#585858"
   },
   {
    "id": "curly_blonde",
    "name": "金",
    "style": "curly",
    "styleName": "捲長髮",
-   "sheet": "char_hair_curly_blonde.png"
+   "sheet": "char_hair_curly_blonde.png",
+   "hex": "#b88830"
   },
   {
    "id": "curly_ashblonde",
    "name": "灰金",
    "style": "curly",
    "styleName": "捲長髮",
-   "sheet": "char_hair_curly_ashblonde.png"
+   "sheet": "char_hair_curly_ashblonde.png",
+   "hex": "#604018"
   },
   {
    "id": "curly_ashplatinum",
    "name": "銀白",
    "style": "curly",
    "styleName": "捲長髮",
-   "sheet": "char_hair_curly_ashplatinum.png"
+   "sheet": "char_hair_curly_ashplatinum.png",
+   "hex": "#684028"
   },
   {
    "id": "curly_red",
    "name": "紅",
    "style": "curly",
    "styleName": "捲長髮",
-   "sheet": "char_hair_curly_red.png"
+   "sheet": "char_hair_curly_red.png",
+   "hex": "#a00830"
   },
   {
    "id": "curly_orange",
    "name": "橘",
    "style": "curly",
    "styleName": "捲長髮",
-   "sheet": "char_hair_curly_orange.png"
+   "sheet": "char_hair_curly_orange.png",
+   "hex": "#b83000"
   },
   {
    "id": "curly_rosepink",
    "name": "玫瑰粉",
    "style": "curly",
    "styleName": "捲長髮",
-   "sheet": "char_hair_curly_rosepink.png"
+   "sheet": "char_hair_curly_rosepink.png",
+   "hex": "#b87070"
   },
   {
    "id": "curly_green",
    "name": "綠",
    "style": "curly",
    "styleName": "捲長髮",
-   "sheet": "char_hair_curly_green.png"
+   "sheet": "char_hair_curly_green.png",
+   "hex": "#008050"
   },
   {
    "id": "curly_blue",
    "name": "藍",
    "style": "curly",
    "styleName": "捲長髮",
-   "sheet": "char_hair_curly_blue.png"
+   "sheet": "char_hair_curly_blue.png",
+   "hex": "#004888"
   },
   {
    "id": "curly_purple",
    "name": "紫",
    "style": "curly",
    "styleName": "捲長髮",
-   "sheet": "char_hair_curly_purple.png"
+   "sheet": "char_hair_curly_purple.png",
+   "hex": "#702078"
   },
   {
    "id": "long_brown",
    "name": "棕",
    "style": "long",
    "styleName": "長髮",
-   "sheet": "char_hair_long_brown.png"
+   "sheet": "char_hair_long_brown.png",
+   "hex": "#684018"
   },
   {
    "id": "long_brown2",
    "name": "深棕",
    "style": "long",
    "styleName": "長髮",
-   "sheet": "char_hair_long_brown2.png"
+   "sheet": "char_hair_long_brown2.png",
+   "hex": "#604820"
   },
   {
    "id": "long_black",
    "name": "黑",
    "style": "long",
    "styleName": "長髮",
-   "sheet": "char_hair_long_black.png"
+   "sheet": "char_hair_long_black.png",
+   "hex": "#585858"
   },
   {
    "id": "long_blonde",
    "name": "金",
    "style": "long",
    "styleName": "長髮",
-   "sheet": "char_hair_long_blonde.png"
+   "sheet": "char_hair_long_blonde.png",
+   "hex": "#b88830"
   },
   {
    "id": "long_ashblonde",
    "name": "灰金",
    "style": "long",
    "styleName": "長髮",
-   "sheet": "char_hair_long_ashblonde.png"
+   "sheet": "char_hair_long_ashblonde.png",
+   "hex": "#604018"
   },
   {
    "id": "long_ashplatinum",
    "name": "銀白",
    "style": "long",
    "styleName": "長髮",
-   "sheet": "char_hair_long_ashplatinum.png"
+   "sheet": "char_hair_long_ashplatinum.png",
+   "hex": "#684028"
   },
   {
    "id": "long_red",
    "name": "紅",
    "style": "long",
    "styleName": "長髮",
-   "sheet": "char_hair_long_red.png"
+   "sheet": "char_hair_long_red.png",
+   "hex": "#a00830"
   },
   {
    "id": "long_orange",
    "name": "橘",
    "style": "long",
    "styleName": "長髮",
-   "sheet": "char_hair_long_orange.png"
+   "sheet": "char_hair_long_orange.png",
+   "hex": "#b83000"
   },
   {
    "id": "long_rosepink",
    "name": "玫瑰粉",
    "style": "long",
    "styleName": "長髮",
-   "sheet": "char_hair_long_rosepink.png"
+   "sheet": "char_hair_long_rosepink.png",
+   "hex": "#b87070"
   },
   {
    "id": "long_green",
    "name": "綠",
    "style": "long",
    "styleName": "長髮",
-   "sheet": "char_hair_long_green.png"
+   "sheet": "char_hair_long_green.png",
+   "hex": "#008050"
   },
   {
    "id": "long_blue",
    "name": "藍",
    "style": "long",
    "styleName": "長髮",
-   "sheet": "char_hair_long_blue.png"
+   "sheet": "char_hair_long_blue.png",
+   "hex": "#004888"
   },
   {
    "id": "long_purple",
    "name": "紫",
    "style": "long",
    "styleName": "長髮",
-   "sheet": "char_hair_long_purple.png"
+   "sheet": "char_hair_long_purple.png",
+   "hex": "#702078"
   }
  ],
  "tops": [

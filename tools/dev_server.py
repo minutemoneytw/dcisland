@@ -175,6 +175,7 @@ def sanitize_state(s, prev):
         "look": {
             "skin": _id_or(look.get("skin"), pl.get("skin", "light")),
             "gender": "female" if look.get("gender") == "female" else "male",
+            "race": look.get("race") if look.get("race") in ("human", "elf", "cat", "lalafell", "giant") else "human",  # 種族（人類/精靈/貓族/拉拉肥/巨人）
             "hair": _id_or(look.get("hair"), pl.get("hair", "hair1")),
             "shirt": round(_num(look.get("shirt"), 0, 99, pl.get("shirt", 0))),
             "pants": round(_num(look.get("pants"), 0, 99, pl.get("pants", 0))),

@@ -278,6 +278,7 @@ function sanitizeState(s, prev) {
     look: {
       skin: idOr(look.skin, pl.skin || "light"),
       gender: look.gender === "female" ? "female" : "male",   // 性別（素體男女）
+      race: ["human", "elf", "cat", "lalafell", "giant"].includes(look.race) ? look.race : "human",   // 種族（人類/精靈/貓族/拉拉肥/巨人）
       hair: idOr(look.hair, pl.hair || "hair1"),
       shirt: Math.round(num(look.shirt, 0, 99, pl.shirt ?? 0)),
       pants: Math.round(num(look.pants, 0, 99, pl.pants ?? 0)),
