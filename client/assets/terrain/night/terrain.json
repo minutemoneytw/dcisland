@@ -32,6 +32,10 @@
   {
    "id": "slime_night",
    "weight": 1
+  },
+  {
+   "id": "dragon_night",
+   "weight": 1
   }
  ],
  "uiColor": "#6b74b8",

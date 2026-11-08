@@ -61,8 +61,8 @@
   2. **`tools/gen_assets.py`**：`EXTERNAL_BUNDLES` 登記 sheet（`frames` 欄數、`rows` 列數、`row0` 從第幾列開始用、`fw`／`fh` 單格尺寸；重跑開頭會健檢尺寸，不符會印警告）→ `MOB_MANIFEST` 加一條 mob → `MOBS_BY_TERRAIN` 指定哪些島、權重。重跑產生器即寫進 `mobs.json` 與各地形 `terrain.json`。
   3. **授權**：`docs/assets-license.md` 補來源；外部素材一律要記，來源不明先標「授權待確認」。
   **mob 條目欄位**：`id`／`name`／`speed`（漫遊速度）／`flee`（被揮擊嚇跑的距離）／`hp`／`swim`（能到海上，預設否）／`line`（點牠的描述）／`anim`／`fixed`。**`anim`**：`sheet`／`frames`（每列幀數）／`fps`／`scale`（1 個 sheet 像素畫幾 px）／`keyBg`（去背）。
-  - **方向網格（選用）**：`rows`＋`row0`（用哪幾列）、`rowDir`＝每一列是哪個方向（順序＝列序，如 `["up","right","down","left"]`）。程式依怪物**移動方向**挑列（`stepMob` 每幀算 `a.face4`、`mobRowFor` 選列）；素材沒畫的方向用**對向那一列左右鏡像**（例如只有「右」沒「左」，往左就畫右再翻）。沒給 `rows`（只有一列）＝沿用舊規則（往左就左右翻轉）。
-  - **調色（一張基準圖做多色系）**：`tint`（目標色）＋`tintBase`（基準圖主色；省略時自動取 sheet 最常見的中亮度色）。整張依**明暗**重上色（暗→暗、亮→往白推，輪廓維持深色），同一張 sheet 就能做各島不同色系（史萊姆＝`slime_<地形>` 各自 `tint`）。實作：`main.js` 的 `tintSheet`／`sheetMainHex`，boot 載入動畫時套用（`S.mobAnims`）。
+  - **方向網格（選用）**：`rows`＋`row0`（用哪幾列）、`rowDir`＝每一列是哪個方向（順序＝列序，如 `["up","right","down","left"]`）。要挑**不連續**的列時（例如飛龍的 sheet 只用第 0、2 列）用 `rowIndex`（`[0,2]`，對應 `rowDir` 的順序）。程式依怪物**移動方向**挑列（`stepMob` 每幀算 `a.face4`、`mobRowFor` 選列）；素材沒畫的方向用**對向那一列左右鏡像**（例如只有「右」沒「左」，往左就畫右再翻）。沒給 `rows`（只有一列）＝沿用舊規則（往左就左右翻轉）。
+  - **調色（一張基準圖做多色系）**：`tint`（目標色）＋`tintBase`（基準圖主色；省略時自動取 sheet 最常見的中亮度色）。預設是**乘法**：整張依明暗重上色（暗→暗、亮→往白推，輪廓維持深色），同一張 sheet 就能做各島不同色系（史萊姆＝`slime_<地形>` 各自 `tint`）。**暗色目標**（例如夜光島的黑飛龍）要加 `tintMode: "off"` 改用**位移法**（保留原本明暗起伏、整體色調平移到 `tint`；乘法的話整隻會變全黑）。實作：`main.js` 的 `tintSheet`／`sheetMainHex`，boot 載入動畫時套用（`S.mobAnims`）。
   - **`fixed: N`**：該種類在同一座島**固定生成 N 隻**（保證一定看得到），且**不參與原本的隨機池**；其他沒標的種類照舊（從權重池隨機抽 6 隻）。雞／史萊姆／兔子＝`fixed: 3`（`spawnMobs`）。
   - **`footDy`**：產生器自動量每格底部留白 × `scale` 寫進 `mobs.json`（客戶端把圖往下挪，腳／底部才會踩到 a.y 的影子）；**島主與 `lurker` 不套用**（牠們另有調好的 `shadow`），要手動覆蓋就在條目直接寫 `footDy`。飛行中的怪（`a.fly`）客戶端不挪。
   - **島主**：另在 `OWNER_BY_TERRAIN` 指定（同一套 `anim`，差別只在 `owner: true`＋招式，見「島主與戰鬥」）。

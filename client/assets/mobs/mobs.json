@@ -312,6 +312,116 @@
    "line": "「跳跳兔」豎起耳朵，隨時準備蹦走。"
   },
   {
+   "id": "dragon_night",
+   "name": "飛龍",
+   "fixed": 3,
+   "swim": true,
+   "big": 5,
+   "speed": 46,
+   "flee": 150,
+   "hp": 4,
+   "footDy": 0,
+   "anim": {
+    "sheet": "external/img2pixel/dragon_sheet.png",
+    "frames": 3,
+    "rows": 2,
+    "rowIndex": [
+     0,
+     2
+    ],
+    "fw": 191,
+    "fh": 161,
+    "rowDir": [
+     "up",
+     "down"
+    ],
+    "fps": 7,
+    "scale": 0.9
+   },
+   "shadow": {
+    "rx": 46,
+    "ry": 10,
+    "dx": 0,
+    "dy": -4
+   },
+   "tint": "#1a1a1a",
+   "tintBase": "#8b1030",
+   "tintMode": "off",
+   "line": "「飛龍」拍了拍翅膀，掀起一陣風。"
+  },
+  {
+   "id": "dragon_volcano",
+   "name": "飛龍",
+   "fixed": 3,
+   "swim": true,
+   "big": 5,
+   "speed": 46,
+   "flee": 150,
+   "hp": 4,
+   "footDy": 0,
+   "anim": {
+    "sheet": "external/img2pixel/dragon_sheet.png",
+    "frames": 3,
+    "rows": 2,
+    "rowIndex": [
+     0,
+     2
+    ],
+    "fw": 191,
+    "fh": 161,
+    "rowDir": [
+     "up",
+     "down"
+    ],
+    "fps": 7,
+    "scale": 0.9
+   },
+   "shadow": {
+    "rx": 46,
+    "ry": 10,
+    "dx": 0,
+    "dy": -4
+   },
+   "line": "「飛龍」拍了拍翅膀，掀起一陣風。"
+  },
+  {
+   "id": "dragon_beach",
+   "name": "飛龍",
+   "fixed": 3,
+   "swim": true,
+   "big": 5,
+   "speed": 46,
+   "flee": 150,
+   "hp": 4,
+   "footDy": 0,
+   "anim": {
+    "sheet": "external/img2pixel/dragon_sheet.png",
+    "frames": 3,
+    "rows": 2,
+    "rowIndex": [
+     0,
+     2
+    ],
+    "fw": 191,
+    "fh": 161,
+    "rowDir": [
+     "up",
+     "down"
+    ],
+    "fps": 7,
+    "scale": 0.9
+   },
+   "shadow": {
+    "rx": 46,
+    "ry": 10,
+    "dx": 0,
+    "dy": -4
+   },
+   "tint": "#d8c090",
+   "tintBase": "#8b1030",
+   "line": "「飛龍」拍了拍翅膀，掀起一陣風。"
+  },
+  {
    "id": "fishman",
    "name": "深海魚人",
    "sprite": "fishman.png",

@@ -1696,6 +1696,7 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/chicken_sheet.png", frames=3, rows=4, fw=32, fh=32, what="咕咕雞的 4 方向 × 3 幀（草島／森林島）"),
     dict(sheet="external/img2pixel/slime_sheet.png", frames=3, rows=3, fw=48, fh=48, what="史萊姆的 3 方向（背／側／前）× 3 幀（各島不同色，靠 tint）"),
     dict(sheet="external/img2pixel/bunny_sheet.png", frames=4, rows=2, row0=0, fw=48, fh=32, what="跳跳兔的左／右各 4 幀（沙灘／雪島白／機械島灰；sheet 第 3 列 2 幀沒用到）"),
+    dict(sheet="external/img2pixel/dragon_sheet.png", frames=3, rows=2, fw=191, fh=161, what="飛龍的上飛／下飛各 3 幀（sheet 共 4 列，只用第 0、2 列＝rowIndex；各島不同色靠 tint）"),
     dict(sheet="external/img2pixel/bahamut_fly_sheet.png", frames=6, fw=88, fh=59, what="黃金肥龍的飛行 6 幀（草島島主）"),
     dict(sheet="external/img2pixel/snake_queen_sheet.png", frames=4, fw=88, fh=85, what="笨蛋蛇女的 4 幀（夜光島島主）"),
     dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fw=88, fh=74, what="蓋老師（究極神兵）的走路 6 幀（熔岩島島主）"),
@@ -1752,6 +1753,20 @@ MOB_MANIFEST = dict(
                **({"tint": tint, "tintBase": "#ab7943"} if tint else {}),
                line="「跳跳兔」豎起耳朵，隨時準備蹦走。")
           for bid, tint in [("bunny", None), ("bunny_snow", "#f2f6ff"), ("bunny_machine", "#9aa4b0")]],
+        # 飛龍：夜光島（黑）、熔岩島（原色紅）、沙灘島（沙）。用 sheet 的第 0、2 列（上飛、下飛）當方向網格；
+        # swim＝會飛所以能過海；big=4＝判定圈 34+6*(4-1)=52（大隻）；shadow 依體型放大、貼在正下方
+        *[dict(id=did, name="飛龍", fixed=3, swim=True, big=5, speed=46, flee=150, hp=4,
+               footDy=0,   # 會飛：不套用底部留白對齊（讓牠浮在影子之上，不貼地）
+               anim=dict(sheet="external/img2pixel/dragon_sheet.png", frames=3, rows=2, rowIndex=[0, 2], fw=191, fh=161,
+                         rowDir=["up", "down"], fps=7, scale=0.9),
+               shadow=dict(rx=46, ry=10, dx=0, dy=-4),
+               **_tk,
+               line="「飛龍」拍了拍翅膀，掀起一陣風。")
+          for did, _tk in [
+              ("dragon_night",   dict(tint="#1a1a1a", tintBase="#8b1030", tintMode="off")),   # 夜光島：黑（位移法保留明暗，不然會整隻全黑）
+              ("dragon_volcano", dict()),                                                    # 熔岩島：原色紅（不調色）
+              ("dragon_beach",   dict(tint="#d8c090", tintBase="#8b1030")),                   # 沙灘島：沙色
+          ]],
         # 釣上來的敵對怪物（lurker=True）：不在任何地形的 mobs 裡自然出現，只會在釣魚時以 fish.json 的 lurkerChance 機率被釣上來；
         # 落在浮標旁的陸地、直接追殺釣到牠的人（與島主同一套仇恨／爪擊），30 秒沒人打就原地消失，被打倒也消失（不重生、沒有獎勵）
         dict(id="fishman", name="深海魚人", sprite="fishman.png", lurker=True, swim=True, big=2,
@@ -1895,11 +1910,11 @@ OWNER_BY_TERRAIN = {
 # 各地形出現的小動物（id=權重）
 MOBS_BY_TERRAIN = {
     "grass":   [("sheep", 2), ("bird", 1), ("frog", 1), ("chicken", 2), ("slime_grass", 1)],
-    "beach":   [("bird", 2), ("frog", 1), ("bunny", 2), ("slime_beach", 1)],
+    "beach":   [("bird", 2), ("frog", 1), ("bunny", 2), ("slime_beach", 1), ("dragon_beach", 1)],
     "snow":    [("sheep", 2), ("bird", 1), ("bunny_snow", 2), ("slime_snow", 1)],
-    "night":   [("frog", 2), ("sheep", 1), ("slime_night", 1)],
+    "night":   [("frog", 2), ("sheep", 1), ("slime_night", 1), ("dragon_night", 1)],
     "forest":  [("sheep", 2), ("bird", 2), ("chicken", 2), ("slime_forest", 1)],
-    "volcano": [("frog", 1), ("bird", 1), ("slime_volcano", 1)],
+    "volcano": [("frog", 1), ("bird", 1), ("slime_volcano", 1), ("dragon_volcano", 1)],
     "machine": [("bunny_machine", 2), ("slime_machine", 1)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）
 }
 

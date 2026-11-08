@@ -156,6 +156,7 @@ function makeSpr(img, spec) {
   const fw = (spec && spec.fw | 0) || Math.floor(img.width / frames);
   const fh = (spec && spec.fh | 0) || Math.floor(img.height / rows);
   return { img: spec?.keyBg ? keyBackground(img) : img, frames, rows, row0: (spec && spec.row0 | 0) || 0,
+           rowIndex: spec?.rowIndex || null,   // 選用：這一列用 sheet 的第幾列（不連續時用，如 [0,2]）；沒給＝row0 起連續 rows 列
            fps: spec?.fps || 8, stagger: !!spec?.stagger, fw, fh, width: fw, height: fh };
 }
 // 載入一張可動畫的圖：manifest 有 anim.sheet 就載 sheet（失敗退回單張 url），否則載單張
@@ -173,7 +174,8 @@ function sprFrame(s, phase = 0, fps = s.fps) {
 }
 // 畫第 fi 幀（ctx 座標）
 function drawSpr(s, fi, dx, dy, dw = s.fw, dh = s.fh, row = 0) {
-  ctx.drawImage(s.img, fi * s.fw, (s.row0 + row) * s.fh, s.fw, s.fh, dx, dy, dw, dh);
+  const srow = s.rowIndex ? (s.rowIndex[row] ?? s.row0 + row) : s.row0 + row;
+  ctx.drawImage(s.img, fi * s.fw, srow * s.fh, s.fw, s.fh, dx, dy, dw, dh);
 }
 // 依格子決定的固定相位（地形點綴物、家具：各自錯開，但每個人畫面一樣、重新整理也不變）
 const cellPhase = (x, y) => ((x * 7 + y * 13) % 29) * .137;
@@ -2403,15 +2405,20 @@ function dyeSheet(img, dye, hex) {  const key = img.src + '|' + dye.join(',') + 
 }
 // 動物調色（mobs.json 的 tint）：整張 sheet 依明暗重上色成目標色——一張基準圖就能做各島不同色系、白兔、灰兔……
 // baseHex＝基準圖「主色」（亮度當 1.0）：比它暗的等比變暗、比它亮的往白色推，輪廓自然維持深色（跟髮色／眼睛同一套作法）
-function tintSheet(img, baseHex, hex) {
+function tintSheet(img, baseHex, hex, mode) {
   const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
   const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
   const d = g.getImageData(0, 0, cv.width, cv.height), p = d.data;
   const T = hexRGB(hex), b = Math.max(1, lum(hexRGB(baseHex)));
   for (let i = 0; i < p.length; i += 4) {
     if (!p[i + 3]) continue;
-    const k = lum([p[i], p[i + 1], p[i + 2]]) / b;
-    for (let c = 0; c < 3; c++) p[i + c] = Math.round(k <= 1 ? T[c] * k : T[c] + (255 - T[c]) * Math.min(1, k - 1));
+    const l = lum([p[i], p[i + 1], p[i + 2]]);
+    if (mode === 'off') {   // 位移法：保留原本的明暗起伏、整體色調平移到目標色（暗色目標用——乘法的話整隻會變全黑）
+      for (let c = 0; c < 3; c++) p[i + c] = Math.max(0, Math.min(255, Math.round(T[c] + (l - b))));
+    } else {                // 乘法：亮部往白推（一般色系用，如史萊姆、兔子）
+      const k = l / b;
+      for (let c = 0; c < 3; c++) p[i + c] = Math.round(k <= 1 ? T[c] * k : T[c] + (255 - T[c]) * Math.min(1, k - 1));
+    }
   }
   g.putImageData(d, 0, 0);
   return cv;
@@ -6236,7 +6243,7 @@ async function boot() {
       const sh = await optImg(`assets/${a.anim.sheet}`);
       if (!sh) return;
       const an = loadAnim(sh, a.anim);
-      if (a.tint) an.img = tintSheet(an.img, a.tintBase || sheetMainHex(an.img), a.tint);   // 調色：一張基準圖 → 各島不同色系
+      if (a.tint) an.img = tintSheet(an.img, a.tintBase || sheetMainHex(an.img), a.tint, a.tintMode);   // 調色：一張基準圖 → 各島不同色系
       S.mobAnims[a.id] = an;
     }),
     ...S.toolsDB.tools.map(async t => { const im = await optImg(`assets/tools/${t.sprite}`); if (im) im.wscale = 2; S.weaponImgs[t.id] = im; }),   // 採集工具仍是舊 24px 規格（畫 2 倍）；換成 64px 模組時改 wscale
