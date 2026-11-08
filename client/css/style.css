@@ -335,3 +335,5 @@ body {
 .uno-timer { font-size: 22px; color: #ffe08a; font-weight: bold; margin-top: 4px; }
 .uno-alert { background: #a83a38; color: #fff; }
 .ff-btn.active { background: #3a3424; border-color: var(--gold); color: var(--gold); }
+.uno-bar { justify-content: space-between; align-items: center; }
+.uno-acts { display: flex; gap: 10px; }

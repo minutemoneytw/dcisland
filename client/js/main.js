@@ -4523,36 +4523,46 @@ function buildUno(box, v, mk, gd) {
       const el = unCardEl(c, { big: true }), ok = myTurn && (v.playable || []).includes(idx);
       el.classList.add(ok ? 'playable' : 'dim');
       if (ok) el.onclick = () => {
-        if (c === 'W' || c === 'F') { S.unPick = idx; buildTable(); return; }   // 變色牌：先選顏色
+        if (c === 'W' || c === 'F' || v.hand.length === 2) { S.unPick = { idx, color: null }; buildTable(); return; }   // 變色牌要先選顏色；剩 2 張時要選「出牌」或「出牌並喊 UNO」
         S.net?.tbl?.({ a: 'play', idx });
       };
       cs.appendChild(el);
     }
     hand.appendChild(cs); box.appendChild(hand);
-    if (S.unPick != null && (v.hand || [])[S.unPick] && myTurn) {   // 選顏色
-      const pk = mk('div', 'table-btns');
-      pk.appendChild(mk('span', 'table-tag', '選一個顏色：'));
-      for (const c of 'RYGB') { const b = mk('button', 'ff-btn small', UN_CNAME[c]); b.style.background = UN_FILL[c]; b.style.color = '#fff'; b.onclick = () => { const idx = S.unPick; S.unPick = null; S.net?.tbl?.({ a: 'play', idx, color: c }); }; pk.appendChild(b); }
+    const pickCard = S.unPick ? (v.hand || [])[S.unPick.idx] : null;
+    if (pickCard && myTurn) {
+      const pk = mk('div', 'table-btns'), wildPick = pickCard === 'W' || pickCard === 'F';
+      const send = (uno) => { const { idx, color } = S.unPick; S.unPick = null; S.net?.tbl?.({ a: 'play', idx, color: color || undefined, uno: uno || undefined }); };
+      if (wildPick && !S.unPick.color) {   // 選顏色
+        pk.appendChild(mk('span', 'table-tag', '選一個顏色：'));
+        for (const c of 'RYGB') {
+          const b = mk('button', 'ff-btn small', UN_CNAME[c]); b.style.background = UN_FILL[c]; b.style.color = '#fff';
+          b.onclick = () => { S.unPick.color = c; if (v.hand.length === 2) buildTable(); else send(false); };
+          pk.appendChild(b);
+        }
+      } else {   // 剩 2 張：出牌後只剩 1 張，可以直接「出牌並喊 UNO」
+        pk.appendChild(Object.assign(mk('button', 'ff-btn small', '出牌'), { onclick: () => send(false) }));
+        pk.appendChild(Object.assign(mk('button', 'ff-btn small uno-alert', '出牌並喊 UNO！'), { onclick: () => send(true) }));
+      }
       const cancel = mk('button', 'ff-btn small', '取消'); cancel.onclick = () => { S.unPick = null; buildTable(); }; pk.appendChild(cancel);
       box.appendChild(pk);
     } else S.unPick = null;
   } else S.unPick = null;
-  // 操作按鈕
-  const btns = mk('div', 'table-btns');
+  // 操作按鈕：遊戲動作靠右、「離開」靠左，避免連點時誤按到離開
+  const btns = mk('div', 'table-btns uno-bar'), acts = mk('div', 'uno-acts');
   if (v.role === 'seat' && playing) {
-    if (v.canDraw) btns.appendChild(Object.assign(mk('button', 'ff-btn', un.pending > 0 ? `吃下 ${un.pending} 張` : '抽牌'), { onclick: () => S.net?.tbl?.({ a: 'draw' }) }));
-    if (v.canPass) btns.appendChild(Object.assign(mk('button', 'ff-btn', un.skip ? '接受被跳過' : '放棄'), { onclick: () => S.net?.tbl?.({ a: 'pass' }) }));
-    const myHand = mySeat?.n ?? 0;
-    if (un.pend === v.me || myHand <= 2) btns.appendChild(Object.assign(mk('button', 'ff-btn' + (un.pend === v.me ? ' uno-alert' : ''), 'UNO！'), { onclick: () => S.net?.tbl?.({ a: 'uno' }) }));
-    if (un.pend >= 0 && un.pend !== v.me) btns.appendChild(Object.assign(mk('button', 'ff-btn uno-alert', `抓！${v.seats[un.pend]?.name} 沒喊 UNO`), { onclick: () => S.net?.tbl?.({ a: 'catch' }) }));
+    if (v.canDraw) acts.appendChild(Object.assign(mk('button', 'ff-btn', un.pending > 0 ? `吃下 ${un.pending} 張` : '抽牌'), { onclick: () => S.net?.tbl?.({ a: 'draw' }) }));
+    if (v.canPass) acts.appendChild(Object.assign(mk('button', 'ff-btn', un.skip ? '接受被跳過' : '放棄'), { onclick: () => S.net?.tbl?.({ a: 'pass' }) }));
+    if (un.pend === v.me) acts.appendChild(Object.assign(mk('button', 'ff-btn uno-alert', 'UNO！'), { onclick: () => S.net?.tbl?.({ a: 'uno' }) }));   // 出到剩 1 張忘了喊：補喊（被抓之前）
+    if (un.pend >= 0 && un.pend !== v.me) acts.appendChild(Object.assign(mk('button', 'ff-btn uno-alert', `抓！${v.seats[un.pend]?.name} 沒喊 UNO`), { onclick: () => S.net?.tbl?.({ a: 'catch' }) }));
   } else if (v.role === 'seat' && !playing) {
     const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
-    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
-    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); acts.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); acts.appendChild(st);
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
-    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); acts.appendChild(b);
   }
-  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv); btns.appendChild(acts);
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log');

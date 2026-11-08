@@ -1101,7 +1101,7 @@ def un_pass_on(t, v, now):
     else:
         un_set_turn(t, v, now)
 
-def un_play(t, cid, idx, color, now):
+def un_play(t, cid, idx, color, now, say=False):
     role, i = tbl_find(t, cid)
     g = t.get("g")
     if t["game"] != "uno" or role != "seat" or t["phase"] != "playing" or not g or i != t["turn"]:
@@ -1130,11 +1130,12 @@ def un_play(t, cid, idx, color, now):
         un_finish(t, i, True)
         return
     if len(s["hand"]) == 1:
-        if s.get("said"):
+        if s.get("said") or say:   # say＝「出牌並喊 UNO」
             s["said"] = False
+            if say:
+                tbl_log(t, f"{s['name']} 喊了 UNO！")
         else:
             g["pend"] = i   # 還沒喊 UNO：下一個人動作前，任何人可以抓
-    n_active = len(un_active(t))
     g["skip"] = False
     if un_is_skip(card):    # 跳過
         v = un_next(t, i)
@@ -1144,10 +1145,10 @@ def un_play(t, cid, idx, color, now):
         else:
             tbl_log(t, f"{t['seats'][v]['name']} 被跳過")
             un_set_turn(t, un_next(t, i, 2), now)
-    elif card not in ("W", "F") and card[1:] == "r":   # 反轉（兩人時等於跳過）
+    elif card not in ("W", "F") and card[1:] == "r":   # 反轉（兩人時也是換對方出牌，使用者定）
         g["dir"] = -g["dir"]
         tbl_log(t, "方向反轉")
-        un_set_turn(t, i if n_active == 2 else un_next(t, i), now)
+        un_set_turn(t, un_next(t, i), now)
     elif un_is_plus(card):   # +2／+4
         n = 4 if card == "F" else 2
         v = un_next(t, i)
@@ -2612,7 +2613,7 @@ class Room:
                     elif a == "move":
                         gm_move(t, cid, msg.get("x"), msg.get("y"))
                     elif a == "play":   # UNO：出牌（idx、變色牌帶 color）
-                        un_play(t, cid, msg.get("idx"), msg.get("color"), now_ms)
+                        un_play(t, cid, msg.get("idx"), msg.get("color"), now_ms, msg.get("uno") is True)
                     elif a == "pass":
                         un_pass(t, cid, now_ms)
                     elif a == "uno":
