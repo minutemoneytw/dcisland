@@ -4107,29 +4107,44 @@ function buildGomoku(box, v, mk) {
 const DG_W = 640, DG_H = 400, DG_PLAYER_R = 5, DG_SPEED = 190, DG_INV = 1.5;
 const DG_COLORS = ['#7ae8d0', '#ffb347', '#a8c8ff', '#ff8ab8', '#c8f070', '#d8a8ff', '#ffe08a', '#8affb8'];
 const DG_KEYS = { w: 'up', arrowup: 'up', s: 'down', arrowdown: 'down', a: 'left', arrowleft: 'left', d: 'right', arrowright: 'right' };
-// 決定性的彈幕產生器：同一個 seed 永遠產生同一批彈幕。彈幕＝{ts（出現時間 s）, x0, y0, vx, vy, r}，位置＝起點＋速度×(t−ts)
+// 決定性的彈幕產生器：同一個 seed 永遠產生同一批彈幕。彈幕＝{ts（出現時間 s）, x0, y0, vx, vy, r, c（顏色編號 0～2）}，位置＝起點＋速度×(t−ts)
+// 所有彈幕一律從場外出發（2026-11-08，使用者要求）：起點都在場地外，才不會剛好出在玩家身上來不及躲
+const DG_BULLET_SPEED = 1.25;   // 彈幕速度倍率（使用者要求比原本快約 1.25 倍）
+const DG_BULLET_COLORS = [['#ff5a5a', '#ffe0d0'], ['#ffb347', '#fff2c8'], ['#5ab8ff', '#d8f0ff']];   // 三種顏色：紅、橘黃、藍（外圈、內點）；只是好看，不影響判定
 function dodgeGen(seed) {
   const rng = mulberry32(seed >>> 0);
   const rnd = (a, b) => a + rng() * (b - a), pick = n => Math.floor(rng() * n);
   const bullets = []; let tw = 2.5;   // 第一波出現的時間（開局後 2.5 秒，讓大家先站好）
-  const add = (ts, x0, y0, vx, vy, r) => bullets.push({ ts, x0, y0, vx, vy, r: r || 4 });
+  const add = (ts, x0, y0, vx, vy, r, c) => bullets.push({ ts, x0, y0, vx, vy, r: r || 4, c });
+  const cx = DG_W / 2, cy = DG_H / 2, OUT = 16;
+  // 場外的發射點：side 0 上、1 右、2 下、3 左；u（0～1）＝沿那一邊的位置；回傳 {x, y, a}（a＝從發射點朝場地中心的角度）
+  const edge = (side, u) => {
+    const x = side === 1 ? DG_W + OUT : side === 3 ? -OUT : u * DG_W, y = side === 0 ? -OUT : side === 2 ? DG_H + OUT : u * DG_H;
+    return { x, y, a: Math.atan2(cy - y, cx - x) };
+  };
   return {
     bullets,
     fill(until) {   // 產生到時間 until（秒）為止的彈幕；隨時間加快、變密
       while (tw < until) {
-        const d = Math.min(1, tw / 300), sp = 70 + 110 * d, kind = pick(4);
-        if (kind === 0) {   // 圓環爆發：從場內一點向四周
-          const n = 10 + Math.floor(14 * d), cx = rnd(60, DG_W - 60), cy = rnd(50, DG_H - 50), a0 = rnd(0, 6.28);
-          for (let i = 0; i < n; i++) add(tw, cx, cy, Math.cos(a0 + i * 6.2832 / n) * sp, Math.sin(a0 + i * 6.2832 / n) * sp, 4);
-        } else if (kind === 1) {   // 雨：從上方落下的幾排
-          const n = 5 + Math.floor(7 * d);
-          for (let i = 0; i < n; i++) add(tw, rnd(10, DG_W - 10), -8, rnd(-12, 12), sp * 1.1 + rnd(0, 30), 4);
-        } else if (kind === 2) {   // 彈牆：左或右側整排橫掃，留一個缺口
-          const fromL = rng() < .5, gap = rnd(40, DG_H - 40), gw = 52 - 16 * d, step = 26 - 6 * d;
-          for (let y = 8; y < DG_H; y += step) if (Math.abs(y - gap) > gw / 2) add(tw, fromL ? -8 : DG_W + 8, y, (fromL ? 1 : -1) * (sp * .95), 0, 5);
-        } else {   // 螺旋：一個發射點邊轉邊發（每顆的出現時間錯開）
-          const n = 14 + Math.floor(10 * d), cx = rnd(120, DG_W - 120), cy = rnd(90, DG_H - 90), a0 = rnd(0, 6.28), dir = rng() < .5 ? 1 : -1;
-          for (let i = 0; i < n; i++) add(tw + i * .07, cx, cy, Math.cos(a0 + dir * i * .5) * sp * .9, Math.sin(a0 + dir * i * .5) * sp * .9, 4);
+        const d = Math.min(1, tw / 300), sp = (70 + 110 * d) * DG_BULLET_SPEED, kind = pick(4), c = pick(3);
+        if (kind === 0) {   // 扇形：從場外一點朝場內散開
+          const e = edge(pick(4), rnd(.15, .85)), n = 8 + Math.floor(12 * d), spread = rnd(.5, .9);
+          for (let i = 0; i < n; i++) { const a = e.a + (n > 1 ? (i / (n - 1) - .5) * 2 * spread : 0); add(tw, e.x, e.y, Math.cos(a) * sp, Math.sin(a) * sp, 4, c); }
+        } else if (kind === 1) {   // 雨：從某一邊的場外整排落進來（略帶側飄）
+          const side = pick(4), n = 5 + Math.floor(7 * d), vert = side === 0 || side === 2, sgn = side === 0 || side === 3 ? 1 : -1;
+          for (let i = 0; i < n; i++) {
+            const along = rnd(10, (vert ? DG_W : DG_H) - 10), drift = rnd(-12, 12) * DG_BULLET_SPEED, v = (sp * 1.1 + rnd(0, 30)) * sgn;
+            if (vert) add(tw, along, side === 0 ? -8 : DG_H + 8, drift, v, 4, c); else add(tw, side === 3 ? -8 : DG_W + 8, along, v, drift, 4, c);
+          }
+        } else if (kind === 2) {   // 彈牆：左或右側（或上或下）整排橫掃，留一個缺口
+          const side = pick(4), vert = side === 0 || side === 2, gap = rnd(40, (vert ? DG_W : DG_H) - 40), gw = 52 - 16 * d, step = 26 - 6 * d;
+          const len = vert ? DG_W : DG_H, sgn = side === 0 || side === 3 ? 1 : -1;
+          for (let u = 8; u < len; u += step) if (Math.abs(u - gap) > gw / 2) {
+            if (vert) add(tw, u, side === 0 ? -8 : DG_H + 8, 0, sgn * sp * .95, 5, c); else add(tw, side === 3 ? -8 : DG_W + 8, u, sgn * sp * .95, 0, 5, c);
+          }
+        } else {   // 螺旋：場外一個發射點，邊掃過場內的方向邊發（每顆的出現時間錯開）
+          const e = edge(pick(4), rnd(.2, .8)), n = 14 + Math.floor(10 * d), dir = rng() < .5 ? 1 : -1, step = 2.4 / n;
+          for (let i = 0; i < n; i++) { const a = e.a + dir * (i - n / 2) * step; add(tw + i * .07, e.x, e.y, Math.cos(a) * sp * .9, Math.sin(a) * sp * .9, 4, c); }
         }
         tw += 1.5 - 1.0 * d + rnd(0, .25);   // 下一波：從 1.5 秒間隔逐漸縮到 0.5 秒
       }
@@ -4174,7 +4189,7 @@ function dodgeFrame(ts) {
       if (age < 0) continue;
       const x = b.x0 + b.vx * age, y = b.y0 + b.vy * age;
       if (x < -20 || x > DG_W + 20 || y < -20 || y > DG_H + 20) { if (age > 12) { bl.splice(i, 1); i--; } continue; }   // 出界很久的丟掉，陣列不會越長越大
-      D.act.push({ x, y, r: b.r });
+      D.act.push({ x, y, r: b.r, c: b.c });
     }
   } else D.act = [];
   // 碰撞：只有自己、已開局、沒在無敵時間內
@@ -4207,8 +4222,9 @@ function dodgeDraw(t, mySeat) {
   for (let y = 0; y <= DG_H; y += 40) { g.beginPath(); g.moveTo(0, y + .5); g.lineTo(DG_W, y + .5); g.stroke(); }
   // 彈幕
   for (const b of D.act) {
-    g.fillStyle = '#ff5a5a'; g.beginPath(); g.arc(b.x, b.y, b.r, 0, 6.2832); g.fill();
-    g.fillStyle = '#ffe0d0'; g.beginPath(); g.arc(b.x, b.y, b.r * .45, 0, 6.2832); g.fill();
+    const bc = DG_BULLET_COLORS[b.c] || DG_BULLET_COLORS[0];
+    g.fillStyle = bc[0]; g.beginPath(); g.arc(b.x, b.y, b.r, 0, 6.2832); g.fill();
+    g.fillStyle = bc[1]; g.beginPath(); g.arc(b.x, b.y, b.r * .45, 0, 6.2832); g.fill();
   }
   // 玩家：自己（有無敵閃爍）、其他人（內插位置）、已出局的變灰
   v.seats.forEach((s, i) => {
