@@ -629,7 +629,7 @@ LPC_EYES = [                     # 眼睛（表情）：(id, 名稱, external �
     ("default", "預設", "e_default.png"), ("angry", "生氣", "e_angry.png"), ("sad", "難過", "e_sad.png"),
     ("lookl", "看左", "e_lookl.png"), ("lookr", "看右", "e_lookr.png"),
 ]
-LPC_EYE_IRIS = [(126, 78, 32), (84, 76, 46)]   # LPC 眼睛的虹膜兩階（主色＋暗部）；瞳孔輪廓（35,32,23）不動
+LPC_EYE_IRIS = [(126, 78, 32)]   # LPC 眼睛的虹膜主色（整層重上色的明暗基準）
 LPC_EARS = [                     # 種族耳朵圖層：(遊戲檔名, external 檔名)
     ("ears_elven", "ear_elven.png"), ("ears_cat_bg", "ear_cat_bg.png"), ("ears_cat_fg", "ear_cat_fg.png"),
 ]
@@ -763,17 +763,18 @@ def lpc_layer_sheet(rel):
     return sheet
 
 def lpc_eyes_sheet(rel, target):
-    """眼睛圖層：虹膜兩階（LPC_EYE_IRIS）重上色成目標色（跟髮色 12 色同一套）→ 832×1344。眼白／瞳孔輪廓不動。"""
+    """眼睛圖層：整層像素依明暗重上色成目標色（跟髮色 12 色同一套）→ 832×1344。
+    眼白不在這層（在素體頭層），所以不用怕；以虹膜主色亮度為基準，瞳孔輪廓變成深色的目標色。"""
     sheet = lpc_layer_sheet(f"external/img2pixel/lpc/{rel}")
     tr = hx(target)
     b0 = 0.299 * LPC_EYE_IRIS[0][0] + 0.587 * LPC_EYE_IRIS[0][1] + 0.114 * LPC_EYE_IRIS[0][2]
-    ir = [tuple(c) for c in LPC_EYE_IRIS]
     for y in range(sheet.h):
         for x in range(sheet.w):
             c = sheet.get(x, y)
-            if c[3] == 0 or (c[0], c[1], c[2]) not in ir:
+            if c[3] == 0:
                 continue
             f = (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / b0
+            f = min(f, 1.7)   # 比虹膜主色亮的（沒有）保底；瞳孔變成深色調
             sheet.set(x, y, (min(255, round(tr[0] * f)), min(255, round(tr[1] * f)), min(255, round(tr[2] * f)), c[3]))
     return sheet
 
