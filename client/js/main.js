@@ -3322,10 +3322,10 @@ function drawPerson(p, wi, nameColor) {
   const pose = p.pose === 'sit' || p.pose === 'sleep' ? p.pose : null;
   const race = (p === S.players[0] ? S.me.race : p.look?.race) || 'human';
   const raceScale = (S.avatar.races?.find(r => r.id === race)?.scale) || 1;   // 種族倍率：拉拉肥 0.5／巨人 1.5（整個模組一起縮）
-  let nameY = p.y - p.z - Math.round(52 * raceScale);   // 名牌跟著身高（種族倍率）移
+  let nameY = p.y - p.z - Math.round(59 * raceScale);   // 名牌跟著身高（種族倍率）移（人物比例重整後頭頂在幀內 y6，見 gen_assets.py 的 CHAR_REPRO）
   if (pose === 'sleep') {
     drawSleeper(p);
-    nameY = p.y - Math.round(46 * raceScale);
+    nameY = p.y - Math.round(59 * raceScale);   // 睡姿頭貼在枕上（drawSleeper 從 y-39 開始畫頭），名牌照身高倍率放
   } else {
     if (!pose) {   // 影子（跳起來時縮小變淡）；坐著的不畫（會蓋在椅子上）
       const shs = 1 - Math.min(.55, p.z / 80);
@@ -3365,7 +3365,7 @@ function drawPerson(p, wi, nameColor) {
     ctx.restore();
     if (pet) ctx.restore();
     if (fish) drawLineAndBobber(p, wi, fish);
-    if (pose) nameY = p.y - 46;
+    if (pose) nameY = p.y - Math.round(59 * raceScale);
   }
   // 名牌（FFXIV 感：白字黑邊）
   ctx.font = '10px "Microsoft JhengHei"';
@@ -3475,9 +3475,9 @@ function drawGazeEye(x, y, r, pul) {
 // 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）
 function drawSleeper(p) {
   const F = S.avatar.frames, s = F.scale || 2, img = playerSpriteDiv(p, (F.states.down_idle || [0])[0]);   // 用正面待機的第 1 幀切出頭與肩膀
-  // 頭與肩膀那塊：由底圖實測——人佔幀內 x 22..40、y 20..63（高 44），頭約在上 30%
-  const sw = Math.round(F.w * .30), sh = Math.round(F.h * .21), sx = Math.round(F.w * .36), sy = Math.round(F.h * .30);
-  ctx.drawImage(img, sx, sy, sw, sh, p.x - sw * s / 2, p.y - 33, sw * s, sh * s);   // 頭的水平中心對準枕頭（單人床中央）
+  // 頭與肩膀那塊：比例重整後（CHAR_REPRO）頭在幀內約 x 20..43、y 6..27，取這段當枕上的頭
+  const sw = Math.round(F.w * .39), sh = Math.round(F.h * .40), sx = Math.round(F.w * .30), sy = Math.round(F.h * .08);
+  ctx.drawImage(img, sx, sy, sw, sh, p.x - sw * s / 2, p.y - 39, sw * s, sh * s);   // 頭的水平中心對準枕頭（單人床中央）
   const def = furnitureDef(p.seatType || 'bed'), bed = S.furnImgs[p.seatType || 'bed'];
   if (bed && def?.quiltRow) {   // 被子：從床的「同一幀」切出被子那幾列蓋回去（床有動畫時才對得上）
     const rows = bed.height - def.quiltRow, fi = sprFrame(bed, p.seat ? cellPhase(p.seat.cell[0], p.seat.cell[1]) : 0);
