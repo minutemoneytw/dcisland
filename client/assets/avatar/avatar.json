@@ -3783,9 +3783,7 @@
    "sheet": "char_top_blm_m.png",
    "sheetF": "char_top_blm_f.png",
    "dye": [
-    "#322d6a",
-    "#3c49ad",
-    "#466ac9"
+    "#4a5057"
    ]
   },
   {
@@ -4011,10 +4009,7 @@
    "name": "尖頂帽",
    "sheet": "char_hat_wizard.png",
    "dye": [
-    "#5e2d13",
-    "#612e14",
-    "#6a3416",
-    "#6a3317",
+    "#4a5057",
     "#9f7e24"
    ]
   },
