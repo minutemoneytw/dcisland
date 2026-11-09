@@ -324,16 +324,14 @@
    "anim": {
     "sheet": "external/img2pixel/dragon_sheet.png",
     "frames": 3,
-    "rows": 2,
-    "rowIndex": [
-     0,
-     2
-    ],
+    "rows": 4,
     "fw": 191,
     "fh": 161,
     "rowDir": [
      "up",
-     "down"
+     "right",
+     "down",
+     "left"
     ],
     "fps": 7,
     "scale": 0.9
@@ -362,16 +360,14 @@
    "anim": {
     "sheet": "external/img2pixel/dragon_sheet.png",
     "frames": 3,
-    "rows": 2,
-    "rowIndex": [
-     0,
-     2
-    ],
+    "rows": 4,
     "fw": 191,
     "fh": 161,
     "rowDir": [
      "up",
-     "down"
+     "right",
+     "down",
+     "left"
     ],
     "fps": 7,
     "scale": 0.9
@@ -397,16 +393,14 @@
    "anim": {
     "sheet": "external/img2pixel/dragon_sheet.png",
     "frames": 3,
-    "rows": 2,
-    "rowIndex": [
-     0,
-     2
-    ],
+    "rows": 4,
     "fw": 191,
     "fh": 161,
     "rowDir": [
      "up",
-     "down"
+     "right",
+     "down",
+     "left"
     ],
     "fps": 7,
     "scale": 0.9

@@ -787,68 +787,6 @@ LPC_WALK_BASE = 8
 LPC_DIR = {"down": 2, "down_right": 3, "right": 3, "up_right": 3, "up": 0, "up_left": 1, "left": 1, "down_left": 1}
 LPC_WALK_COLS = [1, 3, 5, 7]
 
-# ---------------- 人物比例重整（2026-11-09 使用者要求）----------------
-# 原本 LPC 素體偏寬（肩膀／手臂比頭還寬，參考圖是大頭窄身），這裡對所有人物圖層套同一組映射把身體弄窄、長高，
-# 頭維持原樣（可微調）。做法：每個 64×64 幀裡以腰／脖線 N 分兩段，脖線以上算「頭」、以下算「身體」，
-# 各自對脖線縮放（身體水平 BX、垂直 BY；頭水平 HX、垂直 HY），脖線固定在同一點＝兩段接得起來。
-# 一律反向取樣（由目的像素回推來源），縮小時不會破洞；所有圖層共用同一組映射，疊起來仍對齊（耳朵／帽子／武器掛點）。
-# 只處理遊戲真正讀的「走路列」（列 8-11）；其他動作列遊戲沒用到，原樣保留。
-CHAR_REPRO = dict(n=32.0, foot=61.0, cx=31.5, bx=0.70, by=1.18, hx=1.05, hy=1.10)
-
-def _repro_tables():
-    p = CHAR_REPRO
-    n2 = p["foot"] - (p["foot"] - p["n"]) * p["by"]          # 脖線在目的幀裡的新高度
-    iy = []
-    for Y in range(CHAR_FH):
-        ys = p["n"] - (n2 - Y) / p["hy"] if Y <= n2 else p["foot"] - (p["foot"] - Y) / p["by"]
-        iy.append((int(round(ys)), Y <= n2))
-    ixh = [int(round(p["cx"] + (X - p["cx"]) / p["hx"])) for X in range(CHAR_FW)]
-    ixb = [int(round(p["cx"] + (X - p["cx"]) / p["bx"])) for X in range(CHAR_FW)]
-    return iy, ixh, ixb
-
-_REPRO_T = None
-
-def _repro_pt(x, y):
-    """把舊幀內座標 (x, y) 換成重整後的新座標（供 avatar.json 的武器掛點用）。"""
-    p = CHAR_REPRO
-    if y <= p["n"]:
-        X = p["cx"] + (x - p["cx"]) * p["hx"]
-        Y = (p["foot"] - (p["foot"] - p["n"]) * p["by"]) - (p["n"] - y) * p["hy"]
-    else:
-        X = p["cx"] + (x - p["cx"]) * p["bx"]
-        Y = p["foot"] - (p["foot"] - y) * p["by"]
-    return [int(round(X)), int(round(Y))]
-
-def _reproportion(cv):
-    """把 832×1344 的人物圖層重新比例（只動走路列 8-11；其餘像素原樣複製）。
-    沒有走路列的圖（例如 LPC 武器的 128×128／192×192 超大格動作 sheet）原樣返回。"""
-    if cv.h < (LPC_WALK_BASE + 4) * CHAR_FH:
-        return cv
-    global _REPRO_T
-    if _REPRO_T is None:
-        _REPRO_T = _repro_tables()
-    iy, ixh, ixb = _REPRO_T
-    out = Canvas(cv.w, cv.h)
-    band_lo, band_hi = LPC_WALK_BASE * CHAR_FH, (LPC_WALK_BASE + 4) * CHAR_FH
-    for y in range(cv.h):                    # 走路列以外的像素原樣複製；走路列整條清空，只由下面的映射寫入
-        out.buf[y] = [T8] * cv.w if band_lo <= y < band_hi else cv.buf[y][:]
-    for r in range(LPC_WALK_BASE, LPC_WALK_BASE + 4):
-        oy = r * CHAR_FH
-        for c in range(cv.w // CHAR_FW):
-            ox = c * CHAR_FW
-            for Y in range(CHAR_FH):
-                sy, head = iy[Y]
-                if not 0 <= sy < CHAR_FH:
-                    continue
-                ix = ixh if head else ixb
-                for X in range(CHAR_FW):
-                    sx = ix[X]
-                    if 0 <= sx < CHAR_FW:
-                        px = cv.get(ox + sx, oy + sy)
-                        if px[3] > 16:
-                            out.set(ox + X, oy + Y, px)
-    return out
-
 # 攻擊動作（LPC 通用格式的動作組）：id → (起始列, 用到的欄)。每組四列＝上/左/下/右。
 # 加在 65 個基本邏輯幀之後；states 多出「動作_8方向」（斜角沿用同側，同 LPC_DIR）。
 # map 的第三格＝退回幀：素材缺這個動作（例如只下載了走路列）時，改畫該方向的待機幀（main.js 的 charSprite 檢查素體那一格有沒有圖）。
@@ -984,13 +922,13 @@ def lpc_body_sheet(gender="male", skin_key="light"):
             if r > 110 and r >= g and g >= b - 12:   # 膚色系才換
                 f = (0.299 * r + 0.587 * g + 0.114 * b) / ref
                 sheet.set(x, y, (min(255, round(tr[0] * f)), min(255, round(tr[1] * f)), min(255, round(tr[2] * f)), c[3]))
-    return _reproportion(sheet)
+    return sheet
 
 def lpc_layer_sheet(rel):
     """把一張 LPC 走路圖層（頭/眼睛/…576×256）疊到走路列 → 832×1344（原色，不重上色）。"""
     sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
     _lpc_overlay(sheet, rel, LPC_WALK_BASE * CHAR_FH)
-    return _reproportion(sheet)
+    return sheet
 
 def lpc_eyes_sheet(rel, target):
     """眼睛圖層：整層像素依明暗重上色成目標色（跟髮色 12 色同一套）→ 832×1344。
@@ -1012,7 +950,7 @@ def lpc_cloth_sheet(rel):
     """LPC 服裝（走路 9 幀×4 向、576×256）→ 疊到走路列 → 832×1344。"""
     sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
     _lpc_overlay(sheet, rel, LPC_WALK_BASE * CHAR_FH)
-    return _reproportion(sheet)
+    return sheet
 
 def lpc_hair_tinted(rel, target_hex):
     """LPC 髮型原檔是單色（ginger）；依每個像素亮度相對主色縮放目標色＝重上色成指定顏色，排到走路列。"""
@@ -1026,7 +964,7 @@ def lpc_hair_tinted(rel, target_hex):
         r = read_png_pixels(os.path.join(ASSETS, src))
         w, h, data = r
         _lpc_hair_tint_into(sheet, w, h, data, tr, ref, oy0)
-    return _reproportion(sheet)
+    return sheet
 
 def _lpc_hair_tint_into(sheet, w, h, data, tr, ref, oy0):
     for y in range(h):
@@ -1068,7 +1006,7 @@ def lpc_garment(gid, name, sheet_m, sheet_f, **kw):
     return dict(id=gid, name=name, sheet=sheet_m, sheetF=sheet_f, dye=lpc_dye_of(sheet_m, sheet_f), **kw)
 
 def lpc_read_sheet(rel):
-    """直接讀一張 LPC 通用格式 sheet（832×1344）成 Canvas（頭髮等外部素材原樣，只重整走路列比例）。"""
+    """直接讀一張 LPC 通用格式 sheet（832×1344）成 Canvas（頭髮等外部素材 1:1，不轉檔）。"""
     r = read_png_pixels(os.path.join(ASSETS, rel))
     if r is None:
         raise SystemExit(f"找不到 LPC 素材 {rel}")
@@ -1079,7 +1017,7 @@ def lpc_read_sheet(rel):
             i = (y * w + x) * 4
             if data[i + 3] > 16:
                 cv.set(x, y, (data[i], data[i + 1], data[i + 2], data[i + 3]))
-    return _reproportion(cv)
+    return cv
 
 # ---------------- 發光武器外觀（2026-11-09，使用者要求）----------------
 # 取得稱號《究極》→ 每個職業的武器都有天藍發光版；《傳奇》→ 金黃發光版（avatar.json 的武器外觀 glam，unlock＝稱號）。
@@ -2023,7 +1961,7 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/chicken_sheet.png", frames=3, rows=4, fw=32, fh=32, what="咕咕雞的 4 方向 × 3 幀（草島／森林島）"),
     dict(sheet="external/img2pixel/slime_sheet.png", frames=3, rows=3, fw=48, fh=48, what="史萊姆的 3 方向（背／側／前）× 3 幀（各島不同色，靠 tint）"),
     dict(sheet="external/img2pixel/bunny_sheet.png", frames=4, rows=2, row0=0, fw=48, fh=32, what="跳跳兔的左／右各 4 幀（沙灘／雪島白／機械島灰；sheet 第 3 列 2 幀沒用到）"),
-    dict(sheet="external/img2pixel/dragon_sheet.png", frames=3, rows=2, fw=191, fh=161, what="飛龍的上飛／下飛各 3 幀（sheet 共 4 列，只用第 0、2 列＝rowIndex；各島不同色靠 tint）"),
+    dict(sheet="external/img2pixel/dragon_sheet.png", frames=3, rows=4, fw=191, fh=161, what="飛龍的 4 方向（上飛／朝右／下飛／朝左）× 3 幀（各島不同色靠 tint）"),
     dict(sheet="external/img2pixel/bahamut_fly_sheet.png", frames=6, fw=88, fh=59, what="黃金肥龍的飛行 6 幀（草島島主）"),
     dict(sheet="external/img2pixel/snake_queen_sheet.png", frames=4, fw=88, fh=85, what="笨蛋蛇女的 4 幀（夜光島島主）"),
     dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fw=88, fh=74, what="蓋老師（究極神兵）的走路 6 幀（熔岩島島主）"),
@@ -2080,12 +2018,12 @@ MOB_MANIFEST = dict(
                **({"tint": tint, "tintBase": "#ab7943"} if tint else {}),
                line="「跳跳兔」豎起耳朵，隨時準備蹦走。")
           for bid, tint in [("bunny", None), ("bunny_snow", "#f2f6ff"), ("bunny_machine", "#9aa4b0")]],
-        # 飛龍：夜光島（黑）、熔岩島（原色紅）、沙灘島（沙）。用 sheet 的第 0、2 列（上飛、下飛）當方向網格；
-        # swim＝會飛所以能過海；big=4＝判定圈 34+6*(4-1)=52（大隻）；shadow 依體型放大、貼在正下方
+        # 飛龍：夜光島（黑）、熔岩島（原色紅）、沙灘島（沙）。四列都是飛行視角＝上飛／朝右／下飛／朝左（方向網格）；
+        # swim＝會飛所以能過海；big=5＝判定圈 34+6*(5-1)=58（大隻）；shadow 依體型放大、貼在正下方
         *[dict(id=did, name="飛龍", fixed=3, swim=True, big=5, speed=46, flee=150, hp=4,
                footDy=0,   # 會飛：不套用底部留白對齊（讓牠浮在影子之上，不貼地）
-               anim=dict(sheet="external/img2pixel/dragon_sheet.png", frames=3, rows=2, rowIndex=[0, 2], fw=191, fh=161,
-                         rowDir=["up", "down"], fps=7, scale=0.9),
+               anim=dict(sheet="external/img2pixel/dragon_sheet.png", frames=3, rows=4, fw=191, fh=161,
+                         rowDir=["up", "right", "down", "left"], fps=7, scale=0.9),
                shadow=dict(rx=46, ry=10, dx=0, dy=-4),
                **_tk,
                line="「飛龍」拍了拍翅膀，掀起一陣風。")
@@ -3052,7 +2990,7 @@ def main():
                     # 攻擊動作在 sheet 上的起始列與用到的欄（引擎用來判斷某一幀屬於哪個動作，LPC 武器的超大格靠它對位）
                     attacks={k: dict(row=r, cols=c) for k, (r, c) in LPC_ATTACKS.items()},
                     fps=dict(idle=4, walk=6),
-                    anchors=dict(back=_repro_pt(23, 32), backView=_repro_pt(41, 32), waist=_repro_pt(23, 48), hand=_repro_pt(40, 40)),
+                    anchors=dict(back=[23, 32], backView=[41, 32], waist=[23, 48], hand=[40, 40]),
                     frameAnchors={}),
         skins=[dict(id=k, name=n, base=SKINS[k][0], shade=SKINS[k][1], sheet=f"char_body_{k}.png")
                for k, n in [("pale", "白皙"), ("light", "自然"), ("tan", "小麥"), ("deep", "深膚")]],
