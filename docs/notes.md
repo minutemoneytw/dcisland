@@ -56,7 +56,7 @@
 - **命名（2026-11-05，使用者定）**：會動、可被攻擊的非玩家生物統稱 **mobs**（含野外小動物與各島島主，不只動物）。資料在 `client/assets/mobs/mobs.json`（舊名 `animals/animals.json`）、每座地形 `terrain.json` 的 `mobs` 欄位；程式裡 `S.mobs`／`mobDef()`／`S.mobsDB`／`mobImgs`／`hitMob`／`spawnMobs` 等；產生器 `MOB_MANIFEST`／`MOBS_BY_TERRAIN`。後面的中文敘述仍寫「野外動物」，指的是羊、鳥、蛙這類小動物 mob。之後的寵物（捕捉/牧養）是另一種實體，不放進 mobs。
 
 - **動物能不能進海**由 `mobs.json` 的 `swim: true` 決定（旗標名叫 swim，語意是「能到海上」＝會游泳或會飛；目前是大肚蛙與圓喙鳥，羊只在陸地/岸邊）。逃跑時不會游泳的被海擋住就停下或繞開，能到海上的逃進海後會自己回到最近的陸地。新增動物要記得想一下它會不會游泳；`gen_assets.py` 的動物清單也要同步（目前產生器的 `MOB_MANIFEST` 已含 `swim`）。
-- **新增怪物規範（2026-11-08，使用者定；之後加怪照這個走）**：野外小動物（各客戶端自己不同步）＝外部 img2pixel 素材＋產生器三步，**不用碰伺服器**（`worker/`、`dev_server.py`、`net.js` 都不動）。
+- **新增怪物規範（2026-11-08，使用者定；之後加怪照這個走）**：**畫面大小**：人物約 46px 高（LPC 64 格、腳底貼地），野外小動物畫面上大約 20～30px（2026-11-09 使用者嫌「跟人一樣大的雞」太大：咕咕雞 `scale` 1.6→0.85、史萊姆 1.1→0.65、跳跳兔 1.1→0.65），加新動物時先量素材實際內容大小再定 `anim.scale`；飛龍這類怪物可以比人大。野外小動物（各客戶端自己不同步）＝外部 img2pixel 素材＋產生器三步，**不用碰伺服器**（`worker/`、`dev_server.py`、`net.js` 都不動）。
   1. **素材**：透明底 PNG，可為**「方向 × 幀」網格**（每列一個方向、每欄一幀，每格等大）或單列循環；一堆逐幀檔先用 `tools/import_external.py` 拼成水平 sheet，放 `client/assets/external/img2pixel/`。**PNG 要是標準 8-bit RGBA**：索引色／調色盤的 PNG 產生器讀不了（`read_png_pixels` 會說「不存在或無法解碼」），先用 PIL `Image.open(...).convert('RGBA').save(...)` 轉檔。素材每格底部常有幾列透明（腳沒踩到格子底）──**不用手動裁**，產生器會量測補 `footDy`（見下）。
   2. **`tools/gen_assets.py`**：`EXTERNAL_BUNDLES` 登記 sheet（`frames` 欄數、`rows` 列數、`row0` 從第幾列開始用、`fw`／`fh` 單格尺寸；重跑開頭會健檢尺寸，不符會印警告）→ `MOB_MANIFEST` 加一條 mob → `MOBS_BY_TERRAIN` 指定哪些島、權重。重跑產生器即寫進 `mobs.json` 與各地形 `terrain.json`。
   3. **授權**：`docs/assets-license.md` 補來源；外部素材一律要記，來源不明先標「授權待確認」。

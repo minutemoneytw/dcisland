@@ -51,10 +51,10 @@
      "left"
     ],
     "fps": 6,
-    "scale": 1.6
+    "scale": 0.85
    },
    "line": "「咕咕雞」歪著頭啄了啄地面。",
-   "footDy": 5
+   "footDy": 3
   },
   {
    "id": "slime_grass",
@@ -75,12 +75,12 @@
      "down"
     ],
     "fps": 5,
-    "scale": 1.1
+    "scale": 0.65
    },
    "tintBase": "#ff8080",
    "tint": "#58b24a",
    "line": "「史萊姆」果凍般晃了兩下。",
-   "footDy": 9
+   "footDy": 5
   },
   {
    "id": "slime_forest",
@@ -101,12 +101,12 @@
      "down"
     ],
     "fps": 5,
-    "scale": 1.1
+    "scale": 0.65
    },
    "tintBase": "#ff8080",
    "tint": "#2f8a4a",
    "line": "「史萊姆」果凍般晃了兩下。",
-   "footDy": 9
+   "footDy": 5
   },
   {
    "id": "slime_beach",
@@ -127,12 +127,12 @@
      "down"
     ],
     "fps": 5,
-    "scale": 1.1
+    "scale": 0.65
    },
    "tintBase": "#ff8080",
    "tint": "#3aa0d8",
    "line": "「史萊姆」果凍般晃了兩下。",
-   "footDy": 9
+   "footDy": 5
   },
   {
    "id": "slime_snow",
@@ -153,12 +153,12 @@
      "down"
     ],
     "fps": 5,
-    "scale": 1.1
+    "scale": 0.65
    },
    "tintBase": "#ff8080",
    "tint": "#bfe6f5",
    "line": "「史萊姆」果凍般晃了兩下。",
-   "footDy": 9
+   "footDy": 5
   },
   {
    "id": "slime_night",
@@ -179,12 +179,12 @@
      "down"
     ],
     "fps": 5,
-    "scale": 1.1
+    "scale": 0.65
    },
    "tintBase": "#ff8080",
    "tint": "#8a5ad8",
    "line": "「史萊姆」果凍般晃了兩下。",
-   "footDy": 9
+   "footDy": 5
   },
   {
    "id": "slime_volcano",
@@ -205,12 +205,12 @@
      "down"
     ],
     "fps": 5,
-    "scale": 1.1
+    "scale": 0.65
    },
    "tintBase": "#ff8080",
    "tint": "#ff6a2a",
    "line": "「史萊姆」果凍般晃了兩下。",
-   "footDy": 9
+   "footDy": 5
   },
   {
    "id": "slime_machine",
@@ -231,12 +231,12 @@
      "down"
     ],
     "fps": 5,
-    "scale": 1.1
+    "scale": 0.65
    },
    "tintBase": "#ff8080",
    "tint": "#9aa4b0",
    "line": "「史萊姆」果凍般晃了兩下。",
-   "footDy": 9
+   "footDy": 5
   },
   {
    "id": "bunny",
@@ -257,7 +257,7 @@
      "right"
     ],
     "fps": 9,
-    "scale": 1.1
+    "scale": 0.65
    },
    "line": "「跳跳兔」豎起耳朵，隨時準備蹦走。"
   },
@@ -280,7 +280,7 @@
      "right"
     ],
     "fps": 9,
-    "scale": 1.1
+    "scale": 0.65
    },
    "tint": "#f2f6ff",
    "tintBase": "#ab7943",
@@ -305,7 +305,7 @@
      "right"
     ],
     "fps": 9,
-    "scale": 1.1
+    "scale": 0.65
    },
    "tint": "#9aa4b0",
    "tintBase": "#ab7943",

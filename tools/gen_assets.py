@@ -1819,19 +1819,19 @@ MOB_MANIFEST = dict(
         # 咕咕雞：草島／森林島（4 方向：後／右／前／左，各 3 幀）
         dict(id="chicken", name="咕咕雞", fixed=3, speed=30, flee=80, hp=2,
              anim=dict(sheet="external/img2pixel/chicken_sheet.png", frames=3, rows=4, fw=32, fh=32,
-                       rowDir=["up", "right", "down", "left"], fps=6, scale=1.6),
+                       rowDir=["up", "right", "down", "left"], fps=6, scale=0.85),   # scale：畫面約 17×24（人物約 46px 高；2026-11-09 使用者嫌太大，由 1.6 縮小）
              line="「咕咕雞」歪著頭啄了啄地面。"),
         # 史萊姆：所有地形各一種顏色（和平島除外），同一張 sheet 依島調色；3 方向（背／右／前），往左用「右」那一列鏡像
         *[dict(id=f"slime_{isl}", name="史萊姆", fixed=3, speed=22, flee=70, hp=3,
                anim=dict(sheet="external/img2pixel/slime_sheet.png", frames=3, rows=3, fw=48, fh=48,
-                         rowDir=["up", "right", "down"], fps=5, scale=1.1),
+                         rowDir=["up", "right", "down"], fps=5, scale=0.65),   # 畫面約 26×21（2026-11-09 由 1.1 縮小）
                tintBase="#ff8080", tint=col,
                line="「史萊姆」果凍般晃了兩下。")
           for isl, col in SLIME_TINTS.items()],
         # 跳跳兔：沙灘島（原色棕）、雪島（白）、機械島（灰）；左／右各有專屬列不鏡像（sheet 第 3 列 2 幀未用到）
         *[dict(id=bid, name="跳跳兔", fixed=3, speed=44, flee=110, hp=2,
                anim=dict(sheet="external/img2pixel/bunny_sheet.png", frames=4, rows=2, row0=0, fw=48, fh=32,
-                         rowDir=["left", "right"], fps=9, scale=1.1),
+                         rowDir=["left", "right"], fps=9, scale=0.65),   # 畫面約 31×20（2026-11-09 由 1.1 縮小）
                **({"tint": tint, "tintBase": "#ab7943"} if tint else {}),
                line="「跳跳兔」豎起耳朵，隨時準備蹦走。")
           for bid, tint in [("bunny", None), ("bunny_snow", "#f2f6ff"), ("bunny_machine", "#9aa4b0")]],
