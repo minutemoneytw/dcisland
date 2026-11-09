@@ -325,7 +325,7 @@ function useTool(d) {
   if (Math.hypot(bx - p.x, by - p.y) > S.toolsDB.range) { say(`離${tgt.name}太遠了，靠近一點`); return; }
   if (Math.abs(bx - p.x) > 6) p.dir = Math.sign(bx - p.x);
   if (S.t - p.lastAtk < ATK_CD) return;
-  p.lastAtk = S.t; p.swing = ATK_T;
+  p.lastAtk = S.t; p.swing = ATK_T; p.atkT0 = S.t;
   p.tool = tgt.tool; p.toolUntil = S.t + S.toolsDB.hold;     // 自動換工具，一陣子沒用就換回劍
   S.net?.notifyAttack?.();
   // 連線時血量由伺服器扣，結果以伺服器廣播的 deco 訊息為準（同地形的人都會看到）；沒連線才在本機算
@@ -425,7 +425,7 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
   if (S.t - p.lastAtk < ATK_CD) return;
   const rg = rangedDef();
   if (rg) { startCast(p, rg, wx, wy); return; }   // 法杖：遠距詠唱（以滑鼠瞄準，讀條完才出傷害）
-  p.lastAtk = S.t; p.swing = ATK_T; p.tool = null;
+  p.lastAtk = S.t; p.swing = ATK_T; p.tool = null; p.atkT0 = S.t;
   S.net?.notifyAttack?.();          // M2：讓同島的人看到你的揮擊
   for (const a of S.mobs) {
     if (a.dead || a.fly) continue;   // 島主飛在空中打不到
@@ -485,7 +485,7 @@ function startCast(p, rg, wx, wy) {
   const tr = S.fx.triple, instant = !rg.cast;   // cast 0（豎琴弓）＝不用詠唱，直接射
   if (instant || (tr && tr.n > 0 && S.t < tr.until)) {   // 三重：這一擊不用詠唱
     if (!instant) tr.n--;
-    p.lastAtk = S.t; p.swing = 0; p.tool = null; S._hits = 1;
+    p.lastAtk = S.t; p.swing = 0; p.tool = null; S._hits = 1; p.atkT0 = S.t;
     if (Math.abs(a.x - p.x) > 6) p.dir = Math.sign(a.x - p.x);
     S.net?.notifyAttack?.();
     const ty = a.y - 24 * (mobDef(a.id).big || 1) * .6;
@@ -2442,6 +2442,22 @@ function sheetMainHex(img) {
 // 合成一幀（24×24 之類，大小看 frames.w/h），依 (造型, 幀號) 快取。
 // look：{skin, hair, hat, top, bottom（顯示用的款式 id，裝備／外觀已在送出前決定好）, hatC／topC／botC（換色色碼，null＝原色）}；
 // 沒有 topC／botC 欄位（NPC、舊格式）就用 shirt／pants 顏色編號（shirtColors／pantsColors）
+// sheet 的某一格有沒有不透明像素（結果依 (圖, 格子) 快取）
+const cellHasCache = new Map();
+function sheetCellHas(img, sx, sy, w, h) {
+  if (!img || sx + w > img.width || sy + h > img.height) return false;
+  const k = img.src + '|' + sx + ',' + sy;
+  let v = cellHasCache.get(k);
+  if (v === undefined) {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const g = cv.getContext('2d'); g.drawImage(img, sx, sy, w, h, 0, 0, w, h);
+    const d = g.getImageData(0, 0, w, h).data;
+    v = false;
+    for (let i = 3; i < d.length; i += 4) if (d[i]) { v = true; break; }
+    cellHasCache.set(k, v);
+  }
+  return v;
+}
 function charSprite(look, fi) {
   const A = S.avatar, F = A.frames;
   const legacy = (key, idx, list) => key in look ? (look[key] || null) : (list[idx || 0] ?? list[0]);
@@ -2458,32 +2474,59 @@ function charSprite(look, fi) {
   const skinHex = skin.base || null;   // 臉型（頭型）跟膚色重上色
   const hairHex = hair.hex || null;    // 髮色主色（貓耳跟髮色重上色用）
   const race = lookItem(A.races, look.race) || A.races?.[0] || { id: 'human', scale: 1 };
-  const k = [skin.id, skinSheet, look.gender || '', race.id, hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, shoe?.id || '', shoeHex, face?.id || '', eyes?.id || '', fi].join('|');
+  const wpn = look.wpn ? A.weapons.find(w => w.id === look.wpn && w.lpc) : null;   // LPC 武器圖層（見 playerSpriteDiv）
+  const k = [skin.id, skinSheet, look.gender || '', race.id, hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, shoe?.id || '', shoeHex, face?.id || '', eyes?.id || '', wpn?.id || '', fi].join('|');
   let cv = S.charCache.get(k);
   if (cv) return cv;
-  cv = document.createElement('canvas'); cv.width = F.w; cv.height = F.h;
+  // 這一幀屬於哪個攻擊動作（看 frames.attacks 的起始列）：武器在這個動作有超大格（LPC 的 128×128 揮砍等）就整張畫布放大，人物畫在正中央
+  const ent0 = F.map ? F.map[fi] : null;
+  let over = null, overCell = null;
+  if (wpn && ent0 && F.attacks) {
+    for (const [an, a] of Object.entries(F.attacks)) {
+      if (ent0[1] >= a.row && ent0[1] < a.row + 4 && wpn.lpc.over?.[an]) {
+        over = wpn.lpc.over[an]; overCell = [a.cols.indexOf(ent0[0]), ent0[1] - a.row];
+        if (!sheetCellHas(S.charImgs[over.bg] || S.charImgs[over.fg], overCell[0] * over.size, overCell[1] * over.size, over.size, over.size)
+            && !sheetCellHas(S.charImgs[over.fg], overCell[0] * over.size, overCell[1] * over.size, over.size, over.size)) over = null;
+        break;
+      }
+    }
+  }
+  const pad = over ? (over.size - F.w) / 2 : 0;
+  cv = document.createElement('canvas'); cv.width = F.w + pad * 2; cv.height = F.h + pad * 2; cv.pad = pad;
   const g = cv.getContext('2d');
-  // 這一幀在 sheet 上的格子：LPC 通用格式看 frames.map（[欄,列]）；舊格式＝水平排列（fi, 0）
-  const [cc, cr] = F.map ? F.map[fi] : [fi, 0], sx = cc * F.w, sy = cr * F.h;
+  const drawOver = sheet => { const im = sheet && S.charImgs[sheet]; if (im) g.drawImage(im, overCell[0] * over.size, overCell[1] * over.size, over.size, over.size, 0, 0, over.size, over.size); };
+  if (over) drawOver(over.bg);   // 超大格武器的後層（在身體後面）
+  // 這一幀在 sheet 上的格子：LPC 通用格式看 frames.map（[欄,列,退回幀]）；舊格式＝水平排列（fi, 0）。
+  // 攻擊動作的幀帶「退回幀」：素體那一格沒有圖（素材只有走路列）就整個角色改畫退回幀，避免身體消失、只剩頭髮在動
+  let ent = F.map ? F.map[fi] : [fi, 0];
+  if (ent?.[2] != null && !sheetCellHas(S.charImgs[skinIt.sheet], ent[0] * F.w, ent[1] * F.h, F.w, F.h)) ent = F.map[ent[2]];
+  const [cc, cr] = ent, sx = cc * F.w, sy = cr * F.h;
   // 由下往上：身體 → 褲子 → 鞋子 → 衣服 → 臉型(頭) → 眼睛 →（種族耳後層）→ 頭髮 →（種族耳前層）→ 帽子
   const layers = [[skinIt], [bottom, pantsHex], [shoe, shoeHex], [top, shirtHex], [face, skinHex], [eyes]];
+  if (wpn && !over && wpn.lpc.bg) layers.unshift([{ sheet: wpn.lpc.bg }]);   // 一般格武器的後層（在身體後面）
   if (race.ear) layers.push([{ sheet: race.ear, dye: race.earDye }, skinHex]);   // 精靈耳（跟膚色）
   const catTint = race.earFur ? hx2 => [[race.earFur, hx2 || null], [['#ffffff'], race.earInner || '#f5b8ad']] : null;
   if (race.earBg) layers.push([{ sheet: race.earBg, tint: catTint, hx: hairHex || null }]);   // 貓耳後層（髮下面；毛色跟髮色、耳內粉肉色）
-  layers.push([hair]);
+  if (!hat?.hideHair) layers.push([hair]);   // 全罩式頭盔（hats 的 hideHair）把頭髮整個蓋住：不畫頭髮，免得從頭盔上方露出來
   if (race.earFg) layers.push([{ sheet: race.earFg, tint: catTint, hx: hairHex || null }]);   // 貓耳前層（髮上面；同上）
   layers.push([hat, hatHex]);
+  if (wpn && !over && wpn.lpc.fg) layers.push([{ sheet: wpn.lpc.fg }]);   // 一般格武器的前層（最上面）
+  const fbEnt = ent !== (F.map?.[fi]) ? null : (ent?.[2] != null ? F.map[ent[2]] : null);   // 正在畫攻擊動作時，這一幀的退回格（給缺動作的單一圖層用）
   for (const [it, hex] of layers) {
     const img = it && S.charImgs[it.sheet];
-    if (!img || sx + F.w > img.width || sy + F.h > img.height) continue;   // 缺圖／這張 sheet 沒有這一格：這層略過
+    let lx = sx, ly = sy;
+    // 攻擊動作：素體有動作、但這一層（例如之後加的服裝只有走路列）沒有這一格 → 這層改畫自己的退回格，避免衣服整件消失
+    if (fbEnt && img && !sheetCellHas(img, sx, sy, F.w, F.h)) { lx = fbEnt[0] * F.w; ly = fbEnt[1] * F.h; }
+    if (!img || lx + F.w > img.width || ly + F.h > img.height) continue;   // 缺圖／這張 sheet 沒有這一格：這層略過
     let src;
     if (it.tint) src = duotoneSheet(img, it.tint(it.hx));   // 雙色染色（貓耳：毛→髮色、耳內→粉肉色）
     else {
       const dye = dyeList(it);
       src = dye && hex ? dyeSheet(img, dye, hex) : img;
     }
-    g.drawImage(src, sx, sy, F.w, F.h, 0, 0, F.w, F.h);
+    g.drawImage(src, lx, ly, F.w, F.h, pad, pad, F.w, F.h);
   }
+  if (over) drawOver(over.fg);   // 超大格武器的前層（最上面）
   S.charCache.set(k, cv);
   return cv;
 }
@@ -2497,10 +2540,25 @@ function dir8Of(dx, dy) {
 const d8Of = p => p.d8 || (p.face === 'up' ? 'up' : p.face === 'side' ? (p.dir < 0 ? 'left' : 'right') : 'down');
 // 這個人現在該畫哪一幀：坐／睡＝sit；否則「朝向_待機或走路」，依遊戲時間循環（每人有自己的起始相位）。
 // 幀表沒有這個狀態時：左右對稱的方向改用另一邊再左右翻轉（mirror）；再沒有就退回正上／正下
+// 攻擊時身體的動作（LPC 的揮砍／突刺／施法／射擊；武器仍是另外畫的小圖）：
+// 詠唱中依讀條進度播「施法」；揮擊／射箭／採集後 ATK_ANIM 秒內播該職業的攻擊動作。只是畫面，不影響傷害與出手頻率（出手時就結算、間隔看 ATK_CD）
+const ATK_ANIM = .4;
+function atkAnimNow(p) {
+  if (p.cast && p === S.players[0]) return { kind: 'spellcast', q: Math.min(.999, (S.t - p.cast.t0) / p.cast.dur) };
+  if (p.atkT0 == null || S.t - p.atkT0 >= ATK_ANIM || p.fish) return null;
+  const wid = p === S.players[0] ? (p.tool || S.me.weapon) : p.weapon;
+  const wd = S.avatar.weapons.find(w => w.id === wid);
+  let kind = 'slash';   // 空手、採集工具、職業沒設定 → 揮砍
+  if (wd?.ranged) kind = wd.ranged.cast ? 'spellcast' : 'shoot';
+  else if (wd && wid === jobOf(p)?.weapon) kind = jobOf(p)?.atkAnim || 'slash';
+  return { kind, q: (S.t - p.atkT0) / ATK_ANIM };
+}
 function charFrame(p) {
   const F = S.avatar.frames, st = F.states;
   if (p.pose) return { fi: (st.sit || st.down_idle)[0], mirror: false };
   const mode = p.moving ? 'walk' : 'idle', d = d8Of(p);
+  const ak = atkAnimNow(p), al = ak && st[`${ak.kind}_${d}`];
+  if (al) return { fi: al[Math.min(al.length - 1, Math.floor(ak.q * al.length))], mirror: false };
   let list = st[`${d}_${mode}`], mirror = false;
   if (!list && CHAR_MIRROR[d]) { list = st[`${CHAR_MIRROR[d]}_${mode}`]; mirror = !!list; }
   if (!list) list = st[`${d.startsWith('up') ? 'up' : 'down'}_${mode}`] || st.down_idle;
@@ -2511,7 +2569,7 @@ function charFrame(p) {
 // 放大倍率＝avatar.json 的 frames.scale（底圖 64px、畫 1 倍；舊 24px 素材是 2 倍），沒寫時退回 2
 function charAnchor(fi, kind) {
   const F = S.avatar.frames, a = F.frameAnchors?.[fi]?.[kind] || F.anchors[kind], s = F.scale || 2;
-  return [(a[0] - F.w / 2) * s, (a[1] - F.h) * s];
+  return [(a[0] - F.w / 2) * s, (a[1] - F.h + (F.footDy || 0)) * s];   // footDy：圖往下挪（腳底貼地），掛點跟著挪
 }
 
 // ---------------- 玩家 ----------------
@@ -2553,12 +2611,27 @@ function spawnNPCs() {
 }
 
 function playerSpriteDiv(p, fi) {
-  // NPC 與遠端玩家都有自己的 look；自己（players[0]）則用當前職業的裝備＋外觀（myLook）
-  return charSprite(p.look || myLook(), fi);
+  // NPC 與遠端玩家都有自己的 look；自己（players[0]）則用當前職業的裝備＋外觀（myLook）。
+  // LPC 武器（avatar.json 武器條目有 lpc）是人物的一層：帶 wpn（武器 id）給 charSprite 一起合成
+  if (p.npc) return charSprite(p.look || myLook(), fi);
+  const me = p === S.players[0], look = p.look || myLook();
+  const wd = me ? (p.tool ? null : lpcWeaponFor(S.me.weapon, look.wlook)) : lpcWeaponFor(p.weapon, look.wlook);
+  return charSprite(wd ? { ...look, wpn: wd.id } : look, fi);
+}
+// 拿著的武器有沒有 LPC 圖層：有就回該武器條目（武器外觀有 LPC 圖就用外觀的，外觀沒有 LPC 圖就退回舊的小圖畫法）
+function lpcWeaponFor(wid, wlook) {
+  const ws = S.avatar?.weapons; if (!ws || !wid) return null;
+  const base = ws.find(w => w.id === wid);
+  if (wlook && wlook !== wid) {
+    const g = ws.find(w => w.id === wlook);
+    if (g?.glam && base && g.type === base.type) return g.lpc ? g : null;
+  }
+  return base?.lpc ? base : null;
 }
 // 武器的圖：拿著職業武器且有選同類型的武器外觀（glam）時畫外觀的圖；玩法（射程、詠唱等）照拿著的武器
 function weaponImgFor(wid, wlook) {
   if (!wid || wid === 'hands') return null;
+  if (lpcWeaponFor(wid, wlook)) return null;   // LPC 武器畫在人物圖層裡（charSprite），不另外畫小圖
   if (wlook && wlook !== wid) {
     const ws = S.avatar.weapons, g = ws.find(w => w.id === wlook), base = ws.find(w => w.id === wid);
     if (g?.glam && base && g.type === base.type && S.weaponImgs[wlook]) return S.weaponImgs[wlook];
@@ -3156,7 +3229,7 @@ function drawFxFloater(f) {
     case 'after': {   // 縮地殘影：自己的身影淡淡留在原地
       const F = S.avatar.frames, fi = (F.states[`${f.d8}_idle`] || F.states.down_idle)[0], cs = F.scale || 2;
       ctx.globalAlpha = .4 * al; ctx.filter = 'brightness(1.6) saturate(.3)';
-      ctx.drawImage(charSprite(myLook(), fi), f.x - F.w * cs / 2, f.y - F.h * cs, F.w * cs, F.h * cs);
+      ctx.drawImage(charSprite(myLook(), fi), f.x - F.w * cs / 2, f.y - (F.h - (F.footDy || 0)) * cs, F.w * cs, F.h * cs);
       break;
     }
     case 'boom': {   // 忍術：範圍圈＋紫紅色煙爆
@@ -3241,7 +3314,9 @@ function drawPerson(p, wi, nameColor) {
     ctx.save();
     if (cf.mirror) ctx.scale(-1, 1);
     const cs = (F.scale || 2) * raceScale;   // 錨點＝腳底中央；放大＝frames.scale × 種族倍率
-    ctx.drawImage(img, -F.w * cs / 2, -F.h * cs, F.w * cs, F.h * cs);
+    const pad = img.pad || 0;   // 超大格（LPC 武器揮砍）：畫布四周多出 pad，人物仍以腳底中央對齊
+    // footDy：LPC 的腳底在格子第 60～62 列，不往下挪的話腳和影子之間有空隙（看起來像飄在空中）
+    ctx.drawImage(img, (-F.w / 2 - pad) * cs, (-F.h - pad + (F.footDy || 0)) * cs, img.width * cs, img.height * cs);
     ctx.restore();
     if (carry && backView) drawCarry(true);
     if (pfx?.length) drawPersonFx(p, pfx, backView, 'front');
@@ -6268,6 +6343,8 @@ async function boot() {
     }),
     ...[...S.avatar.hair, ...(S.avatar.tops || []), ...(S.avatar.bottoms || []), ...(S.avatar.shoes || []), ...(S.avatar.faces || []), ...(S.avatar.eyes || []), ...(S.avatar.hats || [])].filter(it => it.sheet)   // 沒有圖的（不戴帽子的 nohat）不用載
       .map(async it => S.charImgs[it.sheet] = await optImg(`assets/avatar/${it.sheet}`)),
+    ...S.avatar.weapons.filter(w => w.lpc).flatMap(w => [w.lpc.bg, w.lpc.fg, ...Object.values(w.lpc.over || {}).flatMap(o => [o.bg, o.fg])])   // LPC 武器圖層
+      .filter(Boolean).map(async f => S.charImgs[f] = await optImg(`assets/avatar/${f}`)),
     ...(S.avatar.races || []).flatMap(r => [r.ear, r.earBg, r.earFg]).filter(Boolean)   // 種族耳朵圖層（精靈耳／貓耳前後層）
       .map(async f => S.charImgs[f] = await loadImg(`assets/avatar/${f}`)),
     ...S.avatar.weapons.filter(w => w.sprite).map(async w => {

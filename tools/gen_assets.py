@@ -395,6 +395,8 @@ def char_states():
         st[f"{d}_idle"] = [i * 8 + k for k in range(4)]
         st[f"{d}_walk"] = [i * 8 + 4 + k for k in range(4)]
     st["sit"] = [CHAR_SIT]
+    if "char_attack_frames" in globals():
+        st.update(char_attack_frames()[1])   # 攻擊動作（LPC 揮砍／突刺／施法／射擊）
     return st
 
 _base_px = None
@@ -624,10 +626,20 @@ KIDOL_HAIR = [                   # LPC 短髮模組的 12 種顏色 (檔名後�
     ("ashblonde", "灰金"), ("ashplatinum", "銀白"), ("red", "紅"), ("orange", "橘"),
     ("rosepink", "玫瑰粉"), ("green", "綠"), ("blue", "藍"), ("purple", "紫"),
 ]
-LPC_CLOTHES = [                  # 基本服裝（LPC 原檔）：(遊戲檔名, external 底下的檔名)
+LPC_CLOTHES = [                  # 基本服裝與職業裝備（LPC 原檔）：(遊戲檔名, external 底下的檔名)
     ("top_tshirt_m", "top_tshirt_m.png"), ("top_tshirt_f", "top_tshirt_f.png"),
     ("bottom_pants_m", "bottom_pants_m.png"), ("bottom_pants_f", "bottom_pants_f.png"),
     ("shoes_m", "shoes_m.png"), ("shoes_f", "shoes_f.png"),
+    # 騎士（2026-11-09）：板甲（上身＋護臂合成一張）、板甲腿甲、板甲靴、Armet 頭盔（男女共用）
+    ("top_plate_m", "top_plate_m.png"), ("top_plate_f", "top_plate_f.png"),
+    ("bottom_plate_m", "bottom_plate_m.png"), ("bottom_plate_f", "bottom_plate_f.png"),
+    ("shoes_plate_m", "shoes_plate_m.png"), ("shoes_plate_f", "shoes_plate_f.png"),
+    ("hat_armet", "hat_armet.png"),
+    # LPC 武器圖層（一般格：走路列＝拿在手上；bg＝身體後面、fg＝最上面）
+    ("weapon_arming_bg", "weapon_arming_bg.png"), ("weapon_arming_fg", "weapon_arming_fg.png"),
+]
+LPC_WEAPON_OVER = [             # LPC 武器的超大格動作 sheet（128×128；直接複製）：(遊戲檔名, external 底下的檔名)
+    ("weapon_arming_slash_bg", "weapon_arming_slash_bg.png"), ("weapon_arming_slash_fg", "weapon_arming_slash_fg.png"),
 ]
 LPC_HAIR_STYLES = [              # 其他 LPC 髮型（走路列，原檔是單色，這裡依亮度重上色成多色）：(id, 名稱, external 檔名)
     ("afro", "爆炸頭", "hair_afro.png"),
@@ -736,8 +748,35 @@ LPC_WALK_BASE = 8
 LPC_DIR = {"down": 2, "down_right": 3, "right": 3, "up_right": 3, "up": 0, "up_left": 1, "left": 1, "down_left": 1}
 LPC_WALK_COLS = [1, 3, 5, 7]
 
+# 攻擊動作（LPC 通用格式的動作組）：id → (起始列, 用到的欄)。每組四列＝上/左/下/右。
+# 加在 65 個基本邏輯幀之後；states 多出「動作_8方向」（斜角沿用同側，同 LPC_DIR）。
+# map 的第三格＝退回幀：素材缺這個動作（例如只下載了走路列）時，改畫該方向的待機幀（main.js 的 charSprite 檢查素體那一格有沒有圖）。
+LPC_ATTACKS = {
+    "slash": (12, [0, 1, 2, 3, 4, 5]),                   # 揮砍：騎士、戰士、忍者、採集
+    "thrust": (4, [0, 1, 2, 3, 4, 5, 6, 7]),            # 突刺：龍騎士
+    "spellcast": (0, [0, 1, 2, 3, 4, 5, 6]),            # 施法：法杖／咒杖／魔導書（詠唱中依讀條進度播）
+    "shoot": (16, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),   # 射擊：豎琴弓
+}
+LPC_DIR4 = ["up", "left", "down", "right"]
+CHAR_IDLE_OF4 = {"up": CHAR_DIRS.index("up") * 8, "left": CHAR_DIRS.index("left") * 8,
+                 "down": CHAR_DIRS.index("down") * 8, "right": CHAR_DIRS.index("right") * 8}
+
+def char_attack_frames():
+    """攻擊動作的邏輯幀：回 (map 條目清單, states)；邏輯幀編號從 CHAR_FRAMES 往後排。"""
+    m, st, fi = [], {}, CHAR_FRAMES
+    for anim, (row0, cols) in LPC_ATTACKS.items():
+        by4 = {}
+        for k, d4 in enumerate(LPC_DIR4):
+            by4[d4] = []
+            for c in cols:
+                m.append([c, row0 + k, CHAR_IDLE_OF4[d4]])
+                by4[d4].append(fi); fi += 1
+        for d in CHAR_DIRS:
+            st[f"{anim}_{d}"] = by4[LPC_DIR4[LPC_DIR[d]]]
+    return m, st
+
 def char_frame_map():
-    """遊戲 65 個邏輯幀 → LPC sheet 的 [欄, 列]。"""
+    """遊戲 65 個邏輯幀 → LPC sheet 的 [欄, 列]（之後接攻擊動作的幀，見 char_attack_frames）。"""
     m = []
     for d in CHAR_DIRS:
         row = LPC_WALK_BASE + LPC_DIR[d]
@@ -746,9 +785,24 @@ def char_frame_map():
         for k in range(4):
             m.append([LPC_WALK_COLS[k], row])   # 走路 4 幀
     m.append([0, LPC_WALK_BASE + 2])            # 坐姿暫用正面走路幀 0
-    return m
+    return m + char_attack_frames()[0]
+
+def lpc_act_sources(rel):
+    """一張 LPC 走路來源圖（external/img2pixel/lpc/<名稱>.png）＋它的攻擊動作檔（同資料夾 act/<名稱>_<動作>.png）：
+    回 [(相對路徑, 要放的起始 y)]；攻擊動作放在 LPC_ATTACKS 的起始列（揮砍 12、突刺 4、施法 0、射擊 16），沒有檔就略過。"""
+    out = [(rel, LPC_WALK_BASE * CHAR_FH)]
+    d, fn = os.path.split(rel)
+    stem = fn[:-4]
+    for anim, (row0, _cols) in LPC_ATTACKS.items():
+        a = f"{d}/act/{stem}_{anim}.png"
+        if os.path.exists(os.path.join(ASSETS, a)):
+            out.append((a, row0 * CHAR_FH))
+    return out
 
 def _lpc_overlay(sheet, rel, oy0):
+    if oy0 == LPC_WALK_BASE * CHAR_FH and "/act/" not in rel:   # 走路列：順便把攻擊動作檔疊到各自的列
+        for r2, oy in lpc_act_sources(rel)[1:]:
+            _lpc_overlay(sheet, r2, oy)
     r = read_png_pixels(os.path.join(ASSETS, rel))
     if r is None:
         raise SystemExit(f"找不到 LPC 素材 {rel}")
@@ -811,11 +865,16 @@ def lpc_hair_tinted(rel, target_hex):
     r = read_png_pixels(os.path.join(ASSETS, rel))
     if r is None:
         raise SystemExit(f"找不到 LPC 髮型 {rel}")
-    w, h, data = r
     tr = hx(target_hex)
     ref = 0.299 * 229 + 0.587 * 86 + 0.114 * 0     # 下載檔主色 (229,86,0) 的亮度當基準
     sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
-    oy0 = LPC_WALK_BASE * CHAR_FH
+    for src, oy0 in lpc_act_sources(rel):            # 走路列＋攻擊動作各列
+        r = read_png_pixels(os.path.join(ASSETS, src))
+        w, h, data = r
+        _lpc_hair_tint_into(sheet, w, h, data, tr, ref, oy0)
+    return sheet
+
+def _lpc_hair_tint_into(sheet, w, h, data, tr, ref, oy0):
     for y in range(h):
         for x in range(w):
             i = (y * w + x) * 4
@@ -2595,6 +2654,8 @@ def main():
     # 基本服裝（LPC 原檔，走路列）
     for cid, rel in LPC_CLOTHES:
         save(lpc_cloth_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{cid}.png", sub)
+    for cid, rel in LPC_WEAPON_OVER:
+        save(lpc_read_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{cid}.png", sub)
     # 頭髮：LPC 通用格式外部素材（k-idol 短髮 12 色），1:1 直接用
     for i, (cid, _cname) in enumerate(KIDOL_HAIR):
         save(lpc_read_sheet(f"external/img2pixel/hair_kidol/kidol_hairstyle_male_{cid}.png"),
@@ -2613,8 +2674,11 @@ def main():
         scale=CHAR_SCALE,
         # 人物分層的幀表（所有層共用）：每層都是 832×1344 的 LPC 通用格式 sheet；map＝65 個邏輯幀 → sheet 的 [欄, 列]；
         # w/h＝每格大小、scale＝引擎放大倍率；anchors＝武器掛點（格內像素座標，腳底中心＝(w/2, h)）；frameAnchors 逐幀覆寫
-        frames=dict(w=CHAR_FW, h=CHAR_FH, scale=CHAR_SCALE, count=CHAR_FRAMES, dirs=CHAR_DIRS, states=char_states(),
+        # footDy＝畫圖時往下挪幾 px：LPC 的腳底在格子第 60～62 列（不是 64），不挪的話人和影子之間有空隙
+        frames=dict(w=CHAR_FW, h=CHAR_FH, scale=CHAR_SCALE, footDy=2, count=CHAR_FRAMES + len(char_attack_frames()[0]), dirs=CHAR_DIRS, states=char_states(),
                     map=char_frame_map(),
+                    # 攻擊動作在 sheet 上的起始列與用到的欄（引擎用來判斷某一幀屬於哪個動作，LPC 武器的超大格靠它對位）
+                    attacks={k: dict(row=r, cols=c) for k, (r, c) in LPC_ATTACKS.items()},
                     fps=dict(idle=4, walk=6),
                     anchors=dict(back=[23, 32], backView=[41, 32], waist=[23, 48], hand=[40, 40]),
                     frameAnchors={}),
@@ -2634,12 +2698,19 @@ def main():
               for sid, sname, _fn in LPC_HAIR_STYLES for cid, cname, _hx in hair_colors],
         # 基本服裝（LPC 原檔；gender＝之後選性別用）
         tops=[dict(id="tshirt_m", name="T恤", sheet="char_top_tshirt_m.png", gender="male", glam=True),
-              dict(id="tshirt_f", name="T恤", sheet="char_top_tshirt_f.png", gender="female", glam=True)],
+              dict(id="tshirt_f", name="T恤", sheet="char_top_tshirt_f.png", gender="female", glam=True),
+              dict(id="plate_m", name="騎士板甲", sheet="char_top_plate_m.png", gender="male"),
+              dict(id="plate_f", name="騎士板甲", sheet="char_top_plate_f.png", gender="female")],
         bottoms=[dict(id="pants_m", name="長褲", sheet="char_bottom_pants_m.png", gender="male", glam=True),
-                 dict(id="pants_f", name="長褲", sheet="char_bottom_pants_f.png", gender="female", glam=True)],
+                 dict(id="pants_f", name="長褲", sheet="char_bottom_pants_f.png", gender="female", glam=True),
+                 dict(id="plate_legs_m", name="騎士腿甲", sheet="char_bottom_plate_m.png", gender="male"),
+                 dict(id="plate_legs_f", name="騎士腿甲", sheet="char_bottom_plate_f.png", gender="female")],
         shoes=[dict(id="shoes_m", name="鞋子", sheet="char_shoes_m.png", gender="male", glam=True),
-               dict(id="shoes_f", name="鞋子", sheet="char_shoes_f.png", gender="female", glam=True)],
-        hats=[dict(id="nohat", name="不戴帽子", sheet=None, glam=True)],
+               dict(id="shoes_f", name="鞋子", sheet="char_shoes_f.png", gender="female", glam=True),
+               dict(id="plate_boots_m", name="騎士板甲靴", sheet="char_shoes_plate_m.png", gender="male"),
+               dict(id="plate_boots_f", name="騎士板甲靴", sheet="char_shoes_plate_f.png", gender="female")],
+        hats=[dict(id="nohat", name="不戴帽子", sheet=None, glam=True),
+              dict(id="armet", name="騎士頭盔", sheet="char_hat_armet.png", hideHair=True)],   # hideHair＝全罩式，不畫頭髮
         hairColor="#4a3428",
         shirtColors=['#d95c68', '#4a90d9', '#4aa564', '#c9a227', '#8a5cc9', '#e0e0e0', '#4a4a52', '#d97a3a', '#f2a1b5', '#b5303f', '#f0c93a', '#8fd0e8', '#2e5fa8', '#3a3f8c', '#6fcfc0', '#2f8a78', '#8fc455', '#3e6b3a', '#b48be0', '#6a3f9a', '#8a5a3a', '#c8b08a', '#9aa0aa', '#f4ede0'],
         pantsColors=['#4a54a0', '#2f3548', '#4a4a52', '#8a8f99', '#d8d4c8', '#8a6a46', '#c8b08a', '#5a4a3a', '#3e6b3a', '#6a8a4a', '#2f8a78', '#3a78c8', '#2e5fa8', '#7aa8d8', '#6a3f9a', '#a63d4a', '#d97a3a', '#e0b840', '#e8a0b8', '#b5303f', '#1f1f26', '#f0f0f0', '#6fcfc0', '#b48be0'],
@@ -2649,7 +2720,11 @@ def main():
             # carry：不拿在手上時掛哪裡（back＝背上、waist＝腰間）；back: "hilt"＝背著時劍柄朝上（沒寫＝頭朝上，例如釣竿）
             # scale：這張圖畫幾倍（沒寫＝與人物同倍率）。目前這些是舊 24px placeholder（人物當時畫 2 倍）＝標 scale 2；
             #        之後的 64px 武器模組照人物規格畫、不寫 scale 就是 1 倍
-            dict(id="sword", name="長劍", type="sword", sprite="weapon_sword.png", carry="back", back="hilt", scale=2),
+            # lpc＝LPC 武器圖層（畫在人物圖裡、跟手完全對齊；有這欄就不畫舊的小圖）：bg／fg＝一般格（走路、待機時拿在手上；bg 在身體後面、fg 在最上面），
+            # over＝某個攻擊動作的超大格 sheet（size＝每格邊長，人物畫在格子正中央）。2026-11-09 騎士先換：LPC Arming Sword（steel）
+            dict(id="sword", name="長劍", type="sword", sprite="weapon_sword.png", carry="back", back="hilt", scale=2,
+                 lpc=dict(bg="char_weapon_arming_bg.png", fg="char_weapon_arming_fg.png",
+                          over=dict(slash=dict(size=128, bg="char_weapon_arming_slash_bg.png", fg="char_weapon_arming_slash_fg.png")))),
             dict(id="waraxe", name="戰斧", type="axe", sprite="weapon_waraxe.png", carry="back", scale=2),
             dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", scale=2, ranged=dict(range=320, cast=1.2, dmg=2)),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
             dict(id="tome", name="賢具", type="tome", sprite="weapon_tome.png", carry="waist", scale=2, ranged=dict(range=320, cast=0, dmg=1, shot="funnels")),   # 賢具＝浮游炮（FF14 nouliths）：不用詠唱，攻擊時四座賢具飛出、各朝目標射一道光束（main.js 的 fxk 'funnels'）；不用詠唱的 dmg 1（使用者定的平衡，同豎琴弓）

@@ -1,22 +1,22 @@
 {
- "_comment": "職業（手寫，不由 gen_assets.py 產生）。role＝職能（tank 坦克／healer 補師／melee 近戰輸出／ranged 遠程輸出；被動特性與 R 鍵職能技能的數值在 main.js 的 ROLES）。weapon＝唯一的職業武器（avatar.json 的 weapons id；武器列＝職業武器＋空手＋釣竿）。gear＝切換到這個職業時自動套用的裝備（avatar.json 的 hats／tops／bottoms id）。skills＝1、2 鍵的職業技能 id（數值與效果在 main.js 的 JOB_SKILLS）。legacy＝舊存檔／舊客戶端的職業 id 轉換。兩份伺服器（worker/src/index.js、tools/dev_server.py）各有一份「職業 → 職能」小表 JOB_ROLE，新增職業時要一起加。",
+ "_comment": "職業（手寫，不由 gen_assets.py 產生）。role＝職能（tank 坦克／healer 補師／melee 近戰輸出／ranged 遠程輸出；被動特性與 R 鍵職能技能的數值在 main.js 的 ROLES）。weapon＝唯一的職業武器（avatar.json 的 weapons id；武器列＝職業武器＋空手＋釣竿）。gear＝切換到這個職業時自動套用的裝備（avatar.json 的 hats／tops／bottoms id）。skills＝1、2 鍵的職業技能 id（數值與效果在 main.js 的 JOB_SKILLS）。atkAnim＝拿職業武器攻擊時身體播的 LPC 動作（slash 揮砍／thrust 突刺／spellcast 施法／shoot 射擊；遠程武器照武器自動選，這欄給近戰用）。legacy＝舊存檔／舊客戶端的職業 id 轉換。兩份伺服器（worker/src/index.js、tools/dev_server.py）各有一份「職業 → 職能」小表 JOB_ROLE，新增職業時要一起加。",
  "legacy": { "tank": "knight", "healer": "whitemage", "dps": "ninja" },
  "jobs": [
-  { "id": "knight", "name": "騎士", "role": "tank", "weapon": "sword",
-    "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["guard", "kshield"] },
-  { "id": "warrior", "name": "戰士", "role": "tank", "weapon": "waraxe",
+  { "id": "knight", "atkAnim": "slash", "name": "騎士", "role": "tank", "weapon": "sword",
+    "gear": { "hat": "armet", "top": "plate_m", "bottom": "plate_legs_m", "shoe": "plate_boots_m" }, "skills": ["guard", "kshield"] },
+  { "id": "warrior", "atkAnim": "slash", "name": "戰士", "role": "tank", "weapon": "waraxe",
     "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["vamp", "wshield"] },
-  { "id": "whitemage", "name": "白魔法師", "role": "healer", "weapon": "staff",
+  { "id": "whitemage", "atkAnim": "spellcast", "name": "白魔法師", "role": "healer", "weapon": "staff",
     "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["sheal", "wings"] },
-  { "id": "sage", "name": "賢者", "role": "healer", "weapon": "tome",
+  { "id": "sage", "atkAnim": "spellcast", "name": "賢者", "role": "healer", "weapon": "tome",
     "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["care", "save"] },
-  { "id": "ninja", "name": "忍者", "role": "melee", "weapon": "daggers",
+  { "id": "ninja", "atkAnim": "slash", "name": "忍者", "role": "melee", "weapon": "daggers",
     "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["ninjutsu", "blink"] },
-  { "id": "dragoon", "name": "龍騎士", "role": "melee", "weapon": "lance",
+  { "id": "dragoon", "atkAnim": "thrust", "name": "龍騎士", "role": "melee", "weapon": "lance",
     "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["highjump", "backjump"] },
-  { "id": "bard", "name": "吟遊詩人", "role": "ranged", "weapon": "harpbow",
+  { "id": "bard", "atkAnim": "shoot", "name": "吟遊詩人", "role": "ranged", "weapon": "harpbow",
     "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["song", "poison"] },
-  { "id": "blackmage", "name": "黑魔法師", "role": "ranged", "weapon": "scepter",
+  { "id": "blackmage", "atkAnim": "spellcast", "name": "黑魔法師", "role": "ranged", "weapon": "scepter",
     "gear": { "hat": "nohat", "top": "tshirt_m", "bottom": "pants_m", "shoe": "shoes_m" }, "skills": ["circle", "triple"] }
  ]
 }
