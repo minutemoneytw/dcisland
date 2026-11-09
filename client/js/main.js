@@ -4906,9 +4906,11 @@ function draw() {
     const c = S.campfire, spr = S.campfireSpr, size = CELL * 1.5;
     list.push({
       y: c.y, draw: () => {
+        // 素材（32×32）的木柴底在第 28 列、內容偏左 2 格：圖往下挪 4 格、往右挪 2 格（×1.5 倍），木柴底才貼在影子上（2026-11-09 使用者回報看起來飄在空中）
+        const k = size / 32, ox = 2 * k, oy = 4 * k;
         ctx.fillStyle = 'rgba(10,14,20,.28)';
-        ctx.beginPath(); ctx.ellipse(c.x, c.y - 1, size * .34, size * .13, 0, 0, Math.PI * 2); ctx.fill();
-        drawSpr(spr, sprFrame(spr, cellPhase(c.cell[0], c.cell[1])), c.x - size / 2, c.y - size, size, size);
+        ctx.beginPath(); ctx.ellipse(c.x, c.y - 2, size * .42, size * .14, 0, 0, Math.PI * 2); ctx.fill();
+        drawSpr(spr, sprFrame(spr, cellPhase(c.cell[0], c.cell[1])), c.x - size / 2 + ox, c.y - size + oy, size, size);
       }
     });
   }
