@@ -2472,13 +2472,16 @@ function charSprite(look, fi) {
   const skinSheet = (look.gender === 'female' && skin.sheet) ? skin.sheet.replace('char_body_', 'char_body_female_') : skin.sheet;
   const skinIt = skinSheet === skin.sheet ? skin : { ...skin, sheet: skinSheet };
   const skinHex = skin.base || null;   // 臉型（頭型）跟膚色重上色
-  const hairHex = hair.hex || null;    // 髮色主色（貓耳跟髮色重上色用）
+  const hairHex = look.hairC || hair.hex || null;    // 髮色主色（貓耳跟髮色重上色用；自訂髮色優先）
+  // 調色盤自訂的髮色／眼睛顏色：改用該樣式的棕色底圖（dyeFrom）再依明暗換成自訂色
+  const hairIt = look.hairC && hair.dyeFrom ? { ...hair, sheet: hair.dyeFrom } : hair;
+  const eyesIt = look.eyeC && eyes?.dyeFrom ? { ...eyes, sheet: eyes.dyeFrom } : eyes;
   const race = lookItem(A.races, look.race) || A.races?.[0] || { id: 'human', scale: 1 };
   // 服裝男女共用一個 id：女角改用 sheetF（沒有就用 sheet）
   const byGender = it => it && look.gender === 'female' && it.sheetF ? { ...it, sheet: it.sheetF } : it;
   const topG = byGender(top), bottomG = byGender(bottom), shoeG = byGender(shoe); hat = byGender(hat);
   const wpn = look.wpn ? A.weapons.find(w => w.id === look.wpn && w.lpc) : null;   // LPC 武器圖層（見 playerSpriteDiv）
-  const k = [skin.id, skinSheet, look.gender || '', race.id, hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, shoe?.id || '', shoeHex, face?.id || '', eyes?.id || '', wpn?.id || '', fi].join('|');
+  const k = [skin.id, skinSheet, look.gender || '', race.id, hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, shoe?.id || '', shoeHex, face?.id || '', eyes?.id || '', look.hairC || '', look.eyeC || '', wpn?.id || '', fi].join('|');
   let cv = S.charCache.get(k);
   if (cv) return cv;
   // 這一幀屬於哪個攻擊動作（看 frames.attacks 的起始列）：武器在這個動作有超大格（LPC 的 128×128 揮砍等）就整張畫布放大，人物畫在正中央
@@ -2505,12 +2508,12 @@ function charSprite(look, fi) {
   if (ent?.[2] != null && !sheetCellHas(S.charImgs[skinIt.sheet], ent[0] * F.w, ent[1] * F.h, F.w, F.h)) ent = F.map[ent[2]];
   const [cc, cr] = ent, sx = cc * F.w, sy = cr * F.h;
   // 由下往上：身體 → 褲子 → 鞋子 → 衣服 → 臉型(頭) → 眼睛 →（種族耳後層）→ 頭髮 →（種族耳前層）→ 帽子
-  const layers = [[skinIt], [bottomG, pantsHex], [shoeG, shoeHex], [topG, shirtHex], [face, skinHex], [eyes]];
+  const layers = [[skinIt], [bottomG, pantsHex], [shoeG, shoeHex], [topG, shirtHex], [face, skinHex], [eyesIt, look.eyeC || null]];
   if (wpn && !over && wpn.lpc.bg) layers.unshift([{ sheet: wpn.lpc.bg }]);   // 一般格武器的後層（在身體後面）
   if (race.ear) layers.push([{ sheet: race.ear, dye: race.earDye }, skinHex]);   // 精靈耳（跟膚色）
   const catTint = race.earFur ? hx2 => [[race.earFur, hx2 || null], [['#ffffff'], race.earInner || '#f5b8ad']] : null;
   if (race.earBg) layers.push([{ sheet: race.earBg, tint: catTint, hx: hairHex || null }]);   // 貓耳後層（髮下面；毛色跟髮色、耳內粉肉色）
-  if (!hat?.hideHair) layers.push([hair]);   // 全罩式頭盔（hats 的 hideHair）把頭髮整個蓋住：不畫頭髮，免得從頭盔上方露出來
+  if (!hat?.hideHair) layers.push([hairIt, look.hairC || null]);   // 全罩式頭盔（hats 的 hideHair）把頭髮整個蓋住：不畫頭髮，免得從頭盔上方露出來
   if (race.earFg) layers.push([{ sheet: race.earFg, tint: catTint, hx: hairHex || null }]);   // 貓耳前層（髮上面；同上）
   layers.push([hat, hatHex]);
   if (wpn && !over && wpn.lpc.fg) layers.push([{ sheet: wpn.lpc.fg }]);   // 一般格武器的前層（最上面）
@@ -5661,6 +5664,7 @@ function myLook() {
            hat: shownItem('hat')?.id || null, top: shownItem('top')?.id || null, bottom: shownItem('bottom')?.id || null,
            shoe: shownItem('shoe')?.id || null,
            face: S.me.face || 'normal', eyes: lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown',
+           hairC: S.me.hairC || null, eyeC: S.me.eyeC || null,   // 調色盤自訂的髮色／眼睛顏色（null＝用選的那一色）
            hatC: c.hat || null, topC: c.top || null, botC: c.bottom || null, shoeC: c.shoe || null,
            wlook: w && w.id !== JOBS[S.me.job]?.weapon ? w.id : null,
            shirt: 0, pants: 0 };   // shirt／pants：給舊客戶端的顏色編號（舊版只認這兩個）
@@ -5690,18 +5694,26 @@ function buildAvatarPanel() {
       host.appendChild(o);
     }
   };
-  const lookSwatches = (host, items, curId, onPick) => {
+  const lookSwatches = (host, items, curId, onPick, custom) => {
     host.innerHTML = '';
     for (const it of items) {
       const o = document.createElement('div');
-      o.className = 'opt swatch' + (it.id === curId ? ' sel' : '');
+      o.className = 'opt swatch' + (it.id === curId && !custom?.hex ? ' sel' : '');
       o.style.background = it.hex; o.title = it.name;
-      o.onclick = () => { onPick(it.id); redraw(); };
+      o.onclick = () => { onPick(it.id); custom?.clear(); redraw(); };
+      host.appendChild(o);
+    }
+    if (custom) {   // 最後一格「自訂」：開調色盤（跟服裝換色同一個選色視窗）
+      const o = document.createElement('div');
+      o.className = 'opt swatch custom' + (custom.hex ? ' sel' : '');
+      o.style.background = custom.hex || 'conic-gradient(#f44, #fd4, #4f6, #4cf, #a4f, #f44)';
+      o.title = '自訂顏色';
+      o.onclick = custom.open;
       host.appendChild(o);
     }
   };
   // 樣式＋顏色兩層的項目（髮型、眼睛）：清單裡每一項是「某樣式的某顏色」；換樣式保留顏色、換顏色保留樣式
-  const twoLevel = (list, curId, field, styleHost, colorHost) => {
+  const twoLevel = (list, curId, field, styleHost, colorHost, cfield) => {
     const cur = list.find(x => x.id === curId) || list[0]; if (!cur) return;
     const styles = [];
     for (const it of list) if (!styles.some(s2 => s2.id === it.style)) styles.push({ id: it.style, name: it.styleName || it.style });
@@ -5710,7 +5722,8 @@ function buildAvatarPanel() {
       if (pick) S.me[field] = pick.id;
     });
     const colors = list.filter(x => x.style === cur.style).map(x => ({ id: x.id, name: x.name, hex: x.hex || '#888' }));
-    lookSwatches(colorHost, colors, cur.id, id => { S.me[field] = id; });
+    lookSwatches(colorHost, colors, cur.id, id => { S.me[field] = id; },
+                 cfield && { hex: S.me[cfield] || null, clear: () => { delete S.me[cfield]; }, open: () => openColor(cfield, cur) });
   };
   lookChips($('raceOpts'), (S.avatar.races || []).map(r => ({ id: r.id, name: r.name, title: r.scale && r.scale !== 1 ? `體型 ×${r.scale}` : '' })),
             S.me.race || 'human', v => { S.me.race = v; });
@@ -5737,9 +5750,9 @@ function buildAvatarPanel() {
   $('titleCur').textContent = titleText(S.me.title) || '無';   // 稱號：按「稱號設定」開稱號一覽選
   lookSwatches($('skinOpts'), S.avatar.skins.map(s2 => ({ id: s2.id, name: s2.name, hex: s2.base })), S.me.skin, v => { S.me.skin = v; });
   // 髮型／髮色、臉型、眼神／眼睛顏色
-  twoLevel(S.avatar.hair, S.me.hair, 'hair', $('hairOpts'), $('hairColorOpts'));
+  twoLevel(S.avatar.hair, S.me.hair, 'hair', $('hairOpts'), $('hairColorOpts'), 'hairC');
   lookChips($('faceOpts'), S.avatar.faces || [], S.me.face || 'normal', v => { S.me.face = v; });
-  twoLevel(S.avatar.eyes || [], lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown', 'eyes', $('eyesOpts'), $('eyeColorOpts'));
+  twoLevel(S.avatar.eyes || [], lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown', 'eyes', $('eyesOpts'), $('eyeColorOpts'), 'eyeC');
   // 裝備與外觀：每個部位一列——顯示中的那件（裝備，或套了外觀時的外觀名）＋「外觀」鈕（開外觀一覽選）＋換色鈕
   const box = $('gearRows'); box.innerHTML = '';
   const wr = wardrobe();
@@ -5811,14 +5824,24 @@ function hex2hsv(hex) {
   if (d) { h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
   return { h, s: mx ? d / mx : 0, v: mx };
 }
+// 選色的對象：服裝（hat／top／bottom／shoe，存在 wardrobe 的 color，每個職業各一套）或外貌（hairC／eyeC，存在 S.me，不分職業）
+const LOOK_COLOR = { hairC: '髮色', eyeC: '眼睛顏色' };
+function colorGet(slot) { return LOOK_COLOR[slot] ? (S.me[slot] || null) : (wardrobe().color[slot] || null); }
+function colorSet(slot, hex) {
+  const o = LOOK_COLOR[slot] ? S.me : wardrobe().color;
+  if (hex) o[slot] = hex; else delete o[slot];
+}
 function openColor(slot, item) {
   const dye = dyeList(item); if (!dye) return;
-  const wr = wardrobe();
-  colorUI.slot = slot; colorUI.before = wr.color[slot] || null; colorUI.orig = dye[0];
-  Object.assign(colorUI, hex2hsv(wr.color[slot] || dye[0]));
-  $('colorTitle').textContent = `${SLOTS.find(x => x[0] === slot)[1]}換色：${item.name}`;
+  const look = !!LOOK_COLOR[slot];
+  const orig = look ? (item.hex || dye[0]) : dye[0];   // 外貌：「原色」＝目前選的那一色
+  colorUI.slot = slot; colorUI.before = colorGet(slot); colorUI.orig = orig;
+  Object.assign(colorUI, hex2hsv(colorGet(slot) || orig));
+  $('colorTitle').textContent = look ? `${LOOK_COLOR[slot]}：自訂` : `${SLOTS.find(x => x[0] === slot)[1]}換色：${item.name}`;
   const ps = $('colorPresets'); ps.innerHTML = '';
-  for (const hex of [dye[0], ...new Set([...S.avatar.shirtColors, ...S.avatar.pantsColors])]) {
+  const presets = look ? [...new Set((slot === 'hairC' ? S.avatar.hair : S.avatar.eyes).map(x => x.hex).filter(Boolean))]
+                       : [dye[0], ...new Set([...S.avatar.shirtColors, ...S.avatar.pantsColors])];
+  for (const hex of look ? [orig, ...presets] : presets) {
     const o = document.createElement('div'); o.className = 'opt'; o.style.background = hex; o.title = hex === dye[0] ? '原色' : hex;
     o.onclick = () => { Object.assign(colorUI, hex2hsv(hex)); colorApply(); };
     ps.appendChild(o);
@@ -5842,13 +5865,11 @@ function colorApply(fromHex) {   // 依 colorUI 的 hsv 重畫方塊與色相條
   h2.fillStyle = '#fff'; h2.fillRect(hx - 2, 0, 4, hu.height); h2.strokeStyle = '#000'; h2.lineWidth = 1; h2.strokeRect(hx - 2.5, .5, 5, hu.height - 1);
   if (document.activeElement !== $('colorHex')) $('colorHex').value = hex;
   $('colorNow').style.background = hex;
-  const wr = wardrobe();
-  if (hex.toLowerCase() === colorUI.orig.toLowerCase()) delete wr.color[colorUI.slot]; else wr.color[colorUI.slot] = hex;   // 選回原色＝不換色
+  colorSet(colorUI.slot, hex.toLowerCase() === colorUI.orig.toLowerCase() ? null : hex);   // 選回原色＝不換色
 }
 function closeColor(ok) {
   if (!S.colorOpen) return;
-  const wr = wardrobe();
-  if (!ok) { if (colorUI.before) wr.color[colorUI.slot] = colorUI.before; else delete wr.color[colorUI.slot]; }
+  if (!ok) colorSet(colorUI.slot, colorUI.before);
   $('colorBox').classList.add('hidden'); S.colorOpen = false;
   saveAvatar(); buildAvatarPanel();
 }
@@ -6289,7 +6310,7 @@ async function boot() {
         .map(async f => S.charImgs[f] = await loadImg(`assets/avatar/${f}`));
     }),
     ...[...S.avatar.hair, ...(S.avatar.tops || []), ...(S.avatar.bottoms || []), ...(S.avatar.shoes || []), ...(S.avatar.faces || []), ...(S.avatar.eyes || []), ...(S.avatar.hats || [])]
-      .flatMap(it => [it.sheet, it.sheetF]).filter(Boolean)   // 沒有圖的（不戴帽子的 nohat）不用載；服裝的女版 sheetF 也要載
+      .flatMap(it => [it.sheet, it.sheetF, it.dyeFrom]).filter((f, i, a) => f && a.indexOf(f) === i)   // 沒有圖的（不戴帽子的 nohat）不用載；服裝的女版 sheetF 也要載
       .map(async f => S.charImgs[f] = await optImg(`assets/avatar/${f}`)),
     ...S.avatar.weapons.filter(w => w.lpc).flatMap(w => [w.lpc.bg, w.lpc.fg, ...Object.values(w.lpc.over || {}).flatMap(o => [o.bg, o.fg])])   // LPC 武器圖層
       .filter(Boolean).map(async f => S.charImgs[f] = await optImg(`assets/avatar/${f}`)),

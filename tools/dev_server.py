@@ -190,6 +190,8 @@ def sanitize_state(s, prev):
             "botC": _hex_or(look.get("botC")),
             "shoeC": _hex_or(look.get("shoeC")),
             "wlook": _id_or(look.get("wlook"), None),    # 武器外觀 id
+            "hairC": _hex_or(look.get("hairC")),         # 調色盤自訂的髮色（None＝用選的那一色）
+            "eyeC": _hex_or(look.get("eyeC")),           # 調色盤自訂的眼睛顏色
         },
         "d8": s.get("d8") if s.get("d8") in D8 else None,   # 畫面用的 8 方向朝向（只轉發；玩法看 face）
         "weapon": _id_or(s.get("weapon"), "hands"),

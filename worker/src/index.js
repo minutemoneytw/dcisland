@@ -293,6 +293,8 @@ function sanitizeState(s, prev) {
       botC: hexOr(look.botC),
       shoeC: hexOr(look.shoeC),
       wlook: idOr(look.wlook, null),      // 武器外觀 id（同類型才會畫，由客戶端判斷）
+      hairC: hexOr(look.hairC),           // 調色盤自訂的髮色（null＝用選的那一色）
+      eyeC: hexOr(look.eyeC),             // 調色盤自訂的眼睛顏色
     },
     d8: D8.includes(s.d8) ? s.d8 : null,  // 畫面用的 8 方向朝向（只轉發；玩法看 face）
     weapon: idOr(s.weapon, "hands"),

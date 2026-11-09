@@ -1770,7 +1770,13 @@
    "styleName": "預設",
    "color": "brown",
    "hex": "#684018",
-   "sheet": "char_eyes_default_brown.png"
+   "sheet": "char_eyes_default_brown.png",
+   "dyeFrom": "char_eyes_default_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "default_brown2",
@@ -1779,7 +1785,13 @@
    "styleName": "預設",
    "color": "brown2",
    "hex": "#604820",
-   "sheet": "char_eyes_default_brown2.png"
+   "sheet": "char_eyes_default_brown2.png",
+   "dyeFrom": "char_eyes_default_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "default_black",
@@ -1788,7 +1800,13 @@
    "styleName": "預設",
    "color": "black",
    "hex": "#585858",
-   "sheet": "char_eyes_default_black.png"
+   "sheet": "char_eyes_default_black.png",
+   "dyeFrom": "char_eyes_default_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "default_blonde",
@@ -1797,7 +1815,13 @@
    "styleName": "預設",
    "color": "blonde",
    "hex": "#b88830",
-   "sheet": "char_eyes_default_blonde.png"
+   "sheet": "char_eyes_default_blonde.png",
+   "dyeFrom": "char_eyes_default_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "default_ashblonde",
@@ -1806,7 +1830,13 @@
    "styleName": "預設",
    "color": "ashblonde",
    "hex": "#c0a880",
-   "sheet": "char_eyes_default_ashblonde.png"
+   "sheet": "char_eyes_default_ashblonde.png",
+   "dyeFrom": "char_eyes_default_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "default_ashplatinum",
@@ -1815,7 +1845,13 @@
    "styleName": "預設",
    "color": "ashplatinum",
    "hex": "#c8b8a8",
-   "sheet": "char_eyes_default_ashplatinum.png"
+   "sheet": "char_eyes_default_ashplatinum.png",
+   "dyeFrom": "char_eyes_default_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "default_red",
@@ -1824,7 +1860,13 @@
    "styleName": "預設",
    "color": "red",
    "hex": "#a00830",
-   "sheet": "char_eyes_default_red.png"
+   "sheet": "char_eyes_default_red.png",
+   "dyeFrom": "char_eyes_default_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "default_orange",
@@ -1833,7 +1875,13 @@
    "styleName": "預設",
    "color": "orange",
    "hex": "#b83000",
-   "sheet": "char_eyes_default_orange.png"
+   "sheet": "char_eyes_default_orange.png",
+   "dyeFrom": "char_eyes_default_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "default_rosepink",
@@ -1842,7 +1890,13 @@
    "styleName": "預設",
    "color": "rosepink",
    "hex": "#b87070",
-   "sheet": "char_eyes_default_rosepink.png"
+   "sheet": "char_eyes_default_rosepink.png",
+   "dyeFrom": "char_eyes_default_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "default_green",
@@ -1851,7 +1905,13 @@
    "styleName": "預設",
    "color": "green",
    "hex": "#008050",
-   "sheet": "char_eyes_default_green.png"
+   "sheet": "char_eyes_default_green.png",
+   "dyeFrom": "char_eyes_default_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "default_blue",
@@ -1860,7 +1920,13 @@
    "styleName": "預設",
    "color": "blue",
    "hex": "#20a8b8",
-   "sheet": "char_eyes_default_blue.png"
+   "sheet": "char_eyes_default_blue.png",
+   "dyeFrom": "char_eyes_default_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "default_purple",
@@ -1869,7 +1935,13 @@
    "styleName": "預設",
    "color": "purple",
    "hex": "#702078",
-   "sheet": "char_eyes_default_purple.png"
+   "sheet": "char_eyes_default_purple.png",
+   "dyeFrom": "char_eyes_default_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "angry_brown",
@@ -1878,7 +1950,13 @@
    "styleName": "生氣",
    "color": "brown",
    "hex": "#684018",
-   "sheet": "char_eyes_angry_brown.png"
+   "sheet": "char_eyes_angry_brown.png",
+   "dyeFrom": "char_eyes_angry_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "angry_brown2",
@@ -1887,7 +1965,13 @@
    "styleName": "生氣",
    "color": "brown2",
    "hex": "#604820",
-   "sheet": "char_eyes_angry_brown2.png"
+   "sheet": "char_eyes_angry_brown2.png",
+   "dyeFrom": "char_eyes_angry_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "angry_black",
@@ -1896,7 +1980,13 @@
    "styleName": "生氣",
    "color": "black",
    "hex": "#585858",
-   "sheet": "char_eyes_angry_black.png"
+   "sheet": "char_eyes_angry_black.png",
+   "dyeFrom": "char_eyes_angry_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "angry_blonde",
@@ -1905,7 +1995,13 @@
    "styleName": "生氣",
    "color": "blonde",
    "hex": "#b88830",
-   "sheet": "char_eyes_angry_blonde.png"
+   "sheet": "char_eyes_angry_blonde.png",
+   "dyeFrom": "char_eyes_angry_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "angry_ashblonde",
@@ -1914,7 +2010,13 @@
    "styleName": "生氣",
    "color": "ashblonde",
    "hex": "#c0a880",
-   "sheet": "char_eyes_angry_ashblonde.png"
+   "sheet": "char_eyes_angry_ashblonde.png",
+   "dyeFrom": "char_eyes_angry_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "angry_ashplatinum",
@@ -1923,7 +2025,13 @@
    "styleName": "生氣",
    "color": "ashplatinum",
    "hex": "#c8b8a8",
-   "sheet": "char_eyes_angry_ashplatinum.png"
+   "sheet": "char_eyes_angry_ashplatinum.png",
+   "dyeFrom": "char_eyes_angry_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "angry_red",
@@ -1932,7 +2040,13 @@
    "styleName": "生氣",
    "color": "red",
    "hex": "#a00830",
-   "sheet": "char_eyes_angry_red.png"
+   "sheet": "char_eyes_angry_red.png",
+   "dyeFrom": "char_eyes_angry_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "angry_orange",
@@ -1941,7 +2055,13 @@
    "styleName": "生氣",
    "color": "orange",
    "hex": "#b83000",
-   "sheet": "char_eyes_angry_orange.png"
+   "sheet": "char_eyes_angry_orange.png",
+   "dyeFrom": "char_eyes_angry_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "angry_rosepink",
@@ -1950,7 +2070,13 @@
    "styleName": "生氣",
    "color": "rosepink",
    "hex": "#b87070",
-   "sheet": "char_eyes_angry_rosepink.png"
+   "sheet": "char_eyes_angry_rosepink.png",
+   "dyeFrom": "char_eyes_angry_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "angry_green",
@@ -1959,7 +2085,13 @@
    "styleName": "生氣",
    "color": "green",
    "hex": "#008050",
-   "sheet": "char_eyes_angry_green.png"
+   "sheet": "char_eyes_angry_green.png",
+   "dyeFrom": "char_eyes_angry_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "angry_blue",
@@ -1968,7 +2100,13 @@
    "styleName": "生氣",
    "color": "blue",
    "hex": "#20a8b8",
-   "sheet": "char_eyes_angry_blue.png"
+   "sheet": "char_eyes_angry_blue.png",
+   "dyeFrom": "char_eyes_angry_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "angry_purple",
@@ -1977,7 +2115,13 @@
    "styleName": "生氣",
    "color": "purple",
    "hex": "#702078",
-   "sheet": "char_eyes_angry_purple.png"
+   "sheet": "char_eyes_angry_purple.png",
+   "dyeFrom": "char_eyes_angry_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "sad_brown",
@@ -1986,7 +2130,13 @@
    "styleName": "難過",
    "color": "brown",
    "hex": "#684018",
-   "sheet": "char_eyes_sad_brown.png"
+   "sheet": "char_eyes_sad_brown.png",
+   "dyeFrom": "char_eyes_sad_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "sad_brown2",
@@ -1995,7 +2145,13 @@
    "styleName": "難過",
    "color": "brown2",
    "hex": "#604820",
-   "sheet": "char_eyes_sad_brown2.png"
+   "sheet": "char_eyes_sad_brown2.png",
+   "dyeFrom": "char_eyes_sad_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "sad_black",
@@ -2004,7 +2160,13 @@
    "styleName": "難過",
    "color": "black",
    "hex": "#585858",
-   "sheet": "char_eyes_sad_black.png"
+   "sheet": "char_eyes_sad_black.png",
+   "dyeFrom": "char_eyes_sad_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "sad_blonde",
@@ -2013,7 +2175,13 @@
    "styleName": "難過",
    "color": "blonde",
    "hex": "#b88830",
-   "sheet": "char_eyes_sad_blonde.png"
+   "sheet": "char_eyes_sad_blonde.png",
+   "dyeFrom": "char_eyes_sad_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "sad_ashblonde",
@@ -2022,7 +2190,13 @@
    "styleName": "難過",
    "color": "ashblonde",
    "hex": "#c0a880",
-   "sheet": "char_eyes_sad_ashblonde.png"
+   "sheet": "char_eyes_sad_ashblonde.png",
+   "dyeFrom": "char_eyes_sad_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "sad_ashplatinum",
@@ -2031,7 +2205,13 @@
    "styleName": "難過",
    "color": "ashplatinum",
    "hex": "#c8b8a8",
-   "sheet": "char_eyes_sad_ashplatinum.png"
+   "sheet": "char_eyes_sad_ashplatinum.png",
+   "dyeFrom": "char_eyes_sad_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "sad_red",
@@ -2040,7 +2220,13 @@
    "styleName": "難過",
    "color": "red",
    "hex": "#a00830",
-   "sheet": "char_eyes_sad_red.png"
+   "sheet": "char_eyes_sad_red.png",
+   "dyeFrom": "char_eyes_sad_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "sad_orange",
@@ -2049,7 +2235,13 @@
    "styleName": "難過",
    "color": "orange",
    "hex": "#b83000",
-   "sheet": "char_eyes_sad_orange.png"
+   "sheet": "char_eyes_sad_orange.png",
+   "dyeFrom": "char_eyes_sad_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "sad_rosepink",
@@ -2058,7 +2250,13 @@
    "styleName": "難過",
    "color": "rosepink",
    "hex": "#b87070",
-   "sheet": "char_eyes_sad_rosepink.png"
+   "sheet": "char_eyes_sad_rosepink.png",
+   "dyeFrom": "char_eyes_sad_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "sad_green",
@@ -2067,7 +2265,13 @@
    "styleName": "難過",
    "color": "green",
    "hex": "#008050",
-   "sheet": "char_eyes_sad_green.png"
+   "sheet": "char_eyes_sad_green.png",
+   "dyeFrom": "char_eyes_sad_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "sad_blue",
@@ -2076,7 +2280,13 @@
    "styleName": "難過",
    "color": "blue",
    "hex": "#20a8b8",
-   "sheet": "char_eyes_sad_blue.png"
+   "sheet": "char_eyes_sad_blue.png",
+   "dyeFrom": "char_eyes_sad_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "sad_purple",
@@ -2085,7 +2295,13 @@
    "styleName": "難過",
    "color": "purple",
    "hex": "#702078",
-   "sheet": "char_eyes_sad_purple.png"
+   "sheet": "char_eyes_sad_purple.png",
+   "dyeFrom": "char_eyes_sad_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookl_brown",
@@ -2094,7 +2310,13 @@
    "styleName": "看左",
    "color": "brown",
    "hex": "#684018",
-   "sheet": "char_eyes_lookl_brown.png"
+   "sheet": "char_eyes_lookl_brown.png",
+   "dyeFrom": "char_eyes_lookl_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookl_brown2",
@@ -2103,7 +2325,13 @@
    "styleName": "看左",
    "color": "brown2",
    "hex": "#604820",
-   "sheet": "char_eyes_lookl_brown2.png"
+   "sheet": "char_eyes_lookl_brown2.png",
+   "dyeFrom": "char_eyes_lookl_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookl_black",
@@ -2112,7 +2340,13 @@
    "styleName": "看左",
    "color": "black",
    "hex": "#585858",
-   "sheet": "char_eyes_lookl_black.png"
+   "sheet": "char_eyes_lookl_black.png",
+   "dyeFrom": "char_eyes_lookl_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookl_blonde",
@@ -2121,7 +2355,13 @@
    "styleName": "看左",
    "color": "blonde",
    "hex": "#b88830",
-   "sheet": "char_eyes_lookl_blonde.png"
+   "sheet": "char_eyes_lookl_blonde.png",
+   "dyeFrom": "char_eyes_lookl_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookl_ashblonde",
@@ -2130,7 +2370,13 @@
    "styleName": "看左",
    "color": "ashblonde",
    "hex": "#c0a880",
-   "sheet": "char_eyes_lookl_ashblonde.png"
+   "sheet": "char_eyes_lookl_ashblonde.png",
+   "dyeFrom": "char_eyes_lookl_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookl_ashplatinum",
@@ -2139,7 +2385,13 @@
    "styleName": "看左",
    "color": "ashplatinum",
    "hex": "#c8b8a8",
-   "sheet": "char_eyes_lookl_ashplatinum.png"
+   "sheet": "char_eyes_lookl_ashplatinum.png",
+   "dyeFrom": "char_eyes_lookl_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookl_red",
@@ -2148,7 +2400,13 @@
    "styleName": "看左",
    "color": "red",
    "hex": "#a00830",
-   "sheet": "char_eyes_lookl_red.png"
+   "sheet": "char_eyes_lookl_red.png",
+   "dyeFrom": "char_eyes_lookl_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookl_orange",
@@ -2157,7 +2415,13 @@
    "styleName": "看左",
    "color": "orange",
    "hex": "#b83000",
-   "sheet": "char_eyes_lookl_orange.png"
+   "sheet": "char_eyes_lookl_orange.png",
+   "dyeFrom": "char_eyes_lookl_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookl_rosepink",
@@ -2166,7 +2430,13 @@
    "styleName": "看左",
    "color": "rosepink",
    "hex": "#b87070",
-   "sheet": "char_eyes_lookl_rosepink.png"
+   "sheet": "char_eyes_lookl_rosepink.png",
+   "dyeFrom": "char_eyes_lookl_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookl_green",
@@ -2175,7 +2445,13 @@
    "styleName": "看左",
    "color": "green",
    "hex": "#008050",
-   "sheet": "char_eyes_lookl_green.png"
+   "sheet": "char_eyes_lookl_green.png",
+   "dyeFrom": "char_eyes_lookl_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookl_blue",
@@ -2184,7 +2460,13 @@
    "styleName": "看左",
    "color": "blue",
    "hex": "#20a8b8",
-   "sheet": "char_eyes_lookl_blue.png"
+   "sheet": "char_eyes_lookl_blue.png",
+   "dyeFrom": "char_eyes_lookl_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookl_purple",
@@ -2193,7 +2475,13 @@
    "styleName": "看左",
    "color": "purple",
    "hex": "#702078",
-   "sheet": "char_eyes_lookl_purple.png"
+   "sheet": "char_eyes_lookl_purple.png",
+   "dyeFrom": "char_eyes_lookl_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookr_brown",
@@ -2202,7 +2490,13 @@
    "styleName": "看右",
    "color": "brown",
    "hex": "#684018",
-   "sheet": "char_eyes_lookr_brown.png"
+   "sheet": "char_eyes_lookr_brown.png",
+   "dyeFrom": "char_eyes_lookr_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookr_brown2",
@@ -2211,7 +2505,13 @@
    "styleName": "看右",
    "color": "brown2",
    "hex": "#604820",
-   "sheet": "char_eyes_lookr_brown2.png"
+   "sheet": "char_eyes_lookr_brown2.png",
+   "dyeFrom": "char_eyes_lookr_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookr_black",
@@ -2220,7 +2520,13 @@
    "styleName": "看右",
    "color": "black",
    "hex": "#585858",
-   "sheet": "char_eyes_lookr_black.png"
+   "sheet": "char_eyes_lookr_black.png",
+   "dyeFrom": "char_eyes_lookr_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookr_blonde",
@@ -2229,7 +2535,13 @@
    "styleName": "看右",
    "color": "blonde",
    "hex": "#b88830",
-   "sheet": "char_eyes_lookr_blonde.png"
+   "sheet": "char_eyes_lookr_blonde.png",
+   "dyeFrom": "char_eyes_lookr_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookr_ashblonde",
@@ -2238,7 +2550,13 @@
    "styleName": "看右",
    "color": "ashblonde",
    "hex": "#c0a880",
-   "sheet": "char_eyes_lookr_ashblonde.png"
+   "sheet": "char_eyes_lookr_ashblonde.png",
+   "dyeFrom": "char_eyes_lookr_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookr_ashplatinum",
@@ -2247,7 +2565,13 @@
    "styleName": "看右",
    "color": "ashplatinum",
    "hex": "#c8b8a8",
-   "sheet": "char_eyes_lookr_ashplatinum.png"
+   "sheet": "char_eyes_lookr_ashplatinum.png",
+   "dyeFrom": "char_eyes_lookr_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookr_red",
@@ -2256,7 +2580,13 @@
    "styleName": "看右",
    "color": "red",
    "hex": "#a00830",
-   "sheet": "char_eyes_lookr_red.png"
+   "sheet": "char_eyes_lookr_red.png",
+   "dyeFrom": "char_eyes_lookr_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookr_orange",
@@ -2265,7 +2595,13 @@
    "styleName": "看右",
    "color": "orange",
    "hex": "#b83000",
-   "sheet": "char_eyes_lookr_orange.png"
+   "sheet": "char_eyes_lookr_orange.png",
+   "dyeFrom": "char_eyes_lookr_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookr_rosepink",
@@ -2274,7 +2610,13 @@
    "styleName": "看右",
    "color": "rosepink",
    "hex": "#b87070",
-   "sheet": "char_eyes_lookr_rosepink.png"
+   "sheet": "char_eyes_lookr_rosepink.png",
+   "dyeFrom": "char_eyes_lookr_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookr_green",
@@ -2283,7 +2625,13 @@
    "styleName": "看右",
    "color": "green",
    "hex": "#008050",
-   "sheet": "char_eyes_lookr_green.png"
+   "sheet": "char_eyes_lookr_green.png",
+   "dyeFrom": "char_eyes_lookr_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookr_blue",
@@ -2292,7 +2640,13 @@
    "styleName": "看右",
    "color": "blue",
    "hex": "#20a8b8",
-   "sheet": "char_eyes_lookr_blue.png"
+   "sheet": "char_eyes_lookr_blue.png",
+   "dyeFrom": "char_eyes_lookr_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   },
   {
    "id": "lookr_purple",
@@ -2301,7 +2655,13 @@
    "styleName": "看右",
    "color": "purple",
    "hex": "#702078",
-   "sheet": "char_eyes_lookr_purple.png"
+   "sheet": "char_eyes_lookr_purple.png",
+   "dyeFrom": "char_eyes_lookr_brown.png",
+   "dye": [
+    "#684018",
+    "#261709",
+    "#5a3715"
+   ]
   }
  ],
  "races": [
@@ -2356,7 +2716,15 @@
    "styleName": "短髮",
    "color": "brown",
    "sheet": "char_hair1.png",
-   "hex": "#684018"
+   "hex": "#684018",
+   "dyeFrom": "char_hair1.png",
+   "dye": [
+    "#684018",
+    "#251709",
+    "#533313",
+    "#3e260e",
+    "#997d62"
+   ]
   },
   {
    "id": "hair2",
@@ -2365,7 +2733,15 @@
    "styleName": "短髮",
    "color": "brown2",
    "sheet": "char_hair2.png",
-   "hex": "#604820"
+   "hex": "#604820",
+   "dyeFrom": "char_hair1.png",
+   "dye": [
+    "#684018",
+    "#251709",
+    "#533313",
+    "#3e260e",
+    "#997d62"
+   ]
   },
   {
    "id": "hair3",
@@ -2374,7 +2750,15 @@
    "styleName": "短髮",
    "color": "black",
    "sheet": "char_hair3.png",
-   "hex": "#585858"
+   "hex": "#585858",
+   "dyeFrom": "char_hair1.png",
+   "dye": [
+    "#684018",
+    "#251709",
+    "#533313",
+    "#3e260e",
+    "#997d62"
+   ]
   },
   {
    "id": "hair4",
@@ -2383,7 +2767,15 @@
    "styleName": "短髮",
    "color": "blonde",
    "sheet": "char_hair4.png",
-   "hex": "#b88830"
+   "hex": "#b88830",
+   "dyeFrom": "char_hair1.png",
+   "dye": [
+    "#684018",
+    "#251709",
+    "#533313",
+    "#3e260e",
+    "#997d62"
+   ]
   },
   {
    "id": "hair5",
@@ -2392,7 +2784,15 @@
    "styleName": "短髮",
    "color": "ashblonde",
    "sheet": "char_hair5.png",
-   "hex": "#c0a880"
+   "hex": "#c0a880",
+   "dyeFrom": "char_hair1.png",
+   "dye": [
+    "#684018",
+    "#251709",
+    "#533313",
+    "#3e260e",
+    "#997d62"
+   ]
   },
   {
    "id": "hair6",
@@ -2401,7 +2801,15 @@
    "styleName": "短髮",
    "color": "ashplatinum",
    "sheet": "char_hair6.png",
-   "hex": "#c8b8a8"
+   "hex": "#c8b8a8",
+   "dyeFrom": "char_hair1.png",
+   "dye": [
+    "#684018",
+    "#251709",
+    "#533313",
+    "#3e260e",
+    "#997d62"
+   ]
   },
   {
    "id": "hair7",
@@ -2410,7 +2818,15 @@
    "styleName": "短髮",
    "color": "red",
    "sheet": "char_hair7.png",
-   "hex": "#a00830"
+   "hex": "#a00830",
+   "dyeFrom": "char_hair1.png",
+   "dye": [
+    "#684018",
+    "#251709",
+    "#533313",
+    "#3e260e",
+    "#997d62"
+   ]
   },
   {
    "id": "hair8",
@@ -2419,7 +2835,15 @@
    "styleName": "短髮",
    "color": "orange",
    "sheet": "char_hair8.png",
-   "hex": "#b83000"
+   "hex": "#b83000",
+   "dyeFrom": "char_hair1.png",
+   "dye": [
+    "#684018",
+    "#251709",
+    "#533313",
+    "#3e260e",
+    "#997d62"
+   ]
   },
   {
    "id": "hair9",
@@ -2428,7 +2852,15 @@
    "styleName": "短髮",
    "color": "rosepink",
    "sheet": "char_hair9.png",
-   "hex": "#b87070"
+   "hex": "#b87070",
+   "dyeFrom": "char_hair1.png",
+   "dye": [
+    "#684018",
+    "#251709",
+    "#533313",
+    "#3e260e",
+    "#997d62"
+   ]
   },
   {
    "id": "hair10",
@@ -2437,7 +2869,15 @@
    "styleName": "短髮",
    "color": "green",
    "sheet": "char_hair10.png",
-   "hex": "#008050"
+   "hex": "#008050",
+   "dyeFrom": "char_hair1.png",
+   "dye": [
+    "#684018",
+    "#251709",
+    "#533313",
+    "#3e260e",
+    "#997d62"
+   ]
   },
   {
    "id": "hair11",
@@ -2446,7 +2886,15 @@
    "styleName": "短髮",
    "color": "blue",
    "sheet": "char_hair11.png",
-   "hex": "#20a8b8"
+   "hex": "#20a8b8",
+   "dyeFrom": "char_hair1.png",
+   "dye": [
+    "#684018",
+    "#251709",
+    "#533313",
+    "#3e260e",
+    "#997d62"
+   ]
   },
   {
    "id": "hair12",
@@ -2455,7 +2903,15 @@
    "styleName": "短髮",
    "color": "purple",
    "sheet": "char_hair12.png",
-   "hex": "#702078"
+   "hex": "#702078",
+   "dyeFrom": "char_hair1.png",
+   "dye": [
+    "#684018",
+    "#251709",
+    "#533313",
+    "#3e260e",
+    "#997d62"
+   ]
   },
   {
    "id": "afro_brown",
@@ -2464,7 +2920,15 @@
    "styleName": "爆炸頭",
    "color": "brown",
    "sheet": "char_hair_afro_brown.png",
-   "hex": "#684018"
+   "hex": "#684018",
+   "dyeFrom": "char_hair_afro_brown.png",
+   "dye": [
+    "#684018",
+    "#533313",
+    "#3e260e",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "afro_brown2",
@@ -2473,7 +2937,15 @@
    "styleName": "爆炸頭",
    "color": "brown2",
    "sheet": "char_hair_afro_brown2.png",
-   "hex": "#604820"
+   "hex": "#604820",
+   "dyeFrom": "char_hair_afro_brown.png",
+   "dye": [
+    "#684018",
+    "#533313",
+    "#3e260e",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "afro_black",
@@ -2482,7 +2954,15 @@
    "styleName": "爆炸頭",
    "color": "black",
    "sheet": "char_hair_afro_black.png",
-   "hex": "#585858"
+   "hex": "#585858",
+   "dyeFrom": "char_hair_afro_brown.png",
+   "dye": [
+    "#684018",
+    "#533313",
+    "#3e260e",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "afro_blonde",
@@ -2491,7 +2971,15 @@
    "styleName": "爆炸頭",
    "color": "blonde",
    "sheet": "char_hair_afro_blonde.png",
-   "hex": "#b88830"
+   "hex": "#b88830",
+   "dyeFrom": "char_hair_afro_brown.png",
+   "dye": [
+    "#684018",
+    "#533313",
+    "#3e260e",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "afro_ashblonde",
@@ -2500,7 +2988,15 @@
    "styleName": "爆炸頭",
    "color": "ashblonde",
    "sheet": "char_hair_afro_ashblonde.png",
-   "hex": "#c0a880"
+   "hex": "#c0a880",
+   "dyeFrom": "char_hair_afro_brown.png",
+   "dye": [
+    "#684018",
+    "#533313",
+    "#3e260e",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "afro_ashplatinum",
@@ -2509,7 +3005,15 @@
    "styleName": "爆炸頭",
    "color": "ashplatinum",
    "sheet": "char_hair_afro_ashplatinum.png",
-   "hex": "#c8b8a8"
+   "hex": "#c8b8a8",
+   "dyeFrom": "char_hair_afro_brown.png",
+   "dye": [
+    "#684018",
+    "#533313",
+    "#3e260e",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "afro_red",
@@ -2518,7 +3022,15 @@
    "styleName": "爆炸頭",
    "color": "red",
    "sheet": "char_hair_afro_red.png",
-   "hex": "#a00830"
+   "hex": "#a00830",
+   "dyeFrom": "char_hair_afro_brown.png",
+   "dye": [
+    "#684018",
+    "#533313",
+    "#3e260e",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "afro_orange",
@@ -2527,7 +3039,15 @@
    "styleName": "爆炸頭",
    "color": "orange",
    "sheet": "char_hair_afro_orange.png",
-   "hex": "#b83000"
+   "hex": "#b83000",
+   "dyeFrom": "char_hair_afro_brown.png",
+   "dye": [
+    "#684018",
+    "#533313",
+    "#3e260e",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "afro_rosepink",
@@ -2536,7 +3056,15 @@
    "styleName": "爆炸頭",
    "color": "rosepink",
    "sheet": "char_hair_afro_rosepink.png",
-   "hex": "#b87070"
+   "hex": "#b87070",
+   "dyeFrom": "char_hair_afro_brown.png",
+   "dye": [
+    "#684018",
+    "#533313",
+    "#3e260e",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "afro_green",
@@ -2545,7 +3073,15 @@
    "styleName": "爆炸頭",
    "color": "green",
    "sheet": "char_hair_afro_green.png",
-   "hex": "#008050"
+   "hex": "#008050",
+   "dyeFrom": "char_hair_afro_brown.png",
+   "dye": [
+    "#684018",
+    "#533313",
+    "#3e260e",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "afro_blue",
@@ -2554,7 +3090,15 @@
    "styleName": "爆炸頭",
    "color": "blue",
    "sheet": "char_hair_afro_blue.png",
-   "hex": "#20a8b8"
+   "hex": "#20a8b8",
+   "dyeFrom": "char_hair_afro_brown.png",
+   "dye": [
+    "#684018",
+    "#533313",
+    "#3e260e",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "afro_purple",
@@ -2563,7 +3107,15 @@
    "styleName": "爆炸頭",
    "color": "purple",
    "sheet": "char_hair_afro_purple.png",
-   "hex": "#702078"
+   "hex": "#702078",
+   "dyeFrom": "char_hair_afro_brown.png",
+   "dye": [
+    "#684018",
+    "#533313",
+    "#3e260e",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "bob_brown",
@@ -2572,7 +3124,15 @@
    "styleName": "鮑伯頭",
    "color": "brown",
    "sheet": "char_hair_bob_brown.png",
-   "hex": "#684018"
+   "hex": "#684018",
+   "dyeFrom": "char_hair_bob_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#533313",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "bob_brown2",
@@ -2581,7 +3141,15 @@
    "styleName": "鮑伯頭",
    "color": "brown2",
    "sheet": "char_hair_bob_brown2.png",
-   "hex": "#604820"
+   "hex": "#604820",
+   "dyeFrom": "char_hair_bob_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#533313",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "bob_black",
@@ -2590,7 +3158,15 @@
    "styleName": "鮑伯頭",
    "color": "black",
    "sheet": "char_hair_bob_black.png",
-   "hex": "#585858"
+   "hex": "#585858",
+   "dyeFrom": "char_hair_bob_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#533313",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "bob_blonde",
@@ -2599,7 +3175,15 @@
    "styleName": "鮑伯頭",
    "color": "blonde",
    "sheet": "char_hair_bob_blonde.png",
-   "hex": "#b88830"
+   "hex": "#b88830",
+   "dyeFrom": "char_hair_bob_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#533313",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "bob_ashblonde",
@@ -2608,7 +3192,15 @@
    "styleName": "鮑伯頭",
    "color": "ashblonde",
    "sheet": "char_hair_bob_ashblonde.png",
-   "hex": "#c0a880"
+   "hex": "#c0a880",
+   "dyeFrom": "char_hair_bob_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#533313",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "bob_ashplatinum",
@@ -2617,7 +3209,15 @@
    "styleName": "鮑伯頭",
    "color": "ashplatinum",
    "sheet": "char_hair_bob_ashplatinum.png",
-   "hex": "#c8b8a8"
+   "hex": "#c8b8a8",
+   "dyeFrom": "char_hair_bob_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#533313",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "bob_red",
@@ -2626,7 +3226,15 @@
    "styleName": "鮑伯頭",
    "color": "red",
    "sheet": "char_hair_bob_red.png",
-   "hex": "#a00830"
+   "hex": "#a00830",
+   "dyeFrom": "char_hair_bob_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#533313",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "bob_orange",
@@ -2635,7 +3243,15 @@
    "styleName": "鮑伯頭",
    "color": "orange",
    "sheet": "char_hair_bob_orange.png",
-   "hex": "#b83000"
+   "hex": "#b83000",
+   "dyeFrom": "char_hair_bob_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#533313",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "bob_rosepink",
@@ -2644,7 +3260,15 @@
    "styleName": "鮑伯頭",
    "color": "rosepink",
    "sheet": "char_hair_bob_rosepink.png",
-   "hex": "#b87070"
+   "hex": "#b87070",
+   "dyeFrom": "char_hair_bob_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#533313",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "bob_green",
@@ -2653,7 +3277,15 @@
    "styleName": "鮑伯頭",
    "color": "green",
    "sheet": "char_hair_bob_green.png",
-   "hex": "#008050"
+   "hex": "#008050",
+   "dyeFrom": "char_hair_bob_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#533313",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "bob_blue",
@@ -2662,7 +3294,15 @@
    "styleName": "鮑伯頭",
    "color": "blue",
    "sheet": "char_hair_bob_blue.png",
-   "hex": "#20a8b8"
+   "hex": "#20a8b8",
+   "dyeFrom": "char_hair_bob_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#533313",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "bob_purple",
@@ -2671,7 +3311,15 @@
    "styleName": "鮑伯頭",
    "color": "purple",
    "sheet": "char_hair_bob_purple.png",
-   "hex": "#702078"
+   "hex": "#702078",
+   "dyeFrom": "char_hair_bob_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#533313",
+    "#251709",
+    "#997d62"
+   ]
   },
   {
    "id": "curly_brown",
@@ -2680,7 +3328,15 @@
    "styleName": "捲長髮",
    "color": "brown",
    "sheet": "char_hair_curly_brown.png",
-   "hex": "#684018"
+   "hex": "#684018",
+   "dyeFrom": "char_hair_curly_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "curly_brown2",
@@ -2689,7 +3345,15 @@
    "styleName": "捲長髮",
    "color": "brown2",
    "sheet": "char_hair_curly_brown2.png",
-   "hex": "#604820"
+   "hex": "#604820",
+   "dyeFrom": "char_hair_curly_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "curly_black",
@@ -2698,7 +3362,15 @@
    "styleName": "捲長髮",
    "color": "black",
    "sheet": "char_hair_curly_black.png",
-   "hex": "#585858"
+   "hex": "#585858",
+   "dyeFrom": "char_hair_curly_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "curly_blonde",
@@ -2707,7 +3379,15 @@
    "styleName": "捲長髮",
    "color": "blonde",
    "sheet": "char_hair_curly_blonde.png",
-   "hex": "#b88830"
+   "hex": "#b88830",
+   "dyeFrom": "char_hair_curly_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "curly_ashblonde",
@@ -2716,7 +3396,15 @@
    "styleName": "捲長髮",
    "color": "ashblonde",
    "sheet": "char_hair_curly_ashblonde.png",
-   "hex": "#c0a880"
+   "hex": "#c0a880",
+   "dyeFrom": "char_hair_curly_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "curly_ashplatinum",
@@ -2725,7 +3413,15 @@
    "styleName": "捲長髮",
    "color": "ashplatinum",
    "sheet": "char_hair_curly_ashplatinum.png",
-   "hex": "#c8b8a8"
+   "hex": "#c8b8a8",
+   "dyeFrom": "char_hair_curly_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "curly_red",
@@ -2734,7 +3430,15 @@
    "styleName": "捲長髮",
    "color": "red",
    "sheet": "char_hair_curly_red.png",
-   "hex": "#a00830"
+   "hex": "#a00830",
+   "dyeFrom": "char_hair_curly_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "curly_orange",
@@ -2743,7 +3447,15 @@
    "styleName": "捲長髮",
    "color": "orange",
    "sheet": "char_hair_curly_orange.png",
-   "hex": "#b83000"
+   "hex": "#b83000",
+   "dyeFrom": "char_hair_curly_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "curly_rosepink",
@@ -2752,7 +3464,15 @@
    "styleName": "捲長髮",
    "color": "rosepink",
    "sheet": "char_hair_curly_rosepink.png",
-   "hex": "#b87070"
+   "hex": "#b87070",
+   "dyeFrom": "char_hair_curly_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "curly_green",
@@ -2761,7 +3481,15 @@
    "styleName": "捲長髮",
    "color": "green",
    "sheet": "char_hair_curly_green.png",
-   "hex": "#008050"
+   "hex": "#008050",
+   "dyeFrom": "char_hair_curly_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "curly_blue",
@@ -2770,7 +3498,15 @@
    "styleName": "捲長髮",
    "color": "blue",
    "sheet": "char_hair_curly_blue.png",
-   "hex": "#20a8b8"
+   "hex": "#20a8b8",
+   "dyeFrom": "char_hair_curly_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "curly_purple",
@@ -2779,7 +3515,15 @@
    "styleName": "捲長髮",
    "color": "purple",
    "sheet": "char_hair_curly_purple.png",
-   "hex": "#702078"
+   "hex": "#702078",
+   "dyeFrom": "char_hair_curly_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "long_brown",
@@ -2788,7 +3532,15 @@
    "styleName": "長髮",
    "color": "brown",
    "sheet": "char_hair_long_brown.png",
-   "hex": "#684018"
+   "hex": "#684018",
+   "dyeFrom": "char_hair_long_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "long_brown2",
@@ -2797,7 +3549,15 @@
    "styleName": "長髮",
    "color": "brown2",
    "sheet": "char_hair_long_brown2.png",
-   "hex": "#604820"
+   "hex": "#604820",
+   "dyeFrom": "char_hair_long_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "long_black",
@@ -2806,7 +3566,15 @@
    "styleName": "長髮",
    "color": "black",
    "sheet": "char_hair_long_black.png",
-   "hex": "#585858"
+   "hex": "#585858",
+   "dyeFrom": "char_hair_long_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "long_blonde",
@@ -2815,7 +3583,15 @@
    "styleName": "長髮",
    "color": "blonde",
    "sheet": "char_hair_long_blonde.png",
-   "hex": "#b88830"
+   "hex": "#b88830",
+   "dyeFrom": "char_hair_long_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "long_ashblonde",
@@ -2824,7 +3600,15 @@
    "styleName": "長髮",
    "color": "ashblonde",
    "sheet": "char_hair_long_ashblonde.png",
-   "hex": "#c0a880"
+   "hex": "#c0a880",
+   "dyeFrom": "char_hair_long_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "long_ashplatinum",
@@ -2833,7 +3617,15 @@
    "styleName": "長髮",
    "color": "ashplatinum",
    "sheet": "char_hair_long_ashplatinum.png",
-   "hex": "#c8b8a8"
+   "hex": "#c8b8a8",
+   "dyeFrom": "char_hair_long_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "long_red",
@@ -2842,7 +3634,15 @@
    "styleName": "長髮",
    "color": "red",
    "sheet": "char_hair_long_red.png",
-   "hex": "#a00830"
+   "hex": "#a00830",
+   "dyeFrom": "char_hair_long_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "long_orange",
@@ -2851,7 +3651,15 @@
    "styleName": "長髮",
    "color": "orange",
    "sheet": "char_hair_long_orange.png",
-   "hex": "#b83000"
+   "hex": "#b83000",
+   "dyeFrom": "char_hair_long_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "long_rosepink",
@@ -2860,7 +3668,15 @@
    "styleName": "長髮",
    "color": "rosepink",
    "sheet": "char_hair_long_rosepink.png",
-   "hex": "#b87070"
+   "hex": "#b87070",
+   "dyeFrom": "char_hair_long_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "long_green",
@@ -2869,7 +3685,15 @@
    "styleName": "長髮",
    "color": "green",
    "sheet": "char_hair_long_green.png",
-   "hex": "#008050"
+   "hex": "#008050",
+   "dyeFrom": "char_hair_long_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "long_blue",
@@ -2878,7 +3702,15 @@
    "styleName": "長髮",
    "color": "blue",
    "sheet": "char_hair_long_blue.png",
-   "hex": "#20a8b8"
+   "hex": "#20a8b8",
+   "dyeFrom": "char_hair_long_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   },
   {
    "id": "long_purple",
@@ -2887,7 +3719,15 @@
    "styleName": "長髮",
    "color": "purple",
    "sheet": "char_hair_long_purple.png",
-   "hex": "#702078"
+   "hex": "#702078",
+   "dyeFrom": "char_hair_long_brown.png",
+   "dye": [
+    "#684018",
+    "#3e260e",
+    "#251709",
+    "#533313",
+    "#997d62"
+   ]
   }
  ],
  "tops": [

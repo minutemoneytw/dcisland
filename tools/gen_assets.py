@@ -892,7 +892,7 @@ def _lpc_hair_tint_into(sheet, w, h, data, tr, ref, oy0):
             sheet.set(x, oy0 + y, (out[0], out[1], out[2], data[i + 3]))
     return sheet
 
-def lpc_dye_of(*files, n=8):
+def lpc_dye_of(*files, n=8, min_lum=50):
     """從已產生的人物 sheet（client/assets/avatar/ 底下）取「可染色的顏色」：不透明像素依出現次數排序，
     去掉很暗的輪廓色（亮度 < 50），取前 n 個；第一個（最多的）當主色。給 manifest 的 dye 用（client 的 dyeSheet 依明暗比例換色）。"""
     cnt = {}
@@ -905,7 +905,7 @@ def lpc_dye_of(*files, n=8):
             if data[i + 3] <= 16:
                 continue
             c = (data[i], data[i + 1], data[i + 2])
-            if 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] < 50:
+            if 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] < min_lum:
                 continue
             cnt[c] = cnt.get(c, 0) + 1
     top = sorted(cnt, key=lambda c: -cnt[c])[:n]
@@ -2695,6 +2695,16 @@ def main():
     for eid, _ename, rel in LPC_EYES:
         for cid, _cname in KIDOL_HAIR:
             save(lpc_eyes_sheet(rel, kidol_hex[cid]), f"char_eyes_{eid}_{cid}.png", sub)
+    # 髮色／眼睛顏色的調色盤自訂色：每個樣式拿棕色版當底圖（亮度夠、層次完整），取可染色顏色（只排除最暗的輪廓）
+    hair_dye = {"short": lpc_dye_of("char_hair1.png", n=10, min_lum=25)}
+    for sid, _sname, _fn in LPC_HAIR_STYLES:
+        hair_dye[sid] = lpc_dye_of(f"char_hair_{sid}_brown.png", n=10, min_lum=25)
+    eye_dye = {eid: lpc_dye_of(f"char_eyes_{eid}_brown.png", n=10, min_lum=0) for eid, _en, _rel in LPC_EYES}
+    # 換色以 dye 的第一個顏色當主色（依它算明暗比例）：最常出現的常是暗部輪廓，所以把棕色的主色（kidol_hex["brown"]）排到第一個
+    main_brown = kidol_hex["brown"]
+    for dd in (hair_dye, eye_dye):
+        for k2, lst in dd.items():
+            dd[k2] = [main_brown] + [c for c in lst if c != main_brown]
     write_json(os.path.join(ASSETS, sub, "avatar.json"), dict(
         scale=CHAR_SCALE,
         # 人物分層的幀表（所有層共用）：每層都是 832×1344 的 LPC 通用格式 sheet；map＝65 個邏輯幀 → sheet 的 [欄, 列]；
@@ -2712,14 +2722,18 @@ def main():
         # 臉型（頭型；原色，執行時用 dye 跟膚色重上色）與眼睛（固定色）
         faces=[dict(id=fid, name=fn, sheet=f"char_face_{fid}.png", dye=LPC_SKIN_DYE) for fid, fn, _r in LPC_FACES],
         # 眼睛：5 種眼神（style）× 12 色（color，虹膜＝髮色同一套）；面板分成「眼神」（文字鈕）與「眼睛顏色」（色塊）兩列
-        eyes=[dict(id=f"{eid}_{cid}", name=cname, style=eid, styleName=en, color=cid, hex=kidol_hex[cid], sheet=f"char_eyes_{eid}_{cid}.png")
+        # dyeFrom／dye＝玩家用調色盤自訂顏色時的底圖（該樣式的棕色版）與它的可染色顏色（整層依明暗換成自訂色）
+        eyes=[dict(id=f"{eid}_{cid}", name=cname, style=eid, styleName=en, color=cid, hex=kidol_hex[cid], sheet=f"char_eyes_{eid}_{cid}.png",
+                   dyeFrom=f"char_eyes_{eid}_brown.png", dye=eye_dye[eid])
               for eid, en, _rel in LPC_EYES for cid, cname in KIDOL_HAIR],
         races=LPC_RACES,
         # 髮型：style／styleName＝造型、color／name／hex＝顏色；面板分成「髮型」（文字鈕）與「髮色」（色塊）兩列，換一邊另一邊保持不變
         # hex＝該款髮色的主色（貓耳跟髮色重上色用）
-        hair=[dict(id=f"hair{i + 1}", name=cname, style="short", styleName="短髮", color=cid, sheet=f"char_hair{i + 1}.png", hex=kidol_hex[cid])
+        hair=[dict(id=f"hair{i + 1}", name=cname, style="short", styleName="短髮", color=cid, sheet=f"char_hair{i + 1}.png", hex=kidol_hex[cid],
+                   dyeFrom="char_hair1.png", dye=hair_dye["short"])
               for i, (cid, cname) in enumerate(KIDOL_HAIR)] +
-             [dict(id=f"{sid}_{cid}", name=cname, style=sid, styleName=sname, color=cid, sheet=f"char_hair_{sid}_{cid}.png", hex=kidol_hex[cid])
+             [dict(id=f"{sid}_{cid}", name=cname, style=sid, styleName=sname, color=cid, sheet=f"char_hair_{sid}_{cid}.png", hex=kidol_hex[cid],
+                   dyeFrom=f"char_hair_{sid}_brown.png", dye=hair_dye[sid])
               for sid, sname, _fn in LPC_HAIR_STYLES for cid, cname, _hx in hair_colors],
         # 基本服裝（LPC 原檔；gender＝之後選性別用）
         # 服裝：男女共用一個 id（sheet＝男、sheetF＝女，client 依角色性別挑；外觀清單一件只出現一次）；
