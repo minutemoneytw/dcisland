@@ -203,6 +203,41 @@
    "color": "#f4f0ec"
   },
   {
+   "id": "egg",
+   "name": "雞蛋",
+   "group": "wild",
+   "how": "擊倒咕咕雞",
+   "color": "#f4e8d0"
+  },
+  {
+   "id": "slime_gel",
+   "name": "史萊姆凝膠",
+   "group": "wild",
+   "how": "擊倒史萊姆（各島都有）",
+   "color": "#6ad08a"
+  },
+  {
+   "id": "rabbit_fur",
+   "name": "兔毛",
+   "group": "wild",
+   "how": "擊倒跳跳兔",
+   "color": "#e0c8a8"
+  },
+  {
+   "id": "dragon_scale",
+   "name": "龍鱗",
+   "group": "wild",
+   "how": "擊倒飛龍",
+   "color": "#c84a4a"
+  },
+  {
+   "id": "dragon_fang",
+   "name": "龍牙",
+   "group": "wild",
+   "how": "擊倒飛龍（偶爾）",
+   "color": "#f0ead8"
+  },
+  {
    "id": "plank",
    "name": "木板",
    "group": "crafted",
@@ -271,6 +306,20 @@
    "group": "crafted",
    "how": "合成",
    "color": "#9a6a40"
+  },
+  {
+   "id": "felt",
+   "name": "毛氈",
+   "group": "crafted",
+   "how": "合成：兔毛＋兔毛",
+   "color": "#c8a888"
+  },
+  {
+   "id": "dragon_plate",
+   "name": "龍鱗板",
+   "group": "crafted",
+   "how": "合成：龍鱗＋鋼材",
+   "color": "#a8404a"
   }
  ],
  "sources": {
@@ -455,6 +504,106 @@
     {
      "item": "frog_skin",
      "chance": 1
+    }
+   ],
+   "chicken": [
+    {
+     "item": "egg",
+     "chance": 1
+    },
+    {
+     "item": "feather",
+     "chance": 0.3
+    }
+   ],
+   "slime_grass": [
+    {
+     "item": "slime_gel",
+     "chance": 1
+    }
+   ],
+   "slime_forest": [
+    {
+     "item": "slime_gel",
+     "chance": 1
+    }
+   ],
+   "slime_beach": [
+    {
+     "item": "slime_gel",
+     "chance": 1
+    }
+   ],
+   "slime_snow": [
+    {
+     "item": "slime_gel",
+     "chance": 1
+    }
+   ],
+   "slime_night": [
+    {
+     "item": "slime_gel",
+     "chance": 1
+    }
+   ],
+   "slime_volcano": [
+    {
+     "item": "slime_gel",
+     "chance": 1
+    }
+   ],
+   "slime_machine": [
+    {
+     "item": "slime_gel",
+     "chance": 1
+    }
+   ],
+   "bunny": [
+    {
+     "item": "rabbit_fur",
+     "chance": 1
+    }
+   ],
+   "bunny_snow": [
+    {
+     "item": "rabbit_fur",
+     "chance": 1
+    }
+   ],
+   "bunny_machine": [
+    {
+     "item": "rabbit_fur",
+     "chance": 1
+    }
+   ],
+   "dragon_night": [
+    {
+     "item": "dragon_scale",
+     "chance": 1
+    },
+    {
+     "item": "dragon_fang",
+     "chance": 0.25
+    }
+   ],
+   "dragon_volcano": [
+    {
+     "item": "dragon_scale",
+     "chance": 1
+    },
+    {
+     "item": "dragon_fang",
+     "chance": 0.25
+    }
+   ],
+   "dragon_beach": [
+    {
+     "item": "dragon_scale",
+     "chance": 1
+    },
+    {
+     "item": "dragon_fang",
+     "chance": 0.25
     }
    ]
   }
@@ -705,6 +854,98 @@
    "out": {
     "kind": "furniture",
     "id": "pearl_statue"
+   }
+  },
+  {
+   "id": "felt",
+   "in": [
+    "rabbit_fur",
+    "rabbit_fur"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "felt"
+   }
+  },
+  {
+   "id": "dragon_plate",
+   "in": [
+    "dragon_scale",
+    "steel"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "dragon_plate"
+   }
+  },
+  {
+   "id": "rabbit_rug",
+   "in": [
+    "felt",
+    "cloth"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "rabbit_rug"
+   }
+  },
+  {
+   "id": "jelly_lamp",
+   "in": [
+    "slime_gel",
+    "glass_pane",
+    "glow_spore"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "jelly_lamp"
+   }
+  },
+  {
+   "id": "slime_sofa",
+   "in": [
+    "slime_gel",
+    "slime_gel",
+    "plank"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "slime_sofa"
+   }
+  },
+  {
+   "id": "egg_nest",
+   "in": [
+    "egg",
+    "bark",
+    "feather"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "egg_nest"
+   }
+  },
+  {
+   "id": "dragon_shield",
+   "in": [
+    "dragon_plate",
+    "iron_ingot"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "dragon_shield"
+   }
+  },
+  {
+   "id": "dragon_trophy",
+   "in": [
+    "dragon_fang",
+    "pearl",
+    "plank"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "dragon_trophy"
    }
   }
  ]

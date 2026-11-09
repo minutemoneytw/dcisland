@@ -198,6 +198,61 @@
    "solid": true,
    "sprite": "pearl_statue.png",
    "craft": true
+  },
+  {
+   "id": "rabbit_rug",
+   "name": "兔毛小地毯",
+   "w": 1,
+   "h": 1,
+   "solid": false,
+   "sprite": "rabbit_rug.png",
+   "craft": true
+  },
+  {
+   "id": "jelly_lamp",
+   "name": "果凍燈",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "jelly_lamp.png",
+   "craft": true
+  },
+  {
+   "id": "slime_sofa",
+   "name": "彈彈沙發",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "slime_sofa.png",
+   "use": "sit",
+   "craft": true
+  },
+  {
+   "id": "egg_nest",
+   "name": "鳥巢擺飾",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "egg_nest.png",
+   "craft": true
+  },
+  {
+   "id": "dragon_shield",
+   "name": "龍鱗盾牌",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "dragon_shield.png",
+   "craft": true
+  },
+  {
+   "id": "dragon_trophy",
+   "name": "龍牙獎盃",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "dragon_trophy.png",
+   "craft": true
   }
  ]
 }

@@ -1864,6 +1864,26 @@ def _mat_leather(c):
     for x in range(3, 13, 2): cv.set(x, 11, shade(c, .6))
     cv.outline(); return cv
 
+def _mat_egg(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 9, 4.5, 5.5, c); cv.ellipse(6.5, 6.5, 1.4, 2, shade(c, 1.12)); cv.outline(); return cv
+def _mat_gel(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 10, 6, 4, c); cv.ellipse(8, 7, 4, 3.5, c); cv.ellipse(6, 6, 1.5, 1.2, shade(c, 1.45))
+    cv.set(10, 10, shade(c, .75)); cv.outline(); return cv
+def _mat_fang(c):
+    cv = Canvas(16, 16)
+    for i in range(9): cv.rect(6 + i // 3, 3 + i, 9 - i // 4, 3 + i, c)
+    cv.vline(7, 4, 9, shade(c, 1.2)); cv.rect(5, 2, 10, 3, shade(c, .8)); cv.outline(); return cv
+def _mat_felt(c):
+    cv = Canvas(16, 16); cv.rect(2, 4, 13, 11, c); cv.rect(2, 4, 13, 5, shade(c, 1.15))
+    for x in range(3, 13, 3): cv.set(x, 8, shade(c, .85)); cv.set(x + 1, 10, shade(c, .85))
+    cv.outline(); return cv
+
+MATERIAL_ICONS.update(
+    egg=(_mat_egg, "#f4e8d0"), slime_gel=(_mat_gel, "#6ad08a"), rabbit_fur=(_mat_fluff, "#e0c8a8"),
+    dragon_scale=(_mat_scale, "#c84a4a"), dragon_fang=(_mat_fang, "#f0ead8"),
+    felt=(_mat_felt, "#c8a888"), dragon_plate=(_mat_bar, "#a8404a"),
+)
+
 MATERIAL_ICONS.update(
     petal=(_mat_petal, "#f08ab8"), bark=(_mat_bark, "#8a5e3a"), charcoal=(_mat_chunk, "#3a3a40"), sand=(_mat_sand, "#e8d49a"),
     sulfur=(_mat_crystal, "#e8e03a"), ice=(_mat_cube, "#bfe6f8"), moonstone=(_mat_chunk, "#b8c0f0"), iron_ore=(_mat_ore, "#d88a4a"),
@@ -1919,6 +1939,47 @@ def pearl_statue():
     cv.ellipse(8, 11, 5, 5, hx("#f4f0ec")); cv.ellipse(6, 9, 1.8, 1.8, hx("#ffffff")); cv.set(10, 13, hx("#c8c0e0"))
     cv.outline(hx("#6a6a88")); return cv
 
+def rabbit_rug():   # 兔毛小地毯
+    c = hx("#e0c8a8"); cv = Canvas(16, 12)
+    cv.ellipse(8, 6, 7, 4.5, c); cv.ellipse(8, 6, 5, 3, shade(c, 1.12))
+    for x in (3, 6, 9, 12): cv.set(x, 10, shade(c, .8))
+    cv.outline(); return cv
+
+def jelly_lamp():   # 果凍燈：玻璃罩裡一團發光的凝膠
+    cv = Canvas(16, 24)
+    cv.rect(4, 20, 11, 22, hx("#55525e")); cv.rect(5, 6, 10, 19, hx("#bfe8f0"))
+    cv.ellipse(7.5, 14, 2.5, 3.5, hx("#6ad08a")); cv.ellipse(8.5, 9.5, 1.6, 1.8, hx("#9af0b0")); cv.set(6, 8, hx("#ffffff"))
+    cv.rect(5, 4, 10, 5, hx("#55525e")); cv.outline(); return cv
+
+def slime_sofa():   # 彈彈沙發：史萊姆凝膠坐墊
+    g = hx("#6ad08a"); w = hx("#8a5a34"); cv = Canvas(16, 15)
+    cv.rect(2, 3, 13, 6, shade(g, .9)); cv.rect(2, 7, 13, 10, g); cv.ellipse(5, 8, 1.5, 1, shade(g, 1.3)); cv.ellipse(10, 8, 1.5, 1, shade(g, 1.3))
+    cv.rect(1, 6, 2, 11, w); cv.rect(13, 6, 14, 11, w); cv.rect(2, 11, 13, 12, shade(w, .8)); cv.rect(3, 13, 4, 13, shade(w, .6)); cv.rect(11, 13, 12, 13, shade(w, .6))
+    cv.outline(); return cv
+
+def egg_nest():   # 鳥巢擺飾：樹皮編的窩裡有兩顆蛋
+    b = hx("#8a5e3a"); cv = Canvas(16, 14)
+    cv.ellipse(8, 9, 6.5, 3.5, b); cv.hline(3, 12, 8, shade(b, 1.25)); cv.hline(4, 11, 11, shade(b, .75))
+    cv.ellipse(6.5, 6.5, 2, 2.5, hx("#f4e8d0")); cv.ellipse(9.5, 6.5, 2, 2.5, hx("#e8dcc0")); cv.set(6, 5, hx("#ffffff"))
+    cv.set(12, 6, hx("#e8c070")); cv.set(13, 5, hx("#e8c070"))   # 一根羽毛
+    cv.outline(); return cv
+
+def dragon_shield():   # 龍鱗盾牌擺飾（立在鐵架上）
+    r = hx("#a8404a"); cv = Canvas(16, 24)
+    cv.rect(7, 18, 8, 21, hx("#6a7480")); cv.rect(4, 21, 11, 22, hx("#55525e"))
+    cv.rect(3, 3, 12, 11, r); cv.rect(4, 12, 11, 14, r); cv.rect(6, 15, 9, 16, r); cv.set(7, 17, r); cv.set(8, 17, r)
+    for y in (5, 8, 11): cv.hline(4, 11, y, shade(r, .75))
+    cv.vline(7, 4, 15, hx("#d8b050")); cv.set(5, 4, shade(r, 1.4))
+    cv.outline(); return cv
+
+def dragon_trophy():   # 龍牙獎盃
+    cv = Canvas(16, 24); gold = hx("#e8b83a")
+    cv.rect(4, 20, 11, 22, hx("#8a5a34")); cv.rect(6, 17, 9, 19, gold); cv.rect(4, 13, 11, 16, gold); cv.rect(4, 13, 11, 13, shade(gold, 1.2))
+    f = hx("#f0ead8")
+    for i in range(10): cv.rect(6 + i // 4, 3 + i, 9 - i // 5, 3 + i, f)   # 立起來的龍牙
+    cv.vline(7, 4, 10, hx("#ffffff")); cv.set(8, 15, hx("#f4f0ec"))   # 一顆珍珠
+    cv.outline(); return cv
+
 FURN_MANIFEST = dict(
     scale=2, tile=TILE,
     items=[
@@ -1945,6 +2006,13 @@ FURN_MANIFEST = dict(
         dict(id="lava_lamp",      name="熔岩燈",   w=1, h=1, solid=True, sprite="lava_lamp.png", craft=True),
         dict(id="leather_chair",  name="皮椅",     w=1, h=1, solid=True, sprite="leather_chair.png", use="sit", craft=True),
         dict(id="pearl_statue",   name="珍珠擺飾", w=1, h=1, solid=True, sprite="pearl_statue.png", craft=True),
+        # 2026-11-09：用新怪物的掉落合成的家具
+        dict(id="rabbit_rug",     name="兔毛小地毯", w=1, h=1, solid=False, sprite="rabbit_rug.png", craft=True),
+        dict(id="jelly_lamp",     name="果凍燈",   w=1, h=1, solid=True, sprite="jelly_lamp.png", craft=True),
+        dict(id="slime_sofa",     name="彈彈沙發", w=1, h=1, solid=True, sprite="slime_sofa.png", use="sit", craft=True),
+        dict(id="egg_nest",       name="鳥巢擺飾", w=1, h=1, solid=True, sprite="egg_nest.png", craft=True),
+        dict(id="dragon_shield",  name="龍鱗盾牌", w=1, h=1, solid=True, sprite="dragon_shield.png", craft=True),
+        dict(id="dragon_trophy",  name="龍牙獎盃", w=1, h=1, solid=True, sprite="dragon_trophy.png", craft=True),
     ],
 )
 
@@ -2885,7 +2953,9 @@ def main():
                    ("shelf", shelf()), ("sign", sign()),
                    ("stool", stool()), ("glow_lamp", glow_lamp()), ("fish_tank", fish_tank()), ("steel_shelf", steel_shelf()),
                    ("flower_pot", flower_pot()), ("desk", desk()), ("ice_sculpture", ice_sculpture()), ("moon_lamp", moon_lamp()),
-                   ("iron_chair", iron_chair()), ("lava_lamp", lava_lamp()), ("leather_chair", leather_chair()), ("pearl_statue", pearl_statue())]:
+                   ("iron_chair", iron_chair()), ("lava_lamp", lava_lamp()), ("leather_chair", leather_chair()), ("pearl_statue", pearl_statue()),
+                   ("rabbit_rug", rabbit_rug()), ("jelly_lamp", jelly_lamp()), ("slime_sofa", slime_sofa()), ("egg_nest", egg_nest()),
+                   ("dragon_shield", dragon_shield()), ("dragon_trophy", dragon_trophy())]:
         save(cv, fn + ".png", "furniture")
     write_json(os.path.join(ASSETS, "furniture", "furniture.json"), FURN_MANIFEST)
     print("  furniture/furniture.json")
