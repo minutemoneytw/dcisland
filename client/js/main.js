@@ -5015,6 +5015,7 @@ function draw() {
   const x0 = Math.max(0, Math.floor(S.cam.x / CELL)), y0 = Math.max(0, Math.floor(S.cam.y / CELL));
   const x1 = Math.min(COLS - 1, Math.ceil((S.cam.x + canvas.width) / CELL));
   const y1 = Math.min(ROWS - 1, Math.ceil((S.cam.y + canvas.height) / CELL));
+  if (tMan.layout === 'room' && tMan.roomBox) { ctx.fillStyle = '#10131a'; ctx.fillRect(0, 0, canvas.width, canvas.height); }   // 室內房間：畫面不會每幀清空，房間外沒畫東西會殘留上一幀的畫面（像場景延伸、飄移），先塗黑
   ctx.save();
   ctx.translate(-S.cam.x, -S.cam.y);
   // 底：地面／岸邊／水（可動畫：每種磚這一幀先算好，整張地圖同步；stagger 的各格再錯開）
