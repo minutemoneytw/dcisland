@@ -4851,6 +4851,17 @@ function titleOwnerDown(mob) {
   if (!kills[mob]) { kills[mob] = 1; lsSet('dcisland.m0.titles', S.titleBook); }
   checkTitles(false);
 }
+// 擊倒島主紀錄跟著帳號（2026-11-09，使用者要求）：伺服器存 {有島主的地形: 時間}，這裡換成島主 id（terrain.json 的 owner）併進 titleBook.kills；
+// 本機有、伺服器沒有的（之前只記在這台電腦的）補傳上去
+function onNetKills(k) {
+  const kills = S.titleBook.kills ||= {}, srv = k && typeof k === 'object' ? k : {}, up = [];
+  let changed = false;
+  for (const t of Object.keys(srv)) { const mob = S.terrains[t]?.owner; if (mob && !kills[mob]) { kills[mob] = 1; changed = true; } }
+  for (const t of TERRAIN_IDS) { const mob = S.terrains[t]?.owner; if (mob && kills[mob] && !srv[t]) up.push(t); }
+  if (changed) lsSet('dcisland.m0.titles', S.titleBook);
+  if (up.length) S.net?.killSync?.(up);
+  checkTitles(true);   // 重算稱號與外觀解鎖（不跳提示：換電腦登入時一次補回來）
+}
 function setTitle(id) {
   S.me.title = id; saveAvatar();
   toast(id ? `稱號設定為 ${titleText(id)}` : '不顯示稱號', 1600);
@@ -4860,7 +4871,7 @@ function openTitles() { S.titleOpen = true; buildTitles(); $('titleBox').classLi
 function closeTitles() { S.titleOpen = false; $('titleBox').classList.add('hidden'); }
 function buildTitles() {
   const list = S.titlesDB?.titles || [], got = unlockedTitles();
-  $('titleHint').textContent = `已解鎖 ${got.size}／${list.length}` + (S.dexSource === 'server' ? '' : ' · 訪客／未連線：釣魚紀錄只存在這台電腦') + ' · 擊倒島主的紀錄存在這台電腦';
+  $('titleHint').textContent = `已解鎖 ${got.size}／${list.length}` + (S.dexSource === 'server' ? ' · 以 Discord 帳號保存' : ' · 訪客／未連線：釣魚與擊倒島主的紀錄只存在這台電腦');
   const box = $('titleList'); box.innerHTML = '';
   const row = (id, name, desc, ok, prog) => {
     const o = document.createElement('div');
@@ -6522,6 +6533,7 @@ async function boot() {
     onTpos: onNetTpos,         // 躲彈幕：其他玩家的位置
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
+    onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）
     onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); checkTitles(true); },   // 登入後伺服器送來的圖鑑（稱號跟著重算，不跳提示）
     onOpen: net => {
       if (S.tableOpen) closeTable(false);   // 重連：伺服器已當作我離開牌桌，畫面跟著關

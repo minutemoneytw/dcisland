@@ -116,6 +116,7 @@ export function connectNet(S, opts = {}) {
       case 'tpos': if (opts.onTpos) opts.onTpos(msg); break;   // 躲彈幕：其他玩家的位置（i＝座位編號）
       case 'tblinfo': if (opts.onTblInfo) opts.onTblInfo(msg.info); break;   // 和平島各桌的人數／狀態
       case 'craftdb': if (opts.onCraftDb) opts.onCraftDb(msg.craft); break;   // 合成解鎖紀錄（登入後由伺服器送來）
+      case 'kills': if (opts.onKills) opts.onKills(msg.kills); break;         // 擊倒島主紀錄（登入後、擊倒島主時由伺服器送來；{地形: 時間}）
       case 'dex': if (opts.onDex) opts.onDex(msg.dex); break;                     // 魚類圖鑑（登入後由伺服器送來）
       case 'enter': {
         // 進入（或切換到）某地形：每個人各自在自己的地形，只看得到同地形的人
@@ -245,6 +246,8 @@ export function connectNet(S, opts = {}) {
   net.tbl = m => net.connected && send({ t: 'tbl', ...m });
   net.craftUnlock = (k, id) => net.connected && send({ t: 'craft', k, id });
   net.craftSync = v => net.connected && send({ t: 'craftsync', mat: v.mat || [], furn: v.furn || [], rec: v.rec || [] });
+  // 擊倒島主紀錄：補傳本機有、伺服器沒有的（v＝地形 id 陣列）
+  net.killSync = v => net.connected && send({ t: 'killsync', v });
 
   return net;
 }

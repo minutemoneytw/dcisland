@@ -321,6 +321,9 @@ function sanitizeState(s, prev) {
 const CRAFT_KINDS = ["mat", "furn", "rec"];   // 合成解鎖紀錄的三類：素材／家具／配方（素材圖鑑＋配方筆記；2026-11-07）
 const CRAFT_MAX = 300;                    // 每類最多存幾筆（存檔安全閥；客戶端信任事件，不驗證 id 是否真的存在）
 const CRAFT_SYNC_MAX = 100;               // craftsync 每類一次最多收幾筆
+// 擊倒島主紀錄（2026-11-09，使用者要求跟其他成就一樣跟著帳號）：Registry 的 kills:<uid> = {地形: 時間}（有島主的地形，見 OWNER_TERRAINS）。
+// 島主倒下時 30 秒內的參與者由伺服器記帳；客戶端本機舊紀錄用 killsync 補傳（信任客戶端，同合成紀錄；使用者同意）。客戶端用 terrain.json 的 owner 換成島主 id
+const isOwnerTerrain = t => Object.prototype.hasOwnProperty.call(OWNER_TERRAINS, String(t));
 const XP_MAX = 200000;                  // XP 總量上限（防灌分的保險；等級無上限是設計，這裡只是存檔安全閥）
 const XP_MOB_CD_MS = 1000;              // 擊倒非主動怪的 XP 冷卻（每條連線；每來源每秒最多 1 次）
 const DEATH_CREDIT_MIN_MS = 25000;      // 同一條連線的「倒地記帳」（餵島主 XP／魚人升級）最短間隔：復活要 30 秒，正常玩法不會更密；擋住反覆切 state.dead 灌島主等級
@@ -1200,7 +1203,13 @@ export class Island {
     const amt = ownerKillXp(lv);
     for (const att of this.aggroCandidates(Date.now(), terrain)) {
       const ws = this.socketById(att.id, terrain);   // aggroCandidates 回 attachment：用連線編號找回 socket
-      if (ws) await this.grantXp(ws, amt, "owner");
+      if (!ws) continue;
+      await this.grantXp(ws, amt, "owner");
+      const a = ws.deserializeAttachment() || {};
+      if (a.user) {   // 擊倒島主紀錄跟著帳號（稱號／發光武器外觀換電腦也在）
+        const r = await this.registryCall("/kills", { uid: a.user.id, add: [terrain] });
+        if (r) try { ws.send(JSON.stringify({ t: "kills", kills: r.kills || {} })); } catch { /* 對方已斷線 */ }
+      }
     }
   }
   // 擊倒深海魚人：同上（牠的參與者名單用 lurkHits；獎勵按牠被擊倒當下的等級）
@@ -1516,6 +1525,8 @@ export class Island {
         if (cur.xpKnown) try { ws.send(JSON.stringify({ t: "xp", xp: cur.xp, d: 0, k: "init" })); } catch { /* 對方已斷線 */ }
         const cr = await this.registryCall("/craft", { uid: user.id, add: {} });   // 合成解鎖紀錄（素材圖鑑／配方筆記）
         if (cr) try { ws.send(JSON.stringify({ t: "craftdb", craft: cr.craft || {} })); } catch { /* 對方已斷線 */ }
+        const kr = await this.registryCall("/kills", { uid: user.id, add: [] });   // 擊倒島主紀錄
+        if (kr) try { ws.send(JSON.stringify({ t: "kills", kills: kr.kills || {} })); } catch { /* 對方已斷線 */ }
       }
     } else if (msg.t === "state") {
       const s = sanitizeState(msg.s && typeof msg.s === "object" ? msg.s : {}, att.state);
@@ -1560,6 +1571,12 @@ export class Island {
     } else if (msg.t === "craft") {   // 合成解鎖一筆（素材／家具／配方；客戶端自判，伺服器只存，不驗證 id 是否存在；訪客略過）
       if (att.user && CRAFT_KINDS.includes(msg.k) && ID_RE.test(String(msg.id))) {
         await this.registryCall("/craft", { uid: att.user.id, add: { [msg.k]: [String(msg.id)] } });
+      }
+    } else if (msg.t === "killsync") {   // 補傳本機有、伺服器沒有的擊倒島主紀錄（v＝地形 id 陣列）；回整份 kills
+      if (att.user) {
+        const add = (Array.isArray(msg.v) ? msg.v : []).slice(0, 16).map(String).filter(isOwnerTerrain);
+        const r = await this.registryCall("/kills", { uid: att.user.id, add });
+        if (r) try { ws.send(JSON.stringify({ t: "kills", kills: r.kills || {} })); } catch { /* 對方已斷線 */ }
       }
     } else if (msg.t === "craftsync") {   // 補傳本機有、伺服器沒有的解鎖（訪客時期的進度併進帳號）；回整份 craftdb
       if (att.user) {
@@ -2550,6 +2567,16 @@ export class Registry {
       }
       if (changed) await this.state.storage.put(ck, craft);
       return json({ craft });
+    }
+    if (url.pathname === "/kills") {   // 擊倒島主紀錄：add＝[地形…] 併進去（已有的不動），回整份；add 空＝只讀
+      const kk = "kills:" + uid, kills = (await this.state.storage.get(kk)) || {};
+      let changed = false;
+      for (const t of Array.isArray(body.add) ? body.add : []) {
+        if (!isOwnerTerrain(t) || kills[t]) continue;
+        kills[t] = Date.now(); changed = true;
+      }
+      if (changed) await this.state.storage.put(kk, kills);
+      return json({ kills });
     }
     // ---- 腳色等級 XP（與 Island 的 grantXp／hello／xpsync 搭配）----
     if (url.pathname === "/profile") {

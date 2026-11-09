@@ -379,6 +379,19 @@ def craft_add(uid, add):
                     m[i] = int(time.time() * 1000)
         return json.loads(json.dumps(c))
 
+KILLS_DB = {}             # Discord 使用者 ID -> {有島主的地形: 時間}（擊倒島主紀錄；對應 Worker 的 Registry `kills:<uid>`，只存記憶體）
+KILLS_LOCK = threading.Lock()
+
+def kills_add(uid, add):
+    """併進擊倒島主紀錄（只收 OWNER_TERRAINS 的地形，已有的不動），回整份（複本）。"""
+    with KILLS_LOCK:
+        k = KILLS_DB.setdefault(uid, {})
+        for t in (add if isinstance(add, list) else []):
+            t = str(t)
+            if t in OWNER_TERRAINS and t not in k:
+                k[t] = int(time.time() * 1000)
+        return dict(k)
+
 FISH_DEX = {}            # Discord 使用者 ID -> {地形: {魚id: {max, n, first}}}（對應 Worker 的 Registry）
 FISH_DEX_LOCK = threading.Lock()
 
@@ -2148,6 +2161,10 @@ class Room:
             with self.lock:
                 for ac, cc in self.aggro_candidates(time.time() * 1000, terrain):
                     xp_grant(cc, owner_kill_xp(award_lv), "owner")
+                    if cc.get("user"):   # 擊倒島主紀錄跟著帳號
+                        full = kills_add(cc["user"]["id"], [terrain])
+                        with cc.get("send") or threading.Lock():
+                            ws_send(cc["sock"], json.dumps({"t": "kills", "kills": full}))
         elif post_cycle is not None:
             self._schedule_wander_tick(post_cycle, self.dragon_state(terrain)["wander_gen"], terrain)
         return outs
@@ -2899,6 +2916,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                     dex = json.loads(json.dumps(FISH_DEX.get(c["user"]["id"], {})))
                                 ws_send(sock, json.dumps({"t": "dex", "dex": dex}))
                                 ws_send(sock, json.dumps({"t": "craftdb", "craft": craft_add(c["user"]["id"], {})}))   # 合成解鎖紀錄
+                                ws_send(sock, json.dumps({"t": "kills", "kills": kills_add(c["user"]["id"], [])}))   # 擊倒島主紀錄
                                 if xp_known:   # XP 只在「伺服器有紀錄」時送 init；沒有就等 xpsync 上繳
                                     ws_send(sock, json.dumps({"t": "xp", "xp": c.get("xp", 0), "d": 0, "k": "init"}))
                 elif t == "state":
@@ -2949,6 +2967,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     c = room.clients.get(cid)
                     if c and c.get("user") and msg.get("k") in CRAFT_KINDS:
                         craft_add(c["user"]["id"], {msg["k"]: [msg.get("id")]})
+                elif t == "killsync":   # 補傳本機有、伺服器沒有的擊倒島主紀錄（v＝地形 id 陣列）；回整份 kills
+                    c = room.clients.get(cid)
+                    if c and c.get("user"):
+                        full = kills_add(c["user"]["id"], (msg.get("v") if isinstance(msg.get("v"), list) else [])[:16])
+                        with c.get("send") or threading.Lock():
+                            ws_send(sock, json.dumps({"t": "kills", "kills": full}))
                 elif t == "craftsync":   # 補傳本機有、伺服器沒有的解鎖（訪客時期的進度併進帳號）；回整份 craftdb
                     c = room.clients.get(cid)
                     if c and c.get("user"):
