@@ -596,6 +596,9 @@ function hitMob(p, a, ranged, force) {
     } else if (od.lurker) {   // 釣上來的怪物：不逃跑；單機記下最後被打的時刻（30 秒沒人打就消失）
       if (!a.proxy) a.lastHitAt = S.t;
       a.startle = 0;
+    } else if (od.retaliate) {   // 會反擊的野怪（飛龍）：被打不逃，鎖定攻擊者（純客戶端；打野怪的只有本地玩家）
+      a.startle = 0;
+      a.aggroT = p; a.lastHitAt = S.t; a.clawAt = S.t + 1.5;
     } else {
       a.target = fleeTarget(a, od, p.x, p.y, 220);
     }
@@ -2273,6 +2276,32 @@ function onNetLurker(m) {
   }
 }
 
+// ---- 會反擊的野怪（飛龍）：被打鎖定攻擊者、追殺＋爪擊；30 秒沒再被打就放棄，回去一般漫遊 ----
+// 純客戶端（野外動物刻意不同步）：打野怪的只有本地玩家，所以爪擊只咬本地玩家、受害者自判（走 playerDamage：坦克減半照算）
+const RETAL_CHASE = 150, RETAL_DROPOUT = 30;   // 追殺速度同魚人：走路逃不掉、跑步甩得掉；30 秒同島主脫離規則
+function retaliateStep(a, dt, def) {
+  const t = a.aggroT;
+  if (!t || t.dead || S.t - (a.lastHitAt ?? -1e9) > RETAL_DROPOUT) { a.aggroT = null; a.wleg = null; return false; }
+  const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy);
+  const rng = 30 + 6 * ((def.big || 1) - 1);   // 貼著判定圈抓：與 hitRadius 同式
+  a.face4 = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');   // 方向網格：看向目標
+  if (d <= rng) {
+    a.wleg = null; a.z = 0;
+    if (dx) a.dir = Math.sign(dx);
+    if (S.t >= (a.clawAt ?? 0)) {
+      a.clawAt = S.t + 1.5;
+      S.floaters.push({ x: a.x + dx * .45, y: a.y - 20 + dy * .45, ang: Math.atan2(dy, dx), slash: true, life: .45 });
+      playerDamage(t, def.atk || 1, def.name);
+      S.floaters.push({ x: t.x, y: t.y - 24, ring: true, life: .35 });
+    }
+    return true;
+  }
+  if (a.wleg && Date.now() - a.wleg.t0ms < 600) { stepOwnerWalk(a, dt); return true; }   // 每 0.6 秒重新瞄準
+  a.wleg = { fx: a.x, fy: a.y, tx: t.x, ty: t.y, tms: Math.max(80, Math.round(d / RETAL_CHASE * 1000)), t0ms: Date.now() };
+  stepOwnerWalk(a, dt);
+  return true;
+}
+
 function stepMob(a, dt) {
   const def = mobDef(a.id);
   if (a.lurker) { stepLurker(a, dt, def); return; }   // 釣上來的敵對怪物
@@ -2294,9 +2323,11 @@ function stepMob(a, dt) {
     else a.idle = 2;
     return;
   }
+  // 會反擊的野怪（飛龍）：被打後追咬；追殺腿成立時不走下面的一般漫遊
+  if (def.retaliate && retaliateStep(a, dt, def)) return;
   // 只有「附近有人揮擊」才會被嚇到（自己或同島的人）；單純走過去、站在旁邊不會嚇跑牠
-  // 島主大隻又沉穩：近距離揮擊也不會嚇到（`owner: true`）
-  if (!def.owner && S.t - (a.scaredAt ?? -9) > .4) {
+  // 島主大隻又沉穩：近距離揮擊也不會嚇到（`owner: true`）；會反擊的野怪（`retaliate`）也不嚇跑——被揮到才反咬
+  if (!def.owner && !def.retaliate && S.t - (a.scaredAt ?? -9) > .4) {
     const src = [S.players[0], ...S.remotes.values()]
       .find(q => q.swing > 0 && Math.hypot(q.x - a.x, q.y - a.y) < def.flee);
     if (src) {

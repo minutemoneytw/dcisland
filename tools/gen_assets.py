@@ -2088,7 +2088,8 @@ MOB_MANIFEST = dict(
           for bid, tint in [("bunny", None), ("bunny_snow", "#f2f6ff"), ("bunny_machine", "#9aa4b0")]],
         # 飛龍：夜光島（黑）、熔岩島（原色紅）、沙灘島（沙）。四列都是飛行視角＝上飛／朝右／下飛／朝左（方向網格）；
         # swim＝會飛所以能過海；big=5＝判定圈 34+6*(5-1)=58（大隻）；shadow 依體型放大、貼在正下方
-        *[dict(id=did, name="飛龍", fixed=3, swim=True, big=5, speed=46, flee=150, hp=4,
+        # retaliate＝會反擊的野怪：被打不逃、鎖定攻擊者追咬；血量／攻擊力由下面的 post-pass 依該地形島主 1/10 算
+        *[dict(id=did, name="飛龍", fixed=3, swim=True, big=5, speed=46, flee=150, retaliate=True,
                footDy=0,   # 會飛：不套用底部留白對齊（讓牠浮在影子之上，不貼地）
                anim=dict(sheet="external/img2pixel/dragon_sheet.png", frames=3, rows=4, fw=191, fh=161,
                          rowDir=["up", "right", "down", "left"], fps=7, scale=0.9),
@@ -2239,6 +2240,19 @@ OWNER_BY_TERRAIN = {
     "volcano": "ultima_weapon",
     "machine": "alexander",
 }
+
+# 會反擊的野怪（飛龍）：血量／攻擊力＝該地形島主的 1/10（最低 1，使用者定 2026-11-09）。
+# 島主爪擊每下的標準傷害是兩份伺服器的 D_CLAW_DMG＝2（波動砲 4、命令強制倒地另計），除以 10 後落到最低值 1；
+# 沒有島主的地形（沙灘島）用黃金肥龍當基準（目前各島主血量都是 200，結果都是血 20／攻擊 1）。
+OWNER_CLAW_DMG = 2
+_DRAGON_TERRAIN = {"dragon_night": "night", "dragon_volcano": "volcano", "dragon_beach": "beach"}
+for _m in MOB_MANIFEST["mobs"]:
+    _tid = _DRAGON_TERRAIN.get(_m.get("id"))
+    if not _tid:
+        continue
+    _om = next(_x for _x in MOB_MANIFEST["mobs"] if _x["id"] == OWNER_BY_TERRAIN.get(_tid, "gold_dragon"))
+    _m["hp"] = max(1, _om["hp"] // 10)
+    _m["atk"] = max(1, OWNER_CLAW_DMG // 10)
 
 # 各地形出現的小動物（id=權重）
 MOBS_BY_TERRAIN = {
