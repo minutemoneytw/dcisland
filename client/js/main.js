@@ -2592,7 +2592,7 @@ function atkAnimNow(p) {
   if (p.atkT0 == null || S.t - p.atkT0 >= ATK_ANIM || p.fish) return null;
   return { kind: atkKind(p), q: (S.t - p.atkT0) / ATK_ANIM };
 }
-// 釣魚的釣竿動作（LPC tool_rod 13 格）：拋竿（剛進入等魚的前 ROD_CAST 秒）2→5、等魚 6～8 輕晃、上鉤 8／9 抖竿、拉竿 10～12 收線。
+// 釣魚的釣竿動作（LPC tool_rod 13 格）：拋竿（剛進入等魚的前 ROD_CAST 秒）2→5、等魚 6～8 輕晃、上鉤 8／9 抖竿、拉竿停在 6（持竿）。
 // 只有拿著 LPC 釣竿（lpc.fishOnly）時才播；回第幾格或 null
 const ROD_CAST = .5;
 const ROD_FLY = [.25, .65];   // 拋竿動畫：第幾秒開始甩出浮標（釣竿第 4 格往前揮）、第幾秒落水
@@ -2604,7 +2604,7 @@ function rodFrameNow(p) {
   if (f.ph === 'wait' && since < ROD_CAST) return 2 + Math.min(3, Math.floor(since / ROD_CAST * 4));
   if (f.ph === 'wait') return [6, 7, 8, 7][Math.floor(S.t * 2.5) % 4];
   if (f.ph === 'bite') return [8, 9][Math.floor(S.t * 10) % 2];
-  return [10, 11, 12][Math.floor(S.t * 8) % 3];   // reel
+  return 6;   // reel：釣竿維持持竿姿勢不動，只把浮標拉回來（2026-11-09 使用者要求：不要甩來甩去）
 }
 function charFrame(p) {
   const F = S.avatar.frames, st = F.states;
@@ -3924,9 +3924,9 @@ function drawLineAndBobber(p, wi, f, tip) {
     const d = Math.hypot(f.x - tx, f.y - ty), h = 18 + d * .25;   // 拋物線高度：拋越遠飛越高
     bx = tx + (f.x - tx) * e; by = ty + (f.y - ty) * e - Math.sin(Math.PI * q) * h;
     sag = 2 + 10 * q; flying = true;
-  } else if (f.ph === 'reel') {   // 拉竿：浮標一路收回竿尖
-    const q = Math.min(1, since / FISH_REEL), e = q * q;
-    bx = f.x + (tx - f.x) * e * .9; by = f.y + (ty + 7 - f.y) * e * .9 - Math.sin(Math.PI * q) * 10;
+  } else if (f.ph === 'reel') {   // 拉竿：浮標沿水面直直拉向人（跟原本一樣，不往上甩）
+    const q = Math.min(1, since / FISH_REEL);
+    bx += (p.x - bx) * q * .6; by += (p.y - 10 - by) * q * .6;
   }
   else if (f.ph === 'wait') by += Math.sin(S.t * 3) * 1.5;
   else by += 3;
