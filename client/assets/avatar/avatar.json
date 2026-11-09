@@ -3835,6 +3835,22 @@
     "#ffffff",
     "#00cfdf"
    ]
+  },
+  {
+   "id": "war_mail",
+   "name": "戰士鎖子甲",
+   "sheet": "char_top_war_m.png",
+   "sheetF": "char_top_war_f.png",
+   "dye": [
+    "#867e7f",
+    "#726b7e",
+    "#c4b59f",
+    "#4d4a5d",
+    "#ffffff",
+    "#5c3b26",
+    "#ccc1ba",
+    "#978275"
+   ]
   }
  ],
  "bottoms": [
@@ -3882,6 +3898,16 @@
     "#34508c",
     "#2a4171",
     "#4b6499"
+   ]
+  },
+  {
+   "id": "war_pants",
+   "name": "戰士長褲",
+   "sheet": "char_bottom_war_m.png",
+   "sheetF": "char_bottom_war_f.png",
+   "dye": [
+    "#3b2f2a",
+    "#544a45"
    ]
   }
  ],
@@ -3933,6 +3959,17 @@
     "#263b67",
     "#7689b1",
     "#a1aeca"
+   ]
+  },
+  {
+   "id": "war_boots",
+   "name": "戰士長靴",
+   "sheet": "char_shoes_war_m.png",
+   "sheetF": "char_shoes_war_f.png",
+   "dye": [
+    "#4a3222",
+    "#756256",
+    "#918379"
    ]
   }
  ],
@@ -3999,6 +4036,20 @@
     "#2d4579",
     "#8a9abd",
     "#fcfcfd"
+   ]
+  },
+  {
+   "id": "barbarian",
+   "name": "蠻族頭盔",
+   "sheet": "char_hat_barbarian.png",
+   "dye": [
+    "#726b7e",
+    "#867e7f",
+    "#62351c",
+    "#744b30",
+    "#c4b59f",
+    "#4d4a5d",
+    "#ffffff"
    ]
   }
  ],

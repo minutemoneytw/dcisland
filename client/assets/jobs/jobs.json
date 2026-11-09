@@ -5,7 +5,7 @@
   { "id": "knight", "atkAnim": "halfslash", "name": "騎士", "role": "tank", "weapon": "sword",
     "gear": { "hat": "armet", "top": "plate", "bottom": "plate_legs", "shoe": "plate_boots" }, "skills": ["guard", "kshield"] },
   { "id": "warrior", "atkAnim": "slash", "name": "戰士", "role": "tank", "weapon": "waraxe",
-    "gear": { "hat": "nohat", "top": "tshirt", "bottom": "pants", "shoe": "shoes" }, "skills": ["vamp", "wshield"] },
+    "gear": { "hat": "barbarian", "top": "war_mail", "bottom": "war_pants", "shoe": "war_boots" }, "skills": ["vamp", "wshield"] },
   { "id": "whitemage", "atkAnim": "thrust", "name": "白魔法師", "role": "healer", "weapon": "staff",
     "gear": { "hat": "hood", "top": "whm_robe", "bottom": "pants", "shoe": "shoes" }, "skills": ["sheal", "wings"] },
   { "id": "sage", "atkAnim": "spellcast", "name": "賢者", "role": "healer", "weapon": "tome",
