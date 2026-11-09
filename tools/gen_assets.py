@@ -648,6 +648,7 @@ LPC_CLOTHES = [                  # 基本服裝與職業裝備（LPC 原檔）�
     ("weapon_arming_bg", "weapon_arming_bg.png"), ("weapon_arming_fg", "weapon_arming_fg.png"),
     ("weapon_loop_bg", "weapon_loop_bg.png"), ("weapon_loop_fg", "weapon_loop_fg.png"),
     ("weapon_s_bg", "weapon_s_bg.png"), ("weapon_s_fg", "weapon_s_fg.png"),
+    ("weapon_waraxe_bg", "weapon_waraxe_bg.png"), ("weapon_waraxe_fg", "weapon_waraxe_fg.png"),   # 戰士：LPC 戰斧
 ]
 LPC_WEAPON_OVER = [             # LPC 武器的超大格動作 sheet（128×128；直接複製）：(遊戲檔名, external 底下的檔名)
     ("weapon_arming_slash_bg", "weapon_arming_slash_bg.png"), ("weapon_arming_slash_fg", "weapon_arming_slash_fg.png"),
@@ -658,6 +659,8 @@ LPC_WEAPON_OVER = [             # LPC 武器的超大格動作 sheet（128×128�
     # 龍槍：走路（128×128）＋突刺（192×192）
     ("weapon_dragonspear_walk_bg", "weapon_dragonspear_walk_bg.png"), ("weapon_dragonspear_walk_fg", "weapon_dragonspear_walk_fg.png"),
     ("weapon_dragonspear_thrust_bg", "weapon_dragonspear_thrust_bg.png"), ("weapon_dragonspear_thrust_fg", "weapon_dragonspear_thrust_fg.png"),
+    # 戰斧：揮砍（192×192）
+    ("weapon_waraxe_slash_bg", "weapon_waraxe_slash_bg.png"), ("weapon_waraxe_slash_fg", "weapon_waraxe_slash_fg.png"),
     # 反曲弓：走路（128×128）
     ("weapon_recurve_walk_bg", "weapon_recurve_walk_bg.png"), ("weapon_recurve_walk_fg", "weapon_recurve_walk_fg.png"),
 ]
@@ -2801,7 +2804,9 @@ def main():
                  lpc=dict(bg="char_weapon_arming_bg.png", fg="char_weapon_arming_fg.png",
                           over=dict(slash=dict(size=128, bg="char_weapon_arming_slash_bg.png", fg="char_weapon_arming_slash_fg.png"),
                                     halfslash=dict(size=128, bg="char_weapon_arming_halfslash_bg.png", fg="char_weapon_arming_halfslash_fg.png")))),
-            dict(id="waraxe", name="戰斧", type="axe", sprite="weapon_waraxe.png", carry="back", scale=2),
+            dict(id="waraxe", name="戰斧", type="axe", sprite="weapon_waraxe.png", carry="back", scale=2,
+                 lpc=dict(bg="char_weapon_waraxe_bg.png", fg="char_weapon_waraxe_fg.png",   # LPC 戰斧（waraxe）：走路一般格、揮砍 192 超大格
+                          over=dict(slash=dict(size=192, bg="char_weapon_waraxe_slash_bg.png", fg="char_weapon_waraxe_slash_fg.png")))),
             dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", scale=2, ranged=dict(range=320, cast=1.2, dmg=2),   # LPC 環頭杖（loop）；LPC 的杖只有突刺，攻擊／詠唱都播突刺
                  lpc=dict(bg="char_weapon_loop_bg.png", fg="char_weapon_loop_fg.png",
                           over=dict(thrust=dict(size=192, bg="char_weapon_loop_thrust_bg.png", fg="char_weapon_loop_thrust_fg.png")))),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）

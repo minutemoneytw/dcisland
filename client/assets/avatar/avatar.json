@@ -4077,7 +4077,18 @@
    "type": "axe",
    "sprite": "weapon_waraxe.png",
    "carry": "back",
-   "scale": 2
+   "scale": 2,
+   "lpc": {
+    "bg": "char_weapon_waraxe_bg.png",
+    "fg": "char_weapon_waraxe_fg.png",
+    "over": {
+     "slash": {
+      "size": 192,
+      "bg": "char_weapon_waraxe_slash_bg.png",
+      "fg": "char_weapon_waraxe_slash_fg.png"
+     }
+    }
+   }
   },
   {
    "id": "staff",
