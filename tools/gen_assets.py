@@ -2070,6 +2070,7 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/bunny_sheet.png", frames=4, rows=2, row0=0, fw=48, fh=32, what="跳跳兔的左／右各 4 幀（沙灘／雪島白／機械島灰；sheet 第 3 列 2 幀沒用到）"),
     dict(sheet="external/img2pixel/dragon_sheet.png", frames=3, rows=4, fw=191, fh=161, what="飛龍的 4 方向（上飛／朝右／下飛／朝左）× 3 幀（各島不同色靠 tint）"),
     dict(sheet="external/img2pixel/goblin_sheet.png", frames=8, rows=2, fw=32, fh=32, what="哥布林的走路 2 方向（朝右／朝左）× 8 幀（草島原色綠／森林島棕色靠 tint）"),
+    dict(sheet="external/img2pixel/zombie_sheet.png", frames=9, rows=4, fw=64, fh=64, what="殭屍（LPC）的 4 方向（上／左／下／右）× 9 幀走路（夜光原色／雪島白／機械島灰靠 tint）"),
     dict(sheet="external/img2pixel/bahamut_fly_sheet.png", frames=6, fw=88, fh=59, what="黃金肥龍的飛行 6 幀（草島島主）"),
     dict(sheet="external/img2pixel/snake_queen_sheet.png", frames=4, fw=88, fh=85, what="笨蛋蛇女的 4 幀（夜光島島主）"),
     dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fw=88, fh=74, what="蓋老師（究極神兵）的走路 6 幀（熔岩島島主）"),
@@ -2135,6 +2136,16 @@ MOB_MANIFEST = dict(
                **({"tint": tint} if tint else {}),
                line="「哥布林」敲了敲手裡的長矛，警惕地看著你。")
           for gid, tint in [("goblin_grass", None), ("goblin_forest", "#8a5a33")]],
+        # 殭屍（LPC；反擊型）：夜光島（原色）、雪島（白）、機械島（灰）；走路 4 方向 × 9 幀；數量走隨機池（不固定）
+        # 反擊型但三個比例各給各的（使用者定）：血量 1/5（ownerFrac=5）、攻擊力 1/10（atkFrac=10）、經驗值 1/8（xpFrac=8），都最低 1
+        # noBounce：不套用「走動時上下彈」（LPC 本身有走路動畫，再彈會腳離地＝看起來浮起來；2026-11-09 使用者回報）
+        # 素材來源 OpenGameArt「LPC zombie」（CC-BY-SA 3.0，BenCreating）；畫面約 47px 高（scale 1：人物約 46px，成人體型）
+        *[dict(id=zid, name="殭屍", speed=20, flee=100, retaliate=True, ownerFrac=5, atkFrac=10, xpFrac=8, noBounce=True,
+               anim=dict(sheet="external/img2pixel/zombie_sheet.png", frames=9, rows=4, row0=0, fw=64, fh=64,
+                         rowDir=["up", "left", "down", "right"], fps=5, scale=1.0),
+               **({"tint": tint} if tint else {}),
+               line="「殭屍」拖著沉重的腳步，發出低沉的呻吟。")
+          for zid, tint in [("zombie_night", None), ("zombie_snow", "#dfe9ff"), ("zombie_machine", "#9aa4b0")]],
         # 飛龍：夜光島（黑）、熔岩島（原色紅）、沙灘島（沙）。四列都是飛行視角＝上飛／朝右／下飛／朝左（方向網格）；
         # swim＝會飛所以能過海；big=5＝判定圈 34+6*(5-1)=58（大隻）；shadow 依體型放大、貼在正下方
         # retaliate＝會反擊的野怪：被打不逃、鎖定攻擊者追咬；血量／攻擊力由下面的 post-pass 依該地形島主 1/10 算
@@ -2304,18 +2315,18 @@ for _m in MOB_MANIFEST["mobs"]:
     _om = next(_x for _x in MOB_MANIFEST["mobs"] if _x["id"] == OWNER_BY_TERRAIN.get(_tid if _tid in _TERRAIN_IDS else "", "gold_dragon"))
     _frac = max(1, int(_m["ownerFrac"]))
     _m["hp"] = max(1, _om["hp"] // _frac)
-    if _m.get("retaliate"):
-        _m["atk"] = max(1, OWNER_CLAW_DMG // _frac)
+    if _m.get("retaliate"):   # 攻擊力可另給 atkFrac（例如殭屍：血 1/5、攻擊 1/10）；沒給就跟血量同一個分母
+        _m["atk"] = max(1, OWNER_CLAW_DMG // max(1, int(_m.get("atkFrac", _frac))))
 
 # 各地形出現的小動物（id=權重）
 MOBS_BY_TERRAIN = {
     "grass":   [("sheep", 2), ("bird", 1), ("frog", 1), ("chicken", 2), ("slime_grass", 1), ("goblin_grass", 2)],
     "beach":   [("bird", 2), ("frog", 1), ("bunny", 2), ("slime_beach", 1), ("dragon_beach", 1)],
-    "snow":    [("sheep", 2), ("bird", 1), ("bunny_snow", 2), ("slime_snow", 1)],
-    "night":   [("frog", 2), ("sheep", 1), ("slime_night", 1), ("dragon_night", 1)],
+    "snow":    [("sheep", 2), ("bird", 1), ("bunny_snow", 2), ("slime_snow", 1), ("zombie_snow", 2)],
+    "night":   [("frog", 2), ("sheep", 1), ("slime_night", 1), ("dragon_night", 1), ("zombie_night", 2)],
     "forest":  [("sheep", 2), ("bird", 2), ("chicken", 2), ("slime_forest", 1), ("goblin_forest", 2)],
     "volcano": [("frog", 1), ("bird", 1), ("slime_volcano", 1), ("dragon_volcano", 1)],
-    "machine": [("bunny_machine", 2), ("slime_machine", 1)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）
+    "machine": [("bunny_machine", 2), ("slime_machine", 1), ("zombie_machine", 2)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）
 }
 
 # ---------------- 地板（裝飾模式的地板層，16×16 無縫磚，畫在地面與家具之間）----------------

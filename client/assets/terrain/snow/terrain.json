@@ -36,6 +36,10 @@
   {
    "id": "slime_snow",
    "weight": 1
+  },
+  {
+   "id": "zombie_snow",
+   "weight": 2
   }
  ],
  "uiColor": "#ecf2f8"

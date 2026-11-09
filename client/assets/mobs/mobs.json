@@ -381,6 +381,101 @@
    "atk": 1
   },
   {
+   "id": "zombie_night",
+   "name": "殭屍",
+   "speed": 20,
+   "flee": 100,
+   "retaliate": true,
+   "ownerFrac": 5,
+   "atkFrac": 10,
+   "xpFrac": 8,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/zombie_sheet.png",
+    "frames": 9,
+    "rows": 4,
+    "row0": 0,
+    "fw": 64,
+    "fh": 64,
+    "rowDir": [
+     "up",
+     "left",
+     "down",
+     "right"
+    ],
+    "fps": 5,
+    "scale": 1.0
+   },
+   "line": "「殭屍」拖著沉重的腳步，發出低沉的呻吟。",
+   "footDy": 3,
+   "hp": 40,
+   "atk": 1
+  },
+  {
+   "id": "zombie_snow",
+   "name": "殭屍",
+   "speed": 20,
+   "flee": 100,
+   "retaliate": true,
+   "ownerFrac": 5,
+   "atkFrac": 10,
+   "xpFrac": 8,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/zombie_sheet.png",
+    "frames": 9,
+    "rows": 4,
+    "row0": 0,
+    "fw": 64,
+    "fh": 64,
+    "rowDir": [
+     "up",
+     "left",
+     "down",
+     "right"
+    ],
+    "fps": 5,
+    "scale": 1.0
+   },
+   "tint": "#dfe9ff",
+   "line": "「殭屍」拖著沉重的腳步，發出低沉的呻吟。",
+   "footDy": 3,
+   "hp": 40,
+   "atk": 1
+  },
+  {
+   "id": "zombie_machine",
+   "name": "殭屍",
+   "speed": 20,
+   "flee": 100,
+   "retaliate": true,
+   "ownerFrac": 5,
+   "atkFrac": 10,
+   "xpFrac": 8,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/zombie_sheet.png",
+    "frames": 9,
+    "rows": 4,
+    "row0": 0,
+    "fw": 64,
+    "fh": 64,
+    "rowDir": [
+     "up",
+     "left",
+     "down",
+     "right"
+    ],
+    "fps": 5,
+    "scale": 1.0
+   },
+   "tint": "#9aa4b0",
+   "line": "「殭屍」拖著沉重的腳步，發出低沉的呻吟。",
+   "footDy": 3,
+   "hp": 40,
+   "atk": 1
+  },
+  {
    "id": "dragon_night",
    "name": "飛龍",
    "fixed": 3,

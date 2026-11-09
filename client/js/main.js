@@ -789,10 +789,10 @@ const ownerDmgBonus = lv => Math.floor((Math.max(1, lv) - 1) / 2);   // 島主�
 const lurkDmgBonus = lv => Math.floor((Math.max(1, lv) - 1) / 3);    // 魚人爪擊每 3 級 +1
 const ownerKillXp = lv => 20 + 5 * lv;   // 擊倒島主的 XP 獎勵（30 秒內的參與者）
 const lurkKillXp = lv => 4 + 2 * lv;     // 擊倒魚人的 XP 獎勵（登入者由伺服器在 dead 時直給；訪客在本機記）
-const mobKillXp = def => {   // 擊倒野外動物的 XP（2026-11-09 使用者定）：一般野怪 +1；反擊型野怪＝本島島主經驗值的 1/N、最低 1（N＝def.ownerFrac：飛龍 10、哥布林 12）
+const mobKillXp = def => {   // 擊倒野外動物的 XP（2026-11-09 使用者定）：一般野怪 +1；反擊型野怪＝本島島主經驗值的 1/N、最低 1（N＝def.xpFrac，沒給就用 def.ownerFrac：飛龍 10、哥布林 12、殭屍 8）
   if (!def.retaliate) return 1;
   const ol = S.mobs.find(v => !v.dead && mobDef(v.id)?.owner)?.lvl ?? 1;   // 本島島主現在的等級（島主升級就跟著漲）；沒有島主的地形當 Lv 1
-  return Math.max(1, Math.floor(ownerKillXp(ol) / (def.ownerFrac || 10)));
+  return Math.max(1, Math.floor(ownerKillXp(ol) / (def.xpFrac || def.ownerFrac || 10)));
 };
 function saveProfile() { lsSet('dcisland.m0.profile', S.profile); }
 const xpServer = () => !!(S.net?.connected && S.net.uid);   // 登入＆連線：XP 由伺服器記帳（2026-11-07 第 2 步）；訪客／沒連線照舊本機記
@@ -2382,10 +2382,14 @@ function stepMob(a, dt) {
   if (mobCanStand(def, nx, a.y)) a.x = nx;
   if (mobCanStand(def, a.x, ny)) a.y = ny;
   if (Math.hypot(a.x - ox, a.y - oy) < sp * .2) { a.target = null; a.idle = .5; a.z = 0; return; }   // 被海擋住：停下，不要一直頂
-  // 贊跳感：走動時上下彈
-  const rate = a.startle ? 16 : 8;
-  a.bounce += dt * rate;
-  a.z = Math.abs(Math.sin(a.bounce * Math.PI)) * 4;
+  // 彈跳感：走動時上下彈（給沒有走路動畫的小動物用的「跳跳」感覺）
+  // mobs.json 標 noBounce: true 的怪不彈（例如殭屍：LPC 本身就有走路動畫，再彈會變成跳兩次、腳離地＝看起來浮起來）
+  if (def.noBounce) a.z = 0;
+  else {
+    const rate = a.startle ? 16 : 8;
+    a.bounce += dt * rate;
+    a.z = Math.abs(Math.sin(a.bounce * Math.PI)) * 4;
+  }
 }
 
 function rebuildOcc() {

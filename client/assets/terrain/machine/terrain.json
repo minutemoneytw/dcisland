@@ -24,6 +24,10 @@
   {
    "id": "slime_machine",
    "weight": 1
+  },
+  {
+   "id": "zombie_machine",
+   "weight": 2
   }
  ],
  "uiColor": "#8a94a4",
