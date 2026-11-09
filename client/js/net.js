@@ -155,7 +155,7 @@ export function connectNet(S, opts = {}) {
       case 'floor': if (opts.onFloor) opts.onFloor(msg.items || []); break;
       case 'event': {
         const r = S.remotes.get(msg.id);
-        if (r && msg.kind === 'attack') { r.swing = 0.22; r.atkT0 = S.t; }   // atkT0：身體攻擊動作的起點（main.js 的 atkAnimNow）
+        if (r && msg.kind === 'attack') { r.swing = 0.22; r.atkT0 = S.t; if (r.weapon === 'hands' && opts.onPunch) opts.onPunch(r); }   // 空手出拳：各畫面自己算打到誰（純特效）   // atkT0：身體攻擊動作的起點（main.js 的 atkAnimNow）
         else if (r && msg.kind === 'heal' && opts.onHeal) opts.onHeal(msg.id);   // 補師的群補：每個收到的人自判自己是否被補到
         else if (r && typeof msg.kind === 'string' && opts.onSkillEvent) opts.onSkillEvent(msg.kind, r);   // 職業技能（群盾、忍術、縮地…）：各人自判／演出
         break;

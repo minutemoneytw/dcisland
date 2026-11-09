@@ -420,6 +420,17 @@ function stepDrops(dt) {
   }
 }
 
+// 空手揍人的特效（純畫面，沒有傷害）：出拳點在出手者面前 PUNCH_REACH 處，圈內的其他玩家（含自己）身上冒一個衝擊星。
+// 自己出拳時本機呼叫；別人出拳時由 net.js 的 attack 事件（對方武器是空手）呼叫，各畫面自己算，不需要伺服器
+const PUNCH_REACH = 34, PUNCH_R = 30;
+function punchFx(a) {
+  const [vx, vy] = DIR4_VEC[face4(a)], px = a.x + vx * PUNCH_REACH, py = a.y + vy * PUNCH_REACH;
+  for (const q of [S.players[0], ...S.remotes.values()]) {
+    if (!q || q === a || q.dead || q.pose) continue;
+    if (Math.hypot(q.x - px, q.y - py) > PUNCH_R) continue;
+    S.floaters.push({ x: q.x, y: q.y - 24, punch: true, life: .3 });
+  }
+}
 function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵沒有）
   const p = S.players[0];
   S._hits = 0;
@@ -455,7 +466,14 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
   if (S.fx.seal) { if (!quiet) say('結印中，不能攻擊', 900); return; }
   if (p.leap) return;   // 跳躍中不能攻擊   // 忍術結印中（可移動、不能攻擊）
   if (isRod()) { S._hits = 1; if (!quiet) fishAction(wx, wy); return; }   // 拿著釣竿：拋竿（不能攻擊）
-  if (S.me.weapon === 'hands') { say('先用左上角的武器列裝備武器！'); return; }
+  if (S.me.weapon === 'hands') {   // 空手：揍人（純特效，沒有傷害、不打怪；2026-11-10 使用者要求）
+    if (S.t - p.lastAtk < ATK_CD) return;
+    if (wx != null) aimAt(p, wx, wy); else { p.adir = face4(p); p.d8 = p.adir; }
+    p.lastAtk = S.t; p.swing = ATK_T; p.tool = null; p.atkT0 = S.t; S._hits = 1;
+    S.net?.notifyAttack?.();   // 同島的人看到你出拳；他們的畫面會自己算打到誰（onPunch，不送新訊息）
+    punchFx(p);
+    return;
+  }
   if (!S.weaponImgs[S.me.weapon]) return;
   if (S.t - p.lastAtk < ATK_CD) return;
   const rg = rangedDef();
@@ -5399,6 +5417,15 @@ function draw() {
     } else if (f.fishImg) {   // 釣到的東西：從頭上浮起來再淡出
       ctx.globalAlpha = Math.min(1, f.life / .5);
       ctx.drawImage(f.fishImg, -24, -24, 48, 48);
+    } else if (f.punch) {   // 空手揍人的衝擊星：黃白色放射線＋圈，快速擴散淡出
+      const q = 1 - f.life / .3;
+      ctx.strokeStyle = `rgba(255,236,150,${1 - q})`; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      for (let i = 0; i < 8; i++) {
+        const an = i * Math.PI / 4 + .4, r0 = 6 + q * 10, r1 = 14 + q * 20;
+        ctx.beginPath(); ctx.moveTo(Math.cos(an) * r0, Math.sin(an) * r0); ctx.lineTo(Math.cos(an) * r1, Math.sin(an) * r1); ctx.stroke();
+      }
+      ctx.strokeStyle = `rgba(255,255,255,${1 - q})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, 4 + q * 12, 0, Math.PI * 2); ctx.stroke();
     } else if (f.ring) {   // 被爪擊打中的衝擊圈：紅圈快速擴散淡出
       const q = 1 - f.life / .35;
       ctx.strokeStyle = `rgba(255,110,80,${1 - q})`;
@@ -6575,6 +6602,7 @@ async function boot() {
     onFurn: onNetFurn,
     onFloor: onNetFloor,
     onHeal: onNetHeal,       // 補師的群補事件（各客戶端自判自己是否在半徑內）
+    onPunch: punchFx,        // 別人空手出拳：算打到誰、畫衝擊星（純特效）
     onSkillEvent,            // 職業技能事件（群盾自判、別人畫面上的特效）
     onAdmin: v => { S.admin = !!v; updateDecorUI(); },
     onMe: onNetMe,           // 登入結果：決定 XP 記帳走伺服器；伺服器沒紀錄時一次性上繳本機存檔
