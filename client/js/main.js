@@ -603,7 +603,7 @@ function hitMob(p, a, ranged, force) {
     if (a.hp <= 0) {
       a.dead = true; a.dieT = .6;
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
-      if (p === S.players[0] && !od.owner && !od.lurker) { grantExp(1, p.x, p.y - 60, 'mob'); spawnCraftDrops(S.craftDB?.sources.mob[od.id], a.x, a.y); }   // 合成素材：擊倒野外動物掉落   // 非主動怪（羊／鳥／蛙）：擊倒 +1 XP（登入者上報事件由伺服器記；島主／魚人那步由伺服器計）
+      if (p === S.players[0] && !od.owner && !od.lurker) { grantExp(mobKillXp(od), p.x, p.y - 60, 'mob'); spawnCraftDrops(S.craftDB?.sources.mob[od.id], a.x, a.y); }   // 合成素材：擊倒野外動物掉落   // 非主動怪（羊／鳥／蛙）：擊倒 +1 XP、會反擊的野怪＝島主經驗 1/10（登入者上報事件由伺服器記；島主／魚人那步由伺服器計）
       if (!od.owner && !od.lurker) {   // 殺到動物回 1 HP（島主是伺服器權威事件，不算在此；釣上來的怪物也不算）
         const me = S.players[0];
         me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + 1);
@@ -774,6 +774,11 @@ const ownerDmgBonus = lv => Math.floor((Math.max(1, lv) - 1) / 2);   // 島主�
 const lurkDmgBonus = lv => Math.floor((Math.max(1, lv) - 1) / 3);    // 魚人爪擊每 3 級 +1
 const ownerKillXp = lv => 20 + 5 * lv;   // 擊倒島主的 XP 獎勵（30 秒內的參與者）
 const lurkKillXp = lv => 4 + 2 * lv;     // 擊倒魚人的 XP 獎勵（登入者由伺服器在 dead 時直給；訪客在本機記）
+const mobKillXp = def => {   // 擊倒野外動物的 XP（2026-11-09 使用者定）：一般野怪 +1；會反擊的野怪＝本島島主經驗值的 1/10、最低 1
+  if (!def.retaliate) return 1;
+  const ol = S.mobs.find(v => !v.dead && mobDef(v.id)?.owner)?.lvl ?? 1;   // 本島島主現在的等級（島主升級就跟著漲）；沒有島主的地形當 Lv 1
+  return Math.max(1, Math.floor(ownerKillXp(ol) / 10));
+};
 function saveProfile() { lsSet('dcisland.m0.profile', S.profile); }
 const xpServer = () => !!(S.net?.connected && S.net.uid);   // 登入＆連線：XP 由伺服器記帳（2026-11-07 第 2 步）；訪客／沒連線照舊本機記
 function levelUpFx(p, afterLv) {         // 升級演出（本機記帳與伺服器回覆共用）：回滿血＋金光＋飄字
@@ -786,7 +791,7 @@ function levelUpFx(p, afterLv) {         // 升級演出（本機記帳與伺服
 }
 function grantExp(n, x, y, reason) {     // 拿經驗值：金色 +N XP 飄字；升級＝金光演出＋回滿血（升級獎勵感）
   if (xpServer()) {                      // 登入者：伺服器記帳，等 xp 回覆再演出。擊倒非主動怪要上報事件（server 無法驗證，夾頻防灌分）；採集／釣魚伺服器自己知道，連訊息都不用送
-    if (reason === 'mob') S.net?.xpEvent?.('mob');
+    if (reason === 'mob') S.net?.xpEvent?.('mob', n);   // 會反擊的野怪給的 XP 不是 1（＝島主經驗 1/10），事件要帶數量（伺服器夾 1～25）
     return;
   }
   const p = S.players[0], before = lvInfo(S.profile.xp).lv;
