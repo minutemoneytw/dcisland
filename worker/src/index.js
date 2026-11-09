@@ -326,6 +326,7 @@ const CRAFT_SYNC_MAX = 100;               // craftsync 每類一次最多收幾�
 const isOwnerTerrain = t => Object.prototype.hasOwnProperty.call(OWNER_TERRAINS, String(t));
 const XP_MAX = 200000;                  // XP 總量上限（防灌分的保險；等級無上限是設計，這裡只是存檔安全閥）
 const XP_MOB_CD_MS = 1000;              // 擊倒非主動怪的 XP 冷卻（每條連線；每來源每秒最多 1 次）
+const XP_XPE_MAX = 25;                  // 擊倒非主動怪單次事件的 XP 上限（防亂報；2026-11-09 事件帶 n：會反擊的野怪＝島主經驗 1/10，使用者同意延伸）
 const DEATH_CREDIT_MIN_MS = 25000;      // 同一條連線的「倒地記帳」（餵島主 XP／魚人升級）最短間隔：復活要 30 秒，正常玩法不會更密；擋住反覆切 state.dead 灌島主等級
 const XP_NEED = lv => 10 + 5 * (lv - 1);   // 每級需求 XP；與 client/js/main.js、dev_server.py 相同（改記得三邊都改）
 function xpInfo(xp) {                   // XP 換等級：與 client 的 lvInfo 同演算法
@@ -1584,7 +1585,9 @@ export class Island {
         const now = Date.now();
         if (now - (this.lastXpMob.get(ws) || 0) >= XP_MOB_CD_MS) {
           this.lastXpMob.set(ws, now);
-          await this.grantXp(ws, 1, "mob");
+          // 數量照客戶端帶的（會反擊的野怪＝島主經驗 1/10，2026-11-09 使用者同意延伸）；夾 1～XP_XPE_MAX，防亂報
+          const n = Math.min(XP_XPE_MAX, Math.max(1, Math.floor(Number(msg.n) || 1)));
+          await this.grantXp(ws, n, "mob");
         }
       }
     } else if (msg.t === "enter" || msg.t === "terrain") {

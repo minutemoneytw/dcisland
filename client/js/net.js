@@ -240,7 +240,7 @@ export function connectNet(S, opts = {}) {
   // 腳色等級 XP（2026-11-07 第 2 步）：登入者的 XP 由伺服器記帳。
   // xpSync：舊存檔一次性上繳（伺服器沒有紀錄才會收）；xpEvent：擊倒非主動怪（伺服器無法驗證，信任＋夾頻）
   net.xpSync = v => net.connected && send({ t: 'xpsync', v });
-  net.xpEvent = k => net.connected && send({ t: 'xpe', k });
+  net.xpEvent = (k, n) => net.connected && send({ t: 'xpe', k, ...(n != null ? { n: Math.min(25, Math.max(1, Math.round(n))) } : {}) });   // 野怪擊倒事件（n＝這次給的 XP；一般野怪 1 可以不帶，會反擊的野怪帶 2～）
   // 合成解鎖（素材圖鑑／配方筆記）：登入者由伺服器存（訪客伺服器會略過）。craftUnlock＝解鎖一筆（k：mat／furn／rec）；craftSync＝補傳本機有、伺服器沒有的
   // 和平島遊戲桌（牌局由伺服器權威）：a＝join（id；role＝'spec' 表示選觀戰）／leave／stand（入座改觀戰）／ready（v）／sit／draw（idx）／shuffle（抽鬼牌）／move（x, y；五子棋）／pos（x, y）、hit、finish（躲彈幕）／play（idx, color）、pass、uno、catch、timeout、mode（UNO；draw 在 UNO 是抽牌）
   net.tbl = m => net.connected && send({ t: 'tbl', ...m });

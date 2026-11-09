@@ -216,6 +216,8 @@ def sanitize_state(s, prev):
 # ---- 腳色等級 XP（2026-11-07 第 2 步：登入者的 XP 由伺服器權威記帳）----
 # 與 worker/src/index.js 的 XP_* 同值同演算法（改一邊要改另一邊）。
 # 非主動怪是「刻意不同步」的本機動物，伺服器驗證不到擊倒屬實：信任事件＋夾頻（XP_MOB_CD，使用者同意）
+# 2026-11-09：事件帶數量 n（會反擊的野怪＝島主經驗 1/10，使用者同意延伸），伺服器夾 1～25 照帶記
+XP_XPE_MAX = 25          # 擊倒非主動怪單次事件的 XP 上限（防亂報；一般野怪是 1）
 XP_MAX = 200000          # XP 總量上限（防灌分的保險；等級無上限是設計，這裡只是存檔安全閥）
 XP_MOB_CD = 1.0          # 擊倒非主動怪的 XP 冷卻（秒；每條連線，每來源每秒最多 1 次）
 XP_NEED = lambda lv: 10 + 5 * (lv - 1)   # 每級需求 XP；與 client/js/main.js、worker 相同（改記得三邊都改）
@@ -2980,7 +2982,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         now = time.time()
                         if now - last_xp_mob >= XP_MOB_CD:
                             last_xp_mob = now
-                            xp_grant(c, 1, "mob")
+                            # 數量照客戶端帶的（會反擊的野怪＝島主經驗 1/10，2026-11-09 使用者同意延伸）；夾 1～25，防亂報
+                            amt = min(XP_XPE_MAX, max(1, int(msg.get("n") or 1)))
+                            xp_grant(c, amt, "mob")
                 elif t == "tbl":   # 和平島遊戲桌（join／leave／ready／sit／draw）；牌局邏輯全在伺服器
                     now = time.time()
                     if msg.get("a") == "pos":   # 躲彈幕的位置回報：自己的限流，不影響 hit／finish 等操作
