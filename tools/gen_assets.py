@@ -2130,7 +2130,7 @@ MOB_MANIFEST = dict(
         # 哥布林：草島（原色綠）、森林島（棕色靠 tint）。反擊型野怪（跟飛龍同一套：被打不逃、追咬；2026-11-09 使用者定），
         # 血量／攻擊力／經驗值＝該地形島主的 1/12（ownerFrac，最低 1）；下面的 post-pass 依 OWNER_BY_TERRAIN 算
         # 素材來源 OpenGameArt「GOBLIN FREE PIXELART」（CC0，thekingphoenix）；畫面約 25×29（scale 1：人物約 46px，哥布林小隻）
-        *[dict(id=gid, name="哥布林", fixed=6, speed=34, flee=85, retaliate=True, ownerFrac=12,
+        *[dict(id=gid, name="哥布林", fixed=6, speed=34, flee=85, retaliate=True, ownerFrac=12, noBounce=True,
                anim=dict(sheet="external/img2pixel/goblin_sheet.png", frames=8, rows=2, row0=0, fw=32, fh=32,
                          rowDir=["right", "left"], fps=8, scale=1.0),
                **({"tint": tint} if tint else {}),

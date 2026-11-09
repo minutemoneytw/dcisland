@@ -333,6 +333,7 @@
    "flee": 85,
    "retaliate": true,
    "ownerFrac": 12,
+   "noBounce": true,
    "anim": {
     "sheet": "external/img2pixel/goblin_sheet.png",
     "frames": 8,
@@ -360,6 +361,7 @@
    "flee": 85,
    "retaliate": true,
    "ownerFrac": 12,
+   "noBounce": true,
    "anim": {
     "sheet": "external/img2pixel/goblin_sheet.png",
     "frames": 8,
