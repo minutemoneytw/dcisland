@@ -894,9 +894,10 @@ def char_attack_frames():
     return m, st
 
 def rod_tips(rel_bg, rel_fg, size=128, n=13):
-    """量釣竿每一格的竿尖：從離手最近的釣竿像素（手大約在格子的 (64, 80)）沿著釣竿（8 連通）走，走最遠的那一點＝竿尖
+    """量釣竿每一格的竿尖：從離手最近的釣竿像素（手大約在格子的 (64, 80)）沿著釣竿走（可跨過 6 像素以內的缺口），走最遠的那一點＝竿尖
     （釣竿是彎的，直線距離最遠的常是弧頂而不是竿尖）。回 [方向][格] = [x, y]（格內像素）；那一格沒有釣竿就回 [64, 80]。"""
     ims = [read_png_pixels(os.path.join(ASSETS, r)) for r in (rel_bg, rel_fg)]
+    GAP = 6
     out = []
     for d in range(4):
         row = []
@@ -915,8 +916,8 @@ def rod_tips(rel_bg, rel_fg, size=128, n=13):
             while frontier:
                 nxt = []
                 for (x, y) in frontier:
-                    for dx in (-1, 0, 1):
-                        for dy in (-1, 0, 1):
+                    for dx in range(-GAP, GAP + 1):   # 可以跨過小缺口：釣竿在手握處被分成前後兩層、中間斷開（只走 8 連通會停在握把）
+                        for dy in range(-GAP, GAP + 1):
                             q = (x + dx, y + dy)
                             if q in pts and q not in dist:
                                 dist[q] = dist[(x, y)] + 1
