@@ -649,6 +649,7 @@ LPC_CLOTHES = [                  # 基本服裝與職業裝備（LPC 原檔）�
     ("weapon_loop_bg", "weapon_loop_bg.png"), ("weapon_loop_fg", "weapon_loop_fg.png"),
     ("weapon_s_bg", "weapon_s_bg.png"), ("weapon_s_fg", "weapon_s_fg.png"),
     ("weapon_waraxe_bg", "weapon_waraxe_bg.png"), ("weapon_waraxe_fg", "weapon_waraxe_fg.png"),   # 戰士：LPC 戰斧
+    ("weapon_dagger_bg", "weapon_dagger_bg.png"), ("weapon_dagger_fg", "weapon_dagger_fg.png"),   # 忍者：LPC 短劍（揮砍／突刺都是一般格，放在 act/）
 ]
 LPC_WEAPON_OVER = [             # LPC 武器的超大格動作 sheet（128×128；直接複製）：(遊戲檔名, external 底下的檔名)
     ("weapon_arming_slash_bg", "weapon_arming_slash_bg.png"), ("weapon_arming_slash_fg", "weapon_arming_slash_fg.png"),
@@ -2819,7 +2820,8 @@ def main():
             dict(id="lance", name="長槍", type="lance", sprite="weapon_lance.png", carry="back",
                  lpc=dict(over=dict(walk=dict(size=128, bg="char_weapon_dragonspear_walk_bg.png", fg="char_weapon_dragonspear_walk_fg.png"),   # LPC 龍槍：走路 128、突刺 192
                                     thrust=dict(size=192, bg="char_weapon_dragonspear_thrust_bg.png", fg="char_weapon_dragonspear_thrust_fg.png")))),
-            dict(id="daggers", name="雙劍", type="daggers", sprite="weapon_daggers.png", carry="waist"),
+            dict(id="daggers", name="短劍", type="daggers", sprite="weapon_daggers.png", carry="waist",   # 2026-11-09 換 LPC 短劍（dagger，單手；LPC 沒有雙持），名稱由「雙劍」改「短劍」
+                 lpc=dict(bg="char_weapon_dagger_bg.png", fg="char_weapon_dagger_fg.png")),
             dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=320, cast=1.0, dmg=4, gap=0),
                  lpc=dict(bg="char_weapon_s_bg.png", fg="char_weapon_s_fg.png",   # LPC S 形杖（s）；只有突刺
                           over=dict(thrust=dict(size=192, bg="char_weapon_s_thrust_bg.png", fg="char_weapon_s_thrust_fg.png")))),   # gap：詠唱放完到下一次能開始的間隔（秒）；沒寫＝ATK_CD（0.45）。咒杖 gap=0＝連續施放，間隔就是詠唱時間

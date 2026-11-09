@@ -4174,10 +4174,14 @@
   },
   {
    "id": "daggers",
-   "name": "雙劍",
+   "name": "短劍",
    "type": "daggers",
    "sprite": "weapon_daggers.png",
-   "carry": "waist"
+   "carry": "waist",
+   "lpc": {
+    "bg": "char_weapon_dagger_bg.png",
+    "fg": "char_weapon_dagger_fg.png"
+   }
   },
   {
    "id": "scepter",
