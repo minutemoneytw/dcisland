@@ -532,7 +532,7 @@ function stepCast(p) {   // 每幀（只有本機玩家）：檢查中斷條件�
   if (!inCastRange(p, a, rg)) { cancelCast(p, '詠唱中斷：目標超出射程'); return; }
   aimAt(p, a.x, a.y);   // 面向目標（四方向）
   if (S.t - c.t0 < c.dur) return;
-  p.cast = null; p.atkT0 = S.t; p.lastAtk = S.t - (ATK_CD - Math.min(ATK_CD, rg.gap ?? ATK_CD));   // 放完到下一次的間隔：預設 ATK_CD；武器的 ranged.gap 可縮短（咒杖 0＝連續施放）
+  p.cast = null; p.lastAtk = S.t - (ATK_CD - Math.min(ATK_CD, rg.gap ?? ATK_CD));   // 放完到下一次的間隔：預設 ATK_CD；武器的 ranged.gap 可縮短（咒杖 0＝連續施放）
   S.net?.notifyAttack?.();   // 讓同島的人看到你出手
   S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: a.y - 24 * (mobDef(a.id).big || 1) * .6, life: .22 });
   hitMob(p, a, true);
@@ -2507,11 +2507,12 @@ function charSprite(look, fi) {
   const k = [skin.id, skinSheet, look.gender || '', race.id, hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, shoe?.id || '', shoeHex, face?.id || '', eyes?.id || '', look.hairC || '', look.eyeC || '', wpn?.id || '', fi].join('|');
   let cv = S.charCache.get(k);
   if (cv) return cv;
-  // 這一幀屬於哪個攻擊動作（看 frames.attacks 的起始列）：武器在這個動作有超大格（LPC 的 128×128 揮砍等）就整張畫布放大，人物畫在正中央
+  // 這一幀屬於哪個動作（看 frames.attacks 的起始列；走路／待機＝LPC 第 8～11 列）：武器在這個動作有超大格
+  // （LPC 的 128×128 揮砍、192×192 突刺、128×128 走路的龍槍／弓等）就整張畫布放大，人物畫在正中央
   const ent0 = F.map ? F.map[fi] : null;
   let over = null, overCell = null;
   if (wpn && ent0 && F.attacks) {
-    for (const [an, a] of Object.entries(F.attacks)) {
+    for (const [an, a] of Object.entries({ ...F.attacks, walk: LPC_WALK_ROWS })) {
       if (ent0[1] >= a.row && ent0[1] < a.row + 4 && wpn.lpc.over?.[an]) {
         over = wpn.lpc.over[an]; overCell = [a.cols.indexOf(ent0[0]), ent0[1] - a.row];
         if (!sheetCellHas(S.charImgs[over.bg] || S.charImgs[over.fg], overCell[0] * over.size, overCell[1] * over.size, over.size, over.size)
@@ -2572,15 +2573,20 @@ const d8Of = p => p.d8 || (p.face === 'up' ? 'up' : p.face === 'side' ? (p.dir <
 // 攻擊時身體的動作（LPC 的揮砍／突刺／施法／射擊；武器仍是另外畫的小圖）：
 // 詠唱中依讀條進度播「施法」；揮擊／射箭／採集後 ATK_ANIM 秒內播該職業的攻擊動作。只是畫面，不影響傷害與出手頻率（出手時就結算、間隔看 ATK_CD）
 const ATK_ANIM = .4;
-function atkAnimNow(p) {
-  if (p.cast && p === S.players[0]) return { kind: 'spellcast', q: Math.min(.999, (S.t - p.cast.t0) / p.cast.dur) };
-  if (p.atkT0 == null || S.t - p.atkT0 >= ATK_ANIM || p.fish) return null;
+const LPC_WALK_ROWS = { row: 8, cols: [0, 1, 2, 3, 4, 5, 6, 7, 8] };   // LPC 走路組（待機＝第 0 欄）
+// 攻擊動作依武器（2026-11-09 使用者要求「依照武器替換動畫」）：職業武器看 jobs.json 的 atkAnim（LPC 的杖只有突刺、弓是射擊…）；
+// 其他武器：遠距＝要詠唱的施法／不用詠唱的射擊，近戰＝揮砍。詠唱中也播同一個動作（依讀條進度），放完不再重播
+function atkKind(p) {
   const wid = p === S.players[0] ? (p.tool || S.me.weapon) : p.weapon;
   const wd = S.avatar.weapons.find(w => w.id === wid);
-  let kind = 'slash';   // 空手、採集工具、職業沒設定 → 揮砍
-  if (wd?.ranged) kind = wd.ranged.cast ? 'spellcast' : 'shoot';
-  else if (wd && wid === jobOf(p)?.weapon) kind = jobOf(p)?.atkAnim || 'slash';
-  return { kind, q: (S.t - p.atkT0) / ATK_ANIM };
+  if (wd && wid === jobOf(p)?.weapon && jobOf(p)?.atkAnim) return jobOf(p).atkAnim;
+  if (wd?.ranged) return wd.ranged.cast ? 'spellcast' : 'shoot';
+  return 'slash';   // 空手、採集工具、職業沒設定 → 揮砍
+}
+function atkAnimNow(p) {
+  if (p.cast && p === S.players[0]) return { kind: atkKind(p), q: Math.min(.999, (S.t - p.cast.t0) / p.cast.dur) };
+  if (p.atkT0 == null || S.t - p.atkT0 >= ATK_ANIM || p.fish) return null;
+  return { kind: atkKind(p), q: (S.t - p.atkT0) / ATK_ANIM };
 }
 function charFrame(p) {
   const F = S.avatar.frames, st = F.states;

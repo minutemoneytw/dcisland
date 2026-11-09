@@ -1,22 +1,22 @@
 {
- "_comment": "職業（手寫，不由 gen_assets.py 產生）。role＝職能（tank 坦克／healer 補師／melee 近戰輸出／ranged 遠程輸出；被動特性與 R 鍵職能技能的數值在 main.js 的 ROLES）。weapon＝唯一的職業武器（avatar.json 的 weapons id；武器列＝職業武器＋空手＋釣竿）。gear＝切換到這個職業時自動套用的裝備（avatar.json 的 hats／tops／bottoms id）。skills＝1、2 鍵的職業技能 id（數值與效果在 main.js 的 JOB_SKILLS）。atkAnim＝拿職業武器攻擊時身體播的 LPC 動作（slash 由下往上揮砍／halfslash 由上往下劈／thrust 突刺／spellcast 施法／shoot 射擊；遠程武器照武器自動選，這欄給近戰用）。legacy＝舊存檔／舊客戶端的職業 id 轉換。兩份伺服器（worker/src/index.js、tools/dev_server.py）各有一份「職業 → 職能」小表 JOB_ROLE，新增職業時要一起加。",
+ "_comment": "職業（手寫，不由 gen_assets.py 產生）。role＝職能（tank 坦克／healer 補師／melee 近戰輸出／ranged 遠程輸出；被動特性與 R 鍵職能技能的數值在 main.js 的 ROLES）。weapon＝唯一的職業武器（avatar.json 的 weapons id；武器列＝職業武器＋空手＋釣竿）。gear＝切換到這個職業時自動套用的裝備（avatar.json 的 hats／tops／bottoms id）。skills＝1、2 鍵的職業技能 id（數值與效果在 main.js 的 JOB_SKILLS）。atkAnim＝拿職業武器攻擊時身體播的 LPC 動作（slash 由下往上揮砍／halfslash 由上往下劈／thrust 突刺／spellcast 施法／shoot 射擊；有寫就照這欄（依武器：LPC 的杖只有突刺，所以白魔法師／黑魔法師是 thrust，詠唱中也播它；2026-11-09），沒寫的遠程武器照武器自動選：要詠唱＝spellcast、不用＝shoot）。legacy＝舊存檔／舊客戶端的職業 id 轉換。兩份伺服器（worker/src/index.js、tools/dev_server.py）各有一份「職業 → 職能」小表 JOB_ROLE，新增職業時要一起加。",
  "legacy": { "tank": "knight", "healer": "whitemage", "dps": "ninja" },
  "jobs": [
   { "id": "knight", "atkAnim": "halfslash", "name": "騎士", "role": "tank", "weapon": "sword",
     "gear": { "hat": "armet", "top": "plate", "bottom": "plate_legs", "shoe": "plate_boots" }, "skills": ["guard", "kshield"] },
   { "id": "warrior", "atkAnim": "slash", "name": "戰士", "role": "tank", "weapon": "waraxe",
     "gear": { "hat": "nohat", "top": "tshirt", "bottom": "pants", "shoe": "shoes" }, "skills": ["vamp", "wshield"] },
-  { "id": "whitemage", "atkAnim": "spellcast", "name": "白魔法師", "role": "healer", "weapon": "staff",
-    "gear": { "hat": "nohat", "top": "tshirt", "bottom": "pants", "shoe": "shoes" }, "skills": ["sheal", "wings"] },
+  { "id": "whitemage", "atkAnim": "thrust", "name": "白魔法師", "role": "healer", "weapon": "staff",
+    "gear": { "hat": "hood", "top": "whm_robe", "bottom": "pants", "shoe": "shoes" }, "skills": ["sheal", "wings"] },
   { "id": "sage", "atkAnim": "spellcast", "name": "賢者", "role": "healer", "weapon": "tome",
     "gear": { "hat": "nohat", "top": "tshirt", "bottom": "pants", "shoe": "shoes" }, "skills": ["care", "save"] },
   { "id": "ninja", "atkAnim": "slash", "name": "忍者", "role": "melee", "weapon": "daggers",
     "gear": { "hat": "nohat", "top": "tshirt", "bottom": "pants", "shoe": "shoes" }, "skills": ["ninjutsu", "blink"] },
   { "id": "dragoon", "atkAnim": "thrust", "name": "龍騎士", "role": "melee", "weapon": "lance",
-    "gear": { "hat": "nohat", "top": "tshirt", "bottom": "pants", "shoe": "shoes" }, "skills": ["highjump", "backjump"] },
+    "gear": { "hat": "horned", "top": "drg_plate", "bottom": "drg_legs", "shoe": "drg_boots" }, "skills": ["highjump", "backjump"] },
   { "id": "bard", "atkAnim": "shoot", "name": "吟遊詩人", "role": "ranged", "weapon": "harpbow",
-    "gear": { "hat": "nohat", "top": "tshirt", "bottom": "pants", "shoe": "shoes" }, "skills": ["song", "poison"] },
-  { "id": "blackmage", "atkAnim": "spellcast", "name": "黑魔法師", "role": "ranged", "weapon": "scepter",
-    "gear": { "hat": "nohat", "top": "tshirt", "bottom": "pants", "shoe": "shoes" }, "skills": ["circle", "triple"] }
+    "gear": { "hat": "cavalier", "top": "brd_vest", "bottom": "brd_pants", "shoe": "brd_boots" }, "skills": ["song", "poison"] },
+  { "id": "blackmage", "atkAnim": "thrust", "name": "黑魔法師", "role": "ranged", "weapon": "scepter",
+    "gear": { "hat": "wizard", "top": "blm_robe", "bottom": "pants", "shoe": "shoes" }, "skills": ["circle", "triple"] }
  ]
 }

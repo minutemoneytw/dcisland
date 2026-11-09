@@ -3760,6 +3760,65 @@
     "#9993a2",
     "#ffffff"
    ]
+  },
+  {
+   "id": "whm_robe",
+   "name": "白魔道袍",
+   "sheet": "char_top_whm_m.png",
+   "sheetF": "char_top_whm_f.png",
+   "dye": [
+    "#c4b59f",
+    "#e5e6c7",
+    "#958080",
+    "#4d4a5d",
+    "#ffffff",
+    "#ab1e1e",
+    "#82171c",
+    "#cd2429"
+   ]
+  },
+  {
+   "id": "blm_robe",
+   "name": "黑魔道袍",
+   "sheet": "char_top_blm_m.png",
+   "sheetF": "char_top_blm_f.png",
+   "dye": [
+    "#322d6a",
+    "#3c49ad",
+    "#466ac9"
+   ]
+  },
+  {
+   "id": "brd_vest",
+   "name": "詩人皮背心",
+   "sheet": "char_top_brd_m.png",
+   "sheetF": "char_top_brd_f.png",
+   "dye": [
+    "#704325",
+    "#75502d",
+    "#4d4a5d",
+    "#c4b59f",
+    "#e5e6c7",
+    "#958080",
+    "#9a6f37",
+    "#ffffff"
+   ]
+  },
+  {
+   "id": "drg_plate",
+   "name": "龍騎士鎧甲",
+   "sheet": "char_top_drg_m.png",
+   "sheetF": "char_top_drg_f.png",
+   "dye": [
+    "#34508c",
+    "#536b9e",
+    "#243761",
+    "#b7c1d6",
+    "#5f75a5",
+    "#334f8a",
+    "#7c8eb5",
+    "#ffffff"
+   ]
   }
  ],
  "bottoms": [
@@ -3785,6 +3844,28 @@
     "#8a8394",
     "#706a78",
     "#9993a2"
+   ]
+  },
+  {
+   "id": "brd_pants",
+   "name": "燈籠褲",
+   "sheet": "char_bottom_brd_m.png",
+   "sheetF": "char_bottom_brd_f.png",
+   "dye": [
+    "#ffffff",
+    "#a88a5c",
+    "#e9e1d5"
+   ]
+  },
+  {
+   "id": "drg_legs",
+   "name": "龍騎士腿甲",
+   "sheet": "char_bottom_drg_m.png",
+   "sheetF": "char_bottom_drg_f.png",
+   "dye": [
+    "#34508c",
+    "#2a4171",
+    "#4b6499"
    ]
   }
  ],
@@ -3814,6 +3895,29 @@
     "#908c98",
     "#a7a3ad"
    ]
+  },
+  {
+   "id": "brd_boots",
+   "name": "翻邊皮靴",
+   "sheet": "char_shoes_brd_m.png",
+   "sheetF": "char_shoes_brd_f.png",
+   "dye": [
+    "#6e4a2c",
+    "#ffffff",
+    "#dad0c9"
+   ]
+  },
+  {
+   "id": "drg_boots",
+   "name": "龍騎士鐵靴",
+   "sheet": "char_shoes_drg_m.png",
+   "sheetF": "char_shoes_drg_f.png",
+   "dye": [
+    "#34508c",
+    "#263b67",
+    "#7689b1",
+    "#a1aeca"
+   ]
   }
  ],
  "hats": [
@@ -3834,6 +3938,51 @@
     "#867e7f",
     "#c4b59f",
     "#ffffff"
+   ]
+  },
+  {
+   "id": "hood",
+   "name": "白魔兜帽",
+   "sheet": "char_hat_hood.png",
+   "hideHair": true,
+   "dye": [
+    "#958080",
+    "#e5e6c7",
+    "#ffffff",
+    "#c4b59f",
+    "#4d4a5d"
+   ]
+  },
+  {
+   "id": "wizard",
+   "name": "尖頂帽",
+   "sheet": "char_hat_wizard.png",
+   "dye": [
+    "#5e2d13",
+    "#612e14",
+    "#6a3416",
+    "#6a3317",
+    "#9f7e24"
+   ]
+  },
+  {
+   "id": "cavalier",
+   "name": "羽毛帽",
+   "sheet": "char_hat_cavalier.png",
+   "dye": [
+    "#1b5502"
+   ]
+  },
+  {
+   "id": "horned",
+   "name": "龍騎士角盔",
+   "sheet": "char_hat_horned.png",
+   "hideHair": true,
+   "dye": [
+    "#34508c",
+    "#2d4579",
+    "#8a9abd",
+    "#fcfcfd"
    ]
   }
  ],
@@ -3940,6 +4089,17 @@
     "range": 320,
     "cast": 1.2,
     "dmg": 2
+   },
+   "lpc": {
+    "bg": "char_weapon_loop_bg.png",
+    "fg": "char_weapon_loop_fg.png",
+    "over": {
+     "thrust": {
+      "size": 192,
+      "bg": "char_weapon_loop_thrust_bg.png",
+      "fg": "char_weapon_loop_thrust_fg.png"
+     }
+    }
    }
   },
   {
@@ -3967,6 +4127,17 @@
     "cast": 0,
     "dmg": 1,
     "shot": "arrow"
+   },
+   "lpc": {
+    "bg": "char_weapon_recurve_bg.png",
+    "fg": "char_weapon_recurve_fg.png",
+    "over": {
+     "walk": {
+      "size": 128,
+      "bg": "char_weapon_recurve_walk_bg.png",
+      "fg": "char_weapon_recurve_walk_fg.png"
+     }
+    }
    }
   },
   {
@@ -3974,7 +4145,21 @@
    "name": "長槍",
    "type": "lance",
    "sprite": "weapon_lance.png",
-   "carry": "back"
+   "carry": "back",
+   "lpc": {
+    "over": {
+     "walk": {
+      "size": 128,
+      "bg": "char_weapon_dragonspear_walk_bg.png",
+      "fg": "char_weapon_dragonspear_walk_fg.png"
+     },
+     "thrust": {
+      "size": 192,
+      "bg": "char_weapon_dragonspear_thrust_bg.png",
+      "fg": "char_weapon_dragonspear_thrust_fg.png"
+     }
+    }
+   }
   },
   {
    "id": "daggers",
@@ -3993,6 +4178,17 @@
     "cast": 1.0,
     "dmg": 4,
     "gap": 0
+   },
+   "lpc": {
+    "bg": "char_weapon_s_bg.png",
+    "fg": "char_weapon_s_fg.png",
+    "over": {
+     "thrust": {
+      "size": 192,
+      "bg": "char_weapon_s_thrust_bg.png",
+      "fg": "char_weapon_s_thrust_fg.png"
+     }
+    }
    }
   },
   {

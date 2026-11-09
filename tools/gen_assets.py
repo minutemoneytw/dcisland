@@ -635,12 +635,35 @@ LPC_CLOTHES = [                  # 基本服裝與職業裝備（LPC 原檔）�
     ("bottom_plate_m", "bottom_plate_m.png"), ("bottom_plate_f", "bottom_plate_f.png"),
     ("shoes_plate_m", "shoes_plate_m.png"), ("shoes_plate_f", "shoes_plate_f.png"),
     ("hat_armet", "hat_armet.png"),
+    # 白魔法師／黑魔法師／吟遊詩人／龍騎士（2026-11-09；男女：上身 teen／female、其餘 thin，見 docs/notes.md）
+    ("top_whm_m", "top_whm_m.png"), ("top_whm_f", "top_whm_f.png"), ("hat_hood", "hat_hood.png"),
+    ("top_blm_m", "top_blm_m.png"), ("top_blm_f", "top_blm_f.png"), ("hat_wizard", "hat_wizard.png"),
+    ("top_brd_m", "top_brd_m.png"), ("top_brd_f", "top_brd_f.png"),
+    ("bottom_brd_m", "bottom_brd_m.png"), ("bottom_brd_f", "bottom_brd_f.png"),
+    ("shoes_brd_m", "shoes_brd_m.png"), ("shoes_brd_f", "shoes_brd_f.png"), ("hat_cavalier", "hat_cavalier.png"),
+    ("top_drg_m", "top_drg_m.png"), ("top_drg_f", "top_drg_f.png"),
+    ("bottom_drg_m", "bottom_drg_m.png"), ("bottom_drg_f", "bottom_drg_f.png"),
+    ("shoes_drg_m", "shoes_drg_m.png"), ("shoes_drg_f", "shoes_drg_f.png"), ("hat_horned", "hat_horned.png"),
     # LPC 武器圖層（一般格：走路列＝拿在手上；bg＝身體後面、fg＝最上面）
     ("weapon_arming_bg", "weapon_arming_bg.png"), ("weapon_arming_fg", "weapon_arming_fg.png"),
+    ("weapon_loop_bg", "weapon_loop_bg.png"), ("weapon_loop_fg", "weapon_loop_fg.png"),
+    ("weapon_s_bg", "weapon_s_bg.png"), ("weapon_s_fg", "weapon_s_fg.png"),
 ]
 LPC_WEAPON_OVER = [             # LPC 武器的超大格動作 sheet（128×128；直接複製）：(遊戲檔名, external 底下的檔名)
     ("weapon_arming_slash_bg", "weapon_arming_slash_bg.png"), ("weapon_arming_slash_fg", "weapon_arming_slash_fg.png"),
     ("weapon_arming_halfslash_bg", "weapon_arming_halfslash_bg.png"), ("weapon_arming_halfslash_fg", "weapon_arming_halfslash_fg.png"),
+    # 杖的突刺（192×192）：白魔法師 loop、黑魔法師 s
+    ("weapon_loop_thrust_bg", "weapon_loop_thrust_bg.png"), ("weapon_loop_thrust_fg", "weapon_loop_thrust_fg.png"),
+    ("weapon_s_thrust_bg", "weapon_s_thrust_bg.png"), ("weapon_s_thrust_fg", "weapon_s_thrust_fg.png"),
+    # 龍槍：走路（128×128）＋突刺（192×192）
+    ("weapon_dragonspear_walk_bg", "weapon_dragonspear_walk_bg.png"), ("weapon_dragonspear_walk_fg", "weapon_dragonspear_walk_fg.png"),
+    ("weapon_dragonspear_thrust_bg", "weapon_dragonspear_thrust_bg.png"), ("weapon_dragonspear_thrust_fg", "weapon_dragonspear_thrust_fg.png"),
+    # 反曲弓：走路（128×128）
+    ("weapon_recurve_walk_bg", "weapon_recurve_walk_bg.png"), ("weapon_recurve_walk_fg", "weapon_recurve_walk_fg.png"),
+]
+LPC_WEAPON_ROWS = [             # 只有某些動作的一般格武器（64×64）：(遊戲檔名, [(動作, external 底下的檔名)])，放到該動作的列
+    ("weapon_recurve_bg", [("shoot", "weapon_recurve_shoot_bg.png")]),
+    ("weapon_recurve_fg", [("shoot", "weapon_recurve_shoot_fg.png")]),   # 前層含箭矢（LPC Ammo: arrow）
 ]
 LPC_HAIR_STYLES = [              # 其他 LPC 髮型（走路列，原檔是單色，這裡依亮度重上色成多色）：(id, 名稱, external 檔名)
     ("afro", "爆炸頭", "hair_afro.png"),
@@ -2681,6 +2704,11 @@ def main():
         save(lpc_cloth_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{cid}.png", sub)
     for cid, rel in LPC_WEAPON_OVER:
         save(lpc_read_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{cid}.png", sub)
+    for cid, parts in LPC_WEAPON_ROWS:
+        sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
+        for anim, rel in parts:
+            _lpc_overlay(sheet, f"external/img2pixel/lpc/{rel}", LPC_ATTACKS[anim][0] * CHAR_FH)
+        save(sheet, f"char_{cid}.png", sub)
     # 短髮：2026-11-09 起改用 LPC repo 的 idol 短髮（同一款；k-idol 外部素材沒有半揮等新動作），依亮度重上色成 12 色；
     # 檔名、id 照舊（char_hair1～12），k-idol 原檔只拿來取 12 色的主色（kidol_main_hex）
     for i, (cid, _cname) in enumerate(KIDOL_HAIR):
@@ -2739,13 +2767,25 @@ def main():
         # 服裝：男女共用一個 id（sheet＝男、sheetF＝女，client 依角色性別挑；外觀清單一件只出現一次）；
         # dye＝可染色的顏色（lpc_dye_of 自動從圖上取，第一個是主色）；glam＝可當外觀（沒寫 unlock＝一開始就能用）
         tops=[lpc_garment("tshirt", "T恤", "char_top_tshirt_m.png", "char_top_tshirt_f.png", glam=True),
-              lpc_garment("plate", "騎士板甲", "char_top_plate_m.png", "char_top_plate_f.png")],
+              lpc_garment("plate", "騎士板甲", "char_top_plate_m.png", "char_top_plate_f.png"),
+              lpc_garment("whm_robe", "白魔道袍", "char_top_whm_m.png", "char_top_whm_f.png"),
+              lpc_garment("blm_robe", "黑魔道袍", "char_top_blm_m.png", "char_top_blm_f.png"),
+              lpc_garment("brd_vest", "詩人皮背心", "char_top_brd_m.png", "char_top_brd_f.png"),
+              lpc_garment("drg_plate", "龍騎士鎧甲", "char_top_drg_m.png", "char_top_drg_f.png")],
         bottoms=[lpc_garment("pants", "長褲", "char_bottom_pants_m.png", "char_bottom_pants_f.png", glam=True),
-                 lpc_garment("plate_legs", "騎士腿甲", "char_bottom_plate_m.png", "char_bottom_plate_f.png")],
+                 lpc_garment("plate_legs", "騎士腿甲", "char_bottom_plate_m.png", "char_bottom_plate_f.png"),
+                 lpc_garment("brd_pants", "燈籠褲", "char_bottom_brd_m.png", "char_bottom_brd_f.png"),
+                 lpc_garment("drg_legs", "龍騎士腿甲", "char_bottom_drg_m.png", "char_bottom_drg_f.png")],
         shoes=[lpc_garment("shoes", "鞋子", "char_shoes_m.png", "char_shoes_f.png", glam=True),
-               lpc_garment("plate_boots", "騎士板甲靴", "char_shoes_plate_m.png", "char_shoes_plate_f.png")],
+               lpc_garment("plate_boots", "騎士板甲靴", "char_shoes_plate_m.png", "char_shoes_plate_f.png"),
+               lpc_garment("brd_boots", "翻邊皮靴", "char_shoes_brd_m.png", "char_shoes_brd_f.png"),
+               lpc_garment("drg_boots", "龍騎士鐵靴", "char_shoes_drg_m.png", "char_shoes_drg_f.png")],
         hats=[dict(id="nohat", name="不戴帽子", sheet=None, glam=True),
-              dict(id="armet", name="騎士頭盔", sheet="char_hat_armet.png", hideHair=True, dye=lpc_dye_of("char_hat_armet.png"))],   # hideHair＝全罩式，不畫頭髮
+              dict(id="armet", name="騎士頭盔", sheet="char_hat_armet.png", hideHair=True, dye=lpc_dye_of("char_hat_armet.png")),   # hideHair＝全罩式，不畫頭髮
+              dict(id="hood", name="白魔兜帽", sheet="char_hat_hood.png", hideHair=True, dye=lpc_dye_of("char_hat_hood.png")),
+              dict(id="wizard", name="尖頂帽", sheet="char_hat_wizard.png", dye=lpc_dye_of("char_hat_wizard.png")),
+              dict(id="cavalier", name="羽毛帽", sheet="char_hat_cavalier.png", dye=lpc_dye_of("char_hat_cavalier.png")),
+              dict(id="horned", name="龍騎士角盔", sheet="char_hat_horned.png", hideHair=True, dye=lpc_dye_of("char_hat_horned.png"))],
         hairColor="#4a3428",
         shirtColors=['#d95c68', '#4a90d9', '#4aa564', '#c9a227', '#8a5cc9', '#e0e0e0', '#4a4a52', '#d97a3a', '#f2a1b5', '#b5303f', '#f0c93a', '#8fd0e8', '#2e5fa8', '#3a3f8c', '#6fcfc0', '#2f8a78', '#8fc455', '#3e6b3a', '#b48be0', '#6a3f9a', '#8a5a3a', '#c8b08a', '#9aa0aa', '#f4ede0'],
         pantsColors=['#4a54a0', '#2f3548', '#4a4a52', '#8a8f99', '#d8d4c8', '#8a6a46', '#c8b08a', '#5a4a3a', '#3e6b3a', '#6a8a4a', '#2f8a78', '#3a78c8', '#2e5fa8', '#7aa8d8', '#6a3f9a', '#a63d4a', '#d97a3a', '#e0b840', '#e8a0b8', '#b5303f', '#1f1f26', '#f0f0f0', '#6fcfc0', '#b48be0'],
@@ -2762,14 +2802,22 @@ def main():
                           over=dict(slash=dict(size=128, bg="char_weapon_arming_slash_bg.png", fg="char_weapon_arming_slash_fg.png"),
                                     halfslash=dict(size=128, bg="char_weapon_arming_halfslash_bg.png", fg="char_weapon_arming_halfslash_fg.png")))),
             dict(id="waraxe", name="戰斧", type="axe", sprite="weapon_waraxe.png", carry="back", scale=2),
-            dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", scale=2, ranged=dict(range=320, cast=1.2, dmg=2)),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
+            dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", scale=2, ranged=dict(range=320, cast=1.2, dmg=2),   # LPC 環頭杖（loop）；LPC 的杖只有突刺，攻擊／詠唱都播突刺
+                 lpc=dict(bg="char_weapon_loop_bg.png", fg="char_weapon_loop_fg.png",
+                          over=dict(thrust=dict(size=192, bg="char_weapon_loop_thrust_bg.png", fg="char_weapon_loop_thrust_fg.png")))),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
             dict(id="tome", name="賢具", type="tome", sprite="weapon_tome.png", carry="waist", scale=2, ranged=dict(range=320, cast=0, dmg=1, shot="funnels")),   # 賢具＝浮游炮（FF14 nouliths）：不用詠唱，攻擊時四座賢具飛出、各朝目標射一道光束（main.js 的 fxk 'funnels'）；不用詠唱的 dmg 1（使用者定的平衡，同豎琴弓）
             # 豎琴弓：遠程但不用詠唱（cast 0＝按攻擊直接射箭；shot: "arrow"＝畫箭矢而不是光球）。dmg 1：加上輸出的 +1＝2，
             # 和忍者一樣；要詠唱的武器（咒杖等）才是 2＋1＝3（使用者定：不用詠唱的普攻都是 2）
-            dict(id="harpbow", name="豎琴弓", type="bow", sprite="weapon_harpbow.png", carry="back", ranged=dict(range=320, cast=0, dmg=1, shot="arrow")),
-            dict(id="lance", name="長槍", type="lance", sprite="weapon_lance.png", carry="back"),
+            dict(id="harpbow", name="豎琴弓", type="bow", sprite="weapon_harpbow.png", carry="back", ranged=dict(range=320, cast=0, dmg=1, shot="arrow"),
+                 lpc=dict(bg="char_weapon_recurve_bg.png", fg="char_weapon_recurve_fg.png",   # LPC 反曲弓：射擊是一般格（前層含箭矢），走路是 128 超大格
+                          over=dict(walk=dict(size=128, bg="char_weapon_recurve_walk_bg.png", fg="char_weapon_recurve_walk_fg.png")))),
+            dict(id="lance", name="長槍", type="lance", sprite="weapon_lance.png", carry="back",
+                 lpc=dict(over=dict(walk=dict(size=128, bg="char_weapon_dragonspear_walk_bg.png", fg="char_weapon_dragonspear_walk_fg.png"),   # LPC 龍槍：走路 128、突刺 192
+                                    thrust=dict(size=192, bg="char_weapon_dragonspear_thrust_bg.png", fg="char_weapon_dragonspear_thrust_fg.png")))),
             dict(id="daggers", name="雙劍", type="daggers", sprite="weapon_daggers.png", carry="waist"),
-            dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=320, cast=1.0, dmg=4, gap=0)),   # gap：詠唱放完到下一次能開始的間隔（秒）；沒寫＝ATK_CD（0.45）。咒杖 gap=0＝連續施放，間隔就是詠唱時間
+            dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=320, cast=1.0, dmg=4, gap=0),
+                 lpc=dict(bg="char_weapon_s_bg.png", fg="char_weapon_s_fg.png",   # LPC S 形杖（s）；只有突刺
+                          over=dict(thrust=dict(size=192, bg="char_weapon_s_thrust_bg.png", fg="char_weapon_s_thrust_fg.png")))),   # gap：詠唱放完到下一次能開始的間隔（秒）；沒寫＝ATK_CD（0.45）。咒杖 gap=0＝連續施放，間隔就是詠唱時間
             dict(id="rod", name="釣竿", type="rod", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
             # 武器外觀（glam）：只換樣子，玩法照職業武器；type 要和職業武器相同才能選
             dict(id="goldsword", name="金劍", type="sword", sprite="weapon_goldsword.png", carry="back", back="hilt", scale=2,
