@@ -5723,26 +5723,19 @@ function buildAvatarPanel() {
       host.appendChild(o);
     }
   };
-  const lookSwatches = (host, items, curId, onPick, custom) => {
+  const lookSwatches = (host, items, curId, onPick) => {
     host.innerHTML = '';
     for (const it of items) {
       const o = document.createElement('div');
-      o.className = 'opt swatch' + (it.id === curId && !custom?.hex ? ' sel' : '');
+      o.className = 'opt swatch' + (it.id === curId ? ' sel' : '');
       o.style.background = it.hex; o.title = it.name;
-      o.onclick = () => { onPick(it.id); custom?.clear(); redraw(); };
-      host.appendChild(o);
-    }
-    if (custom) {   // 最後一格「自訂」：開調色盤（跟服裝換色同一個選色視窗）
-      const o = document.createElement('div');
-      o.className = 'opt swatch custom' + (custom.hex ? ' sel' : '');
-      o.style.background = custom.hex || 'conic-gradient(#f44, #fd4, #4f6, #4cf, #a4f, #f44)';
-      o.title = '自訂顏色';
-      o.onclick = custom.open;
+      o.onclick = () => { onPick(it.id); redraw(); };
       host.appendChild(o);
     }
   };
-  // 樣式＋顏色兩層的項目（髮型、眼睛）：清單裡每一項是「某樣式的某顏色」；換樣式保留顏色、換顏色保留樣式
-  const twoLevel = (list, curId, field, styleHost, colorHost, cfield) => {
+  // 樣式＋顏色兩層的項目（髮型、眼睛）：清單裡每一項是「某樣式的某顏色」；換樣式保留顏色。
+  // 顏色＝樣式那排最後的「換色」鈕（2026-11-09 使用者要求跟裝備的換色一樣）：開選色視窗，上排是這個樣式的預設色、下面調色盤自訂
+  const twoLevel = (list, curId, field, styleHost, cfield) => {
     const cur = list.find(x => x.id === curId) || list[0]; if (!cur) return;
     const styles = [];
     for (const it of list) if (!styles.some(s2 => s2.id === it.style)) styles.push({ id: it.style, name: it.styleName || it.style });
@@ -5750,9 +5743,11 @@ function buildAvatarPanel() {
       const pick = list.find(x => x.style === sid && x.color === cur.color) || list.find(x => x.style === sid);
       if (pick) S.me[field] = pick.id;
     });
-    const colors = list.filter(x => x.style === cur.style).map(x => ({ id: x.id, name: x.name, hex: x.hex || '#888' }));
-    lookSwatches(colorHost, colors, cur.id, id => { S.me[field] = id; },
-                 cfield && { hex: S.me[cfield] || null, clear: () => { delete S.me[cfield]; }, open: () => openColor(cfield, cur) });
+    const b = document.createElement('button'); b.className = 'ff-btn small dye-btn'; b.title = LOOK_COLOR[cfield];
+    const sw = document.createElement('span'); sw.className = 'dye-sw'; sw.style.background = S.me[cfield] || cur.hex || '#888';
+    b.append(sw, document.createTextNode('換色'));
+    b.onclick = () => openColor(cfield, cur);
+    styleHost.appendChild(b);
   };
   lookChips($('raceOpts'), (S.avatar.races || []).map(r => ({ id: r.id, name: r.name, title: r.scale && r.scale !== 1 ? `體型 ×${r.scale}` : '' })),
             S.me.race || 'human', v => { S.me.race = v; });
@@ -5779,9 +5774,9 @@ function buildAvatarPanel() {
   $('titleCur').textContent = titleText(S.me.title) || '無';   // 稱號：按「稱號設定」開稱號一覽選
   lookSwatches($('skinOpts'), S.avatar.skins.map(s2 => ({ id: s2.id, name: s2.name, hex: s2.base })), S.me.skin, v => { S.me.skin = v; });
   // 髮型／髮色、臉型、眼神／眼睛顏色
-  twoLevel(S.avatar.hair, S.me.hair, 'hair', $('hairOpts'), $('hairColorOpts'), 'hairC');
+  twoLevel(S.avatar.hair, S.me.hair, 'hair', $('hairOpts'), 'hairC');
   lookChips($('faceOpts'), S.avatar.faces || [], S.me.face || 'normal', v => { S.me.face = v; });
-  twoLevel(S.avatar.eyes || [], lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown', 'eyes', $('eyesOpts'), $('eyeColorOpts'), 'eyeC');
+  twoLevel(S.avatar.eyes || [], lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown', 'eyes', $('eyesOpts'), 'eyeC');
   // 裝備與外觀：每個部位一列——顯示中的那件（裝備，或套了外觀時的外觀名）＋「外觀」鈕（開外觀一覽選）＋換色鈕
   const box = $('gearRows'); box.innerHTML = '';
   const wr = wardrobe();
@@ -5854,7 +5849,7 @@ function hex2hsv(hex) {
   return { h, s: mx ? d / mx : 0, v: mx };
 }
 // 選色的對象：服裝（hat／top／bottom／shoe，存在 wardrobe 的 color，每個職業各一套）或外貌（hairC／eyeC，存在 S.me，不分職業）
-const LOOK_COLOR = { hairC: '髮色', eyeC: '眼睛顏色' };
+const LOOK_COLOR = { hairC: '髮色', eyeC: '眼睛顏色' }, LOOK_FIELD = { hairC: 'hair', eyeC: 'eyes' };   // 外貌換色：自訂色存 S.me[hairC]，預設色＝換 S.me.hair 那一項
 function colorGet(slot) { return LOOK_COLOR[slot] ? (S.me[slot] || null) : (wardrobe().color[slot] || null); }
 function colorSet(slot, hex) {
   const o = LOOK_COLOR[slot] ? S.me : wardrobe().color;
@@ -5865,12 +5860,18 @@ function openColor(slot, item) {
   const look = !!LOOK_COLOR[slot];
   const orig = look ? (item.hex || dye[0]) : dye[0];   // 外貌：「原色」＝目前選的那一色
   colorUI.slot = slot; colorUI.before = colorGet(slot); colorUI.orig = orig;
+  colorUI.beforeItem = look ? S.me[LOOK_FIELD[slot]] : null;
   Object.assign(colorUI, hex2hsv(colorGet(slot) || orig));
-  $('colorTitle').textContent = look ? `${LOOK_COLOR[slot]}：自訂` : `${SLOTS.find(x => x[0] === slot)[1]}換色：${item.name}`;
+  $('colorTitle').textContent = look ? LOOK_COLOR[slot] : `${SLOTS.find(x => x[0] === slot)[1]}換色：${item.name}`;
   const ps = $('colorPresets'); ps.innerHTML = '';
-  const presets = look ? [...new Set((slot === 'hairC' ? S.avatar.hair : S.avatar.eyes).map(x => x.hex).filter(Boolean))]
-                       : [dye[0], ...new Set([...S.avatar.shirtColors, ...S.avatar.pantsColors])];
-  for (const hex of look ? [orig, ...presets] : presets) {
+  if (look) {   // 外貌：預設色＝同樣式的各顏色（LPC 原本的配色，點了是換成那一項、清掉自訂色）
+    const field = LOOK_FIELD[slot], list = field === 'hair' ? S.avatar.hair : S.avatar.eyes;
+    for (const it of list.filter(x => x.style === item.style && x.hex)) {
+      const o = document.createElement('div'); o.className = 'opt'; o.style.background = it.hex; o.title = it.name;
+      o.onclick = () => { S.me[field] = it.id; colorUI.orig = it.hex; S.charCache.clear(); Object.assign(colorUI, hex2hsv(it.hex)); colorApply(); };
+      ps.appendChild(o);
+    }
+  } else for (const hex of [dye[0], ...new Set([...S.avatar.shirtColors, ...S.avatar.pantsColors])]) {
     const o = document.createElement('div'); o.className = 'opt'; o.style.background = hex; o.title = hex === dye[0] ? '原色' : hex;
     o.onclick = () => { Object.assign(colorUI, hex2hsv(hex)); colorApply(); };
     ps.appendChild(o);
@@ -5898,7 +5899,10 @@ function colorApply(fromHex) {   // 依 colorUI 的 hsv 重畫方塊與色相條
 }
 function closeColor(ok) {
   if (!S.colorOpen) return;
-  if (!ok) colorSet(colorUI.slot, colorUI.before);
+  if (!ok) {
+    colorSet(colorUI.slot, colorUI.before);
+    if (LOOK_COLOR[colorUI.slot]) { S.me[LOOK_FIELD[colorUI.slot]] = colorUI.beforeItem; S.charCache.clear(); }   // 外貌：預設色換過的那一項也還原
+  }
   $('colorBox').classList.add('hidden'); S.colorOpen = false;
   saveAvatar(); buildAvatarPanel();
 }
