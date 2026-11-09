@@ -1247,7 +1247,7 @@ export class Island {
     const db = await this.getFishDB();
     const res = rollFish(db, att.terrain);
     // 極低機率釣到敵對怪物（該地形沒有其他還在的怪物時才會）：不記圖鑑，改成在浮標旁落地追殺釣到牠的人
-    if (!res.escaped && db.lurker && !this.lurkers.has(att.terrain) && Math.random() < (db.lurkerChance || 0)
+    if (!res.escaped && db.lurker && !(db.noLurker || []).includes(att.terrain) && !this.lurkers.has(att.terrain) && Math.random() < (db.lurkerChance || 0)   // noLurker：和平島不會釣到
         && await this.spawnLurker(ws, att, String(db.lurker), now)) {
       try { ws.send(JSON.stringify({ t: "fish_result", terrain: att.terrain, lurker: String(db.lurker), saved: false })); } catch { /* 對方已斷線 */ }
       return;

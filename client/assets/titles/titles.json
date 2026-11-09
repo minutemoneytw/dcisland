@@ -108,6 +108,16 @@
    }
   },
   {
+   "id": "angler_peace",
+   "name": "和平島釣魚能手",
+   "desc": "和平島的魚類圖鑑收集 10 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "peace",
+    "n": 10
+   }
+  },
+  {
    "id": "notes_grass",
    "name": "專研草島釣魚筆記",
    "desc": "草島的魚類圖鑑收集 30 種",
@@ -178,6 +188,16 @@
    }
   },
   {
+   "id": "notes_peace",
+   "name": "專研和平島釣魚筆記",
+   "desc": "和平島的魚類圖鑑收集 30 種",
+   "cond": {
+    "type": "dex",
+    "terrain": "peace",
+    "n": 30
+   }
+  },
+  {
    "id": "heart_hook",
    "name": "勾人心魄",
    "desc": "獲得每座島的釣魚能手",
@@ -190,7 +210,8 @@
      "angler_night",
      "angler_forest",
      "angler_volcano",
-     "angler_machine"
+     "angler_machine",
+     "angler_peace"
     ]
    }
   },
@@ -207,7 +228,8 @@
      "notes_night",
      "notes_forest",
      "notes_volcano",
-     "notes_machine"
+     "notes_machine",
+     "notes_peace"
     ]
    }
   },

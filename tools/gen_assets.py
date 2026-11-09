@@ -1642,8 +1642,13 @@ TERRAINS = [
          ground=("#d9c9a6", "#c8b690"), edge=("#ecdfb4", "#dfd09e"),
          water=("#5ab8d8", "#4aa8c8"), leaf=("#6ab85a", "#58a04a"), trunk="#8a6a46",
          deco=[], ui="#d9c9a6",
-         layout="room", campfire=False),   # room＝像室內：整張地圖都是地板（沒有水）；campfire=False＝沒有營火
+         layout="room", campfire=False),   # room＝像室內：整張地圖都是地板（水只有 POOLS_BY_TERRAIN 的室內釣魚池）；campfire=False＝沒有營火
 ]
+
+# 室內釣魚池（像室內的地形才用）：地形 → [池]。cell＝水面左上角格、w／h＝水面幾格；外圍一圈是池邊（岸，可以走）
+POOLS_BY_TERRAIN = {
+    "peace": [dict(cell=[16, 25], w=8, h=6)],   # 2026-11-09 使用者要求：和平島找一小塊做室內釣魚場（左側，遠離中央的遊戲桌）
+}
 
 # 和平島的遊戲桌：地形 → [桌]。id＝桌 id（兩份伺服器的 TABLE_DEFS 要一致）、game＝client/assets/games/games.json 的遊戲 id、
 # cell＝左上角格、w／h＝占幾格（圖 48×32 以 scale 2 畫＝3×2 格）。桌子是島上固定物件，不是可擺設的家具
@@ -2475,6 +2480,62 @@ def glove(c):
     cv.outline()
     return cv
 
+def duck(c="#f8d83a"):   # 橡皮小鴨（和平島）
+    cv = Canvas(16, 16)
+    b = hx(c)
+    cv.ellipse(8, 10.5, 5, 3, b)              # 身體
+    cv.ellipse(10.5, 6, 2.5, 2.5, b)          # 頭
+    cv.rect(13, 6, 14, 7, hx("#f08a2a"))      # 嘴
+    cv.hline(5, 8, 9, shade(b, 1.12))         # 翅膀亮面
+    cv.outline()
+    cv.set(11, 5, FISH_EYE)
+    return cv
+
+def dice(c="#f4f0e8", pip="#2a2a32", gold=False):   # 骰子（和平島；gold＝黃金骰子）
+    cv = Canvas(16, 16)
+    b = hx(c)
+    cv.rect(3, 3, 12, 12, b)
+    cv.hline(3, 12, 3, shade(b, 1.1)); cv.vline(12, 4, 12, shade(b, .8)); cv.hline(4, 12, 12, shade(b, .8))
+    p = hx(pip)
+    for x, y in ((5, 5), (10, 5), (5, 10), (10, 10), (7, 7), (8, 8)):
+        cv.set(x, y, p)
+    cv.outline()
+    if gold:
+        cv.set(4, 4, hx("#fffbe0")); cv.set(5, 4, hx("#fffbe0"))
+    return cv
+
+def card(c="#d84a4a", mark="#f8f0e0"):   # 泡水的紙牌（和平島）
+    cv = Canvas(16, 16)
+    b = hx(c)
+    cv.rect(4, 2, 11, 13, b)
+    cv.rect(5, 3, 10, 12, shade(b, 1.08))
+    m = hx(mark)
+    cv.ellipse(7.5, 7.5, 2, 3, m)              # 中間的橢圓
+    cv.set(5, 3, m); cv.set(10, 12, m)
+    cv.outline()
+    return cv
+
+def stone(c="#2a2a30"):   # 五子棋子（和平島）
+    cv = Canvas(16, 16)
+    b = hx(c)
+    cv.ellipse(8, 8.5, 5, 3.5, b)
+    cv.set(6, 7, shade(b, 1.6 if sum(b[:3]) < 200 else 1.05)); cv.set(7, 7, shade(b, 1.4 if sum(b[:3]) < 200 else 1.02))
+    cv.outline()
+    return cv
+
+def seahorse(c):   # 海馬（和平島）
+    cv = Canvas(16, 16)
+    b = hx(c)
+    cv.ellipse(9, 4.5, 2, 2, b)                # 頭
+    cv.hline(10, 13, 5, b)                     # 吻
+    for y, x in ((7, 8), (8, 8), (9, 8), (10, 8), (11, 7), (12, 7)):
+        cv.rect(x - 1, y, x + 1, y, b)          # 身體
+    cv.set(6, 13, b); cv.set(5, 12, b); cv.set(5, 11, b); cv.set(6, 11, shade(b, .8))   # 捲尾
+    cv.vline(10, 7, 10, shade(b, 1.15))        # 背鰭
+    cv.outline()
+    cv.set(9, 4, FISH_EYE)
+    return cv
+
 def kelp(c):
     cv = Canvas(16, 16)
     b = hx(c)
@@ -2722,14 +2783,46 @@ FISH_TABLE = [
     ("machine", "circuit_fish", "電路魚", R, (40, 90), lambda: fish("#2a8a6a", "#8af8c8", L=12, H=5, stripes=(5, 8, 11), glow="#8af8e8")),
     ("machine", "tungsten_marlin", "鎢鋼旗魚", R, (100, 220), lambda: fish("#9aa8b8", "#e0e8f0", L=14, H=5, horn="#e8e8f0")),
     ("machine", "steam_whale", "蒸汽鯨", R, (150, 300), lambda: fish("#8a98a8", "#e8eef4", L=14, H=7, fin="#c8d0d8", glow="#f0f4f8")),
+    # 和平島：室內釣魚場（2026-11-09 使用者要求）——觀賞魚，加上從遊戲桌掉進池子的小東西
+    ("peace", "goldfish", "金魚", C, (5, 15), lambda: fish("#f0782a", "#f8c070", L=9, H=6, fin="#f8a050")),
+    ("peace", "guppy", "孔雀魚", C, (3, 6), lambda: fish("#8a9aa8", "#d8e0e8", L=7, H=4, fin="#e85ab8")),
+    ("peace", "neon_tetra", "霓虹燈魚", C, (2, 4), lambda: fish("#3a4a8a", "#e84a4a", L=8, H=4, band="#4ae8f8")),
+    ("peace", "zebra_danio", "斑馬魚", C, (3, 6), lambda: fish("#d8d0a8", "#f0ece0", L=8, H=4, stripes=(6, 8, 10))),
+    ("peace", "cherry_shrimp", "櫻桃蝦", C, (2, 4), lambda: shrimp("#e84a5a")),
+    ("peace", "tank_snail", "缸壁螺", C, (1, 3), lambda: snail("#8a6a48", "#c8b898")),
+    ("peace", "platy", "滿魚", C, (4, 7), lambda: fish("#f8a03a", "#f8d8a0", L=8, H=5)),
+    ("peace", "black_molly", "黑摩利", C, (5, 10), lambda: fish("#2a2a32", "#5a5a68", L=9, H=5)),
+    ("peace", "mosquitofish", "大肚魚", C, (3, 6), lambda: fish("#a8a890", "#e0e0c8", L=7, H=5)),
+    ("peace", "corydoras", "鼠魚", C, (4, 7), lambda: fish("#b8a888", "#e8e0c8", L=8, H=5, whisker=True, spots=((6, 7), (8, 6), (10, 7)))),
+    ("peace", "water_wisteria", "水蘊草", C, (10, 40), lambda: kelp("#4aa84a")),
+    ("peace", "rubber_duck", "橡皮小鴨", C, (8, 12), lambda: duck()),
+    ("peace", "lost_dice", "遺落的骰子", C, (1, 2), lambda: dice()),
+    ("peace", "soggy_card", "泡水的紙牌", C, (8, 9), lambda: card()),
+    ("peace", "go_stone", "五子棋子", C, (2, 3), lambda: stone()),
+    ("peace", "betta", "鬥魚", U, (5, 8), lambda: fish("#c83a5a", "#e87a8a", L=8, H=5, fin="#8a3ad8")),
+    ("peace", "angelfish", "神仙魚", U, (10, 20), lambda: fish("#e8e4d8", "#f8f8f0", L=9, H=8, stripes=(7, 10))),
+    ("peace", "axolotl", "六角恐龍", U, (15, 30), lambda: eel("#f0a8c0", "#f8d8e0")),
+    ("peace", "pea_puffer", "豆豆河豚", U, (2, 4), lambda: fish("#d8c870", "#f8f4e0", L=10, H=9, spots=((6, 6), (9, 5), (11, 7), (7, 8)))),
+    ("peace", "dwarf_seahorse", "侏儒海馬", U, (2, 5), lambda: seahorse("#e8a03a")),
+    ("peace", "apple_snail", "蘋果螺", U, (4, 8), lambda: snail("#e8c83a", "#f0e0a0")),
+    ("peace", "crystal_shrimp", "水晶蝦", U, (2, 4), lambda: shrimp("#f0e8f0")),
+    ("peace", "tiger_barb", "虎皮魚", U, (4, 7), lambda: fish("#e8b84a", "#f8e8b0", L=8, H=6, stripes=(5, 8, 11), fin="#e84a3a")),
+    ("peace", "glass_catfish", "玻璃貓", U, (6, 12), lambda: fish("#d8e8f0", "#ffffff", L=10, H=4, alpha=120)),
+    ("peace", "arowana", "金龍魚", R, (40, 90), lambda: fish("#e8b83a", "#f8e8a0", L=14, H=5, whisker=True, glow="#fff0a0", spots=((6, 7), (9, 7), (12, 7)))),
+    ("peace", "discus", "七彩神仙", R, (12, 20), lambda: fish("#3a8ac8", "#e86a3a", L=10, H=9, stripes=(6, 9, 12), glow="#f8c84a")),
+    ("peace", "ranchu", "蘭壽金魚", R, (10, 20), lambda: fish("#f04a2a", "#f8e0d0", L=9, H=8, fin="#f8f0e8", glow="#ffd0c0")),
+    ("peace", "dove_fish", "和平鴿魚", R, (20, 40), lambda: fish("#f8f8f4", "#ffffff", L=11, H=6, fin="#a8c870", glow="#e8f8d8")),
+    ("peace", "rainbow_koi", "彩虹錦鯉", R, (40, 90), lambda: fish("#f0f0e8", fin="#5ab8f0", L=12, H=6, band="#e85ab8", spots=((6, 7), (9, 6), (11, 8)), glow="#f8e84a")),
+    ("peace", "golden_dice", "黃金骰子", R, (1, 2), lambda: dice("#f2c230", "#8a5a10", gold=True)),
 ]
+FISH_NO_LURKER = ["peace"]   # 不會釣到敵對怪物（lurker）的地形：和平島不能有任何敵對 NPC／怪物（使用者定）
 
 def fish_manifest():
     out = dict(
         _comment="釣魚與魚類圖鑑。由 tools/gen_assets.py 的 FISH_TABLE 產生（改這裡要改產生器再重跑）。稀有度先依 weight 抽，再從該地形同稀有度的魚裡平均抽一種；尺寸在 size 範圍內、越大越難（兩份伺服器與單機模擬一致）。",
         escape=0.002,
-        lurker="fishman", lurkerChance=0.002,
-        _lurkerComment="lurker＝釣上來的敵對怪物（mobs.json 的 id）；lurkerChance＝每次拉竿成功（沒脫鉤）時釣到牠的機率（約 500 竿一次）。同一地形已經有一隻還沒消失時照常釣魚。",
+        lurker="fishman", lurkerChance=0.002, noLurker=FISH_NO_LURKER,
+        _lurkerComment="lurker＝釣上來的敵對怪物（mobs.json 的 id）；lurkerChance＝每次拉竿成功（沒脫鉤）時釣到牠的機率（約 500 竿一次）。同一地形已經有一隻還沒消失時照常釣魚。noLurker＝不會釣到牠的地形（和平島；兩份伺服器與單機都照這個判斷）。",
         _bigComment="big＝大尺寸門檻（cm，釣到 ≥ big 就算大尺寸；稱號用）。取尺寸範圍的 75% 處四捨五入，每次釣到該魚時約一到兩成機率是大尺寸（尺寸取 r^1.6）。",
         rarity=dict(common=dict(name="常見", weight=60, color="#c8d0bc"),
                     uncommon=dict(name="罕見", weight=35, color="#7ab8f0"),
@@ -2780,6 +2873,8 @@ def main():
             td["owner"] = OWNER_BY_TERRAIN[t["id"]]
         if t["id"] in TABLES_BY_TERRAIN:
             td["tables"] = TABLES_BY_TERRAIN[t["id"]]
+        if t["id"] in POOLS_BY_TERRAIN:
+            td["pools"] = POOLS_BY_TERRAIN[t["id"]]
         if t.get("layout"):
             td["layout"] = t["layout"]
             if t["layout"] == "room":

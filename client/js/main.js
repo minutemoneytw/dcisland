@@ -119,8 +119,10 @@ function genWorld(id) {
   const cx = COLS / 2 - .5, cy = ROWS / 2 - .5, rx = 29, ry = 19.5;   // 放大 5 倍級（2026-11-07 再放大約 24% 面積：原本 26／17.5）
   const types = new Uint8Array(COLS * ROWS);
   const room = S.terrains[id]?.layout === 'room';   // 和平島：像室內——整張地圖都是地板，沒有水（2026-11-08 使用者要求移除最外圈的水；地圖邊界本來就走不出去）
+  // 室內釣魚池（terrain.json 的 pools；2026-11-09）：池內是水（types 0，可以拋竿），外圍一圈是池邊（types 1，可以走）
+  const inPool = (x, y, m) => (S.terrains[id]?.pools || []).some(p => x >= p.cell[0] - m && x < p.cell[0] + p.w + m && y >= p.cell[1] - m && y < p.cell[1] + p.h + m);
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
-    if (room) { types[y * COLS + x] = 2; continue; }
+    if (room) { types[y * COLS + x] = inPool(x, y, 0) ? 0 : inPool(x, y, 1) ? 1 : 2; continue; }
     let d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
     d += (rng() - .5) * .22;
     types[y * COLS + x] = d < .7 ? 2 : d < 1.1 ? 1 : 0;
@@ -3809,7 +3811,7 @@ function rollFish(terrain, bob) {
   const db = S.fishDB, list = db?.terrains[terrain] || [];
   if (!list.length || Math.random() < db.escape) return { terrain, escaped: true };
   // 極低機率釣到敵對怪物（場上已經有一隻就照常釣魚）；與兩份伺服器的 fishCatch 同規則
-  if (db.lurker && mobDef(db.lurker) && !S.mobs.some(v => v.lurker && !v.dead) && Math.random() < (db.lurkerChance || 0))
+  if (db.lurker && !(db.noLurker || []).includes(terrain) && mobDef(db.lurker) && !S.mobs.some(v => v.lurker && !v.dead) && Math.random() < (db.lurkerChance || 0))   // noLurker：和平島不會釣到
     return { terrain, lurker: db.lurker, bx: bob?.x, by: bob?.y };
   const rars = Object.entries(db.rarity).filter(([k]) => list.some(f => f.rarity === k));
   let r = Math.random() * rars.reduce((s, [, v]) => s + v.weight, 0), rar = rars[rars.length - 1][0];
@@ -6327,6 +6329,14 @@ async function boot() {
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
   S.me.job = jobIdOf(S.me.job) || DEFAULT_JOB;   // 舊存檔的坦克／補師／輸出照 legacy 轉成騎士／白魔法師／忍者；沒有或不合法＝忍者
   if (S.me.title && !titleDef(S.me.title)) S.me.title = null;   // 稱號已從清單移除：不顯示
+  // 2026-11-09 和平島加了魚種：「勾人心魄」「魚譜大成」改成每座島（含和平島）都要；「魚太公」「煙波釣徒」「釣場之王」（所有魚種）也自動包含和平島的魚。
+  // 之前拿到的拔掉（戴著的卸下、從已提示清單移除，重新達成會再跳提示）；條件本身是即時算的，沒達成就是未解鎖
+  if ((S.titleBook.rev || 0) < 1) {
+    const revoked = ['heart_hook', 'world_angler', 'taigong', 'yanbo', 'fishing_king'];
+    if (revoked.includes(S.me.title)) { S.me.title = null; saveAvatar(); }
+    S.titleBook.known = (S.titleBook.known || []).filter(id => !revoked.includes(id));
+    S.titleBook.rev = 1; lsSet('dcisland.m0.titles', S.titleBook);
+  }
   checkTitles(true);                       // 依現有紀錄算一次已解鎖的稱號（不跳提示）
   if (!S.me.weapon || !weaponAllowed(S.me.job, S.me.weapon)) S.me.weapon = JOBS[S.me.job].weapon || 'hands';   // 舊存檔的武器（例如圓盾）這個職業不能用／沒武器欄：換成職業武器
   // 圖片：同樣全部並行（含目前所在地形的圖）。只有角色身體是必要的（缺了畫不出人），其餘缺圖就略過該項

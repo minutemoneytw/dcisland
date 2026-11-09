@@ -3,7 +3,10 @@
  "escape": 0.002,
  "lurker": "fishman",
  "lurkerChance": 0.002,
- "_lurkerComment": "lurker＝釣上來的敵對怪物（mobs.json 的 id）；lurkerChance＝每次拉竿成功（沒脫鉤）時釣到牠的機率（約 500 竿一次）。同一地形已經有一隻還沒消失時照常釣魚。",
+ "noLurker": [
+  "peace"
+ ],
+ "_lurkerComment": "lurker＝釣上來的敵對怪物（mobs.json 的 id）；lurkerChance＝每次拉竿成功（沒脫鉤）時釣到牠的機率（約 500 竿一次）。同一地形已經有一隻還沒消失時照常釣魚。noLurker＝不會釣到牠的地形（和平島；兩份伺服器與單機都照這個判斷）。",
  "_bigComment": "big＝大尺寸門檻（cm，釣到 ≥ big 就算大尺寸；稱號用）。取尺寸範圍的 75% 處四捨五入，每次釣到該魚時約一到兩成機率是大尺寸（尺寸取 r^1.6）。",
  "rarity": {
   "common": {
@@ -2345,6 +2348,338 @@
     ],
     "big": 78,
     "sprite": "salamander_fish.png"
+   }
+  ],
+  "peace": [
+   {
+    "id": "goldfish",
+    "name": "金魚",
+    "rarity": "common",
+    "size": [
+     5,
+     15
+    ],
+    "big": 12,
+    "sprite": "goldfish.png"
+   },
+   {
+    "id": "guppy",
+    "name": "孔雀魚",
+    "rarity": "common",
+    "size": [
+     3,
+     6
+    ],
+    "big": 5,
+    "sprite": "guppy.png"
+   },
+   {
+    "id": "neon_tetra",
+    "name": "霓虹燈魚",
+    "rarity": "common",
+    "size": [
+     2,
+     4
+    ],
+    "big": 4,
+    "sprite": "neon_tetra.png"
+   },
+   {
+    "id": "zebra_danio",
+    "name": "斑馬魚",
+    "rarity": "common",
+    "size": [
+     3,
+     6
+    ],
+    "big": 5,
+    "sprite": "zebra_danio.png"
+   },
+   {
+    "id": "cherry_shrimp",
+    "name": "櫻桃蝦",
+    "rarity": "common",
+    "size": [
+     2,
+     4
+    ],
+    "big": 4,
+    "sprite": "cherry_shrimp.png"
+   },
+   {
+    "id": "tank_snail",
+    "name": "缸壁螺",
+    "rarity": "common",
+    "size": [
+     1,
+     3
+    ],
+    "big": 2,
+    "sprite": "tank_snail.png"
+   },
+   {
+    "id": "platy",
+    "name": "滿魚",
+    "rarity": "common",
+    "size": [
+     4,
+     7
+    ],
+    "big": 6,
+    "sprite": "platy.png"
+   },
+   {
+    "id": "black_molly",
+    "name": "黑摩利",
+    "rarity": "common",
+    "size": [
+     5,
+     10
+    ],
+    "big": 9,
+    "sprite": "black_molly.png"
+   },
+   {
+    "id": "mosquitofish",
+    "name": "大肚魚",
+    "rarity": "common",
+    "size": [
+     3,
+     6
+    ],
+    "big": 5,
+    "sprite": "mosquitofish.png"
+   },
+   {
+    "id": "corydoras",
+    "name": "鼠魚",
+    "rarity": "common",
+    "size": [
+     4,
+     7
+    ],
+    "big": 6,
+    "sprite": "corydoras.png"
+   },
+   {
+    "id": "water_wisteria",
+    "name": "水蘊草",
+    "rarity": "common",
+    "size": [
+     10,
+     40
+    ],
+    "big": 32,
+    "sprite": "water_wisteria.png"
+   },
+   {
+    "id": "rubber_duck",
+    "name": "橡皮小鴨",
+    "rarity": "common",
+    "size": [
+     8,
+     12
+    ],
+    "big": 11,
+    "sprite": "rubber_duck.png"
+   },
+   {
+    "id": "lost_dice",
+    "name": "遺落的骰子",
+    "rarity": "common",
+    "size": [
+     1,
+     2
+    ],
+    "big": 2,
+    "sprite": "lost_dice.png"
+   },
+   {
+    "id": "soggy_card",
+    "name": "泡水的紙牌",
+    "rarity": "common",
+    "size": [
+     8,
+     9
+    ],
+    "big": 9,
+    "sprite": "soggy_card.png"
+   },
+   {
+    "id": "go_stone",
+    "name": "五子棋子",
+    "rarity": "common",
+    "size": [
+     2,
+     3
+    ],
+    "big": 3,
+    "sprite": "go_stone.png"
+   },
+   {
+    "id": "betta",
+    "name": "鬥魚",
+    "rarity": "uncommon",
+    "size": [
+     5,
+     8
+    ],
+    "big": 7,
+    "sprite": "betta.png"
+   },
+   {
+    "id": "angelfish",
+    "name": "神仙魚",
+    "rarity": "uncommon",
+    "size": [
+     10,
+     20
+    ],
+    "big": 18,
+    "sprite": "angelfish.png"
+   },
+   {
+    "id": "axolotl",
+    "name": "六角恐龍",
+    "rarity": "uncommon",
+    "size": [
+     15,
+     30
+    ],
+    "big": 26,
+    "sprite": "axolotl.png"
+   },
+   {
+    "id": "pea_puffer",
+    "name": "豆豆河豚",
+    "rarity": "uncommon",
+    "size": [
+     2,
+     4
+    ],
+    "big": 4,
+    "sprite": "pea_puffer.png"
+   },
+   {
+    "id": "dwarf_seahorse",
+    "name": "侏儒海馬",
+    "rarity": "uncommon",
+    "size": [
+     2,
+     5
+    ],
+    "big": 4,
+    "sprite": "dwarf_seahorse.png"
+   },
+   {
+    "id": "apple_snail",
+    "name": "蘋果螺",
+    "rarity": "uncommon",
+    "size": [
+     4,
+     8
+    ],
+    "big": 7,
+    "sprite": "apple_snail.png"
+   },
+   {
+    "id": "crystal_shrimp",
+    "name": "水晶蝦",
+    "rarity": "uncommon",
+    "size": [
+     2,
+     4
+    ],
+    "big": 4,
+    "sprite": "crystal_shrimp.png"
+   },
+   {
+    "id": "tiger_barb",
+    "name": "虎皮魚",
+    "rarity": "uncommon",
+    "size": [
+     4,
+     7
+    ],
+    "big": 6,
+    "sprite": "tiger_barb.png"
+   },
+   {
+    "id": "glass_catfish",
+    "name": "玻璃貓",
+    "rarity": "uncommon",
+    "size": [
+     6,
+     12
+    ],
+    "big": 10,
+    "sprite": "glass_catfish.png"
+   },
+   {
+    "id": "arowana",
+    "name": "金龍魚",
+    "rarity": "rare",
+    "size": [
+     40,
+     90
+    ],
+    "big": 78,
+    "sprite": "arowana.png"
+   },
+   {
+    "id": "discus",
+    "name": "七彩神仙",
+    "rarity": "rare",
+    "size": [
+     12,
+     20
+    ],
+    "big": 18,
+    "sprite": "discus.png"
+   },
+   {
+    "id": "ranchu",
+    "name": "蘭壽金魚",
+    "rarity": "rare",
+    "size": [
+     10,
+     20
+    ],
+    "big": 18,
+    "sprite": "ranchu.png"
+   },
+   {
+    "id": "dove_fish",
+    "name": "和平鴿魚",
+    "rarity": "rare",
+    "size": [
+     20,
+     40
+    ],
+    "big": 35,
+    "sprite": "dove_fish.png"
+   },
+   {
+    "id": "rainbow_koi",
+    "name": "彩虹錦鯉",
+    "rarity": "rare",
+    "size": [
+     40,
+     90
+    ],
+    "big": 78,
+    "sprite": "rainbow_koi.png"
+   },
+   {
+    "id": "golden_dice",
+    "name": "黃金骰子",
+    "rarity": "rare",
+    "size": [
+     1,
+     2
+    ],
+    "big": 2,
+    "sprite": "golden_dice.png"
    }
   ]
  }

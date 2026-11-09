@@ -3087,7 +3087,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     res = roll_fish(cur)
                     db = fish_db()
                     # 極低機率釣到敵對怪物（該地形沒有其他還在的怪物時才會）：不記圖鑑，改成在浮標旁落地追殺釣到牠的人
-                    if not res.get("escaped") and db.get("lurker") and random.random() < db.get("lurkerChance", 0):
+                    if not res.get("escaped") and db.get("lurker") and cur not in (db.get("noLurker") or []) and random.random() < db.get("lurkerChance", 0):   # noLurker：和平島不會釣到
                         sp = room.spawn_lurker(cid, str(db["lurker"]))
                         if sp:
                             room.broadcast(sp[1], terrain=sp[0])

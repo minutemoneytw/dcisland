@@ -51,6 +51,16 @@
    "h": 2
   }
  ],
+ "pools": [
+  {
+   "cell": [
+    16,
+    25
+   ],
+   "w": 8,
+   "h": 6
+  }
+ ],
  "layout": "room",
  "groundRepeat": 3,
  "campfire": false
