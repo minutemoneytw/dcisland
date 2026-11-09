@@ -5824,7 +5824,7 @@ function buildAvatarPanel() {
     nm.title = (cur ? cur.name : '（無）') + (isGlam ? `（外觀；裝備：${gearIt.name}）` : '（職業裝備）');   // 名稱太長被截斷時，滑鼠停留看全名
     row.appendChild(nm);
     const gb = document.createElement('button'); gb.className = 'ff-btn small'; gb.textContent = '外觀';
-    gb.onclick = () => openGlams(slot);
+    gb.onclick = () => { if (S.glamOpen && glamSlot === slot) closeGlams(); else openGlams(slot); };   // 同一個部位再點一次＝關閉；點別的部位＝切過去
     row.appendChild(gb);
     if (slot !== 'weapon') {   // 換色：顯示中的那件有可染色的顏色才能換
       const b = document.createElement('button'); b.className = 'ff-btn small dye-btn';
