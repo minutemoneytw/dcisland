@@ -2531,13 +2531,13 @@ function charSprite(look, fi) {
   let ent = F.map ? F.map[fi] : [fi, 0];
   if (ent?.[2] != null && !sheetCellHas(S.charImgs[skinIt.sheet], ent[0] * F.w, ent[1] * F.h, F.w, F.h)) ent = F.map[ent[2]];
   const [cc, cr] = ent, sx = cc * F.w, sy = cr * F.h;
-  // 由下往上：身體 → 褲子 → 鞋子 → 衣服 → 臉型(頭) → 眼睛 →（種族耳後層）→ 頭髮 →（種族耳前層）→ 帽子
+  // 由下往上：身體 → 褲子 → 鞋子 → 衣服 → 臉型(頭) → 眼睛 →（貓耳後層）→ 頭髮 →（精靈耳／貓耳前層）→ 帽子
   const layers = [[skinIt], [bottomG, pantsHex], [shoeG, shoeHex], [topG, shirtHex], [face, skinHex], [eyesIt, look.eyeC || null]];
   if (wpn && !over && wpn.lpc.bg) layers.unshift([{ sheet: wpn.lpc.bg }]);   // 一般格武器的後層（在身體後面）
-  if (race.ear) layers.push([{ sheet: race.ear, dye: race.earDye }, skinHex]);   // 精靈耳（跟膚色）
   const catTint = race.earFur ? hx2 => [[race.earFur, hx2 || null], [['#ffffff'], race.earInner || '#f5b8ad']] : null;
   if (race.earBg) layers.push([{ sheet: race.earBg, tint: catTint, hx: hairHex || null }]);   // 貓耳後層（髮下面；毛色跟髮色、耳內粉肉色）
   if (!hat?.hideHair) layers.push([hairIt, look.hairC || null]);   // 全罩式頭盔（hats 的 hideHair）把頭髮整個蓋住：不畫頭髮，免得從頭盔上方露出來
+  if (race.ear) layers.push([{ sheet: race.ear, dye: race.earDye }, skinHex]);   // 精靈耳（跟膚色）：畫在頭髮上面（LPC 的耳朵層 zPos 126 高於頭髮），否則尖耳被頭髮蓋住（2026-11-09 修正）
   if (race.earFg) layers.push([{ sheet: race.earFg, tint: catTint, hx: hairHex || null }]);   // 貓耳前層（髮上面；同上）
   layers.push([hat, hatHex]);
   if (wpn && !over && wpn.lpc.fg) layers.push([{ sheet: wpn.lpc.fg }]);   // 一般格武器的前層（最上面）
