@@ -1573,6 +1573,8 @@
    "name": "棕",
    "style": "default",
    "styleName": "預設",
+   "color": "brown",
+   "hex": "#684018",
    "sheet": "char_eyes_default_brown.png"
   },
   {
@@ -1580,6 +1582,8 @@
    "name": "深棕",
    "style": "default",
    "styleName": "預設",
+   "color": "brown2",
+   "hex": "#604820",
    "sheet": "char_eyes_default_brown2.png"
   },
   {
@@ -1587,6 +1591,8 @@
    "name": "黑",
    "style": "default",
    "styleName": "預設",
+   "color": "black",
+   "hex": "#585858",
    "sheet": "char_eyes_default_black.png"
   },
   {
@@ -1594,6 +1600,8 @@
    "name": "金",
    "style": "default",
    "styleName": "預設",
+   "color": "blonde",
+   "hex": "#b88830",
    "sheet": "char_eyes_default_blonde.png"
   },
   {
@@ -1601,6 +1609,8 @@
    "name": "灰金",
    "style": "default",
    "styleName": "預設",
+   "color": "ashblonde",
+   "hex": "#c0a880",
    "sheet": "char_eyes_default_ashblonde.png"
   },
   {
@@ -1608,6 +1618,8 @@
    "name": "銀白",
    "style": "default",
    "styleName": "預設",
+   "color": "ashplatinum",
+   "hex": "#c8b8a8",
    "sheet": "char_eyes_default_ashplatinum.png"
   },
   {
@@ -1615,6 +1627,8 @@
    "name": "紅",
    "style": "default",
    "styleName": "預設",
+   "color": "red",
+   "hex": "#a00830",
    "sheet": "char_eyes_default_red.png"
   },
   {
@@ -1622,6 +1636,8 @@
    "name": "橘",
    "style": "default",
    "styleName": "預設",
+   "color": "orange",
+   "hex": "#b83000",
    "sheet": "char_eyes_default_orange.png"
   },
   {
@@ -1629,6 +1645,8 @@
    "name": "玫瑰粉",
    "style": "default",
    "styleName": "預設",
+   "color": "rosepink",
+   "hex": "#b87070",
    "sheet": "char_eyes_default_rosepink.png"
   },
   {
@@ -1636,6 +1654,8 @@
    "name": "綠",
    "style": "default",
    "styleName": "預設",
+   "color": "green",
+   "hex": "#008050",
    "sheet": "char_eyes_default_green.png"
   },
   {
@@ -1643,6 +1663,8 @@
    "name": "藍",
    "style": "default",
    "styleName": "預設",
+   "color": "blue",
+   "hex": "#20a8b8",
    "sheet": "char_eyes_default_blue.png"
   },
   {
@@ -1650,6 +1672,8 @@
    "name": "紫",
    "style": "default",
    "styleName": "預設",
+   "color": "purple",
+   "hex": "#702078",
    "sheet": "char_eyes_default_purple.png"
   },
   {
@@ -1657,6 +1681,8 @@
    "name": "棕",
    "style": "angry",
    "styleName": "生氣",
+   "color": "brown",
+   "hex": "#684018",
    "sheet": "char_eyes_angry_brown.png"
   },
   {
@@ -1664,6 +1690,8 @@
    "name": "深棕",
    "style": "angry",
    "styleName": "生氣",
+   "color": "brown2",
+   "hex": "#604820",
    "sheet": "char_eyes_angry_brown2.png"
   },
   {
@@ -1671,6 +1699,8 @@
    "name": "黑",
    "style": "angry",
    "styleName": "生氣",
+   "color": "black",
+   "hex": "#585858",
    "sheet": "char_eyes_angry_black.png"
   },
   {
@@ -1678,6 +1708,8 @@
    "name": "金",
    "style": "angry",
    "styleName": "生氣",
+   "color": "blonde",
+   "hex": "#b88830",
    "sheet": "char_eyes_angry_blonde.png"
   },
   {
@@ -1685,6 +1717,8 @@
    "name": "灰金",
    "style": "angry",
    "styleName": "生氣",
+   "color": "ashblonde",
+   "hex": "#c0a880",
    "sheet": "char_eyes_angry_ashblonde.png"
   },
   {
@@ -1692,6 +1726,8 @@
    "name": "銀白",
    "style": "angry",
    "styleName": "生氣",
+   "color": "ashplatinum",
+   "hex": "#c8b8a8",
    "sheet": "char_eyes_angry_ashplatinum.png"
   },
   {
@@ -1699,6 +1735,8 @@
    "name": "紅",
    "style": "angry",
    "styleName": "生氣",
+   "color": "red",
+   "hex": "#a00830",
    "sheet": "char_eyes_angry_red.png"
   },
   {
@@ -1706,6 +1744,8 @@
    "name": "橘",
    "style": "angry",
    "styleName": "生氣",
+   "color": "orange",
+   "hex": "#b83000",
    "sheet": "char_eyes_angry_orange.png"
   },
   {
@@ -1713,6 +1753,8 @@
    "name": "玫瑰粉",
    "style": "angry",
    "styleName": "生氣",
+   "color": "rosepink",
+   "hex": "#b87070",
    "sheet": "char_eyes_angry_rosepink.png"
   },
   {
@@ -1720,6 +1762,8 @@
    "name": "綠",
    "style": "angry",
    "styleName": "生氣",
+   "color": "green",
+   "hex": "#008050",
    "sheet": "char_eyes_angry_green.png"
   },
   {
@@ -1727,6 +1771,8 @@
    "name": "藍",
    "style": "angry",
    "styleName": "生氣",
+   "color": "blue",
+   "hex": "#20a8b8",
    "sheet": "char_eyes_angry_blue.png"
   },
   {
@@ -1734,6 +1780,8 @@
    "name": "紫",
    "style": "angry",
    "styleName": "生氣",
+   "color": "purple",
+   "hex": "#702078",
    "sheet": "char_eyes_angry_purple.png"
   },
   {
@@ -1741,6 +1789,8 @@
    "name": "棕",
    "style": "sad",
    "styleName": "難過",
+   "color": "brown",
+   "hex": "#684018",
    "sheet": "char_eyes_sad_brown.png"
   },
   {
@@ -1748,6 +1798,8 @@
    "name": "深棕",
    "style": "sad",
    "styleName": "難過",
+   "color": "brown2",
+   "hex": "#604820",
    "sheet": "char_eyes_sad_brown2.png"
   },
   {
@@ -1755,6 +1807,8 @@
    "name": "黑",
    "style": "sad",
    "styleName": "難過",
+   "color": "black",
+   "hex": "#585858",
    "sheet": "char_eyes_sad_black.png"
   },
   {
@@ -1762,6 +1816,8 @@
    "name": "金",
    "style": "sad",
    "styleName": "難過",
+   "color": "blonde",
+   "hex": "#b88830",
    "sheet": "char_eyes_sad_blonde.png"
   },
   {
@@ -1769,6 +1825,8 @@
    "name": "灰金",
    "style": "sad",
    "styleName": "難過",
+   "color": "ashblonde",
+   "hex": "#c0a880",
    "sheet": "char_eyes_sad_ashblonde.png"
   },
   {
@@ -1776,6 +1834,8 @@
    "name": "銀白",
    "style": "sad",
    "styleName": "難過",
+   "color": "ashplatinum",
+   "hex": "#c8b8a8",
    "sheet": "char_eyes_sad_ashplatinum.png"
   },
   {
@@ -1783,6 +1843,8 @@
    "name": "紅",
    "style": "sad",
    "styleName": "難過",
+   "color": "red",
+   "hex": "#a00830",
    "sheet": "char_eyes_sad_red.png"
   },
   {
@@ -1790,6 +1852,8 @@
    "name": "橘",
    "style": "sad",
    "styleName": "難過",
+   "color": "orange",
+   "hex": "#b83000",
    "sheet": "char_eyes_sad_orange.png"
   },
   {
@@ -1797,6 +1861,8 @@
    "name": "玫瑰粉",
    "style": "sad",
    "styleName": "難過",
+   "color": "rosepink",
+   "hex": "#b87070",
    "sheet": "char_eyes_sad_rosepink.png"
   },
   {
@@ -1804,6 +1870,8 @@
    "name": "綠",
    "style": "sad",
    "styleName": "難過",
+   "color": "green",
+   "hex": "#008050",
    "sheet": "char_eyes_sad_green.png"
   },
   {
@@ -1811,6 +1879,8 @@
    "name": "藍",
    "style": "sad",
    "styleName": "難過",
+   "color": "blue",
+   "hex": "#20a8b8",
    "sheet": "char_eyes_sad_blue.png"
   },
   {
@@ -1818,6 +1888,8 @@
    "name": "紫",
    "style": "sad",
    "styleName": "難過",
+   "color": "purple",
+   "hex": "#702078",
    "sheet": "char_eyes_sad_purple.png"
   },
   {
@@ -1825,6 +1897,8 @@
    "name": "棕",
    "style": "lookl",
    "styleName": "看左",
+   "color": "brown",
+   "hex": "#684018",
    "sheet": "char_eyes_lookl_brown.png"
   },
   {
@@ -1832,6 +1906,8 @@
    "name": "深棕",
    "style": "lookl",
    "styleName": "看左",
+   "color": "brown2",
+   "hex": "#604820",
    "sheet": "char_eyes_lookl_brown2.png"
   },
   {
@@ -1839,6 +1915,8 @@
    "name": "黑",
    "style": "lookl",
    "styleName": "看左",
+   "color": "black",
+   "hex": "#585858",
    "sheet": "char_eyes_lookl_black.png"
   },
   {
@@ -1846,6 +1924,8 @@
    "name": "金",
    "style": "lookl",
    "styleName": "看左",
+   "color": "blonde",
+   "hex": "#b88830",
    "sheet": "char_eyes_lookl_blonde.png"
   },
   {
@@ -1853,6 +1933,8 @@
    "name": "灰金",
    "style": "lookl",
    "styleName": "看左",
+   "color": "ashblonde",
+   "hex": "#c0a880",
    "sheet": "char_eyes_lookl_ashblonde.png"
   },
   {
@@ -1860,6 +1942,8 @@
    "name": "銀白",
    "style": "lookl",
    "styleName": "看左",
+   "color": "ashplatinum",
+   "hex": "#c8b8a8",
    "sheet": "char_eyes_lookl_ashplatinum.png"
   },
   {
@@ -1867,6 +1951,8 @@
    "name": "紅",
    "style": "lookl",
    "styleName": "看左",
+   "color": "red",
+   "hex": "#a00830",
    "sheet": "char_eyes_lookl_red.png"
   },
   {
@@ -1874,6 +1960,8 @@
    "name": "橘",
    "style": "lookl",
    "styleName": "看左",
+   "color": "orange",
+   "hex": "#b83000",
    "sheet": "char_eyes_lookl_orange.png"
   },
   {
@@ -1881,6 +1969,8 @@
    "name": "玫瑰粉",
    "style": "lookl",
    "styleName": "看左",
+   "color": "rosepink",
+   "hex": "#b87070",
    "sheet": "char_eyes_lookl_rosepink.png"
   },
   {
@@ -1888,6 +1978,8 @@
    "name": "綠",
    "style": "lookl",
    "styleName": "看左",
+   "color": "green",
+   "hex": "#008050",
    "sheet": "char_eyes_lookl_green.png"
   },
   {
@@ -1895,6 +1987,8 @@
    "name": "藍",
    "style": "lookl",
    "styleName": "看左",
+   "color": "blue",
+   "hex": "#20a8b8",
    "sheet": "char_eyes_lookl_blue.png"
   },
   {
@@ -1902,6 +1996,8 @@
    "name": "紫",
    "style": "lookl",
    "styleName": "看左",
+   "color": "purple",
+   "hex": "#702078",
    "sheet": "char_eyes_lookl_purple.png"
   },
   {
@@ -1909,6 +2005,8 @@
    "name": "棕",
    "style": "lookr",
    "styleName": "看右",
+   "color": "brown",
+   "hex": "#684018",
    "sheet": "char_eyes_lookr_brown.png"
   },
   {
@@ -1916,6 +2014,8 @@
    "name": "深棕",
    "style": "lookr",
    "styleName": "看右",
+   "color": "brown2",
+   "hex": "#604820",
    "sheet": "char_eyes_lookr_brown2.png"
   },
   {
@@ -1923,6 +2023,8 @@
    "name": "黑",
    "style": "lookr",
    "styleName": "看右",
+   "color": "black",
+   "hex": "#585858",
    "sheet": "char_eyes_lookr_black.png"
   },
   {
@@ -1930,6 +2032,8 @@
    "name": "金",
    "style": "lookr",
    "styleName": "看右",
+   "color": "blonde",
+   "hex": "#b88830",
    "sheet": "char_eyes_lookr_blonde.png"
   },
   {
@@ -1937,6 +2041,8 @@
    "name": "灰金",
    "style": "lookr",
    "styleName": "看右",
+   "color": "ashblonde",
+   "hex": "#c0a880",
    "sheet": "char_eyes_lookr_ashblonde.png"
   },
   {
@@ -1944,6 +2050,8 @@
    "name": "銀白",
    "style": "lookr",
    "styleName": "看右",
+   "color": "ashplatinum",
+   "hex": "#c8b8a8",
    "sheet": "char_eyes_lookr_ashplatinum.png"
   },
   {
@@ -1951,6 +2059,8 @@
    "name": "紅",
    "style": "lookr",
    "styleName": "看右",
+   "color": "red",
+   "hex": "#a00830",
    "sheet": "char_eyes_lookr_red.png"
   },
   {
@@ -1958,6 +2068,8 @@
    "name": "橘",
    "style": "lookr",
    "styleName": "看右",
+   "color": "orange",
+   "hex": "#b83000",
    "sheet": "char_eyes_lookr_orange.png"
   },
   {
@@ -1965,6 +2077,8 @@
    "name": "玫瑰粉",
    "style": "lookr",
    "styleName": "看右",
+   "color": "rosepink",
+   "hex": "#b87070",
    "sheet": "char_eyes_lookr_rosepink.png"
   },
   {
@@ -1972,6 +2086,8 @@
    "name": "綠",
    "style": "lookr",
    "styleName": "看右",
+   "color": "green",
+   "hex": "#008050",
    "sheet": "char_eyes_lookr_green.png"
   },
   {
@@ -1979,6 +2095,8 @@
    "name": "藍",
    "style": "lookr",
    "styleName": "看右",
+   "color": "blue",
+   "hex": "#20a8b8",
    "sheet": "char_eyes_lookr_blue.png"
   },
   {
@@ -1986,6 +2104,8 @@
    "name": "紫",
    "style": "lookr",
    "styleName": "看右",
+   "color": "purple",
+   "hex": "#702078",
    "sheet": "char_eyes_lookr_purple.png"
   }
  ],
@@ -2039,6 +2159,7 @@
    "name": "棕",
    "style": "short",
    "styleName": "短髮",
+   "color": "brown",
    "sheet": "char_hair1.png",
    "hex": "#684018"
   },
@@ -2047,6 +2168,7 @@
    "name": "深棕",
    "style": "short",
    "styleName": "短髮",
+   "color": "brown2",
    "sheet": "char_hair2.png",
    "hex": "#604820"
   },
@@ -2055,6 +2177,7 @@
    "name": "黑",
    "style": "short",
    "styleName": "短髮",
+   "color": "black",
    "sheet": "char_hair3.png",
    "hex": "#585858"
   },
@@ -2063,6 +2186,7 @@
    "name": "金",
    "style": "short",
    "styleName": "短髮",
+   "color": "blonde",
    "sheet": "char_hair4.png",
    "hex": "#b88830"
   },
@@ -2071,6 +2195,7 @@
    "name": "灰金",
    "style": "short",
    "styleName": "短髮",
+   "color": "ashblonde",
    "sheet": "char_hair5.png",
    "hex": "#c0a880"
   },
@@ -2079,6 +2204,7 @@
    "name": "銀白",
    "style": "short",
    "styleName": "短髮",
+   "color": "ashplatinum",
    "sheet": "char_hair6.png",
    "hex": "#c8b8a8"
   },
@@ -2087,6 +2213,7 @@
    "name": "紅",
    "style": "short",
    "styleName": "短髮",
+   "color": "red",
    "sheet": "char_hair7.png",
    "hex": "#a00830"
   },
@@ -2095,6 +2222,7 @@
    "name": "橘",
    "style": "short",
    "styleName": "短髮",
+   "color": "orange",
    "sheet": "char_hair8.png",
    "hex": "#b83000"
   },
@@ -2103,6 +2231,7 @@
    "name": "玫瑰粉",
    "style": "short",
    "styleName": "短髮",
+   "color": "rosepink",
    "sheet": "char_hair9.png",
    "hex": "#b87070"
   },
@@ -2111,6 +2240,7 @@
    "name": "綠",
    "style": "short",
    "styleName": "短髮",
+   "color": "green",
    "sheet": "char_hair10.png",
    "hex": "#008050"
   },
@@ -2119,6 +2249,7 @@
    "name": "藍",
    "style": "short",
    "styleName": "短髮",
+   "color": "blue",
    "sheet": "char_hair11.png",
    "hex": "#20a8b8"
   },
@@ -2127,6 +2258,7 @@
    "name": "紫",
    "style": "short",
    "styleName": "短髮",
+   "color": "purple",
    "sheet": "char_hair12.png",
    "hex": "#702078"
   },
@@ -2135,6 +2267,7 @@
    "name": "棕",
    "style": "afro",
    "styleName": "爆炸頭",
+   "color": "brown",
    "sheet": "char_hair_afro_brown.png",
    "hex": "#684018"
   },
@@ -2143,6 +2276,7 @@
    "name": "深棕",
    "style": "afro",
    "styleName": "爆炸頭",
+   "color": "brown2",
    "sheet": "char_hair_afro_brown2.png",
    "hex": "#604820"
   },
@@ -2151,6 +2285,7 @@
    "name": "黑",
    "style": "afro",
    "styleName": "爆炸頭",
+   "color": "black",
    "sheet": "char_hair_afro_black.png",
    "hex": "#585858"
   },
@@ -2159,6 +2294,7 @@
    "name": "金",
    "style": "afro",
    "styleName": "爆炸頭",
+   "color": "blonde",
    "sheet": "char_hair_afro_blonde.png",
    "hex": "#b88830"
   },
@@ -2167,6 +2303,7 @@
    "name": "灰金",
    "style": "afro",
    "styleName": "爆炸頭",
+   "color": "ashblonde",
    "sheet": "char_hair_afro_ashblonde.png",
    "hex": "#c0a880"
   },
@@ -2175,6 +2312,7 @@
    "name": "銀白",
    "style": "afro",
    "styleName": "爆炸頭",
+   "color": "ashplatinum",
    "sheet": "char_hair_afro_ashplatinum.png",
    "hex": "#c8b8a8"
   },
@@ -2183,6 +2321,7 @@
    "name": "紅",
    "style": "afro",
    "styleName": "爆炸頭",
+   "color": "red",
    "sheet": "char_hair_afro_red.png",
    "hex": "#a00830"
   },
@@ -2191,6 +2330,7 @@
    "name": "橘",
    "style": "afro",
    "styleName": "爆炸頭",
+   "color": "orange",
    "sheet": "char_hair_afro_orange.png",
    "hex": "#b83000"
   },
@@ -2199,6 +2339,7 @@
    "name": "玫瑰粉",
    "style": "afro",
    "styleName": "爆炸頭",
+   "color": "rosepink",
    "sheet": "char_hair_afro_rosepink.png",
    "hex": "#b87070"
   },
@@ -2207,6 +2348,7 @@
    "name": "綠",
    "style": "afro",
    "styleName": "爆炸頭",
+   "color": "green",
    "sheet": "char_hair_afro_green.png",
    "hex": "#008050"
   },
@@ -2215,6 +2357,7 @@
    "name": "藍",
    "style": "afro",
    "styleName": "爆炸頭",
+   "color": "blue",
    "sheet": "char_hair_afro_blue.png",
    "hex": "#20a8b8"
   },
@@ -2223,6 +2366,7 @@
    "name": "紫",
    "style": "afro",
    "styleName": "爆炸頭",
+   "color": "purple",
    "sheet": "char_hair_afro_purple.png",
    "hex": "#702078"
   },
@@ -2231,6 +2375,7 @@
    "name": "棕",
    "style": "bob",
    "styleName": "鮑伯頭",
+   "color": "brown",
    "sheet": "char_hair_bob_brown.png",
    "hex": "#684018"
   },
@@ -2239,6 +2384,7 @@
    "name": "深棕",
    "style": "bob",
    "styleName": "鮑伯頭",
+   "color": "brown2",
    "sheet": "char_hair_bob_brown2.png",
    "hex": "#604820"
   },
@@ -2247,6 +2393,7 @@
    "name": "黑",
    "style": "bob",
    "styleName": "鮑伯頭",
+   "color": "black",
    "sheet": "char_hair_bob_black.png",
    "hex": "#585858"
   },
@@ -2255,6 +2402,7 @@
    "name": "金",
    "style": "bob",
    "styleName": "鮑伯頭",
+   "color": "blonde",
    "sheet": "char_hair_bob_blonde.png",
    "hex": "#b88830"
   },
@@ -2263,6 +2411,7 @@
    "name": "灰金",
    "style": "bob",
    "styleName": "鮑伯頭",
+   "color": "ashblonde",
    "sheet": "char_hair_bob_ashblonde.png",
    "hex": "#c0a880"
   },
@@ -2271,6 +2420,7 @@
    "name": "銀白",
    "style": "bob",
    "styleName": "鮑伯頭",
+   "color": "ashplatinum",
    "sheet": "char_hair_bob_ashplatinum.png",
    "hex": "#c8b8a8"
   },
@@ -2279,6 +2429,7 @@
    "name": "紅",
    "style": "bob",
    "styleName": "鮑伯頭",
+   "color": "red",
    "sheet": "char_hair_bob_red.png",
    "hex": "#a00830"
   },
@@ -2287,6 +2438,7 @@
    "name": "橘",
    "style": "bob",
    "styleName": "鮑伯頭",
+   "color": "orange",
    "sheet": "char_hair_bob_orange.png",
    "hex": "#b83000"
   },
@@ -2295,6 +2447,7 @@
    "name": "玫瑰粉",
    "style": "bob",
    "styleName": "鮑伯頭",
+   "color": "rosepink",
    "sheet": "char_hair_bob_rosepink.png",
    "hex": "#b87070"
   },
@@ -2303,6 +2456,7 @@
    "name": "綠",
    "style": "bob",
    "styleName": "鮑伯頭",
+   "color": "green",
    "sheet": "char_hair_bob_green.png",
    "hex": "#008050"
   },
@@ -2311,6 +2465,7 @@
    "name": "藍",
    "style": "bob",
    "styleName": "鮑伯頭",
+   "color": "blue",
    "sheet": "char_hair_bob_blue.png",
    "hex": "#20a8b8"
   },
@@ -2319,6 +2474,7 @@
    "name": "紫",
    "style": "bob",
    "styleName": "鮑伯頭",
+   "color": "purple",
    "sheet": "char_hair_bob_purple.png",
    "hex": "#702078"
   },
@@ -2327,6 +2483,7 @@
    "name": "棕",
    "style": "curly",
    "styleName": "捲長髮",
+   "color": "brown",
    "sheet": "char_hair_curly_brown.png",
    "hex": "#684018"
   },
@@ -2335,6 +2492,7 @@
    "name": "深棕",
    "style": "curly",
    "styleName": "捲長髮",
+   "color": "brown2",
    "sheet": "char_hair_curly_brown2.png",
    "hex": "#604820"
   },
@@ -2343,6 +2501,7 @@
    "name": "黑",
    "style": "curly",
    "styleName": "捲長髮",
+   "color": "black",
    "sheet": "char_hair_curly_black.png",
    "hex": "#585858"
   },
@@ -2351,6 +2510,7 @@
    "name": "金",
    "style": "curly",
    "styleName": "捲長髮",
+   "color": "blonde",
    "sheet": "char_hair_curly_blonde.png",
    "hex": "#b88830"
   },
@@ -2359,6 +2519,7 @@
    "name": "灰金",
    "style": "curly",
    "styleName": "捲長髮",
+   "color": "ashblonde",
    "sheet": "char_hair_curly_ashblonde.png",
    "hex": "#c0a880"
   },
@@ -2367,6 +2528,7 @@
    "name": "銀白",
    "style": "curly",
    "styleName": "捲長髮",
+   "color": "ashplatinum",
    "sheet": "char_hair_curly_ashplatinum.png",
    "hex": "#c8b8a8"
   },
@@ -2375,6 +2537,7 @@
    "name": "紅",
    "style": "curly",
    "styleName": "捲長髮",
+   "color": "red",
    "sheet": "char_hair_curly_red.png",
    "hex": "#a00830"
   },
@@ -2383,6 +2546,7 @@
    "name": "橘",
    "style": "curly",
    "styleName": "捲長髮",
+   "color": "orange",
    "sheet": "char_hair_curly_orange.png",
    "hex": "#b83000"
   },
@@ -2391,6 +2555,7 @@
    "name": "玫瑰粉",
    "style": "curly",
    "styleName": "捲長髮",
+   "color": "rosepink",
    "sheet": "char_hair_curly_rosepink.png",
    "hex": "#b87070"
   },
@@ -2399,6 +2564,7 @@
    "name": "綠",
    "style": "curly",
    "styleName": "捲長髮",
+   "color": "green",
    "sheet": "char_hair_curly_green.png",
    "hex": "#008050"
   },
@@ -2407,6 +2573,7 @@
    "name": "藍",
    "style": "curly",
    "styleName": "捲長髮",
+   "color": "blue",
    "sheet": "char_hair_curly_blue.png",
    "hex": "#20a8b8"
   },
@@ -2415,6 +2582,7 @@
    "name": "紫",
    "style": "curly",
    "styleName": "捲長髮",
+   "color": "purple",
    "sheet": "char_hair_curly_purple.png",
    "hex": "#702078"
   },
@@ -2423,6 +2591,7 @@
    "name": "棕",
    "style": "long",
    "styleName": "長髮",
+   "color": "brown",
    "sheet": "char_hair_long_brown.png",
    "hex": "#684018"
   },
@@ -2431,6 +2600,7 @@
    "name": "深棕",
    "style": "long",
    "styleName": "長髮",
+   "color": "brown2",
    "sheet": "char_hair_long_brown2.png",
    "hex": "#604820"
   },
@@ -2439,6 +2609,7 @@
    "name": "黑",
    "style": "long",
    "styleName": "長髮",
+   "color": "black",
    "sheet": "char_hair_long_black.png",
    "hex": "#585858"
   },
@@ -2447,6 +2618,7 @@
    "name": "金",
    "style": "long",
    "styleName": "長髮",
+   "color": "blonde",
    "sheet": "char_hair_long_blonde.png",
    "hex": "#b88830"
   },
@@ -2455,6 +2627,7 @@
    "name": "灰金",
    "style": "long",
    "styleName": "長髮",
+   "color": "ashblonde",
    "sheet": "char_hair_long_ashblonde.png",
    "hex": "#c0a880"
   },
@@ -2463,6 +2636,7 @@
    "name": "銀白",
    "style": "long",
    "styleName": "長髮",
+   "color": "ashplatinum",
    "sheet": "char_hair_long_ashplatinum.png",
    "hex": "#c8b8a8"
   },
@@ -2471,6 +2645,7 @@
    "name": "紅",
    "style": "long",
    "styleName": "長髮",
+   "color": "red",
    "sheet": "char_hair_long_red.png",
    "hex": "#a00830"
   },
@@ -2479,6 +2654,7 @@
    "name": "橘",
    "style": "long",
    "styleName": "長髮",
+   "color": "orange",
    "sheet": "char_hair_long_orange.png",
    "hex": "#b83000"
   },
@@ -2487,6 +2663,7 @@
    "name": "玫瑰粉",
    "style": "long",
    "styleName": "長髮",
+   "color": "rosepink",
    "sheet": "char_hair_long_rosepink.png",
    "hex": "#b87070"
   },
@@ -2495,6 +2672,7 @@
    "name": "綠",
    "style": "long",
    "styleName": "長髮",
+   "color": "green",
    "sheet": "char_hair_long_green.png",
    "hex": "#008050"
   },
@@ -2503,6 +2681,7 @@
    "name": "藍",
    "style": "long",
    "styleName": "長髮",
+   "color": "blue",
    "sheet": "char_hair_long_blue.png",
    "hex": "#20a8b8"
   },
@@ -2511,6 +2690,7 @@
    "name": "紫",
    "style": "long",
    "styleName": "長髮",
+   "color": "purple",
    "sheet": "char_hair_long_purple.png",
    "hex": "#702078"
   }

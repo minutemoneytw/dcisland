@@ -146,6 +146,9 @@ body {
 
 /* ---------- 造型面板：色票排成多列（上衣、褲子各 24 色）---------- */
 #jobOpts, #skinOpts, #hairOpts, #shirtOpts, #pantsOpts { display: flex; flex-wrap: wrap; gap: 5px; }
+.look-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.look-row .opt { margin: 0; }
+.look-row .opt.swatch { width: 20px; height: 20px; }
 #jobOpts { display: flex; flex-wrap: wrap; gap: 4px; }
 #jobOpts .opt.name { width: 70px; padding: 0 0 0 7px; box-sizing: border-box; margin: 0; justify-content: flex-start; }
 .gear-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }

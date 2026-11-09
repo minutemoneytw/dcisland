@@ -2709,15 +2709,15 @@ def main():
                for k, n in [("pale", "白皙"), ("light", "自然"), ("tan", "小麥"), ("deep", "深膚")]],
         # 臉型（頭型；原色，執行時用 dye 跟膚色重上色）與眼睛（固定色）
         faces=[dict(id=fid, name=fn, sheet=f"char_face_{fid}.png", dye=LPC_SKIN_DYE) for fid, fn, _r in LPC_FACES],
-        # 眼睛：5 種表情 × 12 色（虹膜＝髮色同一套；面板「眼睛」按鈕 → 表情 → 顏色，比照髮型）
-        eyes=[dict(id=f"{eid}_{cid}", name=cname, style=eid, styleName=en, sheet=f"char_eyes_{eid}_{cid}.png")
+        # 眼睛：5 種眼神（style）× 12 色（color，虹膜＝髮色同一套）；面板分成「眼神」（文字鈕）與「眼睛顏色」（色塊）兩列
+        eyes=[dict(id=f"{eid}_{cid}", name=cname, style=eid, styleName=en, color=cid, hex=kidol_hex[cid], sheet=f"char_eyes_{eid}_{cid}.png")
               for eid, en, _rel in LPC_EYES for cid, cname in KIDOL_HAIR],
         races=LPC_RACES,
-        # 髮型：一個「造型」一個方框（style／styleName），框裡是顏色（name＝顏色名）；面板分層顯示、點造型再開顏色
+        # 髮型：style／styleName＝造型、color／name／hex＝顏色；面板分成「髮型」（文字鈕）與「髮色」（色塊）兩列，換一邊另一邊保持不變
         # hex＝該款髮色的主色（貓耳跟髮色重上色用）
-        hair=[dict(id=f"hair{i + 1}", name=cname, style="short", styleName="短髮", sheet=f"char_hair{i + 1}.png", hex=kidol_hex[cid])
+        hair=[dict(id=f"hair{i + 1}", name=cname, style="short", styleName="短髮", color=cid, sheet=f"char_hair{i + 1}.png", hex=kidol_hex[cid])
               for i, (cid, cname) in enumerate(KIDOL_HAIR)] +
-             [dict(id=f"{sid}_{cid}", name=cname, style=sid, styleName=sname, sheet=f"char_hair_{sid}_{cid}.png", hex=kidol_hex[cid])
+             [dict(id=f"{sid}_{cid}", name=cname, style=sid, styleName=sname, color=cid, sheet=f"char_hair_{sid}_{cid}.png", hex=kidol_hex[cid])
               for sid, sname, _fn in LPC_HAIR_STYLES for cid, cname, _hx in hair_colors],
         # 基本服裝（LPC 原檔；gender＝之後選性別用）
         # 服裝：男女共用一個 id（sheet＝男、sheetF＝女，client 依角色性別挑；外觀清單一件只出現一次）；
