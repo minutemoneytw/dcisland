@@ -2595,6 +2595,7 @@ function atkAnimNow(p) {
 // 釣魚的釣竿動作（LPC tool_rod 13 格）：拋竿（剛進入等魚的前 ROD_CAST 秒）2→5、等魚 6～8 輕晃、上鉤 8／9 抖竿、拉竿 10～12 收線。
 // 只有拿著 LPC 釣竿（lpc.fishOnly）時才播；回第幾格或 null
 const ROD_CAST = .5;
+const ROD_FLY = [.25, .65];   // 拋竿動畫：第幾秒開始甩出浮標（釣竿第 4 格往前揮）、第幾秒落水
 function rodFrameNow(p) {
   const f = p.fish; if (!f || p.npc) return null;
   const wid = p === S.players[0] ? S.me.weapon : p.weapon;
@@ -3913,14 +3914,37 @@ function drawLineAndBobber(p, wi, f, tip) {
   }
   let bx = f.x, by = f.y;
   const since = S.t - (f.t ?? S.t);
-  if (f.ph === 'reel') { const q = Math.min(1, since / FISH_REEL); bx += (p.x - bx) * q * .6; by += (p.y - 10 - by) * q * .6; }
+  // 拋竿動畫（2026-11-09）：竿子往後揚時浮標掛在竿尖，往前甩（拋竿後 ROD_FLY[0] 秒）時沿拋物線飛到落點、釣線跟著拉出去，落水濺一圈漣漪。
+  // 只是畫面：浮標的落點與等魚計時照舊從拋竿那一刻算；別人看到的從收到「等魚」狀態那一刻開始播
+  const cast = f.ph === 'wait' ? S.t - (f.c0 ?? f.t ?? S.t) : Infinity;
+  let flying = false, sag = f.ph === 'wait' ? 18 : 4;     // 等魚時線鬆鬆的，上鉤／拉扯時繃緊
+  if (cast < ROD_FLY[0]) { bx = tx; by = ty + 7; sag = 0; flying = true; }   // 還沒甩出去：浮標垂在竿尖下
+  else if (cast < ROD_FLY[1]) {
+    const q = (cast - ROD_FLY[0]) / (ROD_FLY[1] - ROD_FLY[0]), e = 1 - (1 - q) * (1 - q);   // 先快後慢
+    const d = Math.hypot(f.x - tx, f.y - ty), h = 18 + d * .25;   // 拋物線高度：拋越遠飛越高
+    bx = tx + (f.x - tx) * e; by = ty + (f.y - ty) * e - Math.sin(Math.PI * q) * h;
+    sag = 2 + 10 * q; flying = true;
+  } else if (f.ph === 'reel') {   // 拉竿：浮標一路收回竿尖
+    const q = Math.min(1, since / FISH_REEL), e = q * q;
+    bx = f.x + (tx - f.x) * e * .9; by = f.y + (ty + 7 - f.y) * e * .9 - Math.sin(Math.PI * q) * 10;
+  }
   else if (f.ph === 'wait') by += Math.sin(S.t * 3) * 1.5;
   else by += 3;
   ctx.save();
   ctx.strokeStyle = 'rgba(240,240,232,.85)'; ctx.lineWidth = 1;
-  const sag = f.ph === 'wait' ? 18 : 4;     // 等魚時線鬆鬆的，上鉤／拉扯時繃緊
   ctx.beginPath(); ctx.moveTo(tx, ty); ctx.quadraticCurveTo((tx + bx) / 2, Math.max(ty, by) + sag, bx, by - 3); ctx.stroke();
-  if (f.ph !== 'reel') {                   // 水面漣漪
+  const splash = cast - ROD_FLY[1];
+  if (splash >= 0 && splash < .45) {       // 落水：一圈較大的水花
+    const q = splash / .45;
+    ctx.strokeStyle = `rgba(240,250,255,${.8 * (1 - q)})`;
+    ctx.beginPath(); ctx.ellipse(f.x, f.y + 1, 5 + q * 16, 2 + q * 5, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = `rgba(240,250,255,${.8 * (1 - q)})`;
+    for (let i = 0; i < 5; i++) {   // 濺起的水珠
+      const a = Math.PI * (.15 + .7 * i / 4), r = 4 + q * 10;
+      ctx.fillRect(f.x + Math.cos(a) * r * (i % 2 ? 1 : -1) - .5, f.y - 2 - Math.sin(Math.PI * q) * 8 * Math.sin(a), 1.5, 1.5);
+    }
+  }
+  if (f.ph !== 'reel' && !flying) {        // 水面漣漪
     const q = (S.t * (f.ph === 'bite' ? 2.5 : .8)) % 1;
     ctx.strokeStyle = `rgba(230,245,255,${.55 * (1 - q)})`;
     ctx.beginPath(); ctx.ellipse(f.x, f.y + 1, 4 + q * (f.ph === 'bite' ? 12 : 6), 1.5 + q * (f.ph === 'bite' ? 4 : 2), 0, 0, Math.PI * 2); ctx.stroke();
