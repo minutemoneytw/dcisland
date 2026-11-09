@@ -2517,86 +2517,88 @@
  ],
  "tops": [
   {
-   "id": "tshirt_m",
+   "id": "tshirt",
    "name": "T恤",
    "sheet": "char_top_tshirt_m.png",
-   "gender": "male",
+   "sheetF": "char_top_tshirt_f.png",
+   "dye": [
+    "#e5e6c7",
+    "#c4b59f",
+    "#958080",
+    "#4d4a5d",
+    "#ffffff"
+   ],
    "glam": true
   },
   {
-   "id": "tshirt_f",
-   "name": "T恤",
-   "sheet": "char_top_tshirt_f.png",
-   "gender": "female",
-   "glam": true
-  },
-  {
-   "id": "plate_m",
+   "id": "plate",
    "name": "騎士板甲",
    "sheet": "char_top_plate_m.png",
-   "gender": "male"
-  },
-  {
-   "id": "plate_f",
-   "name": "騎士板甲",
-   "sheet": "char_top_plate_f.png",
-   "gender": "female"
+   "sheetF": "char_top_plate_f.png",
+   "dye": [
+    "#726b7e",
+    "#867e7f",
+    "#4d4a5d",
+    "#c4b59f",
+    "#ffffff"
+   ]
   }
  ],
  "bottoms": [
   {
-   "id": "pants_m",
+   "id": "pants",
    "name": "長褲",
    "sheet": "char_bottom_pants_m.png",
-   "gender": "male",
+   "sheetF": "char_bottom_pants_f.png",
+   "dye": [
+    "#c4b59f",
+    "#e5e6c7",
+    "#958080",
+    "#4d4a5d"
+   ],
    "glam": true
   },
   {
-   "id": "pants_f",
-   "name": "長褲",
-   "sheet": "char_bottom_pants_f.png",
-   "gender": "female",
-   "glam": true
-  },
-  {
-   "id": "plate_legs_m",
+   "id": "plate_legs",
    "name": "騎士腿甲",
    "sheet": "char_bottom_plate_m.png",
-   "gender": "male"
-  },
-  {
-   "id": "plate_legs_f",
-   "name": "騎士腿甲",
-   "sheet": "char_bottom_plate_f.png",
-   "gender": "female"
+   "sheetF": "char_bottom_plate_f.png",
+   "dye": [
+    "#867e7f",
+    "#726b7e",
+    "#4d4a5d",
+    "#c4b59f",
+    "#ffffff"
+   ]
   }
  ],
  "shoes": [
   {
-   "id": "shoes_m",
+   "id": "shoes",
    "name": "鞋子",
    "sheet": "char_shoes_m.png",
-   "gender": "male",
+   "sheetF": "char_shoes_f.png",
+   "dye": [
+    "#c4b59f",
+    "#e5e6c7",
+    "#ffffff",
+    "#958080",
+    "#4d4a5d"
+   ],
    "glam": true
   },
   {
-   "id": "shoes_f",
-   "name": "鞋子",
-   "sheet": "char_shoes_f.png",
-   "gender": "female",
-   "glam": true
-  },
-  {
-   "id": "plate_boots_m",
+   "id": "plate_boots",
    "name": "騎士板甲靴",
    "sheet": "char_shoes_plate_m.png",
-   "gender": "male"
-  },
-  {
-   "id": "plate_boots_f",
-   "name": "騎士板甲靴",
-   "sheet": "char_shoes_plate_f.png",
-   "gender": "female"
+   "sheetF": "char_shoes_plate_f.png",
+   "dye": [
+    "#726b7e",
+    "#867e7f",
+    "#4d4a5d",
+    "#c4b59f",
+    "#ffffff"
+   ]
   }
  ],
  "hats": [
@@ -2610,7 +2612,14 @@
    "id": "armet",
    "name": "騎士頭盔",
    "sheet": "char_hat_armet.png",
-   "hideHair": true
+   "hideHair": true,
+   "dye": [
+    "#4d4a5d",
+    "#726b7e",
+    "#867e7f",
+    "#c4b59f",
+    "#ffffff"
+   ]
   }
  ],
  "hairColor": "#4a3428",

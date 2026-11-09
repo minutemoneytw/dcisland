@@ -890,6 +890,29 @@ def _lpc_hair_tint_into(sheet, w, h, data, tr, ref, oy0):
             sheet.set(x, oy0 + y, (out[0], out[1], out[2], data[i + 3]))
     return sheet
 
+def lpc_dye_of(*files, n=8):
+    """從已產生的人物 sheet（client/assets/avatar/ 底下）取「可染色的顏色」：不透明像素依出現次數排序，
+    去掉很暗的輪廓色（亮度 < 50），取前 n 個；第一個（最多的）當主色。給 manifest 的 dye 用（client 的 dyeSheet 依明暗比例換色）。"""
+    cnt = {}
+    for f in files:
+        r = read_png_pixels(os.path.join(ASSETS, "avatar", f))
+        if r is None:
+            continue
+        _w, _h, data = r
+        for i in range(0, len(data), 4):
+            if data[i + 3] <= 16:
+                continue
+            c = (data[i], data[i + 1], data[i + 2])
+            if 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] < 50:
+                continue
+            cnt[c] = cnt.get(c, 0) + 1
+    top = sorted(cnt, key=lambda c: -cnt[c])[:n]
+    return ["#%02x%02x%02x" % c for c in top]
+
+def lpc_garment(gid, name, sheet_m, sheet_f, **kw):
+    """一件服裝（男女共用一個 id）：sheet＝男、sheetF＝女（client 依角色性別挑），dye＝兩張圖的可染色顏色。"""
+    return dict(id=gid, name=name, sheet=sheet_m, sheetF=sheet_f, dye=lpc_dye_of(sheet_m, sheet_f), **kw)
+
 def lpc_read_sheet(rel):
     """直接讀一張 LPC 通用格式 sheet（832×1344）成 Canvas（頭髮等外部素材 1:1，不轉檔）。"""
     r = read_png_pixels(os.path.join(ASSETS, rel))
@@ -2697,20 +2720,16 @@ def main():
              [dict(id=f"{sid}_{cid}", name=cname, style=sid, styleName=sname, sheet=f"char_hair_{sid}_{cid}.png", hex=kidol_hex[cid])
               for sid, sname, _fn in LPC_HAIR_STYLES for cid, cname, _hx in hair_colors],
         # 基本服裝（LPC 原檔；gender＝之後選性別用）
-        tops=[dict(id="tshirt_m", name="T恤", sheet="char_top_tshirt_m.png", gender="male", glam=True),
-              dict(id="tshirt_f", name="T恤", sheet="char_top_tshirt_f.png", gender="female", glam=True),
-              dict(id="plate_m", name="騎士板甲", sheet="char_top_plate_m.png", gender="male"),
-              dict(id="plate_f", name="騎士板甲", sheet="char_top_plate_f.png", gender="female")],
-        bottoms=[dict(id="pants_m", name="長褲", sheet="char_bottom_pants_m.png", gender="male", glam=True),
-                 dict(id="pants_f", name="長褲", sheet="char_bottom_pants_f.png", gender="female", glam=True),
-                 dict(id="plate_legs_m", name="騎士腿甲", sheet="char_bottom_plate_m.png", gender="male"),
-                 dict(id="plate_legs_f", name="騎士腿甲", sheet="char_bottom_plate_f.png", gender="female")],
-        shoes=[dict(id="shoes_m", name="鞋子", sheet="char_shoes_m.png", gender="male", glam=True),
-               dict(id="shoes_f", name="鞋子", sheet="char_shoes_f.png", gender="female", glam=True),
-               dict(id="plate_boots_m", name="騎士板甲靴", sheet="char_shoes_plate_m.png", gender="male"),
-               dict(id="plate_boots_f", name="騎士板甲靴", sheet="char_shoes_plate_f.png", gender="female")],
+        # 服裝：男女共用一個 id（sheet＝男、sheetF＝女，client 依角色性別挑；外觀清單一件只出現一次）；
+        # dye＝可染色的顏色（lpc_dye_of 自動從圖上取，第一個是主色）；glam＝可當外觀（沒寫 unlock＝一開始就能用）
+        tops=[lpc_garment("tshirt", "T恤", "char_top_tshirt_m.png", "char_top_tshirt_f.png", glam=True),
+              lpc_garment("plate", "騎士板甲", "char_top_plate_m.png", "char_top_plate_f.png")],
+        bottoms=[lpc_garment("pants", "長褲", "char_bottom_pants_m.png", "char_bottom_pants_f.png", glam=True),
+                 lpc_garment("plate_legs", "騎士腿甲", "char_bottom_plate_m.png", "char_bottom_plate_f.png")],
+        shoes=[lpc_garment("shoes", "鞋子", "char_shoes_m.png", "char_shoes_f.png", glam=True),
+               lpc_garment("plate_boots", "騎士板甲靴", "char_shoes_plate_m.png", "char_shoes_plate_f.png")],
         hats=[dict(id="nohat", name="不戴帽子", sheet=None, glam=True),
-              dict(id="armet", name="騎士頭盔", sheet="char_hat_armet.png", hideHair=True)],   # hideHair＝全罩式，不畫頭髮
+              dict(id="armet", name="騎士頭盔", sheet="char_hat_armet.png", hideHair=True, dye=lpc_dye_of("char_hat_armet.png"))],   # hideHair＝全罩式，不畫頭髮
         hairColor="#4a3428",
         shirtColors=['#d95c68', '#4a90d9', '#4aa564', '#c9a227', '#8a5cc9', '#e0e0e0', '#4a4a52', '#d97a3a', '#f2a1b5', '#b5303f', '#f0c93a', '#8fd0e8', '#2e5fa8', '#3a3f8c', '#6fcfc0', '#2f8a78', '#8fc455', '#3e6b3a', '#b48be0', '#6a3f9a', '#8a5a3a', '#c8b08a', '#9aa0aa', '#f4ede0'],
         pantsColors=['#4a54a0', '#2f3548', '#4a4a52', '#8a8f99', '#d8d4c8', '#8a6a46', '#c8b08a', '#5a4a3a', '#3e6b3a', '#6a8a4a', '#2f8a78', '#3a78c8', '#2e5fa8', '#7aa8d8', '#6a3f9a', '#a63d4a', '#d97a3a', '#e0b840', '#e8a0b8', '#b5303f', '#1f1f26', '#f0f0f0', '#6fcfc0', '#b48be0'],

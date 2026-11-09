@@ -2466,7 +2466,7 @@ function charSprite(look, fi) {
   const skin = lookItem(A.skins, look.skin) || A.skins[0], hair = lookItem(A.hair, look.hair) || A.hair[0];
   const top = lookItem(A.tops, look.top) || A.tops?.[0], bottom = lookItem(A.bottoms, look.bottom) || A.bottoms?.[0];
   const shoe = lookItem(A.shoes, look.shoe);
-  const hat = lookItem(A.hats, look.hat);
+  let hat = lookItem(A.hats, look.hat);
   const face = lookItem(A.faces, look.face) || A.faces?.[0], eyes = lookItem(A.eyes, look.eyes) || A.eyes?.[0];
   // 性別：素體 sheet 換成女版（char_body_<膚色> → char_body_female_<膚色>）
   const skinSheet = (look.gender === 'female' && skin.sheet) ? skin.sheet.replace('char_body_', 'char_body_female_') : skin.sheet;
@@ -2474,6 +2474,9 @@ function charSprite(look, fi) {
   const skinHex = skin.base || null;   // 臉型（頭型）跟膚色重上色
   const hairHex = hair.hex || null;    // 髮色主色（貓耳跟髮色重上色用）
   const race = lookItem(A.races, look.race) || A.races?.[0] || { id: 'human', scale: 1 };
+  // 服裝男女共用一個 id：女角改用 sheetF（沒有就用 sheet）
+  const byGender = it => it && look.gender === 'female' && it.sheetF ? { ...it, sheet: it.sheetF } : it;
+  const topG = byGender(top), bottomG = byGender(bottom), shoeG = byGender(shoe); hat = byGender(hat);
   const wpn = look.wpn ? A.weapons.find(w => w.id === look.wpn && w.lpc) : null;   // LPC 武器圖層（見 playerSpriteDiv）
   const k = [skin.id, skinSheet, look.gender || '', race.id, hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, shoe?.id || '', shoeHex, face?.id || '', eyes?.id || '', wpn?.id || '', fi].join('|');
   let cv = S.charCache.get(k);
@@ -2502,7 +2505,7 @@ function charSprite(look, fi) {
   if (ent?.[2] != null && !sheetCellHas(S.charImgs[skinIt.sheet], ent[0] * F.w, ent[1] * F.h, F.w, F.h)) ent = F.map[ent[2]];
   const [cc, cr] = ent, sx = cc * F.w, sy = cr * F.h;
   // 由下往上：身體 → 褲子 → 鞋子 → 衣服 → 臉型(頭) → 眼睛 →（種族耳後層）→ 頭髮 →（種族耳前層）→ 帽子
-  const layers = [[skinIt], [bottom, pantsHex], [shoe, shoeHex], [top, shirtHex], [face, skinHex], [eyes]];
+  const layers = [[skinIt], [bottomG, pantsHex], [shoeG, shoeHex], [topG, shirtHex], [face, skinHex], [eyes]];
   if (wpn && !over && wpn.lpc.bg) layers.unshift([{ sheet: wpn.lpc.bg }]);   // 一般格武器的後層（在身體後面）
   if (race.ear) layers.push([{ sheet: race.ear, dye: race.earDye }, skinHex]);   // 精靈耳（跟膚色）
   const catTint = race.earFur ? hx2 => [[race.earFur, hx2 || null], [['#ffffff'], race.earInner || '#f5b8ad']] : null;
@@ -5626,9 +5629,7 @@ function shownItem(slot, job = S.me.job) {
   if (it && glamFits(slot, it, job) && glamUnlocked(it)) return it;
   if (slot === 'weapon') return jobWeaponDef(job);
   const list = slotList(slot) || [], gid = JOBS[job]?.gear?.[slot];
-  let it2 = lookItem(list, gid);
-  if (it2 && it2.gender && it2.gender !== (S.me.gender || 'male') && gid) it2 = lookItem(list, gid.replace(/_m$/, '_f')) || it2;   // 換性別＝換對應性別的服裝
-  return it2;
+  return lookItem(list, gid);   // 服裝男女共用一個 id（女角在 charSprite 改用 sheetF）
 }
 // 自己的顯示造型（畫自己、送給同島的人都用這個；外觀與裝備在這裡就決定好，別人只看結果）
 function myLook() {
@@ -6341,8 +6342,9 @@ async function boot() {
       return files.filter((f, i) => f && files.indexOf(f) === i)
         .map(async f => S.charImgs[f] = await loadImg(`assets/avatar/${f}`));
     }),
-    ...[...S.avatar.hair, ...(S.avatar.tops || []), ...(S.avatar.bottoms || []), ...(S.avatar.shoes || []), ...(S.avatar.faces || []), ...(S.avatar.eyes || []), ...(S.avatar.hats || [])].filter(it => it.sheet)   // 沒有圖的（不戴帽子的 nohat）不用載
-      .map(async it => S.charImgs[it.sheet] = await optImg(`assets/avatar/${it.sheet}`)),
+    ...[...S.avatar.hair, ...(S.avatar.tops || []), ...(S.avatar.bottoms || []), ...(S.avatar.shoes || []), ...(S.avatar.faces || []), ...(S.avatar.eyes || []), ...(S.avatar.hats || [])]
+      .flatMap(it => [it.sheet, it.sheetF]).filter(Boolean)   // 沒有圖的（不戴帽子的 nohat）不用載；服裝的女版 sheetF 也要載
+      .map(async f => S.charImgs[f] = await optImg(`assets/avatar/${f}`)),
     ...S.avatar.weapons.filter(w => w.lpc).flatMap(w => [w.lpc.bg, w.lpc.fg, ...Object.values(w.lpc.over || {}).flatMap(o => [o.bg, o.fg])])   // LPC 武器圖層
       .filter(Boolean).map(async f => S.charImgs[f] = await optImg(`assets/avatar/${f}`)),
     ...(S.avatar.races || []).flatMap(r => [r.ear, r.earBg, r.earFg]).filter(Boolean)   // 種族耳朵圖層（精靈耳／貓耳前後層）
