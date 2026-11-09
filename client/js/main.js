@@ -5682,6 +5682,7 @@ function wardrobe(job = S.me.job) {
   const w = (S.me.wardrobe && typeof S.me.wardrobe === 'object') ? S.me.wardrobe : (S.me.wardrobe = {});
   const e = w[job] && typeof w[job] === 'object' ? w[job] : (w[job] = {});
   e.glam ||= {}; e.color ||= {};
+  if (e.glam.weapon === 'goldsword') e.glam.weapon = 'sword_gold';   // 舊的「金劍」外觀（2026-11-09 拿掉）→ 長劍的金黃發光版（解鎖條件同樣是打倒黃金肥龍）
   return e;
 }
 // 某部位現在顯示哪一件（外觀優先；外觀失效＝沒解鎖／不適用就退回裝備）

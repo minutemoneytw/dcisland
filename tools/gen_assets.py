@@ -965,6 +965,100 @@ def lpc_read_sheet(rel):
                 cv.set(x, y, (data[i], data[i + 1], data[i + 2], data[i + 3]))
     return cv
 
+# ---------------- 發光武器外觀（2026-11-09，使用者要求）----------------
+# 取得稱號《究極》→ 每個職業的武器都有天藍發光版；《傳奇》→ 金黃發光版（avatar.json 的武器外觀 glam，unlock＝稱號）。
+# 圖＝原本的 LPC 武器圖層（與武器小圖）依亮度重上色成該色，外圍再加兩圈半透明光暈（只在同一格內，不會滲到隔壁格）。
+WEAPON_GLOWS = [   # (後綴, 名稱, 主色, 光暈色, 解鎖條件, 提示)
+    ("sky", "天藍輝光", "#5cc8ff", (150, 225, 255), dict(type="titles", ids=["ultima"]), "取得稱號《究極》（參與擊倒熔岩島的蓋老師）"),
+    ("gold", "金黃輝光", "#f2c230", (255, 228, 130), dict(type="titles", ids=["legend"]), "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）"),
+]
+GLOW_JOB_WEAPONS = ["sword", "waraxe", "staff", "tome", "daggers", "lance", "harpbow", "scepter"]
+
+def glow_image(src_name, dst_name, color, halo, cell):
+    """avatar/ 底下的一張圖 → 重上色＋光暈，存成 dst_name。cell＝格子邊長（光暈不跨格；小圖傳整張寬高）。"""
+    r = read_png_pixels(os.path.join(ASSETS, "avatar", src_name))
+    if r is None:
+        raise SystemExit(f"找不到 {src_name}")
+    w, h, data = r
+    cnt, opaque = {}, []
+    for i in range(0, len(data), 4):
+        if data[i + 3] > 16:
+            c = (data[i], data[i + 1], data[i + 2])
+            opaque.append(i // 4)
+            if 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2] >= 40:
+                cnt[c] = cnt.get(c, 0) + 1
+    cv = Canvas(w, h)
+    if not opaque:
+        save(cv, dst_name, "avatar"); return
+    top = max(cnt, key=cnt.get) if cnt else (128, 128, 128)
+    ref = max(1.0, 0.299 * top[0] + 0.587 * top[1] + 0.114 * top[2])
+    tr = hx(color)
+    cw, ch = cell if isinstance(cell, tuple) else (cell, cell)
+    solid = set(opaque)
+    # 光暈：每個不透明像素往外 1～2 格（同一格內）點上半透明光，近的比較亮
+    glow = {}
+    for k in opaque:
+        x, y = k % w, k // w
+        gx0, gy0 = x // cw * cw, y // ch * ch
+        for dy in range(-2, 3):
+            for dx in range(-2, 3):
+                nx, ny = x + dx, y + dy
+                if not (gx0 <= nx < gx0 + cw and gy0 <= ny < gy0 + ch and 0 <= nx < w and 0 <= ny < h):
+                    continue
+                kk = ny * w + nx
+                if kk in solid:
+                    continue
+                a = 150 if max(abs(dx), abs(dy)) == 1 else 60
+                if glow.get(kk, 0) < a:
+                    glow[kk] = a
+    for kk, a in glow.items():
+        cv.set(kk % w, kk // w, (halo[0], halo[1], halo[2], a))
+    for k in opaque:
+        i = k * 4
+        f = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / ref
+        f = 0.35 + 0.75 * f   # 壓縮明暗：深色部分也帶一點顏色，看起來像在發光
+        if f <= 1:
+            out = (min(255, round(tr[0] * f)), min(255, round(tr[1] * f)), min(255, round(tr[2] * f)))
+        else:
+            w2 = min(1.0, f - 1)
+            out = (round(tr[0] + (255 - tr[0]) * w2), round(tr[1] + (255 - tr[1]) * w2), round(tr[2] + (255 - tr[2]) * w2))
+        cv.set(k % w, k // w, (out[0], out[1], out[2], data[i + 3]))
+    save(cv, dst_name, "avatar")
+
+def with_glow(weapons):
+    """在武器清單後面加上每把職業武器的發光外觀（並產生圖）：LPC 圖層逐張重上色，小圖（武器列／外觀清單的圖示）也一起。"""
+    out = list(weapons)
+    by_id = {w["id"]: w for w in weapons}
+    for wid in GLOW_JOB_WEAPONS:
+        base = by_id[wid]
+        for suf, gname, color, halo, unlock, hint in WEAPON_GLOWS:
+            g = dict(id=f"{wid}_{suf}", name=f"{base['name']}・{gname}", type=base["type"], glam=True, unlock=unlock, hint=hint)
+            for k in ("carry", "back", "scale"):
+                if k in base:
+                    g[k] = base[k]
+            spr = base["sprite"]
+            glow_image(spr, spr.replace(".png", f"_{suf}.png"), color, halo, (10 ** 6, 10 ** 6))
+            g["sprite"] = spr.replace(".png", f"_{suf}.png")
+            lpc = base.get("lpc")
+            if lpc:
+                gl = {}
+                for k in ("bg", "fg"):
+                    if lpc.get(k):
+                        glow_image(lpc[k], lpc[k].replace(".png", f"_{suf}.png"), color, halo, CHAR_FW)
+                        gl[k] = lpc[k].replace(".png", f"_{suf}.png")
+                if lpc.get("over"):
+                    gl["over"] = {}
+                    for an, o in lpc["over"].items():
+                        go = dict(size=o["size"])
+                        for k in ("bg", "fg"):
+                            if o.get(k):
+                                glow_image(o[k], o[k].replace(".png", f"_{suf}.png"), color, halo, o["size"])
+                                go[k] = o[k].replace(".png", f"_{suf}.png")
+                        gl["over"][an] = go
+                g["lpc"] = gl
+            out.append(g)
+    return out
+
 def gear_top_sheet(tid):
     _, main, shd = GEAR_TOPS[tid][0], GEAR_TOPS[tid][1], GEAR_TOPS[tid][2]
     return _char_sheet(lambda d, f: _draw_part(d, f, "top", hx(main), hx(shd), d == "up"))
@@ -1376,15 +1470,6 @@ def weapon_lance():  # 長槍（龍騎士的職業武器）：長木桿＋銀色
     cv.rect(2, 1, 3, 5, st); cv.vline(2, 1, 5, hi); cv.set(2, 0, hi)   # 槍頭
     cv.rect(1, 6, 4, 6, st)                    # 槍頭底座
     cv.set(1, 7, red); cv.set(4, 7, red); cv.set(1, 8, red); cv.set(4, 8, red)   # 槍纓
-    cv.outline((30, 24, 22, 255))
-    return cv
-
-def weapon_goldsword():  # 金劍（範例武器外觀，劍類；打倒黃金肥龍解鎖）
-    cv = Canvas(6, 18)
-    sv = hx("#e0b840"); hi = hx("#fff0a0")
-    cv.rect(2, 2, 3, 11, sv); cv.rect(2, 2, 2, 11, hi); cv.set(2, 1, hi)
-    cv.rect(0, 12, 5, 12, hx("#c83a3a"))
-    cv.rect(2, 13, 3, 17, hx("#6a3a1a"))
     cv.outline((30, 24, 22, 255))
     return cv
 
@@ -2687,7 +2772,6 @@ def main():
     save(weapon_waraxe(), "weapon_waraxe.png", "avatar")
     save(weapon_daggers(), "weapon_daggers.png", "avatar")
     save(weapon_scepter(), "weapon_scepter.png", "avatar")
-    save(weapon_goldsword(), "weapon_goldsword.png", "avatar")
     save(weapon_tome(), "weapon_tome.png", "avatar")
     save(weapon_harpbow(), "weapon_harpbow.png", "avatar")
     save(weapon_lance(), "weapon_lance.png", "avatar")
@@ -2811,7 +2895,8 @@ def main():
         hairColor="#4a3428",
         shirtColors=['#d95c68', '#4a90d9', '#4aa564', '#c9a227', '#8a5cc9', '#e0e0e0', '#4a4a52', '#d97a3a', '#f2a1b5', '#b5303f', '#f0c93a', '#8fd0e8', '#2e5fa8', '#3a3f8c', '#6fcfc0', '#2f8a78', '#8fc455', '#3e6b3a', '#b48be0', '#6a3f9a', '#8a5a3a', '#c8b08a', '#9aa0aa', '#f4ede0'],
         pantsColors=['#4a54a0', '#2f3548', '#4a4a52', '#8a8f99', '#d8d4c8', '#8a6a46', '#c8b08a', '#5a4a3a', '#3e6b3a', '#6a8a4a', '#2f8a78', '#3a78c8', '#2e5fa8', '#7aa8d8', '#6a3f9a', '#a63d4a', '#d97a3a', '#e0b840', '#e8a0b8', '#b5303f', '#1f1f26', '#f0f0f0', '#6fcfc0', '#b48be0'],
-        weapons=[
+        # 武器外觀：每把職業武器各有天藍／金黃發光版（with_glow；2026-11-09 取代舊的「金劍」）
+        weapons=with_glow([
             # type＝武器類型（武器外觀只能換成同類型的樣子）；職業武器由 jobs.json 的 weapon 指定，武器列只列「職業武器＋空手＋釣竿」
             dict(id="hands", name="空手", type="hands", sprite=None),
             # carry：不拿在手上時掛哪裡（back＝背上、waist＝腰間）；back: "hilt"＝背著時劍柄朝上（沒寫＝頭朝上，例如釣竿）
@@ -2845,9 +2930,7 @@ def main():
                           over=dict(thrust=dict(size=192, bg="char_weapon_s_thrust_bg.png", fg="char_weapon_s_thrust_fg.png")))),   # gap：詠唱放完到下一次能開始的間隔（秒）；沒寫＝ATK_CD（0.45）。咒杖 gap=0＝連續施放，間隔就是詠唱時間
             dict(id="rod", name="釣竿", type="rod", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
             # 武器外觀（glam）：只換樣子，玩法照職業武器；type 要和職業武器相同才能選
-            dict(id="goldsword", name="金劍", type="sword", sprite="weapon_goldsword.png", carry="back", back="hilt", scale=2,
-                 glam=True, unlock=dict(type="owner", mob="gold_dragon"), hint="打倒黃金肥龍"),
-        ],
+        ]),
     ))
     print("  avatar/avatar.json")
 

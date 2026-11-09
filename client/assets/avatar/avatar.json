@@ -4319,19 +4319,406 @@
    "fishing": true
   },
   {
-   "id": "goldsword",
-   "name": "金劍",
+   "id": "sword_sky",
+   "name": "長劍・天藍輝光",
    "type": "sword",
-   "sprite": "weapon_goldsword.png",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "ultima"
+    ]
+   },
+   "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
    "carry": "back",
    "back": "hilt",
    "scale": 2,
+   "sprite": "weapon_sword_sky.png",
+   "lpc": {
+    "bg": "char_weapon_arming_bg_sky.png",
+    "fg": "char_weapon_arming_fg_sky.png",
+    "over": {
+     "slash": {
+      "size": 128,
+      "bg": "char_weapon_arming_slash_bg_sky.png",
+      "fg": "char_weapon_arming_slash_fg_sky.png"
+     },
+     "halfslash": {
+      "size": 128,
+      "bg": "char_weapon_arming_halfslash_bg_sky.png",
+      "fg": "char_weapon_arming_halfslash_fg_sky.png"
+     }
+    }
+   }
+  },
+  {
+   "id": "sword_gold",
+   "name": "長劍・金黃輝光",
+   "type": "sword",
    "glam": true,
    "unlock": {
-    "type": "owner",
-    "mob": "gold_dragon"
+    "type": "titles",
+    "ids": [
+     "legend"
+    ]
    },
-   "hint": "打倒黃金肥龍"
+   "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
+   "carry": "back",
+   "back": "hilt",
+   "scale": 2,
+   "sprite": "weapon_sword_gold.png",
+   "lpc": {
+    "bg": "char_weapon_arming_bg_gold.png",
+    "fg": "char_weapon_arming_fg_gold.png",
+    "over": {
+     "slash": {
+      "size": 128,
+      "bg": "char_weapon_arming_slash_bg_gold.png",
+      "fg": "char_weapon_arming_slash_fg_gold.png"
+     },
+     "halfslash": {
+      "size": 128,
+      "bg": "char_weapon_arming_halfslash_bg_gold.png",
+      "fg": "char_weapon_arming_halfslash_fg_gold.png"
+     }
+    }
+   }
+  },
+  {
+   "id": "waraxe_sky",
+   "name": "戰斧・天藍輝光",
+   "type": "axe",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "ultima"
+    ]
+   },
+   "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
+   "carry": "back",
+   "scale": 2,
+   "sprite": "weapon_waraxe_sky.png",
+   "lpc": {
+    "bg": "char_weapon_waraxe_bg_sky.png",
+    "fg": "char_weapon_waraxe_fg_sky.png",
+    "over": {
+     "slash": {
+      "size": 192,
+      "bg": "char_weapon_waraxe_slash_bg_sky.png",
+      "fg": "char_weapon_waraxe_slash_fg_sky.png"
+     }
+    }
+   }
+  },
+  {
+   "id": "waraxe_gold",
+   "name": "戰斧・金黃輝光",
+   "type": "axe",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "legend"
+    ]
+   },
+   "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
+   "carry": "back",
+   "scale": 2,
+   "sprite": "weapon_waraxe_gold.png",
+   "lpc": {
+    "bg": "char_weapon_waraxe_bg_gold.png",
+    "fg": "char_weapon_waraxe_fg_gold.png",
+    "over": {
+     "slash": {
+      "size": 192,
+      "bg": "char_weapon_waraxe_slash_bg_gold.png",
+      "fg": "char_weapon_waraxe_slash_fg_gold.png"
+     }
+    }
+   }
+  },
+  {
+   "id": "staff_sky",
+   "name": "法杖・天藍輝光",
+   "type": "staff",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "ultima"
+    ]
+   },
+   "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
+   "scale": 2,
+   "sprite": "weapon_staff_sky.png",
+   "lpc": {
+    "bg": "char_weapon_loop_bg_sky.png",
+    "fg": "char_weapon_loop_fg_sky.png",
+    "over": {
+     "thrust": {
+      "size": 192,
+      "bg": "char_weapon_loop_thrust_bg_sky.png",
+      "fg": "char_weapon_loop_thrust_fg_sky.png"
+     }
+    }
+   }
+  },
+  {
+   "id": "staff_gold",
+   "name": "法杖・金黃輝光",
+   "type": "staff",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "legend"
+    ]
+   },
+   "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
+   "scale": 2,
+   "sprite": "weapon_staff_gold.png",
+   "lpc": {
+    "bg": "char_weapon_loop_bg_gold.png",
+    "fg": "char_weapon_loop_fg_gold.png",
+    "over": {
+     "thrust": {
+      "size": 192,
+      "bg": "char_weapon_loop_thrust_bg_gold.png",
+      "fg": "char_weapon_loop_thrust_fg_gold.png"
+     }
+    }
+   }
+  },
+  {
+   "id": "tome_sky",
+   "name": "賢具・天藍輝光",
+   "type": "tome",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "ultima"
+    ]
+   },
+   "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
+   "carry": "waist",
+   "scale": 2,
+   "sprite": "weapon_tome_sky.png"
+  },
+  {
+   "id": "tome_gold",
+   "name": "賢具・金黃輝光",
+   "type": "tome",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "legend"
+    ]
+   },
+   "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
+   "carry": "waist",
+   "scale": 2,
+   "sprite": "weapon_tome_gold.png"
+  },
+  {
+   "id": "daggers_sky",
+   "name": "短劍・天藍輝光",
+   "type": "daggers",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "ultima"
+    ]
+   },
+   "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
+   "carry": "waist",
+   "sprite": "weapon_daggers_sky.png",
+   "lpc": {
+    "bg": "char_weapon_dagger_bg_sky.png",
+    "fg": "char_weapon_dagger_fg_sky.png"
+   }
+  },
+  {
+   "id": "daggers_gold",
+   "name": "短劍・金黃輝光",
+   "type": "daggers",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "legend"
+    ]
+   },
+   "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
+   "carry": "waist",
+   "sprite": "weapon_daggers_gold.png",
+   "lpc": {
+    "bg": "char_weapon_dagger_bg_gold.png",
+    "fg": "char_weapon_dagger_fg_gold.png"
+   }
+  },
+  {
+   "id": "lance_sky",
+   "name": "長槍・天藍輝光",
+   "type": "lance",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "ultima"
+    ]
+   },
+   "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
+   "carry": "back",
+   "sprite": "weapon_lance_sky.png",
+   "lpc": {
+    "over": {
+     "walk": {
+      "size": 128,
+      "bg": "char_weapon_dragonspear_walk_bg_sky.png",
+      "fg": "char_weapon_dragonspear_walk_fg_sky.png"
+     },
+     "thrust": {
+      "size": 192,
+      "bg": "char_weapon_dragonspear_thrust_bg_sky.png",
+      "fg": "char_weapon_dragonspear_thrust_fg_sky.png"
+     }
+    }
+   }
+  },
+  {
+   "id": "lance_gold",
+   "name": "長槍・金黃輝光",
+   "type": "lance",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "legend"
+    ]
+   },
+   "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
+   "carry": "back",
+   "sprite": "weapon_lance_gold.png",
+   "lpc": {
+    "over": {
+     "walk": {
+      "size": 128,
+      "bg": "char_weapon_dragonspear_walk_bg_gold.png",
+      "fg": "char_weapon_dragonspear_walk_fg_gold.png"
+     },
+     "thrust": {
+      "size": 192,
+      "bg": "char_weapon_dragonspear_thrust_bg_gold.png",
+      "fg": "char_weapon_dragonspear_thrust_fg_gold.png"
+     }
+    }
+   }
+  },
+  {
+   "id": "harpbow_sky",
+   "name": "豎琴弓・天藍輝光",
+   "type": "bow",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "ultima"
+    ]
+   },
+   "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
+   "carry": "back",
+   "sprite": "weapon_harpbow_sky.png",
+   "lpc": {
+    "bg": "char_weapon_recurve_bg_sky.png",
+    "fg": "char_weapon_recurve_fg_sky.png",
+    "over": {
+     "walk": {
+      "size": 128,
+      "bg": "char_weapon_recurve_walk_bg_sky.png",
+      "fg": "char_weapon_recurve_walk_fg_sky.png"
+     }
+    }
+   }
+  },
+  {
+   "id": "harpbow_gold",
+   "name": "豎琴弓・金黃輝光",
+   "type": "bow",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "legend"
+    ]
+   },
+   "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
+   "carry": "back",
+   "sprite": "weapon_harpbow_gold.png",
+   "lpc": {
+    "bg": "char_weapon_recurve_bg_gold.png",
+    "fg": "char_weapon_recurve_fg_gold.png",
+    "over": {
+     "walk": {
+      "size": 128,
+      "bg": "char_weapon_recurve_walk_bg_gold.png",
+      "fg": "char_weapon_recurve_walk_fg_gold.png"
+     }
+    }
+   }
+  },
+  {
+   "id": "scepter_sky",
+   "name": "咒杖・天藍輝光",
+   "type": "scepter",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "ultima"
+    ]
+   },
+   "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
+   "sprite": "weapon_scepter_sky.png",
+   "lpc": {
+    "bg": "char_weapon_s_bg_sky.png",
+    "fg": "char_weapon_s_fg_sky.png",
+    "over": {
+     "thrust": {
+      "size": 192,
+      "bg": "char_weapon_s_thrust_bg_sky.png",
+      "fg": "char_weapon_s_thrust_fg_sky.png"
+     }
+    }
+   }
+  },
+  {
+   "id": "scepter_gold",
+   "name": "咒杖・金黃輝光",
+   "type": "scepter",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "legend"
+    ]
+   },
+   "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
+   "sprite": "weapon_scepter_gold.png",
+   "lpc": {
+    "bg": "char_weapon_s_bg_gold.png",
+    "fg": "char_weapon_s_fg_gold.png",
+    "over": {
+     "thrust": {
+      "size": 192,
+      "bg": "char_weapon_s_thrust_bg_gold.png",
+      "fg": "char_weapon_s_thrust_fg_gold.png"
+     }
+    }
+   }
   }
  ]
 }
