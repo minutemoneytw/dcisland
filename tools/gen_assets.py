@@ -640,6 +640,7 @@ LPC_CLOTHES = [                  # 基本服裝與職業裝備（LPC 原檔）�
 ]
 LPC_WEAPON_OVER = [             # LPC 武器的超大格動作 sheet（128×128；直接複製）：(遊戲檔名, external 底下的檔名)
     ("weapon_arming_slash_bg", "weapon_arming_slash_bg.png"), ("weapon_arming_slash_fg", "weapon_arming_slash_fg.png"),
+    ("weapon_arming_halfslash_bg", "weapon_arming_halfslash_bg.png"), ("weapon_arming_halfslash_fg", "weapon_arming_halfslash_fg.png"),
 ]
 LPC_HAIR_STYLES = [              # 其他 LPC 髮型（走路列，原檔是單色，這裡依亮度重上色成多色）：(id, 名稱, external 檔名)
     ("afro", "爆炸頭", "hair_afro.png"),
@@ -743,7 +744,7 @@ def lpc_hair_sheet(rel):
 # 列＝動作組：0-3 施法(7)、4-7 突刺(8)、8-11 走路(9)、12-15 揮砍(6)、16-19 射擊(13)、20 受擊(6)；
 #   每組四列的順序＝上/左/下/右。遊戲只用「走路」組（列 8-11）：待機＝該列第 0 幀、走路＝第 1,3,5,7 幀、斜角沿用同側。
 # 素體＝LPC 的 body＋head＋eyes 三層疊成（source 在 external/img2pixel/lpc/）。
-LPC_COLS, LPC_ROWS = 13, 21
+LPC_COLS, LPC_ROWS = 13, 25   # 21 列＝LPC 原本的動作；第 21～24 列放半揮（LPC 新動作 halfslash，原本在擴充版的第 50 列，這裡接在後面）
 LPC_WALK_BASE = 8
 LPC_DIR = {"down": 2, "down_right": 3, "right": 3, "up_right": 3, "up": 0, "up_left": 1, "left": 1, "down_left": 1}
 LPC_WALK_COLS = [1, 3, 5, 7]
@@ -756,6 +757,7 @@ LPC_ATTACKS = {
     "thrust": (4, [0, 1, 2, 3, 4, 5, 6, 7]),            # 突刺：龍騎士
     "spellcast": (0, [0, 1, 2, 3, 4, 5, 6]),            # 施法：法杖／咒杖／魔導書（詠唱中依讀條進度播）
     "shoot": (16, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),   # 射擊：豎琴弓
+    "halfslash": (21, [0, 1, 2, 3, 4, 5]),              # 半揮：由上往下劈（騎士；2026-11-09 使用者要「從上往下」）
 }
 LPC_DIR4 = ["up", "left", "down", "right"]
 CHAR_IDLE_OF4 = {"up": CHAR_DIRS.index("up") * 8, "left": CHAR_DIRS.index("left") * 8,
@@ -2679,10 +2681,10 @@ def main():
         save(lpc_cloth_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{cid}.png", sub)
     for cid, rel in LPC_WEAPON_OVER:
         save(lpc_read_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{cid}.png", sub)
-    # 頭髮：LPC 通用格式外部素材（k-idol 短髮 12 色），1:1 直接用
+    # 短髮：2026-11-09 起改用 LPC repo 的 idol 短髮（同一款；k-idol 外部素材沒有半揮等新動作），依亮度重上色成 12 色；
+    # 檔名、id 照舊（char_hair1～12），k-idol 原檔只拿來取 12 色的主色（kidol_main_hex）
     for i, (cid, _cname) in enumerate(KIDOL_HAIR):
-        save(lpc_read_sheet(f"external/img2pixel/hair_kidol/kidol_hairstyle_male_{cid}.png"),
-             f"char_hair{i + 1}.png", sub)
+        save(lpc_hair_tinted("external/img2pixel/lpc/hair_idol.png", kidol_main_hex(cid)), f"char_hair{i + 1}.png", sub)
     # 其他 LPC 髮型（走路列；依亮度重上色成「與短髮相同的 12 色」）
     hair_colors = [(cid, cname, kidol_main_hex(cid)) for cid, cname in KIDOL_HAIR]
     kidol_hex = {cid: chex for cid, _cname, chex in hair_colors}   # 髮色主色（manifest 帶給面板／貓耳染色用）
@@ -2743,7 +2745,8 @@ def main():
             # over＝某個攻擊動作的超大格 sheet（size＝每格邊長，人物畫在格子正中央）。2026-11-09 騎士先換：LPC Arming Sword（steel）
             dict(id="sword", name="長劍", type="sword", sprite="weapon_sword.png", carry="back", back="hilt", scale=2,
                  lpc=dict(bg="char_weapon_arming_bg.png", fg="char_weapon_arming_fg.png",
-                          over=dict(slash=dict(size=128, bg="char_weapon_arming_slash_bg.png", fg="char_weapon_arming_slash_fg.png")))),
+                          over=dict(slash=dict(size=128, bg="char_weapon_arming_slash_bg.png", fg="char_weapon_arming_slash_fg.png"),
+                                    halfslash=dict(size=128, bg="char_weapon_arming_halfslash_bg.png", fg="char_weapon_arming_halfslash_fg.png")))),
             dict(id="waraxe", name="戰斧", type="axe", sprite="weapon_waraxe.png", carry="back", scale=2),
             dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", scale=2, ranged=dict(range=320, cast=1.2, dmg=2)),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
             dict(id="tome", name="賢具", type="tome", sprite="weapon_tome.png", carry="waist", scale=2, ranged=dict(range=320, cast=0, dmg=1, shot="funnels")),   # 賢具＝浮游炮（FF14 nouliths）：不用詠唱，攻擊時四座賢具飛出、各朝目標射一道光束（main.js 的 fxk 'funnels'）；不用詠唱的 dmg 1（使用者定的平衡，同豎琴弓）
