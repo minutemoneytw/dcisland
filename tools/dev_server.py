@@ -102,7 +102,7 @@ def exchange_code(code, cfg):
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 # 以下限制與 worker/src/index.js 一致（改一邊要改另一邊）
-COLS, ROWS = 88, 56
+COLS, ROWS = 108, 72   # 前七座島半徑 ×1.5（2026-11-09）
 MAX_FURN = 500
 SIGN_MAX = 100            # 看板文字上限（字）
 MAX_MSG = 16384           # 裝飾模式的 commit 會一次帶多個操作

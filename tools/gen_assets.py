@@ -1673,18 +1673,23 @@ TERRAINS = [
 
 # 室內釣魚池（像室內的地形才用）：地形 → [池]。cell＝水面左上角格、w／h＝水面幾格；外圍一圈是池邊（岸，可以走）
 POOLS_BY_TERRAIN = {
-    "peace": [dict(cell=[16, 25], w=8, h=6)],   # 2026-11-09 使用者要求：和平島找一小塊做室內釣魚場（左側，遠離中央的遊戲桌）
+    "peace": [dict(cell=[26, 33], w=8, h=6)],   # 2026-11-09 地圖放大成 108×72、島心移到 (53.5,35.5)：座標比原本 (16,25) 加 (10,8)   # 2026-11-09 使用者要求：和平島找一小塊做室內釣魚場（左側，遠離中央的遊戲桌）
 }
+
+# 室內地形的方形房間範圍 [x0,y0,x1,y1]（含邊界，格）：2026-11-09 使用者要求和平島縮小到「剛好包含中央到釣魚池再多一點」，且仍是室內（方形、沒有水）。
+# 釣魚池左緣離島心 (53.5,35.5) 27.5 格 → 橫向半寬 31（x 23～84）；縱向取 20（y 16～55，62×40，比例同舊地圖 88×56）。
+ROOM_BOX = {"peace": [23, 16, 84, 55]}
 
 # 和平島的遊戲桌：地形 → [桌]。id＝桌 id（兩份伺服器的 TABLE_DEFS 要一致）、game＝client/assets/games/games.json 的遊戲 id、
 # cell＝左上角格、w／h＝占幾格（圖 48×32 以 scale 2 畫＝3×2 格）。桌子是島上固定物件，不是可擺設的家具
 TABLES_BY_TERRAIN = {
     # 2026-11-09 使用者要求：五子棋、抽鬼牌改回各一桌（t3／t4 拿掉，兩份伺服器的 TABLE_DEFS 一起改），
     # 四桌排成 2×2、圍著島中央（44, 28），左右相距 8 格、上下相距 7 格（中間留空給重生點）
-    "peace": [dict(id="t2", game="gomoku", cell=[38, 24], w=3, h=2),
-              dict(id="t1", game="oldmaid", cell=[46, 24], w=3, h=2),
-              dict(id="t6", game="uno", cell=[38, 31], w=3, h=2),     # UNO（2026-11-08，使用者要求）
-              dict(id="t5", game="dodge", cell=[46, 31], w=3, h=2)],  # 躲彈幕只有一桌（2026-11-08，使用者要求）
+    # （2026-11-09 地圖放大成 108×72，島心移到 (54,36)，桌子座標整體加 (10,8)）
+    "peace": [dict(id="t2", game="gomoku", cell=[48, 32], w=3, h=2),
+              dict(id="t1", game="oldmaid", cell=[56, 32], w=3, h=2),
+              dict(id="t6", game="uno", cell=[48, 39], w=3, h=2),     # UNO（2026-11-08，使用者要求）
+              dict(id="t5", game="dodge", cell=[56, 39], w=3, h=2)],  # 躲彈幕只有一桌（2026-11-08，使用者要求）
 }
 
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
@@ -2998,7 +3003,9 @@ def main():
         if t.get("layout"):
             td["layout"] = t["layout"]
             if t["layout"] == "room":
-                td["groundRepeat"] = INDOOR_REPEAT   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
+                td["groundRepeat"] = INDOOR_REPEAT
+                if t["id"] in ROOM_BOX:
+                    td["roomBox"] = ROOM_BOX[t["id"]]   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
         if t.get("campfire") is False:
             td["campfire"] = False
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉

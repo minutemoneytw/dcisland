@@ -1,5 +1,6 @@
 // DC島 — 遊戲本體（世界生成、移動、繪圖、戰鬥、動物、裝飾、造型、UI）。多人同步在 net.js，連線時以伺服器（Worker／dev_server）為準
-const CELL = 32, COLS = 88, ROWS = 56;   // 島放大：鏡頭跟隨
+const CELL = 32, COLS = 108, ROWS = 72;   // 島放大：鏡頭跟隨（2026-11-09 前七座島半徑 ×1.5：88×56 → 108×72，島心 (43.5,27.5) → (53.5,35.5)；舊家具座標不遷移）
+const ISLAND_AREA = 2.25;   // 前七座島的面積倍數（半徑 1.5 倍）：野生動物數量照這個放大，素材（點綴物）本來就是每格機率，自動跟著多
 const VIEW_W = 29 * 32, VIEW_H = 17 * 32;
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -114,15 +115,23 @@ if (typeof S.profile.showXp !== 'boolean') S.profile.showXp = true;   // 底部 
 // ---------------- 世界生成 ----------------
 function key(x, y) { return x + ',' + y; }
 
+// 室內地形（layout:'room'）的方形房間範圍 roomBox＝[x0,y0,x1,y1]（含邊界的格）；範圍外不畫、不能走、不能釣魚。沒有 roomBox＝整張地圖
+function inRoom(x, y, id = S.terrain) {
+  const td = S.terrains[id], b = td?.layout === 'room' && td.roomBox;
+  return !b || (x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]);
+}
 function genWorld(id) {
   const rng = mulberry32(hashStr(id));
-  const cx = COLS / 2 - .5, cy = ROWS / 2 - .5, rx = 29, ry = 19.5;   // 放大 5 倍級（2026-11-07 再放大約 24% 面積：原本 26／17.5）
+  const cx = COLS / 2 - .5, cy = ROWS / 2 - .5, rx = 43.5, ry = 29.25;   // 放大 5 倍級（2026-11-07 再放大約 24% 面積：原本 26／17.5；2026-11-09 半徑再 ×1.5：原本 29／19.5）
   const types = new Uint8Array(COLS * ROWS);
   const room = S.terrains[id]?.layout === 'room';   // 和平島：像室內——整張地圖都是地板，沒有水（2026-11-08 使用者要求移除最外圈的水；地圖邊界本來就走不出去）
   // 室內釣魚池（terrain.json 的 pools；2026-11-09）：池內是水（types 0，可以拋竿），外圍一圈是池邊（types 1，可以走）
   const inPool = (x, y, m) => (S.terrains[id]?.pools || []).some(p => x >= p.cell[0] - m && x < p.cell[0] + p.w + m && y >= p.cell[1] - m && y < p.cell[1] + p.h + m);
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
-    if (room) { types[y * COLS + x] = inPool(x, y, 0) ? 0 : inPool(x, y, 1) ? 1 : 2; continue; }
+    if (room) {   // 和平島：方形房間 roomBox 內是地板（池另算）；房間外填 0（走不進去，但不畫也不能釣魚，見 inRoom）
+      types[y * COLS + x] = !inRoom(x, y) ? 0 : inPool(x, y, 0) ? 0 : inPool(x, y, 1) ? 1 : 2;
+      continue;
+    }
     let d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
     d += (rng() - .5) * .22;
     types[y * COLS + x] = d < .7 ? 2 : d < 1.1 ? 1 : 0;
@@ -247,11 +256,12 @@ function spawnMobs() {
     return false;
   };
   // mobs.json 標 fixed: N 的種類（例如新怪）：在該島固定生 N 隻（保證一定看得到），不參與下面的隨機池
-  for (const a of td.mobs) { const n = mobDef(a.id)?.fixed || 0; for (let i = 0; i < n; i++) spawnWild(a.id); }
+  const AREA = S.terrains[S.terrain]?.layout === 'room' ? 1 : ISLAND_AREA;
+  for (const a of td.mobs) { const n = Math.round((mobDef(a.id)?.fixed || 0) * AREA); for (let i = 0; i < n; i++) spawnWild(a.id); }
   // 其他種類照舊：從權重池隨機抽 6 隻
   const pool = [];
   for (const a of td.mobs) if (!mobDef(a.id)?.fixed) for (let i = 0; i < a.weight; i++) pool.push(a.id);
-  for (let n = 0; n < 6 && pool.length; n++) spawnWild(pool[Math.floor(Math.random() * pool.length)]);
+  for (let n = 0; n < Math.round(6 * AREA) && pool.length; n++) spawnWild(pool[Math.floor(Math.random() * pool.length)]);
   // 島主：terrain.json 的 owner 指定的動物，每座地形固定一隻（不會被嚇跑、被打倒會重生；攻擊方式照 mobs.json 的 atk）
   // 連線時島主由伺服器同步（進場快照與事件），只在單機時本地生成
   const odef = td.owner && mobDef(td.owner);
@@ -3799,7 +3809,7 @@ const FISH_RESULT_WAIT = 4;      // 連線時拉竿後，最多再等伺服器�
 const isRod = () => !!S.avatar?.weapons.find(w => w.id === S.me.weapon)?.fishing;
 const isWater = (wx, wy) => {
   const x = Math.floor(wx / CELL), y = Math.floor(wy / CELL);
-  return x >= 0 && y >= 0 && x < COLS && y < ROWS && S.world.types[y * COLS + x] === 0 && !(S.floorMap && floorAt(S.floorMap, x, y) >= 0);   // 鋪了地板的水面不能拋竿
+  return x >= 0 && y >= 0 && x < COLS && y < ROWS && S.world.types[y * COLS + x] === 0 && inRoom(x, y) && !(S.floorMap && floorAt(S.floorMap, x, y) >= 0);   // 鋪了地板的水面不能拋竿；室內房間外不是水
 };
 const fishDef = (terrain, id) => S.fishDB?.terrains[terrain]?.find(f => f.id === id);
 // 沿 (ux,uy) 方向找拋竿範圍內第一片水，再往外一點（外面也是水的話）；沒有回 null
@@ -5004,10 +5014,10 @@ function draw() {
   ctx.save();
   ctx.translate(-S.cam.x, -S.cam.y);
   // 底：地面／岸邊／水（可動畫：每種磚這一幀先算好，整張地圖同步；stagger 的各格再錯開）
-  const tiles = [ims[tMan.water], ims[tMan.edge], ims[tMan.ground]], tileFi = tiles.map(s => s ? sprFrame(s) : 0), groundRep = tMan.groundRepeat || 1;
+  const tiles = [ims[tMan.water], ims[tMan.edge], ims[tMan.ground]], tileFi = tiles.map(s => s ? sprFrame(s) : 0), groundRep = tMan.groundRepeat || 1, roomBox = tMan.layout === 'room' && tMan.roomBox;
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
     const t = S.world.types[y * COLS + x], spr = tiles[t];
-    if (!spr) continue;
+    if (!spr || (roomBox && !inRoom(x, y))) continue;   // 室內地形：房間外留黑
     if (t === 2 && groundRep > 1) {   // 地面圖是 n×n 格的大圖（和平島室內地板的方磚放大 n 倍）：每格畫其中對應的一塊
       const fw = spr.fw / groundRep, fh = spr.fh / groundRep;
       ctx.drawImage(spr.img, (x % groundRep) * fw, (y % groundRep) * fh, fw, fh, x * CELL, y * CELL, CELL, CELL);

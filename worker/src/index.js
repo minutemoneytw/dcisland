@@ -12,7 +12,7 @@ const json = (obj, status = 200) =>
   });
 
 // 與 client/js/main.js 的島尺寸一致（改一邊要改另一邊）
-const COLS = 88, ROWS = 56;
+const COLS = 108, ROWS = 72;   // 前七座島半徑 ×1.5（2026-11-09）；要與 client/js/main.js、tools/dev_server.py 一致
 const MAX_FURN = 500;        // 每個地形的擺設上限
 const SIGN_MAX = 100;        // 看板文字上限（字）
 const MAX_MSG = 16384;       // 單則訊息長度上限（字元）；裝飾模式的 commit 會一次帶多個操作
