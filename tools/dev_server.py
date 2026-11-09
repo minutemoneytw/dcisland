@@ -2967,12 +2967,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     c = room.clients.get(cid)
                     if c and c.get("user") and msg.get("k") in CRAFT_KINDS:
                         craft_add(c["user"]["id"], {msg["k"]: [msg.get("id")]})
-                elif t == "killsync":   # 補傳本機有、伺服器沒有的擊倒島主紀錄（v＝地形 id 陣列）；回整份 kills
-                    c = room.clients.get(cid)
-                    if c and c.get("user"):
-                        full = kills_add(c["user"]["id"], (msg.get("v") if isinstance(msg.get("v"), list) else [])[:16])
-                        with c.get("send") or threading.Lock():
-                            ws_send(sock, json.dumps({"t": "kills", "kills": full}))
                 elif t == "craftsync":   # 補傳本機有、伺服器沒有的解鎖（訪客時期的進度併進帳號）；回整份 craftdb
                     c = room.clients.get(cid)
                     if c and c.get("user"):

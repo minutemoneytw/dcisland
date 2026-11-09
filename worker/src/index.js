@@ -322,7 +322,7 @@ const CRAFT_KINDS = ["mat", "furn", "rec"];   // 合成解鎖紀錄的三類：�
 const CRAFT_MAX = 300;                    // 每類最多存幾筆（存檔安全閥；客戶端信任事件，不驗證 id 是否真的存在）
 const CRAFT_SYNC_MAX = 100;               // craftsync 每類一次最多收幾筆
 // 擊倒島主紀錄（2026-11-09，使用者要求跟其他成就一樣跟著帳號）：Registry 的 kills:<uid> = {地形: 時間}（有島主的地形，見 OWNER_TERRAINS）。
-// 島主倒下時 30 秒內的參與者由伺服器記帳；客戶端本機舊紀錄用 killsync 補傳（信任客戶端，同合成紀錄；使用者同意）。客戶端用 terrain.json 的 owner 換成島主 id
+// 只有伺服器親眼看到的擊倒才算：島主倒下時 30 秒內的參與者由伺服器記帳（本機舊紀錄不上傳，使用者定：重打就重打）。客戶端用 terrain.json 的 owner 換成島主 id
 const isOwnerTerrain = t => Object.prototype.hasOwnProperty.call(OWNER_TERRAINS, String(t));
 const XP_MAX = 200000;                  // XP 總量上限（防灌分的保險；等級無上限是設計，這裡只是存檔安全閥）
 const XP_MOB_CD_MS = 1000;              // 擊倒非主動怪的 XP 冷卻（每條連線；每來源每秒最多 1 次）
@@ -1571,12 +1571,6 @@ export class Island {
     } else if (msg.t === "craft") {   // 合成解鎖一筆（素材／家具／配方；客戶端自判，伺服器只存，不驗證 id 是否存在；訪客略過）
       if (att.user && CRAFT_KINDS.includes(msg.k) && ID_RE.test(String(msg.id))) {
         await this.registryCall("/craft", { uid: att.user.id, add: { [msg.k]: [String(msg.id)] } });
-      }
-    } else if (msg.t === "killsync") {   // 補傳本機有、伺服器沒有的擊倒島主紀錄（v＝地形 id 陣列）；回整份 kills
-      if (att.user) {
-        const add = (Array.isArray(msg.v) ? msg.v : []).slice(0, 16).map(String).filter(isOwnerTerrain);
-        const r = await this.registryCall("/kills", { uid: att.user.id, add });
-        if (r) try { ws.send(JSON.stringify({ t: "kills", kills: r.kills || {} })); } catch { /* 對方已斷線 */ }
       }
     } else if (msg.t === "craftsync") {   // 補傳本機有、伺服器沒有的解鎖（訪客時期的進度併進帳號）；回整份 craftdb
       if (att.user) {

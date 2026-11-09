@@ -246,8 +246,6 @@ export function connectNet(S, opts = {}) {
   net.tbl = m => net.connected && send({ t: 'tbl', ...m });
   net.craftUnlock = (k, id) => net.connected && send({ t: 'craft', k, id });
   net.craftSync = v => net.connected && send({ t: 'craftsync', mat: v.mat || [], furn: v.furn || [], rec: v.rec || [] });
-  // 擊倒島主紀錄：補傳本機有、伺服器沒有的（v＝地形 id 陣列）
-  net.killSync = v => net.connected && send({ t: 'killsync', v });
 
   return net;
 }

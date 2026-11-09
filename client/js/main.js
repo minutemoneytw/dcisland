@@ -4851,15 +4851,13 @@ function titleOwnerDown(mob) {
   if (!kills[mob]) { kills[mob] = 1; lsSet('dcisland.m0.titles', S.titleBook); }
   checkTitles(false);
 }
-// 擊倒島主紀錄跟著帳號（2026-11-09，使用者要求）：伺服器存 {有島主的地形: 時間}，這裡換成島主 id（terrain.json 的 owner）併進 titleBook.kills；
-// 本機有、伺服器沒有的（之前只記在這台電腦的）補傳上去
+// 擊倒島主紀錄跟著帳號（2026-11-09，使用者要求）：伺服器存 {有島主的地形: 時間}，這裡換成島主 id（terrain.json 的 owner）併進 titleBook.kills。
+// 只有伺服器親眼看到的擊倒會進帳號；之前只記在這台電腦的不上傳（使用者定：重打就重打），但在這台電腦照樣算
 function onNetKills(k) {
-  const kills = S.titleBook.kills ||= {}, srv = k && typeof k === 'object' ? k : {}, up = [];
+  const kills = S.titleBook.kills ||= {}, srv = k && typeof k === 'object' ? k : {};
   let changed = false;
   for (const t of Object.keys(srv)) { const mob = S.terrains[t]?.owner; if (mob && !kills[mob]) { kills[mob] = 1; changed = true; } }
-  for (const t of TERRAIN_IDS) { const mob = S.terrains[t]?.owner; if (mob && kills[mob] && !srv[t]) up.push(t); }
   if (changed) lsSet('dcisland.m0.titles', S.titleBook);
-  if (up.length) S.net?.killSync?.(up);
   checkTitles(true);   // 重算稱號與外觀解鎖（不跳提示：換電腦登入時一次補回來）
 }
 function setTitle(id) {
