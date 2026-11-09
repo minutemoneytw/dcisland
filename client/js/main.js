@@ -280,8 +280,29 @@ function respawnMob(id) {
 const ATK_CD = 0.45, ATK_T = 0.22, ATK_RANGE = 58;   // ATK_RANGE：最大怪物（big=5，黃金肥龍）的判定圈半徑，其餘依體型縮小（見 hitRadius）
 // 攻擊判定以「武器尖端」為準、不看人：武器在人臉朝向那一側 WEAPON_REACH 處；怪物腳底中心 + 判定圈（半徑 hitRadius），
 // 武器點進了圈內就打得到，不需要「面向」的扇形限制（背對時武器在另一側，自然要看武器落在哪）
-const WEAPON_REACH = 30;
-const weaponPt = p => ({ x: p.x + (p.dir || 1) * WEAPON_REACH, y: p.y });
+// 四方向攻擊（2026-11-09 使用者要求）：朝上下左右都能打。攻擊方向 p.adir＝出手當下朝向目標（滑鼠點的位置／目標）的四方向，
+// F 鍵沒有目標就用目前面向；揮擊動作期間身體轉向 adir（LPC 的攻擊幀本來就有四方向）。上下的武器點比左右短一點（WEAPON_REACH_V）
+const WEAPON_REACH = 30, WEAPON_REACH_V = 26;
+const DIR4_VEC = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+// 向量 → 四方向：垂直分量比較大才算上下（斜的算左右，用側面揮）；向量太短就維持目前面向
+const dir4To = (dx, dy, p) => Math.hypot(dx, dy) < 4 ? face4(p) : Math.abs(dy) > Math.abs(dx) ? (dy < 0 ? 'up' : 'down') : (dx < 0 ? 'left' : 'right');
+// 目前面向的四方向：攻擊動作中＝adir；否則看畫面朝向（正上／正下才算上下，斜的算左右）
+function face4(p) {
+  if (p.adir && atkActive(p)) return p.adir;
+  const d = p.d8;
+  return d === 'up' || d === 'down' ? d : (p.dir < 0 ? 'left' : 'right');
+}
+const atkActive = p => p.swing > 0 || !!p.cast || (p.atkT0 != null && S.t - p.atkT0 < ATK_ANIM);
+// 轉向目標：左右的 dir 照舊（左右翻轉、掛著的武器用），攻擊方向取四方向
+function aimAt(p, tx, ty) {
+  if (Math.abs(tx - p.x) > 6) p.dir = Math.sign(tx - p.x);
+  p.adir = dir4To(tx - p.x, ty - p.y, p);
+  p.d8 = p.adir; p.face = p.adir === 'up' || p.adir === 'down' ? p.adir : 'side';   // 立刻轉身（notifyAttack 會先送這個朝向）
+}
+const weaponPt = p => {
+  const f = face4(p), [vx, vy] = DIR4_VEC[f];
+  return { x: p.x + vx * WEAPON_REACH, y: p.y + vy * WEAPON_REACH_V };
+};
 const hitRadius = def => 34 + 6 * ((def?.big || 1) - 1);   // big=1：34（與舊版正前方約 58px 的觸及距離相近）、big=5：58
 const inHit = (p, a) => { const w = weaponPt(p); return Math.hypot(a.x - w.x, a.y - w.y) <= hitRadius(mobDef(a.id)); };
 // 長按自動連擊時，「太遠了」「沒裝備武器」這類提示只在第一下顯示，不要每幀洗版
@@ -314,8 +335,8 @@ function decoNear(p) {
   let best = null, bd = S.toolsDB.range + 1;
   for (const d of S.world.decos) {
     if (d.dead || !decoTarget(d)) continue;
-    const [bx, by] = decoBase(d), dx = bx - p.x, dist = Math.hypot(dx, by - p.y);
-    if (dist >= bd || dx * p.dir < -8) continue;
+    const [bx, by] = decoBase(d), dx = bx - p.x, dist = Math.hypot(dx, by - p.y), [vx, vy] = DIR4_VEC[face4(p)];
+    if (dist >= bd || dx * vx + (by - p.y) * vy < -8) continue;   // 在背後的不算
     bd = dist; best = d;
   }
   return best;
@@ -323,8 +344,8 @@ function decoNear(p) {
 function useTool(d) {
   const p = S.players[0], tgt = decoTarget(d), [bx, by] = decoBase(d);
   if (Math.hypot(bx - p.x, by - p.y) > S.toolsDB.range) { say(`離${tgt.name}太遠了，靠近一點`); return; }
-  if (Math.abs(bx - p.x) > 6) p.dir = Math.sign(bx - p.x);
   if (S.t - p.lastAtk < ATK_CD) return;
+  aimAt(p, bx, by);
   p.lastAtk = S.t; p.swing = ATK_T; p.atkT0 = S.t;
   p.tool = tgt.tool; p.toolUntil = S.t + S.toolsDB.hold;     // 自動換工具，一陣子沒用就換回劍
   S.net?.notifyAttack?.();
@@ -425,6 +446,7 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
   if (S.t - p.lastAtk < ATK_CD) return;
   const rg = rangedDef();
   if (rg) { startCast(p, rg, wx, wy); return; }   // 法杖：遠距詠唱（以滑鼠瞄準，讀條完才出傷害）
+  if (wx != null) aimAt(p, wx, wy); else { p.adir = face4(p); p.d8 = p.adir; }   // 四方向：朝點的位置揮；F 鍵朝目前面向
   p.lastAtk = S.t; p.swing = ATK_T; p.tool = null; p.atkT0 = S.t;
   S.net?.notifyAttack?.();          // M2：讓同島的人看到你的揮擊
   for (const a of S.mobs) {
@@ -486,7 +508,7 @@ function startCast(p, rg, wx, wy) {
   if (instant || (tr && tr.n > 0 && S.t < tr.until)) {   // 三重：這一擊不用詠唱
     if (!instant) tr.n--;
     p.lastAtk = S.t; p.swing = 0; p.tool = null; S._hits = 1; p.atkT0 = S.t;
-    if (Math.abs(a.x - p.x) > 6) p.dir = Math.sign(a.x - p.x);
+    aimAt(p, a.x, a.y);
     S.net?.notifyAttack?.();
     const ty = a.y - 24 * (mobDef(a.id).big || 1) * .6;
     if (rg.shot === 'arrow') S.floaters.push({ fxk: 'arrow', x1: p.x + p.dir * 8, y1: p.y - 30, x2: a.x, y2: ty, life: .2 });
@@ -496,6 +518,7 @@ function startCast(p, rg, wx, wy) {
     return;
   }
   p.cast = { t0: S.t, dur: rg.cast * castMul(p), a };   // 黑魔法師站在魔法陣內：詠唱 −50%
+  aimAt(p, a.x, a.y);
   p.swing = 0; p.tool = null; S._hits = 1;   // 算有互動，點到動物時不要再跳動物的台詞
 }
 function cancelCast(p, why) { if (!p.cast) return; p.cast = null; if (why) toast(why, 1500); }
@@ -507,9 +530,9 @@ function stepCast(p) {   // 每幀（只有本機玩家）：檢查中斷條件�
   if (p.moving || p.z > 0 || p.vz > 0) { cancelCast(p, '詠唱中斷：移動了'); return; }   // 詠唱時不能移動（跳躍也算）
   if (!S.mobs.includes(a) || a.dead || a.fly) { cancelCast(p, '詠唱中斷：目標消失了'); return; }
   if (!inCastRange(p, a, rg)) { cancelCast(p, '詠唱中斷：目標超出射程'); return; }
-  if (Math.abs(a.x - p.x) > 6) p.dir = Math.sign(a.x - p.x);   // 面向目標
+  aimAt(p, a.x, a.y);   // 面向目標（四方向）
   if (S.t - c.t0 < c.dur) return;
-  p.cast = null; p.lastAtk = S.t - (ATK_CD - Math.min(ATK_CD, rg.gap ?? ATK_CD));   // 放完到下一次的間隔：預設 ATK_CD；武器的 ranged.gap 可縮短（咒杖 0＝連續施放）
+  p.cast = null; p.atkT0 = S.t; p.lastAtk = S.t - (ATK_CD - Math.min(ATK_CD, rg.gap ?? ATK_CD));   // 放完到下一次的間隔：預設 ATK_CD；武器的 ranged.gap 可縮短（咒杖 0＝連續施放）
   S.net?.notifyAttack?.();   // 讓同島的人看到你出手
   S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: a.y - 24 * (mobDef(a.id).big || 1) * .6, life: .22 });
   hitMob(p, a, true);
@@ -2731,10 +2754,9 @@ function stepPlayer(p, dt) {
   stepFishing(p);
   if (p === S.players[0]) stepCast(p);
   if (p.moving) {
-    if (S.mode === 'walk' && S.mouseHeld && S.mouseClient) {   // 按住滑鼠攻擊時，面向跟著游標（可以一邊朝右攻擊一邊往左退）
-      const wx = S.mouseClient[0] - canvas.getBoundingClientRect().left + S.cam.x;
-      if (Math.abs(wx - p.x) > 6) p.dir = Math.sign(wx - p.x);
-      p.face = 'side'; p.d8 = p.dir < 0 ? 'left' : 'right';
+    if (S.mode === 'walk' && S.mouseHeld && S.mouseClient) {   // 按住滑鼠攻擊時，面向跟著游標（四方向；可以一邊朝右攻擊一邊往左退）
+      const r = canvas.getBoundingClientRect();
+      aimAt(p, S.mouseClient[0] - r.left + S.cam.x, S.mouseClient[1] - r.top + S.cam.y);
     } else {   // 朝向：有往上的分量（含斜上）＝背面、只往下＝正面、其餘有左右分量（左右、斜下）＝側（dir 左右）；站著不動維持上次的朝向
       if (dx !== 0) p.dir = dx;
       p.face = dy < 0 ? 'up' : dx !== 0 ? 'side' : 'down';
@@ -2754,7 +2776,8 @@ function stepPlayer(p, dt) {
     p.z += p.vz * dt; p.vz -= 780 * dt;
     if (p.z <= 0) { p.z = 0; p.vz = 0; }
   }
-  if (p.swing > 0) { p.swing -= dt; p.face = 'side'; p.d8 = p.dir < 0 ? 'left' : 'right'; }   // 揮擊／採集是朝左右揮，轉成側面
+  if (p.swing > 0) p.swing -= dt;
+  if (p.adir && atkActive(p)) { p.d8 = p.adir; p.face = p.adir === 'up' || p.adir === 'down' ? p.adir : 'side'; }   // 攻擊動作中（揮擊／採集／詠唱／射擊）身體轉向攻擊方向（四方向）
   if (p.fish) {   // 釣魚中走動：身體一直面向浮標（倒退著走），釣竿才會指著浮標、釣線不會從背後繞過去
     if (Math.abs(p.fish.x - p.x) > 4) p.dir = Math.sign(p.fish.x - p.x);
     p.face = 'side'; p.d8 = p.dir < 0 ? 'left' : 'right';
@@ -3317,6 +3340,8 @@ function drawPerson(p, wi, nameColor) {
     if (carry && !backView) drawCarry(false);
     const pfx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);   // 技能效果（自己看本地狀態，別人看 state 同步的 fx）
     if (pfx?.length) drawPersonFx(p, pfx, backView, 'back');
+    const swingV = wi && !pose && !fish && p.swing > 0 ? face4(p) : null;   // 小圖武器（wi；LPC 武器畫在人物圖層裡、wi 是 null）往上／往下揮
+    if (swingV === 'up') drawWeaponSwing(wi, p.swing, 1, 'up');   // 往上揮：武器在身體後面
     ctx.save();
     if (cf.mirror) ctx.scale(-1, 1);
     const cs = (F.scale || 2) * raceScale;   // 錨點＝腳底中央；放大＝frames.scale × 種族倍率
@@ -3326,8 +3351,9 @@ function drawPerson(p, wi, nameColor) {
     ctx.restore();
     if (carry && backView) drawCarry(true);
     if (pfx?.length) drawPersonFx(p, pfx, backView, 'front');
+    if (swingV === 'down') drawWeaponSwing(wi, p.swing, 1, 'down');   // 往下揮：武器在身前
     if (p.dir < 0) ctx.scale(-1, 1);                          // 揮擊、拋竿朝面向那側（要翻轉）
-    if (wi && !pose && !fish && p.swing > 0) drawWeaponSwing(wi, p.swing, p.dir < 0 ? -1 : 1);
+    if (wi && !pose && !fish && p.swing > 0 && swingV !== 'up' && swingV !== 'down') drawWeaponSwing(wi, p.swing, p.dir < 0 ? -1 : 1);
     if (fish) drawRodCast(wi, rodAngle(fish));
     if (wi && !pose && !fish && p.cast) drawStaffRaise(wi, Math.min(1, (S.t - p.cast.t0) / p.cast.dur));
     ctx.restore();
@@ -4812,7 +4838,9 @@ function drawWeaponWaist(wi) {
 // 劍柄朝上背著的（hiltUp）或掛腰間的：前 35% 手從掛著的位置（背上劍柄＝back 掛點往左上 2,3；腰間＝waist 掛點）移到手的掛點，看起來是拔出來再揮。
 // 掛著的武器不隨人物翻轉（固定在畫面左側），ctx 卻已依面向翻轉，所以起點 x 要乘上 dir 換回同一側
 const SWING_HILT_DRAW = .35;
-function drawWeaponSwing(wi, swing, dir = 1) {
+// v＝'up'／'down'（四方向攻擊的上下）：不翻轉，往下＝從右上劈到身前下方、往上＝在頭頂由左往右掃（畫在身體後面）
+const SWING_ARC = { side: [-.9, 2.8], down: [.2, 2.9], up: [-1.5, 3] };
+function drawWeaponSwing(wi, swing, dir = 1, v = null) {
   const q = 1 - swing / ATK_T;
   let [px, py] = charAnch.hand;
   if (wi.hiltUp || wi.carry === 'waist') {
@@ -4821,7 +4849,8 @@ function drawWeaponSwing(wi, swing, dir = 1) {
     px = fx + (px - fx) * k; py = from[1] + (py - from[1]) * k;
   }
   const s = wi.wscale || 2;
-  ctx.save(); ctx.translate(px, py); ctx.rotate(-.9 + q * 2.8);
+  const [a0, da] = SWING_ARC[v || 'side'];
+  ctx.save(); ctx.translate(px, py); ctx.rotate(a0 + q * da);
   ctx.drawImage(wi, -wi.width * s / 2, -(wi.height - 3) * s, wi.width * s, wi.height * s); ctx.restore();   // 轉軸＝離圖底 3 格的握把
 }
 
@@ -6108,8 +6137,7 @@ function clickAttack(wx, wy) {
     const d = decoAt(wx, wy);
     if (d) { useTool(d); return; }
   }
-  if (Math.abs(wx - S.players[0].x) > 6) S.players[0].dir = Math.sign(wx - S.players[0].x);
-  doAttack(false, wx, wy);
+  doAttack(false, wx, wy);   // 面向在 doAttack 裡依點的位置轉（四方向）
   // 沒命中但點到了一隻動物 → 牠的致公告告（FF14 點動物 FU）
   if (!S._hits) {
     for (const a of S.mobs) {

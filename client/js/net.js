@@ -203,7 +203,13 @@ export function connectNet(S, opts = {}) {
   // 出示伺服器簽發的身分憑證（Discord 授權完成後才有）；伺服器驗證成功後，名字與 uid 以它為準
   net.hello = () => { if (S.session) send({ t: 'hello', s: S.session }); };
   // 攻擊等瞬時事件（doAttack 會呼叫）
-  net.notifyAttack = () => net.connected && send({ t: 'event', kind: 'attack' });
+  // 先補送一次狀態（四方向攻擊：出手當下轉向的 d8 要比攻擊事件早到，別人看到的揮擊方向才對；狀態沒變就不送，不加訊息量）
+  net.notifyAttack = () => {
+    if (!net.connected) return;
+    const st = JSON.stringify(myState());
+    if (st !== lastSent) { send({ t: 'state', s: JSON.parse(st) }); lastSent = st; lastSentAt = performance.now(); }
+    send({ t: 'event', kind: 'attack' });
+  };
   // 補師打倒動物／發動群療時的群補廣播（泛型 event：kind: 'heal'，兩份伺服器都會原樣轉發）
   net.heal = () => net.connected && send({ t: 'event', kind: 'heal' });
   // 挑釁（坦克限定，main.js 的 R 鍵會呼叫）：伺服器驗證職業/範圍/冷卻後轉向或觸發反擊
