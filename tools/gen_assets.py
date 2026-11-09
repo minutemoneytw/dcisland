@@ -2101,26 +2101,26 @@ SLIME_TINTS = {
 MOB_MANIFEST = dict(
     scale=2, respawn=30,
     mobs=[
-        dict(id="bird",  name="圓喙鳥", sprite="bird.png",  swim=True, speed=42, flee=95, hp=3,
+        dict(id="bird",  name="圓喙鳥", sprite="bird.png",  swim=True, speed=42, flee=95, ownerFrac=60,
              line="「圓喙鳥」用圓圓的眼神看著你。"),
-        dict(id="sheep", name="波波羊", sprite="sheep.png", speed=30, flee=80, hp=4,
+        dict(id="sheep", name="波波羊", sprite="sheep.png", speed=30, flee=80, ownerFrac=50,
              line="「波波羊」慢悠悠地嚼著草。"),
-        dict(id="frog",  name="大肚蛙", sprite="frog.png",  swim=True, speed=26, flee=70, hp=3,
+        dict(id="frog",  name="大肚蛙", sprite="frog.png",  swim=True, speed=26, flee=70, ownerFrac=60,
              line="「大肚蛙」的眼神飄向遠方。"),
         # 咕咕雞：草島／森林島（4 方向：後／右／前／左，各 3 幀）
-        dict(id="chicken", name="咕咕雞", fixed=3, speed=30, flee=80, hp=2,
+        dict(id="chicken", name="咕咕雞", fixed=3, speed=30, flee=80, ownerFrac=100,
              anim=dict(sheet="external/img2pixel/chicken_sheet.png", frames=3, rows=4, fw=32, fh=32,
                        rowDir=["up", "right", "down", "left"], fps=6, scale=0.85),   # scale：畫面約 17×24（人物約 46px 高；2026-11-09 使用者嫌太大，由 1.6 縮小）
              line="「咕咕雞」歪著頭啄了啄地面。"),
         # 史萊姆：所有地形各一種顏色（和平島除外），同一張 sheet 依島調色；3 方向（背／右／前），往左用「右」那一列鏡像
-        *[dict(id=f"slime_{isl}", name="史萊姆", fixed=3, speed=22, flee=70, hp=3,
+        *[dict(id=f"slime_{isl}", name="史萊姆", fixed=3, speed=22, flee=70, ownerFrac=60,
                anim=dict(sheet="external/img2pixel/slime_sheet.png", frames=3, rows=3, fw=48, fh=48,
                          rowDir=["up", "right", "down"], fps=5, scale=0.65),   # 畫面約 26×21（2026-11-09 由 1.1 縮小）
                tintBase="#ff8080", tint=col,
                line="「史萊姆」果凍般晃了兩下。")
           for isl, col in SLIME_TINTS.items()],
         # 跳跳兔：沙灘島（原色棕）、雪島（白）、機械島（灰）；左／右各有專屬列不鏡像（sheet 第 3 列 2 幀未用到）
-        *[dict(id=bid, name="跳跳兔", fixed=3, speed=44, flee=110, hp=2,
+        *[dict(id=bid, name="跳跳兔", fixed=3, speed=44, flee=110, ownerFrac=100,
                anim=dict(sheet="external/img2pixel/bunny_sheet.png", frames=4, rows=2, row0=0, fw=48, fh=32,
                          rowDir=["left", "right"], fps=9, scale=0.65),   # 畫面約 31×20（2026-11-09 由 1.1 縮小）
                **({"tint": tint, "tintBase": "#ab7943"} if tint else {}),
@@ -2290,20 +2290,22 @@ OWNER_BY_TERRAIN = {
     "machine": "alexander",
 }
 
-# 反擊型野怪（retaliate）：血量／攻擊力＝該地形島主的 1/N、最低 1（N 寫在各條目的 ownerFrac；機制與數值規則使用者定 2026-11-09：
-# 以後「反擊型怪物」都照這套，唯一要問使用者的是「島主的幾分之幾」）。經驗值同比例，在 main.js 的 mobKillXp 算。
-# 島主爪擊每下的標準傷害是兩份伺服器的 D_CLAW_DMG＝2；條目的 id 尾碼（dragon_night→night、goblin_forest→forest）
-# 就是該怪所屬的地形，沒有島主的地形（沙灘／森林／雪島）用黃金肥龍當基準（目前各島主血量都是 200）。
+# 血量連動島主（ownerFrac，使用者定 2026-11-09）：條目標 ownerFrac: N，血量＝該地形島主血量 ÷ N（無條件捨去、最低 1）。
+# 反擊型野怪（retaliate）除了血量，攻擊力也連動：島主爪擊標準傷害（兩份伺服器的 D_CLAW_DMG＝2）÷ N、最低 1；
+# 經驗值在 main.js 的 mobKillXp 算（反擊型＝島主經驗 1/N；被動怪照舊 +1）。
+# 條目 id 的尾碼（dragon_night→night、sheep→不是地形）就是該怪所屬的地形；沒有島主的地形（沙灘／森林／雪島）用黃金肥龍當基準
+# （目前各島主血量都是 200，所以同一種怪跨島血量相同；哪天島主血量分島不同，就要拆分島條目如 sheep_snow）。
 OWNER_CLAW_DMG = 2
 _TERRAIN_IDS = {"grass", "beach", "snow", "night", "forest", "volcano", "machine", "peace"}
 for _m in MOB_MANIFEST["mobs"]:
-    if not _m.get("retaliate"):
+    if not _m.get("ownerFrac"):
         continue
     _tid = _m["id"].rsplit("_", 1)[-1]
     _om = next(_x for _x in MOB_MANIFEST["mobs"] if _x["id"] == OWNER_BY_TERRAIN.get(_tid if _tid in _TERRAIN_IDS else "", "gold_dragon"))
-    _frac = max(1, int(_m.get("ownerFrac", 10)))
+    _frac = max(1, int(_m["ownerFrac"]))
     _m["hp"] = max(1, _om["hp"] // _frac)
-    _m["atk"] = max(1, OWNER_CLAW_DMG // _frac)
+    if _m.get("retaliate"):
+        _m["atk"] = max(1, OWNER_CLAW_DMG // _frac)
 
 # 各地形出現的小動物（id=權重）
 MOBS_BY_TERRAIN = {
