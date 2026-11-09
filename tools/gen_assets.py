@@ -673,6 +673,8 @@ LPC_WEAPON_OVER = [             # LPC 武器的超大格動作 sheet（128×128�
     ("weapon_waraxe_slash_bg", "weapon_waraxe_slash_bg.png"), ("weapon_waraxe_slash_fg", "weapon_waraxe_slash_fg.png"),
     # 反曲弓：走路（128×128）
     ("weapon_recurve_walk_bg", "weapon_recurve_walk_bg.png"), ("weapon_recurve_walk_fg", "weapon_recurve_walk_fg.png"),
+    # 釣竿：LPC Fishing Rod（13 格 × 4 方向，128×128；只在釣魚時畫，見 avatar.json 的 lpc.fishOnly）
+    ("weapon_rod_fish_bg", "weapon_rod_fish_bg.png"), ("weapon_rod_fish_fg", "weapon_rod_fish_fg.png"),
 ]
 LPC_WEAPON_ROWS = [             # 只有某些動作的一般格武器（64×64）：(遊戲檔名, [(動作, external 底下的檔名)])，放到該動作的列
     ("weapon_recurve_bg", [("shoot", "weapon_recurve_shoot_bg.png")]),
@@ -861,8 +863,15 @@ LPC_DIR4 = ["up", "left", "down", "right"]
 CHAR_IDLE_OF4 = {"up": CHAR_DIRS.index("up") * 8, "left": CHAR_DIRS.index("left") * 8,
                  "down": CHAR_DIRS.index("down") * 8, "right": CHAR_DIRS.index("right") * 8}
 
+# 工具動作（LPC 的 custom animation：身體借用某個動作列的幀，工具是 128 超大格、每一格各自一張）：
+# 釣竿（2026-11-09，使用者要求四方向釣魚）＝LPC Fishing Rod 的 tool_rod：13 格，身體依序用突刺列的這幾欄
+LPC_TOOL_ANIMS = {
+    "rod": (4, [0, 1, 2, 3, 4, 5, 4, 4, 4, 5, 4, 2, 3]),
+}
+
 def char_attack_frames():
-    """攻擊動作的邏輯幀：回 (map 條目清單, states)；邏輯幀編號從 CHAR_FRAMES 往後排。"""
+    """攻擊動作與工具動作的邏輯幀：回 (map 條目清單, states)；邏輯幀編號從 CHAR_FRAMES 往後排。
+    工具動作的 map 條目＝[欄, 列, 退回幀, 動作名, 工具第幾格, 方向(0上1左2下3右)]。"""
     m, st, fi = [], {}, CHAR_FRAMES
     for anim, (row0, cols) in LPC_ATTACKS.items():
         by4 = {}
@@ -873,7 +882,51 @@ def char_attack_frames():
                 by4[d4].append(fi); fi += 1
         for d in CHAR_DIRS:
             st[f"{anim}_{d}"] = by4[LPC_DIR4[LPC_DIR[d]]]
+    for anim, (row0, cols) in LPC_TOOL_ANIMS.items():
+        by4 = {}
+        for k, d4 in enumerate(LPC_DIR4):
+            by4[d4] = []
+            for j, c in enumerate(cols):
+                m.append([c, row0 + k, CHAR_IDLE_OF4[d4], anim, j, k])
+                by4[d4].append(fi); fi += 1
+        for d in CHAR_DIRS:
+            st[f"{anim}_{d}"] = by4[LPC_DIR4[LPC_DIR[d]]]
     return m, st
+
+def rod_tips(rel_bg, rel_fg, size=128, n=13):
+    """量釣竿每一格的竿尖：從離手最近的釣竿像素（手大約在格子的 (64, 80)）沿著釣竿（8 連通）走，走最遠的那一點＝竿尖
+    （釣竿是彎的，直線距離最遠的常是弧頂而不是竿尖）。回 [方向][格] = [x, y]（格內像素）；那一格沒有釣竿就回 [64, 80]。"""
+    ims = [read_png_pixels(os.path.join(ASSETS, r)) for r in (rel_bg, rel_fg)]
+    out = []
+    for d in range(4):
+        row = []
+        for k in range(n):
+            pts = set()
+            for w, h, data in ims:
+                for y in range(size):
+                    for x in range(size):
+                        i = ((d * size + y) * w + k * size + x) * 4
+                        if data[i + 3] > 16:
+                            pts.add((x, y))
+            if not pts:
+                row.append([64, 80]); continue
+            start = min(pts, key=lambda q: (q[0] - 64) ** 2 + (q[1] - 80) ** 2)
+            dist, frontier, far = {start: 0}, [start], start
+            while frontier:
+                nxt = []
+                for (x, y) in frontier:
+                    for dx in (-1, 0, 1):
+                        for dy in (-1, 0, 1):
+                            q = (x + dx, y + dy)
+                            if q in pts and q not in dist:
+                                dist[q] = dist[(x, y)] + 1
+                                nxt.append(q)
+                                if dist[q] > dist[far]:
+                                    far = q
+                frontier = nxt
+            row.append([far[0], far[1]])
+        out.append(row)
+    return out
 
 def char_frame_map():
     """遊戲 65 個邏輯幀 → LPC sheet 的 [欄, 列]（之後接攻擊動作的幀，見 char_attack_frames）。"""
@@ -3086,7 +3139,10 @@ def main():
             dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=320, cast=1.0, dmg=4, gap=0),
                  lpc=dict(bg="char_weapon_s_bg.png", fg="char_weapon_s_fg.png",   # LPC S 形杖（s）；只有突刺
                           over=dict(thrust=dict(size=192, bg="char_weapon_s_thrust_bg.png", fg="char_weapon_s_thrust_fg.png")))),   # gap：詠唱放完到下一次能開始的間隔（秒）；沒寫＝ATK_CD（0.45）。咒杖 gap=0＝連續施放，間隔就是詠唱時間
-            dict(id="rod", name="釣竿", type="rod", sprite="weapon_rod.png", carry="back", fishing=True),   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
+            dict(id="rod", name="釣竿", type="rod", sprite="weapon_rod.png", carry="back", fishing=True,   # fishing：拿著時左鍵／F 是釣魚，不能攻擊
+                 # 釣魚中改畫 LPC 釣竿（人物圖層，四方向）；沒在釣魚時照舊背著小圖。tips＝每格竿尖（釣線從這裡拉到浮標）
+                 lpc=dict(fishOnly=True, over=dict(rod=dict(size=128, bg="char_weapon_rod_fish_bg.png", fg="char_weapon_rod_fish_fg.png")),
+                          tips=rod_tips("external/img2pixel/lpc/weapon_rod_fish_bg.png", "external/img2pixel/lpc/weapon_rod_fish_fg.png"))),
             # 武器外觀（glam）：只換樣子，玩法照職業武器；type 要和職業武器相同才能選
         ]),
     ))

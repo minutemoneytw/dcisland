@@ -2513,7 +2513,9 @@ function charSprite(look, fi) {
   // （LPC 的 128×128 揮砍、192×192 突刺、128×128 走路的龍槍／弓等）就整張畫布放大，人物畫在正中央
   const ent0 = F.map ? F.map[fi] : null;
   let over = null, overCell = null;
-  if (wpn && ent0 && F.attacks) {
+  if (wpn && ent0 && ent0[3]) {   // 工具動作（釣竿）：每一格各自一張超大格，第幾格／方向寫在 map 條目裡
+    over = wpn.lpc.over?.[ent0[3]] || null; overCell = [ent0[4], ent0[5]];
+  } else if (wpn && ent0 && F.attacks) {
     for (const [an, a] of Object.entries({ ...F.attacks, walk: LPC_WALK_ROWS })) {
       if (ent0[1] >= a.row && ent0[1] < a.row + 4 && wpn.lpc.over?.[an]) {
         over = wpn.lpc.over[an]; overCell = [a.cols.indexOf(ent0[0]), ent0[1] - a.row];
@@ -2590,10 +2592,25 @@ function atkAnimNow(p) {
   if (p.atkT0 == null || S.t - p.atkT0 >= ATK_ANIM || p.fish) return null;
   return { kind: atkKind(p), q: (S.t - p.atkT0) / ATK_ANIM };
 }
+// 釣魚的釣竿動作（LPC tool_rod 13 格）：拋竿（剛進入等魚的前 ROD_CAST 秒）2→5、等魚 6～8 輕晃、上鉤 8／9 抖竿、拉竿 10～12 收線。
+// 只有拿著 LPC 釣竿（lpc.fishOnly）時才播；回第幾格或 null
+const ROD_CAST = .5;
+function rodFrameNow(p) {
+  const f = p.fish; if (!f || p.npc) return null;
+  const wid = p === S.players[0] ? S.me.weapon : p.weapon;
+  if (!S.avatar.weapons.find(w => w.id === wid)?.lpc?.fishOnly) return null;
+  const since = S.t - (f.c0 ?? f.t ?? S.t);
+  if (f.ph === 'wait' && since < ROD_CAST) return 2 + Math.min(3, Math.floor(since / ROD_CAST * 4));
+  if (f.ph === 'wait') return [6, 7, 8, 7][Math.floor(S.t * 2.5) % 4];
+  if (f.ph === 'bite') return [8, 9][Math.floor(S.t * 10) % 2];
+  return [10, 11, 12][Math.floor(S.t * 8) % 3];   // reel
+}
 function charFrame(p) {
   const F = S.avatar.frames, st = F.states;
   if (p.pose) return { fi: (st.sit || st.down_idle)[0], mirror: false };
   const mode = p.moving ? 'walk' : 'idle', d = d8Of(p);
+  const rk = rodFrameNow(p), rl = rk != null && st[`rod_${d}`];
+  if (rl) return { fi: rl[rk], mirror: false };
   const ak = atkAnimNow(p), al = ak && st[`${ak.kind}_${d}`];
   if (al) return { fi: al[Math.min(al.length - 1, Math.floor(ak.q * al.length))], mirror: false };
   let list = st[`${d}_${mode}`], mirror = false;
@@ -2652,7 +2669,8 @@ function playerSpriteDiv(p, fi) {
   // LPC 武器（avatar.json 武器條目有 lpc）是人物的一層：帶 wpn（武器 id）給 charSprite 一起合成
   if (p.npc) return charSprite(p.look || myLook(), fi);
   const me = p === S.players[0], look = p.look || myLook();
-  const wd = me ? (p.tool ? null : lpcWeaponFor(S.me.weapon, look.wlook)) : lpcWeaponFor(p.weapon, look.wlook);
+  let wd = me ? (p.tool ? null : lpcWeaponFor(S.me.weapon, look.wlook)) : lpcWeaponFor(p.weapon, look.wlook);
+  if (wd?.lpc.fishOnly && !p.fish) wd = null;   // LPC 釣竿只在釣魚時畫（四方向的拋竿／持竿／收線動作），平常照舊背著小圖
   return charSprite(wd ? { ...look, wpn: wd.id } : look, fi);
 }
 // 拿著的武器有沒有 LPC 圖層：有就回該武器條目（武器外觀有 LPC 圖就用外觀的，外觀沒有 LPC 圖就退回舊的小圖畫法）
@@ -2668,7 +2686,7 @@ function lpcWeaponFor(wid, wlook) {
 // 武器的圖：拿著職業武器且有選同類型的武器外觀（glam）時畫外觀的圖；玩法（射程、詠唱等）照拿著的武器
 function weaponImgFor(wid, wlook) {
   if (!wid || wid === 'hands') return null;
-  if (lpcWeaponFor(wid, wlook)) return null;   // LPC 武器畫在人物圖層裡（charSprite），不另外畫小圖
+  if (lpcWeaponFor(wid, wlook) && !lpcWeaponFor(wid, wlook).lpc.fishOnly) return null;   // LPC 武器畫在人物圖層裡（charSprite），不另外畫小圖（釣竿例外：沒在釣魚時背小圖）
   if (wlook && wlook !== wid) {
     const ws = S.avatar.weapons, g = ws.find(w => w.id === wlook), base = ws.find(w => w.id === wid);
     if (g?.glam && base && g.type === base.type && S.weaponImgs[wlook]) return S.weaponImgs[wlook];
@@ -2786,9 +2804,9 @@ function stepPlayer(p, dt) {
   }
   if (p.swing > 0) p.swing -= dt;
   if (p.adir && atkActive(p)) { p.d8 = p.adir; p.face = p.adir === 'up' || p.adir === 'down' ? p.adir : 'side'; }   // 攻擊動作中（揮擊／採集／詠唱／射擊）身體轉向攻擊方向（四方向）
-  if (p.fish) {   // 釣魚中走動：身體一直面向浮標（倒退著走），釣竿才會指著浮標、釣線不會從背後繞過去
+  if (p.fish) {   // 釣魚中走動：身體一直面向浮標（倒退著走），釣竿才會指著浮標、釣線不會從背後繞過去；四方向（2026-11-09，可以朝上／朝下釣）
     if (Math.abs(p.fish.x - p.x) > 4) p.dir = Math.sign(p.fish.x - p.x);
-    p.face = 'side'; p.d8 = p.dir < 0 ? 'left' : 'right';
+    p.d8 = dir4To(p.fish.x - p.x, p.fish.y - p.y, p); p.face = p.d8 === 'up' || p.d8 === 'down' ? p.d8 : 'side';
   }
   if (p.tool && S.t > p.toolUntil && !(p.swing > 0)) p.tool = null;
   if (pet && S.t >= (p.petTick ?? 0)) {   // 石化每秒扣 1 HP（死者走既有墓碑機制）
@@ -3362,11 +3380,12 @@ function drawPerson(p, wi, nameColor) {
     if (swingV === 'down') drawWeaponSwing(wi, p.swing, 1, 'down');   // 往下揮：武器在身前
     if (p.dir < 0) ctx.scale(-1, 1);                          // 揮擊、拋竿朝面向那側（要翻轉）
     if (wi && !pose && !fish && p.swing > 0 && swingV !== 'up' && swingV !== 'down') drawWeaponSwing(wi, p.swing, p.dir < 0 ? -1 : 1);
-    if (fish) drawRodCast(wi, rodAngle(fish));
+    const rodTip = fish ? lpcRodTip(p, cf, cs, img.pad || 0) : null;   // LPC 釣竿：竿尖的世界座標（畫在人物圖層裡，不畫舊小圖）
+    if (fish && !rodTip) drawRodCast(wi, rodAngle(fish));
     if (wi && !pose && !fish && p.cast) drawStaffRaise(wi, Math.min(1, (S.t - p.cast.t0) / p.cast.dur));
     ctx.restore();
     if (pet) ctx.restore();
-    if (fish) drawLineAndBobber(p, wi, fish);
+    if (fish) drawLineAndBobber(p, wi, fish, rodTip);
     if (pose) nameY = p.y - Math.round(59 * raceScale);
   }
   // 名牌（FFXIV 感：白字黑邊）
@@ -3778,9 +3797,9 @@ function fishAction(wx, wy) {
     if (!S.fishDB?.terrains[S.terrain]?.length) { say('這裡釣不到東西'); return; }
     const pt = castPoint(p, wx, wy);
     if (!pt) return;
-    p.fish = { ph: 'wait', x: Math.round(pt.x), y: Math.round(pt.y), t: S.t, biteAt: S.t + FISH_WAIT[0] + Math.random() * (FISH_WAIT[1] - FISH_WAIT[0]) };
+    p.fish = { ph: 'wait', x: Math.round(pt.x), y: Math.round(pt.y), t: S.t, c0: S.t, biteAt: S.t + FISH_WAIT[0] + Math.random() * (FISH_WAIT[1] - FISH_WAIT[0]) };
     if (Math.abs(pt.x - p.x) > 4) p.dir = Math.sign(pt.x - p.x);
-    p.face = 'side'; p.tool = null;
+    p.d8 = dir4To(pt.x - p.x, pt.y - p.y, p); p.face = p.d8 === 'up' || p.d8 === 'down' ? p.d8 : 'side'; p.tool = null;
     toast('拋竿了，等魚上鉤…（再按一次收竿）', 1800);
   } else if (f.ph === 'wait') stopFishing(p, '收竿了');
   else if (f.ph === 'bite') {
@@ -3876,9 +3895,22 @@ function drawRodCast(wi, a) {
   ctx.drawImage(wi, -wi.width * s / 2, -(wi.height - 3) * s, wi.width * s, wi.height * s); ctx.restore();
 }
 // 釣線與浮標（世界座標）：從竿尖拉到浮標；上鉤時浮標沉下去、水面起漣漪；拉扯時浮標往人這邊收
-function drawLineAndBobber(p, wi, f) {
-  const a = rodAngle(f), L = (wi.height - 3) * (wi.wscale || 2) - 2, dir = p.dir < 0 ? -1 : 1;
-  const tx = p.x + dir * (charAnch.hand[0] + L * Math.sin(a)), ty = p.y - p.z + charAnch.hand[1] - L * Math.cos(a);
+// LPC 釣竿（avatar.json 的 lpc.tips＝每方向每格的竿尖，格內像素）：這一幀是釣竿動作就回竿尖的世界座標，否則 null
+function lpcRodTip(p, cf, cs, pad) {
+  const F = S.avatar.frames, ent = F.map?.[cf.fi];
+  if (!ent || ent[3] !== 'rod') return null;
+  const wid = p === S.players[0] ? S.me.weapon : p.weapon, tips = S.avatar.weapons.find(w => w.id === wid)?.lpc?.tips;
+  const t = tips?.[ent[5]]?.[ent[4]]; if (!t) return null;
+  const size = 128;   // 釣竿超大格邊長；人物畫在正中央（pad＝(size−64)/2）
+  return { x: p.x + (t[0] - size / 2) * cs, y: p.y - p.z + (t[1] - (F.h + pad) + (F.footDy || 0)) * cs };
+}
+function drawLineAndBobber(p, wi, f, tip) {
+  let tx, ty;
+  if (tip) { tx = tip.x; ty = tip.y; }
+  else {
+    const a = rodAngle(f), L = (wi.height - 3) * (wi.wscale || 2) - 2, dir = p.dir < 0 ? -1 : 1;
+    tx = p.x + dir * (charAnch.hand[0] + L * Math.sin(a)); ty = p.y - p.z + charAnch.hand[1] - L * Math.cos(a);
+  }
   let bx = f.x, by = f.y;
   const since = S.t - (f.t ?? S.t);
   if (f.ph === 'reel') { const q = Math.min(1, since / FISH_REEL); bx += (p.x - bx) * q * .6; by += (p.y - 10 - by) * q * .6; }
