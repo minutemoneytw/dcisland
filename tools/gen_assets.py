@@ -971,6 +971,7 @@ def lpc_read_sheet(rel):
 WEAPON_GLOWS = [   # (後綴, 名稱, 主色, 光暈色, 解鎖條件, 提示)
     ("sky", "天藍輝光", "#5cc8ff", (150, 225, 255), dict(type="titles", ids=["ultima"]), "取得稱號《究極》（參與擊倒熔岩島的蓋老師）"),
     ("gold", "金黃輝光", "#f2c230", (255, 228, 130), dict(type="titles", ids=["legend"]), "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）"),
+    ("pink", "粉金輝光", "#e8b43a", (255, 130, 200), dict(type="titles", ids=["perfect"]), "取得稱號《完美》（參與擊倒機械島的壓力山大）"),   # 金色武器＋粉紅光暈（2026-11-09，使用者要求）
 ]
 GLOW_JOB_WEAPONS = ["sword", "waraxe", "staff", "tome", "daggers", "lance", "harpbow", "scepter"]
 

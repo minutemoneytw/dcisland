@@ -4385,6 +4385,39 @@
    }
   },
   {
+   "id": "sword_pink",
+   "name": "長劍・粉金輝光",
+   "type": "sword",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "perfect"
+    ]
+   },
+   "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
+   "carry": "back",
+   "back": "hilt",
+   "scale": 2,
+   "sprite": "weapon_sword_pink.png",
+   "lpc": {
+    "bg": "char_weapon_arming_bg_pink.png",
+    "fg": "char_weapon_arming_fg_pink.png",
+    "over": {
+     "slash": {
+      "size": 128,
+      "bg": "char_weapon_arming_slash_bg_pink.png",
+      "fg": "char_weapon_arming_slash_fg_pink.png"
+     },
+     "halfslash": {
+      "size": 128,
+      "bg": "char_weapon_arming_halfslash_bg_pink.png",
+      "fg": "char_weapon_arming_halfslash_fg_pink.png"
+     }
+    }
+   }
+  },
+  {
    "id": "waraxe_sky",
    "name": "戰斧・天藍輝光",
    "type": "axe",
@@ -4434,6 +4467,33 @@
       "size": 192,
       "bg": "char_weapon_waraxe_slash_bg_gold.png",
       "fg": "char_weapon_waraxe_slash_fg_gold.png"
+     }
+    }
+   }
+  },
+  {
+   "id": "waraxe_pink",
+   "name": "戰斧・粉金輝光",
+   "type": "axe",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "perfect"
+    ]
+   },
+   "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
+   "carry": "back",
+   "scale": 2,
+   "sprite": "weapon_waraxe_pink.png",
+   "lpc": {
+    "bg": "char_weapon_waraxe_bg_pink.png",
+    "fg": "char_weapon_waraxe_fg_pink.png",
+    "over": {
+     "slash": {
+      "size": 192,
+      "bg": "char_weapon_waraxe_slash_bg_pink.png",
+      "fg": "char_weapon_waraxe_slash_fg_pink.png"
      }
     }
    }
@@ -4491,6 +4551,32 @@
    }
   },
   {
+   "id": "staff_pink",
+   "name": "法杖・粉金輝光",
+   "type": "staff",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "perfect"
+    ]
+   },
+   "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
+   "scale": 2,
+   "sprite": "weapon_staff_pink.png",
+   "lpc": {
+    "bg": "char_weapon_loop_bg_pink.png",
+    "fg": "char_weapon_loop_fg_pink.png",
+    "over": {
+     "thrust": {
+      "size": 192,
+      "bg": "char_weapon_loop_thrust_bg_pink.png",
+      "fg": "char_weapon_loop_thrust_fg_pink.png"
+     }
+    }
+   }
+  },
+  {
    "id": "tome_sky",
    "name": "賢具・天藍輝光",
    "type": "tome",
@@ -4521,6 +4607,22 @@
    "carry": "waist",
    "scale": 2,
    "sprite": "weapon_tome_gold.png"
+  },
+  {
+   "id": "tome_pink",
+   "name": "賢具・粉金輝光",
+   "type": "tome",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "perfect"
+    ]
+   },
+   "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
+   "carry": "waist",
+   "scale": 2,
+   "sprite": "weapon_tome_pink.png"
   },
   {
    "id": "daggers_sky",
@@ -4558,6 +4660,25 @@
    "lpc": {
     "bg": "char_weapon_dagger_bg_gold.png",
     "fg": "char_weapon_dagger_fg_gold.png"
+   }
+  },
+  {
+   "id": "daggers_pink",
+   "name": "短劍・粉金輝光",
+   "type": "daggers",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "perfect"
+    ]
+   },
+   "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
+   "carry": "waist",
+   "sprite": "weapon_daggers_pink.png",
+   "lpc": {
+    "bg": "char_weapon_dagger_bg_pink.png",
+    "fg": "char_weapon_dagger_fg_pink.png"
    }
   },
   {
@@ -4619,6 +4740,35 @@
    }
   },
   {
+   "id": "lance_pink",
+   "name": "長槍・粉金輝光",
+   "type": "lance",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "perfect"
+    ]
+   },
+   "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
+   "carry": "back",
+   "sprite": "weapon_lance_pink.png",
+   "lpc": {
+    "over": {
+     "walk": {
+      "size": 128,
+      "bg": "char_weapon_dragonspear_walk_bg_pink.png",
+      "fg": "char_weapon_dragonspear_walk_fg_pink.png"
+     },
+     "thrust": {
+      "size": 192,
+      "bg": "char_weapon_dragonspear_thrust_bg_pink.png",
+      "fg": "char_weapon_dragonspear_thrust_fg_pink.png"
+     }
+    }
+   }
+  },
+  {
    "id": "harpbow_sky",
    "name": "豎琴弓・天藍輝光",
    "type": "bow",
@@ -4671,6 +4821,32 @@
    }
   },
   {
+   "id": "harpbow_pink",
+   "name": "豎琴弓・粉金輝光",
+   "type": "bow",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "perfect"
+    ]
+   },
+   "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
+   "carry": "back",
+   "sprite": "weapon_harpbow_pink.png",
+   "lpc": {
+    "bg": "char_weapon_recurve_bg_pink.png",
+    "fg": "char_weapon_recurve_fg_pink.png",
+    "over": {
+     "walk": {
+      "size": 128,
+      "bg": "char_weapon_recurve_walk_bg_pink.png",
+      "fg": "char_weapon_recurve_walk_fg_pink.png"
+     }
+    }
+   }
+  },
+  {
    "id": "scepter_sky",
    "name": "咒杖・天藍輝光",
    "type": "scepter",
@@ -4716,6 +4892,31 @@
       "size": 192,
       "bg": "char_weapon_s_thrust_bg_gold.png",
       "fg": "char_weapon_s_thrust_fg_gold.png"
+     }
+    }
+   }
+  },
+  {
+   "id": "scepter_pink",
+   "name": "咒杖・粉金輝光",
+   "type": "scepter",
+   "glam": true,
+   "unlock": {
+    "type": "titles",
+    "ids": [
+     "perfect"
+    ]
+   },
+   "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
+   "sprite": "weapon_scepter_pink.png",
+   "lpc": {
+    "bg": "char_weapon_s_bg_pink.png",
+    "fg": "char_weapon_s_fg_pink.png",
+    "over": {
+     "thrust": {
+      "size": 192,
+      "bg": "char_weapon_s_thrust_bg_pink.png",
+      "fg": "char_weapon_s_thrust_fg_pink.png"
      }
     }
    }
