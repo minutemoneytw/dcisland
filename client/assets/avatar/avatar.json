@@ -3819,6 +3819,22 @@
     "#7c8eb5",
     "#ffffff"
    ]
+  },
+  {
+   "id": "sge_robe",
+   "name": "賢者長袍",
+   "sheet": "char_top_sge_m.png",
+   "sheetF": "char_top_sge_f.png",
+   "dye": [
+    "#c4b59f",
+    "#e5e6c7",
+    "#0098b2",
+    "#156c99",
+    "#4d4a5d",
+    "#958080",
+    "#ffffff",
+    "#00cfdf"
+   ]
   }
  ],
  "bottoms": [

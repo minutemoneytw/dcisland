@@ -9,7 +9,7 @@
   { "id": "whitemage", "atkAnim": "thrust", "name": "白魔法師", "role": "healer", "weapon": "staff",
     "gear": { "hat": "hood", "top": "whm_robe", "bottom": "pants", "shoe": "shoes" }, "skills": ["sheal", "wings"] },
   { "id": "sage", "atkAnim": "spellcast", "name": "賢者", "role": "healer", "weapon": "tome",
-    "gear": { "hat": "nohat", "top": "tshirt", "bottom": "pants", "shoe": "shoes" }, "skills": ["care", "save"] },
+    "gear": { "hat": "nohat", "top": "sge_robe", "bottom": "pants", "shoe": "shoes" }, "skills": ["care", "save"] },
   { "id": "ninja", "atkAnim": "slash", "name": "忍者", "role": "melee", "weapon": "daggers",
     "gear": { "hat": "nohat", "top": "tshirt", "bottom": "pants", "shoe": "shoes" }, "skills": ["ninjutsu", "blink"] },
   { "id": "dragoon", "atkAnim": "thrust", "name": "龍騎士", "role": "melee", "weapon": "lance",

@@ -642,6 +642,7 @@ LPC_CLOTHES = [                  # 基本服裝與職業裝備（LPC 原檔）�
     ("bottom_brd_m", "bottom_brd_m.png"), ("bottom_brd_f", "bottom_brd_f.png"),
     ("shoes_brd_m", "shoes_brd_m.png"), ("shoes_brd_f", "shoes_brd_f.png"), ("hat_cavalier", "hat_cavalier.png"),
     ("top_drg_m", "top_drg_m.png"), ("top_drg_f", "top_drg_f.png"),
+    ("top_sge_m", "top_sge_m.png"), ("top_sge_f", "top_sge_f.png"),   # 賢者：白色開衩和服＋寬袖，青綠滾邊
     ("bottom_drg_m", "bottom_drg_m.png"), ("bottom_drg_f", "bottom_drg_f.png"),
     ("shoes_drg_m", "shoes_drg_m.png"), ("shoes_drg_f", "shoes_drg_f.png"), ("hat_horned", "hat_horned.png"),
     # LPC 武器圖層（一般格：走路列＝拿在手上；bg＝身體後面、fg＝最上面）
@@ -2775,7 +2776,8 @@ def main():
               lpc_garment("whm_robe", "白魔道袍", "char_top_whm_m.png", "char_top_whm_f.png"),
               lpc_garment("blm_robe", "黑魔道袍", "char_top_blm_m.png", "char_top_blm_f.png"),
               lpc_garment("brd_vest", "詩人皮背心", "char_top_brd_m.png", "char_top_brd_f.png"),
-              lpc_garment("drg_plate", "龍騎士鎧甲", "char_top_drg_m.png", "char_top_drg_f.png")],
+              lpc_garment("drg_plate", "龍騎士鎧甲", "char_top_drg_m.png", "char_top_drg_f.png"),
+              lpc_garment("sge_robe", "賢者長袍", "char_top_sge_m.png", "char_top_sge_f.png")],
         bottoms=[lpc_garment("pants", "長褲", "char_bottom_pants_m.png", "char_bottom_pants_f.png", glam=True),
                  lpc_garment("plate_legs", "騎士腿甲", "char_bottom_plate_m.png", "char_bottom_plate_f.png"),
                  lpc_garment("brd_pants", "燈籠褲", "char_bottom_brd_m.png", "char_bottom_brd_f.png"),
