@@ -3896,9 +3896,9 @@ function drawLineAndBobber(p, wi, f) {
 }
 
 // ---- 魚類圖鑑：每個地形一頁，各 30 種；沒釣過的是黑色剪影＋「？？？」，釣過的顯示圖、名稱、稀有度、最大尺寸與次數 ----
-// 圖鑑視窗（2026-11-09 使用者要求：合成併進來）：上方大頁籤＝魚類圖鑑／合成／素材圖鑑／配方筆記（S.dexMain）；
+// 圖鑑視窗（2026-11-09 使用者要求：合成併進來）：上方大頁籤＝魚類圖鑑／素材圖鑑／合成／配方筆記（S.dexMain）；
 // 魚類圖鑑底下再分地形頁籤，合成三頁沿用 buildCraft（S.craftTab）。S.craftOpen＝圖鑑開著且在合成那三頁（解鎖時要不要重畫）
-const DEX_MAIN = [['fish', '魚類圖鑑'], ['make', '合成'], ['dex', '素材圖鑑'], ['notes', '配方筆記']];
+const DEX_MAIN = [['fish', '魚類圖鑑'], ['dex', '素材圖鑑'], ['make', '合成'], ['notes', '配方筆記']];   // 2026-11-09 使用者要求素材圖鑑與合成交換位置
 function openDex(main) {
   S.dexOpen = true; S.dexTab ||= S.fishDB?.terrains[S.terrain] ? S.terrain : TERRAIN_IDS[0];
   if (main) S.dexMain = main;
@@ -6260,7 +6260,7 @@ document.addEventListener('click', e => {   // 點齒輪與選單以外的地方
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => { closeColor(false); closeGlams(); $('avatarPanel').classList.add('hidden'); };
 $('tableClose').onclick = () => closeTable();
-$('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑＋合成／素材圖鑑／配方筆記
+$('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑＋素材圖鑑／合成／配方筆記
 $('dexClose').onclick = closeDex;
 $('btnTitles').onclick = () => { if (S.titleOpen) closeTitles(); else openTitles(); };   // 造型面板的「稱號設定」：稱號一覽
 $('titleClose').onclick = closeTitles;
