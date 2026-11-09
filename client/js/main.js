@@ -2592,7 +2592,7 @@ function atkAnimNow(p) {
   if (p.atkT0 == null || S.t - p.atkT0 >= ATK_ANIM || p.fish) return null;
   return { kind: atkKind(p), q: (S.t - p.atkT0) / ATK_ANIM };
 }
-// 釣魚的釣竿動作（LPC tool_rod 13 格）：拋竿（剛進入等魚的前 ROD_CAST 秒）2→5、等魚 6～8 輕晃、上鉤 8／9 抖竿、拉竿停在 6（持竿）。
+// 釣魚的釣竿動作（LPC tool_rod 13 格）：拋竿（剛進入等魚的前 ROD_CAST 秒）2→5、等魚 6～8 輕晃、上鉤 8／9 抖竿、拉竿停在 12（往後拉住）＋輕微抖動。
 // 只有拿著 LPC 釣竿（lpc.fishOnly）時才播；回第幾格或 null
 const ROD_CAST = .5;
 const ROD_FLY = [.25, .65];   // 拋竿動畫：第幾秒開始甩出浮標（釣竿第 4 格往前揮）、第幾秒落水
@@ -2604,7 +2604,7 @@ function rodFrameNow(p) {
   if (f.ph === 'wait' && since < ROD_CAST) return 2 + Math.min(3, Math.floor(since / ROD_CAST * 4));
   if (f.ph === 'wait') return [6, 7, 8, 7][Math.floor(S.t * 2.5) % 4];
   if (f.ph === 'bite') return [8, 9][Math.floor(S.t * 10) % 2];
-  return 6;   // reel：釣竿維持持竿姿勢不動，只把浮標拉回來（2026-11-09 使用者要求：不要甩來甩去）
+  return 12;   // reel：竿子往後拉住（第 12 格）＋整個人輕微抖動（drawPerson 的 rodJit），跟原本的拉竿一樣；不播 10～12 來回甩（2026-11-09 使用者要求）
 }
 function charFrame(p) {
   const F = S.avatar.frames, st = F.states;
@@ -3357,7 +3357,8 @@ function drawPerson(p, wi, nameColor) {
     charAnch = { back: charAnchor(cf.fi, 'back'), backView: charAnchor(cf.fi, 'backView'), waist: charAnchor(cf.fi, 'waist'), hand: charAnchor(cf.fi, 'hand') };
     const pet = S.t < (p.petUntil ?? 0);   // 石化：身體灰階（自己的石化即時同步；遠端玩家的石化由光束事件就地推斷，純演出）
     if (pet) { ctx.save(); ctx.filter = 'grayscale(1) brightness(.92)'; }
-    ctx.save(); ctx.translate(p.x, p.y - p.z);
+    p.rodJit = p.fish?.ph === 'reel' && rodFrameNow(p) != null ? Math.round(Math.sin(S.t * 30)) : 0;   // 拉竿：竿子往後拉住、整個人左右抖 1px（原本拉竿時竿尖抖動的感覺）
+    ctx.save(); ctx.translate(p.x + p.rodJit, p.y - p.z);
     // 武器（背在背上／掛在腰間；揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
     const fish = wi && !pose && p.fish ? p.fish : null;
     const carry = wi && !pose && !fish && !(p.swing > 0) && !p.cast;   // 不拿在手上（詠唱中高舉法杖）
@@ -3903,7 +3904,7 @@ function lpcRodTip(p, cf, cs, pad) {
   const wid = p === S.players[0] ? S.me.weapon : p.weapon, tips = S.avatar.weapons.find(w => w.id === wid)?.lpc?.tips;
   const t = tips?.[ent[5]]?.[ent[4]]; if (!t) return null;
   const size = 128;   // 釣竿超大格邊長；人物畫在正中央（pad＝(size−64)/2）
-  return { x: p.x + (t[0] - size / 2) * cs, y: p.y - p.z + (t[1] - (F.h + pad) + (F.footDy || 0)) * cs };
+  return { x: p.x + (p.rodJit || 0) + (t[0] - size / 2) * cs, y: p.y - p.z + (t[1] - (F.h + pad) + (F.footDy || 0)) * cs };
 }
 function drawLineAndBobber(p, wi, f, tip) {
   let tx, ty;
