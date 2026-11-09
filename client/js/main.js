@@ -4154,9 +4154,11 @@ function buildCraft() {
   }
   const nMat = db.materials.filter(m => S.craft.mat[m.id]).length, nRec = db.recipes.filter(r => S.craft.rec[r.id]).length;
   $('craftHint').textContent = `素材 ${nMat}／${db.materials.length} · 配方 ${nRec}／${db.recipes.length}` + (S.net?.uid ? ' · 以 Discord 帳號保存' : ' · 訪客／未連線：只存在這台電腦');
-  const body = $('craftBody'); body.innerHTML = '';
+  const body = $('craftBody'), keepScroll = body.dataset.tab === S.craftTab ? body.scrollTop : 0;   // 同一頁重畫（例如點素材放進合成格）時維持捲動位置
+  body.innerHTML = ''; body.dataset.tab = S.craftTab;
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   if (S.craftTab === 'make') {
+    const head = mk('div', 'craft-head');   // 合成格＋說明：固定在捲動區上方（2026-11-09 使用者要求：像凍結窗格，只捲素材）
     const row = mk('div', 'craft-slots');
     const max = db.maxInputs || 3;
     for (let i = 0; i < max; i++) {
@@ -4168,8 +4170,8 @@ function buildCraft() {
     const go = mk('button', 'ff-btn', '合成'); go.onclick = tryCraft;
     const clr = mk('button', 'ff-btn small', '清空'); clr.onclick = () => { S.craftSlots = []; S.craftMsg = ''; buildCraft(); };
     row.append(mk('span', 'craft-op', '→'), go, clr);
-    body.appendChild(row);
-    body.appendChild(mk('div', 'craft-msg', S.craftMsg || '點下面的素材放進合成格（2～' + max + ' 個，不分順序），猜對配方就能做出新東西。素材用不完，錯誤的組合也不會消耗。'));
+    head.append(row, mk('div', 'craft-msg', S.craftMsg || '點下面的素材放進合成格（2～' + max + ' 個，不分順序），猜對配方就能做出新東西。素材用不完，錯誤的組合也不會消耗。'));
+    body.appendChild(head);
     const grid = mk('div', 'craft-grid');
     const have = db.materials.filter(m => S.craft.mat[m.id]);
     for (const m of have) {
@@ -4204,6 +4206,7 @@ function buildCraft() {
     }
     body.appendChild(mk('div', 'craft-empty', list.length ? `還有 ${db.recipes.length - list.length} 個配方沒發現` : '還沒有發現任何配方：到「合成」分頁試試看吧。'));
   }
+  body.scrollTop = keepScroll;
 }
 // 伺服器送來的解鎖紀錄（登入後、craftsync 之後）：和本機取聯集（訪客時期的進度併進帳號），本機有伺服器沒有的補傳
 function onNetCraftDb(c) {

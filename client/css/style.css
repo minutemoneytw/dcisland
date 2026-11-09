@@ -265,6 +265,7 @@ body {
 
 /* ---- 合成面板 ---- */
 #craftBody { overflow-y: auto; margin: 2px 0 8px; min-height: 180px; }
+.craft-head { position: sticky; top: 0; z-index: 1; background: #161922;   /* 不透明：素材捲到下面時不會透出來 */ padding-top: 2px; border-bottom: 1px solid var(--gold-dim); margin-bottom: 6px; }   /* 合成格固定在上方，只捲素材 */
 .craft-slots { display: flex; align-items: center; gap: 8px; justify-content: center; margin: 4px 0 8px; }
 .craft-slot { width: 52px; height: 52px; border: 1px dashed var(--gold-dim); background: rgba(255, 255, 255, .04); display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .craft-slot.full { border-style: solid; background: #3a3424; }
