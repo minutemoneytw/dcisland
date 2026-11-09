@@ -230,6 +230,7 @@ function animFrame(a, an) {
 
 function spawnMobs() {
   S.mobs = [];
+  S.respawn = [];   // 換島（或重生成世界）時重生佇列清空：新的島自己生一批，別島擊倒的不會跟過來（2026-11-09 修正：會在和平島冒出怪）
   const td = S.terrains[S.terrain];
   if (!S.mobsDB || !td.mobs?.length) return;
   const cx = COLS / 2 - .5, cy = ROWS / 2 - .5;
@@ -267,6 +268,7 @@ function spawnMobs() {
 
 function respawnMob(id) {
   const def = mobDef(id);
+  if (!def || !(S.terrains[S.terrain]?.mobs || []).some(m => m.id === id)) return;   // 這座島本來就沒有這種動物（例如和平島）：不生
   for (let tries = 0; tries < 60; tries++) {
     const x = Math.floor(Math.random() * COLS), y = Math.floor(Math.random() * ROWS);
     if (S.world.types[y * COLS + x] !== 2) continue;
@@ -6467,7 +6469,7 @@ async function boot() {
           a.dieT -= dt;
           if (a.dieT <= 0) {
             S.mobs.splice(i, 1);
-            if (!a.proxy && !a.lurker) S.respawn.push({ id: a.id, at: S.t + (S.mobsDB.respawn || 30) });   // 島主（proxy）重生由伺服器的 spawn 事件驅動；釣上來的怪物不重生
+            if (!a.proxy && !a.lurker) S.respawn.push({ id: a.id, terrain: S.terrain, at: S.t + (S.mobsDB.respawn || 30) });   // 島主（proxy）重生由伺服器的 spawn 事件驅動；釣上來的怪物不重生
           }
           continue;
         }
@@ -6475,7 +6477,7 @@ async function boot() {
       }
       for (let i = S.respawn.length - 1; i >= 0; i--) {
         const r = S.respawn[i];
-        if (S.t >= r.at) { S.respawn.splice(i, 1); respawnMob(r.id); }
+        if (S.t >= r.at) { S.respawn.splice(i, 1); if (r.terrain === S.terrain) respawnMob(r.id); }   // 只在擊倒牠的那座島重生
       }
       stepDecos(dt); stepDrops(dt);
       for (let i = S.floaters.length - 1; i >= 0; i--) {
