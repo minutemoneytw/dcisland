@@ -1500,12 +1500,12 @@ TERRAINS = [
 # 和平島的遊戲桌：地形 → [桌]。id＝桌 id（兩份伺服器的 TABLE_DEFS 要一致）、game＝client/assets/games/games.json 的遊戲 id、
 # cell＝左上角格、w／h＝占幾格（圖 48×32 以 scale 2 畫＝3×2 格）。桌子是島上固定物件，不是可擺設的家具
 TABLES_BY_TERRAIN = {
-    "peace": [dict(id="t1", game="oldmaid", cell=[50, 24], w=3, h=2),
-              dict(id="t2", game="gomoku", cell=[34, 24], w=3, h=2),
-              dict(id="t3", game="oldmaid", cell=[50, 31], w=3, h=2),   # 各遊戲都有兩桌（2026-11-08，使用者要求）：t3 是 t1 的複本、t4 是 t2 的複本
-              dict(id="t4", game="gomoku", cell=[34, 31], w=3, h=2),
-              dict(id="t5", game="dodge", cell=[42, 38], w=3, h=2),
-              dict(id="t6", game="uno", cell=[34, 38], w=3, h=2)],   # UNO（2026-11-08，使用者要求）   # 躲彈幕只有一桌（2026-11-08，使用者要求）
+    # 2026-11-09 使用者要求：五子棋、抽鬼牌改回各一桌（t3／t4 拿掉，兩份伺服器的 TABLE_DEFS 一起改），
+    # 四桌排成 2×2、圍著島中央（44, 28），左右相距 8 格、上下相距 7 格（中間留空給重生點）
+    "peace": [dict(id="t2", game="gomoku", cell=[38, 24], w=3, h=2),
+              dict(id="t1", game="oldmaid", cell=[46, 24], w=3, h=2),
+              dict(id="t6", game="uno", cell=[38, 31], w=3, h=2),     # UNO（2026-11-08，使用者要求）
+              dict(id="t5", game="dodge", cell=[46, 31], w=3, h=2)],  # 躲彈幕只有一桌（2026-11-08，使用者要求）
 }
 
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
