@@ -11,7 +11,7 @@
   { "id": "sage", "atkAnim": "spellcast", "name": "賢者", "role": "healer", "weapon": "tome",
     "gear": { "hat": "nohat", "top": "sge_robe", "bottom": "pants", "shoe": "shoes" }, "skills": ["care", "save"] },
   { "id": "ninja", "atkAnim": "slash", "name": "忍者", "role": "melee", "weapon": "daggers",
-    "gear": { "hat": "nohat", "top": "tshirt", "bottom": "pants", "shoe": "shoes" }, "skills": ["ninjutsu", "blink"] },
+    "gear": { "hat": "headband", "top": "nin_top", "bottom": "nin_pants", "shoe": "nin_tabi" }, "skills": ["ninjutsu", "blink"] },
   { "id": "dragoon", "atkAnim": "thrust", "name": "龍騎士", "role": "melee", "weapon": "lance",
     "gear": { "hat": "horned", "top": "drg_plate", "bottom": "drg_legs", "shoe": "drg_boots" }, "skills": ["highjump", "backjump"] },
   { "id": "bard", "atkAnim": "shoot", "name": "吟遊詩人", "role": "ranged", "weapon": "harpbow",

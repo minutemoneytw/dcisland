@@ -3849,6 +3849,16 @@
     "#ccc1ba",
     "#978275"
    ]
+  },
+  {
+   "id": "nin_top",
+   "name": "忍者上衣",
+   "sheet": "char_top_nin_m.png",
+   "sheetF": "char_top_nin_f.png",
+   "dye": [
+    "#2f3542",
+    "#4a4f5a"
+   ]
   }
  ],
  "bottoms": [
@@ -3906,6 +3916,16 @@
    "dye": [
     "#3b2f2a",
     "#544a45"
+   ]
+  },
+  {
+   "id": "nin_pants",
+   "name": "忍者長褲",
+   "sheet": "char_bottom_nin_m.png",
+   "sheetF": "char_bottom_nin_f.png",
+   "dye": [
+    "#2f3542",
+    "#4a4f5a"
    ]
   }
  ],
@@ -3968,6 +3988,18 @@
     "#4a3222",
     "#756256",
     "#918379"
+   ]
+  },
+  {
+   "id": "nin_tabi",
+   "name": "分趾襪",
+   "sheet": "char_shoes_nin_m.png",
+   "sheetF": "char_shoes_nin_f.png",
+   "dye": [
+    "#3c4250",
+    "#2f343f",
+    "#7b7f89",
+    "#e0e1e3"
    ]
   }
  ],
@@ -4045,6 +4077,16 @@
     "#c4b59f",
     "#4d4a5d",
     "#ffffff"
+   ]
+  },
+  {
+   "id": "headband",
+   "name": "忍者頭巾",
+   "sheet": "char_hat_ninja.png",
+   "dye": [
+    "#b3312f",
+    "#802322",
+    "#9f2b2a"
    ]
   }
  ],
