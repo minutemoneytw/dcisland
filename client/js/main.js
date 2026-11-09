@@ -5746,7 +5746,7 @@ function buildAvatarPanel() {
     const b = document.createElement('button'); b.className = 'ff-btn small dye-btn'; b.title = LOOK_COLOR[cfield];
     const sw = document.createElement('span'); sw.className = 'dye-sw'; sw.style.background = S.me[cfield] || cur.hex || '#888';
     b.append(sw, document.createTextNode('換色'));
-    b.onclick = () => openColor(cfield, cur);
+    b.onclick = () => toggleColor(cfield, cur);
     styleHost.appendChild(b);
   };
   lookChips($('raceOpts'), (S.avatar.races || []).map(r => ({ id: r.id, name: r.name, title: r.scale && r.scale !== 1 ? `體型 ×${r.scale}` : '' })),
@@ -5800,7 +5800,7 @@ function buildAvatarPanel() {
       const sw = document.createElement('span'); sw.className = 'dye-sw';
       sw.style.background = wr.color[slot] || dye?.[0] || 'transparent';
       b.append(sw, document.createTextNode('換色'));
-      b.onclick = () => openColor(slot, cur);
+      b.onclick = () => toggleColor(slot, cur);
       row.appendChild(b);
     }
     box.appendChild(row);
@@ -5855,6 +5855,8 @@ function colorSet(slot, hex) {
   const o = LOOK_COLOR[slot] ? S.me : wardrobe().color;
   if (hex) o[slot] = hex; else delete o[slot];
 }
+// 換色鈕：同一個再點一次＝關閉（保留目前選的顏色，跟按「確定」一樣；選色是即時套用的）；點別的換色鈕＝切過去
+function toggleColor(slot, item) { if (S.colorOpen && colorUI.slot === slot) closeColor(true); else openColor(slot, item); }
 function openColor(slot, item) {
   const dye = dyeList(item); if (!dye) return;
   const look = !!LOOK_COLOR[slot];
