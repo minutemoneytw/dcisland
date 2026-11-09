@@ -319,7 +319,7 @@
    "big": 5,
    "speed": 46,
    "flee": 150,
-   "hp": 4,
+   "retaliate": true,
    "footDy": 0,
    "anim": {
     "sheet": "external/img2pixel/dragon_sheet.png",
@@ -345,7 +345,9 @@
    "tint": "#1a1a1a",
    "tintBase": "#8b1030",
    "tintMode": "off",
-   "line": "「飛龍」拍了拍翅膀，掀起一陣風。"
+   "line": "「飛龍」拍了拍翅膀，掀起一陣風。",
+   "hp": 20,
+   "atk": 1
   },
   {
    "id": "dragon_volcano",
@@ -355,7 +357,7 @@
    "big": 5,
    "speed": 46,
    "flee": 150,
-   "hp": 4,
+   "retaliate": true,
    "footDy": 0,
    "anim": {
     "sheet": "external/img2pixel/dragon_sheet.png",
@@ -378,7 +380,9 @@
     "dx": 0,
     "dy": -4
    },
-   "line": "「飛龍」拍了拍翅膀，掀起一陣風。"
+   "line": "「飛龍」拍了拍翅膀，掀起一陣風。",
+   "hp": 20,
+   "atk": 1
   },
   {
    "id": "dragon_beach",
@@ -388,7 +392,7 @@
    "big": 5,
    "speed": 46,
    "flee": 150,
-   "hp": 4,
+   "retaliate": true,
    "footDy": 0,
    "anim": {
     "sheet": "external/img2pixel/dragon_sheet.png",
@@ -413,7 +417,9 @@
    },
    "tint": "#d8c090",
    "tintBase": "#8b1030",
-   "line": "「飛龍」拍了拍翅膀，掀起一陣風。"
+   "line": "「飛龍」拍了拍翅膀，掀起一陣風。",
+   "hp": 20,
+   "atk": 1
   },
   {
    "id": "fishman",
