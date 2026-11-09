@@ -153,13 +153,13 @@ body {
 .gear-name { flex: 1; min-width: 0; font-size: 12px; line-height: 24px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gear-name.glam { color: #f0dc9a; }
 .gear-row .ff-btn { flex: 0 0 auto; }
-#glamBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 300px; max-height: 440px; display: flex; flex-direction: column; z-index: 32; }
+#glamBox { left: 10px; top: 60px; transform: none; width: 300px;   /* 放左邊：中間的角色要看得到換上去的樣子 */ max-height: 440px; display: flex; flex-direction: column; z-index: 32; }
 #glamBox.hidden { display: none !important; }
 #glamList { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
 .dye-btn { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
 .dye-btn:disabled { opacity: .35; cursor: default; }
 .dye-sw { width: 10px; height: 10px; border: 1px solid rgba(0,0,0,.6); display: inline-block; }
-#colorBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 220px; z-index: 33; }
+#colorBox { left: 10px; top: 60px; transform: none; width: 220px;   /* 放左邊：同上 */ z-index: 33; }
 #colorBox.hidden { display: none !important; }
 #colorSV, #colorHue { display: block; width: 200px; margin: 0 auto 6px; cursor: crosshair; touch-action: none; }
 .color-hexrow { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
@@ -188,6 +188,8 @@ body {
 #dexBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 560px; max-height: 500px; display: flex; flex-direction: column; z-index: 31; }
 #dexBox.hidden { display: none !important; }
 #dexTabs .ff-btn { padding: 3px 0; letter-spacing: 1px; }
+#dexFish, #dexCraft { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+#dexFish.hidden, #dexCraft.hidden { display: none; }
 #dexGrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; overflow-y: auto; margin: 2px 0 8px; }
 .dex-card { background: rgba(255, 255, 255, .04); border: 1px solid var(--gold-dim); padding: 6px 4px; text-align: center; }
 .dex-card.unknown { opacity: .8; border-style: dashed; }
@@ -259,8 +261,6 @@ body {
 #weaponBar .wrow.cur::after { content: attr(data-name); position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 4px; white-space: nowrap; padding: 1px 8px; font-size: 12px; letter-spacing: 2px; color: #ffe9a8; background: rgba(22, 25, 34, .85); border: 1px solid var(--gold-dim); text-shadow: 0 0 3px #000; pointer-events: none; }
 
 /* ---- 合成面板 ---- */
-#craftBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 560px; max-height: 500px; display: flex; flex-direction: column; z-index: 31; }
-#craftBox.hidden { display: none !important; }
 #craftBody { overflow-y: auto; margin: 2px 0 8px; min-height: 180px; }
 .craft-slots { display: flex; align-items: center; gap: 8px; justify-content: center; margin: 4px 0 8px; }
 .craft-slot { width: 52px; height: 52px; border: 1px dashed var(--gold-dim); background: rgba(255, 255, 255, .04); display: flex; align-items: center; justify-content: center; cursor: pointer; }

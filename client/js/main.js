@@ -3867,11 +3867,33 @@ function drawLineAndBobber(p, wi, f) {
 }
 
 // ---- 魚類圖鑑：每個地形一頁，各 30 種；沒釣過的是黑色剪影＋「？？？」，釣過的顯示圖、名稱、稀有度、最大尺寸與次數 ----
-function openDex() {
-  S.dexOpen = true; S.dexTab = S.fishDB?.terrains[S.terrain] ? S.terrain : TERRAIN_IDS[0];
-  buildDex(); $('dexBox').classList.remove('hidden');
+// 圖鑑視窗（2026-11-09 使用者要求：合成併進來）：上方大頁籤＝魚類圖鑑／合成／素材圖鑑／配方筆記（S.dexMain）；
+// 魚類圖鑑底下再分地形頁籤，合成三頁沿用 buildCraft（S.craftTab）。S.craftOpen＝圖鑑開著且在合成那三頁（解鎖時要不要重畫）
+const DEX_MAIN = [['fish', '魚類圖鑑'], ['make', '合成'], ['dex', '素材圖鑑'], ['notes', '配方筆記']];
+function openDex(main) {
+  S.dexOpen = true; S.dexTab ||= S.fishDB?.terrains[S.terrain] ? S.terrain : TERRAIN_IDS[0];
+  if (main) S.dexMain = main;
+  S.dexMain ||= 'fish';
+  if (S.dexMain !== 'fish' && !S.craftDB) S.dexMain = 'fish';
+  buildDexMain(); $('dexBox').classList.remove('hidden');
 }
-function closeDex() { S.dexOpen = false; $('dexBox').classList.add('hidden'); }
+function closeDex() { S.dexOpen = false; S.craftOpen = false; $('dexBox').classList.add('hidden'); }
+function buildDexMain() {
+  const tabs = $('dexMainTabs'); tabs.innerHTML = '';
+  for (const [id, name] of DEX_MAIN) {
+    if (id !== 'fish' && !S.craftDB) continue;
+    const b = document.createElement('button');
+    b.className = 'ff-btn small' + (S.dexMain === id ? ' active' : '');
+    b.textContent = name;
+    b.onclick = () => { S.dexMain = id; S.craftMsg = ''; buildDexMain(); };
+    tabs.appendChild(b);
+  }
+  const fish = S.dexMain === 'fish';
+  $('dexFish').classList.toggle('hidden', !fish); $('dexCraft').classList.toggle('hidden', fish);
+  S.craftOpen = S.dexOpen && !fish;
+  if (fish) buildDex();
+  else { S.craftTab = S.dexMain; buildCraft(); }
+}
 function buildDex() {
   const tabs = $('dexTabs'); tabs.innerHTML = '';
   for (const id of TERRAIN_IDS) {
@@ -3928,7 +3950,6 @@ function initCraft(db) {
   db.matById = new Map(db.materials.map(m => [m.id, m]));
   db.recipeByKey = new Map(db.recipes.map(r => [recipeKey(r.in), r]));
   S.craftDB = db;
-  $('btnCraft').style.display = '';
 }
 // 解鎖一筆；回傳 true＝這次才解鎖。登入者順手通知伺服器（訪客／沒連線 net 會自己略過）
 function unlockCraft(k, id) {
@@ -3979,8 +4000,8 @@ function craftSilhouette(cv) { const g = cv.getContext('2d'); g.globalCompositeO
 const outName = o => o.kind === 'furniture' ? (furnitureDef(o.id)?.name || o.id) : (matDef(o.id)?.name || o.id);
 const outKey = o => o.kind === 'furniture' ? 'furn' : 'mat';
 
-function openCraft() { S.craftOpen = true; S.craftTab ||= 'make'; S.craftMsg = ''; buildCraft(); $('craftBox').classList.remove('hidden'); }
-function closeCraft() { S.craftOpen = false; $('craftBox').classList.add('hidden'); }
+function openCraft(tab) { S.craftMsg = ''; openDex(tab || S.craftTab || 'make'); }   // 合成已併進圖鑑視窗
+function closeCraft() { closeDex(); }
 function craftAddSlot(id) {
   if (S.craftSlots.length >= (S.craftDB.maxInputs || 3)) { S.craftMsg = '放不下了：最多 ' + (S.craftDB.maxInputs || 3) + ' 個素材'; buildCraft(); return; }
   S.craftSlots.push(id); S.craftMsg = ''; buildCraft();
@@ -4002,7 +4023,7 @@ function buildCraft() {
   const tabs = $('craftTabs'); tabs.innerHTML = '';
   for (const [id, name] of [['make', '合成'], ['dex', '素材圖鑑'], ['notes', '配方筆記']]) {
     const b = document.createElement('button'); b.className = 'ff-btn small' + (S.craftTab === id ? ' active' : ''); b.textContent = name;
-    b.onclick = () => { S.craftTab = id; S.craftMsg = ''; buildCraft(); }; tabs.appendChild(b);
+    b.onclick = () => { S.craftTab = id; S.dexMain = id; S.craftMsg = ''; buildDexMain(); }; tabs.appendChild(b);
   }
   const nMat = db.materials.filter(m => S.craft.mat[m.id]).length, nRec = db.recipes.filter(r => S.craft.rec[r.id]).length;
   $('craftHint').textContent = `素材 ${nMat}／${db.materials.length} · 配方 ${nRec}／${db.recipes.length}` + (S.net?.uid ? ' · 以 Discord 帳號保存' : ' · 訪客／未連線：只存在這台電腦');
@@ -4716,14 +4737,14 @@ function checkTitles(silent) {
   if (fresh.length) {
     S.titleBook.known = [...known, ...fresh];
     lsSet('dcisland.m0.titles', S.titleBook);
-    if (!silent) setTimeout(() => toast(`獲得稱號 ${fresh.map(titleText).join('')}！可在「造型」的稱號設定中使用`, 3600), 2000);
+    if (!silent) setTimeout(() => toast(`獲得稱號 ${fresh.map(titleText).join('')}！可在「角色」的稱號設定中使用`, 3600), 2000);
   }
   // 外觀：解鎖條件與稱號同一套（avatar.json 各件的 unlock）；剛解鎖的跳提示（比稱號晚一點，不要疊在一起）
   const gk = new Set(S.titleBook.glams || []), gFresh = allGlams().filter(it => it.unlock && glamUnlocked(it) && !gk.has(it.id));
   if (gFresh.length) {
     S.titleBook.glams = [...gk, ...gFresh.map(it => it.id)];
     lsSet('dcisland.m0.titles', S.titleBook);
-    if (!silent) setTimeout(() => toast(`解鎖外觀「${gFresh.map(it => it.name).join('」「')}」！可在「造型」的裝備與外觀中使用`, 3600), 4200);
+    if (!silent) setTimeout(() => toast(`解鎖外觀「${gFresh.map(it => it.name).join('」「')}」！可在「角色」的裝備與外觀中使用`, 3600), 4200);
   }
   if (S.titleOpen) buildTitles();
 }
@@ -5698,13 +5719,10 @@ function buildAvatarPanel() {
   const showTab = n => {
     document.getElementById('avPage1').classList.toggle('hidden', n !== '1');
     document.getElementById('avPage2').classList.toggle('hidden', n !== '2');
-    for (const t of tabs) { const on = t.dataset.avtab === n; t.classList.toggle('sel', on); t.style.background = on ? '#3a4a6a' : '#1b2436'; }
+    for (const t of tabs) t.classList.toggle('active', t.dataset.avtab === n);   // 樣式跟其他視窗的頁籤一樣（ff-tabs／ff-btn active）
     S.avTab = n;
   };
-  for (const t of tabs) {
-    t.style.cssText = 'flex:1;padding:6px;margin:0 2px;border:1px solid #6a7fb0;border-radius:6px;color:#dbe3f2;cursor:pointer;font-family:inherit';
-    t.onclick = () => { showTab(t.dataset.avtab); closeHairColors(); };
-  }
+  for (const t of tabs) t.onclick = () => { showTab(t.dataset.avtab); closeHairColors(); };
   showTab(S.avTab || '1');
   // 種族（在性別上面）：按鈕 → 彈出 5 種可選（人類/精靈/貓族/拉拉肥/巨人）
   const rbs = $('raceOpts'); rbs.innerHTML = '';
@@ -6014,7 +6032,6 @@ addEventListener('keydown', e => {
   }
   if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   if (S.listOpen) { if (k === 'escape' || k === 'l') closeList(); return; }                // 線上列表開著：Esc / L 關閉
-  if (S.craftOpen) { if (k === 'escape') closeCraft(); return; }                          // 合成面板開著：Esc 關閉（仍可走路）
   if (S.dexOpen) { if (k === 'escape') closeDex(); return; }                               // 圖鑑開著：Esc 關閉（仍可走路）
   if (S.titleOpen) { if (k === 'escape') closeTitles(); return; }                          // 稱號一覽開著：Esc 關閉（仍可走路）
   if (S.colorOpen) { if (k === 'escape') closeColor(false); return; }                      // 選色視窗開著：Esc 取消
@@ -6257,9 +6274,7 @@ document.addEventListener('click', e => {   // 點齒輪與選單以外的地方
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => { closeColor(false); closeGlams(); $('avatarPanel').classList.add('hidden'); };
 $('tableClose').onclick = () => closeTable();
-$('btnCraft').onclick = () => { if (S.craftOpen) closeCraft(); else if (S.craftDB) openCraft(); };
-$('craftClose').onclick = closeCraft;
-$('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑
+$('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑＋合成／素材圖鑑／配方筆記
 $('dexClose').onclick = closeDex;
 $('btnTitles').onclick = () => { if (S.titleOpen) closeTitles(); else openTitles(); };   // 造型面板的「稱號設定」：稱號一覽
 $('titleClose').onclick = closeTitles;

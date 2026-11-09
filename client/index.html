@@ -28,9 +28,8 @@
 <button id="menuXp" class="settings-item">經驗條：顯示</button>
         </div>
       </div>
-      <button id="btnCraft" class="ff-btn" style="display:none">合成</button>
       <button id="btnDex" class="ff-btn">圖鑑</button>
-      <button id="btnAvatar" class="ff-btn">造型</button>
+      <button id="btnAvatar" class="ff-btn">角色</button>
       <button id="btnDecor" class="ff-btn" style="display:none">裝飾模式</button>
     </div>
   </div>
@@ -61,12 +60,12 @@
     </div>
   </div>
 
-  <!-- 造型面板 -->
+  <!-- 角色面板（2026-11-09 由「造型」改名） -->
   <div id="avatarPanel" class="ff-panel hidden">
-    <div class="ff-panel-title">造型設定</div>
-    <div id="avTabs">
-      <button class="avtab sel" data-avtab="1">角色</button>
-      <button class="avtab" data-avtab="2">外貌</button>
+    <div class="ff-panel-title">角色設定</div>
+    <div id="avTabs" class="ff-tabs">
+      <button class="ff-btn small avtab active" data-avtab="1">角色</button>
+      <button class="ff-btn small avtab" data-avtab="2">外貌</button>
     </div>
     <div id="avPage1">
       <div class="grp"><label>等級</label><div id="lvRow"><span id="lvCur"></span><div id="lvBar"><span id="lvFill"></span></div></div></div>
@@ -85,7 +84,7 @@
     <div class="ff-panel-foot"><button id="avatarClose" class="ff-btn small">完成</button></div>
   </div>
 
-  <!-- 外觀一覽（造型的「外觀」鈕）：某部位可用的外觀 -->
+  <!-- 外觀一覽（角色設定的「外觀」鈕）：某部位可用的外觀 -->
   <div id="glamBox" class="ff-panel hidden">
     <div id="glamTitle" class="ff-panel-title">外觀</div>
     <div id="glamHint" class="ff-panel-hint"></div>
@@ -93,7 +92,7 @@
     <div class="ff-panel-foot"><button id="glamClose" class="ff-btn small">關閉</button></div>
   </div>
 
-  <!-- 選色視窗（造型的換色） -->
+  <!-- 選色視窗（角色設定的換色） -->
   <div id="colorBox" class="ff-panel hidden">
     <div id="colorTitle" class="ff-panel-title">換色</div>
     <canvas id="colorSV" width="200" height="120"></canvas>
@@ -120,10 +119,18 @@
 
   <!-- 魚類圖鑑：每個地形一頁，沒釣過的是剪影 -->
   <div id="dexBox" class="ff-panel hidden">
-    <div class="ff-panel-title">魚類圖鑑</div>
-    <div id="dexTabs" class="ff-tabs"></div>
-    <div id="dexHint" class="ff-panel-hint"></div>
-    <div id="dexGrid"></div>
+    <div class="ff-panel-title">圖鑑</div>
+    <div id="dexMainTabs" class="ff-tabs"></div>
+    <div id="dexFish">
+      <div id="dexTabs" class="ff-tabs"></div>
+      <div id="dexHint" class="ff-panel-hint"></div>
+      <div id="dexGrid"></div>
+    </div>
+    <div id="dexCraft" class="hidden">
+      <div id="craftTabs" class="ff-tabs hidden"></div>
+      <div id="craftHint" class="ff-panel-hint"></div>
+      <div id="craftBody"></div>
+    </div>
     <div class="ff-panel-foot"><button id="dexClose" class="ff-btn small">關閉</button></div>
   </div>
 
@@ -135,14 +142,6 @@
     </div>
   </div>
 
-  <!-- 合成：合成／素材圖鑑／配方筆記 -->
-  <div id="craftBox" class="ff-panel hidden">
-    <div class="ff-panel-title">合成</div>
-    <div id="craftTabs" class="ff-tabs"></div>
-    <div id="craftHint" class="ff-panel-hint"></div>
-    <div id="craftBody"></div>
-    <div class="ff-panel-foot"><button id="craftClose" class="ff-btn small">關閉</button></div>
-  </div>
 
   <!-- 稱號一覽：已解鎖的可以選，顯示在名字上方 -->
   <div id="titleBox" class="ff-panel hidden">
