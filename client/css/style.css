@@ -101,7 +101,7 @@ body {
 .fitem canvas { image-rendering: pixelated; }
 .fitem .nm { font-size: 11px; color: var(--text-dim); letter-spacing: 1px; margin-top: 3px; }
 
-#avatarPanel { right: 10px; top: 60px; width: 264px; }   /* 264：裝備名稱欄放得下五個字（例如「龍騎士鎧甲」） */
+#avatarPanel { right: 10px; top: 60px; width: 264px; z-index: 30; }   /* z-index 30：蓋過右下角的疾走鈕（15，2026-11-09 使用者要求）；外觀一覽／選色視窗（32／33）仍在它上面。264：裝備名稱欄放得下五個字（例如「龍騎士鎧甲」） */
 .grp { margin-bottom: 10px; }
 .grp > label { display: block; font-size: 11px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 5px; }
 #lvRow { display: flex; align-items: center; gap: 8px; font: bold 12px "Microsoft JhengHei", "PingFang TC", sans-serif; color: var(--gold); }
