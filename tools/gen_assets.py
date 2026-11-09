@@ -932,7 +932,9 @@ def lpc_layer_sheet(rel):
 
 def lpc_eyes_sheet(rel, target):
     """眼睛圖層：整層像素依明暗重上色成目標色（跟髮色 12 色同一套）→ 832×1344。
-    眼白不在這層（在素體頭層），所以不用怕；以虹膜主色亮度為基準，瞳孔輪廓變成深色的目標色。"""
+    眼白不在這層（在素體頭層），所以不用怕；以虹膜主色亮度為基準，瞳孔輪廓變成深色的目標色。
+    （2026-11-09 為 Q 版動漫風重畫過[先是白鞏膜圓眼再改黑框點眼]，使用者看過後決定改回
+    較寫實的風格＝LPC 原始眼睛，重畫的行程式碼已移除。）"""
     sheet = lpc_layer_sheet(f"external/img2pixel/lpc/{rel}")
     tr = hx(target)
     b0 = 0.299 * LPC_EYE_IRIS[0][0] + 0.587 * LPC_EYE_IRIS[0][1] + 0.114 * LPC_EYE_IRIS[0][2]
@@ -945,6 +947,38 @@ def lpc_eyes_sheet(rel, target):
             f = min(f, 1.7)   # 比虹膜主色亮的（沒有）保底；瞳孔變成深色調
             sheet.set(x, y, (min(255, round(tr[0] * f)), min(255, round(tr[1] * f)), min(255, round(tr[2] * f)), c[3]))
     return sheet
+
+
+def lpc_face_sheet(rel):
+    """臉型（頭型）圖層＋Q 版小嘴（2026-11-09，使用者要求加可愛的小嘴；LPC 的臉本來沒有嘴）：
+    每個有臉的格（四方向組的第 1~3 列＝左／下／右；朝上不畫）依臉部像素範圍貼 1～2px 的固定小嘴——嘴色**不在
+    膚色 dye 調色盤**（dyeSheet 是整色 exact-match），所以不管換成哪種膚色／自訂色，小嘴都不會被重上色。
+    臉上的斜陰影／光澤與舊眼球畫法**照上游**（2026-11-09 一度壓平臉、清舊眼球配 Q 版眼，使用者決定
+    改回較寫實的風格＝LPC 原始眼睛，那些處理都撤了；上游的眼睛層跟臉型像素本來就對得上）。"""
+    sheet = lpc_layer_sheet(f"external/img2pixel/lpc/{rel}")
+    mouth = (172, 100, 94)               # 淡玫瑰棕的小嘴色（比膚色深一階、不搶眼）
+    for r in range(sheet.h // CHAR_FH):
+        d4 = (r - 21 if r >= 21 else     # 半揮是接在 21 起（其餘動作組都是 4 的倍數起）
+              r % 4) % 4                  # LPC 四列一組：0 上／1 左／2 下／3 右
+        if d4 == 0:
+            continue                      # 朝上（背面）不露臉
+        for c in range(sheet.w // CHAR_FW):
+            ox, oy = c * CHAR_FW, r * CHAR_FH
+            pts = [(x, y) for y in range(CHAR_FH) for x in range(CHAR_FW)
+                   if sheet.get(ox + x, oy + y)[3] > 16]
+            if not pts:
+                continue
+            x0 = min(p[0] for p in pts); x1 = max(p[0] for p in pts)
+            y0 = min(p[1] for p in pts); y1 = max(p[1] for p in pts)
+            my = y1 - 2                   # 下巴上方一列（y1 是下巴的輪廓弧）
+            mx = (x0 + x1) // 2 if d4 == 2 else (x1 - 3 if d4 == 3 else x0 + 3)   # 正面置中；側面貼在前緣內縮處
+            spot = sheet.get(ox + mx, oy + my)
+            if spot[3] > 16 and (spot[0], spot[1], spot[2]) in {(249, 213, 186), (228, 164, 124), (204, 134, 101)}:   # 臉色系（含陰影層）
+                sheet.set(ox + mx, oy + my, (*mouth, 255))            # 1～2px 的小嘴（正面再補第二 px）
+                if d4 == 2 and sheet.get(ox + mx + 1, oy + my)[3] > 16:
+                    sheet.set(ox + mx + 1, oy + my, (*mouth, 255))
+    return sheet
+
 
 def lpc_cloth_sheet(rel):
     """LPC 服裝（走路 9 幀×4 向、576×256）→ 疊到走路列 → 832×1344。"""
@@ -3026,8 +3060,8 @@ def main():
     for key in SKINS:
         save(lpc_body_sheet("male", key), f"char_body_{key}.png", sub)
         save(lpc_body_sheet("female", key), f"char_body_female_{key}.png", sub)
-    for fid, _fname, rel in LPC_FACES:               # 臉型（頭型；原色，跟膚色用 dye 重上色）
-        save(lpc_layer_sheet(f"external/img2pixel/lpc/{rel}"), f"char_face_{fid}.png", sub)
+    for fid, _fname, rel in LPC_FACES:               # 臉型（頭型；原色，跟膚色用 dye 重上色）＋Q 版小嘴
+        save(lpc_face_sheet(rel), f"char_face_{fid}.png", sub)
     for eid, rel in LPC_EARS:                        # 種族耳朵（精靈／貓）
         save(lpc_layer_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{eid}.png", sub)
     # 基本服裝（LPC 原檔，走路列）
