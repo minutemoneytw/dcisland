@@ -2064,6 +2064,7 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/slime_sheet.png", frames=3, rows=3, fw=48, fh=48, what="史萊姆的 3 方向（背／側／前）× 3 幀（各島不同色，靠 tint）"),
     dict(sheet="external/img2pixel/bunny_sheet.png", frames=4, rows=2, row0=0, fw=48, fh=32, what="跳跳兔的左／右各 4 幀（沙灘／雪島白／機械島灰；sheet 第 3 列 2 幀沒用到）"),
     dict(sheet="external/img2pixel/dragon_sheet.png", frames=3, rows=4, fw=191, fh=161, what="飛龍的 4 方向（上飛／朝右／下飛／朝左）× 3 幀（各島不同色靠 tint）"),
+    dict(sheet="external/img2pixel/goblin_sheet.png", frames=8, rows=2, fw=32, fh=32, what="哥布林的走路 2 方向（朝右／朝左）× 8 幀（草島原色綠／森林島棕色靠 tint）"),
     dict(sheet="external/img2pixel/bahamut_fly_sheet.png", frames=6, fw=88, fh=59, what="黃金肥龍的飛行 6 幀（草島島主）"),
     dict(sheet="external/img2pixel/snake_queen_sheet.png", frames=4, fw=88, fh=85, what="笨蛋蛇女的 4 幀（夜光島島主）"),
     dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fw=88, fh=74, what="蓋老師（究極神兵）的走路 6 幀（熔岩島島主）"),
@@ -2120,10 +2121,19 @@ MOB_MANIFEST = dict(
                **({"tint": tint, "tintBase": "#ab7943"} if tint else {}),
                line="「跳跳兔」豎起耳朵，隨時準備蹦走。")
           for bid, tint in [("bunny", None), ("bunny_snow", "#f2f6ff"), ("bunny_machine", "#9aa4b0")]],
+        # 哥布林：草島（原色綠）、森林島（棕色靠 tint）。反擊型野怪（跟飛龍同一套：被打不逃、追咬；2026-11-09 使用者定），
+        # 血量／攻擊力／經驗值＝該地形島主的 1/12（ownerFrac，最低 1）；下面的 post-pass 依 OWNER_BY_TERRAIN 算
+        # 素材來源 OpenGameArt「GOBLIN FREE PIXELART」（CC0，thekingphoenix）；畫面約 25×29（scale 1：人物約 46px，哥布林小隻）
+        *[dict(id=gid, name="哥布林", fixed=6, speed=34, flee=85, retaliate=True, ownerFrac=12,
+               anim=dict(sheet="external/img2pixel/goblin_sheet.png", frames=8, rows=2, row0=0, fw=32, fh=32,
+                         rowDir=["right", "left"], fps=8, scale=1.0),
+               **({"tint": tint} if tint else {}),
+               line="「哥布林」敲了敲手裡的長矛，警惕地看著你。")
+          for gid, tint in [("goblin_grass", None), ("goblin_forest", "#8a5a33")]],
         # 飛龍：夜光島（黑）、熔岩島（原色紅）、沙灘島（沙）。四列都是飛行視角＝上飛／朝右／下飛／朝左（方向網格）；
         # swim＝會飛所以能過海；big=5＝判定圈 34+6*(5-1)=58（大隻）；shadow 依體型放大、貼在正下方
         # retaliate＝會反擊的野怪：被打不逃、鎖定攻擊者追咬；血量／攻擊力由下面的 post-pass 依該地形島主 1/10 算
-        *[dict(id=did, name="飛龍", fixed=3, swim=True, big=5, speed=46, flee=150, retaliate=True,
+        *[dict(id=did, name="飛龍", fixed=3, swim=True, big=5, speed=46, flee=150, retaliate=True, ownerFrac=10,
                footDy=0,   # 會飛：不套用底部留白對齊（讓牠浮在影子之上，不貼地）
                anim=dict(sheet="external/img2pixel/dragon_sheet.png", frames=3, rows=4, fw=191, fh=161,
                          rowDir=["up", "right", "down", "left"], fps=7, scale=0.9),
@@ -2275,26 +2285,28 @@ OWNER_BY_TERRAIN = {
     "machine": "alexander",
 }
 
-# 會反擊的野怪（飛龍）：血量／攻擊力＝該地形島主的 1/10（最低 1，使用者定 2026-11-09）。
-# 島主爪擊每下的標準傷害是兩份伺服器的 D_CLAW_DMG＝2（波動砲 4、命令強制倒地另計），除以 10 後落到最低值 1；
-# 沒有島主的地形（沙灘島）用黃金肥龍當基準（目前各島主血量都是 200，結果都是血 20／攻擊 1）。
+# 反擊型野怪（retaliate）：血量／攻擊力＝該地形島主的 1/N、最低 1（N 寫在各條目的 ownerFrac；機制與數值規則使用者定 2026-11-09：
+# 以後「反擊型怪物」都照這套，唯一要問使用者的是「島主的幾分之幾」）。經驗值同比例，在 main.js 的 mobKillXp 算。
+# 島主爪擊每下的標準傷害是兩份伺服器的 D_CLAW_DMG＝2；條目的 id 尾碼（dragon_night→night、goblin_forest→forest）
+# 就是該怪所屬的地形，沒有島主的地形（沙灘／森林／雪島）用黃金肥龍當基準（目前各島主血量都是 200）。
 OWNER_CLAW_DMG = 2
-_DRAGON_TERRAIN = {"dragon_night": "night", "dragon_volcano": "volcano", "dragon_beach": "beach"}
+_TERRAIN_IDS = {"grass", "beach", "snow", "night", "forest", "volcano", "machine", "peace"}
 for _m in MOB_MANIFEST["mobs"]:
-    _tid = _DRAGON_TERRAIN.get(_m.get("id"))
-    if not _tid:
+    if not _m.get("retaliate"):
         continue
-    _om = next(_x for _x in MOB_MANIFEST["mobs"] if _x["id"] == OWNER_BY_TERRAIN.get(_tid, "gold_dragon"))
-    _m["hp"] = max(1, _om["hp"] // 10)
-    _m["atk"] = max(1, OWNER_CLAW_DMG // 10)
+    _tid = _m["id"].rsplit("_", 1)[-1]
+    _om = next(_x for _x in MOB_MANIFEST["mobs"] if _x["id"] == OWNER_BY_TERRAIN.get(_tid if _tid in _TERRAIN_IDS else "", "gold_dragon"))
+    _frac = max(1, int(_m.get("ownerFrac", 10)))
+    _m["hp"] = max(1, _om["hp"] // _frac)
+    _m["atk"] = max(1, OWNER_CLAW_DMG // _frac)
 
 # 各地形出現的小動物（id=權重）
 MOBS_BY_TERRAIN = {
-    "grass":   [("sheep", 2), ("bird", 1), ("frog", 1), ("chicken", 2), ("slime_grass", 1)],
+    "grass":   [("sheep", 2), ("bird", 1), ("frog", 1), ("chicken", 2), ("slime_grass", 1), ("goblin_grass", 2)],
     "beach":   [("bird", 2), ("frog", 1), ("bunny", 2), ("slime_beach", 1), ("dragon_beach", 1)],
     "snow":    [("sheep", 2), ("bird", 1), ("bunny_snow", 2), ("slime_snow", 1)],
     "night":   [("frog", 2), ("sheep", 1), ("slime_night", 1), ("dragon_night", 1)],
-    "forest":  [("sheep", 2), ("bird", 2), ("chicken", 2), ("slime_forest", 1)],
+    "forest":  [("sheep", 2), ("bird", 2), ("chicken", 2), ("slime_forest", 1), ("goblin_forest", 2)],
     "volcano": [("frog", 1), ("bird", 1), ("slime_volcano", 1), ("dragon_volcano", 1)],
     "machine": [("bunny_machine", 2), ("slime_machine", 1)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）
 }

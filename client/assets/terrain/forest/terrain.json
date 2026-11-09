@@ -36,6 +36,10 @@
   {
    "id": "slime_forest",
    "weight": 1
+  },
+  {
+   "id": "goblin_forest",
+   "weight": 2
   }
  ],
  "uiColor": "#5b8f46"

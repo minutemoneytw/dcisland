@@ -312,6 +312,61 @@
    "line": "「跳跳兔」豎起耳朵，隨時準備蹦走。"
   },
   {
+   "id": "goblin_grass",
+   "name": "哥布林",
+   "fixed": 6,
+   "speed": 34,
+   "flee": 85,
+   "retaliate": true,
+   "ownerFrac": 12,
+   "anim": {
+    "sheet": "external/img2pixel/goblin_sheet.png",
+    "frames": 8,
+    "rows": 2,
+    "row0": 0,
+    "fw": 32,
+    "fh": 32,
+    "rowDir": [
+     "right",
+     "left"
+    ],
+    "fps": 8,
+    "scale": 1.0
+   },
+   "line": "「哥布林」敲了敲手裡的長矛，警惕地看著你。",
+   "footDy": 1,
+   "hp": 16,
+   "atk": 1
+  },
+  {
+   "id": "goblin_forest",
+   "name": "哥布林",
+   "fixed": 6,
+   "speed": 34,
+   "flee": 85,
+   "retaliate": true,
+   "ownerFrac": 12,
+   "anim": {
+    "sheet": "external/img2pixel/goblin_sheet.png",
+    "frames": 8,
+    "rows": 2,
+    "row0": 0,
+    "fw": 32,
+    "fh": 32,
+    "rowDir": [
+     "right",
+     "left"
+    ],
+    "fps": 8,
+    "scale": 1.0
+   },
+   "tint": "#8a5a33",
+   "line": "「哥布林」敲了敲手裡的長矛，警惕地看著你。",
+   "footDy": 1,
+   "hp": 16,
+   "atk": 1
+  },
+  {
    "id": "dragon_night",
    "name": "飛龍",
    "fixed": 3,
@@ -320,6 +375,7 @@
    "speed": 46,
    "flee": 150,
    "retaliate": true,
+   "ownerFrac": 10,
    "footDy": 0,
    "anim": {
     "sheet": "external/img2pixel/dragon_sheet.png",
@@ -358,6 +414,7 @@
    "speed": 46,
    "flee": 150,
    "retaliate": true,
+   "ownerFrac": 10,
    "footDy": 0,
    "anim": {
     "sheet": "external/img2pixel/dragon_sheet.png",
@@ -393,6 +450,7 @@
    "speed": 46,
    "flee": 150,
    "retaliate": true,
+   "ownerFrac": 10,
    "footDy": 0,
    "anim": {
     "sheet": "external/img2pixel/dragon_sheet.png",

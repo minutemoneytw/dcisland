@@ -596,9 +596,12 @@ function hitMob(p, a, ranged, force) {
     } else if (od.lurker) {   // 釣上來的怪物：不逃跑；單機記下最後被打的時刻（30 秒沒人打就消失）
       if (!a.proxy) a.lastHitAt = S.t;
       a.startle = 0;
-    } else if (od.retaliate) {   // 會反擊的野怪（飛龍）：被打不逃，鎖定攻擊者（純客戶端；打野怪的只有本地玩家）
+    } else if (od.retaliate) {   // 反擊型野怪（飛龍／哥布林）：被打不逃，鎖定攻擊者（純客戶端；打野怪的只有本地玩家）
       a.startle = 0;
       a.aggroT = p; a.lastHitAt = S.t; a.clawAt = S.t + 1.5;
+      for (const b of S.mobs) {   // 群起（2026-11-09 使用者定，哥布林）：被打那隻 200px 內的「同種」一起鎖定攻擊者
+        if (b !== a && !b.dead && b.id === a.id && Math.hypot(b.x - a.x, b.y - a.y) <= RETAL_PACK_R) { b.aggroT = p; b.lastHitAt = S.t; b.clawAt = S.t + 1.5; }
+      }
     } else {
       a.target = fleeTarget(a, od, p.x, p.y, 220);
     }
@@ -776,10 +779,10 @@ const ownerDmgBonus = lv => Math.floor((Math.max(1, lv) - 1) / 2);   // 島主�
 const lurkDmgBonus = lv => Math.floor((Math.max(1, lv) - 1) / 3);    // 魚人爪擊每 3 級 +1
 const ownerKillXp = lv => 20 + 5 * lv;   // 擊倒島主的 XP 獎勵（30 秒內的參與者）
 const lurkKillXp = lv => 4 + 2 * lv;     // 擊倒魚人的 XP 獎勵（登入者由伺服器在 dead 時直給；訪客在本機記）
-const mobKillXp = def => {   // 擊倒野外動物的 XP（2026-11-09 使用者定）：一般野怪 +1；會反擊的野怪＝本島島主經驗值的 1/10、最低 1
+const mobKillXp = def => {   // 擊倒野外動物的 XP（2026-11-09 使用者定）：一般野怪 +1；反擊型野怪＝本島島主經驗值的 1/N、最低 1（N＝def.ownerFrac：飛龍 10、哥布林 12）
   if (!def.retaliate) return 1;
   const ol = S.mobs.find(v => !v.dead && mobDef(v.id)?.owner)?.lvl ?? 1;   // 本島島主現在的等級（島主升級就跟著漲）；沒有島主的地形當 Lv 1
-  return Math.max(1, Math.floor(ownerKillXp(ol) / 10));
+  return Math.max(1, Math.floor(ownerKillXp(ol) / (def.ownerFrac || 10)));
 };
 function saveProfile() { lsSet('dcisland.m0.profile', S.profile); }
 const xpServer = () => !!(S.net?.connected && S.net.uid);   // 登入＆連線：XP 由伺服器記帳（2026-11-07 第 2 步）；訪客／沒連線照舊本機記
@@ -2281,17 +2284,19 @@ function onNetLurker(m) {
   }
 }
 
-// ---- 會反擊的野怪（飛龍）：被打鎖定攻擊者、追殺＋爪擊；30 秒沒再被打就放棄，回去一般漫遊 ----
-// 純客戶端（野外動物刻意不同步）：打野怪的只有本地玩家，所以爪擊只咬本地玩家、受害者自判（走 playerDamage：坦克減半照算）
+// ---- 反擊型野怪（飛龍／哥布林…；機制統一，每種怪唯一差別是「繼承島主幾分之幾」＝mobs.json 的 ownerFrac）----
+// 被打鎖定攻擊者、追殺＋爪擊；30 秒沒再被打就放棄，回去一般漫遊。
+// 純客戶端（野外動物刻意不同步）：打野怪的只有本地玩家，爪擊只咬本地玩家、受害者自判（走 playerDamage：坦克減半照算）。
 const RETAL_CHASE = 150, RETAL_DROPOUT = 30;   // 追殺速度同魚人：走路逃不掉、跑步甩得掉；30 秒同島主脫離規則
+const RETAL_PACK_R = 200;   // 群起半徑：一隻被打，這範圍內的同種一起反擊（2026-11-09 使用者定）
 function retaliateStep(a, dt, def) {
   const t = a.aggroT;
-  if (!t || t.dead || S.t - (a.lastHitAt ?? -1e9) > RETAL_DROPOUT) { a.aggroT = null; a.wleg = null; return false; }
+  if (!t || t.dead || S.t - (a.lastHitAt ?? -1e9) > RETAL_DROPOUT) { a.aggroT = null; return false; }   // 沒仇恨：照一般漫遊
   const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy);
   const rng = 30 + 6 * ((def.big || 1) - 1);   // 貼著判定圈抓：與 hitRadius 同式
   a.face4 = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');   // 方向網格：看向目標
-  if (d <= rng) {
-    a.wleg = null; a.z = 0;
+  if (d <= rng) {   // 進圈：站定開咬（不漫遊）
+    a.target = null; a.wleg = null; a.z = 0;
     if (dx) a.dir = Math.sign(dx);
     if (S.t >= (a.clawAt ?? 0)) {
       a.clawAt = S.t + 1.5;
@@ -2301,10 +2306,8 @@ function retaliateStep(a, dt, def) {
     }
     return true;
   }
-  if (a.wleg && Date.now() - a.wleg.t0ms < 600) { stepOwnerWalk(a, dt); return true; }   // 每 0.6 秒重新瞄準
-  a.wleg = { fx: a.x, fy: a.y, tx: t.x, ty: t.y, tms: Math.max(80, Math.round(d / RETAL_CHASE * 1000)), t0ms: Date.now() };
-  stepOwnerWalk(a, dt);
-  return true;
+  a.target = { x: t.x, y: t.y };   // 追殺：設成目標位置，走下面共用移動（不會飛的被海擋住就追不上＝在岸邊乾瞪眼）
+  return false;
 }
 
 function stepMob(a, dt) {
@@ -2328,7 +2331,7 @@ function stepMob(a, dt) {
     else a.idle = 2;
     return;
   }
-  // 會反擊的野怪（飛龍）：被打後追咬；追殺腿成立時不走下面的一般漫遊
+  // 反擊型野怪（飛龍／哥布林…）：被打後追咬；站定開咬時不走下面的一般移動
   if (def.retaliate && retaliateStep(a, dt, def)) return;
   // 只有「附近有人揮擊」才會被嚇到（自己或同島的人）；單純走過去、站在旁邊不會嚇跑牠
   // 島主大隻又沉穩：近距離揮擊也不會嚇到（`owner: true`）；會反擊的野怪（`retaliate`）也不嚇跑——被揮到才反咬
@@ -2358,7 +2361,8 @@ function stepMob(a, dt) {
     }
     if (!a.target) { a.idle = .5; return; }
   }
-  const sp = (a.startle ? def.speed * 2.6 : def.speed) * dt;
+  const chasing = def.retaliate && a.aggroT;   // 追殺中：速度用 RETAL_CHASE（走路逃不掉、跑步甩得掉）
+  const sp = (chasing ? RETAL_CHASE : (a.startle ? def.speed * 2.6 : def.speed)) * dt;
   const dx = a.target.x - a.x, dy = a.target.y - a.y, len = Math.hypot(dx, dy) || 1;
   if (dx) a.dir = Math.sign(dx);
   // 視覺朝向（4 方向）：給「方向網格」的怪物挑列用；取移動量大的那一軸（靜止時保留上一次）
