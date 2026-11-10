@@ -2076,6 +2076,8 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fw=88, fh=74, what="蓋老師（究極神兵）的走路 6 幀（熔岩島島主）"),
     dict(sheet="external/img2pixel/alexander_idle_sheet.png", frames=4, fw=88, fh=77, what="壓力山大的待機 4 幀（機械島島主）"),
     dict(sheet="external/img2pixel/campfire_sheet.png", frames=8, fw=32, fh=32, what="營火 8 幀（世界物件，不是動物：main.js 直接載入，不經 manifest）"),
+    dict(sheet="external/img2pixel/fireball_sheet.png", frames=8, fw=64, fh=64, what="飛龍火球的 8 幀（特效投射物，不是動物：main.js 直接載入，不經 manifest）"),
+    dict(sheet="external/img2pixel/fireball_burst.png", frames=12, fw=32, fh=32, what="火球命中爆炸的 12 幀（特效，不是動物：main.js 直接載入，不經 manifest）"),
 ]
 
 def check_external():
@@ -2148,8 +2150,9 @@ MOB_MANIFEST = dict(
           for zid, tint in [("zombie_night", None), ("zombie_snow", "#dfe9ff"), ("zombie_machine", "#9aa4b0")]],
         # 飛龍：夜光島（黑）、熔岩島（原色紅）、沙灘島（沙）。四列都是飛行視角＝上飛／朝右／下飛／朝左（方向網格）；
         # swim＝會飛所以能過海；big=5＝判定圈 34+6*(5-1)=58（大隻）；shadow 依體型放大、貼在正下方
-        # retaliate＝會反擊的野怪：被打不逃、鎖定攻擊者追咬；血量／攻擊力由下面的 post-pass 依該地形島主 1/10 算
-        *[dict(id=did, name="飛龍", fixed=3, swim=True, big=5, speed=46, flee=150, retaliate=True, ownerFrac=10,
+        # retaliate＝會反擊的野怪：被打不逃、鎖定攻擊者；血量／攻擊力由下面的 post-pass 依該地形島主 1/10 算
+        # atkStyle="fireball"＝遠距攻擊（2026-11-10 使用者定）：進射程（main.js 的 FIREBALL_RANGE）就站定吐火球，不貼身咬（哥布林／殭屍沒設＝照舊抓咬）
+        *[dict(id=did, name="飛龍", fixed=3, swim=True, big=5, speed=46, flee=150, retaliate=True, ownerFrac=10, atkStyle="fireball",
                footDy=0,   # 會飛：不套用底部留白對齊（讓牠浮在影子之上，不貼地）
                anim=dict(sheet="external/img2pixel/dragon_sheet.png", frames=3, rows=4, fw=191, fh=161,
                          rowDir=["up", "right", "down", "left"], fps=7, scale=0.9),

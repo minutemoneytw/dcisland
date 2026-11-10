@@ -67,8 +67,10 @@ const S = {
   t: 0,
   cam: { x: 0, y: 0 },
   respawn: [],                  // 動物重生佇列 [{id, at}]
+  fireballs: [],                // 飛龍吐的火球（純客戶端投射物）：{x,y,tx,ty,ang,life,life0,dmg,name}
   campfire: null,               // 島上的營火（世界物件）：{terrain, slot, cell, x, y}；每 3 分鐘換位置
   campfireSpr: null,            // 營火 8 幀動畫（外部素材 campfire_sheet.png）
+  fireballSpr: null,            // 飛龍火球 8 幀動畫（外部素材 fireball_sheet.png，特效不是 mob）
   floaters: [],                 // 傷害飄字 {x,y,v,life,poof}
   weaponImgs: {},
   ownerSayIdx: {},              // 照順序說台詞的島主（ownerLinesSeq）目前說到第幾句，key＝島主 id
@@ -148,6 +150,7 @@ function genWorld(id) {
   }
   S.world = { types, decos };
   S.drops = [];
+  S.fireballs = [];   // 換島：飛行中的火球作廢（純客戶端，不跨地形）
   spawnMobs();
 }
 
@@ -2317,25 +2320,54 @@ function onNetLurker(m) {
 // 純客戶端（野外動物刻意不同步）：打野怪的只有本地玩家，爪擊只咬本地玩家、受害者自判（走 playerDamage：坦克減半照算）。
 const RETAL_CHASE = 150, RETAL_DROPOUT = 30;   // 追殺速度同魚人：走路逃不掉、跑步甩得掉；30 秒同島主脫離規則
 const RETAL_PACK_R = 200;   // 群起半徑：一隻被打，這範圍內的同種一起反擊（2026-11-09 使用者定）
+// 飛龍吐火球（2026-11-10 使用者定）：反擊型的遠距攻擊（mobs.json 的 atkStyle: "fireball"，目前只有飛龍）。
+// 進射程就站定吐火球、不再是貼身抓咬：射程 250（跑步甩得掉、走路逃不掉）、每 2.5 秒一顆、飛行 260 px/s；
+// 鎖定「發射當下」的目標位置直線飛行（不追蹤，衝刺側移可以躲開）；傷害＝def.atk（照回爪擊同强度），命中才扣血（受害者自判，走 playerDamage：坦克減半照算）。
+const FIREBALL_RANGE = 250, FIREBALL_CD = 2.5, FIREBALL_SPEED = 260, FIREBALL_SCALE = .65, FIREBALL_HIT_R = 16;   // 射程／間隔／飛行速度／顯示倍率（素材單幀 64px）／命中半徑
 function retaliateStep(a, dt, def) {
   const t = a.aggroT;
   if (!t || t.dead || S.t - (a.lastHitAt ?? -1e9) > RETAL_DROPOUT) { a.aggroT = null; return false; }   // 沒仇恨：照一般漫遊
   const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy);
-  const rng = 30 + 6 * ((def.big || 1) - 1);   // 貼著判定圈抓：與 hitRadius 同式
+  const rng = 30 + 6 * ((def.big || 1) - 1);   // 貼著判定圈抓：與 hitRadius 同式；火球怪用 FIREBALL_RANGE
   a.face4 = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');   // 方向網格：看向目標
-  if (d <= rng) {   // 進圈：站定開咬（不漫遊）
+  if (d <= (def.atkStyle === 'fireball' ? FIREBALL_RANGE : rng)) {   // 進圈（火球怪＝射程）：站定攻擊（不漫遊）
     a.target = null; a.wleg = null; a.z = 0;
     if (dx) a.dir = Math.sign(dx);
     if (S.t >= (a.clawAt ?? 0)) {
-      a.clawAt = S.t + 1.5;
-      S.floaters.push({ x: a.x + dx * .45, y: a.y - 20 + dy * .45, ang: Math.atan2(dy, dx), slash: true, life: .45 });
-      playerDamage(t, def.atk || 1, def.name);
-      S.floaters.push({ x: t.x, y: t.y - 24, ring: true, life: .35 });
+      a.clawAt = S.t + (def.atkStyle === 'fireball' ? FIREBALL_CD : 1.5);
+      if (def.atkStyle === 'fireball') {   // 吐火球：鎖定目標當下位置，直線飛行（不追蹤）
+        // 發射點＝口部（依視覺朝向；飛龍 sheet 實測：側向＝口在身前 58px、腳底上方 69px；上飛／下飛＝身體中心線上、前端取高／低）
+        const mouth = a.face4 === 'up' ? [0, -110] : a.face4 === 'down' ? [0, -40]
+                    : [(dx < 0 ? -1 : 1) * 58, -69];
+        const sx = a.x + mouth[0], sy = a.y - a.z + mouth[1], tx = t.x, ty = t.y - 20;   // 射向目標身體中心
+        const len = Math.hypot(tx - sx, ty - sy) || 1;
+        S.fireballs.push({ x: sx, y: sy, tx, ty, ang: Math.atan2(ty - sy, tx - sx), life: len / FIREBALL_SPEED, life0: len / FIREBALL_SPEED, dmg: def.atk || 1, name: def.name });
+        S.floaters.push({ x: sx, y: sy, ring: true, life: .35 });   // 吐球瞬間的小提示圈
+      } else {   // 一般反擊怪：貼身抓咬
+        S.floaters.push({ x: a.x + dx * .45, y: a.y - 20 + dy * .45, ang: Math.atan2(dy, dx), slash: true, life: .45 });
+        playerDamage(t, def.atk || 1, def.name);
+        S.floaters.push({ x: t.x, y: t.y - 24, ring: true, life: .35 });
+      }
     }
     return true;
   }
   a.target = { x: t.x, y: t.y };   // 追殺：設成目標位置，走下面共用移動（不會飛的被海擋住就追不上＝在岸邊乾瞪眼）
   return false;
+}
+
+function stepFireballs(dt) {   // 飛龍火球步進：直線飛向鎖定點，落地爆炸＋命中判定（純客戶端；打野怪的只有本地玩家）
+  if (!S.fireballs.length) return;
+  const me = S.players[0];
+  for (const f of S.fireballs) {
+    f.life -= dt;
+    if (f.life > 0) continue;
+    S.floaters.push({ burst: true, x: f.tx, y: f.ty, life: .45, life0: .45 });   // 命中爆炸（12 幀，floaters 畫）
+    if (!me.dead && !me.npc && Math.hypot(me.x - f.tx, me.y - 20 - f.ty) <= FIREBALL_HIT_R) {
+      playerDamage(me, f.dmg, f.name);
+      S.floaters.push({ x: me.x, y: me.y - 24, ring: true, life: .35 });
+    }
+  }
+  S.fireballs = S.fireballs.filter(f => f.life > 0);
 }
 
 function stepMob(a, dt) {
@@ -5365,6 +5397,15 @@ function draw() {
     ctx.strokeRect(mx * CELL + .5, my * CELL + .5, w - 1, h - 1);
   }
   // 傷害飄字 / 消失特效
+  if (S.fireballs.length && S.fireballSpr) {   // 飛龍火球：直線飛向鎖定點（世界座標；stepFireballs 負責命中）
+    for (const f of S.fireballs) {
+      const q = 1 - Math.max(0, f.life) / f.life0, x = f.x + (f.tx - f.x) * q, y = f.y + (f.ty - f.y) * q;
+      const fr = sprFrame(S.fireballSpr) % 8, w = 64 * FIREBALL_SCALE, h = 64 * FIREBALL_SCALE;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(f.ang);
+      ctx.drawImage(S.fireballSpr.img, fr * 64, 0, 64, 64, -w / 2, -h / 2, w, h);   // 朝右的圖隨彈道角旋轉
+      ctx.restore();
+    }
+  }
   for (const f of S.floaters) {
     ctx.save();
     if (f.fxk) { drawFxFloater(f); ctx.restore(); continue; }   // 技能特效（世界座標）
@@ -5407,6 +5448,11 @@ function draw() {
       ctx.restore(); continue;
     }
     ctx.translate(f.x, f.y);
+    if (f.burst) {   // 火球命中爆炸（LPC explosions 2 的 fireball1）：12 幀由火花長成火球再淡出（0.45 秒）
+      const fr = Math.min(11, Math.floor((1 - f.life / f.life0) * 12)), s2 = 32 * FIREBALL_SCALE;
+      if (S.burstSpr) ctx.drawImage(S.burstSpr.img, fr * 32, 0, 32, 32, -s2 / 2, -s2 / 2, s2, s2);
+      ctx.restore(); continue;
+    }
     if (f.gold) {   // 升級金光：金環擴散＋繞圈小光點（0.7 秒，固定在腳下）
       const q = 1 - f.life / .7;
       ctx.strokeStyle = `rgba(255,216,107,${(1 - q) * .95})`;
@@ -6509,6 +6555,8 @@ async function boot() {
     ...S.toolsDB.tools.map(async t => { const im = await optImg(`assets/tools/${t.sprite}`); if (im) im.wscale = 2; S.weaponImgs[t.id] = im; }),   // 採集工具仍是舊 24px 規格（畫 2 倍）；換成 64px 模組時改 wscale
     optImg('assets/tombstone.png').then(im => S.tombImg = im),   // 死亡墓碑（島主龍衝打倒後原地出現）
     optImg('assets/external/img2pixel/campfire_sheet.png').then(im => { if (im) S.campfireSpr = makeSpr(im, { frames: 8, fps: 8 }); }),   // 營火 8 幀（使用者提供的外部素材；缺圖就只是不畫）
+    optImg('assets/external/img2pixel/fireball_sheet.png').then(im => { if (im) S.fireballSpr = makeSpr(im, { frames: 8, fw: 64, fh: 64, fps: 12 }); }),   // 飛龍火球 8 幀（LPC 系素材；缺圖就只是不畫）
+    optImg('assets/external/img2pixel/fireball_burst.png').then(im => { if (im) S.burstSpr = makeSpr(im, { frames: 12, fw: 32, fh: 32 }); }),   // 火球命中爆炸 12 幀（LPC explosions 2，CC0）
     ...S.furn.items.map(async it => S.furnImgs[it.id] = await loadSpr(`assets/furniture/${it.sprite}`, it.anim)),
     // 人物分層 sheet：軀幹（膚色）是必要的（缺了畫不出人），頭髮／衣服／褲子／帽子缺圖就略過那一層
     ...S.avatar.skins.flatMap(s => {   // 素體 sheet：男版＋女版（性別切換用）
@@ -6554,6 +6602,7 @@ async function boot() {
     try {
       S.t += dt;
       updateCampfire();   // 換時段／換地形就重擲營火位置（每 3 分鐘）
+      stepFireballs(dt);  // 飛龍火球：步進與落地命中（純客戶端投射物）
       autoAttack();
       for (const p of S.players) stepPlayer(p, dt);
       if (S.mouseCell && S.mouseClient) {      // 裝飾模式邊走邊擺：鏡頭在動，滑鼠指的格子要跟著重算
@@ -6582,7 +6631,7 @@ async function boot() {
       for (let i = S.floaters.length - 1; i >= 0; i--) {
         const f = S.floaters[i];
         f.life -= dt;
-        if (!f.slash && !f.beam && !f.beamLine && !f.healPulse && !f.orb && !f.aoe && !f.fxk && !f.steam && !f.gold) f.y -= 34 * dt;   // 爪擊/光束/綠圈/蒸汽/升級金光固定在原座標，不隨飄字上浮（蒸汽自己在渲染時上升）
+        if (!f.slash && !f.beam && !f.beamLine && !f.healPulse && !f.orb && !f.aoe && !f.fxk && !f.steam && !f.gold && !f.burst) f.y -= 34 * dt;   // 爪擊/光束/綠圈/蒸汽/升級金光固定在原座標，不隨飄字上浮（蒸汽自己在渲染時上升）
         if (f.life <= 0) S.floaters.splice(i, 1);
       }
       stepSkills();

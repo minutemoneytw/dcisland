@@ -487,6 +487,7 @@
    "flee": 150,
    "retaliate": true,
    "ownerFrac": 10,
+   "atkStyle": "fireball",
    "footDy": 0,
    "anim": {
     "sheet": "external/img2pixel/dragon_sheet.png",
@@ -526,6 +527,7 @@
    "flee": 150,
    "retaliate": true,
    "ownerFrac": 10,
+   "atkStyle": "fireball",
    "footDy": 0,
    "anim": {
     "sheet": "external/img2pixel/dragon_sheet.png",
@@ -562,6 +564,7 @@
    "flee": 150,
    "retaliate": true,
    "ownerFrac": 10,
+   "atkStyle": "fireball",
    "footDy": 0,
    "anim": {
     "sheet": "external/img2pixel/dragon_sheet.png",
