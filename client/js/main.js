@@ -4333,7 +4333,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); typingStop(); unStopTimer(); S.unPick = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); typingStop(); unStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
   $('tableBox').classList.add('hidden');
 }
 function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已離開這桌）
@@ -4380,6 +4380,7 @@ function buildTable() {
   if (S.tableChoice) {   // 剛走到桌邊：選入座還是觀戰
     const inf = S.tblInfo?.[S.tableId];
     box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　目前 ${inf ? `${inf.n}/${inf.max} 人入座` : '還沒有人入座'}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));
+    if (gd?.story) box.appendChild(mk('div', 'it-story', gd.story));   // 有故事背景的遊戲（秘藥情報戰）：先看故事
     box.appendChild(mk('div', 'table-tag', '要加入遊戲，還是先在旁邊看？（觀戰不用等滿人，之後想玩可以再按「入座」）'));
     const bs = mk('div', 'table-btns');
     for (const [label, role] of [['入座', 'seat'], ['觀戰', 'spec']]) {
@@ -4397,6 +4398,7 @@ function buildTable() {
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
   if (tb?.game === 'uno') { buildUno(box, v, mk, gd); return; }   // UNO 有自己的畫面（牌桌）
   if (tb?.game === 'typing') { buildTyping(box, v, mk, gd); return; }   // 英打競賽有自己的畫面（題目＋分數）
+  if (tb?.game === 'intel') { buildIntel(box, v, mk, gd); return; }     // 秘藥情報戰有自己的畫面（情報區＋密函）
   const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
   // 狀態列
   let status;
@@ -4895,6 +4897,197 @@ function buildTyping(box, v, mk, gd) {
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
   if (S.ty) { S.ty.wordKey = ''; typingRender(); }
+}
+// ---- 秘藥情報戰（第八桌 t8）：規則與狀態全在伺服器（見 worker 的 it*），客戶端只畫畫面、送 isend／itake／ifwd／iact／timeout ----
+// 密函編碼「印記.行動」：印記 Y 黃（沙都）／B 藍（水都）／K 黑（咒函）／G 灰（廢紙），雙色＝兩個字母；行動 P 截閱／S 調包／F 押送／X 焚信／H 搜身／W 洗白／C 識破
+const IT_FILL = { Y: '#e8b820', B: '#2f66d8', K: '#3a2050', G: '#8a8a98' };
+const IT_CNAME = { Y: '黃', B: '藍', K: '黑', G: '灰' };
+const IT_ACT = { P: '截閱', S: '調包', F: '押送', X: '焚信', H: '搜身', W: '洗白', C: '識破' };
+const IT_ACT_TIP = { P: '密函在你手上時：偷看它', S: '密函在你手上時：換成你的另一張手牌', F: '別人拿著密函時：逼他收下', X: '密函傳遞中：燒掉它', H: '你的回合：偷看一人的 2 張手牌', W: '你的回合：丟掉自己情報區的一張黑函', C: '別人的行動生效前：取消它' };
+const IT_ROLE = { sand: ['沙都', '#e8b820', '任一位沙都玩家集滿 3 張黃色密函'], water: ['水都', '#5a8af0', '任一位水都玩家集滿 3 張藍色密函'], mage: ['咒術師', '#b07ae8', '自己集滿 3 張黑色咒函（你不會因為黑函出局）'] };
+const itCols = c => c.split('.')[0], itActOf = c => c.split('.')[1];
+const itLabel = c => [...itCols(c)].map(x => IT_CNAME[x]).join('') + '·' + IT_ACT[itActOf(c)];
+function itCardEl(c, opts = {}) {   // c＝'YB.F'；null＝牌背
+  const e = document.createElement('div');
+  e.className = 'icard' + (opts.small ? ' small' : '') + (opts.sel ? ' sel' : '');
+  if (!c) { e.classList.add('back'); e.textContent = '✉'; return e; }
+  const cols = [...itCols(c)].map(x => IT_FILL[x]);
+  e.style.background = cols.length > 1 ? `linear-gradient(135deg, ${cols[0]} 50%, ${cols[1]} 50%)` : cols[0];
+  e.textContent = opts.small ? '' : IT_ACT[itActOf(c)];
+  e.title = itLabel(c) + (opts.small ? '' : `：${IT_ACT_TIP[itActOf(c)]}`);
+  return e;
+}
+function itStopTimer() { if (S.itTimer) { clearInterval(S.itTimer); S.itTimer = 0; } }
+function itStartTimer() {
+  if (S.itTimer) return;
+  S.itTimer = setInterval(() => {
+    const cur = S.tableView, it = cur?.it;
+    if (!S.tableOpen || !cur || cur.game !== 'intel' || cur.phase !== 'playing' || !it) { itStopTimer(); return; }
+    const end = it.pend ? it.pend.until : it.deadline, left = (end - (Date.now() + S.itOff)) / 1000;
+    const el = $('itTimer'); if (el) el.textContent = left > 0 ? `${it.pend ? '識破倒數' : '剩'} ${Math.ceil(left)} 秒` : '…';
+    if (left <= 0 && Date.now() - (S.itTimeoutAt || 0) > 1000) { S.itTimeoutAt = Date.now(); S.net?.tbl?.({ a: 'timeout' }); }   // 時間到：請伺服器核對時鐘並處理
+  }, 250);
+}
+function buildIntel(box, v, mk, gd) {
+  const playing = v.phase === 'playing', it = v.it, me = v.role === 'seat' ? v.me : -1;
+  const L = it?.letter, pend = it?.pend, nm = i => v.seats[i]?.name ?? '?';
+  const alive = i => v.seats[i] && !v.seats[i].out && !v.seats[i].left;
+  const send = m => { S.itSel = -1; S.itMode = null; S.net?.tbl?.(m); };
+  if (!playing) { itStopTimer(); S.itSel = -1; S.itMode = null; }
+  else {
+    if (S.itSn !== it.sn) { S.itSn = it.sn; S.itOff = it.sn - Date.now(); }   // 伺服器時間 − 本機時間：只在收到新畫面時算（本機重畫用舊的 sn 會越算越偏）
+    itStartTimer();
+  }
+  const myTurn = playing && !pend && it.step === 'turn' && v.turn === me && me >= 0;
+  const holding = playing && !pend && it.step === 'pass' && L && L.at === me;
+  // 狀態列
+  let status;
+  if (playing) {
+    if (pend) status = `${nm(pend.by)} 使用了${IT_ACT[pend.a]}${pend.a === 'H' ? `（對 ${nm(pend.tgt)}）` : pend.a === 'F' && L ? `（對 ${nm(L.at)}）` : ''}——生效前可以識破`;
+    else if (it.step === 'turn') status = myTurn ? '輪到你：可以先用行動牌，再選一張手牌投遞' : `輪到 ${nm(v.turn)} 投遞`;
+    else status = holding ? '密函在你手上：收下，或轉手給還沒碰過的人' : `密函在 ${nm(L?.at)} 手上`;
+    if (v.role === 'spec') status = '觀戰中 · ' + status;
+  } else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
+  const st = mk('div', 'table-status' + (myTurn || holding ? ' mine' : ''), status);
+  if (playing) { const tm = mk('span', 'it-timer'); tm.id = 'itTimer'; st.appendChild(tm); }
+  box.appendChild(st);
+  // 結算：翻開所有人的身分與情報區
+  if (v.result && !playing) {
+    box.appendChild(mk('div', 'table-result', v.result.text));
+    if (v.result.reveal) {
+      const rv = mk('div', 'it-reveal');
+      for (const r of v.result.reveal) {
+        const row = mk('div', 'it-reveal-row' + (r.win ? ' win' : ''));
+        const rr = IT_ROLE[r.role] || ['?', '#888'];
+        const badge = mk('span', 'it-role', rr[0]); badge.style.background = rr[1]; row.appendChild(badge);
+        row.appendChild(mk('span', null, `${r.name}${r.win ? '　🏆' : ''}${r.out ? '（出局）' : ''}${r.left ? '（中途離開）' : ''}`));
+        const ic = mk('span', 'it-intel'); for (const c of r.intel) ic.appendChild(itCardEl(c, { small: true })); row.appendChild(ic);
+        rv.appendChild(row);
+      }
+      box.appendChild(rv);
+    }
+  }
+  if (!playing && gd?.story) box.appendChild(mk('div', 'it-story', gd.story));   // 開局前：故事背景（有結算時放在結算下面）
+  // 自己的身分
+  if (playing && me >= 0 && v.seats[me]?.role) {
+    const rr = IT_ROLE[v.seats[me].role], line = mk('div', 'it-me');
+    const badge = mk('span', 'it-role', rr[0]); badge.style.background = rr[1];
+    line.append('你的身分：', badge, `　勝利條件：${rr[2]}`);
+    box.appendChild(line);
+  }
+  // 座位：名字、身分（看得到才有）、手牌張數、情報區
+  const row = mk('div', 'table-seats it-seats');
+  v.seats.forEach((s, i) => {
+    const cls = ['table-seat'];
+    if (s.you) cls.push('you');
+    if (playing && it.step === 'turn' && v.turn === i) cls.push('turn');
+    if (playing && (s.out || s.left)) cls.push('out');
+    const seat = mk('div', cls.join(' '));
+    const head = mk('div', 'table-name', s.name + (s.you ? '（你）' : ''));
+    if (playing && s.role) { const rr = IT_ROLE[s.role], b = mk('span', 'it-role small', rr[0]); b.style.background = rr[1]; head.appendChild(b); }
+    seat.appendChild(head);
+    if (playing) {
+      const tags = [`手牌 ${s.n}`];
+      if (L && L.at === i) tags.push('✉ 拿著密函');
+      else if (L && L.seen.includes(i)) tags.push('碰過');
+      if (s.out) tags.push('出局'); if (s.left) tags.push('已離開');
+      seat.appendChild(mk('div', 'table-tag', tags.join(' · ')));
+      const ic = mk('div', 'it-intel'); for (const c of s.intel || []) ic.appendChild(itCardEl(c, { small: true }));
+      seat.appendChild(ic);
+      if (v.hands?.[i]) { const hh = mk('div', 'it-intel spec'); for (const c of v.hands[i]) hh.appendChild(itCardEl(c, { small: true })); seat.appendChild(hh); }   // 觀戰者：看得到手牌
+    } else seat.appendChild(mk('div', 'table-tag', s.ready ? '已準備' : '未準備'));
+    row.appendChild(seat);
+  });
+  if (!playing) for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  if (playing) {
+    // 傳遞中的密函
+    const mid = mk('div', 'it-mid');
+    mid.appendChild(mk('div', 'table-tag', `牌堆 ${it.deck} 張 · 棄牌 ${it.discard} 張`));
+    if (L) {
+      const lt = mk('div', 'it-letter');
+      lt.appendChild(itCardEl(L.card || null));
+      lt.appendChild(mk('div', null, `${nm(L.from)} 投遞 → 現在在 ${nm(L.at)} 手上${L.card ? (v.role === 'spec' ? '（觀戰看得到內容）' : '（你送出的那張，可能被調包）') : ''}`));
+      mid.appendChild(lt);
+    }
+    if (v.note) {   // 自己偷看到的東西（截閱／搜身），到下次輪到自己時清掉
+      const nt = mk('div', 'it-note');
+      if (v.note.k === 'peek') { nt.append('你截閱到的密函：'); nt.appendChild(itCardEl(v.note.card, { small: true })); nt.append(itLabel(v.note.card)); }
+      else { nt.append(`你搜到 ${v.note.tgt} 的手牌：`); for (const c of v.note.cards) { nt.appendChild(itCardEl(c, { small: true })); nt.append(itLabel(c) + '　'); } if (!v.note.cards.length) nt.append('（他沒有手牌）'); }
+      mid.appendChild(nt);
+    }
+    box.appendChild(mid);
+  }
+  const btns = mk('div', 'table-btns');
+  if (playing && me >= 0 && alive(me)) {
+    const hand = v.hand || [];
+    // 識破：別人的行動生效前，手上有識破牌就能出
+    if (pend && pend.by !== me) {
+      const ci = hand.findIndex(c => itActOf(c) === 'C');
+      if (ci >= 0) { const b = mk('button', 'ff-btn', '識破！'); b.onclick = () => send({ a: 'iact', idx: ci }); btns.appendChild(b); }
+    }
+    if (holding) {   // 收下／轉手
+      const tk = mk('button', 'ff-btn', '收下'); tk.onclick = () => send({ a: 'itake' }); btns.appendChild(tk);
+      v.seats.forEach((s, i) => {
+        if (!alive(i) || L.seen.includes(i)) return;
+        const b = mk('button', 'ff-btn small', `轉給 ${s.name}`); b.onclick = () => send({ a: 'ifwd', to: i }); btns.appendChild(b);
+      });
+    }
+    // 手牌：點一張選取，再選要投遞或使用
+    const hw = mk('div', 'it-hand');
+    hand.forEach((c, k) => {
+      const e = itCardEl(c, { sel: k === S.itSel });
+      e.onclick = () => {
+        if (S.itMode === 'S' && k !== S.itSel) { send({ a: 'iact', idx: S.itSel, sel: k }); return; }   // 調包：選換進去的那張
+        S.itSel = k === S.itSel ? -1 : k; S.itMode = null; buildTable();
+      };
+      hw.appendChild(e);
+    });
+    const sel = S.itSel >= 0 && S.itSel < hand.length ? hand[S.itSel] : null;
+    const opts = mk('div', 'table-btns it-opts');
+    if (sel) {
+      const act = itActOf(sel), passing = !pend && it.step === 'pass' && L;
+      const usable = { P: holding, S: holding && hand.length > 1, F: passing && L.at !== me, X: passing, H: myTurn, W: myTurn && (v.seats[me].intel || []).some(c => itCols(c).includes('K')), C: false }[act];
+      opts.appendChild(mk('span', 'table-tag', `${itLabel(sel)}：${IT_ACT_TIP[act]}`));
+      if (myTurn) { const b = mk('button', 'ff-btn', '投遞這張'); b.onclick = () => { S.itMode = 'send'; buildTable(); }; opts.appendChild(b); }
+      if (usable) {
+        const b = mk('button', 'ff-btn', `使用${IT_ACT[act]}`);
+        b.onclick = () => { if (act === 'H' || act === 'W' || act === 'S') { S.itMode = act; buildTable(); } else send({ a: 'iact', idx: S.itSel }); };
+        opts.appendChild(b);
+      }
+      // 選對象
+      if (S.itMode === 'send' || S.itMode === 'H') {
+        opts.appendChild(mk('span', 'table-tag', S.itMode === 'send' ? '交給誰？' : '搜誰的身？'));
+        v.seats.forEach((s, i) => {
+          if (!alive(i) || i === me) return;
+          const b = mk('button', 'ff-btn small', s.name);
+          b.onclick = () => send(S.itMode === 'send' ? { a: 'isend', idx: S.itSel, to: i } : { a: 'iact', idx: S.itSel, tgt: i });
+          opts.appendChild(b);
+        });
+      } else if (S.itMode === 'W') {
+        opts.appendChild(mk('span', 'table-tag', '洗掉哪一封？'));
+        (v.seats[me].intel || []).forEach((c, k) => {
+          if (!itCols(c).includes('K')) return;
+          const b = mk('button', 'ff-btn small', itLabel(c)); b.onclick = () => send({ a: 'iact', idx: S.itSel, sel: k }); opts.appendChild(b);
+        });
+      } else if (S.itMode === 'S') opts.appendChild(mk('span', 'table-tag', '點另一張手牌，把它換進密函'));
+    } else if (hand.length) opts.appendChild(mk('span', 'table-tag', myTurn ? '點一張手牌：投遞或使用' : '點手牌可以看說明、使用行動'));
+    box.appendChild(hw); box.appendChild(opts);
+  }
+  if (v.role === 'seat' && !playing) {
+    const m = v.seats[v.me], b = mk('button', 'ff-btn', m.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !m.ready }); btns.appendChild(b);
+    const sd = mk('button', 'ff-btn small', '改為觀戰'); sd.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(sd);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.prepend(lv);   // 離開放最左邊，避免連點誤按（同 UNO）
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- UNO（第六桌 t6）：牌面用 DOM 畫（原創設計：圓角色塊＋大符號）；規則與狀態全在伺服器，客戶端只畫畫面、送 play／draw／pass／uno／catch／timeout／mode ----
 const UN_FILL = { R: '#d83a3a', Y: '#e8b820', G: '#2ea84a', B: '#2f66d8' };

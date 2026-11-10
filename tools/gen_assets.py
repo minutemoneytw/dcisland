@@ -1690,7 +1690,8 @@ TABLES_BY_TERRAIN = {
               dict(id="t1", game="oldmaid", cell=[56, 32], w=3, h=2),
               dict(id="t6", game="uno", cell=[48, 39], w=3, h=2),     # UNO（2026-11-08，使用者要求）
               dict(id="t5", game="dodge", cell=[56, 39], w=3, h=2),   # 躲彈幕只有一桌（2026-11-08，使用者要求）
-              dict(id="t7", game="typing", cell=[64, 32], w=3, h=2)],  # 英打競賽（2026-11-10，使用者要求）：抽鬼牌右邊、同一排相距 8 格
+              dict(id="t7", game="typing", cell=[64, 32], w=3, h=2),   # 英打競賽（2026-11-10，使用者要求）：抽鬼牌右邊、同一排相距 8 格
+              dict(id="t8", game="intel", cell=[64, 39], w=3, h=2)],   # 秘藥情報戰（2026-11-10，使用者要求）：躲彈幕右邊、英打競賽下面
 }
 
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
@@ -1750,6 +1751,24 @@ def table_typing():
     for y in (18, 20):
         for x in range(9, 39, 3): cv.rect(x, y, x + 1, y, shade(kb, .78))
     cv.rect(15, 22, 32, 22, shade(kb, .78))                                           # 空白鍵
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    cv.outline()
+    return cv
+
+def table_intel():
+    """秘藥情報戰：桌上幾封蠟封密函（黃／藍／黑）和一瓶秘藥。"""
+    cv = Canvas(48, 32)
+    wood = hx("#4a3a5a")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
+    cv.rect(2, 6, 45, 25, hx("#3a2e48"))
+    paper = hx("#efe4c8")
+    for x, y, seal in ((5, 9, "#e8b820"), (15, 14, "#2f66d8"), (25, 8, "#2a2238")):   # 密函＋蠟封
+        cv.rect(x, y, x + 9, y + 6, paper); cv.hline(x, x + 9, y, shade(paper, .8))
+        cv.set(x + 4, y + 2, shade(paper, .75)); cv.set(x + 5, y + 2, shade(paper, .75))
+        cv.ellipse(x + 4.5, y + 4, 1.6, 1.6, hx(seal))
+    cv.rect(37, 9, 39, 11, hx("#c8c0d8"))                                              # 秘藥瓶：瓶頸
+    cv.ellipse(38, 16, 4, 4.5, hx("#9a5ad8")); cv.ellipse(37, 15, 1.4, 1.6, hx("#e0c8ff"))
+    cv.rect(37, 7, 39, 8, hx("#8a5a34"))                                                # 瓶塞
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
@@ -3066,6 +3085,7 @@ def main():
     save(table_dodge(), "table_dodge.png", "games")
     save(table_uno(), "table_uno.png", "games")
     save(table_typing(), "table_typing.png", "games")
+    save(table_intel(), "table_intel.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")

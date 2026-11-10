@@ -480,8 +480,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], intel: [3, 8] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英打競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
 // 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
@@ -544,6 +544,7 @@ function tblLeave(t, cid) {
     if (t.phase === "playing" && t.game === "dodge") { dgLeave(t, i, Date.now()); return; }   // 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
     if (t.phase === "playing" && t.game === "uno") { unLeave(t, i, Date.now()); return; }   // UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
     if (t.phase === "playing" && t.game === "typing") { tyLeave(t, i, Date.now()); return; }   // 英打競賽：離開不中斷，照當時分數排名
+    if (t.phase === "playing" && t.game === "intel") { itLeave(t, i, Date.now()); return; }   // 秘藥情報戰：離開不中斷，翻開身分，場上只剩一個陣營時結束   // 英打競賽：離開不中斷，照當時分數排名
     if (t.phase === "playing") {   // 使用者定：有人離開（含斷線）直接結束這一局
       t.result = { aborted: true, text: `${name} 離開了，這一局結束` };
       tblResetSeats(t);
@@ -782,6 +783,208 @@ function tyLeave(t, i, now) {
   s.left = true; s.cid = null;
   tyCheckEnd(t, now);
 }
+// ---- 秘藥情報戰（第八桌 t8；2026-11-10，使用者要求，原創規則）：3～8 人、隱藏身分（沙都／水都／第三方咒術師）、蓋著投遞密函 ----
+// 規則（使用者定的部分見 notes「和平島與遊戲桌」）：輪到的人抽 2 張，可以先用行動牌，再把一張手牌蓋著交給任一位玩家；
+// 拿到的人選「收下」（翻開放進自己的情報區，公開）或「轉手」給還沒碰過這封的人，所有人都碰過就必須收下。
+// 密函＝印記顏色（黃＝沙都、藍＝水都、黑＝咒函、灰＝廢紙，有雙色牌）＋行動效果。勝負：沙都／水都任一人情報區有 3 張自己顏色 → 該國全員獲勝；
+// 咒術師情報區有 3 張黑 → 他獲勝；其他人有 3 張黑 → 出局。場上只剩一個陣營 → 該陣營獲勝。牌堆抽完把棄牌堆（沒被收下的牌）洗回去（使用者定）。
+// 行動打出後有 IT_PEND_MS 的識破時間，別人可以用「識破」取消；時間到才生效（客戶端送 timeout，伺服器核對時鐘，不用鬧鐘）。與 tools/dev_server.py 的 it_* 同一套。
+const IT_TURN_MS = 30000;   // 投遞回合限時
+const IT_HOLD_MS = 15000;   // 收／轉限時
+const IT_PEND_MS = 3000;    // 行動打出後的識破時間
+const IT_WIN = 3, IT_DEATH = 3;
+const IT_XP = 6;            // 正常結束：每位入座者 +6（輸贏一樣，同其他桌；助手先訂的數值）
+const IT_HAND0 = 4;
+const IT_MSGS = new Set(["isend", "itake", "ifwd", "iact", "timeout"]);         // 開局手牌
+const IT_ACT = { P: "截閱", S: "調包", F: "押送", X: "焚信", H: "搜身", W: "洗白", C: "識破" };
+const IT_CNAME = { Y: "黃", B: "藍", K: "黑", G: "灰" };
+const IT_ROLE = { sand: "沙都", water: "水都", mage: "咒術師" };
+// 牌組 54 張：印記 → 各行動的張數（雙色牌同時算兩種顏色）
+const IT_DECK = { Y: "P2S2F2X2H2W1C3", B: "P2S2F2X2H2W1C3", K: "P1S1F2X1H1C2", YB: "P1S1F1X1H1C1", YK: "P1S1F1C1", BK: "P1S1F1C1", G: "P1S1H1W1" };
+const IT_MAGES = { 3: 1, 4: 0, 5: 1, 6: 2, 7: 1, 8: 2 };   // 人數 → 咒術師人數（使用者定：4 人局 2 對 2）；其餘沙都、水都平分
+function itDeck() {
+  const d = [];
+  for (const [col, spec] of Object.entries(IT_DECK)) for (const m of spec.matchAll(/([A-Z])(\d+)/g)) for (let k = 0; k < Number(m[2]); k++) d.push(`${col}.${m[1]}`);
+  return d;
+}
+const itCols = c => c.split(".")[0];
+const itAct = c => c.split(".")[1];
+const itCount = (intel, col) => intel.filter(c => itCols(c).includes(col)).length;
+const itLabel = c => [...itCols(c)].map(x => IT_CNAME[x]).join("") + "·" + IT_ACT[itAct(c)];
+const itAlive = t => t.seats.map((s, i) => (s.out || s.left ? -1 : i)).filter(i => i >= 0);
+const itOk = (t, i) => Number.isInteger(i) && i >= 0 && i < t.seats.length && !t.seats[i].out && !t.seats[i].left;
+function itNext(t, i) {
+  const n = t.seats.length;
+  for (let k = 1; k <= n; k++) { const j = (i + k) % n; if (itOk(t, j)) return j; }
+  return -1;
+}
+function itDraw(t, i, n) {
+  const g = t.g, hand = t.seats[i].hand;
+  for (let k = 0; k < n; k++) {
+    if (!g.deck.length && g.discard.length) { g.deck = shuffle(g.discard); g.discard = []; tblLog(t, "牌堆抽完了，把丟出的密函洗回牌堆"); }
+    if (!g.deck.length) break;
+    hand.push(g.deck.pop());
+  }
+}
+function itStart(t) {
+  const n = t.seats.length, m = IT_MAGES[n] ?? 1, half = (n - m) / 2;
+  const roles = shuffle([...Array(half).fill("sand"), ...Array(half).fill("water"), ...Array(m).fill("mage")]), deck = shuffle(itDeck());
+  t.seats.forEach((s, k) => { s.hand = deck.splice(deck.length - IT_HAND0, IT_HAND0); s.intel = []; s.role = roles[k]; s.out = false; s.left = false; s.ready = false; s.note = null; });
+  t.g = { deck, discard: [], step: "turn", letter: null, pend: null, deadline: 0 };
+  t.result = null; t.phase = "playing";
+  tblLog(t, `牌局開始！沙都 ${half} 人、水都 ${half} 人${m ? `、咒術師 ${m} 人` : ""}，每人 ${IT_HAND0} 張`);
+  itBeginTurn(t, Math.floor(Math.random() * n), Date.now());
+}
+// 輪到座位 i：抽 2 張；手上沒牌（牌堆也空）就跳過，所有人都沒牌就平手
+function itBeginTurn(t, i, now) {
+  const g = t.g;
+  for (let k = 0; k < t.seats.length && i >= 0; k++) {
+    t.turn = i; g.step = "turn"; g.letter = null; g.pend = null; g.deadline = now + IT_TURN_MS;
+    t.seats[i].note = null;   // 上一輪偷看到的東西：輪到自己時清掉
+    itDraw(t, i, 2);
+    if (t.seats[i].hand.length) return;
+    tblLog(t, `${t.seats[i].name} 沒有牌可以投遞，跳過`);
+    i = itNext(t, i);
+  }
+  itFinish(t, "沒有人有牌可以投遞了，平手", [], true);
+}
+function itFinish(t, text, winners, xp) {
+  const reveal = t.seats.map(s => ({ name: s.name, role: s.role, intel: [...(s.intel || [])], win: winners.includes(s), left: !!s.left, out: !!s.out }));
+  const stay = t.seats.filter(s => !s.left);
+  t.result = { text, rid: Math.floor(Math.random() * 4294967296), xp: stay.map(() => (xp ? IT_XP : 0)), reveal };
+  tblLog(t, text);
+  t.seats = stay;
+  tblResetSeats(t);
+  t.g = null;
+  return true;
+}
+// 場上只剩一個陣營（或沒人）：結束。byLeave＝因為有人離開才結束（不給 XP，擋刷分，同 UNO）
+function itCheckFaction(t, byLeave) {
+  const alive = itAlive(t);
+  if (!alive.length) return itFinish(t, "所有人都出局了，平手", [], !byLeave);
+  const roles = new Set(alive.map(i => t.seats[i].role));
+  if (roles.size > 1) return false;
+  const r = [...roles][0], winners = r === "mage" ? alive.map(i => t.seats[i]) : t.seats.filter(s => s.role === r);
+  return itFinish(t, `場上只剩${IT_ROLE[r]}，${r === "mage" ? winners.map(s => s.name).join("、") + " " : IT_ROLE[r] + "陣營"}獲勝！`, winners, !byLeave);
+}
+// 座位 i 的情報區變多了：先看有沒有人獲勝，再看有沒有人出局
+function itCheckIntel(t, i) {
+  const s = t.seats[i];
+  if (s.role === "mage" && itCount(s.intel, "K") >= IT_WIN) return itFinish(t, `${s.name} 是咒術師！集滿 ${IT_WIN} 封咒函，獲勝！`, [s], true);
+  if (s.role === "sand" && itCount(s.intel, "Y") >= IT_WIN) return itFinish(t, `${s.name} 集滿 ${IT_WIN} 封黃色密函，沙都陣營獲勝！`, t.seats.filter(x => x.role === "sand"), true);
+  if (s.role === "water" && itCount(s.intel, "B") >= IT_WIN) return itFinish(t, `${s.name} 集滿 ${IT_WIN} 封藍色密函，水都陣營獲勝！`, t.seats.filter(x => x.role === "water"), true);
+  if (s.role !== "mage" && itCount(s.intel, "K") >= IT_DEATH) {
+    s.out = true;
+    t.g.discard.push(...s.hand); s.hand = [];
+    tblLog(t, `${s.name} 收到 ${IT_DEATH} 封咒函，暴露出局！身分是${IT_ROLE[s.role]}`);
+    return itCheckFaction(t, false);
+  }
+  return false;
+}
+function itEndLetter(t, now) {   // 這次投遞結束：換下一位
+  const nx = itNext(t, t.turn);
+  if (nx < 0) { itCheckFaction(t, false); return; }
+  itBeginTurn(t, nx, now);
+}
+function itReceive(t, now) {
+  const g = t.g, L = g.letter, s = t.seats[L.at];
+  s.intel.push(L.card); g.letter = null;
+  tblLog(t, `${s.name} 收下了密函：${itLabel(L.card)}`);
+  if (itCheckIntel(t, L.at)) return;
+  itEndLetter(t, now);
+}
+// 行動生效（識破時間過了）
+function itResolve(t, now) {
+  const g = t.g, p = g.pend, by = t.seats[p.by];
+  g.pend = null;
+  g.deadline = Math.max(g.deadline, now + 5000);   // 生效後至少留 5 秒給拿著密函／輪到的人反應
+  if (p.a === "P" && g.letter) { by.note = { k: "peek", card: g.letter.card }; tblLog(t, `${by.name} 截閱了密函`); }
+  else if (p.a === "S" && g.letter) {
+    const k = by.hand.indexOf(p.sel);
+    if (k < 0) return;
+    by.hand.splice(k, 1); by.hand.push(g.letter.card); g.letter.card = p.sel;
+    tblLog(t, `${by.name} 調包了密函`);
+  } else if (p.a === "F" && g.letter) { tblLog(t, `${t.seats[g.letter.at].name} 被押送，必須收下密函`); itReceive(t, now); }
+  else if (p.a === "X" && g.letter) { g.discard.push(g.letter.card); g.letter = null; tblLog(t, `${by.name} 燒掉了密函`); itEndLetter(t, now); }
+  else if (p.a === "H" && itOk(t, p.tgt)) {
+    const th = t.seats[p.tgt], cards = shuffle([...th.hand]).slice(0, 2);
+    by.note = { k: "search", tgt: th.name, cards };
+    tblLog(t, `${by.name} 搜了 ${th.name} 的身`);
+  } else if (p.a === "W") {
+    const k = by.intel.indexOf(p.sel);
+    if (k < 0) return;
+    by.intel.splice(k, 1); g.discard.push(p.sel);
+    tblLog(t, `${by.name} 洗白了一封密函：${itLabel(p.sel)}`);
+  }
+}
+// 時間檢查（每個操作進來先跑；客戶端時間到時送 timeout）：識破時間過了就生效；回合／收轉逾時就自動處理
+function itTick(t, now) {
+  const g = t.g;
+  if (t.game !== "intel" || t.phase !== "playing" || !g) return;
+  if (g.pend) { if (now >= g.pend.until) itResolve(t, now); return; }
+  if (now < g.deadline) return;
+  if (g.step === "pass" && g.letter) { tblLog(t, `${t.seats[g.letter.at].name} 超時，自動收下`); itReceive(t, now); }
+  else if (g.step === "turn") {
+    const s = t.seats[t.turn], to = itNext(t, t.turn);
+    if (!s.hand.length || to < 0) { itEndLetter(t, now); return; }
+    const card = s.hand.splice(Math.floor(Math.random() * s.hand.length), 1)[0];
+    g.letter = { card, orig: card, from: t.turn, at: to, seen: [t.turn, to] }; g.step = "pass"; g.deadline = now + IT_HOLD_MS;
+    tblLog(t, `${s.name} 超時，自動把一封密函交給 ${t.seats[to].name}`);
+  }
+}
+function itMsg(t, cid, msg, now) {
+  const [role, i] = tblFind(t, cid), g = t.g, a = msg.a;
+  if (a === "timeout") { itTick(t, now + 300); return; }
+  if (t.game !== "intel" || role !== "seat" || t.phase !== "playing" || !g || !itOk(t, i)) return;
+  const s = t.seats[i], L = g.letter;
+  if (a === "isend") {   // 投遞：idx＝手牌、to＝交給誰
+    if (g.pend || g.step !== "turn" || i !== t.turn || !Number.isInteger(msg.idx) || msg.idx < 0 || msg.idx >= s.hand.length || !itOk(t, msg.to) || msg.to === i) return;
+    const card = s.hand.splice(msg.idx, 1)[0];
+    g.letter = { card, orig: card, from: i, at: msg.to, seen: [i, msg.to] }; g.step = "pass"; g.deadline = now + IT_HOLD_MS;
+    tblLog(t, `${s.name} 把一封密函交給 ${t.seats[msg.to].name}`);
+  } else if (a === "itake") {   // 收下
+    if (g.pend || g.step !== "pass" || !L || L.at !== i) return;
+    itReceive(t, now);
+  } else if (a === "ifwd") {   // 轉手給還沒碰過這封的人
+    if (g.pend || g.step !== "pass" || !L || L.at !== i || !itOk(t, msg.to) || L.seen.includes(msg.to)) return;
+    L.at = msg.to; L.seen.push(msg.to); g.deadline = now + IT_HOLD_MS;
+    tblLog(t, `${s.name} 把密函轉給 ${t.seats[msg.to].name}`);
+  } else if (a === "iact") {   // 使用行動牌：idx＝手牌；搜身帶 tgt、調包帶 sel（換進去的手牌 idx）、洗白帶 sel（情報區 idx）
+    if (!Number.isInteger(msg.idx) || msg.idx < 0 || msg.idx >= s.hand.length) return;
+    const card = s.hand[msg.idx], act = itAct(card);
+    if (g.pend) {   // 識破時間內只能出識破（不能識破自己）
+      if (act !== "C" || g.pend.by === i) return;
+      s.hand.splice(msg.idx, 1); g.discard.push(card);
+      tblLog(t, `${s.name} 識破了 ${t.seats[g.pend.by].name} 的${IT_ACT[g.pend.a]}！`);
+      g.pend = null; g.deadline = Math.max(g.deadline, now + 5000);
+      return;
+    }
+    const pass = g.step === "pass" && L, mine = g.step === "turn" && i === t.turn;
+    let tgt = -1, sel = null;
+    if (act === "P" || act === "S") { if (!pass || L.at !== i) return; }   // 截閱、調包：密函在自己手上時
+    if (act === "S") { const k = msg.sel; if (!Number.isInteger(k) || k < 0 || k >= s.hand.length || k === msg.idx) return; sel = s.hand[k]; }
+    if (act === "F" && (!pass || L.at === i)) return;   // 押送：別人拿著密函時
+    if (act === "X" && !pass) return;                   // 焚信：密函傳遞中
+    if (act === "H") { if (!mine || !itOk(t, msg.tgt) || msg.tgt === i) return; tgt = msg.tgt; }   // 搜身：自己的回合
+    if (act === "W") { const k = msg.sel; if (!mine || !Number.isInteger(k) || k < 0 || k >= s.intel.length || !itCols(s.intel[k]).includes("K")) return; sel = s.intel[k]; }   // 洗白：自己的回合、情報區的黑函
+    if (act === "C") return;   // 識破只能在別人的行動生效前出
+    s.hand.splice(msg.idx, 1); g.discard.push(card);
+    g.pend = { a: act, by: i, tgt, sel, until: now + IT_PEND_MS };
+    const on = act === "H" ? `（對 ${t.seats[tgt].name}）` : act === "F" ? `（對 ${t.seats[L.at].name}）` : "";
+    tblLog(t, `${s.name} 使用了${IT_ACT[act]}${on}`);
+  }
+}
+// 遊戲進行中有人離開：翻開身分、手牌丟棄，遊戲繼續；場上只剩一個陣營時結束（無 XP）
+function itLeave(t, i, now) {
+  const g = t.g, s = t.seats[i];
+  g.discard.push(...s.hand); s.hand = []; s.left = true; s.cid = null;
+  tblLog(t, `${s.name} 離開了（身分：${IT_ROLE[s.role]}）`);
+  g.pend = null;   // 進行中的行動作廢（牌已經丟了）
+  let advance = g.step === "turn" && t.turn === i;
+  if (g.letter && g.letter.at === i) { g.discard.push(g.letter.card); g.letter = null; advance = true; tblLog(t, "他手上的密函作廢"); }
+  if (itCheckFaction(t, true)) return;
+  if (advance) itEndLetter(t, now);
+}
 // ---- UNO（第六桌 t6；2026-11-08，使用者要求，名稱沿用 UNO（商標風險由使用者決定）；牌面是原創繪製）：2～6 人、標準 108 張、手牌剩 1 張要喊 UNO ----
 // 與 tools/dev_server.py 的 un_* 同一套（規則說明見那邊）：傳統 classic／無限制 wild（+2／+4 可無限累積傳遞、跳過可傳遞、沒牌可出時抽牌不限次數）。
 // 牌的編碼：顏色字母 RYGB＋點數 0～9／s（跳過）／r（反轉）／d（+2），例如 R5、Gs；W＝變色牌、F＝變色 +4。
@@ -980,7 +1183,7 @@ function unSetMode(t, cid, mode) {
   for (const s of t.seats) s.ready = false;
   tblLog(t, `${t.seats[0].name} 把玩法改成${mode === "wild" ? "無限制" : "傳統"}`);
 }
-const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, intel: itStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 function tblView(t, cid) {
   const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
@@ -995,6 +1198,25 @@ function tblView(t, cid) {
   } else if (t.game === "typing") {   // 英打競賽：每個座位的分數／是否已離開；進行中附上 seed 與開始時間（題目由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
     t.seats.forEach((s, k) => { v.seats[k].score = s.score || 0; v.seats[k].left = !!s.left; });
     if (t.g && playing) v.ty = { seed: t.g.seed, t0: t.g.t0, dur: TY_DUR, sn: Date.now() };
+  } else if (t.game === "intel") {   // 秘藥情報戰：情報區公開；身分只給本人、已出局／離開的人、觀戰者（使用者定：觀戰者看得到全部資訊）
+    const all = role === "spec";
+    t.seats.forEach((s, k) => {
+      const vs = v.seats[k];
+      vs.intel = playing ? [...(s.intel || [])] : []; vs.left = !!s.left;
+      if (playing && (all || s.out || s.left || (role === "seat" && k === i))) vs.role = s.role;
+    });
+    if (playing && t.g) {
+      const g = t.g, L = g.letter;
+      v.it = {
+        step: g.step, deck: g.deck.length, discard: g.discard.length, deadline: g.deadline, sn: Date.now(),
+        letter: L ? { from: L.from, at: L.at, seen: [...L.seen] } : null,
+        pend: g.pend ? { a: g.pend.a, by: g.pend.by, tgt: g.pend.tgt, until: g.pend.until } : null,
+      };
+      if (L && all) v.it.letter.card = L.card;                                       // 觀戰者：看得到密函
+      else if (L && role === "seat" && L.from === i) v.it.letter.card = L.orig;     // 投遞的人：只知道自己送出的是哪張（被調包了也不知道）
+      if (role === "seat") { v.hand = [...t.seats[i].hand]; v.note = t.seats[i].note || null; }
+      if (all) v.hands = t.seats.map(s => [...s.hand]);
+    }
   } else if (t.g && t.game === "gomoku") {   // 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
     v.board = t.g.board.join(""); v.last = t.g.last; v.black = t.g.black; v.line = t.g.line; v.moves = t.g.moves || [];   // moves：每一手的座標（偶數手＝黑棋）；結束後客戶端用來復盤
   }
@@ -1520,7 +1742,9 @@ export class Island {
     const resBefore = t.result;
     dgCheckEnd(t, now);   // 時間到了就先結算（下面的動作若是 finish／hit 就只是確認）
     tyCheckEnd(t, now);
-    if (a === "ready") tblReady(t, att.id, msg.v);
+    itTick(t, now);   // 秘藥情報戰：識破時間過了就生效、逾時自動處理
+    if (t.game === "intel" && IT_MSGS.has(a)) itMsg(t, att.id, msg, now);   // 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
+    else if (a === "ready") tblReady(t, att.id, msg.v);
     else if (a === "sit") tblSit(t, att.id);
     else if (a === "stand") tblStand(t, att.id);
     else if (a === "draw") { if (t.game === "uno") unDraw(t, att.id, now); else omDraw(t, att.id, msg.idx); }   // UNO：抽牌；抽鬼牌：抽對方的牌
