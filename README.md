@@ -1,109 +1,203 @@
 # DC島（Discord Island）
 
-FF14 玩家群用的 DC 小島：**同一個語音頻道 = 同一座公共島，沒上線頻道時就在自己的島上裝飾**。
-2D 點陣風、FFXIV 風 HUD（僅風格參考，不含 SE 素材；素材全是自產 placeholder，零授權風險）。
+FF14 玩家群用的 Discord Activity 小遊戲：**同一個語音頻道＝同一座公共島**，大家在 2D 點陣小島上散步、裝飾、釣魚、打島主、玩桌遊。
+HUD 是 FFXIV 風格（僅風格參考，**不使用任何 SE／FFXIV 的素材、圖示、字體或商標**）。
 
-**正式站（跑在 Cloudflare，24/7、不依賴任何人的電腦）：**
-`https://dcisland.less78518.workers.dev`
+**正式站（Cloudflare，24/7、不依賴任何人的電腦）：** `https://dcisland.less78518.workers.dev`
+
+> 給維護者與 AI agent：協作規則看 [`AGENTS.md`](AGENTS.md)，各功能的實作細節、地雷與使用者做過的決定看 [`docs/notes.md`](docs/notes.md)。
+
+## 目錄
+
+- [目前有什麼](#目前有什麼)
+- [里程碑](#里程碑)
+- [架構](#架構)
+- [本機開發](#本機開發)
+- [部署（維護者流程）](#部署維護者流程)
+- [操作](#操作)
+- [內容擴充](#內容擴充大多不用改程式)
+- [島主](#島主)
+- [素材與授權](#素材與授權)
+- [機密與安全](#機密與安全)
+- [文件索引](#文件索引)
+
+## 目前有什麼
+
+- **8 座島**（頂部切換，每個人各自在哪座島，只看得到同島的人）：
+
+  | 島 | 島主 | 野外動物 |
+  |---|---|---|
+  | 草島 | 黃金肥龍 | 波波羊、圓喙鳥、大肚蛙、咕咕雞、史萊姆、哥布林 |
+  | 沙灘島 | — | 圓喙鳥、大肚蛙、跳跳兔、史萊姆、飛龍 |
+  | 雪島 | — | 波波羊、圓喙鳥、跳跳兔、史萊姆、殭屍 |
+  | 夜光島 | 笨蛋蛇女 | 大肚蛙、波波羊、史萊姆、飛龍、殭屍 |
+  | 森林島 | — | 波波羊、圓喙鳥、咕咕雞、史萊姆、哥布林 |
+  | 熔岩島 | 蓋老師 | 大肚蛙、圓喙鳥、史萊姆、飛龍 |
+  | 機械島 | 壓力山大 | 跳跳兔、史萊姆、殭屍 |
+  | 和平島 | — | （室內房間，**沒有任何敵對單位**；有遊戲桌與室內釣魚池） |
+
+  飛龍、哥布林、殭屍是**反擊型野怪**（被打會反擊、附近同種群起），其餘被打只會逃。野外動物是各自畫面的模擬，刻意不同步。
+- **8 個職業**：騎士／戰士（坦克）、白魔法師／賢者（補師）、忍者／龍騎士（近戰輸出）、吟遊詩人／黑魔法師（遠程輸出）。每個職業有固定的 LPC 裝備、唯一的職業武器、`1`／`2` 兩個職業技能與 `R` 職能技能。
+- **腳色等級**：打怪、採集、釣魚、玩小遊戲得 XP；升級加血量上限、每 3 級加攻擊。登入 Discord 的人等級跟著帳號（伺服器記帳），訪客只存在這台裝置。
+- **島主戰**：四隻島主各有不同攻擊樣式，由伺服器權威同步，會打死人；島主也會升級。見下方[島主](#島主)。
+- **釣魚與圖鑑**：每座島 30 種魚（含和平島），有稀有度與大尺寸；極低機率釣上會追殺人的「深海魚人」（和平島釣不到）。
+- **合成**：採集素材解鎖進素材圖鑑（不消耗），組合 2～3 種猜配方，可合成素材與家具。
+- **稱號**：圖鑑收集、大尺寸、參與擊倒島主等條件解鎖，顯示在名字上方。
+- **裝飾**：擺家具、鋪地板（可鋪在水上）、寫看板，所有人都能編輯（清空要管理員）；可坐椅子、睡床。
+- **和平島遊戲桌**：抽鬼牌、五子棋（含復盤）、躲彈幕（1～8 人）、UNO（傳統／無限制兩種玩法），牌局由伺服器權威。
+- **其他**：營火（範圍內回血，每 3 分鐘換位置）、NPC 與嚮導、玩家列表傳送、空手出拳（純特效）。
 
 ## 里程碑
 
-- ✅ **M0 可玩**：6 地形（manifest 制）、走路/跑/跳、裝飾模式、造型系統、FF14 致敬小動物、武器戰鬥＋動物 CD 重生
+- ✅ **M0 本機可玩 demo**：多地形（manifest 制）、走路／跑／跳、裝飾模式、造型系統、戰鬥與動物
 - ✅ **M1 Discord Activity**：真 DC 身分（名牌顯示 DC 名稱）、測試員可啟動
-- ✅ **M2 多人同步**：同語音頻道＝同一座島，玩家/造型/動作/家具同步；每位玩家可各自切換地形，只有同地形的人看得到彼此；**已部署到 Cloudflare**（Durable Object，一座島＝一個實例）
-- ⬜ M3 個人島列表/參觀、鎖島、家具/造型申請審核 bot
+- ✅ **M2 多人同步**：同語音頻道＝同一座島，玩家／造型／動作／家具同步；**已部署到 Cloudflare**（Durable Object，一座島＝一個實例）
+- ⬜ M3 個人島列表／參觀、鎖島、家具／造型申請審核 bot
 - ⬜ M4 公測
+
+詳細規格見 [`docs/spec.md`](docs/spec.md)。
 
 ## 架構
 
 ```
-client/          純前端（無 build step），manifest 制素材
-  js/main.js     遊戲本體（引擎/戰鬥/動物/裝飾/造型）
-  js/discord.js  Discord Embedded App SDK 接線（本機/mock/真 DC）
-  js/net.js      多人同步（WebSocket，位置/造型/動作）
-  vendor/        SDK 單檔 bundle（自託管，不依賴外部 CDN）
-worker/          Cloudflare Worker：靜態檔 + /api/token + /ws（Durable Object 當島）
-  wrangler.toml  部署設定（[assets] + Durable Object 綁定）
+client/              純前端（ES module，無 build step），內容由 manifest（assets/**/*.json）驅動
+  js/main.js         遊戲本體：世界生成、移動、繪圖、戰鬥、動物、裝飾、造型、職業與技能、UI
+  js/net.js          多人同步客戶端（WebSocket）
+  js/discord.js      Discord Embedded App SDK 接線（本機／mock／真 DC 三模式）
+  vendor/            SDK 單檔 bundle（自託管，不依賴外部 CDN，勿手改）
+  assets/            素材與 manifest（多數由 tools/gen_assets.py 產生，部分手寫，見「內容擴充」）
+worker/              正式環境伺服器（Cloudflare Worker）
+  src/index.js       靜態檔 + /api/token、/api/config、/api/log + /ws
+                     → Durable Object Island（一座島一個實例：玩家、家具、島主、牌桌）
+                     → Durable Object Registry（全站一個：跟著 Discord 帳號的圖鑑、XP、合成解鎖、擊倒紀錄）
+  wrangler.toml      部署設定（[assets] 指向 ../client、DO 綁定）
 tools/
-  dev_server.py  本機伺服器：靜態 + /api/token + /ws（純 Python，不需 Node）
-  gen_assets.py  素材產生器（placeholder；改素材先改這裡再重跑；內容感知寫檔，重跑不會弄出像素相同的假變更）
-  import_external.py  外部素材導入：img2pixel 的逐幀 PNG（zip 或資料夾）→ 拼成水平 sheet，用法 `python tools/import_external.py <zip 或資料夾> <輸出.png>`
-  dev_config.example.json  憑證範本
-docs/            規格、授權記錄、Discord 串接、Cloudflare 部署
+  dev_server.py      本機伺服器（純 Python 標準庫，不需 Node）；行為與 Worker 版保持一致
+  gen_assets.py      素材的唯一來源（改素材先改這裡再重跑；內容感知寫檔，沒變的檔不會重寫）
+  import_external.py 外部逐幀素材（zip 或資料夾）→ 拼成水平 sheet
+  dev_config.example.json  本機憑證範本
+docs/                規格、實作筆記、Discord 串接、Cloudflare 部署、素材授權
 ```
 
-## 維護者流程（三人都一樣）
-
-```bash
-git pull
-# 改 client/ 或 worker/ 的程式
-git commit -am "說明改了什麼"
-git push              # → GitHub Actions 自動部署（約 1 分鐘）
-```
-
-- 部署結果：https://github.com/minutemoneytw/dcisland/actions
-- 設定細節：`docs/cloudflare-deploy.md`
-- 只改 `docs/` 不會觸發部署
+同步協定有兩份實作（`worker/src/index.js` 正式、`tools/dev_server.py` 本機），改訊息格式或限制常數時兩邊與 `client/js/net.js` 要一起改。
 
 ## 本機開發
 
 ```bash
-python tools/dev_server.py       # 需要 Python 3；不用 Node
-# 開 http://localhost:8787
-# 多人測試：開兩個分頁，同一 ?room=xxx 就會看到彼此
-# 模擬 DC 身分： http://localhost:8787/index.html?mock=1
+python tools/dev_server.py       # 需要 Python 3；不用 Node。開 http://localhost:8787
 ```
 
-要驗證真正的 Discord 串接，再把本機服務用臨時隧道對外（詳見 `docs/m1-discord-setup.md`），
+- 多人測試：開兩個分頁，同一個 `?room=xxx` 就會看到彼此
+- 模擬 DC 身分：`http://localhost:8787/index.html?mock=1`
+- Windows 若 `python` 指向商店空殼，改用 `py -3`
+- 預覽 Worker 版（含 Durable Object，需 Node ≥ 22）：`cd worker && npx wrangler dev --port 8790`
+- 重新產生素材：`python tools/gen_assets.py`
+- 沒有自動化測試，改完請實際開瀏覽器跑過
+
+要驗證真正的 Discord 串接，把本機服務用臨時隧道對外（見 [`docs/m1-discord-setup.md`](docs/m1-discord-setup.md)）。
 **測試完務必把 Portal 的根對應改回 `dcisland.less78518.workers.dev`**，否則大家會白屏。
+
+## 部署（維護者流程）
+
+```bash
+git pull
+# 改程式，一個 commit 只做一件事
+git commit -m "說明改了什麼"
+git push              # 推到 main → GitHub Actions 自動部署（約 1 分鐘）
+```
+
+- 只有改到 `client/**`、`worker/**` 或 `.github/workflows/deploy.yml` 才會觸發部署；只改 `docs/` 不會
+- 部署結果：https://github.com/minutemoneytw/dcisland/actions
+- 設定細節：[`docs/cloudflare-deploy.md`](docs/cloudflare-deploy.md)
 
 ## 操作
 
-`WASD/方向鍵` 走 · `Shift` 或右下角圓形按鍵**切換**跑步／步行（點擊或按一下持續生效，再點／再按切回） · `Space` 跳 · **左鍵（或 `F`）攻擊，長按自動連續揮擊**（點石頭/貝殼自動用鎬子、點樹木/蘑菇自動用斧頭） · 左/右鍵點 NPC 聊天、點椅子/沙發/床（或在旁邊按 `F`）坐下/睡覺，再點一次、按 `F` 或移動就起身 · **`1`／`2` 職業技能、`R` 職能技能**（例如騎士＝單盾／群盾、白魔法師＝單補／翅膀；R：坦克＝挑釁、補師＝群療、近戰輸出＝破綻、遠程輸出＝降傷，見 `docs/spec.md` 第 9 節） · `E` 裝飾模式（可邊走邊擺、可穿過擺飾；「擺設」分頁左鍵放置、右鍵拿取；「地板」分頁長按左鍵鋪、長按右鍵拆，地毯一次鋪 2×2 且彼此不重疊；地板可鋪在水上，水上要先鋪地板才能放家具、也能走上去，水上地板有家具時要先拿走家具才能拆；按「完成」才保存、「取消變動」可還原，`E` 或 `Esc` 離開時有未保存的變動會先問；「清空」需要管理員）· `L` 線上列表（同一張地圖的人，點名字傳送過去）· **釣魚**（極低機率會釣上敵對的「深海魚人」，牠會追殺你，打倒或 30 秒沒人打牠就消失）：用左上角武器列把武器換成釣竿，在水邊按 `F` 或點水的方向拋竿，浮標被拉下水、頭上出現「!」後 2 秒內再按一次拉竿 · `圖鑑` 看各島釣過的魚（沒釣過的是剪影）· 頂部 chip 切地形 · **武器列**（左上角，橫向只有圖示，選到的才顯示名稱）：**滑鼠滾輪**（在遊戲畫面上）或直接點來切換「職業武器／空手／釣竿」（只列得出來的；換職業會自動換成新職業的武器）；**遠距武器**＝自動瞄準（點滑鼠指著的目標，沒點到就挑最接近游標方向的，射程 320px）：法杖（白魔法師，詠唱 1.2 秒）與咒杖（黑魔法師，1.0 秒、放完可立刻再施放）要**詠唱**——頭上有倒數條、詠唱時不能移動、移動或目標超出射程就中斷；賢具（賢者的浮游炮）與豎琴弓（吟遊詩人，射箭）不用詠唱，可以邊走邊射· **技能列**（畫面底部正中間，三格：`1`、`2` 職業技能與 `R` 職能技能）顯示圖示與冷卻倒數 · **稱號**：達成條件（圖鑑收集、釣到大尺寸、參與擊倒島主…）就解鎖，在 `造型` 按「稱號設定」選一個（或「無」），會以《稱號》顯示在名字上方 · `造型` 換膚色/髮型，最上面選**職業**（8 個：騎士／戰士＝坦克、白魔法師／賢者＝補師、忍者／龍騎士＝近戰輸出、吟遊詩人／黑魔法師＝遠程輸出；每個職業有固定的一套裝備與**唯一的職業武器**，換職業自動換上；裝備可再用「外觀」套已解鎖的外觀、用「換色」換帽子／上衣／褲子的顏色；戰鬥中只能換一次職業、也不能換島） · `操作說明` 開簡易說明（說明／列表視窗開著時仍可走路）。
+| 操作 | 按鍵／方式 |
+|---|---|
+| 移動／跳 | `WASD` 或方向鍵／`Space` |
+| 跑步 | `Shift` 或右下角圓形按鍵**切換**跑步／步行 |
+| 攻擊、採集、互動 | 左鍵或 `F`（長按自動連續揮擊）。點石頭／貝殼自動用鎬子、點樹木／蘑菇自動用斧頭；在 NPC、椅子／床、看板、遊戲桌旁按 `F` 或點它就互動 |
+| 技能 | `1`／`2` 職業技能、`R` 職能技能（坦克＝挑釁、補師＝群療、近戰輸出＝破綻、遠程輸出＝降傷）；畫面底部有技能列與冷卻 |
+| 換武器 | 左上角武器列：在遊戲畫面上**滾滑鼠滾輪**或直接點，在職業武器／空手／釣竿之間切換 |
+| 遠距武器 | 自動瞄準滑鼠指的目標（射程 320px）。法杖、咒杖要**詠唱**（不能移動，移動或目標出射程就中斷）；賢具、豎琴弓不用詠唱，可以邊走邊射 |
+| 釣魚 | 換成釣竿，在水邊按 `F` 或點水面拋竿；浮標被拉下水、頭上出現「!」後 2 秒內再按一次拉竿 |
+| 坐下／睡覺 | 點椅子／沙發／床（或旁邊按 `F`）；再點一次、按 `F` 或移動就起身 |
+| 裝飾模式 | `E`。「擺設」分頁左鍵放、右鍵拿；「地板」分頁長按左鍵鋪、長按右鍵拆。按「完成」才保存、「取消變動」還原；`E`／`Esc` 離開時有未保存的變動會先問 |
+| 玩家列表 | `L`（同島的人，點名字傳送過去） |
+| 切換島 | 頂部 chip（倒地中、戰鬥中不能換） |
+| 遊戲桌（和平島） | 走到桌邊按 `F` 或點桌子，選入座或觀戰；`Esc` 離開 |
+| 面板 | 右上：`圖鑑`（魚類圖鑑／素材圖鑑／合成／配方筆記）、`角色`（職業、裝備、外觀、換色、稱號設定）、齒輪選單（操作說明、名牌等級／血量條／經驗條顯示開關） |
 
-## 內容擴充（都不用改程式）
+規則與數值（石化、命令、血量、技能細節等）見 [`docs/notes.md`](docs/notes.md) 與 [`docs/spec.md`](docs/spec.md) 第 9 節。遊戲內嚮導 NPC 與「操作說明」也有簡易說明（來源是 `client/assets/npcs/npcs.json` 的 `help`，操作方式改了要同步更新）。
+
+## 內容擴充（大多不用改程式）
+
+由產生器管理的 manifest（`mobs.json`、`furniture.json`、`floors.json`、`terrain.json`、`fish.json`、`avatar.json`）要改 `tools/gen_assets.py` 對應的表再重跑，直接改 JSON 會在下次重跑時被蓋掉。標「手寫」的檔案則直接改。
 
 | 想加 | 做什麼 |
 |---|---|
-| 地形 | `client/assets/terrain/<id>/` 加資料夾 + `terrain.json`，並在 `main.js` 的 `TERRAIN_IDS` 登記 |
-| 家具 | `client/assets/furniture/furniture.json` 加條目 + png |
-| 地板 | `client/assets/floors/floors.json` 加條目 + 16×16 無縫磚 png（`gen_assets.py` 的 `FLOOR_MANIFEST`）；多格地板（如地毯 2×2）加 `"w"`/`"h"`，圖為 16w×16h，邊長最多 4 |
-| 動物／怪物（mobs） | `client/assets/mobs/mobs.json` 加條目 + png，並在各地形 `terrain.json` 的 `mobs` 指定；會游泳/兩棲/會飛的加 `"swim": true`（才能逃到海上）；影子預設依 `big` 畫，素材腳印很寬或腳不在正中央時加 `"shadow": {"rx", "ry", "dx", "dy"}`（px，dy 負＝往上）；素材本身面向左邊時加 `"faceLeft": true`（預設素材面向右、往左走才翻轉）；腳底中心不在圖正中央時加 `"footDx"`（px，負＝偏左，畫圖時挪回來，讓判定圈與影子在正腳下）；要多幀動畫就加 `"anim"`（等寬水平 sheet，由左至右循環：`sheet`／`frames`／`fps`／`dashFps`／`scale`／`keyBg`，見 `gen_assets.py` 的 `MOB_MANIFEST` 註解） |
-| 造型 | `client/assets/avatar/avatar.json`（＋對應 png）。人物分五層（軀幹＞褲子＞衣服＞頭髮＞帽子，由下往上疊），每層一張照**標準排列**畫的 sheet：每幀 64×64（`frames.scale`＝1，1:1 不縮放；腳底在幀內 (32,63)），8 方向（下、右下、右、右上、上、左上、左、左下）×〔待機 4 幀＋走路 4 幀〕＋最後 1 幀坐姿，共 65 幀（幀表在 `avatar.json` 的 `frames`）。換素材＝照排列畫好覆蓋同名檔（**軀幹層不能畫上頭髮／衣服／褲子／鞋**——那些是別層）；加衣服／褲子／帽子＝`tops`／`bottoms`／`hats` 加一項（`dye`＝可染色的原色；`glam: true`＝可當外觀，`unlock`＝解鎖條件〔格式同稱號的 `cond`〕）；武器＝單張透明 PNG（握把在離圖底約 3 格處＝轉軸），manifest 可標 `scale`（沒寫＝與人物同倍率）。人物／武器的 placeholder 由 `gen_assets.py` 的 `BASE_CHAR` 段落從底圖 `char_base_walk.png`（使用者自製）拆層生成——換人物底稿＝覆蓋該檔再重跑 |
-| 職業 | `client/assets/jobs/jobs.json`（手寫）：職業的職能（`role`）、職業武器、一套裝備（`gear`）、1／2 鍵技能（`skills`）。技能效果與職能數值在 `main.js` 的 `JOB_SKILLS`／`ROLES`；新增職業時兩份伺服器的 `JOB_ROLE` 也要加（見 `docs/notes.md`「島主與戰鬥」） |
-| NPC／嚮導／台詞／操作說明 | `client/assets/npcs/npcs.json`（`terrains.<地圖>` 每張地圖各自的 NPC，`help` 是嚮導的說明視窗） |
-| 魚（釣魚／圖鑑） | `tools/gen_assets.py` 的 `FISH_TABLE` 加一列（地形、id、名稱、稀有度 `common`/`uncommon`/`rare`、尺寸 cm 範圍、畫圖）再重跑，產生 `client/assets/fish/<id>.png` 與 `fish.json`；稀有度權重、脫鉤率（0.2%）與大尺寸門檻 `big`（尺寸範圍的 75% 處）在 `fish_manifest()` |
-| 稱號 | `client/assets/titles/titles.json`（手寫）加一項：`id`、`name`（頭上顯示成《name》）、`desc`（解鎖條件說明）、`cond`（`owner` 參與擊倒島主／`dex` 某地形圖鑑收集 n 種／`big` 釣到過大尺寸的魚種／`titles` 列出的稱號全解鎖，見 `docs/notes.md`「稱號」）；新的條件類型才要改 `main.js` 的 `titleProgress` |
-| 合成素材／配方／合成家具 | `client/assets/craft/craft.json`（手寫）：`materials` 加素材、`sources` 設掉落（地形物件／釣魚／野外動物）、`recipes` 加配方（2～3 個素材不分順序；產出素材或家具）；圖示在 `tools/gen_assets.py` 的 `MATERIAL_ICONS` 加一筆，合成家具另在 `FURN_MANIFEST` 加 `craft=True` 的條目＋畫圖函式。素材採集過一次就解鎖、之後無限使用；合成出的東西同樣解鎖 |
-| 可破壞物件／採集工具／掉落物 | `client/assets/tools/tools.json`（key＝地形 deco 的圖檔名；掉落物目前為空） |
-| 島主招式（倒數條／招式名／放招前要不要講台詞） | `client/assets/skills/skills.json`（手寫；key＝`mobs.json` 的 `atk` 攻擊樣式）：`name` 招式名稱、`bar: true` 預警時在島主頭上顯示黃色倒數條（右上角是招式名稱）、`say: false` 被打不講台詞直接開始預警。兩份伺服器也讀 `say` |
-| 島主 | `terrain.json` 加 `"owner": "<動物id>"`（一張地圖一隻）；動物本體照上面的「動物」方式加，`"owner": true`＋`"big"` 放大倍率。機制見下方「島主」 |
-| 動畫（把任何單張圖換成多幀） | 準備**等寬水平排列**的 sheet（由左至右循環），在該圖的 manifest 加 `anim`：`{"sheet": "相對 client/assets/ 的路徑", "frames": 幀數, "fps": 8, "keyBg": false, "stagger": false}`。地形磚／點綴物寫在 `terrain.json` 的 `"anims": {"<檔名>": anim}`（例：`"water.png"`、`"tree.png"`）；家具、地板、動物寫在各自條目的 `"anim"`（動物另有 `dashFps`、`scale`）。不寫 `sheet` 時，原本的 `sprite` 檔本身就當 sheet；sheet 載入失敗會退回單張圖。地形磚／地板預設整張地圖同步換幀，`stagger: true` 各格錯開；點綴物與家具依格子自動錯開。`keyBg` 給不是透明底的素材（從圖邊去背）。由產生器管理的 manifest 要寫進 `gen_assets.py` 對應的表（`TERRAINS` 該地形的 `anims`、`FURN_MANIFEST`／`FLOOR_MANIFEST`／`MOB_MANIFEST` 條目的 `anim`）再重跑，否則下次重跑會被蓋掉。只影響畫面，不用改程式、也不動伺服器 |
+| 地形 | `client/assets/terrain/<id>/` 加資料夾＋`terrain.json`（產生器的 `TERRAINS`），並在 `main.js` 的 `TERRAIN_IDS` 登記 |
+| 家具 | `furniture.json` 加條目＋圖（產生器的 `FURN_MANIFEST`）；`use: "sit"／"sleep"` 可坐／睡，`text: true` 可寫字 |
+| 地板 | `floors.json` 加條目＋16×16 無縫磚（`FLOOR_MANIFEST`）；多格地板加 `w`／`h`，邊長最多 4 |
+| 動物／怪物（mobs） | 外部逐幀素材先用 `import_external.py` 拼成 sheet 放進 `client/assets/external/img2pixel/`，再在 `gen_assets.py` 的 `EXTERNAL_BUNDLES` 登記、`MOB_MANIFEST` 加條目、`MOBS_BY_TERRAIN` 指定島與權重。常用欄位：`anim`（含方向網格 `rows`／`rowDir`、`scale`）、`tint`（一張圖做多色系）、`fixed`（每島固定幾隻）、`swim`、`noBounce`、`retaliate`＋`ownerFrac`（反擊型，數值＝島主的 1/N）。**先量大小**：人物畫面上約 46px 高，野外小動物約 20～30px。完整規範見 [`docs/notes.md`](docs/notes.md)「野外動物」與 `client/assets/external/img2pixel/README.md` |
+| 人物造型／服裝／武器 | **只用 LPC 素材**（Universal-LPC-Spritesheet-Character-Generator），每個部位一張 832×1344 的 LPC 通用格式 sheet，由 `gen_assets.py` 產生 `avatar.json`（`tops`／`bottoms`／`hats`、`dye` 可換色、`glam` 可當外觀、`unlock` 解鎖條件）。做法見 [`docs/notes.md`](docs/notes.md)「美術：多幀動畫與人物分層」 |
+| 職業 | `client/assets/jobs/jobs.json`（手寫）：`role`、職業武器、`gear`、`skills`；技能效果在 `main.js` 的 `JOB_SKILLS`；**兩份伺服器的 `JOB_ROLE` 也要加** |
+| NPC／嚮導／操作說明 | `client/assets/npcs/npcs.json`（手寫；`terrains.<地圖>` 各地圖的 NPC，`help` 是說明視窗） |
+| 魚 | `gen_assets.py` 的 `FISH_TABLE` 加一列再重跑；稀有度權重、脫鉤率、大尺寸門檻在 `fish_manifest()`。加新島的魚要一併補該島的兩個釣魚稱號 |
+| 稱號 | `client/assets/titles/titles.json`（手寫）：`id`、`name`、`desc`、`cond`（`owner`／`dex`／`big`／`titles`）；新的條件類型才要改 `main.js` 的 `titleProgress` |
+| 合成素材／配方／合成家具 | `client/assets/craft/craft.json`（手寫）：`materials`、`sources`（掉落）、`recipes`；圖示在 `gen_assets.py` 的 `MATERIAL_ICONS`，合成家具在 `FURN_MANIFEST` 標 `craft=True` |
+| 可破壞物件／採集工具 | `client/assets/tools/tools.json`（手寫；key＝地形點綴物的圖檔名） |
+| 遊戲桌 | `client/assets/games/games.json`（手寫）＋`gen_assets.py` 的 `TABLES_BY_TERRAIN` 與桌子圖＋兩份伺服器實作該遊戲的狀態機並登記 `TABLE_DEFS` |
+| 島主招式設定 | `client/assets/skills/skills.json`（手寫；key＝攻擊樣式）：`name`、`bar`（視窗上方的倒數條）、`say`（放招前要不要講台詞，兩份伺服器也讀） |
+| 島主 | 見下方「新增其他島的島主」 |
+| 動畫 | 任何單張圖都能換成等寬水平 sheet：在該 manifest 條目加 `anim`（`sheet`／`frames`／`fps`／`keyBg`／`stagger`）；地形磚／點綴物寫在 `terrain.json` 的 `anims` |
 
-## 島主（各島的島主）
+## 島主
 
-- 每座地形可以有自己的島主（`terrain.json` 的 `owner` 指定動物）。目前：**草島＝黃金肥龍**（FF14 巴哈姆特致敬的正面金龍，`big: 5`、HP 200；外觀是使用者自製的 6 幀飛行動畫 `client/assets/external/img2pixel/`，龍衝時拍翅加快）、**夜光島＝笨蛋蛇女**（FF14 T7 蛇女致敬的正面蛇女，紫膚蛇髮金甲蛇尾，`big: 4`、HP 200；外觀是使用者自製的 4 幀動畫 `client/assets/external/img2pixel/snake_queen_sheet.png`）、**熔岩島＝蓋老師**（FF14 究極神兵致敬的巨型機甲，`big: 5`、HP 200；外觀是使用者自製的 6 幀走路動畫 `client/assets/external/img2pixel/ultima_weapon_sheet.png`）、**機械島＝壓力山大**（FF14 亞歷山大致敬的機械之神，`big: 5`、HP 200；外觀是使用者自製的 4 幀待機動畫 `client/assets/external/img2pixel/alexander_idle_sheet.png`）。
-- **黃金肥龍（攻擊樣式 `atk: "dash"`）**：被激怒時 **80% 放台詞招式、20% 龍衝**。**台詞招式**：原地說一句台詞，說完 3 秒放第一招、之後每 3 秒一招（依台詞關鍵字：月＝月環、熾熱／燃燒＝離子砲、鐵血／鋼鐵＝鋼鐵、紅月＝月華衝、星降＝隕石流），沒有預警、放出瞬間才看到範圍：**月環**（島主周圍的環形，貼身或站很遠安全）、**鋼鐵**（島主周圍圓形，會被擊飛）、**月華衝**（仇恨目標身邊大傷害，坦克滿血吃得下）、**隕石流**（每人身上一圈，三人疊在一起會死）、**離子砲**（隨機一人，旁邊的人可以分攤）；細節見 `docs/notes.md`。**龍衝**（不講台詞）：打牠 → 瞬間消失 → 在島**隨機邊緣**現蹤鎖定攻擊者 → **讀條 2 秒**（頭上倒數條＋金色虛線）→ 龍本體以 560 px/s 直線飛衝過島（被撞到的玩家角色倒地變墓碑，**30 秒**後在出生點復活）→ 衝到對岸落地停 0.7 秒 → 就地接續散步（不回中心）。
-- **笨蛋蛇女（攻擊樣式 `atk: "gaze"`）**：不瞬移、**不講台詞**。打她 → 身上浮出**大眼睛 2 秒**，頭上同時出現**黃色倒數條**（由左往右填，右上角寫「石化」；她的頭超出畫面時貼齊畫面上緣），填滿就發射（沒有直線、全地圖判定）→ 發射瞬間**臉朝著蛇女的玩家**（四方向朝向：往上走＝背面、往下走＝正面、左右＝側面；朝向與「到蛇女的方向」夾角小於約 80° 就算面對）**石化 10 秒**（不能移動／跳躍，也不能揮擊／採集／F 互動）且**每秒扣 1 HP**；**背對她／看向另一邊就安全**，距離不影響（扣死照墓碑機制）→ 放完直接接仇恨追殺。
-- **蓋老師（攻擊樣式 `atk: "beam"`）**：不瞬移。打牠 → **原地說台詞**（18 句，**照順序一句一句說**，說完回到第一句，見下）→ **原地讀條 2 秒**，頭上**黃色倒數條**寫「波動砲」，同時朝攻擊者方向畫出**跟島主一樣寬**（264px）的青白色**帶狀預警**，填滿就發射一道直線光波（射到島緣）→ **站在光波帶狀範圍裡的人扣 4 HP**（與光束中線的垂直距離 < 島主一半寬、且在島主前方；各客戶端自判，扣死照墓碑機制）→ 放完直接接仇恨追殺。台詞由使用者提供（照原文，共 18 句，寫在 `mobs.json` 的 `ownerLines`，一句內的換行是泡泡內換行）：開頭「冒險者，你是為了什麼而戰鬥的？」，結尾「英雄……也只是虛偽的偶像。就由我來打破！」，中間是對「艾歐澤亞的真實與偽神」的長篇演說
-- **壓力山大（攻擊樣式 `atk: "command"`）**：不瞬移。打牠 → **80% 放台詞招式、20% 直接下命令**。**命令**（不講台詞）：**原地讀條 2 秒**（頭上黃色倒數條寫「行動命令」或「靜止命令」，島主頭上同時浮出全地圖可見的大字「↑ 行動！」／「✕ 靜止！」）→ 讀條結束瞬間檢查每個玩家：**行動命令**＝最近 0.5 秒內有移動輸入才合格、**靜止命令**＝最近 0.5 秒完全沒動才合格；**不服從就強制倒地**（不看血量，頭上飄出命令名稱）。判定在各人自己的畫面（跟龍衝／石化同源）；被石化／被擊飛／坐著睡著都算「靜止」。**台詞招式**：3 句**照順序一句一句說**（出場自介 → 合神完畢 → 時間牢獄；字句照使用者提供的原文），說完 3 秒後放出該句對應的命令（第 1、2 句＝行動命令、第 3 句「時間牢獄」＝靜止命令），讀條與檢定同上；擊倒牠解鎖稱號《完美》。
-- **閒晃**：島主會在島上四處散步（附近 6～16 格的隨機陸地路點、直線不抄水、走完歇 1.5～4 秒），路點由伺服器挑並廣播，客戶端用牆鐘插值跟著走；沒有人在線時散步停擺省資源，有人進來自動恢復。
-- **流程由伺服器權威同步**（`worker/src/index.js` 與 `tools/dev_server.py` 各一份，改流程或常數要兩邊＋`main.js` 一起改）：每座地形的島主狀態、島形位圖（RLE）、被打冷卻、仇恨名單**各自一份**（storage key 帶地形後綴 `dragon:<地形>`／`dragonMap:<地形>`，DO 只有一個鬧鐘、由 `armOwnerAlarm` 統一取最早的醒來時間）。島形位圖由客戶端上傳，每條連線每個地形只傳一次；內容和已存的一樣時 Worker 不重寫儲存。瞬移點與龍衝終點／石化直線的終點由伺服器計算並廣播事件；客戶端只負責演出與「自己有沒有被打到」的判定——所以攻擊可以害死同島的其他玩家（誰被打到誰把自己的死亡寫進 `state.dead`）。石化目前是純客戶端判定（各人在發射瞬間自判「是否面向蛇女」），不進同步協定。
-- 打島主：F 鍵與滑鼠點擊都**優先攻擊島主**（勝過腳下的座位／NPC——島主常駐重生點，旁邊常有一堆家具）；判定以**武器尖端**為準（人臉朝向那側 30px 處進了島主腳下的判定圈就打得到，黃金肥龍與蓋老師圈半徑 58、蛇女 52；靠近時腳下會畫出判定圈）；傷害照職業算（一般 1、暴擊 2，輸出 +1，伺服器上限 4），每連線 300ms 冷卻，伺服器驗證距離 ≤100px（`D_RANGE`，涵蓋判定圈＋武器伸出並留延遲；**拿法杖的連線放寬到 440px `D_STAFF_RANGE`**，要同時帶 `staff` 旗標且 `state.weapon` 是 staff），龍衝飛行中打不到。
-- 島主被打倒後 30 秒重生（Worker 用 Durable Object 鬧鐘、本機用 timer）。沒連線（單機）時退回客戶端本地模擬，行為相同。帶傷的島主會每秒回 18 HP（滿血才停；單機模擬與兩份伺服器的 `D_REGEN` 同值）——目前調到約 **8 人圍毆才打得死**（7 人打不贏、8 人約 70 秒擊殺）。
-- **仇恨追殺（被打就鎖定）**：**一被打就立刻建立仇恨**——反擊照樣先放（說台詞 → 龍衝／石化之瞳），但**放完不用再被打就馬上接著追殺同一個攻擊者**；冷卻期間（12 秒，`D_RAGE_MS`）被打也進仇恨。以 180 px/s 追殺（玩家走路 120 追得上、跑步 200 才能拉開），貼近 36px 就站定**每秒爪擊**（金色抓痕特效，範圍內＋前方扇形的各客戶端自判是否被打）；複數攻擊者每 5 秒隨機換目標、目標倒了也立刻換。**30 秒脫離：從最後一次被打起算**，完全沒人打牠超過 30 秒（`D_DROPOUT`）才冷靜回閒晃（`chill`）；**冷卻一到自動對現在目標放招**。
-- **玩家血量**：HP 上限 10（`PLAYER_HP`）——島主爪擊扣 2（5 下倒地）、**龍衝直接倒地**（不看血量）、石化每秒扣 1、**波動砲扣 4**、殺一隻（單機）動物回 1、脫離戰鬥（場上島主沒在追殺／放招、自己沒被石化）每秒自動回 1（`PLAYER_REGEN`）、復活即滿血；血量走 `state` 封包同步，頭上有掉血才顯示的紅色小血條。
-- 島主是「野外動物刻意不同步」原則的**明確例外**（會打死人，必須全島一致）；其他野外動物維持各自畫面模擬。
-- **島主＝範本**：之後其他島的島主照這套做；攻擊方式可不同（在 `OWNER_TERRAINS`（兩份伺服器）與 `mobs.json` 的 `atk` 登記新樣式 `dash`／`gaze`／`beam`／`command`），框架（伺服器權威狀態機＋事件廣播）共用。
+每座地形最多一隻島主（`terrain.json` 的 `owner`）。四隻都是 HP 200、會升級（等級永不重置，每級血量上限 +25），**約 8 人圍毆才打得死**（帶傷每秒回 18 HP）。被打倒 30 秒後重生；擊倒時 30 秒內打過牠的人算參與（稱號與 XP）。
+
+- **草島＝黃金肥龍**（`atk: "dash"`）：被激怒時 **80% 台詞招式、20% 龍衝**。台詞招式依台詞關鍵字依序放招、沒有預警：月環（環形，貼身或很遠安全）、鋼鐵（周圍圓形＋擊飛）、月華衝（仇恨目標身邊大傷害）、隕石流（每人身上一圈，疊在一起會死）、離子砲（隨機一人，旁邊的人可分攤）。龍衝：瞬移到島緣鎖定攻擊者 → 讀條 2 秒（金色虛線）→ 以 560 px/s 衝過島，撞到的人直接倒地。
+- **夜光島＝笨蛋蛇女**（`atk: "gaze"`）：不講台詞，原地開眼讀條 2 秒 → 發射瞬間**臉朝著她的人**（不看距離、全地圖）石化 10 秒（不能動、不能攻擊，每秒扣 1 HP）。**背對她就安全**。
+- **熔岩島＝蓋老師**（`atk: "beam"`）：先照順序說一句台詞（共 18 句，照使用者提供的原文）→ 讀條 2 秒，朝攻擊者畫出跟牠一樣寬的帶狀預警 → 發射波動砲，範圍內扣 4 HP。
+- **機械島＝壓力山大**（`atk: "command"`）：80% 台詞招式、20% 直接下命令。讀條 2 秒（行人號誌圖示：綠色走路小人＝**行動命令**、紅色站立小人＝**靜止命令**）→ 結束瞬間檢定：行動命令要最近 0.5 秒有移動、靜止命令要最近 0.5 秒完全沒動，**不服從直接倒地**。擊倒牠解鎖稱號《完美》。
+
+共通機制：
+
+- **仇恨追殺**：一被打就鎖定攻擊者，放完招接著以 180 px/s 追殺（走路逃不掉、跑步拉得開），貼身每秒爪擊扣 2；多人時每 5 秒隨機換目標；**30 秒沒人打才脫離**。
+- **閒晃**：沒在戰鬥時會在島上散步（路點由伺服器挑），沒人在線時停擺。
+- **打島主**：`F`／點擊優先打島主；近戰以武器尖端進牠腳下的判定圈為準（靠近時會畫出判定圈），伺服器驗證距離與冷卻。
+- **玩家血量**：上限依職業（坦克 20、補師 10、輸出 8）＋(等級−1)；脫離戰鬥每秒回 1、營火範圍內另外回血；倒地 30 秒後在出生點復活。
+- **伺服器權威**：島主狀態、島形、仇恨、招式時序都由伺服器決定並廣播；「自己有沒有被打到」由各客戶端判定（所以攻擊會害死同島的其他人）。島主是「野外動物不同步」原則的明確例外。數值與實作細節見 [`docs/notes.md`](docs/notes.md)「島主與戰鬥」。
 
 ### 新增其他島的島主（照範本，4 步）
-1. **造型**：`tools/gen_assets.py` 畫該島主的正面圖＋重跑（產生器有內容感知寫檔，重跑不會動到像素相同的其他素材）；改用外部自製素材時，用 `python tools/import_external.py <zip 或資料夾> <輸出.png>` 把逐幀接成 sheet 放進 `client/assets/external/img2pixel/`、在條目加 `"anim"`（此時可以沒有 `"sprite"`；登記步驟見該資料夾的 README），並在 `client/assets/mobs/mobs.json` 加條目：`"owner": true`、`"big"` 放大倍率、`"hp"`（目標約 8 人擊殺）、`"atk"`（攻擊樣式：`dash`／`gaze`／`beam`）、`"line"`（點擊時的描述）、`"ownerLines"`（被激怒的台詞，見第 3 步）
-2. **指定**：該島 `client/assets/terrain/<id>/terrain.json` 加 `"owner": "<動物id>"`（一張地圖一隻），並在兩份伺服器的 `OWNER_TERRAINS` 登記該地形的攻擊樣式
-3. **台詞與招式**：`client/assets/skills/skills.json` 設定該攻擊樣式的招式名稱、要不要倒數條（`bar`）、要不要先講台詞（`say`）；要講台詞的話寫在 `mobs.json` 該島主條目的 `"ownerLines"`（字串陣列；被打觸發反擊前，隨機泡泡說一句；沒寫就不說話）；條目再加 `"ownerLinesSeq": true` 就改成照順序一句一句說、說完回到第一句（目前只有蓋老師）。`mobs.json` 由產生器管理，要寫進 `tools/gen_assets.py` 的 `MOB_MANIFEST`，否則下次重跑會被蓋掉
-4. **完成**——說台詞、預警、攻擊（照 `atk` 分岔）、歇腳、全島散步、仇恨追殺＋爪擊、死亡重生、泡泡、優先攻擊全部由共用框架處理（伺服器權威；`worker/src/index.js` 與 `tools/dev_server.py` 兩份實作已就緒）
+
+1. **造型**：外部自製素材用 `python tools/import_external.py <zip 或資料夾> <輸出.png>` 拼成 sheet 放進 `client/assets/external/img2pixel/`，在 `gen_assets.py` 的 `EXTERNAL_BUNDLES` 登記，並在 `MOB_MANIFEST` 加條目：`owner: true`、`big`、`hp`、`atk`（`dash`／`gaze`／`beam`／`command`）、`line`、`anim`（登記步驟見該資料夾的 README）
+2. **指定**：`gen_assets.py` 的 `OWNER_BY_TERRAIN` 指定該地形的島主（產生 `terrain.json` 的 `owner`），並在**兩份伺服器的 `OWNER_TERRAINS`** 登記攻擊樣式
+3. **台詞與招式**：`skills.json` 設定招式名稱、`bar`、`say`；台詞寫在 `MOB_MANIFEST` 該條目的 `ownerLines`（加 `ownerLinesSeq: true` 改成照順序說）
+4. **重跑產生器**——說台詞、預警、攻擊、仇恨追殺、死亡重生、等級等都由共用框架處理（兩份伺服器已就緒）
+
+## 素材與授權
+
+- **人物、服裝、武器**：LPC 素材（Universal-LPC-Spritesheet-Character-Generator，CC-BY-SA 3.0／GPL 3.0／OGA-BY 3.0 等，需標示作者）
+- **島主、營火與部分怪物**：使用者自製或提供的素材（img2pixel），以及 OpenGameArt 素材（CC0／CC-BY-SA 等）
+- **其餘**（地形、家具、地板、魚、素材圖示、UI 圖示）：`tools/gen_assets.py` 畫的 placeholder
+- 每一項的來源與授權逐條記在 [`docs/assets-license.md`](docs/assets-license.md)；**引入外部素材一定要補記錄**
 
 ## 機密與安全
 
-- `tools/dev_config.json`（含 Discord client secret）**永不進版控**（`.gitignore` 已排除，repo 只有範本）
-- 雲端 secret 存在 Cloudflare Worker secrets（`wrangler secret put`），前端拿不到
-- 只有 App 擁有者與 Discord 開發團隊成員能啟動未發布的 Activity（見 `docs/m1-discord-setup.md`）
+- `tools/dev_config.json`（含 Discord client secret）**永不進版控**（`.gitignore` 已排除，repo 只有範本 `dev_config.example.json`）
+- 雲端 secret（`DISCORD_CLIENT_SECRET`、`SESSION_SECRET`）存在 Cloudflare Worker secrets（`wrangler secret put`），前端拿不到
+- 管理員（可清空家具）＝Worker 環境變數 `ADMIN_IDS`
+- 只有 App 擁有者與 Discord 開發團隊成員能啟動未發布的 Activity（見 [`docs/m1-discord-setup.md`](docs/m1-discord-setup.md)）
+
+## 文件索引
+
+| 文件 | 內容 |
+|---|---|
+| [`AGENTS.md`](AGENTS.md) | 協作規則（給所有維護者與 AI agent） |
+| [`docs/notes.md`](docs/notes.md) | 各功能的實作筆記、地雷、使用者做過的決定 |
+| [`docs/spec.md`](docs/spec.md) | 產品規格與里程碑 |
+| [`docs/dev-setup.md`](docs/dev-setup.md) | 本機開發環境 |
+| [`docs/m1-discord-setup.md`](docs/m1-discord-setup.md) | Discord Application 設定與隧道測試 |
+| [`docs/cloudflare-deploy.md`](docs/cloudflare-deploy.md) | Cloudflare 部署設定 |
+| [`docs/assets-license.md`](docs/assets-license.md) | 素材授權記錄 |
