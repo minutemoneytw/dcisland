@@ -2786,6 +2786,8 @@ function killPlayer(p, cause, label) {   // label：頭上飄字（龍衝撞倒�
   if (p.npc || p.remote || p.dead) return;
   p.dead = true; p.deadAt = performance.now();   // 牆鐘毫秒：畫面被凍結（切走 DC）時倒數照樣走
   p.pose = null; p.seatType = null; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null; p.fish = null; p.cast = null;
+  // 跳到一半／被擊飛中倒地：一起取消（倒地期間 stepPlayer 不會處理它們，留著的話復活後會被瞬移回落點、觸發落地效果，或在出生點被推一下）
+  p.leap = null; p.knock = null; p.z = 0; p.vz = 0;
   S.floaters.push({ x: p.x, y: p.y - 46, v: label || '倒地', life: 1.1, crit: true });
   toast(`${cause} 把你打倒了！${DEAD_SECONDS} 秒後在出生點復活`, 3200);
   loseExp();   // 倒地 10% 機率扣 XP（本機版；同步那步改成伺服器計算，避免本機改存檔灌分）
