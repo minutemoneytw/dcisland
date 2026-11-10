@@ -4480,7 +4480,6 @@ function buildTable() {
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
   }
-  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); btns.appendChild(lv);
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   // 紀錄與規則
@@ -4586,7 +4585,6 @@ function buildGomoku(box, v, mk) {
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
   }
-  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); btns.appendChild(lv);
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log');
@@ -4772,7 +4770,6 @@ function buildDodge(box, v, mk, gd) {
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
   }
-  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); btns.appendChild(lv);
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log');
@@ -4943,7 +4940,6 @@ function buildTyping(box, v, mk, gd) {
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
   }
-  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); btns.appendChild(lv);
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log');
@@ -5135,7 +5131,6 @@ function buildIntel(box, v, mk, gd) {
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
   }
-  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); btns.prepend(lv);   // 離開放最左邊，避免連點誤按（同 UNO）
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log');
@@ -5273,7 +5268,7 @@ function buildUno(box, v, mk, gd) {
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); acts.appendChild(b);
   }
-  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); btns.appendChild(lv); btns.appendChild(acts);
+  btns.appendChild(acts);   // 小遊戲下方不放離開按鈕（避免玩到一半誤按），離開只留右上角與 Esc
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log');
