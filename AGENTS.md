@@ -43,7 +43,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 | `client/js/net.js` | 多人同步客戶端（WebSocket）。介面保持穩定 |
 | `client/js/discord.js` | Discord Embedded App SDK 接線（本機 / mock / 真 DC 三模式） |
 | `client/vendor/` | 自託管的 SDK 單檔 bundle（不依賴外部 CDN，勿手改） |
-| `worker/src/index.js` | **正式環境伺服器**：`/api/token`、`/api/config`、`/api/log`、`/ws` → Durable Object `Island`（一座島一個實例）；全域 Durable Object `Registry`（跨島的玩家資料，目前是魚類圖鑑） |
+| `worker/src/index.js` | **正式環境伺服器**：`/api/token`、`/api/config`、`/api/log`、`/ws` → Durable Object `Island`（一座島一個實例）；全域 Durable Object `Registry`（跨島、跟著 Discord 帳號的玩家資料：魚類圖鑑、腳色 XP、合成解鎖、擊倒島主紀錄） |
 | `worker/wrangler.toml` | Worker 設定（assets 指向 `../client`、DO 綁定、`DISCORD_CLIENT_ID`） |
 | `tools/dev_server.py` | 本機開發用伺服器，行為要與 Worker 版**保持一致** |
 | `tools/gen_assets.py` | 素材的唯一來源 |
