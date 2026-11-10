@@ -4952,8 +4952,9 @@ function buildTyping(box, v, mk, gd) {
 // 密函編碼「印記.行動」：印記 Y 黃（沙都）／B 藍（水都）／K 黑（咒函）／G 灰（廢紙），雙色＝兩個字母；行動 P 截閱／S 調包／F 押送／X 焚信／H 搜身／W 洗白／C 識破
 const IT_FILL = { Y: '#e8b820', B: '#2f66d8', K: '#3a2050', G: '#8a8a98' };
 const IT_CNAME = { Y: '黃', B: '藍', K: '黑', G: '灰' };
-const IT_ACT = { P: '截閱', S: '調包', F: '押送', X: '焚信', H: '搜身', W: '洗白', C: '識破' };
-const IT_ACT_TIP = { P: '密函在你手上時：偷看它', S: '密函在你手上時：換成你的另一張手牌', F: '別人拿著密函時：逼他收下', X: '密函傳遞中：燒掉它', H: '你的回合：偷看一人的 2 張手牌', W: '你的回合：丟掉自己情報區的一張黑函', C: '別人的行動生效前：取消它' };
+const IT_ACT = { P: '截閱', S: '調包', F: '押送', X: '焚信', H: '搜身', W: '洗白', C: '識破', I: '攔截' };
+const IT_KIND = { seal: '密函', pub: '公開情報', direct: '直達情報' };   // 投遞方式：蓋著照座位傳／翻開照座位傳／指定一人（對方必須收下）
+const IT_ACT_TIP = { P: '密函在你手上時：偷看它', S: '密函在你手上時：換成你的另一張手牌', F: '別人拿著密函時：逼他收下', X: '密函傳遞中：燒掉它', H: '你的回合：偷看一人的 2 張手牌', W: '你的回合：丟掉自己情報區的一張黑函', C: '別人的行動（含識破）生效前：取消它', I: '別人拿著情報時：攔到自己手上（不收就傳給下一位；直達情報退回發信者）' };
 const IT_ROLE = { sand: ['沙都', '#e8b820', '任一位沙都玩家集滿 3 張黃色密函'], water: ['水都', '#5a8af0', '任一位水都玩家集滿 3 張藍色密函'], mage: ['咒術師', '#b07ae8', '自己集滿 3 張黑色咒函（你不會因為黑函出局）'] };
 const itCols = c => c.split('.')[0], itActOf = c => c.split('.')[1];
 const itLabel = c => [...itCols(c)].map(x => IT_CNAME[x]).join('') + '·' + IT_ACT[itActOf(c)];
@@ -4967,17 +4968,20 @@ function itCardEl(c, opts = {}) {   // c＝'YB.F'；null＝牌背
   e.title = itLabel(c) + (opts.small ? '' : `：${IT_ACT_TIP[itActOf(c)]}`);
   return e;
 }
+const itAliveN = v => v.seats.filter(x => !x.out && !x.left).length;
 function itStopTimer() { if (S.itTimer) { clearInterval(S.itTimer); S.itTimer = 0; } }
 function itStartTimer() {
   if (S.itTimer) return;
   S.itTimer = setInterval(() => {
     const cur = S.tableView, it = cur?.it;
     if (!S.tableOpen || !cur || cur.game !== 'intel' || cur.phase !== 'playing' || !it) { itStopTimer(); return; }
+    if (it.untimed) { const el0 = $('itTimer'); if (el0) el0.textContent = it.pend ? `等大家按「準備繼續」（${it.pend.ok.length + 1}/${itAliveN(cur)}）` : '不限時'; return; }   // 不限時：沒有倒數，也不送 timeout
     const end = it.pend ? it.pend.until : it.deadline, left = (end - (Date.now() + S.itOff)) / 1000;
     const el = $('itTimer'); if (el) el.textContent = left > 0 ? `${it.pend ? '識破倒數' : '剩'} ${Math.ceil(left)} 秒` : '…';
     if (left <= 0 && Date.now() - (S.itTimeoutAt || 0) > 1000) { S.itTimeoutAt = Date.now(); S.net?.tbl?.({ a: 'timeout' }); }   // 時間到：請伺服器核對時鐘並處理
   }, 250);
 }
+const itNextSeat = (v, i) => { const n = v.seats.length; for (let k = 1; k < n; k++) { const j = (i + k) % n; if (!v.seats[j].out && !v.seats[j].left) return j; } return -1; };
 function buildIntel(box, v, mk, gd) {
   const playing = v.phase === 'playing', it = v.it, me = v.role === 'seat' ? v.me : -1;
   const L = it?.letter, pend = it?.pend, nm = i => v.seats[i]?.name ?? '?';
@@ -4993,9 +4997,13 @@ function buildIntel(box, v, mk, gd) {
   // 狀態列
   let status;
   if (playing) {
-    if (pend) status = `${nm(pend.by)} 使用了${IT_ACT[pend.a]}${pend.a === 'H' ? `（對 ${nm(pend.tgt)}）` : pend.a === 'F' && L ? `（對 ${nm(L.at)}）` : ''}——生效前可以識破`;
+    const kn = L ? IT_KIND[L.kind] : '密函';
+    if (pend) {   // 識破串：最底下是真正的行動，後面每一個都是識破
+      const ch = pend.chain || [{ a: pend.a, by: pend.by, tgt: pend.tgt }];
+      status = ch.map((c, k) => k === 0 ? `${nm(c.by)} 使用了${IT_ACT[c.a]}${c.a === 'H' ? `（對 ${nm(c.tgt)}）` : (c.a === 'F' || c.a === 'I') && L ? `（對 ${nm(L.at)}）` : ''}` : `${nm(c.by)} 識破`).join(' ← ') + '——生效前可以識破';
+    }
     else if (it.step === 'turn') status = myTurn ? '輪到你：可以先用行動牌，再選一張手牌投遞' : `輪到 ${nm(v.turn)} 投遞`;
-    else status = holding ? '密函在你手上：收下，或轉手給還沒碰過的人' : `密函在 ${nm(L?.at)} 手上`;
+    else status = holding ? (L.kind === 'direct' && L.next < 0 ? '直達情報交到你手上：必須收下' : L.next < 0 ? `${kn}在你手上：大家都碰過了，只能收下` : `${kn}在你手上：收下，或傳給 ${nm(L.next)}`) : `${kn}在 ${nm(L?.at)} 手上`;
     if (v.role === 'spec') status = '觀戰中 · ' + status;
   } else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
   const st = mk('div', 'table-status' + (myTurn || holding ? ' mine' : ''), status);
@@ -5038,7 +5046,7 @@ function buildIntel(box, v, mk, gd) {
     seat.appendChild(head);
     if (playing) {
       const tags = [`手牌 ${s.n}`];
-      if (L && L.at === i) tags.push('✉ 拿著密函');
+      if (L && L.at === i) tags.push(`✉ 拿著${IT_KIND[L.kind]}`);
       else if (L && L.seen.includes(i)) tags.push('碰過');
       if (s.out) tags.push('出局'); if (s.left) tags.push('已離開');
       seat.appendChild(mk('div', 'table-tag', tags.join(' · ')));
@@ -5057,7 +5065,7 @@ function buildIntel(box, v, mk, gd) {
     if (L) {
       const lt = mk('div', 'it-letter');
       lt.appendChild(itCardEl(L.card || null));
-      lt.appendChild(mk('div', null, `${nm(L.from)} 投遞 → 現在在 ${nm(L.at)} 手上${L.card ? (v.role === 'spec' ? '（觀戰看得到內容）' : '（你送出的那張，可能被調包）') : ''}`));
+      lt.appendChild(mk('div', null, `${nm(L.from)} 投遞了${IT_KIND[L.kind]} → 現在在 ${nm(L.at)} 手上${L.icpt != null ? `（${nm(L.icpt)} 攔截過）` : ''}${L.kind === 'pub' ? '（公開，大家都看得到）' : L.card ? (v.role === 'spec' ? '（觀戰看得到內容）' : '（你送出的那張，可能被調包）') : ''}${L.kind === 'direct' ? '　直達：目標必須收下' : ''}`));
       mid.appendChild(lt);
     }
     if (v.note) {   // 自己偷看到的東西（截閱／搜身），到下次輪到自己時清掉
@@ -5075,13 +5083,15 @@ function buildIntel(box, v, mk, gd) {
     if (pend && pend.by !== me) {
       const ci = hand.findIndex(c => itActOf(c) === 'C');
       if (ci >= 0) { const b = mk('button', 'ff-btn', '識破！'); b.onclick = () => send({ a: 'iact', idx: ci }); btns.appendChild(b); }
+      if (it.untimed) {   // 不限時：所有活人按「準備繼續」才生效（出牌的人自動算）
+        const done = pend.ok.includes(me), b = mk('button', 'ff-btn' + (done ? ' small' : ''), done ? '已準備（等其他人）' : '準備繼續');
+        if (done) b.disabled = true; else b.onclick = () => send({ a: 'iok' });
+        btns.appendChild(b);
+      }
     }
-    if (holding) {   // 收下／轉手
+    if (holding) {   // 收下／轉手：只能傳給座位順序的下一位（直達情報：攔截者退回給發信者）
       const tk = mk('button', 'ff-btn', '收下'); tk.onclick = () => send({ a: 'itake' }); btns.appendChild(tk);
-      v.seats.forEach((s, i) => {
-        if (!alive(i) || L.seen.includes(i)) return;
-        const b = mk('button', 'ff-btn small', `轉給 ${s.name}`); b.onclick = () => send({ a: 'ifwd', to: i }); btns.appendChild(b);
-      });
+      if (L.next >= 0) { const b = mk('button', 'ff-btn small', `${L.kind === 'direct' ? '不收，退回給' : '傳給'} ${nm(L.next)}`); b.onclick = () => send({ a: 'ifwd' }); btns.appendChild(b); }
     }
     // 手牌：點一張選取，再選要投遞或使用
     const hw = mk('div', 'it-hand');
@@ -5097,21 +5107,27 @@ function buildIntel(box, v, mk, gd) {
     const opts = mk('div', 'table-btns it-opts');
     if (sel) {
       const act = itActOf(sel), passing = !pend && it.step === 'pass' && L;
-      const usable = { P: holding, S: holding && hand.length > 1, F: passing && L.at !== me, X: passing, H: myTurn, W: myTurn && (v.seats[me].intel || []).some(c => itCols(c).includes('K')), C: false }[act];
+      const usable = { P: holding && L.kind !== 'pub', S: holding && L.kind !== 'pub' && hand.length > 1, F: passing && L.at !== me, X: passing, I: passing && L.at !== me && L.from !== me, H: myTurn, W: myTurn && (v.seats[me].intel || []).some(c => itCols(c).includes('K')), C: false }[act];
       opts.appendChild(mk('span', 'table-tag', `${itLabel(sel)}：${IT_ACT_TIP[act]}`));
-      if (myTurn) { const b = mk('button', 'ff-btn', '投遞這張'); b.onclick = () => { S.itMode = 'send'; buildTable(); }; opts.appendChild(b); }
+      if (myTurn) {   // 投遞方式：密函（蓋著）／公開情報（翻開）都依座位順序傳給下一位；直達要指定一人（對方必須收下）
+        const nx = itNextSeat(v, me), nn = nm(nx);
+        for (const [kind, label] of [['seal', `密函（蓋著，傳給 ${nn}）`], ['pub', `公開情報（翻開，傳給 ${nn}）`]]) {
+          const b = mk('button', 'ff-btn', label); b.onclick = () => send({ a: 'isend', idx: S.itSel, kind }); opts.appendChild(b);
+        }
+        const bd = mk('button', 'ff-btn', '直達情報（指定一人，對方必須收下）'); bd.onclick = () => { S.itMode = 'direct'; buildTable(); }; opts.appendChild(bd);
+      }
       if (usable) {
         const b = mk('button', 'ff-btn', `使用${IT_ACT[act]}`);
         b.onclick = () => { if (act === 'H' || act === 'W' || act === 'S') { S.itMode = act; buildTable(); } else send({ a: 'iact', idx: S.itSel }); };
         opts.appendChild(b);
       }
       // 選對象
-      if (S.itMode === 'send' || S.itMode === 'H') {
-        opts.appendChild(mk('span', 'table-tag', S.itMode === 'send' ? '交給誰？' : '搜誰的身？'));
+      if (S.itMode === 'direct' || S.itMode === 'H') {
+        opts.appendChild(mk('span', 'table-tag', S.itMode === 'direct' ? '直達給誰？（對方必須收下）' : '搜誰的身？'));
         v.seats.forEach((s, i) => {
           if (!alive(i) || i === me) return;
           const b = mk('button', 'ff-btn small', s.name);
-          b.onclick = () => send(S.itMode === 'send' ? { a: 'isend', idx: S.itSel, to: i } : { a: 'iact', idx: S.itSel, tgt: i });
+          b.onclick = () => send(S.itMode === 'direct' ? { a: 'isend', idx: S.itSel, kind: 'direct', to: i } : { a: 'iact', idx: S.itSel, tgt: i });
           opts.appendChild(b);
         });
       } else if (S.itMode === 'W') {
@@ -5123,6 +5139,16 @@ function buildIntel(box, v, mk, gd) {
       } else if (S.itMode === 'S') opts.appendChild(mk('span', 'table-tag', '點另一張手牌，把它換進密函'));
     } else if (hand.length) opts.appendChild(mk('span', 'table-tag', myTurn ? '點一張手牌：投遞或使用' : '點手牌可以看說明、使用行動'));
     box.appendChild(hw); box.appendChild(opts);
+  }
+  if (!playing) {   // 模式：限時（預設）／不限時（沒有倒數，每次行動都要所有活人按「準備繼續」）；桌主（第一位入座的人）在開局前選
+    const isHost = v.role === 'seat' && v.me === 0, md = mk('div', 'table-btns');
+    for (const [m, desc] of [['timed', '限時'], ['untimed', '不限時']]) {
+      const b = mk('button', 'ff-btn small' + ((!!v.untimed) === (m === 'untimed') ? ' active' : ''), desc);
+      if (isHost) b.onclick = () => S.net?.tbl?.({ a: 'imode', v: m }); else b.disabled = true;
+      md.appendChild(b);
+    }
+    box.appendChild(md);
+    box.appendChild(mk('div', 'table-tag', (isHost ? '你是桌主，可以選模式。' : '模式由桌主（第一位入座的人）選。') + (v.untimed ? ' 不限時：沒有倒數，每次使用行動牌後要所有活人按「準備繼續」才生效。' : ' 限時：投遞 30 秒、收轉 15 秒、識破 5 秒。')));
   }
   if (v.role === 'seat' && !playing) {
     const m = v.seats[v.me], b = mk('button', 'ff-btn', m.ready ? '取消準備' : '準備');
