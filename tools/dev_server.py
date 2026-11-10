@@ -1060,8 +1060,8 @@ IT_KIND_CODE = {"s": "seal", "p": "pub", "d": "direct"}
 IT_KIND_CYCLE = "sspsd"   # 牌組依序循環分配投遞方式：密函 60%、公開 20%、直達 20%
 IT_CNAME = {"Y": "黃", "B": "藍", "K": "黑"}   # 2026-11-11 使用者要求移除灰（廢紙）
 IT_ROLE = {"sand": "沙都", "water": "水都", "mage": "咒術師"}
-# 牌組 65 張：印記 → 各行動的張數（雙色牌同時算兩種顏色；沒有灰）
-IT_DECK = {"Y": "P2S2F2X2H2W1C3I1T1B1N1", "B": "P2S2F2X2H2W1C3I1T1B1N1", "K": "P1S1F2X1H1C2I1T1B1", "YB": "P1S1F1X1H1C1I1N1", "YK": "P1S1F1C1B1", "BK": "P1S1F1C1T1"}
+# 牌組 64 張：印記 → 各行動的張數（雙色牌同時算兩種顏色；沒有灰）
+IT_DECK = {"Y": "P2S2F2X2H2W1C3I1T1B1N1", "B": "P2S2F2X2H2W1C3I1T1B1N1", "K": "P1S1F2X1H1C2I1T1B1", "YB": "P1S1F1X1H1C1I1", "YK": "P1S1F1C1B1", "BK": "P1S1F1C1T1"}
 IT_MAGES = {3: 1, 4: 0, 5: 1, 6: 2, 7: 1, 8: 2}   # 人數 → 咒術師人數（使用者定：4 人局 2 對 2）；其餘沙都、水都平分
 
 def it_deck():
