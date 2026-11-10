@@ -5531,7 +5531,8 @@ function draw() {
   const y1 = Math.min(ROWS - 1, Math.ceil((S.cam.y + canvas.height) / CELL));
   if (tMan.layout === 'room' && tMan.roomBox) { ctx.fillStyle = '#10131a'; ctx.fillRect(0, 0, canvas.width, canvas.height); }   // 室內房間：畫面不會每幀清空，房間外沒畫東西會殘留上一幀的畫面（像場景延伸、飄移），先塗黑
   ctx.save();
-  ctx.translate(-S.cam.x, -S.cam.y);
+  // 室內房間每幀先填黑底，鏡頭座標有小數時磚與磚的邊會半透明、透出黑底，變成地板上一條條灰色細線 → 房間地形把鏡頭取整數像素再畫
+  if (tMan.layout === 'room' && tMan.roomBox) ctx.translate(-Math.round(S.cam.x), -Math.round(S.cam.y)); else ctx.translate(-S.cam.x, -S.cam.y);
   // 底：地面／岸邊／水（可動畫：每種磚這一幀先算好，整張地圖同步；stagger 的各格再錯開）
   const tiles = [ims[tMan.water], ims[tMan.edge], ims[tMan.ground]], tileFi = tiles.map(s => s ? sprFrame(s) : 0), groundRep = tMan.groundRepeat || 1, roomBox = tMan.layout === 'room' && tMan.roomBox;
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
