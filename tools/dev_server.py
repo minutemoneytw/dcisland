@@ -1143,7 +1143,7 @@ def it_start(t):
     for k, s in enumerate(t["seats"]):
         s["hand"] = [deck.pop() for _ in range(IT_HAND0)]
         s["intel"], s["role"], s["out"], s["left"], s["ready"], s["note"] = [], roles[k], False, False, False, None
-    t["g"] = {"deck": deck, "discard": [], "step": "turn", "letter": None, "pend": None, "deadline": 0, "untimed": bool(t.get("untimed"))}
+    t["g"] = {"deck": deck, "discard": [], "step": "turn", "letter": None, "pend": None, "arrive": None, "deadline": 0, "untimed": bool(t.get("untimed"))}
     t["result"] = None
     t["phase"] = "playing"
     tbl_log(t, f"牌局開始！沙都 {half} 人、水都 {half} 人" + (f"、咒術師 {m} 人" if m else "") + f"，每人 {IT_HAND0} 張" + ("（不限時）" if t.get("untimed") else ""))
@@ -1156,7 +1156,7 @@ def it_begin_turn(t, i, now):
         if i < 0:
             break
         t["turn"] = i
-        g["step"], g["letter"], g["pend"], g["deadline"] = "turn", None, None, it_dl(g, now, IT_TURN_MS)
+        g["step"], g["letter"], g["pend"], g["arrive"], g["deadline"] = "turn", None, None, None, it_dl(g, now, IT_TURN_MS)
         t["seats"][i]["note"] = None   # 上一輪偷看到的東西：輪到自己時清掉
         it_draw(t, i, 2)
         if t["seats"][i]["hand"]:
@@ -1219,6 +1219,7 @@ def it_receive(t, now, ack=False):
     s = t["seats"][at]
     s["intel"].append(L["card"])
     g["letter"] = None
+    g["arrive"] = None
     tbl_log(t, f"{s['name']} 收下了密函：{it_label(L['card'])}")
     if it_check_intel(t, at):
         return
@@ -1227,6 +1228,20 @@ def it_receive(t, now, ack=False):
         it_ack_check(t, now)
         return
     it_end_letter(t, now)
+
+def it_arrive(g):
+    """不限時：情報每次「到達」一個人手上（投遞、傳給下一位、被攔截、退回發信者）都先確認：所有活人（持有者自動算）按「準備繼續」，
+    持有者才能決定收下／傳走；期間其他人可以出押送／攔截／焚信（出牌後確認重來），攔截或傳走後在新持有者手上再確認一次。"""
+    if g["untimed"]:
+        g["arrive"] = {"ok": []}
+
+def it_arrive_check(t, now):
+    g = t.get("g")
+    L = g and g["letter"]
+    if not g or not g.get("arrive") or not L:
+        return
+    if all(i == L["at"] or i in g["arrive"]["ok"] for i in it_alive(t)):
+        g["arrive"] = None
 
 def it_ack_check(t, now):
     """不限時：收下情報後的確認（所有活人，收下的人自動算）都按了才換下一位。"""
@@ -1294,6 +1309,7 @@ def it_apply(t, p, now):
         if p["by"] not in L["seen"]:
             L["seen"].append(p["by"])
         g["deadline"] = it_dl(g, now, IT_HOLD_MS)
+        it_arrive(g)
         tbl_log(t, f"{by['name']} 從 {was} 手上攔截了{IT_KIND[L['kind']]}")
     elif a == "H" and it_ok(t, p["tgt"]):
         th = t["seats"][p["tgt"]]
@@ -1376,6 +1392,12 @@ def it_msg(t, cid, msg, now):
     s, L = t["seats"][i], g["letter"]
     idx, to, sel = msg.get("idx"), msg.get("to"), msg.get("sel")
     if a == "iok":   # 不限時：按「準備繼續」（識破時間內沒有要識破；或收下情報後的確認）
+        ar = g.get("arrive")
+        if ar and not g["pend"] and g["untimed"] and g["letter"]:
+            if g["letter"]["at"] != i and i not in ar["ok"]:
+                ar["ok"].append(i)
+                it_arrive_check(t, now)
+            return
         ak = g.get("ack")
         if g["step"] == "ack" and ak and g["untimed"]:
             if ak["by"] != i and i not in ak["ok"]:
@@ -1397,14 +1419,15 @@ def it_msg(t, cid, msg, now):
         card = s["hand"].pop(idx)
         g["letter"] = {"card": card, "orig": card, "from": i, "at": dst, "seen": [i, dst], "kind": kind, "icpt": None}
         g["step"], g["deadline"] = "pass", it_dl(g, now, IT_HOLD_MS)
+        it_arrive(g)
         dn = t["seats"][dst]["name"]
         tbl_log(t, f"{s['name']} 公開了一則情報（{it_label(card)}），交給 {dn}" if kind == "pub" else f"{s['name']} 把一封直達情報交給 {dn}" if kind == "direct" else f"{s['name']} 把一封密函交給 {dn}")
     elif a == "itake":   # 收下
-        if g["pend"] or g["step"] != "pass" or not L or L["at"] != i:
+        if g["pend"] or g.get("arrive") or g["step"] != "pass" or not L or L["at"] != i:
             return
         it_receive(t, now, True)
     elif a == "ifwd":   # 轉手：只能轉給座位順序的下一個沒碰過的人（直達情報：被攔截的人退回給發信者）
-        if g["pend"] or g["step"] != "pass" or not L or L["at"] != i:
+        if g["pend"] or g.get("arrive") or g["step"] != "pass" or not L or L["at"] != i:
             return
         dst = it_fwd_target(t, L)
         if dst < 0:
@@ -1413,6 +1436,7 @@ def it_msg(t, cid, msg, now):
         if dst not in L["seen"]:
             L["seen"].append(dst)
         g["deadline"] = it_dl(g, now, IT_HOLD_MS)
+        it_arrive(g)
         dn = t["seats"][dst]["name"]
         tbl_log(t, f"{s['name']} 不收，把直達情報退回給 {dn}" if L["kind"] == "direct" else f"{s['name']} 把{IT_KIND[L['kind']]}轉給 {dn}")
     elif a == "iact":   # 使用行動牌：idx＝手牌；搜身帶 tgt、調包帶 sel（換進去的手牌 idx）、洗白帶 sel（情報區 idx）
@@ -1460,6 +1484,8 @@ def it_msg(t, cid, msg, now):
         s["hand"].pop(idx)
         g["discard"].append(card)
         g["pend"] = {"a": act, "by": i, "tgt": tgt, "sel": pick, "until": now + IT_PEND_MS, "under": None, "ok": []}
+        if g.get("arrive"):
+            g["arrive"]["ok"] = []   # 有人出牌：到達確認重來
         on = f"（對 {t['seats'][tgt]['name']}）" if act == "H" else f"（對 {t['seats'][L['at']]['name']}）" if act in ("F", "I") else ""
         tbl_log(t, f"{s['name']} 使用了{IT_ACT[act]}{on}")
         it_ok_check(t, now)   # 不限時：只剩出牌的人自己活著的極端情況，直接生效
@@ -1475,6 +1501,7 @@ def it_leave(t, i, now):
     if g["letter"] and g["letter"]["at"] == i:
         g["discard"].append(g["letter"]["card"])
         g["letter"] = None
+        g["arrive"] = None
         advance = True
         tbl_log(t, "他手上的密函作廢")
     if it_check_faction(t, True):
@@ -1482,6 +1509,8 @@ def it_leave(t, i, now):
     if g["step"] == "ack":   # 不限時：有人離開，剩下的人都按了就繼續
         it_ack_check(t, now)
         return
+    if g.get("arrive"):   # 不限時：到達確認中有人離開，剩下的人按完就讓持有者決定
+        it_arrive_check(t, now)
     if advance:
         it_end_letter(t, now)
 
@@ -1861,7 +1890,7 @@ def tbl_view(t, cid):
         if playing and g:
             L = g["letter"]
             v["it"] = {"step": g["step"], "deck": len(g["deck"]), "discard": len(g["discard"]), "deadline": g["deadline"], "sn": int(time.time() * 1000),
-                       "untimed": bool(g["untimed"]), "ack": {"by": g["ack"]["by"], "ok": list(g["ack"]["ok"])} if g.get("ack") else None,
+                       "untimed": bool(g["untimed"]), "arrive": {"at": L["at"], "ok": list(g["arrive"]["ok"])} if g.get("arrive") and L else None, "ack": {"by": g["ack"]["by"], "ok": list(g["ack"]["ok"])} if g.get("ack") else None,
                        "letter": {"from": L["from"], "at": L["at"], "seen": list(L["seen"]), "kind": L["kind"], "next": it_fwd_target(t, L), "icpt": L.get("icpt")} if L else None,
                        "pend": {"a": g["pend"]["a"], "by": g["pend"]["by"], "tgt": g["pend"]["tgt"], "until": g["pend"]["until"], "ok": list(g["pend"]["ok"]), "chain": it_chain(g["pend"])} if g["pend"] else None}
             if L and (see_all or L["kind"] == "pub"):

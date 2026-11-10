@@ -5003,7 +5003,7 @@ function itStartTimer() {
   S.itTimer = setInterval(() => {
     const cur = S.tableView, it = cur?.it;
     if (!S.tableOpen || !cur || cur.game !== 'intel' || cur.phase !== 'playing' || !it) { itStopTimer(); return; }
-    if (it.untimed) { const el0 = $('itTimer'); if (el0) el0.textContent = it.pend ? `等大家按「準備繼續」（${it.pend.ok.length + 1}/${itAliveN(cur)}）` : it.ack ? `等大家按「準備繼續」（${it.ack.ok.length + 1}/${itAliveN(cur)}）` : '不限時'; return; }   // 不限時：沒有倒數，也不送 timeout
+    if (it.untimed) { const el0 = $('itTimer'); if (el0) el0.textContent = it.pend ? `等大家按「準備繼續」（${it.pend.ok.length + 1}/${itAliveN(cur)}）` : it.ack ? `等大家按「準備繼續」（${it.ack.ok.length + 1}/${itAliveN(cur)}）` : it.arrive ? `等大家按「準備繼續」（${it.arrive.ok.length + 1}/${itAliveN(cur)}）` : '不限時'; return; }   // 不限時：沒有倒數，也不送 timeout
     const end = it.pend ? it.pend.until : it.deadline, left = (end - (Date.now() + S.itOff)) / 1000;
     const el = $('itTimer'); if (el) el.textContent = left > 0 ? `${it.pend ? '識破倒數' : '剩'} ${Math.ceil(left)} 秒` : '…';
     if (left <= 0 && Date.now() - (S.itTimeoutAt || 0) > 1000) { S.itTimeoutAt = Date.now(); S.net?.tbl?.({ a: 'timeout' }); }   // 時間到：請伺服器核對時鐘並處理
@@ -5021,7 +5021,7 @@ function buildIntel(box, v, mk, gd) {
     itStartTimer();
   }
   const myTurn = playing && !pend && it.step === 'turn' && v.turn === me && me >= 0;
-  const holding = playing && !pend && it.step === 'pass' && L && L.at === me;
+  const holding = playing && !pend && !it.arrive && it.step === 'pass' && L && L.at === me;
   // 狀態列
   let status;
   if (playing) {
@@ -5030,6 +5030,7 @@ function buildIntel(box, v, mk, gd) {
       const ch = pend.chain || [{ a: pend.a, by: pend.by, tgt: pend.tgt }];
       status = ch.map((c, k) => k === 0 ? `${nm(c.by)} 使用了${IT_ACT[c.a]}${c.a === 'H' ? `（對 ${nm(c.tgt)}）` : (c.a === 'F' || c.a === 'I') && L ? `（對 ${nm(L.at)}）` : ''}` : `${nm(c.by)} 識破`).join(' ← ') + '——生效前可以識破';
     }
+    else if (it.arrive && it.step === 'pass') status = `${kn}到了 ${nm(L.at)} 手上——大家按「準備繼續」後他才能決定（這時可以出押送／攔截／焚信）`;
     else if (it.step === 'ack') status = `${nm(it.ack.by)} 收下了情報——大家看清楚後按「準備繼續」`;
     else if (it.step === 'turn') status = myTurn ? '輪到你：可以先用行動牌，再選一張手牌投遞' : `輪到 ${nm(v.turn)} 投遞`;
     else status = holding ? (L.kind === 'direct' && L.next < 0 ? '直達情報交到你手上：必須收下' : L.next < 0 ? `${kn}在你手上：${L.at === L.from ? '大家都不收，退回到你手上，必須收下' : '只能收下'}` : L.next === L.from ? `${kn}在你手上：收下，或退回給發信者 ${nm(L.next)}（發信者必須收下）` : `${kn}在你手上：收下，或傳給 ${nm(L.next)}`) : `${kn}在 ${nm(L?.at)} 手上`;
@@ -5117,6 +5118,11 @@ function buildIntel(box, v, mk, gd) {
         if (done) b.disabled = true; else b.onclick = () => send({ a: 'iok' });
         btns.appendChild(b);
       }
+    }
+    if (playing && it.arrive && !pend && it.untimed && L && L.at !== me) {   // 不限時：情報到達新持有者手上，所有活人按「準備繼續」他才能決定
+      const done = it.arrive.ok.includes(me), b = mk('button', 'ff-btn' + (done ? ' small' : ''), done ? '已準備（等其他人）' : '準備繼續');
+      if (done) b.disabled = true; else b.onclick = () => send({ a: 'iok' });
+      btns.appendChild(b);
     }
     if (playing && it.step === 'ack' && it.untimed && it.ack.by !== me) {   // 不限時：收下情報後，所有活人按「準備繼續」才換下一位（收下的人自動算）
       const done = it.ack.ok.includes(me), b = mk('button', 'ff-btn' + (done ? ' small' : ''), done ? '已準備（等其他人）' : '準備繼續');
