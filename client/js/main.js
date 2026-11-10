@@ -6545,7 +6545,9 @@ async function boot() {
   let last = performance.now();
   function loop(now) {
     if (now - last > 2000) S.net?.requestDragonSnap?.();   // 分頁被凍結過（切視窗回來）：要一份島主即時快照，別用舊位置打人
-    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    // rAF 給的 now 是「這一幀開始的時刻」，第一幀可能比上面記的 performance.now() 還早 → dt 變負、S.t 掉到 0 以下，
+    // 所有「S.t < (xxUntil ?? 0)」的判斷都會誤判成生效中（例如剛進島就跳「石化解除了！」），所以夾在 0 以上
+    const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;
     try {
       S.t += dt;
       updateCampfire();   // 換時段／換地形就重擲營火位置（每 3 分鐘）
