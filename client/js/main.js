@@ -4334,7 +4334,24 @@ function openTable(tb) {
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
   S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); typingStop(); unStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
+  rulesShow(false);
   $('tableBox').classList.add('hidden');
+}
+// 規則說明視窗：遊戲定義有 guide（分段規則）的遊戲才有按鈕；入座／觀戰／遊戲中都能開關，不影響牌局畫面
+function rulesGuide() { const tb = tablesHere().find(t => t.id === S.tableId); return tb && gameDef(tb.game)?.guide || null; }
+function rulesShow(on) {
+  const g = on ? rulesGuide() : null, box = $('rulesBox');
+  if (!g) { box.classList.add('hidden'); return; }
+  $('rulesTitle').textContent = g.title || '規則說明';
+  const body = $('rulesBody'); body.innerHTML = '';
+  for (const sec of g.sections) {
+    const d = document.createElement('div'); d.className = 'rules-sec';
+    const h = document.createElement('h4'); h.textContent = sec.h; d.appendChild(h);
+    const ul = document.createElement('ul');
+    for (const t of sec.li) { const li = document.createElement('li'); if (/^\d+\. /.test(t)) li.className = 'num'; li.textContent = t; ul.appendChild(li); }
+    d.appendChild(ul); body.appendChild(d);
+  }
+  box.classList.remove('hidden');
 }
 function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已離開這桌）
   if (!S.tableOpen || m.id !== S.tableId) return;
@@ -4376,6 +4393,7 @@ function buildTable() {
   const box = $('tableBody'); box.innerHTML = '';
   const tb = tablesHere().find(t => t.id === S.tableId), gd = tb && gameDef(tb.game), v = S.tableView;
   $('tableTitle').textContent = gd ? gd.name : '遊戲桌';
+  $('tableRulesBtn').classList.toggle('hidden', !gd?.guide);
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   if (S.tableChoice) {   // 剛走到桌邊：選入座還是觀戰
     const inf = S.tblInfo?.[S.tableId];
@@ -6577,7 +6595,7 @@ addEventListener('keydown', e => {
     return;
   }
   if (S.tableOpen) {   // 遊戲畫面開著：Esc 離開；五子棋復盤時 ←／→／Home／End 切換步數；其他鍵都不處理（不能走路）
-    if (k === 'escape') { e.preventDefault(); closeTable(); }
+    if (k === 'escape') { e.preventDefault(); if (!$('rulesBox').classList.contains('hidden')) rulesShow(false); else closeTable(); }   // 規則視窗開著：Esc 先關規則
     else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
     else if (S.ty) typingKey(e);   // 英打競賽：英文字母
     else if (S.gmStep != null && S.tableView?.moves && ['arrowleft', 'arrowright', 'home', 'end'].includes(k)) {
@@ -6838,6 +6856,8 @@ document.addEventListener('click', e => {   // 點齒輪與選單以外的地方
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => { closeColor(false); closeGlams(); $('avatarPanel').classList.add('hidden'); };
 $('tableClose').onclick = () => closeTable();
+$('tableRulesBtn').onclick = () => rulesShow($('rulesBox').classList.contains('hidden'));   // 再點一下關閉
+$('rulesClose').onclick = () => rulesShow(false);
 $('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑＋素材圖鑑／合成／配方筆記
 $('dexClose').onclick = closeDex;
 $('btnTitles').onclick = () => { if (S.titleOpen) closeTitles(); else openTitles(); };   // 造型面板的「稱號設定」：稱號一覽
