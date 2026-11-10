@@ -1048,7 +1048,9 @@ IT_XP = 6            # 正常結束：每位入座者 +6（輸贏一樣；助手
 IT_HAND0 = 4         # 開局手牌
 IT_MSGS = {"isend", "itake", "ifwd", "iact", "timeout", "imode", "iok"}
 IT_ACT = {"P": "截閱", "S": "調包", "F": "押送", "X": "焚信", "H": "搜身", "W": "洗白", "C": "識破", "I": "攔截"}
-IT_KIND = {"seal": "密函", "pub": "公開情報", "direct": "直達情報"}   # 投遞方式：蓋著照座位傳／翻開照座位傳／直接指定一人（對方必須收下）
+IT_KIND = {"seal": "密函", "pub": "公開情報", "direct": "直達情報"}   # 投遞方式（由卡面決定，不是玩家選）：蓋著照座位傳／翻開照座位傳／直接指定一人（對方必須收下）
+IT_KIND_CODE = {"s": "seal", "p": "pub", "d": "direct"}
+IT_KIND_CYCLE = "sspsd"   # 牌組依序循環分配投遞方式：密函 60%、公開 20%、直達 20%
 IT_CNAME = {"Y": "黃", "B": "藍", "K": "黑", "G": "灰"}
 IT_ROLE = {"sand": "沙都", "water": "水都", "mage": "咒術師"}
 # 牌組 54 張：印記 → 各行動的張數（雙色牌同時算兩種顏色）
@@ -1060,10 +1062,14 @@ def it_deck():
     for col, spec in IT_DECK.items():
         for act, n in re.findall(r"([A-Z])(\d+)", spec):
             d += [f"{col}.{act}"] * int(n)
-    return d
+    return [f"{c}.{IT_KIND_CYCLE[k % len(IT_KIND_CYCLE)]}" for k, c in enumerate(d)]   # 牌＝「印記.行動.投遞方式」（例 YB.F.p）；投遞方式由卡面決定
 
 def it_cols(c):
     return c.split(".")[0]
+
+def it_kind_of(c):
+    p = c.split(".")
+    return IT_KIND_CODE.get(p[2] if len(p) > 2 else "", "seal")
 
 def it_act(c):
     return c.split(".")[1]
@@ -1225,7 +1231,16 @@ def it_resolve(t, now):
             it_apply(t, p, now)
         else:
             tbl_log(t, f"{t['seats'][p['by']]['name']} 的{IT_ACT[p['a']]}被識破，沒有生效")
+        it_no_hand(t, now)
         return
+
+def it_no_hand(t, now):
+    """輪到的人把最後一張牌當行動用掉、手上沒牌可以投遞：直接換下一位（限時模式靠逾時，不限時模式沒有逾時，一定要在這裡處理）。"""
+    g = t.get("g")
+    if not g or t["phase"] != "playing" or g["step"] != "turn" or g["pend"] or g["letter"] or t["seats"][t["turn"]]["hand"]:
+        return
+    tbl_log(t, f"{t['seats'][t['turn']]['name']} 沒有牌可以投遞，跳過")
+    it_end_letter(t, now)
 
 def it_apply(t, p, now):
     g = t["g"]
@@ -1286,14 +1301,20 @@ def it_tick(t, now):
         it_receive(t, now)
     elif g["step"] == "turn":
         s = t["seats"][t["turn"]]
-        to = it_next_untouched(t, t["turn"], [t["turn"]])
-        if not s["hand"] or to < 0:
+        if not s["hand"]:
             it_end_letter(t, now)
             return
-        card = s["hand"].pop(random.randrange(len(s["hand"])))
-        g["letter"] = {"card": card, "orig": card, "from": t["turn"], "at": to, "seen": [t["turn"], to], "kind": "seal", "icpt": None}
+        k = random.randrange(len(s["hand"]))
+        kind = it_kind_of(s["hand"][k])   # 投遞方式由卡面決定；直達的目標隨機挑一位
+        others = [j for j in it_alive(t) if j != t["turn"]]
+        to = random.choice(others) if kind == "direct" and others else it_next_untouched(t, t["turn"], [t["turn"]])
+        if to < 0:
+            it_end_letter(t, now)
+            return
+        card = s["hand"].pop(k)
+        g["letter"] = {"card": card, "orig": card, "from": t["turn"], "at": to, "seen": [t["turn"], to], "kind": kind, "icpt": None}
         g["step"], g["deadline"] = "pass", now + IT_HOLD_MS
-        tbl_log(t, f"{s['name']} 超時，自動把一封密函交給 {t['seats'][to]['name']}")
+        tbl_log(t, f"{s['name']} 超時，自動把一封{IT_KIND[kind]}交給 {t['seats'][to]['name']}")
 
 def it_ok_check(t, now):
     """不限時模式：識破時間不倒數，要所有活人（出牌的人自動算）按「準備繼續」才生效；有人出識破就重新計。"""
@@ -1337,10 +1358,10 @@ def it_msg(t, cid, msg, now):
             return
         p["ok"].append(i)
         it_ok_check(t, now)
-    elif a == "isend":   # 投遞：idx＝手牌、kind＝密函 seal／公開 pub／直達 direct；直達要帶 to（對方必須收下），其餘依座位順序交給下一位
-        kind = msg.get("kind")
-        if g["pend"] or g["step"] != "turn" or i != t["turn"] or type(idx) is not int or not 0 <= idx < len(s["hand"]) or kind not in IT_KIND:
+    elif a == "isend":   # 投遞：idx＝手牌；投遞方式由卡面決定（密函／公開情報照座位順序交給下一位；直達情報要帶 to，對方必須收下）
+        if g["pend"] or g["step"] != "turn" or i != t["turn"] or type(idx) is not int or not 0 <= idx < len(s["hand"]):
             return
+        kind = it_kind_of(s["hand"][idx])
         dst = to if kind == "direct" else it_next_untouched(t, i, [i])
         if not it_ok(t, dst) or dst == i:
             return

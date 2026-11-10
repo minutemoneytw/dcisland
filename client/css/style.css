@@ -339,6 +339,8 @@ body {
 .dodge-seats .table-seat { min-height: 52px; flex: 1 1 110px; max-width: 150px; }
 /* 秘藥情報戰：密函（印記顏色＝底色，雙色＝斜切兩半）、情報區、身分徽章、故事背景 */
 .icard { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 72px; margin: 3px; border: 2px solid #1e1e24; border-radius: 6px; color: #fff; font-size: 14px; font-weight: bold; text-shadow: 0 0 3px #000, 0 0 2px #000; cursor: pointer; box-sizing: border-box; vertical-align: middle; }
+.icard { position: relative; }
+.ikind { position: absolute; left: 2px; top: 1px; font-size: 11px; line-height: 1; font-weight: normal; }   /* 卡面左上角：投遞方式（✉ 密函／👁 公開／➤ 直達） */
 .icard.back { background: repeating-linear-gradient(45deg, #5a3a2a 0 6px, #6a4a36 6px 12px); color: #efe4c8; font-size: 22px; cursor: default; }
 .icard.sel { outline: 3px solid #ffe08a; transform: translateY(-6px); }
 .icard.small { width: 16px; height: 22px; margin: 1px; border-width: 1px; border-radius: 3px; cursor: default; }

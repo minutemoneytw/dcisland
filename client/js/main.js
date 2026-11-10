@@ -4953,7 +4953,9 @@ function buildTyping(box, v, mk, gd) {
 const IT_FILL = { Y: '#e8b820', B: '#2f66d8', K: '#3a2050', G: '#8a8a98' };
 const IT_CNAME = { Y: '黃', B: '藍', K: '黑', G: '灰' };
 const IT_ACT = { P: '截閱', S: '調包', F: '押送', X: '焚信', H: '搜身', W: '洗白', C: '識破', I: '攔截' };
-const IT_KIND = { seal: '密函', pub: '公開情報', direct: '直達情報' };   // 投遞方式：蓋著照座位傳／翻開照座位傳／指定一人（對方必須收下）
+const IT_KIND = { seal: '密函', pub: '公開情報', direct: '直達情報' };   // 投遞方式（由卡面決定，不是玩家選）：蓋著照座位傳／翻開照座位傳／指定一人（對方必須收下）
+const IT_KIND_CODE = { s: 'seal', p: 'pub', d: 'direct' }, IT_KIND_SYM = { seal: '✉', pub: '👁', direct: '➤' };   // 卡面左上角的符號
+const itKindOf = c => IT_KIND_CODE[c.split('.')[2]] || 'seal';   // 牌＝印記.行動.投遞方式（例 YB.F.p）
 const IT_ACT_TIP = { P: '密函在你手上時：偷看它', S: '密函在你手上時：換成你的另一張手牌', F: '別人拿著密函時：逼他收下', X: '密函傳遞中：燒掉它', H: '你的回合：偷看一人的 2 張手牌', W: '你的回合：丟掉自己情報區的一張黑函', C: '別人的行動（含識破）生效前：取消它', I: '別人拿著情報時：攔到自己手上（不收就傳給下一位；直達情報退回發信者）' };
 const IT_ROLE = { sand: ['沙都', '#e8b820', '任一位沙都玩家集滿 3 張黃色密函'], water: ['水都', '#5a8af0', '任一位水都玩家集滿 3 張藍色密函'], mage: ['咒術師', '#b07ae8', '自己集滿 3 張黑色咒函（你不會因為黑函出局）'] };
 const itCols = c => c.split('.')[0], itActOf = c => c.split('.')[1];
@@ -4965,7 +4967,8 @@ function itCardEl(c, opts = {}) {   // c＝'YB.F'；null＝牌背
   const cols = [...itCols(c)].map(x => IT_FILL[x]);
   e.style.background = cols.length > 1 ? `linear-gradient(135deg, ${cols[0]} 50%, ${cols[1]} 50%)` : cols[0];
   e.textContent = opts.small ? '' : IT_ACT[itActOf(c)];
-  e.title = itLabel(c) + (opts.small ? '' : `：${IT_ACT_TIP[itActOf(c)]}`);
+  if (!opts.small) { const kb = document.createElement('span'); kb.className = 'ikind'; kb.textContent = IT_KIND_SYM[itKindOf(c)]; e.appendChild(kb); }   // 左上角：這張牌的投遞方式
+  e.title = itLabel(c) + (opts.small ? '' : `（投遞：${IT_KIND[itKindOf(c)]}）：${IT_ACT_TIP[itActOf(c)]}`);
   return e;
 }
 const itAliveN = v => v.seats.filter(x => !x.out && !x.left).length;
@@ -5109,12 +5112,10 @@ function buildIntel(box, v, mk, gd) {
       const act = itActOf(sel), passing = !pend && it.step === 'pass' && L;
       const usable = { P: holding && L.kind !== 'pub', S: holding && L.kind !== 'pub' && hand.length > 1, F: passing && L.at !== me, X: passing, I: passing && L.at !== me && L.from !== me, H: myTurn, W: myTurn && (v.seats[me].intel || []).some(c => itCols(c).includes('K')), C: false }[act];
       opts.appendChild(mk('span', 'table-tag', `${itLabel(sel)}：${IT_ACT_TIP[act]}`));
-      if (myTurn) {   // 投遞方式：密函（蓋著）／公開情報（翻開）都依座位順序傳給下一位；直達要指定一人（對方必須收下）
-        const nx = itNextSeat(v, me), nn = nm(nx);
-        for (const [kind, label] of [['seal', `密函（蓋著，傳給 ${nn}）`], ['pub', `公開情報（翻開，傳給 ${nn}）`]]) {
-          const b = mk('button', 'ff-btn', label); b.onclick = () => send({ a: 'isend', idx: S.itSel, kind }); opts.appendChild(b);
-        }
-        const bd = mk('button', 'ff-btn', '直達情報（指定一人，對方必須收下）'); bd.onclick = () => { S.itMode = 'direct'; buildTable(); }; opts.appendChild(bd);
+      if (myTurn) {   // 投遞方式由卡面決定：密函（蓋著）／公開情報（翻開）依座位順序傳給下一位；直達要指定一人（對方必須收下）
+        const kind = itKindOf(sel), nn = nm(itNextSeat(v, me));
+        if (kind === 'direct') { const b = mk('button', 'ff-btn', '投遞這張（直達情報：指定一人，對方必須收下）'); b.onclick = () => { S.itMode = 'direct'; buildTable(); }; opts.appendChild(b); }
+        else { const b = mk('button', 'ff-btn', `投遞這張（${IT_KIND[kind]}：${kind === 'pub' ? '翻開' : '蓋著'}傳給 ${nn}）`); b.onclick = () => send({ a: 'isend', idx: S.itSel }); opts.appendChild(b); }
       }
       if (usable) {
         const b = mk('button', 'ff-btn', `使用${IT_ACT[act]}`);
@@ -5127,7 +5128,7 @@ function buildIntel(box, v, mk, gd) {
         v.seats.forEach((s, i) => {
           if (!alive(i) || i === me) return;
           const b = mk('button', 'ff-btn small', s.name);
-          b.onclick = () => send(S.itMode === 'direct' ? { a: 'isend', idx: S.itSel, kind: 'direct', to: i } : { a: 'iact', idx: S.itSel, tgt: i });
+          b.onclick = () => send(S.itMode === 'direct' ? { a: 'isend', idx: S.itSel, to: i } : { a: 'iact', idx: S.itSel, tgt: i });
           opts.appendChild(b);
         });
       } else if (S.itMode === 'W') {

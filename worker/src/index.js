@@ -798,19 +798,22 @@ const IT_XP = 6;            // 正常結束：每位入座者 +6（輸贏一樣�
 const IT_HAND0 = 4;
 const IT_MSGS = new Set(["isend", "itake", "ifwd", "iact", "timeout", "imode", "iok"]);         // 開局手牌
 const IT_ACT = { P: "截閱", S: "調包", F: "押送", X: "焚信", H: "搜身", W: "洗白", C: "識破", I: "攔截" };
-const IT_KIND = { seal: "密函", pub: "公開情報", direct: "直達情報" };   // 投遞方式：蓋著照座位傳／翻開照座位傳／直接指定一人（對方必須收下）
+const IT_KIND = { seal: "密函", pub: "公開情報", direct: "直達情報" };   // 投遞方式（由卡面決定，不是玩家選）：蓋著照座位傳／翻開照座位傳／直接指定一人（對方必須收下）
+const IT_KIND_CODE = { s: "seal", p: "pub", d: "direct" };
+const IT_KIND_CYCLE = "sspsd";   // 牌組依序循環分配投遞方式：密函 60%、公開 20%、直達 20%
 const IT_CNAME = { Y: "黃", B: "藍", K: "黑", G: "灰" };
 const IT_ROLE = { sand: "沙都", water: "水都", mage: "咒術師" };
 // 牌組 54 張：印記 → 各行動的張數（雙色牌同時算兩種顏色）
 const IT_DECK = { Y: "P2S2F2X2H2W1C3I1", B: "P2S2F2X2H2W1C3I1", K: "P1S1F2X1H1C2I1", YB: "P1S1F1X1H1C1I1", YK: "P1S1F1C1", BK: "P1S1F1C1", G: "P1S1H1W1I1" };
 const IT_MAGES = { 3: 1, 4: 0, 5: 1, 6: 2, 7: 1, 8: 2 };   // 人數 → 咒術師人數（使用者定：4 人局 2 對 2）；其餘沙都、水都平分
-function itDeck() {
+function itDeck() {   // 牌＝「印記.行動.投遞方式」（例 YB.F.p）；投遞方式 s 密函／p 公開情報／d 直達情報，由卡面決定
   const d = [];
   for (const [col, spec] of Object.entries(IT_DECK)) for (const m of spec.matchAll(/([A-Z])(\d+)/g)) for (let k = 0; k < Number(m[2]); k++) d.push(`${col}.${m[1]}`);
-  return d;
+  return d.map((c, k) => `${c}.${IT_KIND_CYCLE[k % IT_KIND_CYCLE.length]}`);
 }
 const itCols = c => c.split(".")[0];
 const itAct = c => c.split(".")[1];
+const itKindOf = c => IT_KIND_CODE[c.split(".")[2]] || "seal";
 const itCount = (intel, col) => intel.filter(c => itCols(c).includes(col)).length;
 const itLabel = c => [...itCols(c)].map(x => IT_CNAME[x]).join("") + "·" + IT_ACT[itAct(c)];
 const itAlive = t => t.seats.map((s, i) => (s.out || s.left ? -1 : i)).filter(i => i >= 0);
@@ -917,8 +920,16 @@ function itResolve(t, now) {
     if (p.a === "C") { act = !act; p = p.under; continue; }
     if (act) itApply(t, p, now);
     else tblLog(t, `${t.seats[p.by].name} 的${IT_ACT[p.a]}被識破，沒有生效`);
+    itNoHand(t, now);
     return;
   }
+}
+// 輪到的人把最後一張牌當行動用掉、手上沒牌可以投遞：直接換下一位（限時模式靠逾時，不限時模式沒有逾時，一定要在這裡處理）
+function itNoHand(t, now) {
+  const g = t.g;
+  if (!g || t.phase !== "playing" || g.step !== "turn" || g.pend || g.letter || t.seats[t.turn].hand.length) return;
+  tblLog(t, `${t.seats[t.turn].name} 沒有牌可以投遞，跳過`);
+  itEndLetter(t, now);
 }
 function itApply(t, p, now) {
   const g = t.g, by = t.seats[p.by];
@@ -954,11 +965,14 @@ function itTick(t, now) {
   if (now < g.deadline) return;
   if (g.step === "pass" && g.letter) { tblLog(t, `${t.seats[g.letter.at].name} 超時，自動收下`); itReceive(t, now); }
   else if (g.step === "turn") {
-    const s = t.seats[t.turn], to = itNextUntouched(t, t.turn, [t.turn]);
-    if (!s.hand.length || to < 0) { itEndLetter(t, now); return; }
-    const card = s.hand.splice(Math.floor(Math.random() * s.hand.length), 1)[0];
-    g.letter = { card, orig: card, from: t.turn, at: to, seen: [t.turn, to], kind: "seal", icpt: null }; g.step = "pass"; g.deadline = now + IT_HOLD_MS;
-    tblLog(t, `${s.name} 超時，自動把一封密函交給 ${t.seats[to].name}`);
+    const s = t.seats[t.turn];
+    if (!s.hand.length) { itEndLetter(t, now); return; }
+    const k = Math.floor(Math.random() * s.hand.length), kind = itKindOf(s.hand[k]);   // 投遞方式由卡面決定；直達的目標隨機挑一位
+    const others = itAlive(t).filter(j => j !== t.turn), to = kind === "direct" ? others[Math.floor(Math.random() * others.length)] : itNextUntouched(t, t.turn, [t.turn]);
+    if (to === undefined || to < 0) { itEndLetter(t, now); return; }
+    const card = s.hand.splice(k, 1)[0];
+    g.letter = { card, orig: card, from: t.turn, at: to, seen: [t.turn, to], kind, icpt: null }; g.step = "pass"; g.deadline = now + IT_HOLD_MS;
+    tblLog(t, `${s.name} 超時，自動把一封${IT_KIND[kind]}交給 ${t.seats[to].name}`);
   }
 }
 // 不限時模式：識破時間不倒數，要所有活人（出牌的人自動算）按「準備繼續」才生效；有人出識破就重新計
@@ -984,13 +998,14 @@ function itMsg(t, cid, msg, now) {
   if (a === "iok") {   // 不限時：按「準備繼續」（識破時間內沒有要識破）
     if (!g.pend || !g.untimed || g.pend.by === i || g.pend.ok.includes(i)) return;
     g.pend.ok.push(i); itOkCheck(t, now);
-  } else if (a === "isend") {   // 投遞：idx＝手牌、kind＝密函 seal／公開 pub／直達 direct；直達要帶 to（對方必須收下），其餘依座位順序交給下一位
-    if (g.pend || g.step !== "turn" || i !== t.turn || !Number.isInteger(msg.idx) || msg.idx < 0 || msg.idx >= s.hand.length || !(msg.kind in IT_KIND)) return;
-    const to = msg.kind === "direct" ? msg.to : itNextUntouched(t, i, [i]);
+  } else if (a === "isend") {   // 投遞：idx＝手牌；投遞方式由卡面決定（密函／公開情報照座位順序交給下一位；直達情報要帶 to，對方必須收下）
+    if (g.pend || g.step !== "turn" || i !== t.turn || !Number.isInteger(msg.idx) || msg.idx < 0 || msg.idx >= s.hand.length) return;
+    const kind = itKindOf(s.hand[msg.idx]);
+    const to = kind === "direct" ? msg.to : itNextUntouched(t, i, [i]);
     if (!itOk(t, to) || to === i) return;
     const card = s.hand.splice(msg.idx, 1)[0];
-    g.letter = { card, orig: card, from: i, at: to, seen: [i, to], kind: msg.kind, icpt: null }; g.step = "pass"; g.deadline = itDl(g, now, IT_HOLD_MS);
-    tblLog(t, msg.kind === "pub" ? `${s.name} 公開了一則情報（${itLabel(card)}），交給 ${t.seats[to].name}` : msg.kind === "direct" ? `${s.name} 把一封直達情報交給 ${t.seats[to].name}（必須收下）` : `${s.name} 把一封密函交給 ${t.seats[to].name}`);
+    g.letter = { card, orig: card, from: i, at: to, seen: [i, to], kind, icpt: null }; g.step = "pass"; g.deadline = itDl(g, now, IT_HOLD_MS);
+    tblLog(t, kind === "pub" ? `${s.name} 公開了一則情報（${itLabel(card)}），交給 ${t.seats[to].name}` : kind === "direct" ? `${s.name} 把一封直達情報交給 ${t.seats[to].name}（必須收下）` : `${s.name} 把一封密函交給 ${t.seats[to].name}`);
   } else if (a === "itake") {   // 收下
     if (g.pend || g.step !== "pass" || !L || L.at !== i) return;
     itReceive(t, now);
