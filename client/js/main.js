@@ -4592,7 +4592,7 @@ function dodgeFrame(ts) {
   const D = S.dg, v = S.tableView;
   if (!D || !S.tableOpen || !v || v.phase !== 'playing' || v.game !== 'dodge') { S.dgRaf = 0; if (S.tableOpen && v?.game === 'dodge') buildTable(); return; }
   S.dgRaf = requestAnimationFrame(dodgeFrame);
-  const dt = Math.min(.05, (ts - S.dgLast) / 1000); S.dgLast = ts;
+  const dt = Math.max(0, Math.min(.05, (ts - S.dgLast) / 1000)); S.dgLast = ts;   // 第一幀的 ts 可能比 dgLast 早（同主迴圈，見 notes.md「環境與部署地雷」）
   const t = dodgeNow(), mySeat = v.role === 'seat' ? v.seats[v.me] : null, alive = mySeat && !mySeat.out;
   // 自己移動（開局前也可以先動；出局後不能）
   if (alive) {
