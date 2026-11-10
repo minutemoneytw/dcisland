@@ -4430,7 +4430,7 @@ function buildTable() {
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
   if (tb?.game === 'uno') { buildUno(box, v, mk, gd); return; }   // UNO 有自己的畫面（牌桌）
-  if (tb?.game === 'typing') { buildTyping(box, v, mk, gd); return; }   // 英打競賽有自己的畫面（題目＋分數）
+  if (tb?.game === 'typing' || tb?.game === 'zhtyping') { buildTyping(box, v, mk, gd); return; }   // 英打／中文打字競賽有自己的畫面（題目＋分數）
   if (tb?.game === 'intel') { buildIntel(box, v, mk, gd); return; }     // 秘藥情報戰有自己的畫面（情報區＋密函）
   const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
   // 狀態列
@@ -4783,8 +4783,8 @@ const TY_LOCK_MS = 700;      // 打錯後不能輸入的時間（使用者定）
 const TY_PROG_GAP_MS = 250;   // 兩次打字進度回報（給觀戰者看）的最短間隔；伺服器的限流是 200ms
 const TY_SEND_GAP_MS = 70;   // 兩次分數回報的最短間隔（伺服器的限流是 60ms；太快的那次留給下一個 tick 補送）
 const TY_SETTLE_S = 1;       // 時間到後多久才請伺服器結算（與伺服器的 TY_SETTLE_MS 一致：讓最後一個字的回報先到）
-function typingWords(seed) {   // 同一個 seed 永遠產生同一串單字；不會連續出同一個字
-  const words = gameDef('typing')?.words || ['typing'], rng = mulberry32(seed >>> 0), list = [];
+function typingWords(seed, game = 'typing') {   // 同一個 seed 永遠產生同一串單字（中文打字競賽＝zhtyping.words 的詞）；不會連續出同一個字
+  const words = gameDef(game)?.words || ['typing'], rng = mulberry32(seed >>> 0), list = [];
   return k => {
     while (list.length <= k) {
       let w = words[Math.floor(rng() * words.length)];
@@ -4798,7 +4798,7 @@ function typingStart(v) {   // 一局開始（伺服器給了 ty）：重置本�
   typingStop();
   S.ty = {
     id: S.tableId, t0: v.ty.t0, dur: v.ty.dur, off: v.ty.sn - Date.now(),   // off：伺服器時間 − 本機時間（毫秒，忽略單程延遲）
-    word: typingWords(v.ty.seed), idx: 0, pos: 0, score: 0, sent: 0, lastSend: 0, lockUntil: 0, errPos: -1,
+    game: v.game, zh: v.game === 'zhtyping', word: typingWords(v.ty.seed, v.game), idx: 0, pos: 0, score: 0, sent: 0, lastSend: 0, lockUntil: 0, errPos: -1,
     finishAt: 0, ime: false, scores: v.seats.map(s => s.score || 0), wordKey: '',
   };
   S.ty.timer = setInterval(typingTick, 100);
@@ -4814,6 +4814,7 @@ function typingSend() {   // 有還沒回報的分數就送（太快的留給 ti
 function typingKey(e) {
   const T = S.ty, v = S.tableView;
   if (!T || !v || v.role !== 'seat' || v.phase !== 'playing') return;
+  if (T.zh) return;   // 中文打字：交給輸入框（輸入法），不攔截按鍵
   if (e.key === 'Process' || e.isComposing) { T.ime = true; typingRender(); return; }   // 中文輸入法開著：提示切換成英文
   if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
   e.preventDefault();
@@ -4827,6 +4828,25 @@ function typingKey(e) {
   } else { T.lockUntil = performance.now() + TY_LOCK_MS; T.errPos = T.pos; T.wordKey = ''; }   // 打錯：該打的字母變紅震動，鎖 0.7 秒；不用刪除
   typingRender();
 }
+// 中文打字競賽：輸入框收到「輸入法送出的文字」（不含組字中）才比對；對得上題目的前綴就算打對的部分，整個詞對了自動 +1 分；
+// 送出的字和題目不符：保留對的前綴、第一個錯字變紅震動、鎖 0.7 秒（鎖定中送出的字一律清掉）；不用刪除、不扣分
+function typingZhCheck(e) {
+  const T = S.ty, v = S.tableView, inp = $('tyZh');
+  if (!T || !T.zh || !inp || !v || v.role !== 'seat' || v.phase !== 'playing' || (e && e.isComposing)) return;
+  const t = typingNow(), w = T.word(T.idx), val = inp.value;
+  if (!val) return;
+  if (t < 0 || t >= T.dur) { inp.value = ''; return; }
+  if (performance.now() < T.lockUntil) { inp.value = w.slice(0, T.pos); return; }   // 打錯鎖定中
+  if (w.startsWith(val)) {
+    T.errPos = -1;
+    if (val.length >= w.length) { T.idx++; T.pos = 0; T.score++; inp.value = ''; if (v.me >= 0) T.scores[v.me] = T.score; typingSend(); }   // 整個詞對了：自動得分、換下一個
+    else T.pos = val.length;
+  } else {
+    let k = 0; while (k < val.length && val[k] === w[k]) k++;
+    T.pos = k; T.errPos = k; T.lockUntil = performance.now() + TY_LOCK_MS; T.wordKey = ''; inp.value = w.slice(0, k);
+  }
+  typingRender();
+}
 function typingSendProgress(v) {   // 有人在觀戰才送打字進度（約每 250ms 最多一次、有變化才送）；沒人觀戰就一個訊息都不送
   const T = S.ty;
   if (v.role !== 'seat' || !(v.specs > 0)) { T.pKey = ''; return; }
@@ -4837,7 +4857,7 @@ function typingSendProgress(v) {   // 有人在觀戰才送打字進度（約每
 }
 function typingTick() {
   const T = S.ty, v = S.tableView;
-  if (!T || !S.tableOpen || !v || v.game !== 'typing' || v.phase !== 'playing') { typingStop(); return; }
+  if (!T || !S.tableOpen || !v || (v.game !== 'typing' && v.game !== 'zhtyping') || v.phase !== 'playing') { typingStop(); return; }
   typingSend();
   typingSendProgress(v);
   const t = typingNow();
@@ -4894,7 +4914,8 @@ function typingRender() {
     } else wd.textContent = !seated ? '' : t < 0 ? '準備…' : '時間到！等待結算…';
   }
   if (inp) inp.textContent = showWord ? w.slice(0, T.pos) : '';
-  const hint = $('tyHint'); if (hint) hint.textContent = T.ime ? '偵測到中文輸入法：請切換成英文輸入（例如按 Shift）' : '';
+  const zi = $('tyZh'); if (zi) { zi.disabled = !showWord; if (showWord && document.activeElement !== zi) zi.focus(); }   // 中文打字：輸入框保持聚焦，玩家直接用輸入法打字
+  const hint = $('tyHint'); if (hint) hint.textContent = T.zh ? (showWord ? '請切換成中文輸入法（例如注音），打出上面的詞，選字送出後自動計分' : '') : T.ime ? '偵測到中文輸入法：請切換成英文輸入（例如按 Shift）' : '';
 }
 function buildTyping(box, v, mk, gd) {
   const playing = v.phase === 'playing', mySeat = v.role === 'seat' ? v.seats[v.me] : null;
@@ -4902,22 +4923,26 @@ function buildTyping(box, v, mk, gd) {
   else if (playing && S.ty) S.ty.scores = v.seats.map((s, i) => (i === v.me && v.role === 'seat' ? S.ty.score : Math.max(s.score || 0, S.ty.scores[i] || 0)));
   if (!playing) typingStop();
   let status;
-  if (playing) status = mySeat ? '比賽中：照著打出畫面中央的單字（不用按 Enter）' : '觀戰中';
+  if (playing) status = mySeat ? (v.game === 'zhtyping' ? '比賽中：照著打出畫面中央的詞（不用按 Enter）' : '比賽中：照著打出畫面中央的單字（不用按 Enter）') : '觀戰中';
   else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
   box.appendChild(mk('div', 'table-status' + (playing && mySeat ? ' mine' : ''), status));
   if (v.result && !playing && v.result.ranking) {   // 結算：依分數排名（同分同名次）
     box.appendChild(mk('div', 'table-result', v.result.text));
     const rk = mk('div', 'dodge-rank'), rs = v.result.ranking;
-    rs.forEach(r => rk.appendChild(mk('div', null, `${1 + rs.filter(o => o.score > r.score).length}. ${r.name}　${r.score} 個單字${r.left ? '（中途離開）' : ''}`)));
+    rs.forEach(r => rk.appendChild(mk('div', null, `${1 + rs.filter(o => o.score > r.score).length}. ${r.name}　${r.score} ${v.game === 'zhtyping' ? '個詞' : '個單字'}${r.left ? '（中途離開）' : ''}`)));
     box.appendChild(rk);
   }
   if (playing) {   // 比賽畫面：上方其他人的分數、中央題目與自己的分數、下方自己打的內容
     const wrap = mk('div', 'typing-wrap');
     wrap.appendChild(mk('div', 'typing-others')).id = 'tyOthers';
     wrap.appendChild(mk('div', 'typing-time')).id = 'tyTime';
-    wrap.appendChild(mk('div', 'typing-word')).id = 'tyWord';
+    wrap.appendChild(mk('div', 'typing-word' + (v.game === 'zhtyping' ? ' zh' : ''))).id = 'tyWord';
     wrap.appendChild(mk('div', 'typing-score')).id = 'tyScore';
-    wrap.appendChild(mk('div', 'typing-input')).id = 'tyInput';
+    if (v.game === 'zhtyping' && mySeat) {   // 中文打字：真的輸入框（要靠輸入法組字、選字）；組字中不比對，送出（compositionend／input）才比對
+      const zi = mk('input', 'typing-zh'); zi.id = 'tyZh'; zi.type = 'text'; zi.autocomplete = 'off'; zi.spellcheck = false; zi.placeholder = '在這裡用中文輸入法打字';
+      zi.addEventListener('input', typingZhCheck); zi.addEventListener('compositionend', () => setTimeout(typingZhCheck, 0));
+      wrap.appendChild(zi);
+    } else wrap.appendChild(mk('div', 'typing-input')).id = 'tyInput';
     wrap.appendChild(mk('div', 'typing-hint')).id = 'tyHint';
     wrap.appendChild(mk('div', 'typing-count hidden')).id = 'tyCount';
     box.appendChild(wrap);

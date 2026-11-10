@@ -636,8 +636,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "intel": (3, 8)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英打競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英打競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -728,7 +728,7 @@ def tbl_leave(t, cid):
         if t["phase"] == "playing" and t["game"] == "uno":   # UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
             un_leave(t, i, int(time.time() * 1000))
             return
-        if t["phase"] == "playing" and t["game"] == "typing":   # 英打競賽：離開不中斷，照當時分數排名
+        if t["phase"] == "playing" and ty_is(t):   # 英打競賽：離開不中斷，照當時分數排名
             ty_leave(t, i, int(time.time() * 1000))
             return
         if t["phase"] == "playing" and t["game"] == "intel":   # 秘藥情報戰：離開不中斷，翻開身分，場上只剩一個陣營時結束
@@ -986,6 +986,13 @@ def dg_leave(t, i, now):
 # 每打完一個字回報 word {n}（n＝目前總分，信任客戶端；伺服器只收「比上次多 1～3」的值），伺服器記分、轉發 tsc {i, n} 給同桌其他人。
 # 時間到後留 TY_SETTLE_MS 收最後的分數，客戶端再送 finish，伺服器核對時鐘才結算。中途離開不中斷（座位留空殼、照當時分數排名、不給 XP）。
 # 與 worker/src/index.js 的 ty* 同一套。
+# 中文打字競賽（第九桌 t9，2026-11-11，使用者要求）：規則與英打完全一樣（同一套 ty_*），只是題目換成 games.json 的 zhtyping.words；game id＝zhtyping
+def ty_is(t):
+    return t["game"] in ("typing", "zhtyping")
+
+def ty_unit(t):
+    return "詞" if t["game"] == "zhtyping" else "單字"
+
 TY_DUR = 30              # 比賽秒數（使用者定）
 TY_COUNTDOWN_MS = 3000   # 開局倒數（使用者定）
 TY_SETTLE_MS = 1000      # 時間到後再收分數的寬限（最後一個字的回報可能晚到）
@@ -1005,7 +1012,7 @@ def ty_finish(t):
     stay = [s for s in t["seats"] if not s.get("left")]
     xp = [TY_XP if s.get("score", 0) >= TY_XP_MIN else 0 for s in stay]   # 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
     top = ranking[0] if ranking else None
-    text = f"比賽結束！第一名 {top['name']}，打了 {top['score']} 個單字" if top else "比賽結束"
+    text = f"比賽結束！第一名 {top['name']}，打了 {top['score']} 個{ty_unit(t)}" if top else "比賽結束"
     t["seats"] = stay
     t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp}
     tbl_log(t, text)
@@ -1013,7 +1020,7 @@ def ty_finish(t):
 
 def ty_check_end(t, now):
     """時間到（含寬限），或入座的人全部離開：結算。"""
-    if t["game"] != "typing" or t["phase"] != "playing" or not t.get("g"):
+    if not ty_is(t) or t["phase"] != "playing" or not t.get("g"):
         return
     if now >= t["g"]["t0"] + TY_DUR * 1000 + TY_SETTLE_MS or all(s.get("left") for s in t["seats"]):
         ty_finish(t)
@@ -1021,7 +1028,7 @@ def ty_check_end(t, now):
 def ty_word(t, cid, n, now):
     """回報分數：有更新回 True（呼叫端轉發給同桌）。"""
     role, i = tbl_find(t, cid)
-    if t["game"] != "typing" or role != "seat" or t["phase"] != "playing" or not t.get("g"):
+    if not ty_is(t) or role != "seat" or t["phase"] != "playing" or not t.get("g"):
         return False
     if now < t["g"]["t0"] or now > t["g"]["t0"] + TY_DUR * 1000 + TY_SETTLE_MS:
         return False
@@ -1034,7 +1041,7 @@ def ty_word(t, cid, n, now):
 
 def ty_leave(t, i, now):
     s = t["seats"][i]
-    tbl_log(t, f"{s['name']} 離開了（{s.get('score', 0)} 個單字）")
+    tbl_log(t, f"{s['name']} 離開了（{s.get('score', 0)} 個{ty_unit(t)}）")
     s["left"], s["cid"] = True, None
     ty_check_end(t, now)
 
@@ -1795,7 +1802,7 @@ def un_set_mode(t, cid, mode):
         s["ready"] = False
     tbl_log(t, f"{t['seats'][0]['name']} 把玩法改成{'無限制' if mode == 'wild' else '傳統'}")
 
-GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "intel": it_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
@@ -1814,7 +1821,7 @@ def tbl_view(t, cid):
             seats[k].update(lives=s.get("lives", 0), died=s.get("died"), left=bool(s.get("left")))
         if g and playing:
             v["dg"] = {"seed": g["seed"], "t0": g["t0"], "dur": DG_DUR, "sn": int(time.time() * 1000)}
-    elif t["game"] == "typing":   # 英打競賽：每個座位的分數／是否已離開；進行中附上 seed 與開始時間（題目由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
+    elif ty_is(t):   # 英打／中文打字競賽：每個座位的分數／是否已離開；進行中附上 seed 與開始時間（題目由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
         for k, s in enumerate(t["seats"]):
             seats[k].update(score=s.get("score", 0), left=bool(s.get("left")))
         if g and playing:
@@ -3125,7 +3132,7 @@ class Room:
                 if a == "typ":   # 英打競賽：打字進度 {n 第幾個字, p 已打對幾個字母, e 是否剛打錯}，只轉發給觀戰者（tpg）；不存檔、不通知畫面
                     role, i = tbl_find(t, cid)
                     n, p = msg.get("n"), msg.get("p")
-                    ok = (t["game"] == "typing" and role == "seat" and t["phase"] == "playing" and t.get("g")
+                    ok = (ty_is(t) and role == "seat" and t["phase"] == "playing" and t.get("g")
                           and type(n) is int and 0 <= n <= 100000 and type(p) is int and 0 <= p <= 64)
                     if ok:
                         for m in t["specs"]:

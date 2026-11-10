@@ -1691,7 +1691,8 @@ TABLES_BY_TERRAIN = {
               dict(id="t6", game="uno", cell=[48, 39], w=3, h=2),     # UNO（2026-11-08，使用者要求）
               dict(id="t5", game="dodge", cell=[56, 39], w=3, h=2),   # 躲彈幕只有一桌（2026-11-08，使用者要求）
               dict(id="t7", game="typing", cell=[64, 32], w=3, h=2),   # 英打競賽（2026-11-10，使用者要求）：抽鬼牌右邊、同一排相距 8 格
-              dict(id="t8", game="intel", cell=[64, 39], w=3, h=2)],   # 秘藥情報戰（2026-11-10，使用者要求）：躲彈幕右邊、英打競賽下面
+              dict(id="t8", game="intel", cell=[64, 39], w=3, h=2),   # 秘藥情報戰（2026-11-10，使用者要求）：躲彈幕右邊、英打競賽下面
+              dict(id="t9", game="zhtyping", cell=[72, 32], w=3, h=2)],   # 中文打字競賽（2026-11-11，使用者要求）：英打競賽右邊同一排
 }
 
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
@@ -1746,6 +1747,26 @@ def table_typing():
     cv.rect(12, 6, 35, 14, hx("#2a2e3a")); cv.rect(13, 7, 34, 13, screen)          # 螢幕
     for x in (15, 17, 19, 21, 23): cv.rect(x, 9, x, 11, hx("#7ae8d0"))              # 螢幕上的「字」
     cv.rect(26, 9, 26, 11, hx("#ff5a5a")); cv.rect(28, 9, 31, 11, hx("#5a6a88"))
+    kb = hx("#d8d4c8")
+    cv.rect(6, 16, 41, 24, shade(kb, .7)); cv.rect(7, 17, 40, 23, kb)                # 鍵盤
+    for y in (18, 20):
+        for x in range(9, 39, 3): cv.rect(x, y, x + 1, y, shade(kb, .78))
+    cv.rect(15, 22, 32, 22, shade(kb, .78))                                           # 空白鍵
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    cv.outline()
+    return cv
+
+def table_zhtyping():
+    """中文打字競賽：同英打的桌子，螢幕上換成兩個「方塊字」、桌面偏紅褐色。"""
+    cv = Canvas(48, 32)
+    wood, screen = hx("#6a403a"), hx("#141826")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.25))
+    cv.rect(12, 6, 35, 14, hx("#2a2e3a")); cv.rect(13, 7, 34, 13, screen)          # 螢幕
+    for x0, col in ((16, "#f0d070"), (24, "#7ae8d0")):                               # 螢幕上兩個方塊字（外框＋十字）
+        cv.rect(x0, 8, x0 + 5, 8, hx(col)); cv.rect(x0, 12, x0 + 5, 12, hx(col))
+        cv.rect(x0, 8, x0, 12, hx(col)); cv.rect(x0 + 5, 8, x0 + 5, 12, hx(col))
+        cv.rect(x0 + 2, 9, x0 + 2, 11, hx(col)); cv.rect(x0 + 1, 10, x0 + 4, 10, hx(col))
+    cv.rect(31, 9, 31, 12, hx("#ff5a5a"))                                            # 游標
     kb = hx("#d8d4c8")
     cv.rect(6, 16, 41, 24, shade(kb, .7)); cv.rect(7, 17, 40, 23, kb)                # 鍵盤
     for y in (18, 20):
@@ -3086,6 +3107,7 @@ def main():
     save(table_uno(), "table_uno.png", "games")
     save(table_typing(), "table_typing.png", "games")
     save(table_intel(), "table_intel.png", "games")
+    save(table_zhtyping(), "table_zhtyping.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")

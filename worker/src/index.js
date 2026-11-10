@@ -480,8 +480,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], intel: [3, 8] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英打競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英打競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -544,7 +544,7 @@ function tblLeave(t, cid) {
     const name = t.seats[i].name;
     if (t.phase === "playing" && t.game === "dodge") { dgLeave(t, i, Date.now()); return; }   // 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
     if (t.phase === "playing" && t.game === "uno") { unLeave(t, i, Date.now()); return; }   // UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
-    if (t.phase === "playing" && t.game === "typing") { tyLeave(t, i, Date.now()); return; }   // 英打競賽：離開不中斷，照當時分數排名
+    if (t.phase === "playing" && isTy(t)) { tyLeave(t, i, Date.now()); return; }   // 英打競賽：離開不中斷，照當時分數排名
     if (t.phase === "playing" && t.game === "intel") { itLeave(t, i, Date.now()); return; }   // 秘藥情報戰：離開不中斷，翻開身分，場上只剩一個陣營時結束   // 英打競賽：離開不中斷，照當時分數排名
     if (t.phase === "playing") {   // 使用者定：有人離開（含斷線）直接結束這一局
       t.result = { aborted: true, text: `${name} 離開了，這一局結束` };
@@ -741,6 +741,10 @@ function dgLeave(t, i, now) {
 // 每打完一個字回報 word {n}（n＝目前總分，信任客戶端；伺服器只收「比上次多 1～3」的值），伺服器記分、轉發 tsc {i, n} 給同桌其他人。
 // 時間到後留 TY_SETTLE_MS 收最後的分數，客戶端再送 finish，伺服器核對時鐘才結算。中途離開不中斷（座位留空殼、照當時分數排名、不給 XP）。
 // 與 tools/dev_server.py 的 ty_* 同一套。
+// 中文打字競賽（第九桌 t9，2026-11-11，使用者要求）：規則與英打完全一樣（同一套 ty*），只是題目換成 games.json 的 zhtyping.words、
+// 客戶端用輸入法「送出選字」後的文字比對（伺服器不管輸入內容，只收分數）；game id＝zhtyping
+const isTy = t => t.game === "typing" || t.game === "zhtyping";
+const tyUnit = t => (t.game === "zhtyping" ? "詞" : "單字");
 const TY_DUR = 30;              // 比賽秒數（使用者定）
 const TY_COUNTDOWN_MS = 3000;   // 開局倒數（使用者定）
 const TY_SETTLE_MS = 1000;      // 時間到後再收分數的寬限（最後一個字的回報可能晚到）
@@ -757,7 +761,7 @@ function tyFinish(t) {
   const ranking = t.seats.map(s => ({ name: s.name, score: s.score || 0, left: !!s.left })).sort((a, b) => b.score - a.score);
   const stay = t.seats.filter(s => !s.left);
   const xp = stay.map(s => ((s.score || 0) >= TY_XP_MIN ? TY_XP : 0));   // 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
-  const top = ranking[0], text = top ? `比賽結束！第一名 ${top.name}，打了 ${top.score} 個單字` : "比賽結束";
+  const top = ranking[0], text = top ? `比賽結束！第一名 ${top.name}，打了 ${top.score} 個${tyUnit(t)}` : "比賽結束";
   t.seats = stay;
   t.result = { text, rid: Math.floor(Math.random() * 4294967296), ranking, xp };
   tblLog(t, text);
@@ -765,13 +769,13 @@ function tyFinish(t) {
 }
 // 時間到（含寬限），或入座的人全部離開：結算
 function tyCheckEnd(t, now) {
-  if (t.game !== "typing" || t.phase !== "playing" || !t.g) return;
+  if (!isTy(t) || t.phase !== "playing" || !t.g) return;
   if (now >= t.g.t0 + TY_DUR * 1000 + TY_SETTLE_MS || t.seats.every(s => s.left)) tyFinish(t);
 }
 // 回報分數：有更新回 true（呼叫端轉發給同桌）
 function tyWord(t, cid, n, now) {
   const [role, i] = tblFind(t, cid);
-  if (t.game !== "typing" || role !== "seat" || t.phase !== "playing" || !t.g) return false;
+  if (!isTy(t) || role !== "seat" || t.phase !== "playing" || !t.g) return false;
   if (now < t.g.t0 || now > t.g.t0 + TY_DUR * 1000 + TY_SETTLE_MS) return false;
   const s = t.seats[i];
   if (!Number.isInteger(n) || n <= (s.score || 0) || n > (s.score || 0) + TY_STEP_MAX) return false;
@@ -780,7 +784,7 @@ function tyWord(t, cid, n, now) {
 }
 function tyLeave(t, i, now) {
   const s = t.seats[i];
-  tblLog(t, `${s.name} 離開了（${s.score || 0} 個單字）`);
+  tblLog(t, `${s.name} 離開了（${s.score || 0} 個${tyUnit(t)}）`);
   s.left = true; s.cid = null;
   tyCheckEnd(t, now);
 }
@@ -1253,7 +1257,7 @@ function unSetMode(t, cid, mode) {
   for (const s of t.seats) s.ready = false;
   tblLog(t, `${t.seats[0].name} 把玩法改成${mode === "wild" ? "無限制" : "傳統"}`);
 }
-const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, intel: itStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 function tblView(t, cid) {
   const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
@@ -1265,7 +1269,7 @@ function tblView(t, cid) {
   if (t.game === "dodge") {   // 躲彈幕：每個座位的命數／淘汰秒數／是否已離開；進行中附上 seed 與開始時間（彈幕由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
     t.seats.forEach((s, k) => { v.seats[k].lives = s.lives || 0; v.seats[k].died = s.died ?? null; v.seats[k].left = !!s.left; });
     if (t.g && playing) v.dg = { seed: t.g.seed, t0: t.g.t0, dur: DG_DUR, sn: Date.now() };
-  } else if (t.game === "typing") {   // 英打競賽：每個座位的分數／是否已離開；進行中附上 seed 與開始時間（題目由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
+  } else if (isTy(t)) {   // 英打／中文打字競賽：每個座位的分數／是否已離開；進行中附上 seed 與開始時間（題目由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
     t.seats.forEach((s, k) => { v.seats[k].score = s.score || 0; v.seats[k].left = !!s.left; });
     if (t.g && playing) v.ty = { seed: t.g.seed, t0: t.g.t0, dur: TY_DUR, sn: Date.now() };
   } else if (t.game === "intel") {   // 秘藥情報戰：情報區公開；身分只給本人、已出局／離開的人、觀戰者（使用者定：觀戰者看得到全部資訊）
@@ -1808,7 +1812,7 @@ export class Island {
     if (a === "typ") {   // 英打競賽：打字進度 {n 第幾個字, p 已打對幾個字母, e 是否剛打錯}，只轉發給觀戰者（tpg）；不存檔、不通知畫面、沒人觀戰就什麼都不送
       const [role, i] = tblFind(t, att.id);
       const n = msg.n, p = msg.p;
-      if (t.game !== "typing" || role !== "seat" || t.phase !== "playing" || !t.g) return;
+      if (!isTy(t) || role !== "seat" || t.phase !== "playing" || !t.g) return;
       if (!Number.isInteger(n) || n < 0 || n > 100000 || !Number.isInteger(p) || p < 0 || p > 64) return;
       const data = JSON.stringify({ t: "tpg", i, n, p, e: msg.e === 1 ? 1 : 0 });
       for (const m of t.specs) {
