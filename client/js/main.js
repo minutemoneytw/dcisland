@@ -1870,8 +1870,8 @@ function stepOwnerProxy(a, dt, def) {
     a.x = b.x; a.y = b.y; a.z = 0; a.fly = false;
     a.cast = Math.max(0, (b.castMs - el) / 1000); a.castFrom = b.from;
     if (el >= b.castMs) {
-      a.command = null; a.beam = null; a.cast = 0; a.castFrom = null;
-      beamFire(a, def);
+      a.command = null; a.beam = null; a.cast = 0;
+      beamFire(a, def);   // castFrom（鎖定方向）由 beamFire 讀完自己清掉；先清的話會退回島主面向的正左／正右，跟預兆方向對不上
     }
     return;
   }
