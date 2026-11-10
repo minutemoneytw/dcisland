@@ -5003,7 +5003,7 @@ function itStartTimer() {
   S.itTimer = setInterval(() => {
     const cur = S.tableView, it = cur?.it;
     if (!S.tableOpen || !cur || cur.game !== 'intel' || cur.phase !== 'playing' || !it) { itStopTimer(); return; }
-    if (it.untimed) { const el0 = $('itTimer'); if (el0) el0.textContent = it.pend ? `等大家按「準備繼續」（${it.pend.ok.length + 1}/${itAliveN(cur)}）` : '不限時'; return; }   // 不限時：沒有倒數，也不送 timeout
+    if (it.untimed) { const el0 = $('itTimer'); if (el0) el0.textContent = it.pend ? `等大家按「準備繼續」（${it.pend.ok.length + 1}/${itAliveN(cur)}）` : it.ack ? `等大家按「準備繼續」（${it.ack.ok.length + 1}/${itAliveN(cur)}）` : '不限時'; return; }   // 不限時：沒有倒數，也不送 timeout
     const end = it.pend ? it.pend.until : it.deadline, left = (end - (Date.now() + S.itOff)) / 1000;
     const el = $('itTimer'); if (el) el.textContent = left > 0 ? `${it.pend ? '識破倒數' : '剩'} ${Math.ceil(left)} 秒` : '…';
     if (left <= 0 && Date.now() - (S.itTimeoutAt || 0) > 1000) { S.itTimeoutAt = Date.now(); S.net?.tbl?.({ a: 'timeout' }); }   // 時間到：請伺服器核對時鐘並處理
@@ -5030,6 +5030,7 @@ function buildIntel(box, v, mk, gd) {
       const ch = pend.chain || [{ a: pend.a, by: pend.by, tgt: pend.tgt }];
       status = ch.map((c, k) => k === 0 ? `${nm(c.by)} 使用了${IT_ACT[c.a]}${c.a === 'H' ? `（對 ${nm(c.tgt)}）` : (c.a === 'F' || c.a === 'I') && L ? `（對 ${nm(L.at)}）` : ''}` : `${nm(c.by)} 識破`).join(' ← ') + '——生效前可以識破';
     }
+    else if (it.step === 'ack') status = `${nm(it.ack.by)} 收下了情報——大家看清楚後按「準備繼續」`;
     else if (it.step === 'turn') status = myTurn ? '輪到你：可以先用行動牌，再選一張手牌投遞' : `輪到 ${nm(v.turn)} 投遞`;
     else status = holding ? (L.kind === 'direct' && L.next < 0 ? '直達情報交到你手上：必須收下' : L.next < 0 ? `${kn}在你手上：${L.at === L.from ? '大家都不收，退回到你手上，必須收下' : '只能收下'}` : L.next === L.from ? `${kn}在你手上：收下，或退回給發信者 ${nm(L.next)}（發信者必須收下）` : `${kn}在你手上：收下，或傳給 ${nm(L.next)}`) : `${kn}在 ${nm(L?.at)} 手上`;
     if (v.role === 'spec') status = '觀戰中 · ' + status;
@@ -5116,6 +5117,11 @@ function buildIntel(box, v, mk, gd) {
         if (done) b.disabled = true; else b.onclick = () => send({ a: 'iok' });
         btns.appendChild(b);
       }
+    }
+    if (playing && it.step === 'ack' && it.untimed && it.ack.by !== me) {   // 不限時：收下情報後，所有活人按「準備繼續」才換下一位（收下的人自動算）
+      const done = it.ack.ok.includes(me), b = mk('button', 'ff-btn' + (done ? ' small' : ''), done ? '已準備（等其他人）' : '準備繼續');
+      if (done) b.disabled = true; else b.onclick = () => send({ a: 'iok' });
+      btns.appendChild(b);
     }
     if (holding) {   // 收下／轉手：只能傳給座位順序的下一位（直達情報：攔截者退回給發信者）
       const tk = mk('button', 'ff-btn', '收下'); tk.onclick = () => send({ a: 'itake' }); btns.appendChild(tk);

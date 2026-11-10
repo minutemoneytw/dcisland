@@ -908,12 +908,19 @@ function itEndLetter(t, now) {   // 這次投遞結束：換下一位
   if (nx < 0) { itCheckFaction(t, false); return; }
   itBeginTurn(t, nx, now);
 }
-function itReceive(t, now) {
-  const g = t.g, L = g.letter, s = t.seats[L.at];
+function itReceive(t, now, ack = false) {
+  const g = t.g, L = g.letter, s = t.seats[L.at], at = L.at;
   s.intel.push(L.card); g.letter = null;
   tblLog(t, `${s.name} 收下了密函：${itLabel(L.card)}`);
-  if (itCheckIntel(t, L.at)) return;
+  if (itCheckIntel(t, at)) return;
+  if (ack && g.untimed) { g.step = "ack"; g.ack = { by: at, ok: [] }; itAckCheck(t, now); return; }   // 不限時模式：收下後要所有活人按「準備繼續」才換下一位
   itEndLetter(t, now);
+}
+// 不限時：收下情報後的確認（所有活人，收下的人自動算）都按了才換下一位
+function itAckCheck(t, now) {
+  const g = t.g, a = g && g.ack;
+  if (!a || g.step !== "ack") return;
+  if (itAlive(t).every(i => i === a.by || a.ok.includes(i))) { g.ack = null; itEndLetter(t, now); }
 }
 // 行動生效：chain 由上（最後出的）往下，識破（C）會取消它底下那一張，被取消的識破就不會取消底下的（識破可以被識破）；最底下是真正的行動
 function itResolve(t, now) {
@@ -1000,7 +1007,8 @@ function itMsg(t, cid, msg, now) {
   if (a === "timeout") { itTick(t, now + 300); return; }
   if (t.game !== "intel" || role !== "seat" || t.phase !== "playing" || !g || !itOk(t, i)) return;
   const s = t.seats[i], L = g.letter;
-  if (a === "iok") {   // 不限時：按「準備繼續」（識破時間內沒有要識破）
+  if (a === "iok") {   // 不限時：按「準備繼續」（識破時間內沒有要識破；或收下情報後的確認）
+    if (g.step === "ack" && g.ack && g.untimed) { if (g.ack.by === i || g.ack.ok.includes(i)) return; g.ack.ok.push(i); itAckCheck(t, now); return; }
     if (!g.pend || !g.untimed || g.pend.by === i || g.pend.ok.includes(i)) return;
     g.pend.ok.push(i); itOkCheck(t, now);
   } else if (a === "isend") {   // 投遞：idx＝手牌；投遞方式由卡面決定（密函／公開情報照座位順序交給下一位；直達情報要帶 to，對方可以不收、退回給發信者）
@@ -1013,7 +1021,7 @@ function itMsg(t, cid, msg, now) {
     tblLog(t, kind === "pub" ? `${s.name} 公開了一則情報（${itLabel(card)}），交給 ${t.seats[to].name}` : kind === "direct" ? `${s.name} 把一封直達情報交給 ${t.seats[to].name}` : `${s.name} 把一封密函交給 ${t.seats[to].name}`);
   } else if (a === "itake") {   // 收下
     if (g.pend || g.step !== "pass" || !L || L.at !== i) return;
-    itReceive(t, now);
+    itReceive(t, now, true);
   } else if (a === "ifwd") {   // 轉手：只能轉給座位順序的下一個沒碰過的人（直達情報：被攔截的人退回給發信者）
     if (g.pend || g.step !== "pass" || !L || L.at !== i) return;
     const to = itFwdTarget(t, L);
@@ -1058,6 +1066,7 @@ function itLeave(t, i, now) {
   let advance = g.step === "turn" && t.turn === i;
   if (g.letter && g.letter.at === i) { g.discard.push(g.letter.card); g.letter = null; advance = true; tblLog(t, "他手上的密函作廢"); }
   if (itCheckFaction(t, true)) return;
+  if (g.step === "ack") { itAckCheck(t, now); return; }   // 不限時：有人離開，剩下的人都按了就繼續
   if (advance) itEndLetter(t, now);
 }
 // ---- UNO（第六桌 t6；2026-11-08，使用者要求，名稱沿用 UNO（商標風險由使用者決定）；牌面是原創繪製）：2～6 人、標準 108 張、手牌剩 1 張要喊 UNO ----
@@ -1284,7 +1293,7 @@ function tblView(t, cid) {
       const g = t.g, L = g.letter;
       v.it = {
         step: g.step, deck: g.deck.length, discard: g.discard.length, deadline: g.deadline, sn: Date.now(),
-        untimed: !!g.untimed,
+        untimed: !!g.untimed, ack: g.ack ? { by: g.ack.by, ok: [...g.ack.ok] } : null,
         letter: L ? { from: L.from, at: L.at, seen: [...L.seen], kind: L.kind, next: itFwdTarget(t, L), icpt: L.icpt ?? null } : null,
         pend: g.pend ? { a: g.pend.a, by: g.pend.by, tgt: g.pend.tgt, until: g.pend.until, ok: [...g.pend.ok], chain: itChain(g.pend) } : null,
       };

@@ -1212,16 +1212,31 @@ def it_end_letter(t, now):
         return
     it_begin_turn(t, nx, now)
 
-def it_receive(t, now):
+def it_receive(t, now, ack=False):
     g = t["g"]
     L = g["letter"]
-    s = t["seats"][L["at"]]
+    at = L["at"]
+    s = t["seats"][at]
     s["intel"].append(L["card"])
     g["letter"] = None
     tbl_log(t, f"{s['name']} 收下了密函：{it_label(L['card'])}")
-    if it_check_intel(t, L["at"]):
+    if it_check_intel(t, at):
+        return
+    if ack and g["untimed"]:   # 不限時模式：收下後要所有活人按「準備繼續」才換下一位
+        g["step"], g["ack"] = "ack", {"by": at, "ok": []}
+        it_ack_check(t, now)
         return
     it_end_letter(t, now)
+
+def it_ack_check(t, now):
+    """不限時：收下情報後的確認（所有活人，收下的人自動算）都按了才換下一位。"""
+    g = t.get("g")
+    a = g and g.get("ack")
+    if not a or g["step"] != "ack":
+        return
+    if all(i == a["by"] or i in a["ok"] for i in it_alive(t)):
+        g["ack"] = None
+        it_end_letter(t, now)
 
 def it_resolve(t, now):
     """行動生效：chain 由上（最後出的）往下，識破（C）會取消它底下那一張，被取消的識破就不會取消底下的（識破可以被識破）；最底下是真正的行動。"""
@@ -1360,7 +1375,13 @@ def it_msg(t, cid, msg, now):
         return
     s, L = t["seats"][i], g["letter"]
     idx, to, sel = msg.get("idx"), msg.get("to"), msg.get("sel")
-    if a == "iok":   # 不限時：按「準備繼續」（識破時間內沒有要識破）
+    if a == "iok":   # 不限時：按「準備繼續」（識破時間內沒有要識破；或收下情報後的確認）
+        ak = g.get("ack")
+        if g["step"] == "ack" and ak and g["untimed"]:
+            if ak["by"] != i and i not in ak["ok"]:
+                ak["ok"].append(i)
+                it_ack_check(t, now)
+            return
         p = g["pend"]
         if not p or not g["untimed"] or p["by"] == i or i in p["ok"]:
             return
@@ -1381,7 +1402,7 @@ def it_msg(t, cid, msg, now):
     elif a == "itake":   # 收下
         if g["pend"] or g["step"] != "pass" or not L or L["at"] != i:
             return
-        it_receive(t, now)
+        it_receive(t, now, True)
     elif a == "ifwd":   # 轉手：只能轉給座位順序的下一個沒碰過的人（直達情報：被攔截的人退回給發信者）
         if g["pend"] or g["step"] != "pass" or not L or L["at"] != i:
             return
@@ -1457,6 +1478,9 @@ def it_leave(t, i, now):
         advance = True
         tbl_log(t, "他手上的密函作廢")
     if it_check_faction(t, True):
+        return
+    if g["step"] == "ack":   # 不限時：有人離開，剩下的人都按了就繼續
+        it_ack_check(t, now)
         return
     if advance:
         it_end_letter(t, now)
@@ -1837,7 +1861,7 @@ def tbl_view(t, cid):
         if playing and g:
             L = g["letter"]
             v["it"] = {"step": g["step"], "deck": len(g["deck"]), "discard": len(g["discard"]), "deadline": g["deadline"], "sn": int(time.time() * 1000),
-                       "untimed": bool(g["untimed"]),
+                       "untimed": bool(g["untimed"]), "ack": {"by": g["ack"]["by"], "ok": list(g["ack"]["ok"])} if g.get("ack") else None,
                        "letter": {"from": L["from"], "at": L["at"], "seen": list(L["seen"]), "kind": L["kind"], "next": it_fwd_target(t, L), "icpt": L.get("icpt")} if L else None,
                        "pend": {"a": g["pend"]["a"], "by": g["pend"]["by"], "tgt": g["pend"]["tgt"], "until": g["pend"]["until"], "ok": list(g["pend"]["ok"]), "chain": it_chain(g["pend"])} if g["pend"] else None}
             if L and (see_all or L["kind"] == "pub"):
