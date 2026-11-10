@@ -2149,8 +2149,8 @@ function onNetDragon(m) {
     if (a) {
       const keepCmd = a.command && Date.now() - a.command.t0ms < a.command.castMs;   // 讀條中的命令照樣跑完檢定（同 wander 的修正）
       a.aggro = true; a.wleg = null; a.cast = 0; a.castFrom = null;
-      a.fly = false; a.dashU = null; a.cycle = null; a.gaze = null; a.command = null; a.beam = null; a.rest = 0; a.retHome = false;
-      if (!keepCmd) a.command = null;
+      a.fly = false; a.dashU = null; a.cycle = null; a.gaze = null; a.beam = null; a.rest = 0; a.retHome = false;
+      if (!keepCmd) a.command = null;   // 不能在上一行無條件清：台詞招式放完伺服器馬上送 aggro，會把剛開始的命令讀條洗掉（讀條閃一下就不見、也不檢定）
     }
     if (m.id === S.net?.id) toast(`${ownerName()} 火冒三丈地追殺你！快跑！`, 2600);
     else if (r) toast(`${ownerName()} 追殺 ${r.name}！`, 2200);
