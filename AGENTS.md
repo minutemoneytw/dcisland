@@ -73,10 +73,11 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 |---|---|
 | `net.js`、兩份伺服器的訊息／房間／限流、可破壞物件、家具同步、裝飾草稿 | 同步協定與伺服器 |
 | `/api/token`、`hello`、`SESSION_SECRET`、管理員、服裝配發 | 身分驗證與權限 |
-| 島主（`OWNER_*`、`D_*`）、仇恨、玩家血量、營火、**職能與職業（`ROLES`、`jobs.json`、`JOB_SKILLS`、`JOB_ROLE`、技能列、技能特效）**、底部 HUD（技能列／血量條／經驗條，`#statBars`、`showHp`／`showXp`）、**法杖／咒杖遠距詠唱**、**武器列**、新增島主 | 島主與戰鬥 |
-| `mobs.json`、動物游泳、**新增怪物規範（方向網格／調色 tint／fixed／footDy）**、捕捉/牧養規劃、釣上來的敵對怪物（lurker） | 野外動物 |
+| 島主（`OWNER_*`、`D_*`）、**四方向朝向與攻擊方向（`face`／`adir`、武器尖端判定 `inHit`）**、仇恨、玩家血量、營火、**職能與職業（`ROLES`、`jobs.json`、`JOB_SKILLS`、`JOB_ROLE`、技能列、技能特效）**、底部 HUD（技能列／血量條／經驗條，`#statBars`、`showHp`／`showXp`）、**法杖／咒杖遠距詠唱**、**武器列**、新增島主 | 島主與戰鬥 |
+| `mobs.json`、動物游泳、**新增怪物規範（方向網格／調色 tint／fixed／footDy／noBounce）**、**反擊型野怪（`retaliate`）／道德性怪物**、動物重生、捕捉/牧養規劃、釣上來的敵對怪物（lurker） | 野外動物 |
 | 裝飾模式、地板、看板、坐下/睡覺、家具碰撞 | 裝飾、家具、地板、看板 |
-| 採集工具、釣魚與圖鑑、稱號、NPC、操作說明、**合成（素材圖鑑／配方筆記／合成家具）** | 玩法：採集、釣魚、NPC |
-| **和平島、遊戲桌、抽鬼牌（`tbl`／`table`／`tblinfo` 訊息、`TABLE_DEFS`、`games.json`）** | 玩法：採集、釣魚、NPC（「和平島與遊戲桌」） |
+| 採集工具、釣魚與圖鑑、稱號（含擊倒島主紀錄）、NPC、操作說明、**合成（素材圖鑑／配方筆記／合成家具）** | 玩法：採集、釣魚、合成、稱號、NPC |
+| **地圖尺寸（`COLS`／`ROWS`）、和平島、遊戲桌（抽鬼牌／五子棋／躲彈幕／UNO；`tbl`／`table`／`tblinfo` 訊息、`TABLE_DEFS`、`games.json`）** | 和平島與遊戲桌 |
 | `makeSpr`／`drawSpr`、`anim`、人物分層 sheet、`avatar.json` 的 `frames`、**裝備／外觀／換色（`dye`、`glam`、`wardrobe`）** | 美術：多幀動畫與人物分層 |
-| 本機 Python／Node 環境、Discord CSP、`dev_server.py` 的 HTTP 設定 | 環境與部署地雷 |
+| 本機 Python／Node 環境、Discord CSP、`dev_server.py` 的 HTTP 設定、主迴圈 `dt`／`S.t` | 環境與部署地雷 |
+| 已被取代的舊做法（舊人物分層、髮型模組縮放） | 歷史紀錄（已過時） |
