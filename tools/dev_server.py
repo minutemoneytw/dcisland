@@ -638,6 +638,7 @@ def floor_to_list(floor):
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
 GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "intel": (3, 8)}           # 遊戲 → (開局最少人數, 入座上限)
+TBL_TYP_CD = 0.2                              # 英打競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英打競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
 # 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
@@ -3010,6 +3011,16 @@ class Room:
                             if m["cid"] is not None and m["cid"] != cid:
                                 out.append((m["cid"], {"t": "tpos", "i": i, "x": round(x, 1), "y": round(y, 1)}))
                     return out, None, None
+                if a == "typ":   # 英打競賽：打字進度 {n 第幾個字, p 已打對幾個字母, e 是否剛打錯}，只轉發給觀戰者（tpg）；不存檔、不通知畫面
+                    role, i = tbl_find(t, cid)
+                    n, p = msg.get("n"), msg.get("p")
+                    ok = (t["game"] == "typing" and role == "seat" and t["phase"] == "playing" and t.get("g")
+                          and type(n) is int and 0 <= n <= 100000 and type(p) is int and 0 <= p <= 64)
+                    if ok:
+                        for m in t["specs"]:
+                            if m["cid"] is not None:
+                                out.append((m["cid"], {"t": "tpg", "i": i, "n": n, "p": p, "e": 1 if msg.get("e") == 1 else 0}))
+                    return out, None, None
                 if a == "word":   # 英打競賽：分數回報，轉發 tsc 給同桌其他人（不通知整個畫面、不廣播 tblinfo）
                     n = msg.get("n")
                     if ty_word(t, cid, n, now_ms):
@@ -3269,6 +3280,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         last_hit = 0.0
         last_tbl = 0.0   # 牌桌操作的每連線限流（TBL_CD）
         last_pos = 0.0   # 躲彈幕位置回報的限流（TBL_POS_CD）
+        last_typ = 0.0   # 英打進度回報的限流（TBL_TYP_CD）
         last_dragon_hit = 0.0   # 打島主的每連線冷卻（與 last_hit 同款）
         last_fish = 0.0         # 釣魚結果的每連線冷卻
         last_xp_mob = 0.0       # 擊倒非主動怪的 XP 冷卻（2026-11-07）
@@ -3400,6 +3412,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         if now - last_pos < TBL_POS_CD:
                             continue
                         last_pos = now
+                    elif msg.get("a") == "typ":   # 英打競賽的打字進度（只轉發給觀戰者）：自己的限流
+                        if now - last_typ < TBL_TYP_CD:
+                            continue
+                        last_typ = now
                     else:
                         if now - last_tbl < TBL_CD:
                             continue

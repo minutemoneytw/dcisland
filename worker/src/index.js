@@ -482,6 +482,7 @@ async function exchangeToken(request, env) {
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
 const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
 const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], intel: [3, 8] };           // 遊戲 → [開局最少人數, 入座上限]
+const TBL_TYP_CD_MS = 200;                       // 英打競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英打競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
 // 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
@@ -1268,6 +1269,7 @@ export class Island {
     this.tables = new Map();         // 桌 id → 牌桌狀態（和平島遊戲桌；懶載入 storage，每次變動都寫回）
     this.lastTbl = new Map();        // ws → 上次牌桌操作的時間（TBL_CD_MS）
     this.lastTblPos = new Map();     // ws → 上次躲彈幕位置回報的時間（TBL_POS_CD_MS）
+    this.lastTblTyp = new Map();     // ws → 上次英打進度回報的時間（TBL_TYP_CD_MS）
     this.lastGameXp = new Map();     // 帳號 id → 上次玩小遊戲得 XP 的時間（GAME_XP_CD_MS；只放記憶體，休眠後重置無妨）
     this.dragonHits = new Map();     // ws → {terrain, t}：上次打哪座島的島主（冷卻＋仇恨換人用）
     this.provokes = new Map();       // ws → {terrain, t}：上次挑釁哪座島的島主（冷卻只在成功出手時計）
@@ -1693,6 +1695,9 @@ export class Island {
     if (a === "pos" || a === "word") {   // 躲彈幕的位置回報、英打競賽的分數回報：自己的限流，不影響 hit／finish 等操作
       if (now - (this.lastTblPos.get(ws) || 0) < TBL_POS_CD_MS) return;
       this.lastTblPos.set(ws, now);
+    } else if (a === "typ") {   // 英打競賽的打字進度（只轉發給觀戰者）：自己的限流
+      if (now - (this.lastTblTyp.get(ws) || 0) < TBL_TYP_CD_MS) return;
+      this.lastTblTyp.set(ws, now);
     } else {
       if (now - (this.lastTbl.get(ws) || 0) < TBL_CD_MS) return;
       this.lastTbl.set(ws, now);
@@ -1726,6 +1731,18 @@ export class Island {
           if (m.cid == null || m.cid === att.id) continue;
           for (const w of this.state.getWebSockets()) if ((w.deserializeAttachment() || {}).id === m.cid) { try { w.send(data); } catch { /* 對方已斷線 */ } }
         }
+      }
+      return;
+    }
+    if (a === "typ") {   // 英打競賽：打字進度 {n 第幾個字, p 已打對幾個字母, e 是否剛打錯}，只轉發給觀戰者（tpg）；不存檔、不通知畫面、沒人觀戰就什麼都不送
+      const [role, i] = tblFind(t, att.id);
+      const n = msg.n, p = msg.p;
+      if (t.game !== "typing" || role !== "seat" || t.phase !== "playing" || !t.g) return;
+      if (!Number.isInteger(n) || n < 0 || n > 100000 || !Number.isInteger(p) || p < 0 || p > 64) return;
+      const data = JSON.stringify({ t: "tpg", i, n, p, e: msg.e === 1 ? 1 : 0 });
+      for (const m of t.specs) {
+        if (m.cid == null) continue;
+        for (const w of this.state.getWebSockets()) if ((w.deserializeAttachment() || {}).id === m.cid) { try { w.send(data); } catch { /* 對方已斷線 */ } }
       }
       return;
     }
@@ -2802,6 +2819,7 @@ export class Island {
     this.lastDeathCredit.delete(ws);
     this.lastTbl.delete(ws);
     this.lastTblPos.delete(ws);
+    this.lastTblTyp.delete(ws);
     const att = ws.deserializeAttachment() || {};
     if (att.terrain) this.broadcast({ t: "leave", id: att.id }, ws, att.terrain);
   }

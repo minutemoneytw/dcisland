@@ -4750,6 +4750,7 @@ function buildDodge(box, v, mk, gd) {
 // ---- 英打競賽（第七桌 t7）：題目由「伺服器給的 seed」決定性地從 games.json 的 typing.words 抽（大家同一串單字）；
 // 打字判定、錯字鎖定 0.7 秒都在本機，每打完一個字回報 word {n}（n＝目前總分），其他人的分數由 tsc 訊息轉發；時間到後送 finish 請伺服器結算 ----
 const TY_LOCK_MS = 700;      // 打錯後不能輸入的時間（使用者定）
+const TY_PROG_GAP_MS = 250;   // 兩次打字進度回報（給觀戰者看）的最短間隔；伺服器的限流是 200ms
 const TY_SEND_GAP_MS = 70;   // 兩次分數回報的最短間隔（伺服器的限流是 60ms；太快的那次留給下一個 tick 補送）
 const TY_SETTLE_S = 1;       // 時間到後多久才請伺服器結算（與伺服器的 TY_SETTLE_MS 一致：讓最後一個字的回報先到）
 function typingWords(seed) {   // 同一個 seed 永遠產生同一串單字；不會連續出同一個字
@@ -4796,14 +4797,28 @@ function typingKey(e) {
   } else { T.lockUntil = performance.now() + TY_LOCK_MS; T.errPos = T.pos; T.wordKey = ''; }   // 打錯：該打的字母變紅震動，鎖 0.7 秒；不用刪除
   typingRender();
 }
+function typingSendProgress(v) {   // 有人在觀戰才送打字進度（約每 250ms 最多一次、有變化才送）；沒人觀戰就一個訊息都不送
+  const T = S.ty;
+  if (v.role !== 'seat' || !(v.specs > 0)) { T.pKey = ''; return; }
+  const e = T.errPos >= 0 ? 1 : 0, key = `${T.idx}|${T.pos}|${e}`;
+  if (key === T.pKey || performance.now() - (T.pAt || 0) < TY_PROG_GAP_MS) return;
+  T.pKey = key; T.pAt = performance.now();
+  S.net?.tbl?.({ a: 'typ', n: T.idx, p: T.pos, e });
+}
 function typingTick() {
   const T = S.ty, v = S.tableView;
   if (!T || !S.tableOpen || !v || v.game !== 'typing' || v.phase !== 'playing') { typingStop(); return; }
   typingSend();
+  typingSendProgress(v);
   const t = typingNow();
   // 時間到：留 1 秒讓最後的分數先到，再請伺服器結算（伺服器核對時鐘；每秒最多重送一次直到收到結果）
   if (v.role === 'seat' && t >= T.dur + TY_SETTLE_S && performance.now() - T.finishAt > 1000) { T.finishAt = performance.now(); S.net?.tbl?.({ a: 'finish' }); }
   if (T.errPos >= 0 && performance.now() >= T.lockUntil) T.errPos = -1;   // 鎖定結束：紅字恢復
+  typingRender();
+}
+function onNetTpg(m) {   // 觀戰者才會收到：各座位目前的打字進度（i＝座位編號）
+  const T = S.ty; if (!T) return;
+  (T.prog ||= {})[m.i] = { n: m.n, p: m.p, e: m.e };
   typingRender();
 }
 function onNetTsc(m) {   // 其他人的分數（i＝座位編號）
@@ -4824,6 +4839,12 @@ function typingRender() {
       if (seated && i === v.me) return;
       const e = document.createElement('div'); e.className = 'typing-other' + (s.left ? ' left' : '');
       e.textContent = `${s.name}${s.left ? '（已離開）' : ''}　${T.scores[i] ?? 0}`;
+      if (!seated && !s.left) {   // 觀戰者：多顯示這個人正在打的單字與打到哪（伺服器只送給觀戰者，tpg）
+        const pr = T.prog?.[i], n = Math.max(T.scores[i] ?? 0, pr?.n ?? 0), p = pr && pr.n === n ? pr.p : 0, w = T.word(n);
+        const ww = document.createElement('div'); ww.className = 'typing-other-word';
+        [...w].forEach((c, k) => { const sp = document.createElement('span'); sp.textContent = c; sp.className = k < p ? 'done' : k === p && pr && pr.n === n && pr.e ? 'err' : ''; ww.appendChild(sp); });
+        e.appendChild(ww);
+      }
       ot.appendChild(e);
     });
     if (!ot.childElementCount) ot.appendChild(Object.assign(document.createElement('div'), { className: 'typing-other solo', textContent: '只有你一個人參賽' }));
@@ -7015,6 +7036,7 @@ async function boot() {
     onFishResult,            // 釣魚結果（伺服器抽的魚；登入的人已記進伺服器的圖鑑）
     onTable: onNetTable,       // 和平島遊戲桌：伺服器給我的牌桌畫面
     onTpos: onNetTpos,         // 躲彈幕：其他玩家的位置
+    onTpg: onNetTpg,           // 英打競賽：觀戰者看到的其他玩家打字進度
     onTsc: onNetTsc,           // 英打競賽：其他玩家的分數
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）

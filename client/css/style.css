@@ -380,3 +380,6 @@ body {
 .ff-btn.active { background: #3a3424; border-color: var(--gold); color: var(--gold); }
 .uno-bar { justify-content: space-between; align-items: center; }
 .uno-acts { display: flex; gap: 10px; }
+.typing-other-word { font-family: monospace; font-size: 16px; letter-spacing: 2px; color: #7a86b0; margin-top: 2px; }
+.typing-other-word .done { color: #7be08a; }
+.typing-other-word .err { color: #ff6a6a; }

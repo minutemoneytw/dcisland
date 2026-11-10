@@ -114,6 +114,7 @@ export function connectNet(S, opts = {}) {
       case 'fish_result': if (opts.onFishResult) opts.onFishResult(msg); break;   // 釣魚結果（伺服器抽）
       case 'table': if (opts.onTable) opts.onTable(msg); break;           // 和平島遊戲桌：我這桌的畫面（v＝null＝我已離開）
       case 'tpos': if (opts.onTpos) opts.onTpos(msg); break;   // 躲彈幕：其他玩家的位置（i＝座位編號）
+      case 'tpg': if (opts.onTpg) opts.onTpg(msg); break;      // 英打競賽（觀戰者才收到）：其他玩家的打字進度（i＝座位編號、n＝第幾個字、p＝已打對幾個字母、e＝剛打錯）
       case 'tsc': if (opts.onTsc) opts.onTsc(msg); break;      // 英打競賽：其他玩家的分數（i＝座位編號、n＝分數）
       case 'tblinfo': if (opts.onTblInfo) opts.onTblInfo(msg.info); break;   // 和平島各桌的人數／狀態
       case 'craftdb': if (opts.onCraftDb) opts.onCraftDb(msg.craft); break;   // 合成解鎖紀錄（登入後由伺服器送來）
