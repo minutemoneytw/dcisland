@@ -5031,7 +5031,7 @@ function buildIntel(box, v, mk, gd) {
       status = ch.map((c, k) => k === 0 ? `${nm(c.by)} 使用了${IT_ACT[c.a]}${c.a === 'H' ? `（對 ${nm(c.tgt)}）` : (c.a === 'F' || c.a === 'I') && L ? `（對 ${nm(L.at)}）` : ''}` : `${nm(c.by)} 識破`).join(' ← ') + '——生效前可以識破';
     }
     else if (it.step === 'turn') status = myTurn ? '輪到你：可以先用行動牌，再選一張手牌投遞' : `輪到 ${nm(v.turn)} 投遞`;
-    else status = holding ? (L.kind === 'direct' && L.next < 0 ? '直達情報交到你手上：必須收下' : L.next < 0 ? `${kn}在你手上：大家都碰過了，只能收下` : `${kn}在你手上：收下，或傳給 ${nm(L.next)}`) : `${kn}在 ${nm(L?.at)} 手上`;
+    else status = holding ? (L.kind === 'direct' && L.next < 0 ? '直達情報交到你手上：必須收下' : L.next < 0 ? `${kn}在你手上：${L.at === L.from ? '大家都不收，退回到你手上，必須收下' : '只能收下'}` : L.next === L.from ? `${kn}在你手上：收下，或退回給發信者 ${nm(L.next)}（發信者必須收下）` : `${kn}在你手上：收下，或傳給 ${nm(L.next)}`) : `${kn}在 ${nm(L?.at)} 手上`;
     if (v.role === 'spec') status = '觀戰中 · ' + status;
   } else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
   const st = mk('div', 'table-status' + (myTurn || holding ? ' mine' : ''), status);
@@ -5119,7 +5119,7 @@ function buildIntel(box, v, mk, gd) {
     }
     if (holding) {   // 收下／轉手：只能傳給座位順序的下一位（直達情報：攔截者退回給發信者）
       const tk = mk('button', 'ff-btn', '收下'); tk.onclick = () => send({ a: 'itake' }); btns.appendChild(tk);
-      if (L.next >= 0) { const b = mk('button', 'ff-btn small', `${L.kind === 'direct' ? '不收，退回給' : '傳給'} ${nm(L.next)}`); b.onclick = () => send({ a: 'ifwd' }); btns.appendChild(b); }
+      if (L.next >= 0) { const b = mk('button', 'ff-btn small', `${L.kind === 'direct' ? '不收，退回給' : L.next === L.from ? '不收，退回給發信者' : '傳給'} ${nm(L.next)}`); b.onclick = () => send({ a: 'ifwd' }); btns.appendChild(b); }
     }
     // 手牌：點一張選取，再選要投遞或使用
     const hw = mk('div', 'it-hand');

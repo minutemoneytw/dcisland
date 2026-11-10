@@ -1114,7 +1114,10 @@ def it_fwd_target(t, L):
     """拿著情報的人能轉給誰（-1＝只能收下）：蓋著／公開＝座位順序的下一個沒碰過的人；直達＝只有「攔截下來的人」能退回給發信者，目標本人必須收下。"""
     if L["kind"] == "direct":
         return L["from"] if L.get("icpt") == L["at"] and it_ok(t, L["from"]) and L["from"] != L["at"] else -1
-    return it_next_untouched(t, L["at"], L["seen"])
+    nx = it_next_untouched(t, L["at"], L["seen"])
+    if nx >= 0:
+        return nx
+    return L["from"] if L["at"] != L["from"] and it_ok(t, L["from"]) else -1   # 大家都不收：退回給發信者，發信者必須收下
 
 def it_dl(g, now, ms):
     return 0 if g["untimed"] else now + ms   # 不限時模式：期限＝0（沒有倒數）

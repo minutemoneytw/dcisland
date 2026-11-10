@@ -836,7 +836,9 @@ function itNextUntouched(t, i, seen) {
 // 拿著情報的人能轉給誰（-1＝只能收下）：蓋著／公開＝座位順序的下一個沒碰過的人；直達＝只有「被攔截下來的人」能退回給發信者，目標本人必須收下
 function itFwdTarget(t, L) {
   if (L.kind === "direct") return L.icpt === L.at && itOk(t, L.from) && L.from !== L.at ? L.from : -1;
-  return itNextUntouched(t, L.at, L.seen);
+  const nx = itNextUntouched(t, L.at, L.seen);
+  if (nx >= 0) return nx;
+  return L.at !== L.from && itOk(t, L.from) ? L.from : -1;   // 大家都不收：退回給發信者，發信者必須收下
 }
 const itDl = (g, now, ms) => (g.untimed ? 0 : now + ms);   // 不限時模式：期限＝0（沒有倒數）
 function itDraw(t, i, n) {
