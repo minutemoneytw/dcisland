@@ -3672,6 +3672,7 @@ function closeList() { S.listOpen = false; $('listBox').classList.add('hidden');
 function teleportTo(r) {
   const me = S.players[0];
   if (!S.remotes.has(r.id) || me.dead) { buildPlayerList(); return; }
+  if (S.t < (me.petUntil ?? 0)) { toast('被石化了，動彈不得', 1200); return; }   // 石化中不能傳送（否則等於繞過「不能移動」）
   standUp(me);
   me.x = r.x; me.y = r.y; me.z = 0; me.vz = 0;
   closeList();
