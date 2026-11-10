@@ -4337,8 +4337,19 @@ function openTable(tb) {
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
   S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); typingStop(); unStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
-  rulesShow(false);
+  rulesShow(false); leaveAsk(false);
   $('tableBox').classList.add('hidden');
+}
+// 使用者主動離開（離開按鈕／Esc）：我是入座玩家而且牌局進行中 → 先跳確認（離開會直接中斷這一局或放棄成績）；觀戰、還沒開局就直接離開
+function leaveAsk(on) {
+  const box = $('leaveBox'); box.classList.toggle('hidden', !on);
+  if (on) $('leaveStay').focus();   // 預設停在「繼續遊戲」，連點空白鍵也不會誤退出
+}
+function leaveTable() {
+  const box = $('leaveBox');
+  if (!box.classList.contains('hidden')) { leaveAsk(false); return; }   // Esc 再按一次＝取消確認，繼續遊戲
+  const v = S.tableView;
+  if (v && v.phase === 'playing' && v.role === 'seat') leaveAsk(true); else closeTable();
 }
 // 規則說明視窗：遊戲定義有 guide（分段規則）的遊戲才有按鈕；入座／觀戰／遊戲中都能開關，不影響牌局畫面
 function rulesGuide() { const tb = tablesHere().find(t => t.id === S.tableId); return tb && gameDef(tb.game)?.guide || null; }
@@ -4397,6 +4408,7 @@ function buildTable() {
   const tb = tablesHere().find(t => t.id === S.tableId), gd = tb && gameDef(tb.game), v = S.tableView;
   $('tableTitle').textContent = gd ? gd.name : '遊戲桌';
   $('tableRulesBtn').classList.toggle('hidden', !gd?.guide);
+  if (!(v && v.phase === 'playing' && v.role === 'seat')) leaveAsk(false);   // 牌局結束／被移出座位：確認視窗不留著
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   if (S.tableChoice) {   // 剛走到桌邊：選入座還是觀戰
     const inf = S.tblInfo?.[S.tableId];
@@ -4409,7 +4421,7 @@ function buildTable() {
       b.onclick = () => { S.tableChoice = false; S.net?.tbl?.({ a: 'join', id: S.tableId, role }); buildTable(); };
       bs.appendChild(b);
     }
-    const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); bs.appendChild(lv);
+    const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); bs.appendChild(lv);
     box.appendChild(bs);
     if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
     return;
@@ -4468,7 +4480,7 @@ function buildTable() {
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
   }
-  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); btns.appendChild(lv);
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   // 紀錄與規則
@@ -4574,7 +4586,7 @@ function buildGomoku(box, v, mk) {
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
   }
-  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); btns.appendChild(lv);
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log');
@@ -4760,7 +4772,7 @@ function buildDodge(box, v, mk, gd) {
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
   }
-  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); btns.appendChild(lv);
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log');
@@ -4931,7 +4943,7 @@ function buildTyping(box, v, mk, gd) {
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
   }
-  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); btns.appendChild(lv);
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log');
@@ -5123,7 +5135,7 @@ function buildIntel(box, v, mk, gd) {
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
   }
-  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.prepend(lv);   // 離開放最左邊，避免連點誤按（同 UNO）
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); btns.prepend(lv);   // 離開放最左邊，避免連點誤按（同 UNO）
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log');
@@ -5261,7 +5273,7 @@ function buildUno(box, v, mk, gd) {
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); acts.appendChild(b);
   }
-  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv); btns.appendChild(acts);
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); btns.appendChild(lv); btns.appendChild(acts);
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log');
@@ -6598,7 +6610,7 @@ addEventListener('keydown', e => {
     return;
   }
   if (S.tableOpen) {   // 遊戲畫面開著：Esc 離開；五子棋復盤時 ←／→／Home／End 切換步數；其他鍵都不處理（不能走路）
-    if (k === 'escape') { e.preventDefault(); if (!$('rulesBox').classList.contains('hidden')) rulesShow(false); else closeTable(); }   // 規則視窗開著：Esc 先關規則
+    if (k === 'escape') { e.preventDefault(); if (!$('rulesBox').classList.contains('hidden')) rulesShow(false); else leaveTable(); }   // 規則視窗開著：Esc 先關；離開確認開著：Esc＝取消規則
     else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
     else if (S.ty) typingKey(e);   // 英打競賽：英文字母
     else if (S.gmStep != null && S.tableView?.moves && ['arrowleft', 'arrowright', 'home', 'end'].includes(k)) {
@@ -6858,7 +6870,9 @@ document.addEventListener('click', e => {   // 點齒輪與選單以外的地方
 });
 $('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
 $('avatarClose').onclick = () => { closeColor(false); closeGlams(); $('avatarPanel').classList.add('hidden'); };
-$('tableClose').onclick = () => closeTable();
+$('tableClose').onclick = () => leaveTable();
+$('leaveStay').onclick = () => leaveAsk(false);
+$('leaveGo').onclick = () => { leaveAsk(false); closeTable(); };
 $('tableRulesBtn').onclick = () => rulesShow($('rulesBox').classList.contains('hidden'));   // 再點一下關閉
 $('rulesClose').onclick = () => rulesShow(false);
 $('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑＋素材圖鑑／合成／配方筆記
