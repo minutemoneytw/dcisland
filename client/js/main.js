@@ -3544,7 +3544,7 @@ function drawPerson(p, wi, nameColor) {
     ctx.fillStyle = '#f0dc9a'; ctx.fillText(tt, p.x, headY);
     ctx.font = '10px "Microsoft JhengHei"';   // 職業圓點的位置要用名字的字型量寬
   }
-  if (p.cast) drawCastBar(p.x, headY - 30, (S.t - p.cast.t0) / p.cast.dur, '詠唱', p === S.players[0] ? castSlideLen(p.cast) / p.cast.dur : 0);   // 詠唱倒數條（同島島主的招式條同一個樣式）
+  if (p.cast) drawCastBar(p.x, headY - 30, (S.t - p.cast.t0) / p.cast.dur, '詠唱');   // 詠唱倒數條（同島島主的招式條同一個樣式）
   const jd = jobOf(p);
   if (jd) {   // 職業小圓點（FF14 職業徽章的簡化）：名牌左邊一顆角色色圓點
     const px = p.x - ctx.measureText(p.name).width / 2 - 9;
@@ -3748,14 +3748,13 @@ function saveSign() {
 }
 // 對話泡泡（畫在名牌上方）
 // 放招倒數條：中心 (cx, y)（條的上緣），frac＝進度（0→1，黃色由左往右填，填滿就放招），name＝右上角的招式名稱
-function drawCastBar(cx, y, frac, name, slide = 0) {   // slide＝最後這段比例是滑步窗口（可以移動），畫成淡藍色
+function drawCastBar(cx, y, frac, name) {
   const w = 72, h = 6, x = Math.round(cx - w / 2);
   frac = Math.max(0, Math.min(1, frac));
   ctx.save();
   ctx.fillStyle = 'rgba(8,10,14,.78)'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);   // 底
   ctx.fillStyle = '#f3c93e'; ctx.fillRect(x, y, w * frac, h);                      // 黃色倒數
   ctx.fillStyle = 'rgba(255,246,200,.55)'; ctx.fillRect(x, y, w * frac, 2);        // 上緣亮線
-  if (slide > 0) { const sx = x + w * (1 - slide); ctx.fillStyle = 'rgba(120,200,255,.45)'; ctx.fillRect(sx, y, w - (sx - x), h); }   // 滑步窗口（最後一段）
   ctx.strokeStyle = 'rgba(214,180,96,.9)'; ctx.lineWidth = 1; ctx.strokeRect(x - .5, y - .5, w + 1, h + 1);   // 細金邊
   if (name) {
     ctx.font = 'bold 11px "Microsoft JhengHei"'; ctx.textAlign = 'right';
