@@ -1111,10 +1111,8 @@ def it_next_untouched(t, i, seen):
     return -1
 
 def it_fwd_target(t, L):
-    """拿著情報的人能轉給誰（-1＝只能收下）：蓋著／公開＝座位順序的下一個沒碰過的人；直達＝只有「攔截下來的人」能退回給發信者，目標本人必須收下。"""
-    if L["kind"] == "direct":
-        return L["from"] if L.get("icpt") == L["at"] and it_ok(t, L["from"]) and L["from"] != L["at"] else -1
-    nx = it_next_untouched(t, L["at"], L["seen"])
+    """拿著情報的人能轉給誰（-1＝只能收下）：蓋著／公開＝座位順序的下一個沒碰過的人；直達＝拿著的人（目標本人或攔截者）可以不收、退回給發信者，發信者必須收下。"""
+    nx = -1 if L["kind"] == "direct" else it_next_untouched(t, L["at"], L["seen"])   # 直達不照座位傳，不收就直接退回發信者
     if nx >= 0:
         return nx
     return L["from"] if L["at"] != L["from"] and it_ok(t, L["from"]) else -1   # 大家都不收：退回給發信者，發信者必須收下
@@ -1368,7 +1366,7 @@ def it_msg(t, cid, msg, now):
             return
         p["ok"].append(i)
         it_ok_check(t, now)
-    elif a == "isend":   # 投遞：idx＝手牌；投遞方式由卡面決定（密函／公開情報照座位順序交給下一位；直達情報要帶 to，對方必須收下）
+    elif a == "isend":   # 投遞：idx＝手牌；投遞方式由卡面決定（密函／公開情報照座位順序交給下一位；直達情報要帶 to，對方可以不收、退回給發信者）
         if g["pend"] or g["step"] != "turn" or i != t["turn"] or type(idx) is not int or not 0 <= idx < len(s["hand"]):
             return
         kind = it_kind_of(s["hand"][idx])
@@ -1379,7 +1377,7 @@ def it_msg(t, cid, msg, now):
         g["letter"] = {"card": card, "orig": card, "from": i, "at": dst, "seen": [i, dst], "kind": kind, "icpt": None}
         g["step"], g["deadline"] = "pass", it_dl(g, now, IT_HOLD_MS)
         dn = t["seats"][dst]["name"]
-        tbl_log(t, f"{s['name']} 公開了一則情報（{it_label(card)}），交給 {dn}" if kind == "pub" else f"{s['name']} 把一封直達情報交給 {dn}（必須收下）" if kind == "direct" else f"{s['name']} 把一封密函交給 {dn}")
+        tbl_log(t, f"{s['name']} 公開了一則情報（{it_label(card)}），交給 {dn}" if kind == "pub" else f"{s['name']} 把一封直達情報交給 {dn}" if kind == "direct" else f"{s['name']} 把一封密函交給 {dn}")
     elif a == "itake":   # 收下
         if g["pend"] or g["step"] != "pass" or not L or L["at"] != i:
             return

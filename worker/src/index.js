@@ -833,10 +833,9 @@ function itNextUntouched(t, i, seen) {
   for (let k = 1; k < n; k++) { const j = (i + k) % n; if (itOk(t, j) && !seen.includes(j)) return j; }
   return -1;
 }
-// 拿著情報的人能轉給誰（-1＝只能收下）：蓋著／公開＝座位順序的下一個沒碰過的人；直達＝只有「被攔截下來的人」能退回給發信者，目標本人必須收下
+// 拿著情報的人能轉給誰（-1＝只能收下）：蓋著／公開＝座位順序的下一個沒碰過的人；直達＝拿著的人（目標本人或攔截者）可以不收、退回給發信者，發信者必須收下
 function itFwdTarget(t, L) {
-  if (L.kind === "direct") return L.icpt === L.at && itOk(t, L.from) && L.from !== L.at ? L.from : -1;
-  const nx = itNextUntouched(t, L.at, L.seen);
+  const nx = L.kind === "direct" ? -1 : itNextUntouched(t, L.at, L.seen);   // 直達不照座位傳，不收就直接退回發信者
   if (nx >= 0) return nx;
   return L.at !== L.from && itOk(t, L.from) ? L.from : -1;   // 大家都不收：退回給發信者，發信者必須收下
 }
@@ -1004,14 +1003,14 @@ function itMsg(t, cid, msg, now) {
   if (a === "iok") {   // 不限時：按「準備繼續」（識破時間內沒有要識破）
     if (!g.pend || !g.untimed || g.pend.by === i || g.pend.ok.includes(i)) return;
     g.pend.ok.push(i); itOkCheck(t, now);
-  } else if (a === "isend") {   // 投遞：idx＝手牌；投遞方式由卡面決定（密函／公開情報照座位順序交給下一位；直達情報要帶 to，對方必須收下）
+  } else if (a === "isend") {   // 投遞：idx＝手牌；投遞方式由卡面決定（密函／公開情報照座位順序交給下一位；直達情報要帶 to，對方可以不收、退回給發信者）
     if (g.pend || g.step !== "turn" || i !== t.turn || !Number.isInteger(msg.idx) || msg.idx < 0 || msg.idx >= s.hand.length) return;
     const kind = itKindOf(s.hand[msg.idx]);
     const to = kind === "direct" ? msg.to : itNextUntouched(t, i, [i]);
     if (!itOk(t, to) || to === i) return;
     const card = s.hand.splice(msg.idx, 1)[0];
     g.letter = { card, orig: card, from: i, at: to, seen: [i, to], kind, icpt: null }; g.step = "pass"; g.deadline = itDl(g, now, IT_HOLD_MS);
-    tblLog(t, kind === "pub" ? `${s.name} 公開了一則情報（${itLabel(card)}），交給 ${t.seats[to].name}` : kind === "direct" ? `${s.name} 把一封直達情報交給 ${t.seats[to].name}（必須收下）` : `${s.name} 把一封密函交給 ${t.seats[to].name}`);
+    tblLog(t, kind === "pub" ? `${s.name} 公開了一則情報（${itLabel(card)}），交給 ${t.seats[to].name}` : kind === "direct" ? `${s.name} 把一封直達情報交給 ${t.seats[to].name}` : `${s.name} 把一封密函交給 ${t.seats[to].name}`);
   } else if (a === "itake") {   // 收下
     if (g.pend || g.step !== "pass" || !L || L.at !== i) return;
     itReceive(t, now);

@@ -5093,7 +5093,7 @@ function buildIntel(box, v, mk, gd) {
     if (L) {
       const lt = mk('div', 'it-letter');
       lt.appendChild(itCardEl(L.card || null));
-      lt.appendChild(mk('div', null, `${nm(L.from)} 投遞了${IT_KIND[L.kind]} → 現在在 ${nm(L.at)} 手上${L.icpt != null ? `（${nm(L.icpt)} 攔截過）` : ''}${L.kind === 'pub' ? '（公開，大家都看得到）' : L.card ? (v.role === 'spec' ? '（觀戰看得到內容）' : '（你送出的那張，可能被調包）') : ''}${L.kind === 'direct' ? '　直達：目標必須收下' : ''}`));
+      lt.appendChild(mk('div', null, `${nm(L.from)} 投遞了${IT_KIND[L.kind]} → 現在在 ${nm(L.at)} 手上${L.icpt != null ? `（${nm(L.icpt)} 攔截過）` : ''}${L.kind === 'pub' ? '（公開，大家都看得到）' : L.card ? (v.role === 'spec' ? '（觀戰看得到內容）' : '（你送出的那張，可能被調包）') : ''}${L.kind === 'direct' ? '　直達：目標可以不收，退回發信者' : ''}`));
       mid.appendChild(lt);
     }
     if (v.note) {   // 自己偷看到的東西（截閱／搜身），到下次輪到自己時清掉
@@ -5139,7 +5139,7 @@ function buildIntel(box, v, mk, gd) {
       opts.appendChild(mk('span', 'table-tag', `${itLabel(sel)}：${IT_ACT_TIP[act]}`));
       if (myTurn) {   // 投遞方式由卡面決定：密函（蓋著）／公開情報（翻開）依座位順序傳給下一位；直達要指定一人（對方必須收下）
         const kind = itKindOf(sel), nn = nm(itNextSeat(v, me));
-        if (kind === 'direct') { const b = mk('button', 'ff-btn', '投遞這張（直達情報：指定一人，對方必須收下）'); b.onclick = () => { S.itMode = 'direct'; buildTable(); }; opts.appendChild(b); }
+        if (kind === 'direct') { const b = mk('button', 'ff-btn', '投遞這張（直達情報：指定一人，對方不收會退回給你）'); b.onclick = () => { S.itMode = 'direct'; buildTable(); }; opts.appendChild(b); }
         else { const b = mk('button', 'ff-btn', `投遞這張（${IT_KIND[kind]}：${kind === 'pub' ? '翻開' : '蓋著'}傳給 ${nn}）`); b.onclick = () => send({ a: 'isend', idx: S.itSel }); opts.appendChild(b); }
       }
       if (usable) {
@@ -5149,7 +5149,7 @@ function buildIntel(box, v, mk, gd) {
       }
       // 選對象
       if (S.itMode === 'direct' || S.itMode === 'H') {
-        opts.appendChild(mk('span', 'table-tag', S.itMode === 'direct' ? '直達給誰？（對方必須收下）' : '搜誰的身？'));
+        opts.appendChild(mk('span', 'table-tag', S.itMode === 'direct' ? '直達給誰？（對方不收會退回給你，你必須收下）' : '搜誰的身？'));
         v.seats.forEach((s, i) => {
           if (!alive(i) || i === me) return;
           const b = mk('button', 'ff-btn small', s.name);
