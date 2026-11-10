@@ -1689,7 +1689,8 @@ TABLES_BY_TERRAIN = {
     "peace": [dict(id="t2", game="gomoku", cell=[48, 32], w=3, h=2),
               dict(id="t1", game="oldmaid", cell=[56, 32], w=3, h=2),
               dict(id="t6", game="uno", cell=[48, 39], w=3, h=2),     # UNO（2026-11-08，使用者要求）
-              dict(id="t5", game="dodge", cell=[56, 39], w=3, h=2)],  # 躲彈幕只有一桌（2026-11-08，使用者要求）
+              dict(id="t5", game="dodge", cell=[56, 39], w=3, h=2),   # 躲彈幕只有一桌（2026-11-08，使用者要求）
+              dict(id="t7", game="typing", cell=[64, 32], w=3, h=2)],  # 英打競賽（2026-11-10，使用者要求）：抽鬼牌右邊、同一排相距 8 格
 }
 
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
@@ -1732,6 +1733,23 @@ def table_dodge():
     for x, y, c in ((8, 10, "#ff5a5a"), (14, 18, "#ffb347"), (20, 9, "#ff5a5a"), (27, 15, "#7ae8d0"), (33, 21, "#ff5a5a"), (38, 11, "#ffb347"), (12, 22, "#7ae8d0"), (30, 8, "#ffb347")):
         cv.ellipse(x, y, 1.6, 1.6, hx(c))
     cv.rect(23, 17, 25, 19, hx("#f4f0e4")); cv.set(24, 16, hx("#f4f0e4"))   # 中間一個小小的「玩家」
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    cv.outline()
+    return cv
+
+def table_typing():
+    """英打競賽：桌上一台鍵盤＋螢幕上的單字。"""
+    cv = Canvas(48, 32)
+    wood, screen = hx("#5a4a3a"), hx("#141826")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.25))
+    cv.rect(12, 6, 35, 14, hx("#2a2e3a")); cv.rect(13, 7, 34, 13, screen)          # 螢幕
+    for x in (15, 17, 19, 21, 23): cv.rect(x, 9, x, 11, hx("#7ae8d0"))              # 螢幕上的「字」
+    cv.rect(26, 9, 26, 11, hx("#ff5a5a")); cv.rect(28, 9, 31, 11, hx("#5a6a88"))
+    kb = hx("#d8d4c8")
+    cv.rect(6, 16, 41, 24, shade(kb, .7)); cv.rect(7, 17, 40, 23, kb)                # 鍵盤
+    for y in (18, 20):
+        for x in range(9, 39, 3): cv.rect(x, y, x + 1, y, shade(kb, .78))
+    cv.rect(15, 22, 32, 22, shade(kb, .78))                                           # 空白鍵
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
@@ -3047,6 +3065,7 @@ def main():
     save(table_gomoku(), "table_gomoku.png", "games")
     save(table_dodge(), "table_dodge.png", "games")
     save(table_uno(), "table_uno.png", "games")
+    save(table_typing(), "table_typing.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")

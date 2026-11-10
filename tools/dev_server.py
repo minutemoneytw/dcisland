@@ -636,9 +636,9 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6)}           # 遊戲 → (開局最少人數, 入座上限)
-TBL_POS_CD = 0.06                           # 躲彈幕的位置回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8)}           # 遊戲 → (開局最少人數, 入座上限)
+TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英打競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
 # 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
 # 輸贏經驗一樣（使用者定）：抽鬼牌每位 +4；五子棋勝／負／平手都 +5（下不到 10 手就結束的不給，擋刷分）。
@@ -726,6 +726,9 @@ def tbl_leave(t, cid):
             return
         if t["phase"] == "playing" and t["game"] == "uno":   # UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
             un_leave(t, i, int(time.time() * 1000))
+            return
+        if t["phase"] == "playing" and t["game"] == "typing":   # 英打競賽：離開不中斷，照當時分數排名
+            ty_leave(t, i, int(time.time() * 1000))
             return
         if t["phase"] == "playing":   # 使用者定：有人離開（含斷線）直接結束這一局
             t["result"] = {"aborted": True, "text": f"{name} 離開了，這一局結束"}
@@ -973,6 +976,63 @@ def dg_leave(t, i, now):
         tbl_log(t, f"{s['name']} 離開了")
     s["left"], s["cid"] = True, None
     dg_check_end(t, now)
+
+# ---- 英打競賽（第七桌 t7；2026-11-10，使用者要求）：1～8 人、倒數 3 秒後 30 秒內比誰打完的英文單字多 ----
+# 題目由客戶端用伺服器給的 seed 決定性地產生（大家同一串單字，單字表在 games.json 的 typing.words）；打字與錯字鎖定都在客戶端，
+# 每打完一個字回報 word {n}（n＝目前總分，信任客戶端；伺服器只收「比上次多 1～3」的值），伺服器記分、轉發 tsc {i, n} 給同桌其他人。
+# 時間到後留 TY_SETTLE_MS 收最後的分數，客戶端再送 finish，伺服器核對時鐘才結算。中途離開不中斷（座位留空殼、照當時分數排名、不給 XP）。
+# 與 worker/src/index.js 的 ty* 同一套。
+TY_DUR = 30              # 比賽秒數（使用者定）
+TY_COUNTDOWN_MS = 3000   # 開局倒數（使用者定）
+TY_SETTLE_MS = 1000      # 時間到後再收分數的寬限（最後一個字的回報可能晚到）
+TY_STEP_MAX = 3          # 一次回報最多比上次多幾分（漏掉的回報由下一次補上）
+TY_XP, TY_XP_MIN = 3, 5  # 正常打完、至少 TY_XP_MIN 個字的入座者 +TY_XP（助手先訂的數值）
+
+def ty_start(t):
+    t["g"] = {"seed": random.getrandbits(31), "t0": int(time.time() * 1000) + TY_COUNTDOWN_MS}
+    t["result"] = None
+    t["phase"] = "playing"
+    for s in t["seats"]:
+        s["score"], s["out"], s["left"], s["ready"] = 0, False, False, False
+    tbl_log(t, f"比賽開始！{len(t['seats'])} 人參加，限時 {TY_DUR} 秒")
+
+def ty_finish(t):
+    ranking = sorted(({"name": s["name"], "score": s.get("score", 0), "left": bool(s.get("left"))} for s in t["seats"]), key=lambda r: -r["score"])
+    stay = [s for s in t["seats"] if not s.get("left")]
+    xp = [TY_XP if s.get("score", 0) >= TY_XP_MIN else 0 for s in stay]   # 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
+    top = ranking[0] if ranking else None
+    text = f"比賽結束！第一名 {top['name']}，打了 {top['score']} 個單字" if top else "比賽結束"
+    t["seats"] = stay
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp}
+    tbl_log(t, text)
+    tbl_reset_seats(t)
+
+def ty_check_end(t, now):
+    """時間到（含寬限），或入座的人全部離開：結算。"""
+    if t["game"] != "typing" or t["phase"] != "playing" or not t.get("g"):
+        return
+    if now >= t["g"]["t0"] + TY_DUR * 1000 + TY_SETTLE_MS or all(s.get("left") for s in t["seats"]):
+        ty_finish(t)
+
+def ty_word(t, cid, n, now):
+    """回報分數：有更新回 True（呼叫端轉發給同桌）。"""
+    role, i = tbl_find(t, cid)
+    if t["game"] != "typing" or role != "seat" or t["phase"] != "playing" or not t.get("g"):
+        return False
+    if now < t["g"]["t0"] or now > t["g"]["t0"] + TY_DUR * 1000 + TY_SETTLE_MS:
+        return False
+    s = t["seats"][i]
+    cur = s.get("score", 0)
+    if type(n) is not int or n <= cur or n > cur + TY_STEP_MAX:
+        return False
+    s["score"] = n
+    return True
+
+def ty_leave(t, i, now):
+    s = t["seats"][i]
+    tbl_log(t, f"{s['name']} 離開了（{s.get('score', 0)} 個單字）")
+    s["left"], s["cid"] = True, None
+    ty_check_end(t, now)
 
 # ---- UNO（第六桌 t6；2026-11-08，使用者要求，名稱沿用 UNO（商標風險由使用者決定）；牌面是原創繪製）：2～6 人、標準 108 張、手牌剩 1 張要喊 UNO ----
 # 牌的編碼：顏色字母 RYGB（紅黃綠藍）＋點數 0～9／s（跳過）／r（反轉）／d（+2），例如 R5、Gs；W＝變色牌、F＝變色 +4（沒有顏色）。
@@ -1316,7 +1376,7 @@ def un_set_mode(t, cid, mode):
         s["ready"] = False
     tbl_log(t, f"{t['seats'][0]['name']} 把玩法改成{'無限制' if mode == 'wild' else '傳統'}")
 
-GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
@@ -1335,6 +1395,11 @@ def tbl_view(t, cid):
             seats[k].update(lives=s.get("lives", 0), died=s.get("died"), left=bool(s.get("left")))
         if g and playing:
             v["dg"] = {"seed": g["seed"], "t0": g["t0"], "dur": DG_DUR, "sn": int(time.time() * 1000)}
+    elif t["game"] == "typing":   # 英打競賽：每個座位的分數／是否已離開；進行中附上 seed 與開始時間（題目由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
+        for k, s in enumerate(t["seats"]):
+            seats[k].update(score=s.get("score", 0), left=bool(s.get("left")))
+        if g and playing:
+            v["ty"] = {"seed": g["seed"], "t0": g["t0"], "dur": TY_DUR, "sn": int(time.time() * 1000)}
     elif g and t["game"] == "gomoku":   # 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
         v["board"] = "".join(str(c) for c in g["board"])
         v["last"], v["black"], v["line"], v["moves"] = g["last"], g["black"], g["line"], g["moves"]   # moves：每一手的座標（偶數手＝黑棋）；結束後客戶端用來復盤
@@ -2614,10 +2679,19 @@ class Room:
                             if m["cid"] is not None and m["cid"] != cid:
                                 out.append((m["cid"], {"t": "tpos", "i": i, "x": round(x, 1), "y": round(y, 1)}))
                     return out, None, None
+                if a == "word":   # 英打競賽：分數回報，轉發 tsc 給同桌其他人（不通知整個畫面、不廣播 tblinfo）
+                    n = msg.get("n")
+                    if ty_word(t, cid, n, now_ms):
+                        i = tbl_find(t, cid)[1]
+                        for m in t["seats"] + t["specs"]:
+                            if m["cid"] is not None and m["cid"] != cid:
+                                out.append((m["cid"], {"t": "tsc", "i": i, "n": n}))
+                    return out, None, None
                 if a == "leave":
                     self._table_leave_locked(cid, out)
                 else:
                     dg_check_end(t, now_ms)   # 時間到了就先結算（下面的動作若是 finish／hit 就只是確認）
+                    ty_check_end(t, now_ms)
                     if a == "ready":
                         tbl_ready(t, cid, msg.get("v"))
                     elif a == "sit":
@@ -2647,8 +2721,9 @@ class Room:
                         un_set_mode(t, cid, msg.get("v"))
                     elif a == "hit":   # 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
                         dg_hit(t, cid, now_ms)
-                    elif a == "finish":   # 躲彈幕：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）
+                    elif a == "finish":   # 躲彈幕／英打競賽：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）
                         dg_check_end(t, now_ms + 300)
+                        ty_check_end(t, now_ms + 300)
                     else:
                         return [], None, None
                     self._table_notify_locked(t, out)
@@ -2987,7 +3062,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             xp_grant(c, amt, "mob")
                 elif t == "tbl":   # 和平島遊戲桌（join／leave／ready／sit／draw）；牌局邏輯全在伺服器
                     now = time.time()
-                    if msg.get("a") == "pos":   # 躲彈幕的位置回報：自己的限流，不影響 hit／finish 等操作
+                    if msg.get("a") in ("pos", "word"):   # 躲彈幕的位置回報、英打競賽的分數回報：自己的限流，不影響 hit／finish 等操作
                         if now - last_pos < TBL_POS_CD:
                             continue
                         last_pos = now

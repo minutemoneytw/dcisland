@@ -101,7 +101,7 @@ const S = {
   craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
   craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
   gamesDB: null, tableImgs: {},        // 和平島遊戲桌：遊戲定義（assets/games/games.json，手寫）與桌子圖
-  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, unTimer: 0, unOff: 0, unTimeoutAt: 0, unPick: null, dg: null, dgRaf: 0, dgLast: 0, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
+  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, unTimer: 0, unOff: 0, unTimeoutAt: 0, unPick: null, dg: null, dgRaf: 0, dgLast: 0, ty: null, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
   titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
@@ -4333,7 +4333,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); unStopTimer(); S.unPick = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); typingStop(); unStopTimer(); S.unPick = null;
   $('tableBox').classList.add('hidden');
 }
 function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已離開這桌）
@@ -4396,6 +4396,7 @@ function buildTable() {
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
   if (tb?.game === 'uno') { buildUno(box, v, mk, gd); return; }   // UNO 有自己的畫面（牌桌）
+  if (tb?.game === 'typing') { buildTyping(box, v, mk, gd); return; }   // 英打競賽有自己的畫面（題目＋分數）
   const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
   // 狀態列
   let status;
@@ -4743,6 +4744,157 @@ function buildDodge(box, v, mk, gd) {
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 英打競賽（第七桌 t7）：題目由「伺服器給的 seed」決定性地從 games.json 的 typing.words 抽（大家同一串單字）；
+// 打字判定、錯字鎖定 0.7 秒都在本機，每打完一個字回報 word {n}（n＝目前總分），其他人的分數由 tsc 訊息轉發；時間到後送 finish 請伺服器結算 ----
+const TY_LOCK_MS = 700;      // 打錯後不能輸入的時間（使用者定）
+const TY_SEND_GAP_MS = 70;   // 兩次分數回報的最短間隔（伺服器的限流是 60ms；太快的那次留給下一個 tick 補送）
+const TY_SETTLE_S = 1;       // 時間到後多久才請伺服器結算（與伺服器的 TY_SETTLE_MS 一致：讓最後一個字的回報先到）
+function typingWords(seed) {   // 同一個 seed 永遠產生同一串單字；不會連續出同一個字
+  const words = gameDef('typing')?.words || ['typing'], rng = mulberry32(seed >>> 0), list = [];
+  return k => {
+    while (list.length <= k) {
+      let w = words[Math.floor(rng() * words.length)];
+      if (words.length > 1 && w === list[list.length - 1]) w = words[(words.indexOf(w) + 1) % words.length];
+      list.push(w);
+    }
+    return list[k];
+  };
+}
+function typingStart(v) {   // 一局開始（伺服器給了 ty）：重置本機狀態
+  typingStop();
+  S.ty = {
+    id: S.tableId, t0: v.ty.t0, dur: v.ty.dur, off: v.ty.sn - Date.now(),   // off：伺服器時間 − 本機時間（毫秒，忽略單程延遲）
+    word: typingWords(v.ty.seed), idx: 0, pos: 0, score: 0, sent: 0, lastSend: 0, lockUntil: 0, errPos: -1,
+    finishAt: 0, ime: false, scores: v.seats.map(s => s.score || 0), wordKey: '',
+  };
+  S.ty.timer = setInterval(typingTick, 100);
+}
+function typingStop() { if (S.ty?.timer) clearInterval(S.ty.timer); S.ty = null; }
+const typingNow = () => (Date.now() + S.ty.off - S.ty.t0) / 1000;   // 開局後的秒數（開局前是負的＝倒數）
+function typingSend() {   // 有還沒回報的分數就送（太快的留給 tick 補送）
+  const T = S.ty;
+  if (!T || T.score <= T.sent || performance.now() - T.lastSend < TY_SEND_GAP_MS) return;
+  T.lastSend = performance.now(); T.sent = T.score;
+  S.net?.tbl?.({ a: 'word', n: T.score });
+}
+function typingKey(e) {
+  const T = S.ty, v = S.tableView;
+  if (!T || !v || v.role !== 'seat' || v.phase !== 'playing') return;
+  if (e.key === 'Process' || e.isComposing) { T.ime = true; typingRender(); return; }   // 中文輸入法開著：提示切換成英文
+  if (e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+  e.preventDefault();
+  const t = typingNow();
+  if (t < 0 || t >= T.dur || performance.now() < T.lockUntil) return;   // 倒數中、時間到、打錯鎖定中
+  T.ime = false;
+  const w = T.word(T.idx), ch = e.key.toLowerCase();
+  if (ch === w[T.pos]) {
+    T.pos++; T.errPos = -1;
+    if (T.pos >= w.length) { T.idx++; T.pos = 0; T.score++; if (v.me >= 0) T.scores[v.me] = T.score; typingSend(); }   // 打完最後一個字母：自動得分、換下一個字
+  } else { T.lockUntil = performance.now() + TY_LOCK_MS; T.errPos = T.pos; T.wordKey = ''; }   // 打錯：該打的字母變紅震動，鎖 0.7 秒；不用刪除
+  typingRender();
+}
+function typingTick() {
+  const T = S.ty, v = S.tableView;
+  if (!T || !S.tableOpen || !v || v.game !== 'typing' || v.phase !== 'playing') { typingStop(); return; }
+  typingSend();
+  const t = typingNow();
+  // 時間到：留 1 秒讓最後的分數先到，再請伺服器結算（伺服器核對時鐘；每秒最多重送一次直到收到結果）
+  if (v.role === 'seat' && t >= T.dur + TY_SETTLE_S && performance.now() - T.finishAt > 1000) { T.finishAt = performance.now(); S.net?.tbl?.({ a: 'finish' }); }
+  if (T.errPos >= 0 && performance.now() >= T.lockUntil) T.errPos = -1;   // 鎖定結束：紅字恢復
+  typingRender();
+}
+function onNetTsc(m) {   // 其他人的分數（i＝座位編號）
+  const T = S.ty; if (!T) return;
+  T.scores[m.i] = m.n;
+  typingRender();
+}
+function typingRender() {
+  const T = S.ty, v = S.tableView;
+  if (!T || !v) return;
+  const t = typingNow(), seated = v.role === 'seat';
+  const tm = $('tyTime'); if (tm) tm.textContent = t < 0 ? `開始倒數 ${Math.ceil(-t)}` : t >= T.dur ? '時間到！' : `剩 ${(T.dur - t).toFixed(1)} 秒`;
+  const cd = $('tyCount'); if (cd) { cd.textContent = t < 0 ? String(Math.ceil(-t)) : ''; cd.classList.toggle('hidden', t >= 0); }
+  const ot = $('tyOthers');   // 上方：其他參賽者的分數（觀戰者看全部）
+  if (ot) {
+    ot.innerHTML = '';
+    v.seats.forEach((s, i) => {
+      if (seated && i === v.me) return;
+      const e = document.createElement('div'); e.className = 'typing-other' + (s.left ? ' left' : '');
+      e.textContent = `${s.name}${s.left ? '（已離開）' : ''}　${T.scores[i] ?? 0}`;
+      ot.appendChild(e);
+    });
+    if (!ot.childElementCount) ot.appendChild(Object.assign(document.createElement('div'), { className: 'typing-other solo', textContent: '只有你一個人參賽' }));
+  }
+  const sc = $('tyScore'); if (sc) sc.textContent = seated ? `分數 ${T.score}` : '觀戰中';
+  const wd = $('tyWord'), inp = $('tyInput'), w = T.word(T.idx);
+  const showWord = seated && t >= 0 && t < T.dur;
+  const key = showWord ? `${T.idx}|${T.pos}|${T.errPos}` : `-|${t < 0 ? 'cd' : 'end'}`;
+  if (wd && key !== T.wordKey) {   // 題目有變才重畫（不然錯字的震動動畫會一直重來）
+    T.wordKey = key; wd.innerHTML = '';
+    if (showWord) {
+      [...w].forEach((c, k) => {
+        const e = document.createElement('span');
+        e.className = k < T.pos ? 'done' : k === T.errPos ? 'err' : k === T.pos ? 'cur' : '';
+        e.textContent = c; wd.appendChild(e);
+      });
+    } else wd.textContent = !seated ? '' : t < 0 ? '準備…' : '時間到！等待結算…';
+  }
+  if (inp) inp.textContent = showWord ? w.slice(0, T.pos) : '';
+  const hint = $('tyHint'); if (hint) hint.textContent = T.ime ? '偵測到中文輸入法：請切換成英文輸入（例如按 Shift）' : '';
+}
+function buildTyping(box, v, mk, gd) {
+  const playing = v.phase === 'playing', mySeat = v.role === 'seat' ? v.seats[v.me] : null;
+  if (playing && v.ty && (!S.ty || S.ty.id !== S.tableId || S.ty.t0 !== v.ty.t0)) typingStart(v);   // 新的一局（或剛進來觀戰一局進行中的）：重置本機狀態
+  else if (playing && S.ty) S.ty.scores = v.seats.map((s, i) => (i === v.me && v.role === 'seat' ? S.ty.score : Math.max(s.score || 0, S.ty.scores[i] || 0)));
+  if (!playing) typingStop();
+  let status;
+  if (playing) status = mySeat ? '比賽中：照著打出畫面中央的單字（不用按 Enter）' : '觀戰中';
+  else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
+  box.appendChild(mk('div', 'table-status' + (playing && mySeat ? ' mine' : ''), status));
+  if (v.result && !playing && v.result.ranking) {   // 結算：依分數排名（同分同名次）
+    box.appendChild(mk('div', 'table-result', v.result.text));
+    const rk = mk('div', 'dodge-rank'), rs = v.result.ranking;
+    rs.forEach(r => rk.appendChild(mk('div', null, `${1 + rs.filter(o => o.score > r.score).length}. ${r.name}　${r.score} 個單字${r.left ? '（中途離開）' : ''}`)));
+    box.appendChild(rk);
+  }
+  if (playing) {   // 比賽畫面：上方其他人的分數、中央題目與自己的分數、下方自己打的內容
+    const wrap = mk('div', 'typing-wrap');
+    wrap.appendChild(mk('div', 'typing-others')).id = 'tyOthers';
+    wrap.appendChild(mk('div', 'typing-time')).id = 'tyTime';
+    wrap.appendChild(mk('div', 'typing-word')).id = 'tyWord';
+    wrap.appendChild(mk('div', 'typing-score')).id = 'tyScore';
+    wrap.appendChild(mk('div', 'typing-input')).id = 'tyInput';
+    wrap.appendChild(mk('div', 'typing-hint')).id = 'tyHint';
+    wrap.appendChild(mk('div', 'typing-count hidden')).id = 'tyCount';
+    box.appendChild(wrap);
+  } else {   // 大廳：座位（名字、準備狀態）
+    const row = mk('div', 'table-seats dodge-seats');
+    v.seats.forEach(s => {
+      const seat = mk('div', 'table-seat' + (s.you ? ' you' : ''));
+      seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '')));
+      seat.appendChild(mk('div', 'table-tag', s.ready ? '已準備' : '未準備'));
+      row.appendChild(seat);
+    });
+    for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+    box.appendChild(row);
+  }
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => closeTable(); btns.appendChild(lv);
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+  if (S.ty) { S.ty.wordKey = ''; typingRender(); }
 }
 // ---- UNO（第六桌 t6）：牌面用 DOM 畫（原創設計：圓角色塊＋大符號）；規則與狀態全在伺服器，客戶端只畫畫面、送 play／draw／pass／uno／catch／timeout／mode ----
 const UN_FILL = { R: '#d83a3a', Y: '#e8b820', G: '#2ea84a', B: '#2f66d8' };
@@ -6213,6 +6365,7 @@ addEventListener('keydown', e => {
   if (S.tableOpen) {   // 遊戲畫面開著：Esc 離開；五子棋復盤時 ←／→／Home／End 切換步數；其他鍵都不處理（不能走路）
     if (k === 'escape') { e.preventDefault(); closeTable(); }
     else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
+    else if (S.ty) typingKey(e);   // 英打競賽：英文字母
     else if (S.gmStep != null && S.tableView?.moves && ['arrowleft', 'arrowright', 'home', 'end'].includes(k)) {
       e.preventDefault();
       const N = S.tableView.moves.length;
@@ -6669,6 +6822,7 @@ async function boot() {
     onFishResult,            // 釣魚結果（伺服器抽的魚；登入的人已記進伺服器的圖鑑）
     onTable: onNetTable,       // 和平島遊戲桌：伺服器給我的牌桌畫面
     onTpos: onNetTpos,         // 躲彈幕：其他玩家的位置
+    onTsc: onNetTsc,           // 英打競賽：其他玩家的分數
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）
