@@ -4974,14 +4974,14 @@ function buildTyping(box, v, mk, gd) {
   if (S.ty) { S.ty.wordKey = ''; typingRender(); }
 }
 // ---- 秘藥情報戰（第八桌 t8）：規則與狀態全在伺服器（見 worker 的 it*），客戶端只畫畫面、送 isend／itake／ifwd／iact／timeout ----
-// 密函編碼「印記.行動.投遞方式」：印記 Y 黃（沙都）／B 藍（水都）／K 黑（咒函），雙色＝兩個字母（沒有灰）；行動 P 截閱／S 調包／F 押送／X 焚信／H 搜身／W 洗白／C 識破／I 攔截／T 轉移／B 阻擋／N 無人倖免；投遞方式 s 密函／p 公開情報／d 直達情報
+// 密函編碼「印記.行動.投遞方式」：印記 Y 黃（沙都）／B 藍（水都）／K 黑（咒函），雙色＝兩個字母（沒有灰）；行動 P 截閱／S 調包／F 鎖定（原押送）／X 焚信／H 搜身／W 洗白／C 識破／I 攔截／T 轉移／B 阻擋／N 無人倖免；投遞方式 s 密函／p 公開情報／d 直達情報
 const IT_FILL = { Y: '#e8b820', B: '#2f66d8', K: '#3a2050' };   // 灰（廢紙）已移除（2026-11-11）
 const IT_CNAME = { Y: '黃', B: '藍', K: '黑' };
-const IT_ACT = { P: '截閱', S: '調包', F: '押送', X: '焚信', H: '搜身', W: '洗白', C: '識破', I: '攔截', T: '轉移', B: '阻擋', N: '無人倖免', V: '查驗', D: '補給', R: '竊取' };
+const IT_ACT = { P: '截閱', S: '調包', F: '鎖定', X: '焚信', H: '搜身', W: '洗白', C: '識破', I: '攔截', T: '轉移', B: '阻擋', N: '無人倖免', V: '查驗', D: '補給', R: '竊取' };
 const IT_KIND = { seal: '密函', pub: '公開情報', direct: '直達情報' };   // 投遞方式（由卡面決定，不是玩家選）：蓋著照座位傳／翻開照座位傳／指定一人（對方必須收下）
 const IT_KIND_CODE = { s: 'seal', p: 'pub', d: 'direct' }, IT_KIND_SYM = { seal: '✉', pub: '👁', direct: '➤' };   // 卡面左上角的符號
 const itKindOf = c => IT_KIND_CODE[c.split('.')[2]] || 'seal';   // 牌＝印記.行動.投遞方式（例 YB.F.p）
-const IT_ACT_TIP = { P: '蓋著的密函在你手上時：偷看它的內容（公開情報、已被調包公開的不能用）；也可以先宣告一個顏色，宣告就公開這封情報，猜對（雙色只要包含）抽 1 張', S: '蓋著的密函在你手上時：換上你的另一張手牌，換上去的牌公開，被換掉的牌丟棄（投遞方式不變）', F: '別人拿著情報時：逼他立刻收下（優先於阻擋，他不能再不收或傳走）', X: '情報傳遞中：把它燒掉', H: '你的回合：偷看一人的 2 張手牌', W: '任何階段：丟掉任何一位玩家情報區裡一封含黑的情報', C: '別人的行動（含識破）生效前：取消它（識破也能被識破）', I: '別人拿著情報時：攔到自己手上（不能攔自己發的）；攔到後可收下，或不收：蓋著／公開的照座位傳給下一位、直達情報退回發信者', T: '情報傳到你面前時：轉移給另一位玩家，他不能拒收（被阻擋的人不能當對象）', B: '情報傳遞中（自己或別人的）：指定一位玩家，本回他不能收下情報（沒有人可轉、只能收下時不生效；押送優先於阻擋）', N: '你的回合、投遞之前：從你開始，照座位順序從牌堆頂各拿一張直接放進每個人的情報區，有人勝利就停', V: '你的回合：查驗一位玩家的陣營，只有你看得到結果（之後有些身分可以謊報或不透露）', D: '你的回合、投遞之前：抽 2 張', R: '你的回合、投遞之前：從一位玩家手上隨機拿 1 張到你手上（他會看到被拿走哪張）' };
+const IT_ACT_TIP = { P: '蓋著的密函在你手上時：偷看它的內容（公開情報、已被調包公開的不能用）；也可以先宣告一個顏色，宣告就公開這封情報，猜對（雙色只要包含）抽 1 張', S: '蓋著的密函在你手上時：換上你的另一張手牌，換上去的牌公開，被換掉的牌丟棄（投遞方式不變）', F: '只有輪到的人（投遞前或傳遞中）：鎖定一位玩家，本回情報到他手上就必須收下（他正拿著就立刻收下；優先於阻擋，他也不能用轉移丟給別人）', X: '情報傳遞中：把它燒掉', H: '你的回合：偷看一人的 2 張手牌', W: '任何階段：丟掉任何一位玩家情報區裡一封含黑的情報', C: '別人的行動（含識破）生效前：取消它（識破也能被識破）', I: '別人拿著情報時：攔到自己手上（不能攔自己發的）；攔到後可收下，或不收：蓋著／公開的照座位傳給下一位、直達情報退回發信者', T: '情報傳到你面前時：轉移給另一位玩家，他不能拒收（被阻擋的人不能當對象；你被鎖定時不能用）', B: '情報傳遞中（自己或別人的）：指定一位玩家，本回他不能收下情報（沒有人可轉、只能收下時不生效；鎖定優先於阻擋）', N: '你的回合、投遞之前：從你開始，照座位順序從牌堆頂各拿一張直接放進每個人的情報區，有人勝利就停', V: '你的回合：查驗一位玩家的陣營，只有你看得到結果（之後有些身分可以謊報或不透露）', D: '你的回合、投遞之前：抽 2 張', R: '你的回合、投遞之前：從一位玩家手上隨機拿 1 張到你手上（他會看到被拿走哪張）' };
 const IT_ROLE = { sand: ['沙都', '#e8b820', '任一位沙都玩家集滿 3 張黃色密函'], water: ['水都', '#5a8af0', '任一位水都玩家集滿 3 張藍色密函'], mage: ['咒術師', '#b07ae8', '自己集滿 3 張黑色咒函（你不會因為黑函出局）'] };
 const itCols = c => c.split('.')[0], itActOf = c => c.split('.')[1];
 const itLabel = c => [...itCols(c)].map(x => IT_CNAME[x]).join('') + '·' + IT_ACT[itActOf(c)];
@@ -5029,10 +5029,10 @@ function buildIntel(box, v, mk, gd) {
     const kn = L ? IT_KIND[L.kind] : '密函';
     if (pend) {   // 識破串：最底下是真正的行動，後面每一個都是識破
       const ch = pend.chain || [{ a: pend.a, by: pend.by, tgt: pend.tgt }];
-      status = ch.map((c, k) => k === 0 ? `${nm(c.by)} 使用了${IT_ACT[c.a]}${['H', 'V', 'R', 'T', 'B', 'W'].includes(c.a) ? `（對 ${nm(c.tgt)}）` : c.col ? `（宣告${IT_CNAME[c.col]}色）` : (c.a === 'F' || c.a === 'I') && L ? `（對 ${nm(L.at)}）` : ''}` : `${nm(c.by)} 識破`).join(' ← ') + '——生效前可以識破';
+      status = ch.map((c, k) => k === 0 ? `${nm(c.by)} 使用了${IT_ACT[c.a]}${['F', 'H', 'V', 'R', 'T', 'B', 'W'].includes(c.a) ? `（對 ${nm(c.tgt)}）` : c.col ? `（宣告${IT_CNAME[c.col]}色）` : c.a === 'I' && L ? `（對 ${nm(L.at)}）` : ''}` : `${nm(c.by)} 識破`).join(' ← ') + '——生效前可以識破';
     }
     else if (it.ask) status = it.ask.tgt === me ? `${nm(it.ask.by)} 查驗了你：選擇要怎麼回答` : `等 ${nm(it.ask.tgt)} 回答 ${nm(it.ask.by)} 的查驗`;
-    else if (it.arrive && it.step === 'pass') status = `${kn}到了 ${nm(L.at)} 手上——大家按「準備繼續」後他才能決定（這時可以出押送／攔截／焚信／阻擋）`;
+    else if (it.arrive && it.step === 'pass') status = `${kn}到了 ${nm(L.at)} 手上——大家按「準備繼續」後他才能決定（這時可以出鎖定（輪到的人）／攔截／焚信／阻擋）`;
     else if (it.step === 'ack') status = `${nm(it.ack.by)} 收下了情報——大家看清楚後按「準備繼續」`;
     else if (it.step === 'turn') status = myTurn ? '輪到你：可以先用行動牌，再選一張手牌投遞' : `輪到 ${nm(v.turn)} 投遞`;
     else status = holding ? (L.kind === 'direct' && L.next < 0 ? '直達情報交到你手上：必須收下' : L.next < 0 ? `${kn}在你手上：${L.at === L.from ? '大家都不收，退回到你手上，必須收下' : '只能收下'}` : L.next === L.from ? `${kn}在你手上：收下，或退回給發信者 ${nm(L.next)}（發信者必須收下）` : `${kn}在你手上：${(it.blocked || []).includes(me) ? '你被阻擋，本回不能收下，只能傳給 ' + nm(L.next) : '收下，或傳給 ' + nm(L.next)}`) : `${kn}在 ${nm(L?.at)} 手上`;
@@ -5098,6 +5098,7 @@ function buildIntel(box, v, mk, gd) {
       if (L && L.at === i) tags.push(`✉ 拿著${IT_KIND[L.kind]}`);
       else if (L && L.seen.includes(i)) tags.push('碰過');
       if ((it.blocked || []).includes(i)) tags.push('🚫 本回不能收');
+      if ((it.locked || []).includes(i)) tags.push('🔒 本回被鎖定');
       if (s.out) tags.push('出局'); if (s.left) tags.push('已離開');
       seat.appendChild(mk('div', 'table-tag', tags.join(' · ')));
       const ic = mk('div', 'it-intel'); for (const c of s.intel || []) ic.appendChild(itCardEl(c, { small: true }));
@@ -5183,9 +5184,9 @@ function buildIntel(box, v, mk, gd) {
     const opts = mk('div', 'table-btns it-opts');
     if (sel) {
       const act = itActOf(sel), passing = !pend && it.step === 'pass' && L, atMe = passing && L.at === me, canSee = L && L.kind !== 'pub' && !L.open;
-      const others = v.seats.map((x, i) => i).filter(i => alive(i) && i !== me), tTargets = others.filter(i => !(it.blocked || []).includes(i)), bTargets = v.seats.map((x, i) => i).filter(i => alive(i) && !(it.blocked || []).includes(i));
+      const others = v.seats.map((x, i) => i).filter(i => alive(i) && i !== me), tTargets = others.filter(i => !(it.blocked || []).includes(i)), fTargets = others.filter(i => !(it.locked || []).includes(i)), bTargets = v.seats.map((x, i) => i).filter(i => alive(i) && !(it.blocked || []).includes(i));
       const blackIn = v.seats.map((x, i) => i).filter(i => alive(i) && (v.seats[i].intel || []).some(c => itCols(c).includes('K')));
-      const usable = { P: atMe && canSee, S: atMe && canSee && hand.length > 1, F: passing && L.at !== me, X: passing, I: passing && L.at !== me && L.from !== me, H: myTurn, V: myTurn, D: myTurn && !L, R: myTurn && !L && others.length > 0, W: !pend && blackIn.length > 0, T: atMe && tTargets.length > 0, B: passing && bTargets.length > 0, N: myTurn && !L, C: false }[act];
+      const usable = { P: atMe && canSee, S: atMe && canSee && hand.length > 1, F: v.turn === me && !it.ask && ((myTurn && !L) || passing) && fTargets.length > 0, X: passing, I: passing && L.at !== me && L.from !== me, H: myTurn, V: myTurn, D: myTurn && !L, R: myTurn && !L && others.length > 0, W: !pend && blackIn.length > 0, T: atMe && !(it.locked || []).includes(me) && tTargets.length > 0, B: passing && bTargets.length > 0, N: myTurn && !L, C: false }[act];
       opts.appendChild(mk('span', 'table-tag', `${itLabel(sel)}：${IT_ACT_TIP[act]}`));
       if (myTurn) {   // 投遞方式由卡面決定：密函（蓋著）／公開情報（翻開）依座位順序傳給下一位；直達要指定一人（對方必須收下）
         const kind = itKindOf(sel), nn = nm(itNextSeat(v, me));
@@ -5194,7 +5195,7 @@ function buildIntel(box, v, mk, gd) {
       }
       if (usable) {
         const b = mk('button', 'ff-btn', act === 'P' ? '使用截閱（自己偷看）' : `使用${IT_ACT[act]}`);
-        b.onclick = () => { if (act === 'H' || act === 'V' || act === 'R' || act === 'W' || act === 'S' || act === 'T' || act === 'B') { S.itMode = act; S.itWTgt = -1; buildTable(); } else send({ a: 'iact', idx: S.itSel }); };
+        b.onclick = () => { if (act === 'F' || act === 'H' || act === 'V' || act === 'R' || act === 'W' || act === 'S' || act === 'T' || act === 'B') { S.itMode = act; S.itWTgt = -1; buildTable(); } else send({ a: 'iact', idx: S.itSel }); };
         opts.appendChild(b);
         if (act === 'P') {   // 截閱：宣告一個顏色＝一定公開這封情報；猜對（雙色只要包含）抽 1 張，猜錯只是不能抽
           opts.appendChild(mk('span', 'table-tag', '或宣告顏色並公開：'));
@@ -5207,6 +5208,7 @@ function buildIntel(box, v, mk, gd) {
       else if (S.itMode === 'H') pickBtns('搜誰的身？', others, i => send({ a: 'iact', idx: S.itSel, tgt: i }));
       else if (S.itMode === 'V') pickBtns('查驗誰？', others, i => send({ a: 'iact', idx: S.itSel, tgt: i }));
       else if (S.itMode === 'R') pickBtns('竊取誰的手牌？', others, i => send({ a: 'iact', idx: S.itSel, tgt: i }));
+      else if (S.itMode === 'F') pickBtns('鎖定誰？（本回情報到他手上就必須收下）', fTargets, i => send({ a: 'iact', idx: S.itSel, tgt: i }));
       else if (S.itMode === 'T') pickBtns('轉移給誰？（他不能拒收）', tTargets, i => send({ a: 'iact', idx: S.itSel, tgt: i }));
       else if (S.itMode === 'B') pickBtns('阻擋誰？（本回他不能收下情報）', bTargets, i => send({ a: 'iact', idx: S.itSel, tgt: i }));
       else if (S.itMode === 'W' && !(S.itWTgt >= 0)) pickBtns('洗誰的情報區？（只列出有黑的人）', blackIn, i => { S.itWTgt = i; buildTable(); });

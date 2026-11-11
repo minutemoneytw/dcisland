@@ -1058,7 +1058,7 @@ IT_HAND0 = 4         # 開局手牌
 # 「一段倒數」＝識破時間（每張出的牌／識破各自一段）、投遞回合、每次有人拿到情報的收／轉；換下一段就重新算。與 worker 的 itExtend／itSkip 同一套
 IT_EXT_MUL, IT_EXT_MAX, IT_EXT_PER, IT_EXT_SKIP_MS = 5, 2, 3, 3000
 IT_MSGS = {"isend", "itake", "ifwd", "iact", "timeout", "imode", "iok", "iext", "iskip", "ians"}
-IT_ACT = {"P": "截閱", "S": "調包", "F": "押送", "X": "焚信", "H": "搜身", "W": "洗白", "C": "識破", "I": "攔截", "T": "轉移", "B": "阻擋", "N": "無人倖免", "V": "查驗", "D": "補給", "R": "竊取"}
+IT_ACT = {"P": "截閱", "S": "調包", "F": "鎖定", "X": "焚信", "H": "搜身", "W": "洗白", "C": "識破", "I": "攔截", "T": "轉移", "B": "阻擋", "N": "無人倖免", "V": "查驗", "D": "補給", "R": "竊取"}
 IT_KIND = {"seal": "密函", "pub": "公開情報", "direct": "直達情報"}   # 投遞方式（由卡面決定，不是玩家選）：蓋著照座位傳／翻開照座位傳／直接指定一人（對方必須收下）
 IT_KIND_CODE = {"s": "seal", "p": "pub", "d": "direct"}
 IT_KIND_CYCLE = "sspsd"   # 牌組依序循環分配投遞方式：密函 60%、公開 20%、直達 20%
@@ -1066,7 +1066,8 @@ IT_CNAME = {"Y": "黃", "B": "藍", "K": "黑"}   # 2026-11-11 使用者要求�
 IT_ROLE = {"sand": "沙都", "water": "水都", "mage": "咒術師"}
 # 牌組 75 張：印記 → 各行動的張數（雙色牌同時算兩種顏色；沒有灰）。2026-11-11 使用者要求重配：黃藍雙色減少、黃黑／藍黑增加；
 # 焚信 −4、洗白 +2、搜身 −2、攔截 +2、阻擋 +2，新增補給 D 4 張、竊取 R 3 張（顏色由助手分配）。含黃 35、含藍 35、含黑 33（與 worker 的 IT_DECK 一致）
-IT_DECK = {"Y": "P2S2F2X1H1W1C3I1T1B1N1V1D1", "B": "P2S2F2X1H1W1C3I1T1B1N1V1D1", "K": "P1S1F1H1W1C1I1B1V1D1R1", "YB": "P1S1I1B1V1D1", "YK": "P1S1F2H1C2I1T1B1R1", "BK": "P1S1F2W1C2I1T1B1R1"}
+# （2026-11-11 再改：洗白 +2，加在純黃、純藍各 1 張，共 77 張；含黃 36、含藍 36、含黑 33；押送改名鎖定）
+IT_DECK = {"Y": "P2S2F2X1H1W2C3I1T1B1N1V1D1", "B": "P2S2F2X1H1W2C3I1T1B1N1V1D1", "K": "P1S1F1H1W1C1I1B1V1D1R1", "YB": "P1S1I1B1V1D1", "YK": "P1S1F2H1C2I1T1B1R1", "BK": "P1S1F2W1C2I1T1B1R1"}
 IT_MAGES = {3: 1, 4: 0, 5: 1, 6: 2, 7: 1, 8: 2}   # 人數 → 咒術師人數（使用者定：4 人局 2 對 2）；其餘沙都、水都平分
 
 def it_deck():
@@ -1117,6 +1118,8 @@ def it_next_untouched(t, i, seen):
 
 def it_fwd_target(t, L):
     """拿著情報的人能轉給誰（-1＝只能收下）：蓋著／公開＝座位順序的下一個沒碰過的人；直達＝拿著的人（目標本人或攔截者）可以不收、退回給發信者，發信者必須收下。"""
+    if it_locked(t["g"], L["at"]):   # 被鎖定的人：情報到他手上就只能收下（不能傳走、不能退回）
+        return -1
     nx = -1 if L["kind"] == "direct" else it_next_untouched(t, L["at"], L["seen"])   # 直達不照座位傳，不收就直接退回發信者
     if nx >= 0:
         return nx
@@ -1147,6 +1150,11 @@ def it_draw(t, i, n):
 def it_blocked(g, i):
     """阻擋：本回不能「收下」情報的人（g["blocked"]，換回合就清空）。"""
     return i in g.get("blocked", [])
+
+def it_locked(g, i):
+    """鎖定（F，原押送；2026-11-11 使用者改）：輪到的人在自己的回合（投遞前或傳遞中）指定一人，本回情報到他手上就必須收下（g["locked"]，換回合清空）；
+    鎖定的人沒有可轉的對象（it_fwd_target＝-1），所以阻擋對他不生效（鎖定優先於阻擋），也不能用轉移把情報丟給別人。"""
+    return i in (g.get("locked") or [])
 
 def it_can_take(t, L, i):
     """沒有可轉的人時（只能收下）阻擋不生效，避免卡死；押送優先於阻擋（押送直接走 it_receive）。"""
@@ -1182,6 +1190,7 @@ def it_begin_turn(t, i, now):
             break
         t["turn"] = i
         g["step"], g["letter"], g["pend"], g["arrive"], g["blocked"], g["deadline"] = "turn", None, None, None, [], it_dl(g, now, IT_TURN_MS)
+        g["locked"] = []
         g["ask"] = None
         it_clear_stolen(t)
         t["seats"][i]["note"] = None   # 上一輪偷看到的東西：輪到自己時清掉
@@ -1330,9 +1339,14 @@ def it_apply(t, p, now):
         g["discard"].append(L["card"])
         L["card"], L["open"] = p["sel"], True
         tbl_log(t, f"{by['name']} 調包了密函：換上 {it_label(p['sel'])}（公開），原本的牌被丟棄")
-    elif a == "F" and L:
-        tbl_log(t, f"{t['seats'][L['at']]['name']} 被押送，必須收下密函")
-        it_receive(t, now)
+    elif a == "F" and it_ok(t, p["tgt"]):   # 鎖定：他正拿著情報就立刻收下；還沒拿到就標記，情報到他手上時只能收下
+        if not it_locked(g, p["tgt"]):
+            g.setdefault("locked", []).append(p["tgt"])
+        if L and g["step"] == "pass" and L["at"] == p["tgt"]:
+            tbl_log(t, f"{t['seats'][p['tgt']]['name']} 被鎖定，必須收下情報")
+            it_receive(t, now)
+        else:
+            tbl_log(t, f"{by['name']} 鎖定了 {t['seats'][p['tgt']]['name']}：本回情報到他手上就必須收下")
     elif a == "X" and L:
         g["discard"].append(L["card"])
         g["letter"] = None
@@ -1637,8 +1651,11 @@ def it_msg(t, cid, msg, now):
             if type(sel) is not int or not 0 <= sel < len(s["hand"]) or sel == idx:
                 return
             pick = s["hand"][sel]
-        if act == "F" and (not passing or L["at"] == i):   # 押送：別人拿著情報時
-            return
+        if act == "F":                                     # 鎖定：只有輪到的人，投遞前或傳遞中，指定另一位玩家
+            tg = msg.get("tgt")
+            if i != t["turn"] or g.get("ask") or not ((mine and not L) or passing) or not it_ok(t, tg) or tg == i or it_locked(g, tg):
+                return
+            tgt = tg
         if act == "X" and not passing:                    # 焚信：情報傳遞中
             return
         if act == "I" and (not passing or L["at"] == i or L["from"] == i):   # 攔截：別人拿著情報時（不能攔自己發出去的）
@@ -1655,7 +1672,7 @@ def it_msg(t, cid, msg, now):
             tgt, pick = tg, t["seats"][tg]["intel"][sel]
         if act == "T":                                     # 轉移：情報在自己面前時，交給另一位（被阻擋的人不行）
             tg = msg.get("tgt")
-            if not passing or L["at"] != i or not it_ok(t, tg) or tg == i or it_blocked(g, tg):
+            if not passing or L["at"] != i or it_locked(g, i) or not it_ok(t, tg) or tg == i or it_blocked(g, tg):
                 return
             tgt = tg
         if act == "B":                                     # 阻擋：情報傳遞中（自己或別人的），指定一人
@@ -1684,7 +1701,7 @@ def it_msg(t, cid, msg, now):
             g["ack"]["ok"] = []      # 收下確認中出牌：確認重來
         if col:
             g["pend"]["col"] = col
-        on = f"（對 {t['seats'][tgt]['name']}）" if act in ("H", "V", "R", "W", "T", "B") else f"（對 {t['seats'][L['at']]['name']}）" if act in ("F", "I") else f"（宣告{IT_CNAME[col]}色）" if col else ""
+        on = f"（對 {t['seats'][tgt]['name']}）" if act in ("F", "H", "V", "R", "W", "T", "B") else f"（對 {t['seats'][L['at']]['name']}）" if act == "I" else f"（宣告{IT_CNAME[col]}色）" if col else ""
         tbl_log(t, f"{s['name']} 使用了{IT_ACT[act]}{on}")
         it_ok_check(t, now)   # 不限時：只剩出牌的人自己活著的極端情況，直接生效
 
@@ -2093,7 +2110,7 @@ def tbl_view(t, cid):
         if playing and g:
             L = g["letter"]
             v["it"] = {"step": g["step"], "deck": len(g["deck"]), "discard": len(g["discard"]), "deadline": g["deadline"], "sn": int(time.time() * 1000),
-                       "untimed": bool(g["untimed"]), "blocked": list(g.get("blocked", [])), "arrive": {"at": L["at"], "ok": list(g["arrive"]["ok"])} if g.get("arrive") and L else None, "ack": {"by": g["ack"]["by"], "ok": list(g["ack"]["ok"])} if g.get("ack") else None,
+                       "untimed": bool(g["untimed"]), "blocked": list(g.get("blocked", [])), "locked": list(g.get("locked") or []), "arrive": {"at": L["at"], "ok": list(g["arrive"]["ok"])} if g.get("arrive") and L else None, "ack": {"by": g["ack"]["by"], "ok": list(g["ack"]["ok"])} if g.get("ack") else None,
                        "letter": {"from": L["from"], "at": L["at"], "seen": list(L["seen"]), "kind": L["kind"], "open": bool(L.get("open")), "next": it_fwd_target(t, L), "icpt": L.get("icpt")} if L else None,
                        "pend": {"a": g["pend"]["a"], "by": g["pend"]["by"], "tgt": g["pend"]["tgt"], "until": g["pend"]["until"], "ok": list(g["pend"]["ok"]), "chain": it_chain(g["pend"])} if g["pend"] else None}
             v["it"]["ask"] = {"by": g["ask"]["by"], "tgt": g["ask"]["tgt"]} if g.get("ask") else None   # 等誰回答查驗

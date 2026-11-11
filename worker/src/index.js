@@ -805,7 +805,7 @@ const IT_WIN = 3, IT_DEATH = 3;
 const IT_XP = 6;            // 正常結束：每位入座者 +6（輸贏一樣，同其他桌；助手先訂的數值）
 const IT_HAND0 = 4;
 const IT_MSGS = new Set(["isend", "itake", "ifwd", "iact", "timeout", "imode", "iok", "iext", "iskip", "ians"]);         // 開局手牌
-const IT_ACT = { P: "截閱", S: "調包", F: "押送", X: "焚信", H: "搜身", W: "洗白", C: "識破", I: "攔截", T: "轉移", B: "阻擋", N: "無人倖免", V: "查驗", D: "補給", R: "竊取" };
+const IT_ACT = { P: "截閱", S: "調包", F: "鎖定", X: "焚信", H: "搜身", W: "洗白", C: "識破", I: "攔截", T: "轉移", B: "阻擋", N: "無人倖免", V: "查驗", D: "補給", R: "竊取" };
 const IT_KIND = { seal: "密函", pub: "公開情報", direct: "直達情報" };   // 投遞方式（由卡面決定，不是玩家選）：蓋著照座位傳／翻開照座位傳／直接指定一人（對方必須收下）
 const IT_KIND_CODE = { s: "seal", p: "pub", d: "direct" };
 const IT_KIND_CYCLE = "sspsd";   // 牌組依序循環分配投遞方式：密函 60%、公開 20%、直達 20%
@@ -813,8 +813,9 @@ const IT_CNAME = { Y: "黃", B: "藍", K: "黑" };   // 2026-11-11 使用者要�
 const IT_ROLE = { sand: "沙都", water: "水都", mage: "咒術師" };
 // 牌組 75 張：印記 → 各行動的張數（雙色牌同時算兩種顏色；沒有灰）。2026-11-11 使用者要求重配：黃藍雙色減少、黃黑／藍黑增加；
 // 焚信 −4、洗白 +2、搜身 −2、攔截 +2、阻擋 +2，新增補給 D 4 張、竊取 R 3 張（顏色由助手分配）。含黃 35、含藍 35、含黑 33
-// 各行動：截閱 8、調包 8、押送 9、焚信 2、搜身 4、洗白 4、識破 11、攔截 6、轉移 4、阻擋 6、無人倖免 2、查驗 4、補給 4、竊取 3
-const IT_DECK = { Y: "P2S2F2X1H1W1C3I1T1B1N1V1D1", B: "P2S2F2X1H1W1C3I1T1B1N1V1D1", K: "P1S1F1H1W1C1I1B1V1D1R1", YB: "P1S1I1B1V1D1", YK: "P1S1F2H1C2I1T1B1R1", BK: "P1S1F2W1C2I1T1B1R1" };
+// （2026-11-11 再改：洗白 +2，加在純黃、純藍各 1 張，共 77 張；含黃 36、含藍 36、含黑 33）
+// 各行動：截閱 8、調包 8、鎖定（原押送）9、焚信 2、搜身 4、洗白 6、識破 11、攔截 6、轉移 4、阻擋 6、無人倖免 2、查驗 4、補給 4、竊取 3
+const IT_DECK = { Y: "P2S2F2X1H1W2C3I1T1B1N1V1D1", B: "P2S2F2X1H1W2C3I1T1B1N1V1D1", K: "P1S1F1H1W1C1I1B1V1D1R1", YB: "P1S1I1B1V1D1", YK: "P1S1F2H1C2I1T1B1R1", BK: "P1S1F2W1C2I1T1B1R1" };
 const IT_MAGES = { 3: 1, 4: 0, 5: 1, 6: 2, 7: 1, 8: 2 };   // 人數 → 咒術師人數（使用者定：4 人局 2 對 2）；其餘沙都、水都平分
 function itDeck() {   // 牌＝「印記.行動.投遞方式」（例 YB.F.p）；投遞方式 s 密函／p 公開情報／d 直達情報，由卡面決定
   const d = [];
@@ -841,6 +842,7 @@ function itNextUntouched(t, i, seen) {
 }
 // 拿著情報的人能轉給誰（-1＝只能收下）：蓋著／公開＝座位順序的下一個沒碰過的人；直達＝拿著的人（目標本人或攔截者）可以不收、退回給發信者，發信者必須收下
 function itFwdTarget(t, L) {
+  if (itLocked(t.g, L.at)) return -1;   // 被鎖定的人：情報到他手上就只能收下（不能傳走、不能退回）
   const nx = L.kind === "direct" ? -1 : itNextUntouched(t, L.at, L.seen);   // 直達不照座位傳，不收就直接退回發信者
   if (nx >= 0) return nx;
   return L.at !== L.from && itOk(t, L.from) ? L.from : -1;   // 大家都不收：退回給發信者，發信者必須收下
@@ -858,6 +860,9 @@ function itDraw(t, i, n) {
 }
 // 阻擋：本回不能「收下」情報的人（g.blocked，換回合就清空）；沒有可轉的人時（只能收下）阻擋不生效，避免卡死；押送優先於阻擋
 const itBlocked = (g, i) => (g.blocked || []).includes(i);
+// 鎖定（F，原押送；2026-11-11 使用者改）：輪到的人在自己的回合（投遞前或傳遞中）指定一人，本回情報到他手上就必須收下（g.locked，換回合清空）；
+// 鎖定的人沒有可轉的對象（itFwdTarget＝-1），所以阻擋對他不生效（鎖定優先於阻擋），也不能用轉移把情報丟給別人
+const itLocked = (g, i) => (g.locked || []).includes(i);
 const itCanTake = (t, L, i) => !itBlocked(t.g, i) || itFwdTarget(t, L) < 0;
 function itStart(t) {
   const n = t.seats.length, m = IT_MAGES[n] ?? 1, half = (n - m) / 2;
@@ -873,7 +878,7 @@ const itClearStolen = t => { for (const s of t.seats) s.stolen = null; };   // �
 function itBeginTurn(t, i, now) {
   const g = t.g;
   for (let k = 0; k < t.seats.length && i >= 0; k++) {
-    t.turn = i; g.step = "turn"; g.letter = null; g.pend = null; g.arrive = null; g.ask = null; g.blocked = []; itClearStolen(t); g.deadline = itDl(g, now, IT_TURN_MS);
+    t.turn = i; g.step = "turn"; g.letter = null; g.pend = null; g.arrive = null; g.ask = null; g.blocked = []; g.locked = []; itClearStolen(t); g.deadline = itDl(g, now, IT_TURN_MS);
     t.seats[i].note = null;   // 上一輪偷看到的東西：輪到自己時清掉
     itDraw(t, i, 2);
     if (t.seats[i].hand.length) return;
@@ -978,7 +983,11 @@ function itApply(t, p, now) {
     if (k < 0) return;
     by.hand.splice(k, 1); g.discard.push(g.letter.card); g.letter.card = p.sel; g.letter.open = true;
     tblLog(t, `${by.name} 調包了密函：換上 ${itLabel(p.sel)}（公開），原本的牌被丟棄`);
-  } else if (p.a === "F" && g.letter) { tblLog(t, `${t.seats[g.letter.at].name} 被押送，必須收下密函`); itReceive(t, now); }
+  } else if (p.a === "F" && itOk(t, p.tgt)) {   // 鎖定：他正拿著情報就立刻收下；還沒拿到就標記，情報到他手上時只能收下
+    if (!itLocked(g, p.tgt)) (g.locked || (g.locked = [])).push(p.tgt);
+    if (g.letter && g.step === "pass" && g.letter.at === p.tgt) { tblLog(t, `${t.seats[p.tgt].name} 被鎖定，必須收下情報`); itReceive(t, now); }
+    else tblLog(t, `${by.name} 鎖定了 ${t.seats[p.tgt].name}：本回情報到他手上就必須收下`);
+  }
   else if (p.a === "X" && g.letter) { g.discard.push(g.letter.card); g.letter = null; tblLog(t, `${by.name} 燒掉了密函`); itEndLetter(t, now); }
   else if (p.a === "I" && g.letter && g.step === "pass" && g.letter.at !== p.by && g.letter.from !== p.by && itOk(t, p.by)) {
     const L = g.letter, was = t.seats[L.at].name;
@@ -1157,7 +1166,7 @@ function itMsg(t, cid, msg, now) {
     let tgt = -1, sel = null;
     if (act === "P" || act === "S") { if (!pass || L.at !== i || L.kind === "pub" || L.open) return; }   // 截閱、調包：蓋著的密函（非公開、沒被調包過）在自己手上時
     if (act === "S") { const k = msg.sel; if (!Number.isInteger(k) || k < 0 || k >= s.hand.length || k === msg.idx) return; sel = s.hand[k]; }
-    if (act === "F" && (!pass || L.at === i)) return;   // 押送：別人拿著情報時
+    if (act === "F") { if (i !== t.turn || g.ask || !(mine && !L || pass) || !itOk(t, msg.tgt) || msg.tgt === i || itLocked(g, msg.tgt)) return; tgt = msg.tgt; }   // 鎖定：只有輪到的人，投遞前或傳遞中，指定另一位玩家
     if (act === "X" && !pass) return;                   // 焚信：情報傳遞中
     if (act === "I" && (!pass || L.at === i || L.from === i)) return;   // 攔截：別人拿著情報時（不能攔自己發出去的）
     if (act === "H" || act === "V") { if (!mine || !itOk(t, msg.tgt) || msg.tgt === i) return; tgt = msg.tgt; }   // 搜身、查驗：自己的回合
@@ -1166,7 +1175,7 @@ function itMsg(t, cid, msg, now) {
       if (!itOk(t, msg.tgt) || !Number.isInteger(k) || k < 0 || k >= th.intel.length || !itCols(th.intel[k]).includes("K")) return;
       tgt = msg.tgt; sel = th.intel[k];
     }
-    if (act === "T") { if (!pass || L.at !== i || !itOk(t, msg.tgt) || msg.tgt === i || itBlocked(g, msg.tgt)) return; tgt = msg.tgt; }   // 轉移：情報在自己面前時，交給另一位（被阻擋的人不行）
+    if (act === "T") { if (!pass || L.at !== i || itLocked(g, i) || !itOk(t, msg.tgt) || msg.tgt === i || itBlocked(g, msg.tgt)) return; tgt = msg.tgt; }   // 轉移：情報在自己面前時，交給另一位（被阻擋的人不行）
     if (act === "B") { if (!pass || !itOk(t, msg.tgt) || itBlocked(g, msg.tgt)) return; tgt = msg.tgt; }   // 阻擋：情報傳遞中（自己或別人的），指定一人
     if (act === "N" && (!mine || L)) return;   // 無人倖免：自己的回合、發送情報之前
     if (act === "D" && (!mine || L)) return;   // 補給：自己的回合、發送情報之前
@@ -1178,7 +1187,7 @@ function itMsg(t, cid, msg, now) {
     if (g.arrive) g.arrive.ok = [];   // 有人出牌：到達確認重來
     if (g.ack) g.ack.ok = [];         // 收下確認中出牌：確認重來
     if (col) g.pend.col = col;
-    const on = act === "H" || act === "V" || act === "R" || act === "W" || act === "T" || act === "B" ? `（對 ${t.seats[tgt].name}）` : act === "F" || act === "I" ? `（對 ${t.seats[L.at].name}）` : col ? `（宣告${IT_CNAME[col]}色）` : "";
+    const on = act === "F" || act === "H" || act === "V" || act === "R" || act === "W" || act === "T" || act === "B" ? `（對 ${t.seats[tgt].name}）` : act === "I" ? `（對 ${t.seats[L.at].name}）` : col ? `（宣告${IT_CNAME[col]}色）` : "";
     tblLog(t, `${s.name} 使用了${IT_ACT[act]}${on}`);
     itOkCheck(t, now);   // 不限時：只剩出牌的人自己活著的極端情況，直接生效
   }
@@ -1422,7 +1431,7 @@ function tblView(t, cid) {
       const g = t.g, L = g.letter;
       v.it = {
         step: g.step, deck: g.deck.length, discard: g.discard.length, deadline: g.deadline, sn: Date.now(),
-        untimed: !!g.untimed, blocked: [...(g.blocked || [])], arrive: g.arrive && L ? { at: L.at, ok: [...g.arrive.ok] } : null, ack: g.ack ? { by: g.ack.by, ok: [...g.ack.ok] } : null,
+        untimed: !!g.untimed, blocked: [...(g.blocked || [])], locked: [...(g.locked || [])], arrive: g.arrive && L ? { at: L.at, ok: [...g.arrive.ok] } : null, ack: g.ack ? { by: g.ack.by, ok: [...g.ack.ok] } : null,
         letter: L ? { from: L.from, at: L.at, seen: [...L.seen], kind: L.kind, open: !!L.open, next: itFwdTarget(t, L), icpt: L.icpt ?? null } : null,
         pend: g.pend ? { a: g.pend.a, by: g.pend.by, tgt: g.pend.tgt, until: g.pend.until, ok: [...g.pend.ok], chain: itChain(g.pend) } : null,
       };
