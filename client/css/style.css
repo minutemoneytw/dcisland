@@ -422,10 +422,6 @@ body {
 .it-mychar { margin: 6px auto; max-width: 340px; }
 
 /* 規則視窗：左側分頁（規則說明／角色介紹） */
-.rules-panel.wide { width: min(780px, 100%); }
-.rules-layout { display: flex; gap: 14px; align-items: flex-start; }
-.rules-nav { display: flex; flex-direction: column; gap: 8px; flex: 0 0 96px; position: sticky; top: 64px; }
-.rules-content { flex: 1 1 auto; min-width: 0; }
 .rules-hint { font-size: 12px; color: var(--text-dim); line-height: 1.6; margin-bottom: 8px; }
 .char-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
 .char-list .char-card { max-width: none; }
@@ -449,3 +445,9 @@ body {
 .char-nav-pos { font-size: 12px; color: var(--text-dim); min-width: 56px; text-align: center; }
 .char-detail { display: flex; justify-content: center; }
 .char-detail .char-card { max-width: 440px; width: 100%; font-size: 13px; }
+
+/* 角色介紹視窗：高度固定（上一位／下一位不會跳位置） */
+.rules-panel.chars { width: min(620px, 100%); height: min(560px, 92vh); display: flex; flex-direction: column; overflow: hidden; }
+.rules-panel.chars #rulesBody { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.char-view { display: flex; flex-direction: column; height: 100%; }
+.char-view .char-detail { flex: 1 1 auto; min-height: 0; overflow-y: auto; align-items: flex-start; }

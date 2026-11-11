@@ -4353,48 +4353,46 @@ function leaveTable() {
 }
 // 規則說明視窗：遊戲定義有 guide（分段規則）的遊戲才有按鈕；入座／觀戰／遊戲中都能開關，不影響牌局畫面
 function rulesGuide() { const tb = tablesHere().find(t => t.id === S.tableId); return tb && gameDef(tb.game)?.guide || null; }
+// 規則說明／角色介紹共用同一個浮動視窗，由標題列的兩顆按鈕各自開關（tab＝'rules'｜'chars'）；角色介紹視窗高度固定，上一位／下一位按鈕位置不會跳
 function rulesShow(on, tab) {
   const g = on ? rulesGuide() : null, box = $('rulesBox');
   if (!g) { box.classList.add('hidden'); return; }
   const tb = tablesHere().find(t => t.id === S.tableId), chars = tb && gameDef(tb.game)?.characters;
-  if (tab) S.rulesTab = tab;
-  if (!chars || (S.rulesTab !== 'chars')) S.rulesTab = 'rules';
+  const was = S.rulesTab;
+  S.rulesTab = tab === 'chars' && chars ? 'chars' : 'rules';
+  if (S.rulesTab === 'chars' && was !== 'chars' && box.classList.contains('hidden')) S.rulesChar = null;   // 重新打開角色介紹：從選單開始
   $('rulesTitle').textContent = S.rulesTab === 'chars' ? '角色介紹' : (g.title || '規則說明');
   const body = $('rulesBody'); body.innerHTML = '';
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
-  body.className = chars ? 'rules-layout' : '';
-  $('rulesBox').querySelector('.rules-panel').classList.toggle('wide', !!chars);
-  let main = body;
-  if (chars) {   // 有角色介紹的遊戲：左邊分頁（規則說明／角色介紹），右邊內容
-    const nav = mk('div', 'rules-nav');
-    for (const [id, label] of [['rules', '規則說明'], ['chars', '角色介紹']]) { const b = mk('button', 'ff-btn small' + (S.rulesTab === id ? ' active' : ''), label); b.onclick = () => { if (id === 'chars') S.rulesChar = null; rulesShow(true, id); }; nav.appendChild(b); }
-    main = mk('div', 'rules-content'); body.appendChild(nav); body.appendChild(main);
-  }
+  const panel = box.querySelector('.rules-panel'); panel.classList.toggle('chars', S.rulesTab === 'chars');
   if (S.rulesTab === 'chars') {
     const ids = Object.keys(chars), cur = ids.indexOf(S.rulesChar);
     if (cur < 0) {   // 選單：每個角色一顆按鈕（置中、等寬），點了看詳細介紹
-      main.appendChild(mk('div', 'rules-hint', '每人開局拿 1 張身分牌和 2 張角色卡，選 1 張當本局角色。公開型選完就翻開，隱藏型保持覆蓋。「咒術勝利條件」只有咒術師身分才用；沒開「角色卡」模式時不會用到這些。點角色名稱看詳細介紹。'));
+      body.appendChild(mk('div', 'rules-hint', '每人開局拿 1 張身分牌和 2 張角色卡，選 1 張當本局角色。公開型選完就翻開，隱藏型保持覆蓋。「咒術勝利條件」只有咒術師身分才用；沒開「角色卡」模式時不會用到這些。點角色名稱看詳細介紹。'));
       const menu = mk('div', 'char-menu');
-      for (const id of ids) { const b = mk('button', 'ff-btn char-menu-btn', chars[id].name); b.onclick = () => { S.rulesChar = id; rulesShow(true); }; menu.appendChild(b); }
-      main.appendChild(menu);
-    } else {   // 詳細介紹：左右切換角色，或回到選單
+      for (const id of ids) { const b = mk('button', 'ff-btn char-menu-btn', chars[id].name); b.onclick = () => { S.rulesChar = id; rulesShow(true, 'chars'); }; menu.appendChild(b); }
+      body.appendChild(menu);
+    } else {   // 詳細介紹：上方左右切換、中間卡片（高度固定、內容多就在卡片區捲動）、下方回到選單
+      const wrap = mk('div', 'char-view');
       const bar = mk('div', 'char-nav');
-      const go = d => { S.rulesChar = ids[(cur + d + ids.length) % ids.length]; rulesShow(true); };
+      const go = d => { S.rulesChar = ids[(cur + d + ids.length) % ids.length]; rulesShow(true, 'chars'); };
       const prev = mk('button', 'ff-btn small', '◀ 上一位'); prev.onclick = () => go(-1);
       const next = mk('button', 'ff-btn small', '下一位 ▶'); next.onclick = () => go(1);
       bar.appendChild(prev); bar.appendChild(mk('span', 'char-nav-pos', `${cur + 1} / ${ids.length}`)); bar.appendChild(next);
-      main.appendChild(bar);
-      const one = mk('div', 'char-detail'); one.appendChild(itCharCardEl(ids[cur], mk)); main.appendChild(one);
-      const back = mk('div', 'char-nav'); const bb = mk('button', 'ff-btn small', '回到選單'); bb.onclick = () => { S.rulesChar = null; rulesShow(true); }; back.appendChild(bb); main.appendChild(back);
+      wrap.appendChild(bar);
+      const one = mk('div', 'char-detail'); one.appendChild(itCharCardEl(ids[cur], mk)); wrap.appendChild(one);
+      const back = mk('div', 'char-nav'); const bb = mk('button', 'ff-btn small', '回到選單'); bb.onclick = () => { S.rulesChar = null; rulesShow(true, 'chars'); }; back.appendChild(bb); wrap.appendChild(back);
+      body.appendChild(wrap);
     }
   } else for (const sec of g.sections) {
     const d = mk('div', 'rules-sec'); d.appendChild(mk('h4', null, sec.h));
     const ul = mk('ul');
     for (const t of sec.li) { const li = mk('li', /^\d+\. /.test(t) ? 'num' : null, t); ul.appendChild(li); }
-    d.appendChild(ul); main.appendChild(d);
+    d.appendChild(ul); body.appendChild(d);
   }
   box.classList.remove('hidden');
 }
+const rulesToggle = tab => { const open = !$('rulesBox').classList.contains('hidden'); if (open && S.rulesTab === tab) rulesShow(false); else rulesShow(true, tab); };   // 再點同一顆按鈕關閉，點另一顆切換內容
 function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已離開這桌）
   if (!S.tableOpen || m.id !== S.tableId) return;
   if (m.v === null) { closeTable(false); return; }
@@ -4436,6 +4434,7 @@ function buildTable() {
   const tb = tablesHere().find(t => t.id === S.tableId), gd = tb && gameDef(tb.game), v = S.tableView;
   $('tableTitle').textContent = gd ? gd.name : '遊戲桌';
   $('tableRulesBtn').classList.toggle('hidden', !gd?.guide);
+  $('tableCharsBtn').classList.toggle('hidden', !gd?.characters);
   if (!(v && v.phase === 'playing' && v.role === 'seat')) leaveAsk(false);   // 牌局結束／被移出座位：確認視窗不留著
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   if (S.tableChoice) {   // 剛走到桌邊：選入座還是觀戰
@@ -7148,7 +7147,8 @@ $('avatarClose').onclick = () => { closeColor(false); closeGlams(); $('avatarPan
 $('tableClose').onclick = () => leaveTable();
 $('leaveStay').onclick = () => leaveAsk(false);
 $('leaveGo').onclick = () => { leaveAsk(false); closeTable(); };
-$('tableRulesBtn').onclick = () => rulesShow($('rulesBox').classList.contains('hidden'));   // 再點一下關閉
+$('tableRulesBtn').onclick = () => rulesToggle('rules');   // 再點一下關閉
+$('tableCharsBtn').onclick = () => rulesToggle('chars');
 $('rulesClose').onclick = () => rulesShow(false);
 $('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑＋素材圖鑑／合成／配方筆記
 $('dexClose').onclick = closeDex;
