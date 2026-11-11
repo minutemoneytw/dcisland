@@ -404,3 +404,48 @@ body {
 .typing-other-word { font-family: monospace; font-size: 16px; letter-spacing: 2px; color: #7a86b0; margin-top: 2px; }
 .typing-other-word .done { color: #7be08a; }
 .typing-other-word .err { color: #ff6a6a; }
+
+/* 秘藥情報戰：角色卡（2026-11-11） */
+.char-card { border: 1px solid var(--gold-dim); background: rgba(255, 255, 255, .05); padding: 8px 10px; text-align: left; font-size: 12px; line-height: 1.55; max-width: 330px; box-sizing: border-box; }
+.char-card.hidden-type { border-style: dashed; }
+.char-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.char-name { font-size: 15px; color: var(--gold); font-weight: bold; }
+.char-type { font-size: 11px; color: var(--text-dim); border: 1px solid var(--text-dim); padding: 0 5px; border-radius: 3px; }
+.char-win { color: #b8e8c8; margin-bottom: 4px; }
+.char-skill { color: var(--text); margin-top: 2px; }
+.char-skill.once b { color: #ffd98a; }
+.char-note { color: var(--text-dim); margin-top: 4px; font-size: 11px; }
+.char-pick { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 10px 0; }
+.char-pick-one { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.it-char { margin-left: 6px; font-size: 11px; color: #ffd98a; }
+.it-char.covered { color: var(--text-dim); }
+.it-mychar { margin: 6px auto; max-width: 340px; }
+
+/* 規則視窗：左側分頁（規則說明／角色介紹） */
+.rules-panel.wide { width: min(780px, 100%); }
+.rules-layout { display: flex; gap: 14px; align-items: flex-start; }
+.rules-nav { display: flex; flex-direction: column; gap: 8px; flex: 0 0 96px; position: sticky; top: 64px; }
+.rules-content { flex: 1 1 auto; min-width: 0; }
+.rules-hint { font-size: 12px; color: var(--text-dim); line-height: 1.6; margin-bottom: 8px; }
+.char-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.char-list .char-card { max-width: none; }
+.char-skill.off { opacity: .75; }
+.char-off { margin-left: 4px; font-size: 10px; color: var(--text-dim); border: 1px solid var(--text-dim); border-radius: 3px; padding: 0 3px; }
+
+/* 角色技能面板與暫停選擇（第 1 階段） */
+.it-skills { margin: 6px auto; max-width: 560px; text-align: left; font-size: 12px; }
+.it-skill-row { display: flex; gap: 8px; align-items: center; padding: 2px 0; flex-wrap: wrap; }
+.it-skill-row b { color: var(--gold); min-width: 64px; }
+.it-skill-row.off { opacity: .55; }
+.it-skill-tip { color: var(--text-dim); flex: 1 1 200px; }
+.it-skill-pick, .it-prompt { border: 1px solid var(--gold-dim); background: rgba(255, 255, 255, .04); padding: 8px 10px; margin: 6px auto; max-width: 600px; text-align: center; }
+.it-hand.pick .icard.sel { transform: translateY(-4px); }
+.it-prompt-wait { color: #ffd98a; }
+
+/* 角色介紹：選單（置中、按鈕等寬）與詳細頁 */
+.char-menu { display: grid; grid-template-columns: repeat(3, 150px); gap: 10px; justify-content: center; margin: 14px 0 6px; }
+.char-menu-btn { width: 100%; text-align: center; padding: 8px 0; box-sizing: border-box; }
+.char-nav { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 8px 0; }
+.char-nav-pos { font-size: 12px; color: var(--text-dim); min-width: 56px; text-align: center; }
+.char-detail { display: flex; justify-content: center; }
+.char-detail .char-card { max-width: 440px; width: 100%; font-size: 13px; }

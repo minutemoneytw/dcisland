@@ -4353,17 +4353,45 @@ function leaveTable() {
 }
 // 規則說明視窗：遊戲定義有 guide（分段規則）的遊戲才有按鈕；入座／觀戰／遊戲中都能開關，不影響牌局畫面
 function rulesGuide() { const tb = tablesHere().find(t => t.id === S.tableId); return tb && gameDef(tb.game)?.guide || null; }
-function rulesShow(on) {
+function rulesShow(on, tab) {
   const g = on ? rulesGuide() : null, box = $('rulesBox');
   if (!g) { box.classList.add('hidden'); return; }
-  $('rulesTitle').textContent = g.title || '規則說明';
+  const tb = tablesHere().find(t => t.id === S.tableId), chars = tb && gameDef(tb.game)?.characters;
+  if (tab) S.rulesTab = tab;
+  if (!chars || (S.rulesTab !== 'chars')) S.rulesTab = 'rules';
+  $('rulesTitle').textContent = S.rulesTab === 'chars' ? '角色介紹' : (g.title || '規則說明');
   const body = $('rulesBody'); body.innerHTML = '';
-  for (const sec of g.sections) {
-    const d = document.createElement('div'); d.className = 'rules-sec';
-    const h = document.createElement('h4'); h.textContent = sec.h; d.appendChild(h);
-    const ul = document.createElement('ul');
-    for (const t of sec.li) { const li = document.createElement('li'); if (/^\d+\. /.test(t)) li.className = 'num'; li.textContent = t; ul.appendChild(li); }
-    d.appendChild(ul); body.appendChild(d);
+  const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  body.className = chars ? 'rules-layout' : '';
+  $('rulesBox').querySelector('.rules-panel').classList.toggle('wide', !!chars);
+  let main = body;
+  if (chars) {   // 有角色介紹的遊戲：左邊分頁（規則說明／角色介紹），右邊內容
+    const nav = mk('div', 'rules-nav');
+    for (const [id, label] of [['rules', '規則說明'], ['chars', '角色介紹']]) { const b = mk('button', 'ff-btn small' + (S.rulesTab === id ? ' active' : ''), label); b.onclick = () => { if (id === 'chars') S.rulesChar = null; rulesShow(true, id); }; nav.appendChild(b); }
+    main = mk('div', 'rules-content'); body.appendChild(nav); body.appendChild(main);
+  }
+  if (S.rulesTab === 'chars') {
+    const ids = Object.keys(chars), cur = ids.indexOf(S.rulesChar);
+    if (cur < 0) {   // 選單：每個角色一顆按鈕（置中、等寬），點了看詳細介紹
+      main.appendChild(mk('div', 'rules-hint', '每人開局拿 1 張身分牌和 2 張角色卡，選 1 張當本局角色。公開型選完就翻開，隱藏型保持覆蓋。「咒術勝利條件」只有咒術師身分才用；沒開「角色卡」模式時不會用到這些。點角色名稱看詳細介紹。'));
+      const menu = mk('div', 'char-menu');
+      for (const id of ids) { const b = mk('button', 'ff-btn char-menu-btn', chars[id].name); b.onclick = () => { S.rulesChar = id; rulesShow(true); }; menu.appendChild(b); }
+      main.appendChild(menu);
+    } else {   // 詳細介紹：左右切換角色，或回到選單
+      const bar = mk('div', 'char-nav');
+      const go = d => { S.rulesChar = ids[(cur + d + ids.length) % ids.length]; rulesShow(true); };
+      const prev = mk('button', 'ff-btn small', '◀ 上一位'); prev.onclick = () => go(-1);
+      const next = mk('button', 'ff-btn small', '下一位 ▶'); next.onclick = () => go(1);
+      bar.appendChild(prev); bar.appendChild(mk('span', 'char-nav-pos', `${cur + 1} / ${ids.length}`)); bar.appendChild(next);
+      main.appendChild(bar);
+      const one = mk('div', 'char-detail'); one.appendChild(itCharCardEl(ids[cur], mk)); main.appendChild(one);
+      const back = mk('div', 'char-nav'); const bb = mk('button', 'ff-btn small', '回到選單'); bb.onclick = () => { S.rulesChar = null; rulesShow(true); }; back.appendChild(bb); main.appendChild(back);
+    }
+  } else for (const sec of g.sections) {
+    const d = mk('div', 'rules-sec'); d.appendChild(mk('h4', null, sec.h));
+    const ul = mk('ul');
+    for (const t of sec.li) { const li = mk('li', /^\d+\. /.test(t) ? 'num' : null, t); ul.appendChild(li); }
+    d.appendChild(ul); main.appendChild(d);
   }
   box.classList.remove('hidden');
 }
@@ -5011,18 +5039,127 @@ function itStartTimer() {
   }, 250);
 }
 const itNextSeat = (v, i) => { const n = v.seats.length; for (let k = 1; k < n; k++) { const j = (i + k) % n; if (!v.seats[j].out && !v.seats[j].left) return j; } return -1; };
+// 角色卡（資料在 games.json 的 intel.characters；2026-11-11）：第 0 階段只有選角與咒術師身分的勝利條件，技能還沒啟用（卡面標「尚未啟用」）
+const itCharDef = id => gameDef('intel')?.characters?.[id] || null;
+function itCharCardEl(id, mk, opts = {}) {
+  const c = itCharDef(id), el = mk('div', 'char-card' + (c?.type === 'hidden' ? ' hidden-type' : '') + (opts.sel ? ' sel' : ''));
+  if (!c) { el.textContent = id; return el; }
+  const hd = mk('div', 'char-head'); hd.appendChild(mk('span', 'char-name', c.name)); hd.appendChild(mk('span', 'char-type', c.type === 'hidden' ? '隱藏' : '公開')); el.appendChild(hd);
+  el.appendChild(mk('div', 'char-win', '咒術勝利條件：' + c.win));
+  for (const k of c.skills) { const d = mk('div', 'char-skill' + (k.once ? ' once' : '') + (k.on ? '' : ' off')); d.appendChild(mk('b', null, k.n + (k.once ? '（一局一次）' : '') + '：')); d.append(k.t); if (!k.on) d.appendChild(mk('span', 'char-off', '（尚未啟用）')); el.appendChild(d); }
+  return el;
+}
+// ---- 角色技能 UI（第 1 階段）：技能面板（主動技能按鈕）與暫停時的選擇面板（保命／順水推舟／併購／搜刮） ----
+// 技能的實作與規則見 docs/intel-characters.md；伺服器訊息：tbl {a:'iskill', k, ...}（主動技能）、{a:'iprompt', ...}（回答暫停中的選擇；no:true＝不用）
+const itBlackIdx = intel => (intel || []).map((c, k) => k).filter(k => itCols(intel[k]).includes('K'));
+function itHandPick(box, mk, hand, sel, max, onToggle) {   // 自己的手牌：點選／取消點選（最多 max 張）
+  const hw = mk('div', 'it-hand pick');
+  hand.forEach((c, k) => { const e = itCardEl(c, { sel: sel.includes(k) }); e.onclick = () => onToggle(k); hw.appendChild(e); });
+  box.appendChild(hw);
+}
+function itSkillPanel(box, v, mk, send, cx) {
+  const { me, it, L, pend, nm, alive } = cx, sm = v.seats[me], id = sm.char, cd = itCharDef(id);
+  if (!cd || !alive(me) || it.step === 'pick') return;
+  const hand = v.hand || [], used = !!sm.used, idle = !pend && !it.ask && !it.prompt, atMe = idle && it.step === 'pass' && L && L.at === me, canSee = L && L.kind !== 'pub' && !L.open;
+  const myTurnIdle = idle && it.step === 'turn' && v.turn === me && !L, blk = itBlackIdx(sm.intel);
+  const root = pend ? (pend.chain && pend.chain[0]) || { a: pend.a, tgt: pend.tgt } : null;
+  const others = v.seats.map((x, i) => i).filter(i => i !== me && alive(i));
+  const wrap = mk('div', 'it-skills'), sk = S.itSk;
+  wrap.appendChild(mk('div', 'table-tag', `【${cd.name}】技能：`));
+  const row = (k, name, tip, btn) => {   // 一個技能一行：名稱＋說明＋按鈕（沒有按鈕＝自動觸發或在選擇時發動）
+    const r = mk('div', 'it-skill-row' + (cd.skills[k].on ? '' : ' off')); r.appendChild(mk('b', null, name)); r.appendChild(mk('span', 'it-skill-tip', tip));
+    if (btn) { const b = mk('button', 'ff-btn small', btn.label); if (btn.on) b.onclick = btn.fn; else b.disabled = true; r.appendChild(b); }
+    wrap.appendChild(r);
+  };
+  const ONCE = k => cd.skills[k].once ? (used ? '（已用過）' : '（一局一次）') : '';
+  const washBtn = (k, cond) => ({ label: '使用', on: cond && hand.length >= 2 && blk.length > 0, fn: () => { S.itSk = { kind: 'wash', k, hand: [], intel: -1 }; buildTable(); } });
+  if (id === 'cautious') {
+    row(0, '審慎', '蓋著的密函在你手上時偷看（不算行動牌）', { label: '偷看', on: atMe && canSee, fn: () => send({ a: 'iskill', k: 0 }) });
+    row(1, '避險', '棄 2 張手牌，洗白自己情報區的一張咒函', washBtn(1, idle));
+    row(2, '絕對謹慎' + ONCE(2), '被鎖定／被轉移選為你時取消（識破時間內）', { label: '取消', on: !used && !!pend && !!root && (root.a === 'F' || root.a === 'T') && root.tgt === me, fn: () => send({ a: 'iskill', k: 2 }) });
+  } else if (id === 'doubleagent') {
+    row(0, '雙面', '收下雙色情報時自動抽 1 張', null);
+    row(1, '偷天換日', '點一張雙色手牌，在手牌下方按「當作調包使用」（可被識破）', null);
+    row(2, '雙面人生' + ONCE(2), '從牌堆找一張雙色牌加入手牌，然後洗牌', { label: '使用', on: !used && idle && (v.deckDouble || []).length > 0, fn: () => { S.itSk = { kind: 'deck' }; buildTable(); } });
+  } else if (id === 'fencesitter') {
+    row(0, '兩邊倒', '收下含咒函的情報時自動抽 1 張', null);
+    row(1, '調節', '自己回合、投遞前：棄 2 張手牌，洗白自己情報區的一張咒函', washBtn(1, myTurnIdle));
+    row(2, '保命' + ONCE(2), '將收下第 3 張咒函時會問你要不要棄 2 張手牌、改為燒掉它', null);
+  } else if (id === 'collector') {
+    row(0, '鑑識', '使用截閱並宣告成功時自動額外抽 1 張', null);
+    row(1, '搜刮', '有人出局時會問你要不要拿他 1 張手牌', null);
+    row(2, '偽造遺囑' + ONCE(2), '有人出局時（搜刮的選擇裡）把他情報區全部納為手牌', null);
+  } else if (id === 'broker') {
+    row(0, '囤貨', '手牌少於 5 張時，抽牌階段自動多抽 1 張', null);
+    row(1, '順水推舟', '收到咒函時會問你要不要看並拿別人的 1 張手牌', null);
+    row(2, '併購' + ONCE(2), '指定一位玩家，看他全部手牌，拿走 1 張再給他 1 張', { label: '使用', on: !used && idle && hand.length > 0 && others.some(i => v.seats[i].n > 0), fn: () => { S.itSk = { kind: 'merge' }; buildTable(); } });
+  }
+  if (sk) {   // 技能的選擇步驟
+    const box2 = mk('div', 'it-skill-pick');
+    if (sk.kind === 'wash') {
+      box2.appendChild(mk('div', 'table-tag', `選 2 張要棄掉的手牌（已選 ${sk.hand.length}/2），再選要洗白的咒函：`));
+      itHandPick(box2, mk, hand, sk.hand, 2, k => { sk.hand = sk.hand.includes(k) ? sk.hand.filter(x => x !== k) : sk.hand.length < 2 ? [...sk.hand, k] : sk.hand; buildTable(); });
+      const ib = mk('div', 'table-btns'); blk.forEach(k => { const b = mk('button', 'ff-btn small' + (sk.intel === k ? ' active' : ''), itLabel(sm.intel[k])); b.onclick = () => { sk.intel = k; buildTable(); }; ib.appendChild(b); }); box2.appendChild(ib);
+      const ok = mk('button', 'ff-btn', '確定'); ok.disabled = !(sk.hand.length === 2 && sk.intel >= 0); ok.onclick = () => send({ a: 'iskill', k: sk.k, hand: sk.hand, intel: sk.intel }); box2.appendChild(ok);
+    } else if (sk.kind === 'deck') {
+      box2.appendChild(mk('div', 'table-tag', '牌堆裡的雙色牌，選一張加入手牌：'));
+      const hw = mk('div', 'it-hand'); (v.deckDouble || []).forEach(c => { const e = itCardEl(c); e.onclick = () => send({ a: 'iskill', k: 2, c }); hw.appendChild(e); }); box2.appendChild(hw);
+    } else if (sk.kind === 'merge') {
+      box2.appendChild(mk('div', 'table-tag', '併購：要指定誰？'));
+      const ib = mk('div', 'table-btns'); others.filter(i => v.seats[i].n > 0).forEach(i => { const b = mk('button', 'ff-btn small', nm(i)); b.onclick = () => send({ a: 'iskill', k: 2, tgt: i }); ib.appendChild(b); }); box2.appendChild(ib);
+    }
+    const cn = mk('button', 'ff-btn small', '取消'); cn.onclick = () => { S.itSk = null; buildTable(); }; box2.appendChild(cn);
+    wrap.appendChild(box2);
+  }
+  box.appendChild(wrap);
+}
+// 暫停中的選擇（別人在選時只顯示狀態）。選擇狀態放 S.itPr，換一個暫停就重設
+function itPromptPanel(box, v, mk, send, cx) {
+  const { me, it, nm } = cx, pr = it.prompt;
+  if (!pr) { S.itPr = null; return; }
+  const key = pr.kind + ':' + pr.seat; if (!S.itPr || S.itPr.key !== key) S.itPr = { key, take: -1, give: -1, dest: 'hand', will: false, pick: [] };
+  const st = S.itPr, d = v.prompt;
+  if (pr.seat !== me || !d) { box.appendChild(mk('div', 'table-tag it-prompt-wait', `等 ${nm(pr.seat)} 做技能決定…`)); return; }
+  const w = mk('div', 'it-prompt'), no = (label = '不用') => { const b = mk('button', 'ff-btn small', label); b.onclick = () => send({ a: 'iprompt', no: true }); return b; };
+  const cards = (arr, selIdx, onPick) => { const hw = mk('div', 'it-hand'); arr.forEach((c, k) => { const e = itCardEl(c, { sel: selIdx === k }); e.onclick = () => onPick(k); hw.appendChild(e); }); return hw; };
+  if (pr.kind === 'savelife') {
+    w.appendChild(mk('div', 'table-status mine', `你將收下第 3 張咒函：${itLabel(d.card)}。要發動【保命】嗎？（棄 2 張手牌，把這封情報燒掉）`));
+    w.appendChild(mk('div', 'table-tag', `選 2 張要棄掉的手牌（已選 ${st.pick.length}/2）：`));
+    itHandPick(w, mk, v.hand || [], st.pick, 2, k => { st.pick = st.pick.includes(k) ? st.pick.filter(x => x !== k) : st.pick.length < 2 ? [...st.pick, k] : st.pick; buildTable(); });
+    const ok = mk('button', 'ff-btn', '發動保命'); ok.disabled = st.pick.length !== 2; ok.onclick = () => send({ a: 'iprompt', yes: true, idx: st.pick }); w.appendChild(ok); w.appendChild(no('不用（照常收下）'));
+  } else if (pr.kind === 'dig') {
+    w.appendChild(mk('div', 'table-status mine', '【順水推舟】你收到咒函了：可以看任一玩家的手牌，拿 1 張當自己的手牌'));
+    d.hands.forEach((h, i) => { if (!h.length) return; w.appendChild(mk('div', 'table-tag', `${nm(i)} 的手牌（點一張拿走）：`)); w.appendChild(cards(h, -1, k => send({ a: 'iprompt', tgt: i, idx: k }))); });
+    w.appendChild(no());
+  } else if (pr.kind === 'merge') {
+    w.appendChild(mk('div', 'table-status mine', `【併購】${nm(d.tgt)} 的全部手牌：選 1 張拿走，再選你自己的 1 張給他`));
+    w.appendChild(cards(d.hand, st.take, k => { st.take = k; buildTable(); }));
+    w.appendChild(mk('div', 'table-tag', '你要給他的牌：'));
+    w.appendChild(cards(v.hand || [], st.give, k => { st.give = k; buildTable(); }));
+    const ok = mk('button', 'ff-btn', '確定併購'); ok.disabled = st.take < 0 || st.give < 0; ok.onclick = () => send({ a: 'iprompt', take: st.take, give: st.give }); w.appendChild(ok); w.appendChild(no('取消'));
+  } else if (pr.kind === 'loot') {
+    w.appendChild(mk('div', 'table-status mine', `【收藏家】${nm(d.victim)} 出局了：可以搜刮他的 1 張手牌，也可以偽造遺囑`));
+    if (d.hand.length) { w.appendChild(mk('div', 'table-tag', '搜刮：點一張他的手牌（再點一次取消）'));
+      w.appendChild(cards(d.hand, st.take, k => { st.take = st.take === k ? -1 : k; buildTable(); }));
+      const dr = mk('div', 'table-btns'); for (const [val, lab] of [['hand', '放進我的手牌'], ['intel', '放進我的情報區']]) { const b = mk('button', 'ff-btn small' + (st.dest === val ? ' active' : ''), lab); b.onclick = () => { st.dest = val; buildTable(); }; dr.appendChild(b); } w.appendChild(dr); }
+    if (d.will && d.intel.length) { w.appendChild(mk('div', 'table-tag', `偽造遺囑（一局一次）：把他情報區的 ${d.intel.length} 張情報全部納為你的手牌`));
+      const b = mk('button', 'ff-btn small' + (st.will ? ' active' : ''), st.will ? '✔ 要偽造遺囑' : '偽造遺囑'); b.onclick = () => { st.will = !st.will; buildTable(); }; w.appendChild(b); }
+    const ok = mk('button', 'ff-btn', '確定'); ok.onclick = () => send({ a: 'iprompt', take: st.take >= 0 ? st.take : null, dest: st.dest, will: st.will }); w.appendChild(ok); w.appendChild(no('什麼都不拿'));
+  }
+  box.appendChild(w);
+}
 function buildIntel(box, v, mk, gd) {
   const playing = v.phase === 'playing', it = v.it, me = v.role === 'seat' ? v.me : -1;
   const L = it?.letter, pend = it?.pend, nm = i => v.seats[i]?.name ?? '?';
   const alive = i => v.seats[i] && !v.seats[i].out && !v.seats[i].left;
-  const send = m => { S.itSel = -1; S.itMode = null; S.net?.tbl?.(m); };
-  if (!playing) { itStopTimer(); S.itSel = -1; S.itMode = null; }
+  const send = m => { S.itSel = -1; S.itMode = null; S.itSk = null; S.itPr = null; S.itAsS = false; S.net?.tbl?.(m); };
+  if (!playing) { itStopTimer(); S.itSel = -1; S.itMode = null; S.itSk = null; S.itPr = null; }
   else {
     if (S.itSn !== it.sn) { S.itSn = it.sn; S.itOff = it.sn - Date.now(); }   // 伺服器時間 − 本機時間：只在收到新畫面時算（本機重畫用舊的 sn 會越算越偏）
     itStartTimer();
   }
-  const myTurn = playing && !pend && !it.ask && it.step === 'turn' && v.turn === me && me >= 0;   // 等查驗回答時不能投遞／出牌
-  const holding = playing && !pend && !it.arrive && it.step === 'pass' && L && L.at === me;
+  const myTurn = playing && !pend && !it.ask && !it.prompt && it.step === 'turn' && v.turn === me && me >= 0;   // 等查驗回答時不能投遞／出牌
+  const holding = playing && !pend && !it.arrive && !it.prompt && it.step === 'pass' && L && L.at === me;
   // 狀態列
   let status;
   if (playing) {
@@ -5031,6 +5168,8 @@ function buildIntel(box, v, mk, gd) {
       const ch = pend.chain || [{ a: pend.a, by: pend.by, tgt: pend.tgt }];
       status = ch.map((c, k) => k === 0 ? `${nm(c.by)} 使用了${IT_ACT[c.a]}${['F', 'H', 'V', 'R', 'T', 'B', 'W'].includes(c.a) ? `（對 ${nm(c.tgt)}）` : c.col ? `（宣告${IT_CNAME[c.col]}色）` : c.a === 'I' && L ? `（對 ${nm(L.at)}）` : ''}` : `${nm(c.by)} 識破`).join(' ← ') + '——生效前可以識破';
     }
+    else if (it.step === 'pick') status = v.choices ? '選擇你的角色卡（2 選 1，另一張棄掉）' : me >= 0 ? `已選好，等其他人（${v.seats.filter(x => x.picked).length}/${v.seats.filter(x => !x.left).length}）` : `選角中（${v.seats.filter(x => x.picked).length}/${v.seats.filter(x => !x.left).length}）`;
+    else if (it.prompt) status = it.prompt.seat === me ? '輪到你做技能的決定（見下方）' : `等 ${nm(it.prompt.seat)} 做技能的決定`;
     else if (it.ask) status = it.ask.tgt === me ? `${nm(it.ask.by)} 查驗了你：選擇要怎麼回答` : `等 ${nm(it.ask.tgt)} 回答 ${nm(it.ask.by)} 的查驗`;
     else if (it.arrive && it.step === 'pass') status = `${kn}到了 ${nm(L.at)} 手上——大家按「準備繼續」後他才能決定（這時可以出鎖定（輪到的人）／攔截／焚信／阻擋）`;
     else if (it.step === 'ack') status = `${nm(it.ack.by)} 收下了情報——大家看清楚後按「準備繼續」`;
@@ -5058,6 +5197,7 @@ function buildIntel(box, v, mk, gd) {
     }
     if (row.childElementCount) box.appendChild(row);
   }
+  if (playing && it.chars) itPromptPanel(box, v, mk, send, { me, it, nm });   // 技能暫停中的選擇
   // 結算：翻開所有人的身分與情報區
   if (v.result && !playing) {
     box.appendChild(mk('div', 'table-result', v.result.text));
@@ -5067,7 +5207,7 @@ function buildIntel(box, v, mk, gd) {
         const row = mk('div', 'it-reveal-row' + (r.win ? ' win' : ''));
         const rr = IT_ROLE[r.role] || ['?', '#888'];
         const badge = mk('span', 'it-role', rr[0]); badge.style.background = rr[1]; row.appendChild(badge);
-        row.appendChild(mk('span', null, `${r.name}${r.win ? '　🏆' : ''}${r.out ? '（出局）' : ''}${r.left ? '（中途離開）' : ''}`));
+        row.appendChild(mk('span', null, `${r.name}${r.char && itCharDef(r.char) ? `【${itCharDef(r.char).name}】` : ''}${r.win ? '　🏆' : ''}${r.out ? '（出局）' : ''}${r.left ? '（中途離開）' : ''}`));
         const ic = mk('span', 'it-intel'); for (const c of r.intel) ic.appendChild(itCardEl(c, { small: true })); row.appendChild(ic);
         rv.appendChild(row);
       }
@@ -5079,8 +5219,23 @@ function buildIntel(box, v, mk, gd) {
   if (playing && me >= 0 && v.seats[me]?.role) {
     const rr = IT_ROLE[v.seats[me].role], line = mk('div', 'it-me');
     const badge = mk('span', 'it-role', rr[0]); badge.style.background = rr[1];
-    line.append('你的身分：', badge, `　勝利條件：${rr[2]}`);
+    const mc = it.chars && v.seats[me].role === 'mage' ? itCharDef(v.seats[me].char) : null;   // 角色卡模式：咒術師改用角色卡的勝利條件（沒選完前先不顯示條件）
+    line.append('你的身分：', badge, `　勝利條件：${it.chars && v.seats[me].role === 'mage' ? (mc ? mc.win + `（【${mc.name}】）` : '看你選的角色卡') : rr[2]}`);
     box.appendChild(line);
+    if (it.chars && v.seats[me].char) { const mine = mk('div', 'it-mychar'); mine.appendChild(mk('div', 'table-tag', '你的角色卡' + (v.seats[me].up ? '（已公開）' : '（覆蓋中，只有你和觀戰者看得到）') + (v.seats[me].role === 'mage' ? '' : '：勝利條件只對咒術師身分生效，你仍照你的陣營獲勝')));
+      mine.appendChild(itCharCardEl(v.seats[me].char, mk)); box.appendChild(mine);
+      if (me >= 0 && alive(me)) itSkillPanel(box, v, mk, send, { me, it, L, pend, nm, alive }); }
+  }
+  // 選角：每人 2 張選 1 張（觀戰者看得到所有人的候選）
+  if (playing && it.step === 'pick') {
+    if (v.choices) {
+      const pr = mk('div', 'char-pick');
+      v.choices.forEach(id => { const w = mk('div', 'char-pick-one'); w.appendChild(itCharCardEl(id, mk, { noNote: true })); const b = mk('button', 'ff-btn', '選這張'); b.onclick = () => S.net?.tbl?.({ a: 'ipick', c: id }); w.appendChild(b); pr.appendChild(w); });
+      box.appendChild(pr);
+      box.appendChild(mk('div', 'table-tag', '角色卡提供勝利條件（咒術師身分才用）與技能；公開型選完就翻開，隱藏型保持覆蓋。標「尚未啟用」的技能目前還沒有效果。'));
+    } else if (v.role === 'spec') {
+      for (const s of v.seats) if (s.choices) { const w = mk('div', 'char-pick-spec'); w.appendChild(mk('div', 'table-tag', `${s.name}（${s.picked ? '已選' : '選角中'}）的候選：`)); const pr = mk('div', 'char-pick'); s.choices.forEach(id => pr.appendChild(itCharCardEl(id, mk, { noNote: true }))); w.appendChild(pr); box.appendChild(w); }
+    }
   }
   // 座位：名字、身分（看得到才有）、手牌張數、情報區
   const row = mk('div', 'table-seats it-seats');
@@ -5092,6 +5247,11 @@ function buildIntel(box, v, mk, gd) {
     const seat = mk('div', cls.join(' '));
     const head = mk('div', 'table-name', s.name + (s.you ? '（你）' : ''));
     if (playing && s.role) { const rr = IT_ROLE[s.role], b = mk('span', 'it-role small', rr[0]); b.style.background = rr[1]; head.appendChild(b); }
+    if (playing && it.chars) {   // 角色卡：公開型翻開後大家看得到名稱；隱藏型覆蓋（自己與觀戰者看得到）
+      const cd = s.char ? itCharDef(s.char) : null, tg = mk('span', 'it-char' + (s.char && !s.up ? ' covered' : ''), cd ? `【${cd.name}】${s.up ? '' : '（覆蓋）'}` : s.picked ? '🂠 角色卡' : '選角中');
+      if (cd) tg.title = `咒術勝利條件：${cd.win}\n` + cd.skills.map(k => `${k.n}${k.once ? '（一局一次）' : ''}：${k.t}`).join('\n');
+      head.appendChild(tg);
+    }
     seat.appendChild(head);
     if (playing) {
       const tags = [`手牌 ${s.n}`];
@@ -5138,7 +5298,7 @@ function buildIntel(box, v, mk, gd) {
     box.appendChild(mid);
   }
   const btns = mk('div', 'table-btns');
-  if (playing && me >= 0 && alive(me)) {
+  if (playing && me >= 0 && alive(me) && it.step !== 'pick' && !it.prompt) {   // 選角階段不顯示手牌操作
     const hand = v.hand || [];
     // 識破：別人的行動生效前，手上有識破牌就能出
     if (pend && pend.by !== me) {
@@ -5175,8 +5335,8 @@ function buildIntel(box, v, mk, gd) {
     hand.forEach((c, k) => {
       const e = itCardEl(c, { sel: k === S.itSel });
       e.onclick = () => {
-        if (S.itMode === 'S' && k !== S.itSel) { send({ a: 'iact', idx: S.itSel, sel: k }); return; }   // 調包：選換進去的那張
-        S.itSel = k === S.itSel ? -1 : k; S.itMode = null; S.itWTgt = -1; buildTable();
+        if (S.itMode === 'S' && k !== S.itSel) { send({ a: 'iact', idx: S.itSel, sel: k, ...(S.itAsS ? { as: 'S' } : {}) }); return; }   // 調包：選換進去的那張（偷天換日：用雙色牌當調包）
+        S.itSel = k === S.itSel ? -1 : k; S.itMode = null; S.itWTgt = -1; S.itAsS = false; buildTable();
       };
       hw.appendChild(e);
     });
@@ -5192,6 +5352,9 @@ function buildIntel(box, v, mk, gd) {
         const kind = itKindOf(sel), nn = nm(itNextSeat(v, me));
         if (kind === 'direct') { const b = mk('button', 'ff-btn', '投遞這張（直達情報：指定一人，對方不收會退回給你）'); b.onclick = () => { S.itMode = 'direct'; buildTable(); }; opts.appendChild(b); }
         else { const b = mk('button', 'ff-btn', `投遞這張（${IT_KIND[kind]}：${kind === 'pub' ? '翻開' : '蓋著'}傳給 ${nn}）`); b.onclick = () => send({ a: 'isend', idx: S.itSel }); opts.appendChild(b); }
+      }
+      if (atMe && canSee && hand.length > 1 && itCols(sel).length === 2 && v.seats[me].char === 'doubleagent' && act !== 'S') {   // 雙面間諜「偷天換日」：雙色牌當作調包使用
+        const b = mk('button', 'ff-btn', '當作調包使用（偷天換日）'); b.onclick = () => { S.itMode = 'S'; S.itAsS = true; buildTable(); }; opts.appendChild(b);
       }
       if (usable) {
         const b = mk('button', 'ff-btn', act === 'P' ? '使用截閱（自己偷看）' : `使用${IT_ACT[act]}`);
@@ -5230,6 +5393,14 @@ function buildIntel(box, v, mk, gd) {
       md.appendChild(b);
     }
     box.appendChild(md);
+    const cm = mk('div', 'table-btns');   // 角色卡：開（每人 2 張角色卡選 1，咒術師改用角色卡的勝利條件；第 0 階段技能尚未啟用）／關（照原本規則）
+    for (const [on, desc] of [[false, '角色卡：關'], [true, '角色卡：開']]) {
+      const b = mk('button', 'ff-btn small' + ((!!v.chars) === on ? ' active' : ''), desc);
+      if (isHost) b.onclick = () => S.net?.tbl?.({ a: 'ichars', v: on }); else b.disabled = true;
+      cm.appendChild(b);
+    }
+    box.appendChild(cm);
+    box.appendChild(mk('div', 'table-tag', v.chars ? '角色卡開啟：開局每人拿 2 張角色卡選 1 張；咒術師不再靠集滿 3 張咒函獲勝，改用角色卡的勝利條件，而且也會因收到第 3 張咒函出局。部分技能已啟用（標「尚未啟用」的還沒有效果）。' : '角色卡關閉：維持原本規則（咒術師集滿 3 張咒函獲勝）。'));
     box.appendChild(mk('div', 'table-tag', (isHost ? '你是桌主，可以選模式。' : '模式由桌主（第一位入座的人）選。') + (v.untimed ? ' 不限時：沒有倒數，每次使用行動牌後要所有活人按「準備繼續」才生效。' : ' 限時：投遞 30 秒、收轉 15 秒、識破 5 秒。')));
   }
   if (v.role === 'seat' && !playing) {
