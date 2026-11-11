@@ -354,6 +354,7 @@ body {
 .it-mid { text-align: center; margin: 8px 0; }
 .it-letter { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--text); font-size: 14px; }
 .it-note { margin-top: 6px; color: #ffe08a; font-size: 13px; }
+.it-note.it-stolen { color: #ff8a8a; }   /* 被竊取的提示 */
 .it-timer { margin-left: 10px; color: #ffb347; }
 .it-timer.ext { color: #7ae8d0; }   /* 加時中 */
 .it-ext { margin: 2px 0 4px; align-items: center; }

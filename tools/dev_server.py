@@ -1058,14 +1058,15 @@ IT_HAND0 = 4         # 開局手牌
 # 「一段倒數」＝識破時間（每張出的牌／識破各自一段）、投遞回合、每次有人拿到情報的收／轉；換下一段就重新算。與 worker 的 itExtend／itSkip 同一套
 IT_EXT_MUL, IT_EXT_MAX, IT_EXT_PER, IT_EXT_SKIP_MS = 5, 2, 3, 3000
 IT_MSGS = {"isend", "itake", "ifwd", "iact", "timeout", "imode", "iok", "iext", "iskip", "ians"}
-IT_ACT = {"P": "截閱", "S": "調包", "F": "押送", "X": "焚信", "H": "搜身", "W": "洗白", "C": "識破", "I": "攔截", "T": "轉移", "B": "阻擋", "N": "無人倖免", "V": "查驗"}
+IT_ACT = {"P": "截閱", "S": "調包", "F": "押送", "X": "焚信", "H": "搜身", "W": "洗白", "C": "識破", "I": "攔截", "T": "轉移", "B": "阻擋", "N": "無人倖免", "V": "查驗", "D": "補給", "R": "竊取"}
 IT_KIND = {"seal": "密函", "pub": "公開情報", "direct": "直達情報"}   # 投遞方式（由卡面決定，不是玩家選）：蓋著照座位傳／翻開照座位傳／直接指定一人（對方必須收下）
 IT_KIND_CODE = {"s": "seal", "p": "pub", "d": "direct"}
 IT_KIND_CYCLE = "sspsd"   # 牌組依序循環分配投遞方式：密函 60%、公開 20%、直達 20%
 IT_CNAME = {"Y": "黃", "B": "藍", "K": "黑"}   # 2026-11-11 使用者要求移除灰（廢紙）
 IT_ROLE = {"sand": "沙都", "water": "水都", "mage": "咒術師"}
-# 牌組 64 張：印記 → 各行動的張數（雙色牌同時算兩種顏色；沒有灰）
-IT_DECK = {"Y": "P2S2F2X2H2W1C3I1T1B1N1V1", "B": "P2S2F2X2H2W1C3I1T1B1N1V1", "K": "P1S1F2X1H1C2I1T1B1V1", "YB": "P1S1F1X1H1C1I1V1", "YK": "P1S1F1C1B1", "BK": "P1S1F1C1T1"}   # 查驗 V（2026-11-11）黃、藍、黑、黃藍各 1 張，共 68 張
+# 牌組 75 張：印記 → 各行動的張數（雙色牌同時算兩種顏色；沒有灰）。2026-11-11 使用者要求重配：黃藍雙色減少、黃黑／藍黑增加；
+# 焚信 −4、洗白 +2、搜身 −2、攔截 +2、阻擋 +2，新增補給 D 4 張、竊取 R 3 張（顏色由助手分配）。含黃 35、含藍 35、含黑 33（與 worker 的 IT_DECK 一致）
+IT_DECK = {"Y": "P2S2F2X1H1W1C3I1T1B1N1V1D1", "B": "P2S2F2X1H1W1C3I1T1B1N1V1D1", "K": "P1S1F1H1W1C1I1B1V1D1R1", "YB": "P1S1I1B1V1D1", "YK": "P1S1F2H1C2I1T1B1R1", "BK": "P1S1F2W1C2I1T1B1R1"}
 IT_MAGES = {3: 1, 4: 0, 5: 1, 6: 2, 7: 1, 8: 2}   # 人數 → 咒術師人數（使用者定：4 人局 2 對 2）；其餘沙都、水都平分
 
 def it_deck():
@@ -1168,6 +1169,11 @@ def it_start(t):
     tbl_log(t, f"牌局開始！沙都 {half} 人、水都 {half} 人" + (f"、咒術師 {m} 人" if m else "") + f"，每人 {IT_HAND0} 張" + ("（不限時）" if t.get("untimed") else ""))
     it_begin_turn(t, random.randrange(n), int(time.time() * 1000))
 
+def it_clear_stolen(t):
+    """被竊取的提示：到下一階段（投遞出情報、換下一位）就清掉。"""
+    for s in t["seats"]:
+        s["stolen"] = None
+
 def it_begin_turn(t, i, now):
     """輪到座位 i：抽 2 張；手上沒牌（牌堆也空）就跳過，所有人都沒牌就平手。"""
     g = t["g"]
@@ -1177,6 +1183,7 @@ def it_begin_turn(t, i, now):
         t["turn"] = i
         g["step"], g["letter"], g["pend"], g["arrive"], g["blocked"], g["deadline"] = "turn", None, None, None, [], it_dl(g, now, IT_TURN_MS)
         g["ask"] = None
+        it_clear_stolen(t)
         t["seats"][i]["note"] = None   # 上一輪偷看到的東西：輪到自己時清掉
         it_draw(t, i, 2)
         if t["seats"][i]["hand"]:
@@ -1306,8 +1313,16 @@ def it_apply(t, p, now):
     L = g["letter"]
     a = p["a"]
     if a == "P" and L and L["kind"] != "pub" and not L.get("open"):
-        by["note"] = {"k": "peek", "card": L["card"]}
-        tbl_log(t, f"{by['name']} 截閱了密函")
+        col = p.get("col")
+        if col:   # 宣告了顏色：一定公開；猜對（雙色只要包含）就抽 1 張，猜錯只是不能抽（2026-11-11 使用者定）
+            hit = col in it_cols(L["card"])
+            L["open"] = True
+            tbl_log(t, f"{by['name']} 宣告{IT_CNAME[col]}色並公開了密函：{it_label(L['card'])}，{'猜對了，抽 1 張' if hit else '猜錯了'}")
+            if hit:
+                it_draw(t, p["by"], 1)
+        else:
+            by["note"] = {"k": "peek", "card": L["card"]}
+            tbl_log(t, f"{by['name']} 截閱了密函")
     elif a == "S" and L and L["kind"] != "pub" and not L.get("open"):   # 調包：換上去的牌公開（所有人看得到），被換掉的牌棄掉
         if p["sel"] not in by["hand"]:
             return
@@ -1337,6 +1352,19 @@ def it_apply(t, p, now):
         random.shuffle(cards)
         by["note"] = {"k": "search", "tgt": th["name"], "cards": cards[:2]}
         tbl_log(t, f"{by['name']} 搜了 {th['name']} 的身")
+    elif a == "D" and g["step"] == "turn" and t["turn"] == p["by"] and not L:   # 補給：自己的回合抽 2 張
+        it_draw(t, p["by"], 2)
+        tbl_log(t, f"{by['name']} 補給，抽了 2 張")
+    elif a == "R" and g["step"] == "turn" and t["turn"] == p["by"] and not L and it_ok(t, p["tgt"]):   # 竊取：從他手上隨機拿 1 張（被竊取的人到下一階段前看得到提示）
+        th = t["seats"][p["tgt"]]
+        if not th["hand"]:
+            tbl_log(t, f"{th['name']} 沒有手牌，竊取落空")
+            return
+        card = th["hand"].pop(random.randrange(len(th["hand"])))
+        by["hand"].append(card)
+        by["note"] = {"k": "steal", "tgt": th["name"], "card": card}
+        th["stolen"] = {"by": by["name"], "card": card}
+        tbl_log(t, f"{by['name']} 從 {th['name']} 手上竊取了一張牌")
     elif a == "V" and it_ok(t, p["tgt"]):   # 查驗：被查驗的人能自己決定回答（it_can_lie）就等他回答；否則照實回答
         th = t["seats"][p["tgt"]]
         tbl_log(t, f"{by['name']} 查驗了 {th['name']}")
@@ -1425,6 +1453,7 @@ def it_tick(t, now):
         card = s["hand"].pop(k)
         g["letter"] = {"card": card, "orig": card, "from": t["turn"], "at": to, "seen": [t["turn"], to], "kind": kind, "icpt": None}
         g["step"], g["deadline"] = "pass", it_dl(g, now, IT_HOLD_MS)
+        it_clear_stolen(t)
         tbl_log(t, f"{s['name']} 超時，自動把一封{IT_KIND[kind]}交給 {t['seats'][to]['name']}")
 
 def it_ok_check(t, now):
@@ -1497,7 +1526,7 @@ def it_chain(p):
     """識破串：由最底下的行動到最上面（最後出的）。"""
     c = []
     while p:
-        c.insert(0, {"a": p["a"], "by": p["by"], "tgt": p["tgt"]})
+        c.insert(0, {"a": p["a"], "by": p["by"], "tgt": p["tgt"], "col": p.get("col")})
         p = p["under"]
     return c
 
@@ -1562,6 +1591,7 @@ def it_msg(t, cid, msg, now):
         card = s["hand"].pop(idx)
         g["letter"] = {"card": card, "orig": card, "from": i, "at": dst, "seen": [i, dst], "kind": kind, "icpt": None}
         g["step"], g["deadline"] = "pass", it_dl(g, now, IT_HOLD_MS)
+        it_clear_stolen(t)
         it_arrive(g)
         dn = t["seats"][dst]["name"]
         tbl_log(t, f"{s['name']} 公開了一則情報（{it_label(card)}），交給 {dn}" if kind == "pub" else f"{s['name']} 把一封直達情報交給 {dn}" if kind == "direct" else f"{s['name']} 把一封密函交給 {dn}")
@@ -1635,6 +1665,14 @@ def it_msg(t, cid, msg, now):
             tgt = tg
         if act == "N" and (not mine or L):                 # 無人倖免：自己的回合、發送情報之前
             return
+        if act == "D" and (not mine or L):                 # 補給：自己的回合、發送情報之前
+            return
+        if act == "R":                                     # 竊取：自己的回合，指定另一位玩家
+            tg = msg.get("tgt")
+            if not mine or L or not it_ok(t, tg) or tg == i:
+                return
+            tgt = tg
+        col = msg.get("col") if act == "P" and msg.get("col") in ("Y", "B", "K") else None   # 截閱：可以宣告一個顏色（宣告就公開）
         if act == "C":   # 識破只能在別人的行動生效前出
             return
         s["hand"].pop(idx)
@@ -1644,7 +1682,9 @@ def it_msg(t, cid, msg, now):
             g["arrive"]["ok"] = []   # 有人出牌：到達確認重來
         if g.get("ack"):
             g["ack"]["ok"] = []      # 收下確認中出牌：確認重來
-        on = f"（對 {t['seats'][tgt]['name']}）" if act in ("H", "V", "W", "T", "B") else f"（對 {t['seats'][L['at']]['name']}）" if act in ("F", "I") else ""
+        if col:
+            g["pend"]["col"] = col
+        on = f"（對 {t['seats'][tgt]['name']}）" if act in ("H", "V", "R", "W", "T", "B") else f"（對 {t['seats'][L['at']]['name']}）" if act in ("F", "I") else f"（宣告{IT_CNAME[col]}色）" if col else ""
         tbl_log(t, f"{s['name']} 使用了{IT_ACT[act]}{on}")
         it_ok_check(t, now)   # 不限時：只剩出牌的人自己活著的極端情況，直接生效
 
@@ -2068,6 +2108,7 @@ def tbl_view(t, cid):
             if role == "seat":
                 v["hand"] = list(t["seats"][i]["hand"])
                 v["note"] = t["seats"][i].get("note")
+                v["stolen"] = t["seats"][i].get("stolen")
             if see_all:
                 v["hands"] = [list(s["hand"]) for s in t["seats"]]
     elif g and t["game"] == "gomoku":   # 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
