@@ -1057,15 +1057,15 @@ IT_HAND0 = 4         # 開局手牌
 # 同一段倒數最多 2 個人加時（後按的人一樣重設成上限 ×5），所有加時的人都按「跳過」才縮回剩 3 秒（原本剩的比 3 秒短就不變）；每人每局 3 次。
 # 「一段倒數」＝識破時間（每張出的牌／識破各自一段）、投遞回合、每次有人拿到情報的收／轉；換下一段就重新算。與 worker 的 itExtend／itSkip 同一套
 IT_EXT_MUL, IT_EXT_MAX, IT_EXT_PER, IT_EXT_SKIP_MS = 5, 2, 3, 3000
-IT_MSGS = {"isend", "itake", "ifwd", "iact", "timeout", "imode", "iok", "iext", "iskip"}
-IT_ACT = {"P": "截閱", "S": "調包", "F": "押送", "X": "焚信", "H": "搜身", "W": "洗白", "C": "識破", "I": "攔截", "T": "轉移", "B": "阻擋", "N": "無人倖免"}
+IT_MSGS = {"isend", "itake", "ifwd", "iact", "timeout", "imode", "iok", "iext", "iskip", "ians"}
+IT_ACT = {"P": "截閱", "S": "調包", "F": "押送", "X": "焚信", "H": "搜身", "W": "洗白", "C": "識破", "I": "攔截", "T": "轉移", "B": "阻擋", "N": "無人倖免", "V": "查驗"}
 IT_KIND = {"seal": "密函", "pub": "公開情報", "direct": "直達情報"}   # 投遞方式（由卡面決定，不是玩家選）：蓋著照座位傳／翻開照座位傳／直接指定一人（對方必須收下）
 IT_KIND_CODE = {"s": "seal", "p": "pub", "d": "direct"}
 IT_KIND_CYCLE = "sspsd"   # 牌組依序循環分配投遞方式：密函 60%、公開 20%、直達 20%
 IT_CNAME = {"Y": "黃", "B": "藍", "K": "黑"}   # 2026-11-11 使用者要求移除灰（廢紙）
 IT_ROLE = {"sand": "沙都", "water": "水都", "mage": "咒術師"}
 # 牌組 64 張：印記 → 各行動的張數（雙色牌同時算兩種顏色；沒有灰）
-IT_DECK = {"Y": "P2S2F2X2H2W1C3I1T1B1N1", "B": "P2S2F2X2H2W1C3I1T1B1N1", "K": "P1S1F2X1H1C2I1T1B1", "YB": "P1S1F1X1H1C1I1", "YK": "P1S1F1C1B1", "BK": "P1S1F1C1T1"}
+IT_DECK = {"Y": "P2S2F2X2H2W1C3I1T1B1N1V1", "B": "P2S2F2X2H2W1C3I1T1B1N1V1", "K": "P1S1F2X1H1C2I1T1B1V1", "YB": "P1S1F1X1H1C1I1V1", "YK": "P1S1F1C1B1", "BK": "P1S1F1C1T1"}   # 查驗 V（2026-11-11）黃、藍、黑、黃藍各 1 張，共 68 張
 IT_MAGES = {3: 1, 4: 0, 5: 1, 6: 2, 7: 1, 8: 2}   # 人數 → 咒術師人數（使用者定：4 人局 2 對 2）；其餘沙都、水都平分
 
 def it_deck():
@@ -1176,6 +1176,7 @@ def it_begin_turn(t, i, now):
             break
         t["turn"] = i
         g["step"], g["letter"], g["pend"], g["arrive"], g["blocked"], g["deadline"] = "turn", None, None, None, [], it_dl(g, now, IT_TURN_MS)
+        g["ask"] = None
         t["seats"][i]["note"] = None   # 上一輪偷看到的東西：輪到自己時清掉
         it_draw(t, i, 2)
         if t["seats"][i]["hand"]:
@@ -1294,7 +1295,7 @@ def it_resolve(t, now):
 def it_no_hand(t, now):
     """輪到的人把最後一張牌當行動用掉、手上沒牌可以投遞：直接換下一位（限時模式靠逾時，不限時模式沒有逾時，一定要在這裡處理）。"""
     g = t.get("g")
-    if not g or t["phase"] != "playing" or g["step"] != "turn" or g["pend"] or g["letter"] or t["seats"][t["turn"]]["hand"]:
+    if not g or t["phase"] != "playing" or g["step"] != "turn" or g["pend"] or g.get("ask") or g["letter"] or t["seats"][t["turn"]]["hand"]:
         return
     tbl_log(t, f"{t['seats'][t['turn']]['name']} 沒有牌可以投遞，跳過")
     it_end_letter(t, now)
@@ -1336,6 +1337,15 @@ def it_apply(t, p, now):
         random.shuffle(cards)
         by["note"] = {"k": "search", "tgt": th["name"], "cards": cards[:2]}
         tbl_log(t, f"{by['name']} 搜了 {th['name']} 的身")
+    elif a == "V" and it_ok(t, p["tgt"]):   # 查驗：被查驗的人能自己決定回答（it_can_lie）就等他回答；否則照實回答
+        th = t["seats"][p["tgt"]]
+        tbl_log(t, f"{by['name']} 查驗了 {th['name']}")
+        if it_can_lie(t, p["tgt"]):
+            g["ask"] = {"by": p["by"], "tgt": p["tgt"], "dl": g["deadline"], "ext": g.get("ext")}   # 暫停投遞回合：記下原本的期限與加時，回答後還原
+            g["deadline"] = it_dl(g, now, IT_HOLD_MS)
+            tbl_log(t, f"等 {th['name']} 回答查驗")
+        else:
+            by["note"] = {"k": "verify", "tgt": th["name"], "ans": th["role"]}
     elif a == "W" and it_ok(t, p["tgt"]):   # 洗白：任何階段，可以對任何人情報區裡含黑的情報使用
         th = t["seats"][p["tgt"]]
         if p["sel"] not in th["intel"]:
@@ -1385,6 +1395,9 @@ def it_tick(t, now):
         return
     if now < g["deadline"]:
         return
+    if g.get("ask"):   # 查驗逾時：照實回答
+        it_answer(t, None, now)
+        return
     if g["step"] == "pass" and g["letter"]:
         L = g["letter"]
         to = it_fwd_target(t, L) if it_blocked(g, L["at"]) else -1   # 被阻擋的持有者不能收：超時改成自動傳走
@@ -1423,6 +1436,24 @@ def it_ok_check(t, now):
     if all(i == p["by"] or i in p["ok"] for i in it_alive(t)):
         it_resolve(t, now)
 
+def it_can_lie(t, i):
+    """查驗：被查驗的人能不能自己決定回答（謊報／不透露）。目前還沒有身分牌，一律照實回答；之後「可以謊報查驗」的身分牌在這裡回 True。"""
+    return False
+
+IT_ANS = ("sand", "water", "mage", "hide")   # 回答：沙都／水都／咒術師／不透露
+
+def it_answer(t, ans, now):
+    """被查驗的人回答（ans＝None：照實回答，逾時或離開時用）。"""
+    g = t["g"]
+    q = g["ask"]
+    th = t["seats"][q["tgt"]]
+    g["ask"] = None
+    t["seats"][q["by"]]["note"] = {"k": "verify", "tgt": th["name"], "ans": ans or th["role"]}
+    tbl_log(t, f"{th['name']} 回答了 {t['seats'][q['by']]['name']} 的查驗" if ans else f"{th['name']} 沒有回答，照實告知查驗結果")
+    g["ext"] = q["ext"]
+    g["deadline"] = 0 if g["untimed"] else max(q["dl"], now + 5000)   # 回到投遞回合：還原原本的期限（至少留 5 秒）與加時
+    it_no_hand(t, now)
+
 def it_ext_of(g, make):
     """加時：目前這段倒數的加時紀錄（識破時間記在 pend 上、其他記在 g["ext"]）；make＝沒有就建立。"""
     o = g["pend"] or g
@@ -1439,7 +1470,7 @@ def it_extend(t, i, now):
         return
     e["by"].append(i)
     s["extLeft"] -= 1
-    base = IT_PEND_MS if g["pend"] else IT_TURN_MS if g["step"] == "turn" else IT_HOLD_MS
+    base = IT_PEND_MS if g["pend"] else IT_HOLD_MS if g.get("ask") else IT_TURN_MS if g["step"] == "turn" else IT_HOLD_MS
     until = now + base * IT_EXT_MUL
     if g["pend"]:
         g["pend"]["until"] = until
@@ -1494,6 +1525,13 @@ def it_msg(t, cid, msg, now):
         return
     if a == "iskip":   # 加時的人放棄行動：所有加時的人都跳過就縮回 3 秒
         it_skip(t, i, now)
+        return
+    if a == "ians":   # 回答查驗（只有能謊報的人會被問）
+        q = g.get("ask")
+        if q and q["tgt"] == i and msg.get("v") in IT_ANS:
+            it_answer(t, msg.get("v"), now)
+        return
+    if g.get("ask"):   # 等查驗回答：其他動作都暫停
         return
     if a == "iok":   # 不限時：按「準備繼續」（識破時間內沒有要識破；或收下情報後的確認）
         p = g["pend"]
@@ -1575,7 +1613,7 @@ def it_msg(t, cid, msg, now):
             return
         if act == "I" and (not passing or L["at"] == i or L["from"] == i):   # 攔截：別人拿著情報時（不能攔自己發出去的）
             return
-        if act == "H":                                     # 搜身：自己的回合
+        if act in ("H", "V"):                              # 搜身、查驗：自己的回合
             tg = msg.get("tgt")
             if not mine or not it_ok(t, tg) or tg == i:
                 return
@@ -1606,7 +1644,7 @@ def it_msg(t, cid, msg, now):
             g["arrive"]["ok"] = []   # 有人出牌：到達確認重來
         if g.get("ack"):
             g["ack"]["ok"] = []      # 收下確認中出牌：確認重來
-        on = f"（對 {t['seats'][tgt]['name']}）" if act in ("H", "W", "T", "B") else f"（對 {t['seats'][L['at']]['name']}）" if act in ("F", "I") else ""
+        on = f"（對 {t['seats'][tgt]['name']}）" if act in ("H", "V", "W", "T", "B") else f"（對 {t['seats'][L['at']]['name']}）" if act in ("F", "I") else ""
         tbl_log(t, f"{s['name']} 使用了{IT_ACT[act]}{on}")
         it_ok_check(t, now)   # 不限時：只剩出牌的人自己活著的極端情況，直接生效
 
@@ -1617,6 +1655,11 @@ def it_leave(t, i, now):
     s["hand"], s["left"], s["cid"] = [], True, None
     tbl_log(t, f"{s['name']} 離開了（身分：{IT_ROLE[s['role']]}）")
     g["pend"] = None   # 進行中的行動作廢（牌已經丟了）
+    q = g.get("ask")
+    if q and q["tgt"] == i and q["by"] != i and it_ok(t, q["by"]):   # 被查驗的人離開：照實告知
+        it_answer(t, None, now)
+    elif q:
+        g["ask"] = None
     advance = g["step"] == "turn" and t["turn"] == i
     if g["letter"] and g["letter"]["at"] == i:
         g["discard"].append(g["letter"]["card"])
@@ -2013,6 +2056,7 @@ def tbl_view(t, cid):
                        "untimed": bool(g["untimed"]), "blocked": list(g.get("blocked", [])), "arrive": {"at": L["at"], "ok": list(g["arrive"]["ok"])} if g.get("arrive") and L else None, "ack": {"by": g["ack"]["by"], "ok": list(g["ack"]["ok"])} if g.get("ack") else None,
                        "letter": {"from": L["from"], "at": L["at"], "seen": list(L["seen"]), "kind": L["kind"], "open": bool(L.get("open")), "next": it_fwd_target(t, L), "icpt": L.get("icpt")} if L else None,
                        "pend": {"a": g["pend"]["a"], "by": g["pend"]["by"], "tgt": g["pend"]["tgt"], "until": g["pend"]["until"], "ok": list(g["pend"]["ok"]), "chain": it_chain(g["pend"])} if g["pend"] else None}
+            v["it"]["ask"] = {"by": g["ask"]["by"], "tgt": g["ask"]["tgt"]} if g.get("ask") else None   # 等誰回答查驗
             ex = it_ext_of(g, False)
             v["it"]["ext"] = {"by": list(ex["by"]), "skip": list(ex["skip"])} if ex else None   # 目前這段倒數的加時（誰按了、誰跳過了）
             for k, s in enumerate(t["seats"]):

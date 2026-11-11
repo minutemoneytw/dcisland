@@ -804,15 +804,15 @@ const IT_PEND_MS = 5000;    // 行動（含識破）打出後的識破時間（�
 const IT_WIN = 3, IT_DEATH = 3;
 const IT_XP = 6;            // 正常結束：每位入座者 +6（輸贏一樣，同其他桌；助手先訂的數值）
 const IT_HAND0 = 4;
-const IT_MSGS = new Set(["isend", "itake", "ifwd", "iact", "timeout", "imode", "iok", "iext", "iskip"]);         // 開局手牌
-const IT_ACT = { P: "截閱", S: "調包", F: "押送", X: "焚信", H: "搜身", W: "洗白", C: "識破", I: "攔截", T: "轉移", B: "阻擋", N: "無人倖免" };
+const IT_MSGS = new Set(["isend", "itake", "ifwd", "iact", "timeout", "imode", "iok", "iext", "iskip", "ians"]);         // 開局手牌
+const IT_ACT = { P: "截閱", S: "調包", F: "押送", X: "焚信", H: "搜身", W: "洗白", C: "識破", I: "攔截", T: "轉移", B: "阻擋", N: "無人倖免", V: "查驗" };
 const IT_KIND = { seal: "密函", pub: "公開情報", direct: "直達情報" };   // 投遞方式（由卡面決定，不是玩家選）：蓋著照座位傳／翻開照座位傳／直接指定一人（對方必須收下）
 const IT_KIND_CODE = { s: "seal", p: "pub", d: "direct" };
 const IT_KIND_CYCLE = "sspsd";   // 牌組依序循環分配投遞方式：密函 60%、公開 20%、直達 20%
 const IT_CNAME = { Y: "黃", B: "藍", K: "黑" };   // 2026-11-11 使用者要求移除灰（廢紙）
 const IT_ROLE = { sand: "沙都", water: "水都", mage: "咒術師" };
 // 牌組 64 張：印記 → 各行動的張數（雙色牌同時算兩種顏色；沒有灰）
-const IT_DECK = { Y: "P2S2F2X2H2W1C3I1T1B1N1", B: "P2S2F2X2H2W1C3I1T1B1N1", K: "P1S1F2X1H1C2I1T1B1", YB: "P1S1F1X1H1C1I1", YK: "P1S1F1C1B1", BK: "P1S1F1C1T1" };
+const IT_DECK = { Y: "P2S2F2X2H2W1C3I1T1B1N1V1", B: "P2S2F2X2H2W1C3I1T1B1N1V1", K: "P1S1F2X1H1C2I1T1B1V1", YB: "P1S1F1X1H1C1I1V1", YK: "P1S1F1C1B1", BK: "P1S1F1C1T1" };   // 查驗 V（2026-11-11）黃、藍、黑、黃藍各 1 張，共 68 張
 const IT_MAGES = { 3: 1, 4: 0, 5: 1, 6: 2, 7: 1, 8: 2 };   // 人數 → 咒術師人數（使用者定：4 人局 2 對 2）；其餘沙都、水都平分
 function itDeck() {   // 牌＝「印記.行動.投遞方式」（例 YB.F.p）；投遞方式 s 密函／p 公開情報／d 直達情報，由卡面決定
   const d = [];
@@ -870,7 +870,7 @@ function itStart(t) {
 function itBeginTurn(t, i, now) {
   const g = t.g;
   for (let k = 0; k < t.seats.length && i >= 0; k++) {
-    t.turn = i; g.step = "turn"; g.letter = null; g.pend = null; g.arrive = null; g.blocked = []; g.deadline = itDl(g, now, IT_TURN_MS);
+    t.turn = i; g.step = "turn"; g.letter = null; g.pend = null; g.arrive = null; g.ask = null; g.blocked = []; g.deadline = itDl(g, now, IT_TURN_MS);
     t.seats[i].note = null;   // 上一輪偷看到的東西：輪到自己時清掉
     itDraw(t, i, 2);
     if (t.seats[i].hand.length) return;
@@ -956,7 +956,7 @@ function itResolve(t, now) {
 // 輪到的人把最後一張牌當行動用掉、手上沒牌可以投遞：直接換下一位（限時模式靠逾時，不限時模式沒有逾時，一定要在這裡處理）
 function itNoHand(t, now) {
   const g = t.g;
-  if (!g || t.phase !== "playing" || g.step !== "turn" || g.pend || g.letter || t.seats[t.turn].hand.length) return;
+  if (!g || t.phase !== "playing" || g.step !== "turn" || g.pend || g.ask || g.letter || t.seats[t.turn].hand.length) return;
   tblLog(t, `${t.seats[t.turn].name} 沒有牌可以投遞，跳過`);
   itEndLetter(t, now);
 }
@@ -979,6 +979,14 @@ function itApply(t, p, now) {
     const th = t.seats[p.tgt], cards = shuffle([...th.hand]).slice(0, 2);
     by.note = { k: "search", tgt: th.name, cards };
     tblLog(t, `${by.name} 搜了 ${th.name} 的身`);
+  } else if (p.a === "V" && itOk(t, p.tgt)) {   // 查驗：被查驗的人能自己決定回答（itCanLie）就等他回答；否則照實回答
+    const th = t.seats[p.tgt];
+    tblLog(t, `${by.name} 查驗了 ${th.name}`);
+    if (itCanLie(t, p.tgt)) {
+      g.ask = { by: p.by, tgt: p.tgt, dl: g.deadline, ext: g.ext || null };   // 暫停投遞回合：記下原本的期限與加時，回答後還原
+      g.deadline = itDl(g, now, IT_HOLD_MS);
+      tblLog(t, `等 ${th.name} 回答查驗`);
+    } else by.note = { k: "verify", tgt: th.name, ans: th.role };
   } else if (p.a === "W" && itOk(t, p.tgt)) {   // 洗白：任何階段，可以對任何人情報區裡含黑的情報使用
     const th = t.seats[p.tgt], k = th.intel.indexOf(p.sel);
     if (k < 0) return;
@@ -1014,6 +1022,7 @@ function itTick(t, now) {
   if (t.game !== "intel" || t.phase !== "playing" || !g || g.untimed) return;
   if (g.pend) { if (now >= g.pend.until) itResolve(t, now); return; }
   if (now < g.deadline) return;
+  if (g.ask) { itAnswer(t, null, now); return; }   // 查驗逾時：照實回答
   if (g.step === "pass" && g.letter) {
     const L = g.letter, to = itBlocked(g, L.at) ? itFwdTarget(t, L) : -1;   // 被阻擋的持有者不能收：超時改成自動傳走
     if (to >= 0) { tblLog(t, `${t.seats[L.at].name} 超時（被阻擋），自動把情報傳給 ${t.seats[to].name}`); L.at = to; if (!L.seen.includes(to)) L.seen.push(to); g.deadline = itDl(g, now, IT_HOLD_MS); }
@@ -1036,6 +1045,18 @@ function itOkCheck(t, now) {
   if (!p || !g.untimed) return;
   if (itAlive(t).every(i => i === p.by || p.ok.includes(i))) itResolve(t, now);
 }
+// 查驗：被查驗的人能不能自己決定回答（謊報／不透露）。目前還沒有身分牌，一律照實回答；之後「可以謊報查驗」的身分牌在這裡回 true
+function itCanLie(t, i) { return false; }
+const IT_ANS = ["sand", "water", "mage", "hide"];   // 回答：沙都／水都／咒術師／不透露
+// 被查驗的人回答（ans＝null：照實回答，逾時或離開時用）
+function itAnswer(t, ans, now) {
+  const g = t.g, q = g.ask, th = t.seats[q.tgt];
+  g.ask = null;
+  t.seats[q.by].note = { k: "verify", tgt: th.name, ans: ans || th.role };
+  tblLog(t, ans ? `${th.name} 回答了 ${t.seats[q.by].name} 的查驗` : `${th.name} 沒有回答，照實告知查驗結果`);
+  g.ext = q.ext; g.deadline = g.untimed ? 0 : Math.max(q.dl, now + 5000);   // 回到投遞回合：還原原本的期限（至少留 5 秒）與加時
+  itNoHand(t, now);
+}
 // 加時：目前這段倒數的加時紀錄（識破時間記在 pend 上、其他記在 g.ext）；make＝沒有就建立
 function itExtOf(g, make) {
   const o = g.pend || g;
@@ -1048,7 +1069,7 @@ function itExtend(t, i, now) {
   const e = itExtOf(g, true);
   if (e.by.includes(i) || e.by.length >= IT_EXT_MAX) return;
   e.by.push(i); s.extLeft -= 1;
-  const base = g.pend ? IT_PEND_MS : g.step === "turn" ? IT_TURN_MS : IT_HOLD_MS, until = now + base * IT_EXT_MUL;
+  const base = g.pend ? IT_PEND_MS : g.ask ? IT_HOLD_MS : g.step === "turn" ? IT_TURN_MS : IT_HOLD_MS, until = now + base * IT_EXT_MUL;
   if (g.pend) { g.pend.until = until; g.deadline = Math.max(g.deadline, until + 5000); } else g.deadline = until;
   tblLog(t, `${s.name} 申請加時（${base * IT_EXT_MUL / 1000} 秒，本局還剩 ${s.extLeft} 次）`);
 }
@@ -1076,6 +1097,8 @@ function itMsg(t, cid, msg, now) {
   const s = t.seats[i], L = g.letter;
   if (a === "iext") { itExtend(t, i, now); return; }   // 加時（限時模式）
   if (a === "iskip") { itSkip(t, i, now); return; }    // 加時的人放棄行動：所有加時的人都跳過就縮回 3 秒
+  if (a === "ians") { if (g.ask && g.ask.tgt === i && IT_ANS.includes(msg.v)) itAnswer(t, msg.v, now); return; }   // 回答查驗（只有能謊報的人會被問）
+  if (g.ask) return;   // 等查驗回答：其他動作都暫停
   if (a === "iok") {   // 不限時：按「準備繼續」（識破時間內沒有要識破；或收下情報後的確認）
     if (g.pend) { if (!g.untimed || g.pend.by === i || g.pend.ok.includes(i)) return; g.pend.ok.push(i); itOkCheck(t, now); return; }
     if (g.arrive && g.untimed && g.letter) { const ar = g.arrive; if (g.letter.at === i || ar.ok.includes(i)) return; ar.ok.push(i); itArriveCheck(t, now); return; }
@@ -1116,7 +1139,7 @@ function itMsg(t, cid, msg, now) {
     if (act === "F" && (!pass || L.at === i)) return;   // 押送：別人拿著情報時
     if (act === "X" && !pass) return;                   // 焚信：情報傳遞中
     if (act === "I" && (!pass || L.at === i || L.from === i)) return;   // 攔截：別人拿著情報時（不能攔自己發出去的）
-    if (act === "H") { if (!mine || !itOk(t, msg.tgt) || msg.tgt === i) return; tgt = msg.tgt; }   // 搜身：自己的回合
+    if (act === "H" || act === "V") { if (!mine || !itOk(t, msg.tgt) || msg.tgt === i) return; tgt = msg.tgt; }   // 搜身、查驗：自己的回合
     if (act === "W") {   // 洗白：任何階段，對任何活人情報區裡含黑的情報（tgt＝座位、sel＝他情報區的 idx）
       const th = t.seats[msg.tgt], k = msg.sel;
       if (!itOk(t, msg.tgt) || !Number.isInteger(k) || k < 0 || k >= th.intel.length || !itCols(th.intel[k]).includes("K")) return;
@@ -1130,7 +1153,7 @@ function itMsg(t, cid, msg, now) {
     g.pend = { a: act, by: i, tgt, sel, until: now + IT_PEND_MS, under: null, ok: [] };
     if (g.arrive) g.arrive.ok = [];   // 有人出牌：到達確認重來
     if (g.ack) g.ack.ok = [];         // 收下確認中出牌：確認重來
-    const on = act === "H" || act === "W" || act === "T" || act === "B" ? `（對 ${t.seats[tgt].name}）` : act === "F" || act === "I" ? `（對 ${t.seats[L.at].name}）` : "";
+    const on = act === "H" || act === "V" || act === "W" || act === "T" || act === "B" ? `（對 ${t.seats[tgt].name}）` : act === "F" || act === "I" ? `（對 ${t.seats[L.at].name}）` : "";
     tblLog(t, `${s.name} 使用了${IT_ACT[act]}${on}`);
     itOkCheck(t, now);   // 不限時：只剩出牌的人自己活著的極端情況，直接生效
   }
@@ -1141,6 +1164,8 @@ function itLeave(t, i, now) {
   g.discard.push(...s.hand); s.hand = []; s.left = true; s.cid = null;
   tblLog(t, `${s.name} 離開了（身分：${IT_ROLE[s.role]}）`);
   g.pend = null;   // 進行中的行動作廢（牌已經丟了）
+  if (g.ask && g.ask.tgt === i && g.ask.by !== i && itOk(t, g.ask.by)) itAnswer(t, null, now);   // 被查驗的人離開：照實告知
+  else if (g.ask) g.ask = null;
   let advance = g.step === "turn" && t.turn === i;
   if (g.letter && g.letter.at === i) { g.discard.push(g.letter.card); g.letter = null; g.arrive = null; advance = true; tblLog(t, "他手上的密函作廢"); }
   if (itCheckFaction(t, true)) return;
@@ -1376,6 +1401,7 @@ function tblView(t, cid) {
         letter: L ? { from: L.from, at: L.at, seen: [...L.seen], kind: L.kind, open: !!L.open, next: itFwdTarget(t, L), icpt: L.icpt ?? null } : null,
         pend: g.pend ? { a: g.pend.a, by: g.pend.by, tgt: g.pend.tgt, until: g.pend.until, ok: [...g.pend.ok], chain: itChain(g.pend) } : null,
       };
+      v.it.ask = g.ask ? { by: g.ask.by, tgt: g.ask.tgt } : null;   // 等誰回答查驗
       const ex = itExtOf(g, false);
       v.it.ext = ex ? { by: [...ex.by], skip: [...ex.skip] } : null;   // 目前這段倒數的加時（誰按了、誰跳過了）
       t.seats.forEach((s, k) => { v.seats[k].ext = s.extLeft ?? 0; });   // 每人本局還剩幾次加時
