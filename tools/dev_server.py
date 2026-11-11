@@ -1053,7 +1053,11 @@ IT_PEND_MS = 5000    # 行動（含識破）打出後的識破時間（使用者
 IT_WIN, IT_DEATH = 3, 3
 IT_XP = 6            # 正常結束：每位入座者 +6（輸贏一樣；助手先訂的數值）
 IT_HAND0 = 4         # 開局手牌
-IT_MSGS = {"isend", "itake", "ifwd", "iact", "timeout", "imode", "iok"}
+# 加時（2026-11-11，使用者要求；只有限時模式）：倒數中任何活著的入座玩家可以按「加時」，這段倒數變成「該段上限秒數 ×5」（從按下時起算），
+# 同一段倒數最多 2 個人加時（後按的人一樣重設成上限 ×5），所有加時的人都按「跳過」才縮回剩 3 秒（原本剩的比 3 秒短就不變）；每人每局 3 次。
+# 「一段倒數」＝識破時間（每張出的牌／識破各自一段）、投遞回合、每次有人拿到情報的收／轉；換下一段就重新算。與 worker 的 itExtend／itSkip 同一套
+IT_EXT_MUL, IT_EXT_MAX, IT_EXT_PER, IT_EXT_SKIP_MS = 5, 2, 3, 3000
+IT_MSGS = {"isend", "itake", "ifwd", "iact", "timeout", "imode", "iok", "iext", "iskip"}
 IT_ACT = {"P": "截閱", "S": "調包", "F": "押送", "X": "焚信", "H": "搜身", "W": "洗白", "C": "識破", "I": "攔截", "T": "轉移", "B": "阻擋", "N": "無人倖免"}
 IT_KIND = {"seal": "密函", "pub": "公開情報", "direct": "直達情報"}   # 投遞方式（由卡面決定，不是玩家選）：蓋著照座位傳／翻開照座位傳／直接指定一人（對方必須收下）
 IT_KIND_CODE = {"s": "seal", "p": "pub", "d": "direct"}
@@ -1118,6 +1122,7 @@ def it_fwd_target(t, L):
     return L["from"] if L["at"] != L["from"] and it_ok(t, L["from"]) else -1   # 大家都不收：退回給發信者，發信者必須收下
 
 def it_dl(g, now, ms):
+    g["ext"] = None   # 開始新的一段倒數：清掉上一段的加時
     return 0 if g["untimed"] else now + ms   # 不限時模式：期限＝0（沒有倒數）
 
 def it_top(t):
@@ -1156,7 +1161,7 @@ def it_start(t):
     random.shuffle(deck)
     for k, s in enumerate(t["seats"]):
         s["hand"] = [deck.pop() for _ in range(IT_HAND0)]
-        s["intel"], s["role"], s["out"], s["left"], s["ready"], s["note"] = [], roles[k], False, False, False, None
+        s["intel"], s["role"], s["out"], s["left"], s["ready"], s["note"], s["extLeft"] = [], roles[k], False, False, False, None, IT_EXT_PER
     t["g"] = {"deck": deck, "discard": [], "step": "turn", "letter": None, "pend": None, "arrive": None, "blocked": [], "deadline": 0, "untimed": bool(t.get("untimed"))}
     t["result"] = None
     t["phase"] = "playing"
@@ -1388,7 +1393,7 @@ def it_tick(t, now):
             L["at"] = to
             if to not in L["seen"]:
                 L["seen"].append(to)
-            g["deadline"] = now + IT_HOLD_MS
+            g["deadline"] = it_dl(g, now, IT_HOLD_MS)
         else:
             tbl_log(t, f"{t['seats'][L['at']]['name']} 超時，自動收下")
             it_receive(t, now)
@@ -1406,7 +1411,7 @@ def it_tick(t, now):
             return
         card = s["hand"].pop(k)
         g["letter"] = {"card": card, "orig": card, "from": t["turn"], "at": to, "seen": [t["turn"], to], "kind": kind, "icpt": None}
-        g["step"], g["deadline"] = "pass", now + IT_HOLD_MS
+        g["step"], g["deadline"] = "pass", it_dl(g, now, IT_HOLD_MS)
         tbl_log(t, f"{s['name']} 超時，自動把一封{IT_KIND[kind]}交給 {t['seats'][to]['name']}")
 
 def it_ok_check(t, now):
@@ -1417,6 +1422,45 @@ def it_ok_check(t, now):
         return
     if all(i == p["by"] or i in p["ok"] for i in it_alive(t)):
         it_resolve(t, now)
+
+def it_ext_of(g, make):
+    """加時：目前這段倒數的加時紀錄（識破時間記在 pend 上、其他記在 g["ext"]）；make＝沒有就建立。"""
+    o = g["pend"] or g
+    if not o.get("ext") and make:
+        o["ext"] = {"by": [], "skip": []}
+    return o.get("ext")
+
+def it_extend(t, i, now):
+    g, s = t["g"], t["seats"][i]
+    if g["untimed"] or s.get("extLeft", 0) <= 0 or g["step"] not in ("turn", "pass"):
+        return
+    e = it_ext_of(g, True)
+    if i in e["by"] or len(e["by"]) >= IT_EXT_MAX:
+        return
+    e["by"].append(i)
+    s["extLeft"] -= 1
+    base = IT_PEND_MS if g["pend"] else IT_TURN_MS if g["step"] == "turn" else IT_HOLD_MS
+    until = now + base * IT_EXT_MUL
+    if g["pend"]:
+        g["pend"]["until"] = until
+        g["deadline"] = max(g["deadline"], until + 5000)
+    else:
+        g["deadline"] = until
+    tbl_log(t, f"{s['name']} 申請加時（{base * IT_EXT_MUL // 1000} 秒，本局還剩 {s['extLeft']} 次）")
+
+def it_skip(t, i, now):
+    g = t["g"]
+    e = it_ext_of(g, False)
+    if g["untimed"] or not e or i not in e["by"] or i in e["skip"]:
+        return
+    e["skip"].append(i)
+    tbl_log(t, f"{t['seats'][i]['name']} 跳過")
+    if not all(j in e["skip"] for j in e["by"]):   # 所有加時的人都跳過才縮回
+        return
+    if g["pend"]:
+        g["pend"]["until"] = min(g["pend"]["until"], now + IT_EXT_SKIP_MS)
+    else:
+        g["deadline"] = min(g["deadline"], now + IT_EXT_SKIP_MS)
 
 def it_chain(p):
     """識破串：由最底下的行動到最上面（最後出的）。"""
@@ -1445,6 +1489,12 @@ def it_msg(t, cid, msg, now):
         return
     s, L = t["seats"][i], g["letter"]
     idx, to, sel = msg.get("idx"), msg.get("to"), msg.get("sel")
+    if a == "iext":   # 加時（限時模式）
+        it_extend(t, i, now)
+        return
+    if a == "iskip":   # 加時的人放棄行動：所有加時的人都跳過就縮回 3 秒
+        it_skip(t, i, now)
+        return
     if a == "iok":   # 不限時：按「準備繼續」（識破時間內沒有要識破；或收下情報後的確認）
         p = g["pend"]
         if p:   # 識破／行動確認中：先處理這個
@@ -1963,6 +2013,10 @@ def tbl_view(t, cid):
                        "untimed": bool(g["untimed"]), "blocked": list(g.get("blocked", [])), "arrive": {"at": L["at"], "ok": list(g["arrive"]["ok"])} if g.get("arrive") and L else None, "ack": {"by": g["ack"]["by"], "ok": list(g["ack"]["ok"])} if g.get("ack") else None,
                        "letter": {"from": L["from"], "at": L["at"], "seen": list(L["seen"]), "kind": L["kind"], "open": bool(L.get("open")), "next": it_fwd_target(t, L), "icpt": L.get("icpt")} if L else None,
                        "pend": {"a": g["pend"]["a"], "by": g["pend"]["by"], "tgt": g["pend"]["tgt"], "until": g["pend"]["until"], "ok": list(g["pend"]["ok"]), "chain": it_chain(g["pend"])} if g["pend"] else None}
+            ex = it_ext_of(g, False)
+            v["it"]["ext"] = {"by": list(ex["by"]), "skip": list(ex["skip"])} if ex else None   # 目前這段倒數的加時（誰按了、誰跳過了）
+            for k, s in enumerate(t["seats"]):
+                seats[k]["ext"] = s.get("extLeft", 0)   # 每人本局還剩幾次加時
             if L and (see_all or L["kind"] == "pub" or L.get("open")):
                 v["it"]["letter"]["card"] = L["card"]          # 觀戰者：看得到密函；公開情報：所有人都看得到
             elif L and role == "seat" and L["from"] == i:

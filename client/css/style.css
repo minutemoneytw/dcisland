@@ -355,6 +355,8 @@ body {
 .it-letter { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--text); font-size: 14px; }
 .it-note { margin-top: 6px; color: #ffe08a; font-size: 13px; }
 .it-timer { margin-left: 10px; color: #ffb347; }
+.it-timer.ext { color: #7ae8d0; }   /* 加時中 */
+.it-ext { margin: 2px 0 4px; align-items: center; }
 .it-opts { align-items: center; flex-wrap: wrap; }
 .it-reveal { margin: 6px auto; max-width: 560px; font-size: 14px; color: var(--text); }
 .it-reveal-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; }

@@ -5005,7 +5005,8 @@ function itStartTimer() {
     if (!S.tableOpen || !cur || cur.game !== 'intel' || cur.phase !== 'playing' || !it) { itStopTimer(); return; }
     if (it.untimed) { const el0 = $('itTimer'); if (el0) el0.textContent = it.pend ? `等大家按「準備繼續」（${it.pend.ok.length + 1}/${itAliveN(cur)}）` : it.ack ? `等大家按「準備繼續」（${it.ack.ok.length + 1}/${itAliveN(cur)}）` : it.arrive ? `等大家按「準備繼續」（${it.arrive.ok.length + 1}/${itAliveN(cur)}）` : '不限時'; return; }   // 不限時：沒有倒數，也不送 timeout
     const end = it.pend ? it.pend.until : it.deadline, left = (end - (Date.now() + S.itOff)) / 1000;
-    const el = $('itTimer'); if (el) el.textContent = left > 0 ? `${it.pend ? '識破倒數' : '剩'} ${Math.ceil(left)} 秒` : '…';
+    const ex = it.ext, extOn = !!ex?.by.length && !ex.by.every(j => ex.skip.includes(j));   // 這段倒數有人加時（還沒全部跳過）
+    const el = $('itTimer'); if (el) { el.textContent = left > 0 ? `${extOn ? '⏳ 加時中 · ' : ''}${it.pend ? '識破倒數' : '剩'} ${Math.ceil(left)} 秒` : '…'; el.classList.toggle('ext', extOn); }
     if (left <= 0 && Date.now() - (S.itTimeoutAt || 0) > 1000) { S.itTimeoutAt = Date.now(); S.net?.tbl?.({ a: 'timeout' }); }   // 時間到：請伺服器核對時鐘並處理
   }, 250);
 }
@@ -5039,6 +5040,23 @@ function buildIntel(box, v, mk, gd) {
   const st = mk('div', 'table-status' + (myTurn || holding ? ' mine' : ''), status);
   if (playing) { const tm = mk('span', 'it-timer'); tm.id = 'itTimer'; st.appendChild(tm); }
   box.appendChild(st);
+  // 加時（限時模式）：倒數中任何活著的入座玩家可以按「加時」（這段倒數變成上限 ×5，同一段最多 2 人、每人每局 3 次）；加時的人可以按「跳過」，全部跳過就縮回 3 秒
+  if (playing && !it.untimed && (it.step === 'turn' || it.step === 'pass')) {
+    const ex = it.ext || { by: [], skip: [] }, row = mk('div', 'table-btns it-ext');
+    if (ex.by.length) row.appendChild(mk('span', 'table-tag', '加時：' + ex.by.map(j => nm(j) + (ex.skip.includes(j) ? '（已跳過）' : '')).join('、')));
+    if (me >= 0 && alive(me)) {
+      const left = v.seats[me].ext ?? 0;
+      if (ex.by.includes(me)) {
+        if (!ex.skip.includes(me)) { const b = mk('button', 'ff-btn small', '跳過'); b.title = '我不行動了：所有加時的人都跳過，倒數就縮回 3 秒'; b.onclick = () => S.net?.tbl?.({ a: 'iskip' }); row.appendChild(b); }
+      } else {
+        const b = mk('button', 'ff-btn small', `加時（剩 ${left} 次）`);
+        b.disabled = left <= 0 || ex.by.length >= 2;
+        b.title = ex.by.length >= 2 ? '這段倒數已經有 2 個人加時' : left <= 0 ? '本局的加時次數用完了' : '這段倒數變成上限的 5 倍（識破 25 秒、收／轉 75 秒、投遞 150 秒）';
+        b.onclick = () => S.net?.tbl?.({ a: 'iext' }); row.appendChild(b);
+      }
+    }
+    if (row.childElementCount) box.appendChild(row);
+  }
   // 結算：翻開所有人的身分與情報區
   if (v.result && !playing) {
     box.appendChild(mk('div', 'table-result', v.result.text));
