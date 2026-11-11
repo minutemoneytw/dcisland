@@ -48,7 +48,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 | `tools/dev_server.py` | 本機開發用伺服器，行為要與 Worker 版**保持一致** |
 | `tools/gen_assets.py` | 素材的唯一來源 |
 | `client/assets/**` | 由 manifest（各 `*.json`）驅動 |
-| `docs/` | 規格、實作筆記（`notes.md`）、Discord 設定、Cloudflare 部署、素材授權記錄 |
+| `docs/` | 規格、實作筆記（`notes.md`）、秘藥情報戰角色卡規格（`intel-characters.md`）、Discord 設定、Cloudflare 部署、素材授權記錄 |
 
 ## 慣例
 1. **加內容走 manifest，不改程式**：新家具/動物/造型＝manifest 加條目＋圖檔。新地形＝`assets/terrain/<id>/` 資料夾＋在 `main.js` 的 `TERRAIN_IDS` 登記（見 README「內容擴充」）。
