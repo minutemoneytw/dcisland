@@ -4759,6 +4759,14 @@ function dodgeDraw(t, mySeat) {
   if (t < 0) { g.fillStyle = 'rgba(8,10,20,.55)'; g.fillRect(0, 0, DG_W, DG_H); g.fillStyle = '#ffe08a'; g.font = 'bold 56px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillText(String(Math.ceil(-t)), DG_W / 2, DG_H / 2 + 18); }
   if (mySeat?.out && v.role === 'seat') { g.fillStyle = 'rgba(8,10,20,.5)'; g.fillRect(0, DG_H / 2 - 36, DG_W, 72); g.fillStyle = '#ffb347'; g.font = 'bold 24px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillText(`你出局了：存活 ${mySeat.died ?? '—'} 秒`, DG_W / 2, DG_H / 2 + 8); }
 }
+// 排行榜（前三名；英文打字競賽、中文打字競賽、躲彈幕）：伺服器每次結算後更新，table 畫面帶 board（[{name, score, ts}]）；只在大廳與結算畫面顯示
+function boardBlock(box, v, mk, fmt) {
+  const b = v.board || [], el = mk('div', 'table-board');
+  el.appendChild(mk('div', 'table-board-title', '🏆 排行榜（前三名）'));
+  if (!b.length) el.appendChild(mk('div', 'table-board-row empty', '還沒有紀錄'));
+  b.forEach((e, i) => el.appendChild(mk('div', 'table-board-row', `${['🥇', '🥈', '🥉'][i] || i + 1 + '.'} ${e.name}　${fmt(e.score)}`)));
+  box.appendChild(el);
+}
 function buildDodge(box, v, mk, gd) {
   const playing = v.phase === 'playing', mySeat = v.role === 'seat' ? v.seats[v.me] : null;
   if (playing && (!S.dg || S.dg.id !== S.tableId || S.dg.t0 !== v.dg?.t0)) dodgeStart(v);   // 新的一局（或剛進來觀戰一局進行中的）：重置本機狀態
@@ -4773,6 +4781,7 @@ function buildDodge(box, v, mk, gd) {
     v.result.ranking.forEach((r, i) => rk.appendChild(mk('div', null, `${i + 1}. ${r.name}　${r.sec} 秒${r.left ? '（中途離開）' : ''}`)));
     box.appendChild(rk);
   }
+  if (!playing) boardBlock(box, v, mk, sc => `${sc} 秒`);
   const row = mk('div', 'table-seats dodge-seats');   // 每位玩家：名字、命數（♥）、存活秒數
   v.seats.forEach((s, i) => {
     const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && s.out ? ' out' : ''));
@@ -4804,7 +4813,7 @@ function buildDodge(box, v, mk, gd) {
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
-// ---- 英打競賽（第七桌 t7）：題目由「伺服器給的 seed」決定性地從 games.json 的 typing.words 抽（大家同一串單字）；
+// ---- 英文打字競賽（第七桌 t7）：題目由「伺服器給的 seed」決定性地從 games.json 的 typing.words 抽（大家同一串單字）；
 // 打字判定、錯字鎖定 0.7 秒都在本機，每打完一個字回報 word {n}（n＝目前總分），其他人的分數由 tsc 訊息轉發；時間到後送 finish 請伺服器結算 ----
 const TY_LOCK_MS = 700;      // 打錯後不能輸入的時間（使用者定）
 const TY_PROG_GAP_MS = 250;   // 兩次打字進度回報（給觀戰者看）的最短間隔；伺服器的限流是 200ms
@@ -4959,6 +4968,7 @@ function buildTyping(box, v, mk, gd) {
     rs.forEach(r => rk.appendChild(mk('div', null, `${1 + rs.filter(o => o.score > r.score).length}. ${r.name}　${r.score} ${v.game === 'zhtyping' ? '個詞' : '個單字'}${r.left ? '（中途離開）' : ''}`)));
     box.appendChild(rk);
   }
+  if (!playing) boardBlock(box, v, mk, sc => `${sc} ${v.game === 'zhtyping' ? '個詞' : '個單字'}`);
   if (playing) {   // 比賽畫面：上方其他人的分數、中央題目與自己的分數、下方自己打的內容
     const wrap = mk('div', 'typing-wrap');
     wrap.appendChild(mk('div', 'typing-others')).id = 'tyOthers';
@@ -6886,7 +6896,7 @@ addEventListener('keydown', e => {
   if (S.tableOpen) {   // 遊戲畫面開著：Esc 離開；五子棋復盤時 ←／→／Home／End 切換步數；其他鍵都不處理（不能走路）
     if (k === 'escape') { e.preventDefault(); if (!$('rulesBox').classList.contains('hidden')) rulesShow(false); else leaveTable(); }   // 規則視窗開著：Esc 先關；離開確認開著：Esc＝取消規則
     else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
-    else if (S.ty) typingKey(e);   // 英打競賽：英文字母
+    else if (S.ty) typingKey(e);   // 英文打字競賽：英文字母
     else if (S.gmStep != null && S.tableView?.moves && ['arrowleft', 'arrowright', 'home', 'end'].includes(k)) {
       e.preventDefault();
       const N = S.tableView.moves.length;
@@ -7348,8 +7358,8 @@ async function boot() {
     onFishResult,            // 釣魚結果（伺服器抽的魚；登入的人已記進伺服器的圖鑑）
     onTable: onNetTable,       // 和平島遊戲桌：伺服器給我的牌桌畫面
     onTpos: onNetTpos,         // 躲彈幕：其他玩家的位置
-    onTpg: onNetTpg,           // 英打競賽：觀戰者看到的其他玩家打字進度
-    onTsc: onNetTsc,           // 英打競賽：其他玩家的分數
+    onTpg: onNetTpg,           // 英文打字競賽：觀戰者看到的其他玩家打字進度
+    onTsc: onNetTsc,           // 英文打字競賽：其他玩家的分數
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）

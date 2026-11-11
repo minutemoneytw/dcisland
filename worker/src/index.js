@@ -482,8 +482,8 @@ async function exchangeToken(request, env) {
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
 const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
 const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8] };           // 遊戲 → [開局最少人數, 入座上限]
-const TBL_TYP_CD_MS = 200;                       // 英打競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
-const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英打競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
+const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
+const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
 // 玩小遊戲得 XP（2026-11-08，使用者要求；數值是助手先訂的）：對局正常結束（沒人中途離開）時，每位入座者各得一份，寫在 result.xp（依座位順序）
 // 輸贏經驗一樣（使用者定）：抽鬼牌每位 +4；五子棋勝／負／平手都 +5（下不到 10 手就結束的不給，擋刷分）。
@@ -544,8 +544,8 @@ function tblLeave(t, cid) {
     const name = t.seats[i].name;
     if (t.phase === "playing" && t.game === "dodge") { dgLeave(t, i, Date.now()); return; }   // 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
     if (t.phase === "playing" && t.game === "uno") { unLeave(t, i, Date.now()); return; }   // UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
-    if (t.phase === "playing" && isTy(t)) { tyLeave(t, i, Date.now()); return; }   // 英打競賽：離開不中斷，照當時分數排名
-    if (t.phase === "playing" && t.game === "intel") { itLeave(t, i, Date.now()); return; }   // 秘藥情報戰：離開不中斷，翻開身分，場上只剩一個陣營時結束   // 英打競賽：離開不中斷，照當時分數排名
+    if (t.phase === "playing" && isTy(t)) { tyLeave(t, i, Date.now()); return; }   // 英文打字競賽：離開不中斷，照當時分數排名
+    if (t.phase === "playing" && t.game === "intel") { itLeave(t, i, Date.now()); return; }   // 秘藥情報戰：離開不中斷，翻開身分，場上只剩一個陣營時結束   // 英文打字競賽：離開不中斷，照當時分數排名
     if (t.phase === "playing") {   // 使用者定：有人離開（含斷線）直接結束這一局
       t.result = { aborted: true, text: `${name} 離開了，這一局結束` };
       tblResetSeats(t);
@@ -736,7 +736,7 @@ function dgLeave(t, i, now) {
   s.left = true; s.cid = null;
   dgCheckEnd(t, now);
 }
-// ---- 英打競賽（第七桌 t7；2026-11-10，使用者要求）：1～8 人、倒數 3 秒後 30 秒內比誰打完的英文單字多 ----
+// ---- 英文打字競賽（第七桌 t7；2026-11-10，使用者要求）：1～8 人、倒數 3 秒後 30 秒內比誰打完的英文單字多 ----
 // 題目由客戶端用伺服器給的 seed 決定性地產生（大家同一串單字，單字表在 games.json 的 typing.words）；打字與錯字鎖定都在客戶端，
 // 每打完一個字回報 word {n}（n＝目前總分，信任客戶端；伺服器只收「比上次多 1～3」的值），伺服器記分、轉發 tsc {i, n} 給同桌其他人。
 // 時間到後留 TY_SETTLE_MS 收最後的分數，客戶端再送 finish，伺服器核對時鐘才結算。中途離開不中斷（座位留空殼、照當時分數排名、不給 XP）。
@@ -745,6 +745,14 @@ function dgLeave(t, i, now) {
 // 客戶端用輸入法「送出選字」後的文字比對（伺服器不管輸入內容，只收分數）；game id＝zhtyping
 const isTy = t => t.game === "typing" || t.game === "zhtyping";
 const tyUnit = t => (t.game === "zhtyping" ? "詞" : "單字");
+// 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
+// 記在這座島的 storage（"boards"），每次結算後更新，table 畫面帶 board 給客戶端顯示。與 tools/dev_server.py 的 BOARDS 同一套
+const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge"]), BOARD_N = 3;
+function boardMerge(list, entries) {
+  const best = new Map();
+  for (const e of [...(list || []), ...entries]) { const o = best.get(e.name); if (!o || e.score > o.score) best.set(e.name, e); }
+  return [...best.values()].sort((a, b) => b.score - a.score || a.ts - b.ts).slice(0, BOARD_N);
+}
 const TY_DUR = 30;              // 比賽秒數（使用者定）
 const TY_COUNTDOWN_MS = 3000;   // 開局倒數（使用者定）
 const TY_SETTLE_MS = 1000;      // 時間到後再收分數的寬限（最後一個字的回報可能晚到）
@@ -1727,7 +1735,7 @@ const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unS
 function tblView(t, cid) {
   const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
   const v = {
-    id: t.id, game: t.game, phase: t.phase, min: mn, max: mx, role, me: role === "seat" ? i : -1,
+    id: t.id, game: t.game, phase: t.phase, min: mn, max: mx, role, me: role === "seat" ? i : -1, board: t.board || null,
     seats: t.seats.map((s, k) => ({ name: s.name, n: playing ? s.hand.length : 0, ready: s.ready, out: playing ? s.out : false, you: role === "seat" && k === i })),
     specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
   };
@@ -2189,6 +2197,7 @@ export class Island {
     const game = this.tableGame(tid);
     if (!game) return null;
     t = (await this.state.storage.get("table:" + tid)) || tblNew(tid, game);
+    if (BOARD_GAMES.has(game)) t.board = (await this.getBoards())[game] || [];   // 排行榜（前三名）
     const alive = this.liveIds();
     for (const m of [...t.seats, ...t.specs]) if (!alive.has(m.cid)) tblLeave(t, m.cid);
     this.tables.set(tid, t);
@@ -2230,6 +2239,19 @@ export class Island {
     this.tableNotify(t);
     for (const [terr, defs] of Object.entries(TABLE_DEFS)) if (defs[tid]) await this.tableBroadcastInfo(terr);
     await this.tableXp(t, resBefore);   // 躲彈幕：最後一個活人離開會結束遊戲，留下的入座者照常得 XP
+    await this.tableBoard(t, resBefore);
+  }
+  async getBoards() { if (!this.boards) this.boards = (await this.state.storage.get("boards")) || {}; return this.boards; }
+  // 這個操作結束了一局：更新排行榜（沒離開、成績 > 0 的入座者；有變動才存檔並通知畫面）
+  async tableBoard(t, resBefore) {
+    const r = t.result;
+    if (!BOARD_GAMES.has(t.game) || !r || r === resBefore || r.aborted || !r.ranking) return;
+    const ts = Date.now(), entries = r.ranking.filter(x => !x.left).map(x => ({ name: x.name, score: t.game === "dodge" ? x.sec : x.score, ts })).filter(e => e.score > 0);
+    if (!entries.length) return;
+    const boards = await this.getBoards(), old = boards[t.game] || [], nb = boardMerge(old, entries);
+    if (JSON.stringify(nb.map(e => [e.name, e.score])) === JSON.stringify(old.map(e => [e.name, e.score]))) return;
+    boards[t.game] = nb; await this.state.storage.put("boards", boards); t.board = nb;
+    await this.saveTable(t); this.tableNotify(t);
   }
   // 這個操作結束了一局：登入的入座者各得 XP（訪客由客戶端看 result.xp 本機補發）；同一帳號 GAME_XP_CD_MS 內只算一次
   async tableXp(t, resBefore) {
@@ -2247,10 +2269,10 @@ export class Island {
   }
   async tableMsg(ws, att, msg) {
     const now = Date.now(), a = msg.a;
-    if (a === "pos" || a === "word") {   // 躲彈幕的位置回報、英打競賽的分數回報：自己的限流，不影響 hit／finish 等操作
+    if (a === "pos" || a === "word") {   // 躲彈幕的位置回報、英文打字競賽的分數回報：自己的限流，不影響 hit／finish 等操作
       if (now - (this.lastTblPos.get(ws) || 0) < TBL_POS_CD_MS) return;
       this.lastTblPos.set(ws, now);
-    } else if (a === "typ") {   // 英打競賽的打字進度（只轉發給觀戰者）：自己的限流
+    } else if (a === "typ") {   // 英文打字競賽的打字進度（只轉發給觀戰者）：自己的限流
       if (now - (this.lastTblTyp.get(ws) || 0) < TBL_TYP_CD_MS) return;
       this.lastTblTyp.set(ws, now);
     } else {
@@ -2289,7 +2311,7 @@ export class Island {
       }
       return;
     }
-    if (a === "typ") {   // 英打競賽：打字進度 {n 第幾個字, p 已打對幾個字母, e 是否剛打錯}，只轉發給觀戰者（tpg）；不存檔、不通知畫面、沒人觀戰就什麼都不送
+    if (a === "typ") {   // 英文打字競賽：打字進度 {n 第幾個字, p 已打對幾個字母, e 是否剛打錯}，只轉發給觀戰者（tpg）；不存檔、不通知畫面、沒人觀戰就什麼都不送
       const [role, i] = tblFind(t, att.id);
       const n = msg.n, p = msg.p;
       if (!isTy(t) || role !== "seat" || t.phase !== "playing" || !t.g) return;
@@ -2301,7 +2323,7 @@ export class Island {
       }
       return;
     }
-    if (a === "word") {   // 英打競賽：分數回報，轉發 tsc 給同桌其他人（不通知整個畫面、不廣播 tblinfo；storage 每 TY_SAVE_MS 才寫一次）
+    if (a === "word") {   // 英文打字競賽：分數回報，轉發 tsc 給同桌其他人（不通知整個畫面、不廣播 tblinfo；storage 每 TY_SAVE_MS 才寫一次）
       if (!tyWord(t, att.id, msg.n, now)) return;
       const i = tblFind(t, att.id)[1], data = JSON.stringify({ t: "tsc", i, n: msg.n });
       for (const m of [...t.seats, ...t.specs]) {
@@ -2329,12 +2351,13 @@ export class Island {
     else if (a === "timeout") unTimeout(t, now);
     else if (a === "mode") unSetMode(t, att.id, msg.v);   // UNO：桌主在開局前選玩法（classic／wild）
     else if (a === "hit") dgHit(t, att.id, now);   // 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
-    else if (a === "finish") { dgCheckEnd(t, now + 300); tyCheckEnd(t, now + 300); }   // 躲彈幕／英打競賽：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）
+    else if (a === "finish") { dgCheckEnd(t, now + 300); tyCheckEnd(t, now + 300); }   // 躲彈幕／英文打字競賽：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）
     else return;
     await this.saveTable(t);
     this.tableNotify(t);
     await this.tableBroadcastInfo(terr);
     await this.tableXp(t, resBefore);
+    await this.tableBoard(t, resBefore);
   }
 
   // 簡易限流：超過就丟棄，不回應

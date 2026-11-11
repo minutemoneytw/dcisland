@@ -1,5 +1,5 @@
 {
- "_comment": "和平島遊戲桌的遊戲定義（手寫，不由 gen_assets.py 產生）。key＝遊戲 id（terrain.json 的 tables[].game、兩份伺服器的 TABLE_DEFS／GAME_LIMITS 要一致）。name＝顯示名稱；min／max＝開局最少人數／入座上限（改了要同步兩份伺服器的 GAME_LIMITS）；sprite＝桌子圖（gen_assets.py 的 table_*）；rules＝畫面上的簡短規則說明。words＝英打競賽的單字表（小寫英文字母；客戶端用伺服器給的 seed 從這裡抽題，改了不用動伺服器）。story＝開局前顯示的故事背景（選填）。",
+ "_comment": "和平島遊戲桌的遊戲定義（手寫，不由 gen_assets.py 產生）。key＝遊戲 id（terrain.json 的 tables[].game、兩份伺服器的 TABLE_DEFS／GAME_LIMITS 要一致）。name＝顯示名稱；min／max＝開局最少人數／入座上限（改了要同步兩份伺服器的 GAME_LIMITS）；sprite＝桌子圖（gen_assets.py 的 table_*）；rules＝畫面上的簡短規則說明。words＝英文打字競賽的單字表（小寫英文字母；客戶端用伺服器給的 seed 從這裡抽題，改了不用動伺服器）。story＝開局前顯示的故事背景（選填）。",
  "games": {
   "oldmaid": {
    "name": "抽鬼牌",
@@ -30,7 +30,7 @@
    "rules": "2～6 人，每人 7 張，先出完手牌的人獲勝。出牌要和最上面那張同顏色或同數字，變色牌／+4 可以選顏色；+2、+4 讓下一位抽牌並被跳過，跳過讓下一位被跳過，反轉改變出牌方向。沒牌可出就抽牌；手牌剩 1 張時要按「UNO！」，被別人抓到沒喊就罰抽 2 張。每回合限時 30 秒。桌主（第一位入座的人）可以在開局前選「無限制玩法」：+2、+4 可以無限累積傳遞、跳過可以傳遞、沒牌可出時可以一直抽牌。"
   },
   "typing": {
-   "name": "英打競賽",
+   "name": "英文打字競賽",
    "min": 1,
    "max": 8,
    "sprite": "table_typing.png",
