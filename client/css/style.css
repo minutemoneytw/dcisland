@@ -417,6 +417,9 @@ body {
 .char-note { color: var(--text-dim); margin-top: 4px; font-size: 11px; }
 .char-pick { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin: 10px 0; }
 .char-pick-one { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.char-pick-one > .char-card { flex: 1 1 auto; }   /* 選角：兩張卡面等高（按鈕固定在底部） */
+.it-opts .it-opt-title { flex: 0 0 100%; text-align: center; }   /* 選對象：標題獨佔一行，按鈕在下一行 */
+.ff-btn:disabled { opacity: .4; cursor: not-allowed; }
 .it-char { margin-left: 6px; font-size: 11px; color: #ffd98a; }
 .it-char.covered { color: var(--text-dim); }
 .it-mychar { margin: 6px auto; max-width: 340px; }
