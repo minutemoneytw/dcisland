@@ -632,9 +632,15 @@ function hitMob(p, a, ranged, force) {
       a.startle = 0;
     } else if (od.retaliate) {   // 反擊型野怪（飛龍／哥布林）：被打不逃，鎖定攻擊者（純客戶端；打野怪的只有本地玩家）
       a.startle = 0;
-      a.aggroT = p; a.lastHitAt = S.t; a.clawAt = S.t + 1.5;
+      // 咬擊節奏：只有「剛開始鎖定」才排下一口（2026-11-11 使用者回報修正：原本每被打一下就重設
+      // clawAt，連續揮牠就永遠輪不到咬＝跑過來呆站給人打）；已經在咬的照自己的 1.5 秒節奏交換攻擊
+      if (!a.aggroT) a.clawAt = S.t + 1.5;
+      a.aggroT = p; a.lastHitAt = S.t;
       for (const b of S.mobs) {   // 群起（2026-11-09 使用者定，哥布林）：被打那隻 200px 內的「同種」一起鎖定攻擊者
-        if (b !== a && !b.dead && b.id === a.id && Math.hypot(b.x - a.x, b.y - a.y) <= RETAL_PACK_R) { b.aggroT = p; b.lastHitAt = S.t; b.clawAt = S.t + 1.5; }
+        if (b !== a && !b.dead && b.id === a.id && Math.hypot(b.x - a.x, b.y - a.y) <= RETAL_PACK_R) {
+          if (!b.aggroT) b.clawAt = S.t + 1.5;
+          b.aggroT = p; b.lastHitAt = S.t;
+        }
       }
     } else {
       a.target = fleeTarget(a, od, p.x, p.y, 220);
