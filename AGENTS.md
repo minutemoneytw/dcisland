@@ -72,7 +72,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 | 要改的東西 | 讀哪一段 |
 |---|---|
 | `net.js`、兩份伺服器的訊息／房間／限流、可破壞物件、家具同步、裝飾草稿 | 同步協定與伺服器 |
-| `/api/token`、`hello`、`SESSION_SECRET`、管理員、服裝配發 | 身分驗證與權限 |
+| `/api/token`、`hello`、`SESSION_SECRET`、管理員、服裝配發、**暱稱（`nick`）** | 身分驗證與權限 |
 | 島主（`OWNER_*`、`D_*`）、**四方向朝向與攻擊方向（`face`／`adir`、武器尖端判定 `inHit`）**、仇恨、玩家血量、營火、**職能與職業（`ROLES`、`jobs.json`、`JOB_SKILLS`、`JOB_ROLE`、技能列、技能特效）**、底部 HUD（技能列／血量條／經驗條，`#statBars`、`showHp`／`showXp`）、**法杖／咒杖遠距詠唱**、**武器列**、新增島主 | 島主與戰鬥 |
 | `mobs.json`、動物游泳、**新增怪物規範（方向網格／調色 tint／fixed／footDy／noBounce）**、**反擊型野怪（`retaliate`）／道德性怪物**、動物重生、捕捉/牧養規劃、釣上來的敵對怪物（lurker） | 野外動物 |
 | 裝飾模式、地板、看板、坐下/睡覺、家具碰撞 | 裝飾、家具、地板、看板 |

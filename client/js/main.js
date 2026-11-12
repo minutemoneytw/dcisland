@@ -7851,6 +7851,40 @@ $('menuXp').onclick = () => {   // 設定 → 底部經驗條顯示開關
   saveProfile(); menuXpLabel(); syncHud();
   $('settingsMenu').classList.add('hidden');
 };
+// ---- 暱稱（2026-11-13，使用者要求）：設定 → 暱稱設定，只改「顯示名稱」。登入者存在伺服器（Registry，跟著帳號；S.nick 由伺服器的 nick 訊息給，空＝用 Discord 名稱），
+// 訪客存本機 localStorage；身分（uid）不變，排行榜等以 uid 為準。不擋撞名 ----
+const NICK_MAX = 12;
+const cleanNick = v => String(v || '').replace(/\s+/g, ' ').replace(/[ -]/g, '').trim().slice(0, NICK_MAX);
+const guestNick = () => { if (S.guestNickMem != null) return S.guestNickMem; try { return cleanNick(localStorage.getItem('dcisland.m0.nick')); } catch { return ''; } };   // guestNickMem：存不了 localStorage 時至少這次有效
+const nickCanSet = () => !S.discordUser || !!(S.net?.connected && S.net.uid);   // 有 Discord 身分就要連線登入才能存到伺服器
+function applyMyName() {   // 自己的顯示名稱：登入者＝暱稱或 Discord 名稱；訪客＝本機暱稱或「訪客」
+  const me = S.players?.[0]; if (!me) return;
+  me.name = S.discordUser ? (S.nick || S.discordUser.name || '未命名') : (guestNick() || '訪客');
+}
+function openNick() {
+  $('settingsMenu').classList.add('hidden');
+  const inp = $('nickInput'), can = nickCanSet();
+  $('nickHint').textContent = S.discordUser
+    ? (can ? `只改顯示名稱，跟著你的帳號（你的 Discord 名稱：${S.discordUser.name}）。最多 ${NICK_MAX} 字，留空＝用 Discord 名稱。` : '要連線並用 Discord 登入後才能改暱稱。')
+    : `只存在這台裝置上（用 Discord 登入後會跟著帳號）。最多 ${NICK_MAX} 字，留空＝「訪客」。`;
+  inp.value = S.discordUser ? (S.nick || '') : guestNick(); inp.placeholder = S.discordUser ? S.discordUser.name : '訪客';
+  inp.disabled = $('nickSave').disabled = $('nickReset').disabled = !can;
+  $('nickBox').classList.remove('hidden'); inp.focus(); inp.select();
+}
+const closeNick = () => $('nickBox').classList.add('hidden');
+function saveNick(raw) {
+  if (!nickCanSet()) return;
+  const v = cleanNick(raw);
+  if (S.discordUser) S.net.nick(v);   // 伺服器存好後回 nick 訊息，才會換掉名字
+  else { try { if (v) localStorage.setItem('dcisland.m0.nick', v); else localStorage.removeItem('dcisland.m0.nick'); } catch { /* 存不了就只有這次有效 */ } S.guestNickMem = v; applyMyName(); }
+  closeNick();
+  toast(v ? `暱稱改成「${v}」` : '已恢復預設名稱', 1800);
+}
+$('menuNick').onclick = openNick;
+$('nickSave').onclick = () => saveNick($('nickInput').value);
+$('nickReset').onclick = () => saveNick('');
+$('nickCancel').onclick = closeNick;
+$('nickInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); saveNick($('nickInput').value); } else if (e.key === 'Escape') { e.preventDefault(); closeNick(); } });
 document.addEventListener('click', e => {   // 點齒輪與選單以外的地方就收起來
   if (!(e.target instanceof Element) || !e.target.closest('#settingsBox')) $('settingsMenu')?.classList.add('hidden');
 });
@@ -7980,6 +8014,7 @@ async function boot() {
   buildTerrainChips();
 
   S.players = [makePlayer('訪客', { dx: -40, dy: 10 })];
+  applyMyName();   // 訪客的暱稱存在本機
   spawnNPCs();
 
   fetch('version.json', { cache: 'no-store' }).then(r => r.json()).then(v => { if (v.commit) $('verTag').textContent = v.commit; }).catch(() => {});   // 左上角顯示版本（commit 前 7 碼）
@@ -8065,6 +8100,7 @@ async function boot() {
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）
+    onNick: nick => { S.nick = nick || ''; applyMyName(); },   // 登入後／改暱稱後伺服器送來的暱稱（跟著帳號）
     onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); checkTitles(true); },   // 登入後伺服器送來的圖鑑（稱號跟著重算，不跳提示）
     onOpen: net => {
       if (S.tableOpen) closeTable(false);   // 重連：伺服器已當作我離開牌桌，畫面跟著關

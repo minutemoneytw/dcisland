@@ -116,6 +116,13 @@ CELL = 32                # 與 client/js/main.js 一致
 # ---- 玩家 state 封包白名單（與 worker/src/index.js 的 sanitizeState 一致，改一邊要改另一邊）----
 ID_RE = re.compile(r"^[a-z0-9_-]{1,24}$")
 NAME_MAX = 24
+# 暱稱（2026-11-13，使用者要求）：跟著 Discord 帳號（Worker 存 Registry 的 nick:<uid>，這裡只存記憶體），只改「顯示名稱」——state.name 對登入者＝暱稱，沒設就是 Discord 名稱；
+# 身分仍是 uid（管理員、XP、圖鑑、排行榜去重都看 uid，與名稱無關）。不擋撞名。與 worker 的 nickClean 同一套
+NICK_MAX, NICK_CD_MS = 12, 2000
+NICKS = {}
+
+def nick_clean(v):
+    return re.sub(r"[\x00-\x1f\x7f]", "", re.sub(r"\s+", " ", v)).strip()[:NICK_MAX] if isinstance(v, str) else ""
 D8 = ("down", "down_right", "right", "up_right", "up", "up_left", "left", "down_left")   # 與 client 的 CHAR_DIR8 一致
 
 
@@ -704,16 +711,16 @@ def tbl_reset_seats(t):
         s["ready"], s["hand"], s["out"] = False, [], False
     t["phase"], t["turn"], t["g"] = "lobby", -1, None
 
-def tbl_join(t, cid, name, want="seat"):
+def tbl_join(t, cid, name, want="seat", uid=None):
     """want＝'seat'（有空位且還沒開局才會入座，否則自動觀戰）或 'spec'（使用者自己選觀戰：沒滿人也可以）。"""
     if tbl_find(t, cid)[0]:
         return
     mn, mx = GAME_LIMITS[t["game"]]
     if want != "spec" and t["phase"] == "lobby" and len(t["seats"]) < mx:
-        t["seats"].append({"cid": cid, "name": name, "ready": False, "hand": [], "out": False})
+        t["seats"].append({"cid": cid, "name": name, "uid": uid, "ready": False, "hand": [], "out": False})
         tbl_log(t, f"{name} 入座了")
     else:
-        t["specs"].append({"cid": cid, "name": name})
+        t["specs"].append({"cid": cid, "name": name, "uid": uid})
         tbl_log(t, f"{name} 來觀戰")
 
 def tbl_leave(t, cid):
@@ -759,7 +766,7 @@ def tbl_stand(t, cid):
     if role != "seat" or t["phase"] != "lobby":
         return
     s = t["seats"].pop(i)
-    t["specs"].append({"cid": cid, "name": s["name"]})
+    t["specs"].append({"cid": cid, "name": s["name"], "uid": s.get("uid")})
     tbl_log(t, f"{s['name']} 改為觀戰")
     tbl_check_start(t)
 
@@ -769,7 +776,7 @@ def tbl_sit(t, cid):
     if role != "spec" or t["phase"] != "lobby" or len(t["seats"]) >= mx:
         return
     s = t["specs"].pop(i)
-    t["seats"].append({"cid": cid, "name": s["name"], "ready": False, "hand": [], "out": False})
+    t["seats"].append({"cid": cid, "name": s["name"], "uid": s.get("uid"), "ready": False, "hand": [], "out": False})
     tbl_log(t, f"{s['name']} 入座了")
 
 def tbl_ready(t, cid, v):
@@ -1227,12 +1234,12 @@ def dg_finish(t, now):
         if not s["out"]:   # 時間到還活著的：存活到最後
             s["out"] = True
             s["died"] = round(dg_elapsed(t, now), 1)
-    ranking = sorted(({"name": s["name"], "sec": s["died"], "bonus": s["bonus"], "score": dg_score(s), "left": bool(s.get("left"))} for s in t["seats"]), key=lambda r: (-r["score"], -r["sec"]))
+    ranking = sorted(({"name": s["name"], "uid": s.get("uid"), "sec": s["died"], "bonus": s["bonus"], "score": dg_score(s), "left": bool(s.get("left"))} for s in t["seats"]), key=lambda r: (-r["score"], -r["sec"]))
     stay = [s for s in t["seats"] if not s.get("left")]
     xp = [dg_xp(s["died"]) for s in stay]   # 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
     top = ranking[0] if ranking else None
     text = f"挑戰結束！第一名 {top['name']}，{top['score']} 分" if top else "挑戰結束"
-    board_record(t, [(r["name"], r["score"]) for r in ranking if not r["left"]])
+    board_record(t, [(r["name"], r["score"], r.get("uid")) for r in ranking if not r["left"]])
     t["seats"] = stay
     t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp}
     tbl_log(t, text)
@@ -1347,7 +1354,7 @@ def mg_finish(t, now, win):
     hp_left = sum(s["hp"] for s in t["seats"] if not s.get("dead"))
     kills = sum(s["kills"] for s in t["seats"])
     score = int(1000 * MG_MULT[g["diff"]] + kills * 10 + hp_left * 50 + max(0.0, 240.0 - e) * 5) if win else 0
-    ranking = [{"name": s["name"], "kills": s["kills"], "hp": max(0, s["hp"]), "dead": bool(s.get("dead")), "left": bool(s.get("left"))} for s in t["seats"]]
+    ranking = [{"name": s["name"], "uid": s.get("uid"), "kills": s["kills"], "hp": max(0, s["hp"]), "dead": bool(s.get("dead")), "left": bool(s.get("left"))} for s in t["seats"]]
     stay = [s for s in t["seats"] if not s.get("left")]
     xp = [MG_XP[g["diff"]] if win else 1 for s in stay]
     solo = g["n"] == 1
@@ -1355,7 +1362,7 @@ def mg_finish(t, now, win):
     if not win and e >= MG_BOSS_START and mg_alive(t):
         text = f"Boss 太強了，撐不住…（{MG_DIFF_NAMES[g['diff']]}模式）"
     if win and solo:
-        board_record(t, [(t["seats"][0]["name"], score)])
+        board_record(t, [(t["seats"][0]["name"], score, t["seats"][0].get("uid"))])
     t["seats"] = stay
     t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp, "win": win, "score": score, "diff": g["diff"], "solo": solo, "kills": kills}
     tbl_log(t, text)
@@ -1493,11 +1500,19 @@ def board_record(t, entries):
     """entries：[(名字, 成績)]（沒離開、成績 > 0 的入座者）；合併進前三名。"""
     ts = int(time.time() * 1000)
     best = {}
-    for e in BOARDS.get(t["game"], []) + [{"name": n, "score": sc, "ts": ts} for n, sc in entries if sc > 0]:
-        o = best.get(e["name"])
+    for e in BOARDS.get(t["game"], []) + [{"name": n, "uid": uid, "score": sc, "ts": ts} for n, sc, uid in entries if sc > 0]:
+        k = ("u", e["uid"]) if e.get("uid") else ("n", e["name"])   # 同一個人只留最好的一筆：登入者用 uid（改名也算同一人），訪客用名字
+        o = best.get(k)
         if o is None or e["score"] > o["score"]:
-            best[e["name"]] = e
+            best[k] = e
     BOARDS[t["game"]] = sorted(best.values(), key=lambda e: (-e["score"], e["ts"]))[:BOARD_N]
+
+def board_rename(uid, name):
+    """暱稱改了：排行榜裡有這個 uid 的項目改成新的顯示名稱。"""
+    for lst in BOARDS.values():
+        for e in lst:
+            if e.get("uid") == uid:
+                e["name"] = name
 
 TY_DUR = 30              # 比賽秒數（使用者定）
 TY_COUNTDOWN_MS = 3000   # 開局倒數（使用者定）
@@ -1514,12 +1529,12 @@ def ty_start(t):
     tbl_log(t, f"比賽開始！{len(t['seats'])} 人參加，限時 {TY_DUR} 秒")
 
 def ty_finish(t):
-    ranking = sorted(({"name": s["name"], "score": s.get("score", 0), "left": bool(s.get("left"))} for s in t["seats"]), key=lambda r: -r["score"])
+    ranking = sorted(({"name": s["name"], "uid": s.get("uid"), "score": s.get("score", 0), "left": bool(s.get("left"))} for s in t["seats"]), key=lambda r: -r["score"])
     stay = [s for s in t["seats"] if not s.get("left")]
     xp = [TY_XP if s.get("score", 0) >= TY_XP_MIN else 0 for s in stay]   # 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
     top = ranking[0] if ranking else None
     text = f"比賽結束！第一名 {top['name']}，打了 {top['score']} 個{ty_unit(t)}" if top else "比賽結束"
-    board_record(t, [(r["name"], r["score"]) for r in ranking if not r["left"]])
+    board_record(t, [(r["name"], r["score"], r.get("uid")) for r in ranking if not r["left"]])
     t["seats"] = stay
     t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp}
     tbl_log(t, text)
@@ -4942,7 +4957,7 @@ class Room:
                     self._table_leave_locked(cid, out)
                 t = self.tables.setdefault(tid, tbl_new(tid, game))
                 name = str((c.get("state") or {}).get("name") or (c.get("user") or {}).get("name") or f"玩家{cid}")[:12]
-                tbl_join(t, cid, name, "spec" if msg.get("role") == "spec" else "seat")
+                tbl_join(t, cid, name, "spec" if msg.get("role") == "spec" else "seat", (c.get("user") or {}).get("id"))
                 c["table"], c["table_terr"] = tid, terr
                 self._table_notify_locked(t, out)
             else:
@@ -5295,12 +5310,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 xp_known = c["xp_known"] = c["user"]["id"] in XP_DB
                             if c.get("state") and xp_known:
                                 c["state"]["lvl"] = xp_info(c["xp"])["lv"]
+                        c["nick"] = NICKS.get(c["user"]["id"], "") if c["user"] else ""   # 暱稱（顯示名稱）
                         if c["user"] and c.get("state"):   # 與 Worker 一致：已送過的狀態立刻改用驗證過的名字與 uid
-                            c["state"] = {**c["state"], "name": str(c["user"]["name"])[:NAME_MAX], "uid": c["user"]["id"]}
+                            c["state"] = {**c["state"], "name": c["nick"] or str(c["user"]["name"])[:NAME_MAX], "uid": c["user"]["id"]}
                         with c["send"]:
                             ws_send(sock, json.dumps({"t": "me", "admin": c["admin"], "auth": bool(c["user"]),
                                                       # uid／xpKnown：客戶端據此決定 XP 記帳走伺服器（xpKnown=false 時要把本機存檔一次性上繳）
                                                       "uid": c["user"]["id"] if c["user"] else None, "xpKnown": xp_known}))
+                            if c["user"]:
+                                ws_send(sock, json.dumps({"t": "nick", "nick": c["nick"]}))   # 我的暱稱（客戶端據此顯示自己的名字與設定面板）
                             if c["user"]:   # 登入的人：送他的魚類圖鑑
                                 with FISH_DEX_LOCK:
                                     dex = json.loads(json.dumps(FISH_DEX.get(c["user"]["id"], {})))
@@ -5315,7 +5333,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     # 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）；等級以伺服器存檔為準（訪客照客戶端報的，只影響名牌）
                     user = c.get("user") if c else None
                     if user:
-                        st["name"], st["uid"] = str(user["name"])[:NAME_MAX], user["id"]
+                        st["name"], st["uid"] = c.get("nick") or str(user["name"])[:NAME_MAX], user["id"]
                         if c.get("xp_known") and isinstance(c.get("xp"), (int, float)):
                             st["lvl"] = xp_info(c["xp"])["lv"]
                     was_dead = bool((c.get("state") or {}).get("dead")) if c else False
@@ -5339,6 +5357,32 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             kill_out = room.credit_mob_kill(cid, victim_lvl, cur)
                             if kill_out and cur:
                                 room.broadcast(kill_out, terrain=cur)
+                elif t == "nick":   # 改暱稱 {v}（空字串＝恢復 Discord 名稱）：只有登入者；之後的 state 帶新名字給大家；兩次最短間隔 NICK_CD_MS
+                    c = room.clients.get(cid)
+                    now_ms = int(time.time() * 1000)
+                    if c is not None and c.get("user") and now_ms - c.get("nick_at", 0) >= NICK_CD_MS:
+                        c["nick_at"] = now_ms
+                        nick = nick_clean(msg.get("v"))
+                        uid = c["user"]["id"]
+                        if nick:
+                            NICKS[uid] = nick
+                        else:
+                            NICKS.pop(uid, None)
+                        name = nick or str(c["user"]["name"])[:NAME_MAX]
+                        c["nick"] = nick
+                        if c.get("state"):
+                            c["state"] = {**c["state"], "name": name}
+                        with c["send"]:
+                            ws_send(sock, json.dumps({"t": "nick", "nick": nick}))
+                        board_rename(uid, name)
+                        outs = []
+                        with room.lock:
+                            for tb in room.tables.values():
+                                if tb["game"] in BOARD_GAMES:
+                                    room._table_notify_locked(tb, outs)   # 正在看排行榜的人：換上新名字
+                        for to, m in outs:
+                            if to is not None:
+                                room.send_to(to, m)
                 elif t == "xpsync":   # 舊存檔一次性上繳（2026-11-07 使用者定 (a)）：伺服器沒有紀錄才收，有就回現值（冪等）
                     c = room.clients.get(cid)
                     user = c.get("user") if c else None

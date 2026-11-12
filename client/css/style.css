@@ -480,3 +480,11 @@ body {
 .bk-score-line { padding: 3px 0; font-size: 14px; color: var(--text); }
 .bk-score-line.win { color: #ffb347; font-weight: bold; }
 .bk-msg { min-height: 18px; margin-top: 6px; font-size: 13px; color: #ff8a7a; }
+
+/* 暱稱設定 */
+#nickBox { position: fixed; inset: 0; z-index: 70; background: rgba(8, 12, 20, .75); display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box; }
+#nickBox.hidden { display: none !important; }
+.nick-panel { width: min(360px, 94vw); padding: 16px 20px; text-align: center; }
+.nick-hint { font-size: 12px; color: var(--text-dim); margin: 8px 0 10px; line-height: 1.6; }
+#nickInput { width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 15px; text-align: center; background: rgba(255, 255, 255, .06); border: 1px solid var(--gold-dim); color: var(--text); }
+#nickInput:disabled { opacity: .5; }

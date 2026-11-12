@@ -119,6 +119,7 @@ export function connectNet(S, opts = {}) {
       case 'tblinfo': if (opts.onTblInfo) opts.onTblInfo(msg.info); break;   // 和平島各桌的人數／狀態
       case 'craftdb': if (opts.onCraftDb) opts.onCraftDb(msg.craft); break;   // 合成解鎖紀錄（登入後由伺服器送來）
       case 'kills': if (opts.onKills) opts.onKills(msg.kills); break;         // 擊倒島主紀錄（登入後、擊倒島主時由伺服器送來；{地形: 時間}）
+      case 'nick': if (opts.onNick) opts.onNick(msg.nick); break;                 // 我的暱稱（登入後、改暱稱後由伺服器送來；空字串＝沒設，用 Discord 名稱）
       case 'dex': if (opts.onDex) opts.onDex(msg.dex); break;                     // 魚類圖鑑（登入後由伺服器送來）
       case 'enter': {
         // 進入（或切換到）某地形：每個人各自在自己的地形，只看得到同地形的人
@@ -205,6 +206,8 @@ export function connectNet(S, opts = {}) {
 
   // 出示伺服器簽發的身分憑證（Discord 授權完成後才有）；伺服器驗證成功後，名字與 uid 以它為準
   net.hello = () => { if (S.session) send({ t: 'hello', s: S.session }); };
+  // 改暱稱（只有登入者；伺服器存進 Registry，回 nick 訊息；空字串＝恢復 Discord 名稱）
+  net.nick = v => net.connected && send({ t: 'nick', v });
   // 攻擊等瞬時事件（doAttack 會呼叫）
   // 先補送一次狀態（四方向攻擊：出手當下轉向的 d8 要比攻擊事件早到，別人看到的揮擊方向才對；狀態沒變就不送，不加訊息量）
   net.notifyAttack = () => {

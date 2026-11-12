@@ -23,6 +23,7 @@
         <!-- 設定選單：之後的設定項目加在這裡（.settings-item） -->
         <div id="settingsMenu" class="hidden">
           <button id="menuHelp" class="settings-item">操作說明</button>
+<button id="menuNick" class="settings-item">暱稱設定</button>
 <button id="menuLv" class="settings-item">名牌等級：顯示</button>
 <button id="menuHp" class="settings-item">血量條：顯示</button>
 <button id="menuXp" class="settings-item">經驗條：顯示</button>
@@ -134,6 +135,9 @@
     </div>
     <div class="ff-panel-foot"><button id="dexClose" class="ff-btn small">關閉</button></div>
   </div>
+
+  <!-- 暱稱設定（設定 → 暱稱設定；Esc 關閉） -->
+  <div id="nickBox" class="hidden"><div class="ff-panel nick-panel"><div class="ff-panel-title">暱稱設定</div><div id="nickHint" class="nick-hint"></div><input id="nickInput" type="text" maxlength="12" autocomplete="off" spellcheck="false"><div class="table-btns"><button id="nickSave" class="ff-btn">儲存</button><button id="nickReset" class="ff-btn small">恢復預設</button><button id="nickCancel" class="ff-btn small">取消</button></div></div></div>
 
   <!-- 和平島遊戲桌的遊戲畫面（全螢幕；Esc 離開） -->
   <div id="tableBox" class="hidden">

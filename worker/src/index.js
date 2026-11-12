@@ -251,6 +251,10 @@ function cellHasFurn(items, defs, cell) {
 // 欄位要與 client/js/net.js 的 myState() 一致（改一邊要改另一邊）；dev_server.py 有同款 sanitize_state
 const ID_RE = /^[a-z0-9_-]{1,24}$/;
 const NAME_MAX = 24;
+// 暱稱（2026-11-13，使用者要求）：跟著 Discord 帳號（Registry 的 nick:<uid>），只改「顯示名稱」——state.name 對登入者＝暱稱，沒設就是 Discord 名稱；
+// 身分仍是 uid（管理員、XP、圖鑑、排行榜去重都看 uid，與名稱無關）。不擋撞名。與 tools/dev_server.py 的 nick_clean 同一套
+const NICK_MAX = 12, NICK_CD_MS = 2000;
+const nickClean = v => (typeof v === "string" ? v.replace(/\s+/g, " ").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, NICK_MAX) : "");
 const D8 = ["down", "down_right", "right", "up_right", "up", "up_left", "left", "down_left"];   // 與 client 的 CHAR_DIR8 一致
 const num = (v, lo, hi, fb) => (typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fb);
 const idOr = (v, fb) => (typeof v === "string" && ID_RE.test(v) ? v : fb);
@@ -531,11 +535,11 @@ function tblResetSeats(t) {
   t.phase = "lobby"; t.turn = -1; t.g = null;
 }
 // want＝"seat"（有空位且還沒開局才會入座，否則自動觀戰）或 "spec"（使用者自己選觀戰：沒滿人也可以）
-function tblJoin(t, cid, name, want) {
+function tblJoin(t, cid, name, want, uid) {
   if (tblFind(t, cid)[0]) return;
   const mx = GAME_LIMITS[t.game][1];
-  if (want !== "spec" && t.phase === "lobby" && t.seats.length < mx) { t.seats.push({ cid, name, ready: false, hand: [], out: false }); tblLog(t, `${name} 入座了`); }
-  else { t.specs.push({ cid, name }); tblLog(t, `${name} 來觀戰`); }
+  if (want !== "spec" && t.phase === "lobby" && t.seats.length < mx) { t.seats.push({ cid, name, uid: uid || null, ready: false, hand: [], out: false }); tblLog(t, `${name} 入座了`); }
+  else { t.specs.push({ cid, name, uid: uid || null }); tblLog(t, `${name} 來觀戰`); }
 }
 function tblLeave(t, cid) {
   const [role, i] = tblFind(t, cid);
@@ -560,7 +564,7 @@ function tblSit(t, cid) {
   const [role, i] = tblFind(t, cid);
   if (role !== "spec" || t.phase !== "lobby" || t.seats.length >= GAME_LIMITS[t.game][1]) return;
   const s = t.specs.splice(i, 1)[0];
-  t.seats.push({ cid, name: s.name, ready: false, hand: [], out: false });
+  t.seats.push({ cid, name: s.name, uid: s.uid || null, ready: false, hand: [], out: false });
   tblLog(t, `${s.name} 入座了`);
 }
 function tblReady(t, cid, v) {
@@ -577,7 +581,7 @@ function tblStand(t, cid) {
   const [role, i] = tblFind(t, cid);
   if (role !== "seat" || t.phase !== "lobby") return;
   const s = t.seats.splice(i, 1)[0];
-  t.specs.push({ cid, name: s.name });
+  t.specs.push({ cid, name: s.name, uid: s.uid || null });
   tblLog(t, `${s.name} 改為觀戰`);
   tblCheckStart(t);
 }
@@ -875,7 +879,7 @@ function dgOut(t, s, now, why) {
 }
 function dgFinish(t, now) {
   for (const s of t.seats) if (!s.out) { s.out = true; s.died = round1(dgElapsed(t, now)); }   // 時間到還活著的：存活到最後
-  const ranking = t.seats.map(s => ({ name: s.name, sec: s.died, bonus: s.bonus, score: dgScore(s), left: !!s.left })).sort((a, b) => b.score - a.score || b.sec - a.sec);
+  const ranking = t.seats.map(s => ({ name: s.name, uid: s.uid || null, sec: s.died, bonus: s.bonus, score: dgScore(s), left: !!s.left })).sort((a, b) => b.score - a.score || b.sec - a.sec);
   const stay = t.seats.filter(s => !s.left);
   const xp = stay.map(s => dgXp(s.died));   // 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
   const top = ranking[0], text = top ? `挑戰結束！第一名 ${top.name}，${top.score} 分` : "挑戰結束";
@@ -951,7 +955,7 @@ function mgFinish(t, now, win) {
   const g = t.g, e = Math.max(0, mgElapsed(t, now));
   const hpLeft = t.seats.reduce((a, s) => a + (s.dead ? 0 : s.hp), 0), kills = t.seats.reduce((a, s) => a + s.kills, 0);
   const score = win ? Math.floor(1000 * MG_MULT[g.diff] + kills * 10 + hpLeft * 50 + Math.max(0, 240 - e) * 5) : 0;
-  const ranking = t.seats.map(s => ({ name: s.name, kills: s.kills, hp: Math.max(0, s.hp), dead: !!s.dead, left: !!s.left }));
+  const ranking = t.seats.map(s => ({ name: s.name, uid: s.uid || null, kills: s.kills, hp: Math.max(0, s.hp), dead: !!s.dead, left: !!s.left }));
   const stay = t.seats.filter(s => !s.left), solo = g.n === 1;
   const xp = stay.map(() => (win ? MG_XP[g.diff] : 1));
   let text = win ? `驅魔師們打倒了 Boss！${MG_DIFF_NAMES[g.diff]}模式通關，${score} 分` : `驅魔師們全軍覆沒…（${MG_DIFF_NAMES[g.diff]}模式）`;
@@ -1040,7 +1044,7 @@ const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage"]), BOARD_N = 
 const boardKey = game => (game === "dodge" ? "dodge2" : game);
 function boardMerge(list, entries) {
   const best = new Map();
-  for (const e of [...(list || []), ...entries]) { const o = best.get(e.name); if (!o || e.score > o.score) best.set(e.name, e); }
+  for (const e of [...(list || []), ...entries]) { const k = e.uid ? "u:" + e.uid : "n:" + e.name, o = best.get(k); if (!o || e.score > o.score) best.set(k, e); }   // 同一個人只留最好的一筆：登入者用 uid（改名也算同一人），訪客用名字
   return [...best.values()].sort((a, b) => b.score - a.score || a.ts - b.ts).slice(0, BOARD_N);
 }
 const TY_DUR = 30;              // 比賽秒數（使用者定）
@@ -1056,7 +1060,7 @@ function tyStart(t) {
   tblLog(t, `比賽開始！${t.seats.length} 人參加，限時 ${TY_DUR} 秒`);
 }
 function tyFinish(t) {
-  const ranking = t.seats.map(s => ({ name: s.name, score: s.score || 0, left: !!s.left })).sort((a, b) => b.score - a.score);
+  const ranking = t.seats.map(s => ({ name: s.name, uid: s.uid || null, score: s.score || 0, left: !!s.left })).sort((a, b) => b.score - a.score);
   const stay = t.seats.filter(s => !s.left);
   const xp = stay.map(s => ((s.score || 0) >= TY_XP_MIN ? TY_XP : 0));   // 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
   const top = ranking[0], text = top ? `比賽結束！第一名 ${top.name}，打了 ${top.score} 個${tyUnit(t)}` : "比賽結束";
@@ -2910,14 +2914,23 @@ export class Island {
     await this.tableBoard(t, resBefore);
   }
   async getBoards() { if (!this.boards) this.boards = (await this.state.storage.get("boards")) || {}; return this.boards; }
+  // 暱稱改了：排行榜裡有這個 uid 的項目改成新的顯示名稱（有變動才存檔、通知正在看這桌的人）
+  async boardRename(uid, name) {
+    const boards = await this.getBoards();
+    let changed = false;
+    for (const list of Object.values(boards)) for (const e of list) if (e.uid === uid && e.name !== name) { e.name = name; changed = true; }
+    if (!changed) return;
+    await this.state.storage.put("boards", boards);
+    for (const t of this.tables.values()) if (BOARD_GAMES.has(t.game)) { t.board = boards[boardKey(t.game)] || []; this.tableNotify(t); }
+  }
   // 這個操作結束了一局：更新排行榜（沒離開、成績 > 0 的入座者；有變動才存檔並通知畫面）
   async tableBoard(t, resBefore) {
     const r = t.result;
     if (!BOARD_GAMES.has(t.game) || !r || r === resBefore || r.aborted || !r.ranking) return;
-    const ts = Date.now(), entries = t.game === "mage" ? (r.win && r.solo ? [{ name: r.ranking[0].name, score: r.score, ts }] : []) : r.ranking.filter(x => !x.left).map(x => ({ name: x.name, score: x.score, ts })).filter(e => e.score > 0);   // 見習驅魔師：只有單人勝利進排行榜
+    const ts = Date.now(), entries = t.game === "mage" ? (r.win && r.solo ? [{ name: r.ranking[0].name, uid: r.ranking[0].uid, score: r.score, ts }] : []) : r.ranking.filter(x => !x.left).map(x => ({ name: x.name, uid: x.uid, score: x.score, ts })).filter(e => e.score > 0);   // 見習驅魔師：只有單人勝利進排行榜
     if (!entries.length) return;
     const bk = boardKey(t.game), boards = await this.getBoards(), old = boards[bk] || [], nb = boardMerge(old, entries);
-    if (JSON.stringify(nb.map(e => [e.name, e.score])) === JSON.stringify(old.map(e => [e.name, e.score]))) return;
+    if (JSON.stringify(nb.map(e => [e.uid, e.name, e.score])) === JSON.stringify(old.map(e => [e.uid, e.name, e.score]))) return;
     boards[bk] = nb; await this.state.storage.put("boards", boards); t.board = nb;
     await this.saveTable(t); this.tableNotify(t);
   }
@@ -2956,7 +2969,7 @@ export class Island {
       if (att.table && att.table !== tid) await this.tableLeave(ws);
       const t = await this.getTable(tid);
       const cur = ws.deserializeAttachment() || {};
-      tblJoin(t, att.id, String((att.state && att.state.name) || (att.user && att.user.name) || `玩家${att.id}`).slice(0, 12), msg.role === "spec" ? "spec" : "seat");
+      tblJoin(t, att.id, String((att.state && att.state.name) || (att.user && att.user.name) || `玩家${att.id}`).slice(0, 12), msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null);
       cur.table = tid; ws.serializeAttachment(cur);
       await this.saveTable(t);
       this.tableNotify(t);
@@ -3075,10 +3088,16 @@ export class Island {
           if (cur.state) cur.state.lvl = xpInfo(cur.xp).lv;
         }
       }
-      if (user && cur.state) cur.state = { ...cur.state, name: String(user.name).slice(0, NAME_MAX), uid: user.id };
+      if (user) {   // 暱稱：存在 Registry，登入時讀回來（顯示名稱＝暱稱，沒設就是 Discord 名稱）
+        const nr = await this.registryCall("/nick", { uid: user.id });
+        cur = ws.deserializeAttachment() || {}; cur.user = user; cur.admin = !!user && isAdminId(this.env, user.id);
+        cur.nick = nr ? nickClean(nr.nick) : "";
+      }
+      if (user && cur.state) cur.state = { ...cur.state, name: cur.nick || String(user.name).slice(0, NAME_MAX), uid: user.id };
       ws.serializeAttachment(cur);
       // me 的 uid／xpKnown：客戶端據此決定 XP 記帳走伺服器（xpKnown=false 時要把本機存檔一次性上繳）
       ws.send(JSON.stringify({ t: "me", admin: cur.admin, auth: !!user, uid: user ? user.id : null, xpKnown }));
+      if (user) try { ws.send(JSON.stringify({ t: "nick", nick: cur.nick || "" })); } catch { /* 對方已斷線 */ }   // 我的暱稱（客戶端據此顯示自己的名字與設定面板）
       if (user) {   // 登入的人：送他存在伺服器的魚類圖鑑與 XP（XP 只在「伺服器有紀錄」時會收到 init；沒有就等 xpsync 上繳）
         const r = await this.registryCall("/dex", { uid: user.id });
         if (r) try { ws.send(JSON.stringify({ t: "dex", dex: r.dex || {} })); } catch { /* 對方已斷線 */ }
@@ -3092,7 +3111,7 @@ export class Island {
       const s = sanitizeState(msg.s && typeof msg.s === "object" ? msg.s : {}, att.state);
       // 已驗證身分的人，名字與 uid 以伺服器為準（不能冒名）；等級以伺服器存檔為準（訪客照客戶端報的，只影響名牌）
       if (att.user) {
-        s.name = String(att.user.name).slice(0, NAME_MAX);
+        s.name = att.nick || String(att.user.name).slice(0, NAME_MAX);
         s.uid = att.user.id;
         if (att.xpKnown && typeof att.xp === "number") s.lvl = xpInfo(att.xp).lv;
       }
@@ -3112,6 +3131,17 @@ export class Island {
           await this.creditMobKill(att);
         }
       }
+    } else if (msg.t === "nick") {   // 改暱稱 {v}（空字串＝恢復 Discord 名稱）：只有登入者；存 Registry，之後的 state 帶新名字給大家；兩次最短間隔 NICK_CD_MS
+      if (!att.user || Date.now() - (att.nickAt || 0) < NICK_CD_MS) return;
+      att.nickAt = Date.now(); ws.serializeAttachment({ ...(ws.deserializeAttachment() || {}), nickAt: att.nickAt });
+      const r = await this.registryCall("/nick", { uid: att.user.id, set: nickClean(msg.v) });
+      if (!r) return;
+      const cur = ws.deserializeAttachment() || {}, nick = nickClean(r.nick), name = nick || String(att.user.name).slice(0, NAME_MAX);
+      cur.nick = nick;
+      if (cur.state) cur.state = { ...cur.state, name };
+      ws.serializeAttachment(cur);
+      try { ws.send(JSON.stringify({ t: "nick", nick })); } catch { /* 對方已斷線 */ }
+      await this.boardRename(att.user.id, name);
     } else if (msg.t === "xpsync") {   // 舊存檔一次性上繳（2026-11-07 使用者定 (a)）：伺服器沒有紀錄才收，有就回現值（冪等）
       const user = att.user;
       if (user) {
@@ -4124,6 +4154,11 @@ export class Registry {
       }
       if (changed) await this.state.storage.put(ck, craft);
       return json({ craft });
+    }
+    if (url.pathname === "/nick") {   // 暱稱（跟著帳號）：set 是字串就寫入（空字串＝清除、恢復 Discord 名稱）；回目前暱稱
+      const nk = "nick:" + uid;
+      if (typeof body.set === "string") { const v = nickClean(body.set); if (v) await this.state.storage.put(nk, v); else await this.state.storage.delete(nk); }
+      return json({ nick: nickClean(await this.state.storage.get(nk)) });
     }
     if (url.pathname === "/kills") {   // 擊倒島主紀錄：add＝[地形…] 併進去（已有的不動），回整份；add 空＝只讀
       const kk = "kills:" + uid, kills = (await this.state.storage.get(kk)) || {};
