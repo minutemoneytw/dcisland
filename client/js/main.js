@@ -5107,8 +5107,10 @@ function itSkillPanel(box, v, mk, send, cx) {
     const most = Math.max(0, ...others.map(i => v.seats[i].n)), aimTg = others.filter(i => v.seats[i].n > 0 && v.seats[i].n === most);
     const btn = { judge0: { label: '使用', on: idle && judgeTg.length > 0, fn: () => { S.itSk = { kind: 'judge' }; buildTable(); } },
       sniper0: { label: v.aimed ? '這回合用過了' : '使用', on: myTurnIdle && !v.aimed && aimTg.length > 0, fn: () => { S.itSk = { kind: 'aim' }; buildTable(); } },
-      blackcollector2: { label: '使用', on: !used && idle && others.length > 0, fn: () => { S.itSk = { kind: 'grab' }; buildTable(); } } };
-    const auto = { poisoner0: '（自動：獲得咒函時抽 3 張，再選 1 張放回牌庫頂）', desperate0: '（自動）', helper0: '（自動）', blackcollector1: '（自動）', assassin1: '（抽牌階段會問你）', blackcollector0: '（抽牌階段會問你）' };
+      blackcollector2: { label: '使用', on: !used && idle && others.length > 0, fn: () => { S.itSk = { kind: 'grab' }; buildTable(); } },
+      desperate1: { label: '使用', on: idle && hand.length >= 4 && others.some(i => (v.seats[i].intel || []).length > 0), fn: () => { S.itSk = { kind: 'trade', hand: [], tgt: -1, intel: -1 }; buildTable(); } } };
+    const auto = { poisoner0: '（自動：獲得咒函時抽 3 張，再選 1 張放回牌庫頂）', desperate0: '（自動）', helper0: '（自動）', blackcollector1: '（自動）', assassin1: '（抽牌階段會問你）', blackcollector0: '（抽牌階段會問你）',
+      poisoner1: '（觸發時會問你，從手牌放）', poisoner2: '（觸發時會問你，從手牌放）', judge1: '（自動抽 2，再問你要不要從手牌放咒函）', judge2: '（自動：收到第 3 張咒函時多審判一次）', desperate2: '（出局時會問你）', killer0: '（自動抽 2，再問你要不要從手牌放咒函）', helper1: '（出局時會問你）', helper2: '（有人將出局時會問你）' };
     cd.skills.forEach((sk2, k) => row(k, sk2.n + (sk2.once ? ONCE(k) : ''), T(k) + (sk2.on ? auto[id + k] || '' : ''), sk2.on ? btn[id + k] || null : null));
   }
   if (sk) {   // 技能的選擇步驟
@@ -5127,6 +5129,13 @@ function itSkillPanel(box, v, mk, send, cx) {
       const k = sk.kind === 'grab' ? 2 : 0;
       box2.appendChild(mk('div', 'table-tag', { judge: '旁聽：要檢視誰的手牌？（只列出情報區有 2 張以上咒函的人）', aim: '瞄準：要偷看誰？（只列出手牌最多的人）', grab: '搶購（一局一次）：要搶誰的純黑手牌？' }[sk.kind]));
       const ib = mk('div', 'table-btns'); list.forEach(i => { const b = mk('button', 'ff-btn small', `${nm(i)}（手牌 ${v.seats[i].n}）`); b.onclick = () => send({ a: 'iskill', k, tgt: i }); ib.appendChild(b); }); box2.appendChild(ib);
+    } else if (sk.kind === 'trade') {   // 交易：選 4 張手牌、對象、他情報區的一張情報
+      box2.appendChild(mk('div', 'table-tag', `交易：選 4 張要交給他的手牌（已選 ${sk.hand.length}/4）`));
+      itHandPick(box2, mk, hand, sk.hand, 4, k => { sk.hand = sk.hand.includes(k) ? sk.hand.filter(x => x !== k) : sk.hand.length < 4 ? [...sk.hand, k] : sk.hand; buildTable(); });
+      const ib = mk('div', 'table-btns'); ib.appendChild(mk('span', 'table-tag', '交給誰：'));
+      others.filter(i => (v.seats[i].intel || []).length > 0).forEach(i => { const b = mk('button', 'ff-btn small' + (sk.tgt === i ? ' active' : ''), nm(i)); b.onclick = () => { sk.tgt = i; sk.intel = -1; buildTable(); }; ib.appendChild(b); }); box2.appendChild(ib);
+      if (sk.tgt >= 0) { const ib2 = mk('div', 'table-btns'); ib2.appendChild(mk('span', 'table-tag', '拿走他的哪一張情報（放進你的手牌）：')); (v.seats[sk.tgt].intel || []).forEach((c, k) => { const b = mk('button', 'ff-btn small' + (sk.intel === k ? ' active' : ''), itLabel(c)); b.onclick = () => { sk.intel = k; buildTable(); }; ib2.appendChild(b); }); box2.appendChild(ib2); }
+      const ok = mk('button', 'ff-btn', '確定交易'); ok.disabled = !(sk.hand.length === 4 && sk.tgt >= 0 && sk.intel >= 0); ok.onclick = () => send({ a: 'iskill', k: 1, hand: sk.hand, tgt: sk.tgt, intel: sk.intel }); box2.appendChild(ok);
     } else if (sk.kind === 'merge') {
       box2.appendChild(mk('div', 'table-tag', '併購：要指定誰？'));
       const ib = mk('div', 'table-btns'); others.filter(i => v.seats[i].n > 0).forEach(i => { const b = mk('button', 'ff-btn small', nm(i)); b.onclick = () => send({ a: 'iskill', k: 2, tgt: i }); ib.appendChild(b); }); box2.appendChild(ib);
@@ -5168,6 +5177,37 @@ function itPromptPanel(box, v, mk, send, cx) {
     if (d.will && d.intel.length) { w.appendChild(mk('div', 'table-tag', `偽造遺囑（一局一次）：把他情報區的 ${d.intel.length} 張情報全部納為你的手牌`));
       const b = mk('button', 'ff-btn small' + (st.will ? ' active' : ''), st.will ? '✔ 要偽造遺囑' : '偽造遺囑'); b.onclick = () => { st.will = !st.will; buildTable(); }; w.appendChild(b); }
     const ok = mk('button', 'ff-btn', '確定'); ok.onclick = () => send({ a: 'iprompt', take: st.take >= 0 ? st.take : null, dest: st.dest, will: st.will }); w.appendChild(ok); w.appendChild(no('什麼都不拿'));
+  } else if (pr.kind === 'judge' || pr.kind === 'mark' || pr.kind === 'chase') {   // 從手牌放 1 張咒函
+    const title = { judge: '【審判者】審判：可以從手牌放 1 張咒函到任一玩家的情報區', mark: `【毒藥師】製毒：${nm(d.tgt)} 獲得了你傳出的黃／藍情報，可以從手牌放 1 張咒函到他的情報區`, chase: `【殺手】追殺：${nm(d.tgt)} 獲得了你傳出的咒函，可以從手牌再放 1 張咒函到他的情報區` }[pr.kind];
+    w.appendChild(mk('div', 'table-status mine', title));
+    const hand = v.hand || [], blk = hand.map((c, k) => k).filter(k => itCols(hand[k]).includes('K'));
+    w.appendChild(mk('div', 'table-tag', '選一張手牌裡的咒函：'));
+    const hw = mk('div', 'it-hand'); blk.forEach(k => { const e = itCardEl(hand[k], { sel: st.take === k }); e.onclick = () => { st.take = k; buildTable(); }; hw.appendChild(e); }); w.appendChild(hw);
+    if (pr.kind === 'judge') {
+      const tb = mk('div', 'table-btns'); tb.appendChild(mk('span', 'table-tag', '放到誰的情報區：'));
+      v.seats.forEach((x, i) => { if (x.out || x.left) return; const b = mk('button', 'ff-btn small' + (st.give === i ? ' active' : ''), x.name); b.onclick = () => { st.give = i; buildTable(); }; tb.appendChild(b); }); w.appendChild(tb);
+    }
+    const ok = mk('button', 'ff-btn', '放咒函'); ok.disabled = st.take < 0 || (pr.kind === 'judge' && st.give < 0); ok.onclick = () => send({ a: 'iprompt', idx: st.take, tgt: st.give }); w.appendChild(ok); w.appendChild(no('不放'));
+  } else if (pr.kind === 'venom') {   // 劇毒：最多 2 張
+    w.appendChild(mk('div', 'table-status mine', `【毒藥師】劇毒（一局一次）：${nm(d.tgt)} 識破了你的查驗，可以從手牌放最多 2 張咒函到他的情報區`));
+    const hand = v.hand || [], blk = hand.map((c, k) => k).filter(k => itCols(hand[k]).includes('K'));
+    const hw = mk('div', 'it-hand'); blk.forEach(k => { const e = itCardEl(hand[k], { sel: st.pick.includes(k) }); e.onclick = () => { st.pick = st.pick.includes(k) ? st.pick.filter(x => x !== k) : st.pick.length < 2 ? [...st.pick, k] : st.pick; buildTable(); }; hw.appendChild(e); }); w.appendChild(hw);
+    const ok = mk('button', 'ff-btn', `放 ${st.pick.length} 張`); ok.disabled = !st.pick.length; ok.onclick = () => send({ a: 'iprompt', idx: st.pick }); w.appendChild(ok); w.appendChild(no('不用'));
+  } else if (pr.kind === 'sub') {   // 替死
+    w.appendChild(mk('div', 'table-status mine', `【助人者】替死（一局一次）：${nm(d.victim)} 將因這張咒函出局（${itLabel(d.card)}），要改放進你的情報區嗎？`));
+    const ok = mk('button', 'ff-btn', '替他收下'); ok.onclick = () => send({ a: 'iprompt', yes: true }); w.appendChild(ok); w.appendChild(no('不用'));
+  } else if (pr.kind === 'will') {   // 遺言：先選人
+    w.appendChild(mk('div', 'table-status mine', '【絕望者】遺言：你出局了。指定一位玩家，看他的手牌並拿走其中 2 張（丟進棄牌堆）'));
+    const tb = mk('div', 'table-btns'); v.seats.forEach((x, i) => { if (i === me || x.out || x.left || !x.n) return; const b = mk('button', 'ff-btn small', `${x.name}（手牌 ${x.n}）`); b.onclick = () => send({ a: 'iprompt', tgt: i }); tb.appendChild(b); }); w.appendChild(tb); w.appendChild(no('不用'));
+  } else if (pr.kind === 'will2') {
+    w.appendChild(mk('div', 'table-status mine', `【絕望者】遺言：${nm(d.tgt)} 的手牌，選 ${Math.min(2, d.hand.length)} 張拿走（已選 ${st.pick.length}）`));
+    const need = Math.min(2, d.hand.length), hw = mk('div', 'it-hand');
+    d.hand.forEach((c, k) => { const e = itCardEl(c, { sel: st.pick.includes(k) }); e.onclick = () => { st.pick = st.pick.includes(k) ? st.pick.filter(x => x !== k) : st.pick.length < need ? [...st.pick, k] : st.pick; buildTable(); }; hw.appendChild(e); }); w.appendChild(hw);
+    const ok = mk('button', 'ff-btn', '拿走'); ok.disabled = st.pick.length !== need; ok.onclick = () => send({ a: 'iprompt', idx: st.pick }); w.appendChild(ok);
+  } else if (pr.kind === 'martyr') {   // 殉道
+    w.appendChild(mk('div', 'table-status mine', '【助人者】殉道：你出局了。可以洗白任一玩家情報區的一張咒函'));
+    d.intels.forEach((ks, i) => { if (!ks.length) return; const row2 = mk('div', 'table-btns'); row2.appendChild(mk('span', 'table-tag', `${nm(i)}：`)); ks.forEach(k => { const c = v.seats[i].intel[k], b = mk('button', 'ff-btn small', itLabel(c)); b.onclick = () => send({ a: 'iprompt', tgt: i, idx: k }); row2.appendChild(b); }); w.appendChild(row2); });
+    w.appendChild(no('不用'));
   } else if (pr.kind === 'taste') {
     w.appendChild(mk('div', 'table-status mine', '【毒藥師】試毒：你抽了這幾張，選 1 張放回牌庫頂'));
     w.appendChild(cards(d.cards, -1, k => send({ a: 'iprompt', idx: k })));
