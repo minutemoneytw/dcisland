@@ -1301,7 +1301,12 @@ def it_declare(t, i, winners, text):
         if ok:
             win.append(s)
             joined.append(f"{s['name']}【{IT_CHARS[s['char']][0]}】")
-    return it_finish(t, text + (f"　{'、'.join(joined)} 一起獲勝" if joined else ""), win, True)
+    fin = text + (f"　{'、'.join(joined)} 一起獲勝" if joined else "")
+    hz = next((w for w in win if w.get("char") == "harmonizer" and w.get("faceUp") and not w.get("left")), None)   # 調和者「救助」：獲勝時可以指定一位玩家一同勝利（先暫停問他，回答完才結束）
+    if hz and any(not any(x is w for w in win) and not x.get("left") for x in t["seats"]):
+        it_prompt(t, int(time.time() * 1000), {"kind": "rescue", "seat": t["seats"].index(hz), "win": [t["seats"].index(w) for w in win], "text": fin, "cont": None})
+        return True
+    return it_finish(t, fin, win, True)
 
 def it_pick_done(t, now):
     """選角：每人 2 張選 1 張，其餘棄掉；全員選完（或逾時自動選第一張）後，公開型的翻開，開始第一個回合。"""
@@ -1338,6 +1343,24 @@ def it_lock_apply(t, by, tgt, now):
         it_receive(t, now)
     else:
         tbl_log(t, f"{t['seats'][by]['name']} 鎖定了 {t['seats'][tgt]['name']}：本回情報到他手上就必須收下")
+
+def it_cold_eye(t, i):
+    """局外人「冷眼旁觀」：情報區 ≤1 張時（角色卡已翻開），不能被搜身、竊取、查驗指定。"""
+    return bool(t["g"].get("chars")) and it_skill_ready(t, i, "outsider") and len(t["seats"][i]["intel"]) <= 1
+
+def it_immune_end(t):
+    """篡奪者「死裡逃生」（一局一次）：用的那個回合收到咒函不會出局，回合結束時洗白自己該回合收到的咒函。"""
+    g = t["g"]
+    for s in t["seats"]:
+        if not s.get("immuneTurn") or s["immuneTurn"] != g.get("turnNo"):
+            continue
+        for c in s.get("immuneCards", []):
+            if c in s["intel"]:
+                s["intel"].remove(c)
+                g["discard"].append(c)
+        if s.get("immuneCards"):
+            tbl_log(t, f"{s['name']}【篡奪者】死裡逃生：回合結束，洗白了這回合收到的 {len(s['immuneCards'])} 封咒函")
+        s["immuneTurn"], s["immuneCards"] = 0, []
 
 def it_flip(t, i):
     """翻開角色卡（隱藏型用「公開角色牌」的技能時）。"""
@@ -1390,6 +1413,7 @@ def it_begin_turn(t, i, now):
     for _ in range(len(t["seats"])):
         if i < 0:
             break
+        it_immune_end(t)   # 上一個回合結束：死裡逃生的洗白
         t["turn"] = i
         g["step"], g["letter"], g["pend"], g["arrive"], g["blocked"], g["deadline"] = "turn", None, None, None, [], it_dl(g, now, IT_TURN_MS)
         g["locked"] = []
@@ -1479,6 +1503,9 @@ def it_check_intel(t, i, cause=-1):
     if s["role"] == "water" and it_count(s["intel"], "B") >= IT_WIN:
         return it_declare(t, i, [x for x in t["seats"] if x["role"] == "water"], f"{s['name']} 集滿 {IT_WIN} 封藍色密函，水都陣營獲勝！")
     if (chars or s["role"] != "mage") and it_count(s["intel"], "K") >= IT_DEATH and not s.get("out"):
+        if chars and s.get("immuneTurn") and s["immuneTurn"] == t["g"].get("turnNo"):
+            tbl_log(t, f"{s['name']}【篡奪者】死裡逃生：這回合收到咒函不會出局")
+            return it_char_check(t, i)
         it_kill(t, i, cause)
         if it_char_check(t, i):   # 先結算勝利（含絕望者「第一個死亡」）再看場上陣營
             return True
@@ -1534,6 +1561,11 @@ def it_recv(t, now, r):
         if it_skill_ready(t, r["at"], "assassin") and any(k != r["at"] for k in it_alive(t)):
             it_prompt(t, now, {"kind": "layout", "seat": r["at"], "card": card, "cont": r})
             return
+    if r["stage"] == 0 and not r.get("burnAsked"):   # 局外人「無關緊要」（一局一次）：一封情報將被你收下時（含鎖定、轉移、布局），改為燒掉
+        r["burnAsked"] = True
+        if it_skill_ready(t, r["at"], "outsider") and not s.get("onceUsed"):
+            it_prompt(t, now, {"kind": "burn", "seat": r["at"], "card": card, "cont": r})
+            return
     if r["stage"] == 0:
         r["stage"] = 1
         if has_k and it_skill_ready(t, r["at"], "fencesitter") and not s.get("onceUsed") and len(s["hand"]) >= 2 and it_black(s["intel"]) == 2:
@@ -1550,6 +1582,8 @@ def it_recv(t, now, r):
         s["intel"].append(card)
         g["letter"] = None
         g["arrive"] = None
+        if has_k and s.get("immuneTurn") and s["immuneTurn"] == g.get("turnNo"):
+            s.setdefault("immuneCards", []).append(card)   # 篡奪者「死裡逃生」：記下這回合收到的咒函
         tbl_log(t, f"{s['name']} 收下了密函：{it_label(card)}")
         if it_skill_ready(t, r["at"], "doubleagent") and len(it_cols(card)) == 2:
             it_draw(t, r["at"], 1)
@@ -1695,8 +1729,10 @@ def it_prompt_data(t, p):
         return {"cards": list(p["cards"])}
     if k in ("mark", "chase", "venom"):
         return {"tgt": p["tgt"]}
-    if k == "layout":
+    if k in ("layout", "burn"):
         return {"card": p["card"]}
+    if k == "rescue":
+        return {"cands": [j for j, x in enumerate(t["seats"]) if j not in p["win"] and not x.get("left")]}
     if k == "profit":
         return {"victim": p["victim"]}
     if k == "sub":
@@ -1866,6 +1902,31 @@ def it_prompt_done(t, ans, now):
             g["prompt"] = None
         it_cont(t, now, p["cont"])
         return True
+    if k == "burn":   # 局外人「無關緊要」（一局一次）：改為燒掉這封情報
+        g["prompt"] = None
+        if ans and ans.get("yes"):
+            s["onceUsed"] = True
+            g["discard"].append(p["cont"]["card"])
+            g["letter"] = None
+            g["arrive"] = None
+            tbl_log(t, f"{s['name']}【局外人】無關緊要：把要收下的情報燒掉了（{it_label(p['cont']['card'])}）")
+            it_end_letter(t, now)
+            return True
+        it_cont(t, now, p["cont"])
+        return True
+    if k == "rescue":   # 調和者「救助」：獲勝時，指定一位玩家一同勝利
+        extra = -1
+        if ans and ans.get("tgt") is not None:
+            tg = ans["tgt"]
+            if type(tg) is not int or tg in p["win"] or not 0 <= tg < len(t["seats"]) or t["seats"][tg].get("left"):
+                return False
+            extra = tg
+        g["prompt"] = None
+        ws = [t["seats"][j] for j in p["win"]]
+        if extra >= 0:
+            ws.append(t["seats"][extra])
+        it_finish(t, p["text"] + (f"　{s['name']}【調和者】救助：{t['seats'][extra]['name']} 一起獲勝" if extra >= 0 else ""), ws, True)
+        return True
     if k == "sub":   # 助人者「替死」（一局一次）：改把這張咒函放進自己的情報區
         g["prompt"] = None
         if ans and ans.get("yes"):
@@ -1990,7 +2051,7 @@ def it_skill(t, i, msg, now):
     """主動技能：k＝技能編號（0／1 不限次數，2 一局一次）。"""
     g, s, k = t["g"], t["seats"][i], msg.get("k")
     L = g["letter"]
-    flip_k = s.get("char") in ("healer", "fisher") and k == 0   # 求知慾、埋伏：「公開角色牌」的技能＝只有覆蓋中能用（用了就翻開；使用者 2026-11-12 定）
+    flip_k = (s.get("char") in ("healer", "fisher") and k == 0) or (s.get("char") == "usurper" and k == 1)   # 求知慾、埋伏、轉機；   # 求知慾、埋伏：「公開角色牌」的技能＝只有覆蓋中能用（用了就翻開；使用者 2026-11-12 定）
     if flip_k and s.get("faceUp"):
         return
     if not g.get("chars") or not s.get("char") or s.get("out") or s.get("left") or (not s.get("faceUp") and not flip_k) or g.get("ask") or g.get("prompt") or g["step"] == "pick":
@@ -2122,6 +2183,35 @@ def it_skill(t, i, msg, now):
             if it_char_check(t, i):
                 return
             it_no_hand(t, now)
+    elif cid == "outsider":
+        if k == 1 and idle and mine:   # 撇清：自己回合、投遞前，棄 2 張手牌，丟棄自己情報區的一張非咒函
+            hi = list(dict.fromkeys(msg["hand"])) if isinstance(msg.get("hand"), list) else []
+            q = msg.get("intel")
+            if len(hi) != 2 or not all(_ok_idx(x, s["hand"]) for x in hi) or not _ok_idx(q, s["intel"]) or it_has_k(s["intel"][q]):
+                return
+            c = s["intel"].pop(q)
+            for x in sorted(hi, reverse=True):
+                g["discard"].append(s["hand"].pop(x))
+            g["discard"].append(c)
+            tbl_log(t, f"{s['name']}【局外人】撇清：棄 2 張手牌，丟棄了自己情報區的一張情報（{it_label(c)}）")
+            if it_char_check(t, i):
+                return
+            it_no_hand(t, now)
+    elif cid == "usurper":
+        tg = msg.get("tgt")
+        if k == 0 and idle and g["step"] == "pass" and L and s.get("faceUp") and type(tg) is int and it_ok(t, tg) and not it_blocked(g, tg):   # 妨礙：情報傳遞階段，覆蓋角色卡並指定一位玩家被阻擋（可以再翻開：轉機）
+            s["faceUp"] = False
+            g["blocked"].append(tg)
+            tbl_log(t, f"{s['name']}【篡奪者】妨礙：覆蓋了角色卡，{t['seats'][tg]['name']} 本回不能收下情報")
+        elif k == 1 and idle and not s.get("faceUp") and not s["hand"]:   # 轉機：沒有手牌時，翻開角色卡並抽 2 張牌
+            it_flip(t, i)
+            it_draw(t, i, 2)
+            tbl_log(t, f"{s['name']}【篡奪者】轉機：沒有手牌，翻開角色卡並抽 2 張")
+            if it_char_check(t, i):
+                return
+        elif k == 2 and idle and not s.get("onceUsed") and not (s.get("immuneTurn") and s["immuneTurn"] == g.get("turnNo")):   # 死裡逃生（一局一次）：這回合收到咒函不會出局，回合結束時洗白這回合收到的咒函
+            s["onceUsed"], s["immuneTurn"], s["immuneCards"] = True, g.get("turnNo"), []
+            tbl_log(t, f"{s['name']}【篡奪者】死裡逃生：這回合收到咒函不會出局，回合結束時洗白這回合收到的咒函")
     elif cid == "broker":
         tg = msg.get("tgt")
         if k == 2 and idle and not s.get("onceUsed") and type(tg) is int and tg != i and it_ok(t, tg) and t["seats"][tg]["hand"] and s["hand"]:   # 併購（一局一次）：先看他的全部手牌
@@ -2227,7 +2317,7 @@ def it_apply(t, p, now):
         g["deadline"] = it_dl(g, now, IT_HOLD_MS)
         it_arrive(g)
         tbl_log(t, f"{by['name']} 從 {was} 手上攔截了{IT_KIND[L['kind']]}")
-    elif a == "H" and it_ok(t, p["tgt"]):
+    elif a == "H" and it_ok(t, p["tgt"]) and not it_cold_eye(t, p["tgt"]):
         th = t["seats"][p["tgt"]]
         cards = it_hide_black(t, p["tgt"])
         random.shuffle(cards)
@@ -2236,7 +2326,7 @@ def it_apply(t, p, now):
     elif a == "D" and g["step"] == "turn" and t["turn"] == p["by"] and not L:   # 補給：自己的回合抽 2 張
         it_draw(t, p["by"], 2)
         tbl_log(t, f"{by['name']} 補給，抽了 2 張")
-    elif a == "R" and g["step"] == "turn" and t["turn"] == p["by"] and not L and it_ok(t, p["tgt"]):   # 竊取：從他手上隨機拿 1 張（被竊取的人到下一階段前看得到提示）
+    elif a == "R" and g["step"] == "turn" and t["turn"] == p["by"] and not L and it_ok(t, p["tgt"]) and not it_cold_eye(t, p["tgt"]):   # 竊取：從他手上隨機拿 1 張（被竊取的人到下一階段前看得到提示）
         th = t["seats"][p["tgt"]]
         pool = it_hide_black(t, p["tgt"])
         if not pool:
@@ -2248,7 +2338,7 @@ def it_apply(t, p, now):
         by["note"] = {"k": "steal", "tgt": th["name"], "card": card}
         th["stolen"] = {"by": by["name"], "card": card}
         tbl_log(t, f"{by['name']} 從 {th['name']} 手上竊取了一張牌")
-    elif a == "V" and it_ok(t, p["tgt"]):   # 查驗：被查驗的人能自己決定回答（it_can_lie）就等他回答；否則照實回答
+    elif a == "V" and it_ok(t, p["tgt"]) and not it_cold_eye(t, p["tgt"]):   # 查驗：被查驗的人能自己決定回答（it_can_lie）就等他回答；否則照實回答
         th = t["seats"][p["tgt"]]
         tbl_log(t, f"{by['name']} 查驗了 {th['name']}")
         if it_can_lie(t, p["tgt"]):
@@ -2543,7 +2633,7 @@ def it_msg(t, cid, msg, now):
         if type(idx) is not int or not 0 <= idx < len(s["hand"]):
             return
         card = s["hand"][idx]
-        as_f = (msg.get("as") == "F" and it_skill_ready(t, i, "killer") and it_kind_of(card) == "seal") or (msg.get("as") == "F!" and it_skill_ready(t, i, "killer") and not s.get("onceUsed"))   # 殺手：標記目標（密函）／死亡預告（任一張，一局一次，不能被識破）
+        as_f = (msg.get("as") == "F" and it_skill_ready(t, i, "killer") and it_kind_of(card) == "seal") or (msg.get("as") == "F!" and not s.get("onceUsed") and (it_skill_ready(t, i, "killer") or (it_skill_ready(t, i, "harmonizer") and it_kind_of(card) == "direct")))   # 殺手：標記目標（密函）／死亡預告（任一張，一局一次，不能被識破）；調和者「調和」（直達牌，一局一次，不能被識破）
         act = "F" if as_f else "S" if msg.get("as") == "S" and it_skill_ready(t, i, "doubleagent") and len(it_cols(card)) == 2 else it_act(card)   # 雙面間諜「偷天換日」：雙色牌可當作調包使用（是行動牌，可被識破）
         if g["pend"]:   # 識破時間內只能出識破（不能識破自己出的那張）；識破本身也能被識破，每次重新計時
             if act != "C" or g["pend"]["by"] == i:
@@ -2565,18 +2655,19 @@ def it_msg(t, cid, msg, now):
             if type(sel) is not int or not 0 <= sel < len(s["hand"]) or sel == idx:
                 return
             pick = s["hand"][sel]
-        if act == "F":                                     # 鎖定：只有輪到的人，投遞前或傳遞中，指定另一位玩家
+        harm = it_skill_ready(t, i, "harmonizer")   # 調和者「平等」：可以在他人的回合使用鎖定（投遞前或傳遞中）
+        if act == "F":                                     # 鎖定：輪到的人（或平等的調和者），投遞前或傳遞中，指定另一位玩家
             tg = msg.get("tgt")
-            if i != t["turn"] or g.get("ask") or not ((mine and not L) or passing) or not it_ok(t, tg) or tg == i or it_locked(g, tg):
+            if (i != t["turn"] and not harm) or g.get("ask") or not ((g["step"] == "turn" and not L and (i == t["turn"] or harm)) or passing) or not it_ok(t, tg) or tg == i or it_locked(g, tg):
                 return
             tgt = tg
         if act == "X" and not passing:                    # 焚信：情報傳遞中
             return
         if act == "I" and (not passing or L["at"] == i or L["from"] == i):   # 攔截：別人拿著情報時（不能攔自己發出去的）
             return
-        if act in ("H", "V"):                              # 搜身、查驗：自己的回合
+        if act in ("H", "V"):                              # 搜身、查驗：自己的回合（局外人「冷眼旁觀」不能被指定）
             tg = msg.get("tgt")
-            if not mine or not it_ok(t, tg) or tg == i:
+            if not mine or not it_ok(t, tg) or tg == i or it_cold_eye(t, tg):
                 return
             tgt = tg
         if act == "W":                                     # 洗白：任何階段，對任何活人情報區裡含黑的情報（tgt＝座位、sel＝他情報區的 idx）
@@ -2598,9 +2689,9 @@ def it_msg(t, cid, msg, now):
             return
         if act == "D" and (not mine or L):                 # 補給：自己的回合、發送情報之前
             return
-        if act == "R":                                     # 竊取：自己的回合，指定另一位玩家
+        if act == "R":                                     # 竊取：自己的回合，指定另一位玩家（局外人「冷眼旁觀」不能被指定）
             tg = msg.get("tgt")
-            if not mine or L or not it_ok(t, tg) or tg == i:
+            if not mine or L or not it_ok(t, tg) or tg == i or it_cold_eye(t, tg):
                 return
             tgt = tg
         col = msg.get("col") if act == "P" and msg.get("col") in ("Y", "B", "K") else None   # 截閱：可以宣告一個顏色（宣告就公開）
@@ -2610,7 +2701,7 @@ def it_msg(t, cid, msg, now):
             s["hand"].pop(idx)
             g["discard"].append(card)
             s["onceUsed"] = True
-            tbl_log(t, f"{s['name']}【殺手】死亡預告：把一張牌當作鎖定使用（對 {t['seats'][tgt]['name']}，不能被識破）")
+            tbl_log(t, f"{s['name']}【調和者】調和：把一張直達當作鎖定使用（對 {t['seats'][tgt]['name']}，不能被識破）" if s.get("char") == "harmonizer" else f"{s['name']}【殺手】死亡預告：把一張牌當作鎖定使用（對 {t['seats'][tgt]['name']}，不能被識破）")
             it_lock_apply(t, i, tgt, now)
             it_resolve_end(t, now, i)
             return

@@ -5128,11 +5128,16 @@ function itSkillPanel(box, v, mk, send, cx) {
       fisher0: { label: sm.up ? '已翻開，不能再用' : '公開並使用', on: !sm.up && idle && it.step === 'pass' && !!L && others.some(i => (v.seats[i].intel || []).length > 0), fn: () => { S.itSk = { kind: 'ambush', tgt: -1 }; buildTable(); } },
       fisher2: { label: '使用', on: !used && idle && v.turn !== me && (it.step === 'turn' || it.step === 'pass') && others.some(i => !(it.locked || []).includes(i)), fn: () => { S.itSk = { kind: 'net' }; buildTable(); } },
       assassin2: { label: '使用', on: !used && idle && it.step === 'pass' && !!L, fn: () => { S.itSk = { kind: 'smoke', sel: [] }; buildTable(); } },
+      outsider1: { label: '使用', on: myTurnIdle && hand.length >= 2 && (sm.intel || []).some(c => !itCols(c).includes('K')), fn: () => { S.itSk = { kind: 'clear', hand: [], intel: -1 }; buildTable(); } },
+      usurper0: { label: sm.up ? '使用' : '角色卡覆蓋中', on: sm.up && idle && it.step === 'pass' && !!L && others.some(i => !(it.blocked || []).includes(i)), fn: () => { S.itSk = { kind: 'hinder' }; buildTable(); } },
+      usurper1: { label: sm.up ? '已翻開，不能再用' : '使用', on: !sm.up && idle && hand.length === 0, fn: () => send({ a: 'iskill', k: 1 }) },
+      usurper2: { label: '使用', on: !used && idle, fn: () => send({ a: 'iskill', k: 2 }) },
       sniper1: { label: v.shot ? '這回合用過了' : '使用', on: myTurnIdle && !v.shot && others.length > 0, fn: () => { S.itSk = { kind: 'shots', sel: [] }; buildTable(); } } };
     const auto = { poisoner0: '（自動：獲得咒函時抽 3 張，再選 1 張放回牌庫頂）', desperate0: '（自動）', helper0: '（自動）', blackcollector1: '（自動）', assassin1: '（抽牌階段會問你）', blackcollector0: '（抽牌階段會問你）',
       healer1: '（自動：角色卡翻開後）', fisher1: '（有人出局時會問你，從手牌放）', killer1: '（點一張密函手牌，在下方按「當作鎖定使用」）', killer2: '（點任一張手牌，在下方按「死亡預告」）', assassin0: '（即將收下情報時會問你）', sniper2: '（點一張含黑的手牌，在下方按「殺意」）',
-      poisoner1: '（觸發時會問你，從手牌放）', poisoner2: '（觸發時會問你，從手牌放）', judge1: '（自動抽 2，再問你要不要從手牌放咒函）', judge2: '（自動：收到第 3 張咒函時多審判一次）', desperate2: '（出局時會問你）', killer0: '（自動抽 2，再問你要不要從手牌放咒函）', helper1: '（出局時會問你）', helper2: '（有人將出局時會問你）' };
-    const flipK = k => k === 0 && (id === 'healer' || id === 'fisher');   // 求知慾、埋伏：「公開角色牌」的技能＝只有覆蓋中能用（翻開後就不能再用）
+      poisoner1: '（觸發時會問你，從手牌放）', poisoner2: '（觸發時會問你，從手牌放）', judge1: '（自動抽 2，再問你要不要從手牌放咒函）', judge2: '（自動：收到第 3 張咒函時多審判一次）', desperate2: '（出局時會問你）', killer0: '（自動抽 2，再問你要不要從手牌放咒函）', helper1: '（出局時會問你）', helper2: '（有人將出局時會問你）',
+      harmonizer0: '（點一張鎖定手牌，可在他人的回合使用）', harmonizer1: '（你獲勝時會問你要不要指定一位玩家一同勝利）', harmonizer2: '（點一張直達手牌，在下方按「調和」）', outsider0: '（自動：情報區 1 張以下時，不會被搜身、竊取、查驗指定）', outsider2: '（將收下情報時會問你）' };
+    const flipK = k => (k === 0 && (id === 'healer' || id === 'fisher')) || (k === 1 && id === 'usurper');   // 求知慾、埋伏：「公開角色牌」的技能＝只有覆蓋中能用（翻開後就不能再用）
     cd.skills.forEach((sk2, k) => { let b = sk2.on ? btn[id + k] || null : null; if (b && !sm.up && !flipK(k)) b = { ...b, on: false, label: '角色卡覆蓋中' }; row(k, sk2.n + (sk2.once ? ONCE(k) : ''), T(k) + (sk2.on ? auto[id + k] || '' : '') + (!sm.up && sk2.on && !flipK(k) && !btn[id + k] ? '（角色卡翻開後才有效）' : ''), b); });
   }
   if (sk) {   // 技能的選擇步驟
@@ -5171,6 +5176,14 @@ function itSkillPanel(box, v, mk, send, cx) {
       others.filter(i => (v.seats[i].intel || []).length > 0).forEach(i => { const b = mk('button', 'ff-btn small' + (sk.tgt === i ? ' active' : ''), nm(i)); b.onclick = () => { sk.tgt = i; sk.intel = -1; buildTable(); }; ib.appendChild(b); }); box2.appendChild(ib);
       if (sk.tgt >= 0) { const ib2 = mk('div', 'table-btns'); ib2.appendChild(mk('span', 'table-tag', '拿走他的哪一張情報（放進你的手牌）：')); (v.seats[sk.tgt].intel || []).forEach((c, k) => { const b = mk('button', 'ff-btn small' + (sk.intel === k ? ' active' : ''), itLabel(c)); b.onclick = () => { sk.intel = k; buildTable(); }; ib2.appendChild(b); }); box2.appendChild(ib2); }
       const ok = mk('button', 'ff-btn', '確定交易'); ok.disabled = !(sk.hand.length === 4 && sk.tgt >= 0 && sk.intel >= 0); ok.onclick = () => send({ a: 'iskill', k: 1, hand: sk.hand, tgt: sk.tgt, intel: sk.intel }); box2.appendChild(ok);
+    } else if (sk.kind === 'clear') {   // 撇清：棄 2 張手牌，丟棄自己情報區的一張非咒函
+      box2.appendChild(mk('div', 'table-tag', `撇清：選 2 張要棄掉的手牌（已選 ${sk.hand.length}/2），再選要丟棄的情報（不能是咒函）：`));
+      itHandPick(box2, mk, hand, sk.hand, 2, k => { sk.hand = sk.hand.includes(k) ? sk.hand.filter(x => x !== k) : sk.hand.length < 2 ? [...sk.hand, k] : sk.hand; buildTable(); });
+      const ib = mk('div', 'table-btns'); (sm.intel || []).forEach((c, k) => { if (itCols(c).includes('K')) return; const b = mk('button', 'ff-btn small' + (sk.intel === k ? ' active' : ''), itLabel(c)); b.onclick = () => { sk.intel = k; buildTable(); }; ib.appendChild(b); }); box2.appendChild(ib);
+      const ok = mk('button', 'ff-btn', '確定'); ok.disabled = !(sk.hand.length === 2 && sk.intel >= 0); ok.onclick = () => send({ a: 'iskill', k: 1, hand: sk.hand, intel: sk.intel }); box2.appendChild(ok);
+    } else if (sk.kind === 'hinder') {   // 妨礙：覆蓋角色卡，指定一位玩家被阻擋
+      box2.appendChild(mk('div', 'table-tag', '妨礙：覆蓋你的角色卡，並指定一位玩家本回不能收下情報'));
+      const ib = mk('div', 'table-btns'); others.filter(i => !(it.blocked || []).includes(i)).forEach(i => { const b = mk('button', 'ff-btn small', nm(i)); b.onclick = () => send({ a: 'iskill', k: 0, tgt: i }); ib.appendChild(b); }); box2.appendChild(ib);
     } else if (sk.kind === 'merge') {
       box2.appendChild(mk('div', 'table-tag', '併購：要指定誰？'));
       const ib = mk('div', 'table-btns'); others.filter(i => v.seats[i].n > 0).forEach(i => { const b = mk('button', 'ff-btn small', nm(i)); b.onclick = () => send({ a: 'iskill', k: 2, tgt: i }); ib.appendChild(b); }); box2.appendChild(ib);
@@ -5216,6 +5229,13 @@ function itPromptPanel(box, v, mk, send, cx) {
     w.appendChild(mk('div', 'table-status mine', `【暗殺者】布局：你即將收下這封情報${d.card ? `（${itLabel(d.card)}）` : ''}，要直接放進別人的情報區嗎？`));
     const tb = mk('div', 'table-btns'); v.seats.forEach((x, i) => { if (i === me || x.out || x.left) return; const b = mk('button', 'ff-btn small', x.name); b.onclick = () => send({ a: 'iprompt', tgt: i }); tb.appendChild(b); }); w.appendChild(tb);
     w.appendChild(no('不用（自己收下）'));
+  } else if (pr.kind === 'burn') {   // 無關緊要
+    w.appendChild(mk('div', 'table-status mine', `【局外人】無關緊要（一局一次）：你即將收下這封情報${d.card ? `（${itLabel(d.card)}）` : ''}，要改為燒掉它嗎？`));
+    const ok = mk('button', 'ff-btn', '燒掉'); ok.onclick = () => send({ a: 'iprompt', yes: true }); w.appendChild(ok); w.appendChild(no('不用（照常收下）'));
+  } else if (pr.kind === 'rescue') {   // 救助
+    w.appendChild(mk('div', 'table-status mine', '【調和者】救助：你獲勝了！可以指定一位玩家一同勝利'));
+    const tb = mk('div', 'table-btns'); (d.cands || []).forEach(i => { const b = mk('button', 'ff-btn small', nm(i)); b.onclick = () => send({ a: 'iprompt', tgt: i }); tb.appendChild(b); }); w.appendChild(tb);
+    w.appendChild(no('不指定'));
   } else if (pr.kind === 'profit') {   // 得利
     w.appendChild(mk('div', 'table-status mine', `【漁翁】得利：${nm(d.victim)} 出局了，可以從手牌放最多 2 張咒函到另一位玩家的情報區`));
     const hand = v.hand || [], blk = hand.map((c, k) => k).filter(k => itCols(hand[k]).includes('K'));
@@ -5467,7 +5487,7 @@ function buildIntel(box, v, mk, gd) {
       const act = itActOf(sel), passing = !pend && it.step === 'pass' && L, atMe = passing && L.at === me, canSee = L && L.kind !== 'pub' && !L.open;
       const others = v.seats.map((x, i) => i).filter(i => alive(i) && i !== me), tTargets = others.filter(i => !(it.blocked || []).includes(i)), fTargets = others.filter(i => !(it.locked || []).includes(i)), bTargets = v.seats.map((x, i) => i).filter(i => alive(i) && !(it.blocked || []).includes(i));
       const blackIn = v.seats.map((x, i) => i).filter(i => alive(i) && (v.seats[i].intel || []).some(c => itCols(c).includes('K')));
-      const usable = { P: atMe && canSee, S: atMe && canSee && hand.length > 1, F: v.turn === me && !it.ask && ((myTurn && !L) || passing) && fTargets.length > 0, X: passing, I: passing && L.at !== me && L.from !== me, H: myTurn, V: myTurn, D: myTurn && !L, R: myTurn && !L && others.length > 0, W: !pend && blackIn.length > 0, T: atMe && !(it.locked || []).includes(me) && tTargets.length > 0, B: passing && bTargets.length > 0, N: myTurn && !L, C: false }[act];
+      const usable = { P: atMe && canSee, S: atMe && canSee && hand.length > 1, F: (v.turn === me || (v.seats[me].char === 'harmonizer' && v.seats[me].up)) && !it.ask && ((it.step === 'turn' && !L && (myTurn || (v.seats[me].char === 'harmonizer' && v.seats[me].up))) || passing) && fTargets.length > 0, X: passing, I: passing && L.at !== me && L.from !== me, H: myTurn, V: myTurn, D: myTurn && !L, R: myTurn && !L && others.length > 0, W: !pend && blackIn.length > 0, T: atMe && !(it.locked || []).includes(me) && tTargets.length > 0, B: passing && bTargets.length > 0, N: myTurn && !L, C: false }[act];
       opts.appendChild(mk('span', 'table-tag', `${itLabel(sel)}：${IT_ACT_TIP[act]}`));
       if (myTurn) {   // 投遞方式由卡面決定：密函（蓋著）／公開情報（翻開）依座位順序傳給下一位；直達要指定一人（對方必須收下）
         const kind = itKindOf(sel), nn = nm(itNextSeat(v, me));
@@ -5482,6 +5502,9 @@ function buildIntel(box, v, mk, gd) {
       if (myCh === 'killer' && chUp && canLock) {   // 殺手：標記目標（密函當作鎖定，可被識破）／死亡預告（任一張當作鎖定，一局一次，不能被識破）
         if (itKindOf(sel) === 'seal' && act !== 'F') { const b = mk('button', 'ff-btn', '當作鎖定使用（標記目標）'); b.onclick = () => { S.itMode = 'F'; S.itAs = 'F'; buildTable(); }; opts.appendChild(b); }
         if (!chUsed) { const b = mk('button', 'ff-btn', '死亡預告：當作鎖定（不能被識破）'); b.onclick = () => { S.itMode = 'F'; S.itAs = 'F!'; buildTable(); }; opts.appendChild(b); }
+      }
+      if (myCh === 'harmonizer' && chUp && !chUsed && itKindOf(sel) === 'direct' && !it.ask && ((it.step === 'turn' && !L) || passing) && fTargets.length > 0) {   // 調和者「調和」（一局一次）：直達當作鎖定，不能被識破
+        const b = mk('button', 'ff-btn', '調和：當作鎖定（不能被識破）'); b.onclick = () => { S.itMode = 'F'; S.itAs = 'F!'; buildTable(); }; opts.appendChild(b);
       }
       if (myCh === 'sniper' && chUp && !chUsed && myTurn && itCols(sel).includes('K')) {   // 狙擊手「殺意」（一局一次）：咒函當作直達送出
         const b = mk('button', 'ff-btn', '殺意：當作直達送出'); b.onclick = () => { S.itMode = 'direct'; S.itAs = 'direct'; buildTable(); }; opts.appendChild(b);
