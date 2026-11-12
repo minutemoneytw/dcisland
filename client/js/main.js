@@ -4401,7 +4401,7 @@ function rulesShow(on, tab) {
   } else for (const sec of g.sections) {
     const d = mk('div', 'rules-sec'); d.appendChild(mk('h4', null, sec.h));
     const ul = mk('ul');
-    for (const t of sec.li) { const li = mk('li', /^\d+\. /.test(t) ? 'num' : null, t); ul.appendChild(li); }
+    for (const t of sec.li) { const li = mk('li', /^\d+\. /.test(t) ? 'num' : null); t.split('**').forEach((part, k) => { if (k % 2) li.appendChild(mk('b', null, part)); else li.append(part); }); ul.appendChild(li); }   // **字** ＝粗體
     d.appendChild(ul); body.appendChild(d);
   }
   box.classList.remove('hidden');
@@ -5375,7 +5375,7 @@ function buildIntel(box, v, mk, gd) {
       const pr = mk('div', 'char-pick');
       v.choices.forEach(id => { const w = mk('div', 'char-pick-one'); w.appendChild(itCharCardEl(id, mk, { noNote: true })); const b = mk('button', 'ff-btn', '選這張'); b.onclick = () => S.net?.tbl?.({ a: 'ipick', c: id }); w.appendChild(b); pr.appendChild(w); });
       box.appendChild(pr);
-      box.appendChild(mk('div', 'table-tag', '角色卡提供勝利條件（咒術師身分才用）與技能；公開型選完就翻開，隱藏型保持覆蓋。標「尚未啟用」的技能目前還沒有效果。'));
+      box.appendChild(mk('div', 'table-tag', '角色卡提供勝利條件（咒術師身分才用）與技能；公開型選完就翻開，隱藏型保持覆蓋。'));
     } else if (v.role === 'spec') {
       for (const s of v.seats) if (s.choices) { const w = mk('div', 'char-pick-spec'); w.appendChild(mk('div', 'table-tag', `${s.name}（${s.picked ? '已選' : '選角中'}）的候選：`)); const pr = mk('div', 'char-pick'); s.choices.forEach(id => pr.appendChild(itCharCardEl(id, mk, { noNote: true }))); w.appendChild(pr); box.appendChild(w); }
     }
@@ -5557,7 +5557,7 @@ function buildIntel(box, v, mk, gd) {
       cm.appendChild(b);
     }
     box.appendChild(cm);
-    box.appendChild(mk('div', 'table-tag', v.chars ? '角色卡開啟：開局每人拿 2 張角色卡選 1 張；咒術師不再靠集滿 3 張咒函獲勝，改用角色卡的勝利條件，而且也會因收到第 3 張咒函出局。部分技能已啟用（標「尚未啟用」的還沒有效果）。' : '角色卡關閉：維持原本規則（咒術師集滿 3 張咒函獲勝）。'));
+    box.appendChild(mk('div', 'table-tag', v.chars ? '角色卡開啟：開局每人拿 2 張角色卡選 1 張；咒術師不再靠集滿 3 張咒函獲勝，改用角色卡的勝利條件，而且也會因收到第 3 張咒函出局。' : '角色卡關閉：維持原本規則（咒術師集滿 3 張咒函獲勝）。'));
     box.appendChild(mk('div', 'table-tag', (isHost ? '你是桌主，可以選模式。' : '模式由桌主（第一位入座的人）選。') + (v.untimed ? ' 不限時：沒有倒數，每次使用行動牌後要所有活人按「準備繼續」才生效。' : ' 限時：投遞 30 秒、收轉 15 秒、識破 5 秒。')));
   }
   if (v.role === 'seat' && !playing) {
