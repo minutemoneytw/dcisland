@@ -55,12 +55,14 @@
 `sprite_fly_01 → sprite_fly_02 → sprite_fly_02c → sprite_fly_02c-2 → sprite_fly_02c-3 → sprite_fly_03 →（回 01）`
 （02c 系列是使用者手改的變化幀，位置就是設計好的循環順序，不需再挑）
 
-## 導入流程（2026-11-05 起）
+## 導入流程（2026-11-05 起；2026-11-12 支援 sheet PNG／GIF）
 
-1. 把 `img2pixel` 匯出的逐幀 PNG（zip 或資料夾）交給導入工具：
-   `python tools/import_external.py <zip 或資料夾> <輸出檔名>.png`
-   → 自動解壓／收集、檢查（8-bit RGBA、全部幀同尺寸，透明區 RGB 正規化為 0）、水平拼成 sheet 寫進本資料夾，並印出接下來要登記的三處。
-2. **登記三處**（工具只印指引、不代改程式，避免弄壞 manifest 的註解與排版）：
+1. 把素材交給導入工具，來源有三種：
+   - **逐幀 PNG**（img2pixel 匯出的 zip 或資料夾）：`python tools/import_external.py <zip 或資料夾> <輸出檔名>.png`
+   - **現成 sprite sheet PNG**（上網抓的多幀整張圖）：`python tools/import_external.py <sheet.png> <輸出檔名>.png` — 自動切格重拼成等寬水平 sheet；多列方向網格（每列一個方向）會保留列結構。幀與幀相連（沒有整欄透明分隔）切不出格線時要手動 `--fw`；多列要再給 `--rows`
+   - **GIF**：`python tools/import_external.py <動畫.gif> <輸出檔名>.png` — 每個影格＝一幀（需 Pillow：`pip install pillow`），並依影格時長建議 fps
+   → 自動解壓／切格／檢查（8-bit RGBA、全部幀同尺寸，索引色 PNG 有 Pillow 會自動轉，透明區 RGB 正規化為 0）、水平拼成 sheet 寫進本資料夾，並印出接下來要登記的三處草稿（`EXTERNAL_BUNDLES` 條目、`anim` 一行、授權表格列）。
+2. **登記三處**（工具只印草稿、不代改程式，避免弄壞 manifest 的註解與排版）：
    - `tools/gen_assets.py` 的 `EXTERNAL_BUNDLES` 加一條（重跑開頭會檢查 sheet 存在與幀數尺寸有沒有對上）；
    - 動物／島主接線：`gen_assets.py` 的 `MOB_MANIFEST` 該條目加 `anim`（島主再登記 `OWNER_BY_TERRAIN`），下次重跑會寫進 `mobs.json`；
    - `docs/assets-license.md` 補素材來源與授權記錄。
