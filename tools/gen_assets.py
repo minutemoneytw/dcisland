@@ -2129,6 +2129,7 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/dragon_sheet.png", frames=3, rows=4, fw=191, fh=161, what="飛龍的 4 方向（上飛／朝右／下飛／朝左）× 3 幀（各島不同色靠 tint）"),
     dict(sheet="external/img2pixel/goblin_sheet.png", frames=8, rows=2, fw=32, fh=32, what="哥布林的走路 2 方向（朝右／朝左）× 8 幀（草島原色綠／森林島棕色靠 tint）"),
     dict(sheet="external/img2pixel/zombie_sheet.png", frames=9, rows=4, fw=64, fh=64, what="殭屍（LPC）的 4 方向（上／左／下／右）× 9 幀走路（夜光原色／雪島白／機械島灰靠 tint）"),
+    dict(sheet="external/img2pixel/skeleton_sheet.png", frames=9, rows=4, fw=64, fh=64, what="骷髏（LPC）的 4 方向（上／左／下／右）× 9 幀走路（夜光島，原色白骨）"),
     dict(sheet="external/img2pixel/bahamut_fly_sheet.png", frames=6, fw=88, fh=59, what="黃金肥龍的飛行 6 幀（草島島主）"),
     dict(sheet="external/img2pixel/snake_queen_sheet.png", frames=4, fw=88, fh=85, what="笨蛋蛇女的 4 幀（夜光島島主）"),
     dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fw=88, fh=74, what="蓋老師（究極神兵）的走路 6 幀（熔岩島島主）"),
@@ -2206,6 +2207,15 @@ MOB_MANIFEST = dict(
                **({"tint": tint} if tint else {}),
                line="「殭屍」拖著沉重的腳步，發出低沉的呻吟。")
           for zid, tint in [("zombie_night", None), ("zombie_snow", "#dfe9ff"), ("zombie_machine", "#9aa4b0")]],
+        # 骷髏（LPC；反擊型）：夜光島固定 6 隻（fixed；使用者定 2026-11-10）；走路 4 方向 × 9 幀；不套走動彈跳（有真走路動畫）
+        # 反擊型比例 1/12（跟哥布林一樣，使用者定）：血／攻擊／經驗都＝島主（笨蛋蛇女）的 1/12、最低 1（產生器 post-pass 算 hp／atk，
+        # main.js 的 mobKillXp 算 XP）→ hp 16（200÷12）、atk 1（爪擊 2÷12 落最低值）、擊倒 XP 2（25÷12 無條件捨去）
+        # 素材來源 OpenGameArt「LPC skeleton」（CC-BY-SA 3.0；rhimlock 補上刺擊、動畫本體 by wulax／Johannes Sjölund，
+        # 改建自 Redshrike 的 LPC 基底）；畫面約 47px 高（scale 1：人物約 46px）
+        dict(id="skeleton_night", name="骷髏", fixed=6, speed=30, flee=110, retaliate=True, ownerFrac=12, noBounce=True,
+             anim=dict(sheet="external/img2pixel/skeleton_sheet.png", frames=9, rows=4, row0=0, fw=64, fh=64,
+                       rowDir=["up", "left", "down", "right"], fps=5, scale=1.0),
+             line="「骷髏」喀啦喀啦地轉過頭來，空洞的眼窩盯著你。"),
         # 飛龍：夜光島（黑）、熔岩島（原色紅）、沙灘島（沙）。四列都是飛行視角＝上飛／朝右／下飛／朝左（方向網格）；
         # swim＝會飛所以能過海；big=5＝判定圈 34+6*(5-1)=58（大隻）；shadow 依體型放大、貼在正下方
         # retaliate＝會反擊的野怪：被打不逃、鎖定攻擊者；血量／攻擊力由下面的 post-pass 依該地形島主 1/10 算
@@ -2384,7 +2394,7 @@ MOBS_BY_TERRAIN = {
     "grass":   [("sheep", 2), ("bird", 1), ("frog", 1), ("chicken", 2), ("slime_grass", 1), ("goblin_grass", 2)],
     "beach":   [("bird", 2), ("frog", 1), ("bunny", 2), ("slime_beach", 1), ("dragon_beach", 1)],
     "snow":    [("sheep", 2), ("bird", 1), ("bunny_snow", 2), ("slime_snow", 1), ("zombie_snow", 2)],
-    "night":   [("frog", 2), ("sheep", 1), ("slime_night", 1), ("dragon_night", 1), ("zombie_night", 2)],
+    "night":   [("frog", 2), ("sheep", 1), ("slime_night", 1), ("dragon_night", 1), ("zombie_night", 2), ("skeleton_night", 2)],
     "forest":  [("sheep", 2), ("bird", 2), ("chicken", 2), ("slime_forest", 1), ("goblin_forest", 2)],
     "volcano": [("frog", 1), ("bird", 1), ("slime_volcano", 1), ("dragon_volcano", 1)],
     "machine": [("bunny_machine", 2), ("slime_machine", 1), ("zombie_machine", 2)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）

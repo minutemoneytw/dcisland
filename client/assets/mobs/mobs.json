@@ -478,6 +478,36 @@
    "atk": 1
   },
   {
+   "id": "skeleton_night",
+   "name": "骷髏",
+   "fixed": 6,
+   "speed": 30,
+   "flee": 110,
+   "retaliate": true,
+   "ownerFrac": 12,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/skeleton_sheet.png",
+    "frames": 9,
+    "rows": 4,
+    "row0": 0,
+    "fw": 64,
+    "fh": 64,
+    "rowDir": [
+     "up",
+     "left",
+     "down",
+     "right"
+    ],
+    "fps": 5,
+    "scale": 1.0
+   },
+   "line": "「骷髏」喀啦喀啦地轉過頭來，空洞的眼窩盯著你。",
+   "footDy": 4,
+   "hp": 16,
+   "atk": 1
+  },
+  {
    "id": "dragon_night",
    "name": "飛龍",
    "fixed": 3,
