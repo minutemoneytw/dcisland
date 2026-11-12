@@ -887,6 +887,8 @@ const itCanTake = (t, L, i) => !itBlocked(t.g, i) || itFwdTarget(t, L) < 0;
 const itHasK = c => itCols(c).includes("K");
 const itBlack = intel => intel.filter(itHasK).length;
 const itPureBlack = c => itCols(c) === "K";
+// 搜身／竊取能選到的手牌：咒函蒐集者「藏鋒」（角色卡已翻開）不會被選到純黑牌
+const itHideBlack = (t, i) => { const h = t.seats[i].hand; return t.g.chars && itSkillReady(t, i, "blackcollector") ? h.filter(c => !itPureBlack(c)) : [...h]; };
 // 因咒函出局：記錄出局者、「親手殺掉」的人（killer）、第幾位出局、他出局時是不是手牌最多（或之一）的人（狙擊手用）
 function itKill(t, i, cause) {
   const g = t.g, s = t.seats[i], alive = itAlive(t), most = Math.max(...alive.map(j => t.seats[j].hand.length));
@@ -997,14 +999,41 @@ function itBeginTurn(t, i, now) {
   const g = t.g;
   for (let k = 0; k < t.seats.length && i >= 0; k++) {
     t.turn = i; g.step = "turn"; g.letter = null; g.pend = null; g.arrive = null; g.ask = null; g.blocked = []; g.locked = []; itClearStolen(t); g.deadline = itDl(g, now, IT_TURN_MS);
+    g.turnNo = (g.turnNo || 0) + 1;   // 第幾個回合（狙擊手「瞄準」每回合一次用）
     t.seats[i].note = null;   // 上一輪偷看到的東西：輪到自己時清掉
-    itDraw(t, i, 2 + (g.chars && itSkillReady(t, i, "broker") && t.seats[i].hand.length < 5 ? 1 : 0));   // 情報商「囤貨」：手牌少於 5 張時多抽 1 張
-    if (g.chars && itCharCheck(t, i)) return;   // 手牌累積型的勝利條件（情報商、咒函蒐集者）
-    if (t.seats[i].hand.length) return;
+    if (g.chars && itDrawChoice(t, i, now)) return;   // 抽牌階段可以改做別的（暗計、採集）：先暫停問他，回答後走 itTurnResume
+    if (itTurnDraw(t, i, true)) return;
     tblLog(t, `${t.seats[i].name} 沒有牌可以投遞，跳過`);
     i = itNext(t, i);
   }
   itFinish(t, "沒有人有牌可以投遞了，平手", [], true);
+}
+// 抽牌階段：draw＝照常抽牌（2 張；囤貨、背水一戰多抽）。回傳 true＝回合繼續（有牌可以投遞，或遊戲已經結束）
+function itTurnDraw(t, i, draw) {
+  const g = t.g, s = t.seats[i];
+  if (draw) {
+    let n = 2;
+    if (g.chars && itSkillReady(t, i, "broker") && s.hand.length < 5) n += 1;   // 情報商「囤貨」：手牌少於 5 張時多抽 1 張
+    if (g.chars && itSkillReady(t, i, "desperate") && itBlack(s.intel) > 0) { n += 1; tblLog(t, `${s.name}【絕望者】背水一戰：情報區有咒函，多抽 1 張`); }
+    itDraw(t, i, n);
+  }
+  if (g.chars && itCharCheck(t, i)) return true;   // 手牌累積型的勝利條件（情報商、咒函蒐集者）
+  return s.hand.length > 0;
+}
+// 抽牌階段的選擇回答完：重新給完整的投遞時間；沒牌可以投遞就換下一位
+function itTurnResume(t, now, i, alt) {
+  const g = t.g;
+  if (!g) return;
+  g.deadline = itDl(g, now, IT_TURN_MS);
+  if (itTurnDraw(t, i, !alt)) return;
+  tblLog(t, `${t.seats[i].name} 沒有牌可以投遞，跳過`);
+  itEndLetter(t, now);
+}
+// 抽牌階段可以改做別的技能：暗殺者「暗計」（場上有咒函時）、咒函蒐集者「採集」。開了暫停就回 true
+function itDrawChoice(t, i, now) {
+  if (itSkillReady(t, i, "assassin") && t.seats.some((x, k) => itOk(t, k) && itBlack(x.intel) > 0)) { itPrompt(t, now, { kind: "scheme", seat: i, cont: { kind: "draw", seat: i, alt: false } }); return true; }
+  if (itSkillReady(t, i, "blackcollector")) { itPrompt(t, now, { kind: "gather", seat: i, cont: { kind: "draw", seat: i, alt: false } }); return true; }
+  return false;
 }
 function itFinish(t, text, winners, xp) {
   const reveal = t.seats.map(s => ({ name: s.name, role: s.role, char: s.char || null, intel: [...(s.intel || [])], win: winners.includes(s), left: !!s.left, out: !!s.out }));
@@ -1061,6 +1090,7 @@ function itCont(t, now, c) {
   if (c.kind === "recv") itRecv(t, now, c);
   else if (c.kind === "recvEnd") itRecvEnd(t, now, c.ack, c.at);
   else if (c.kind === "resolveEnd") itResolveEnd(t, now, c.by);
+  else if (c.kind === "draw") itTurnResume(t, now, c.seat, c.alt);
 }
 // 收下情報的流程（可被暫停）：0 牆頭草「保命」→ 1 放進情報區＋自動技能（雙面、兩邊倒）→ 2 情報商「順水推舟」→ 3 結算勝利／出局 → 4 收藏家「搜刮／偽造遺囑」→ 收尾
 function itReceive(t, now, ack = false) {
@@ -1079,8 +1109,14 @@ function itRecv(t, now, r) {
     tblLog(t, `${s.name} 收下了密函：${itLabel(card)}`);
     if (itSkillReady(t, r.at, "doubleagent") && itCols(card).length === 2) { itDraw(t, r.at, 1); tblLog(t, `${s.name}【雙面間諜】收下雙色情報，抽 1 張`); }
     if (itSkillReady(t, r.at, "fencesitter") && hasK) { itDraw(t, r.at, 1); tblLog(t, `${s.name}【牆頭草】收下含咒函的情報，抽 1 張`); }
+    if (itSkillReady(t, r.at, "poisoner") && hasK) {   // 毒藥師「試毒」：抽 3 張，等一下選 1 張放回牌庫頂
+      const got = [];
+      for (let k = 0; k < 3; k++) { const c = itTop(t); if (c === undefined) break; s.hand.push(c); got.push(c); }
+      if (got.length) { r.taste = got; tblLog(t, `${s.name}【毒藥師】試毒：獲得咒函，抽 ${got.length} 張`); }
+    }
   }
   if (r.stage === 2) {
+    if (r.taste) { const cards = r.taste; r.taste = null; itPrompt(t, now, { kind: "taste", seat: r.at, cards, cont: r }); return; }
     r.stage = 3;
     if (hasK && itSkillReady(t, r.at, "broker") && t.seats.some((x, k) => k !== r.at && x.hand.length)) { itPrompt(t, now, { kind: "dig", seat: r.at, cont: r }); return; }
   }
@@ -1125,6 +1161,8 @@ function itPromptData(t, p) {
   if (p.kind === "dig") return { hands: t.seats.map((x, k) => (k === p.seat ? [] : [...x.hand])) };
   if (p.kind === "merge") return { tgt: p.tgt, hand: [...t.seats[p.tgt].hand] };
   if (p.kind === "loot") return { victim: p.victim, hand: [...t.seats[p.victim].hand], intel: [...t.seats[p.victim].intel], will: !t.seats[p.seat].onceUsed };
+  if (p.kind === "taste") return { cards: [...p.cards] };
+  if (p.kind === "scheme") return { intels: t.seats.map((x, k) => (itOk(t, k) ? x.intel.map((c, j) => (itHasK(c) ? j : -1)).filter(j => j >= 0) : [])) };
   return {};
 }
 // 玩家回答（ans＝null：不用／逾時）。答案不合法就回 false、暫停繼續；成功回 true
@@ -1189,6 +1227,36 @@ function itPromptDone(t, ans, now) {
     if (!itLootRun(t, now, p.cont)) itCont(t, now, p.cont);
     return true;
   }
+  if (p.kind === "taste") {   // 毒藥師「試毒」：剛抽的 3 張選 1 張放回牌庫頂（不選／逾時＝放回第一張）
+    const k = ans && Number.isInteger(ans.idx) ? ans.idx : 0;
+    if (k < 0 || k >= p.cards.length) return false;
+    g.prompt = null;
+    const at = s.hand.lastIndexOf(p.cards[k]);
+    if (at >= 0) { g.deck.push(s.hand.splice(at, 1)[0]); tblLog(t, `${s.name}【毒藥師】試毒：選了 1 張放回牌庫頂`); }
+    itCont(t, now, p.cont); return true;
+  }
+  if (p.kind === "scheme") {   // 暗殺者「暗計」：放棄抽牌，把任一玩家情報區的一張咒函加入自己的手牌（不用／逾時＝照常抽牌）
+    if (ans && ans.tgt !== undefined) {
+      const o = t.seats[ans.tgt];
+      if (!itOk(t, ans.tgt) || !okIdx(ans.idx, o.intel) || !itHasK(o.intel[ans.idx])) return false;
+      g.prompt = null;
+      const c = o.intel.splice(ans.idx, 1)[0]; s.hand.push(c);
+      tblLog(t, `${s.name}【暗殺者】暗計：放棄抽牌，把 ${o.name} 情報區的一封咒函（${itLabel(c)}）拿進手牌`);
+      itTurnResume(t, now, p.seat, true); return true;
+    }
+    g.prompt = null; itCont(t, now, p.cont); return true;
+  }
+  if (p.kind === "gather") {   // 咒函蒐集者「採集」：改為翻開牌堆頂 3 張，純黑的全拿，其餘放到牌堆底（不用／逾時＝照常抽牌）
+    if (ans && ans.yes) {
+      g.prompt = null;
+      const got = [], rest = [];
+      for (let k = 0; k < 3; k++) { const c = itTop(t); if (c === undefined) break; (itPureBlack(c) ? got : rest).push(c); }
+      s.hand.push(...got); g.deck.unshift(...rest);
+      tblLog(t, `${s.name}【咒函蒐集者】採集：翻開牌堆頂 ${got.length + rest.length} 張（${[...got, ...rest].map(itLabel).join("、") || "沒有牌"}），拿走 ${got.length} 張純黑，其餘放到牌堆底`);
+      itTurnResume(t, now, p.seat, true); return true;
+    }
+    g.prompt = null; itCont(t, now, p.cont); return true;
+  }
   g.prompt = null;
   return true;
 }
@@ -1230,6 +1298,29 @@ function itSkill(t, i, msg, now) {
     }
   } else if (s.char === "fencesitter") {
     if (k === 1 && idle && mine) itWashOwn(t, i, msg, now, "調節");   // 調節：自己回合、投遞前，棄 2 張手牌，洗白自己情報區的一張咒函
+  } else if (s.char === "judge") {
+    if (k === 0 && idle && Number.isInteger(msg.tgt) && msg.tgt !== i && itOk(t, msg.tgt) && itBlack(t.seats[msg.tgt].intel) >= 2) {   // 旁聽：情報區有 2 張以上咒函的玩家，檢視他的手牌
+      const o = t.seats[msg.tgt];
+      s.note = { k: "view", tgt: o.name, cards: [...o.hand] };
+      tblLog(t, `${s.name}【審判者】旁聽：檢視了 ${o.name} 的手牌`);
+    }
+  } else if (s.char === "sniper") {
+    if (k === 0 && idle && mine && s.aimTurn !== g.turnNo && Number.isInteger(msg.tgt) && msg.tgt !== i && itOk(t, msg.tgt)) {   // 瞄準（自己回合、投遞前，每回合一次）：手牌最多（或之一）的玩家，偷看他 1 張隨機手牌
+      const o = t.seats[msg.tgt], most = Math.max(...itAlive(t).filter(j => j !== i).map(j => t.seats[j].hand.length));
+      if (!o.hand.length || o.hand.length !== most) return;
+      s.aimTurn = g.turnNo;
+      s.note = { k: "aim", tgt: o.name, card: o.hand[Math.floor(Math.random() * o.hand.length)] };
+      tblLog(t, `${s.name}【狙擊手】瞄準：偷看了 ${o.name} 的一張手牌`);
+    }
+  } else if (s.char === "blackcollector") {
+    if (k === 2 && idle && !s.onceUsed && Number.isInteger(msg.tgt) && msg.tgt !== i && itOk(t, msg.tgt)) {   // 搶購（一局一次）：拿走他所有純黑手牌，再從牌堆頂給他等量的牌
+      const o = t.seats[msg.tgt], got = o.hand.filter(itPureBlack);
+      o.hand = o.hand.filter(c => !itPureBlack(c)); s.hand.push(...got); s.onceUsed = true;
+      let n = 0; for (; n < got.length; n++) { const c = itTop(t); if (c === undefined) break; o.hand.push(c); }
+      tblLog(t, `${s.name}【咒函蒐集者】搶購：拿走 ${o.name} 的 ${got.length} 張純黑手牌，再從牌堆頂補給他 ${n} 張`);
+      if (itCharCheck(t, i)) return;
+      itNoHand(t, now);
+    }
   } else if (s.char === "broker") {
     if (k === 2 && idle && !s.onceUsed && Number.isInteger(msg.tgt) && msg.tgt !== i && itOk(t, msg.tgt) && t.seats[msg.tgt].hand.length && s.hand.length) {   // 併購（一局一次）：先看他的全部手牌
       itPrompt(t, now, { kind: "merge", seat: i, tgt: msg.tgt, cont: null });
@@ -1299,16 +1390,17 @@ function itApply(t, p, now) {
     g.deadline = itDl(g, now, IT_HOLD_MS); itArrive(g);
     tblLog(t, `${by.name} 從 ${was} 手上攔截了${IT_KIND[L.kind]}`);
   } else if (p.a === "H" && itOk(t, p.tgt)) {
-    const th = t.seats[p.tgt], cards = shuffle([...th.hand]).slice(0, 2);
+    const th = t.seats[p.tgt], cards = shuffle(itHideBlack(t, p.tgt)).slice(0, 2);
     by.note = { k: "search", tgt: th.name, cards };
     tblLog(t, `${by.name} 搜了 ${th.name} 的身`);
   } else if (p.a === "D" && g.step === "turn" && t.turn === p.by && !g.letter) {   // 補給：自己的回合抽 2 張
     itDraw(t, p.by, 2);
     tblLog(t, `${by.name} 補給，抽了 2 張`);
   } else if (p.a === "R" && g.step === "turn" && t.turn === p.by && !g.letter && itOk(t, p.tgt)) {   // 竊取：從他手上隨機拿 1 張（只有雙方知道是哪張；被竊取的人到下一階段前看得到提示）
-    const th = t.seats[p.tgt];
-    if (!th.hand.length) { tblLog(t, `${th.name} 沒有手牌，竊取落空`); return; }
-    const card = th.hand.splice(Math.floor(Math.random() * th.hand.length), 1)[0];
+    const th = t.seats[p.tgt], pool = itHideBlack(t, p.tgt);
+    if (!pool.length) { tblLog(t, `${th.name} 沒有可以拿的手牌，竊取落空`); return; }
+    const card = pool[Math.floor(Math.random() * pool.length)];
+    th.hand.splice(th.hand.indexOf(card), 1);
     by.hand.push(card);
     by.note = { k: "steal", tgt: th.name, card };
     th.stolen = { by: by.name, card };
@@ -1327,6 +1419,7 @@ function itApply(t, p, now) {
     th.intel.splice(k, 1); g.discard.push(p.sel);
     if (!(by.washedFor || (by.washedFor = [])).includes(p.tgt)) by.washedFor.push(p.tgt);   // 助人者：曾洗白某位玩家的咒函
     tblLog(t, `${by.name} 洗白了 ${th.name} 情報區的一封情報：${itLabel(p.sel)}`);
+    if (itSkillReady(t, p.by, "helper")) { itDraw(t, p.by, 1); tblLog(t, `${by.name}【助人者】援手：使用洗白，抽 1 張`); }
   } else if (p.a === "T" && g.letter && g.step === "pass" && g.letter.at === p.by && itOk(t, p.tgt) && p.tgt !== p.by) {   // 轉移：面前的情報交給另一位，對方不能拒收（被阻擋的人不能當對象）
     if (itBlocked(g, p.tgt)) { tblLog(t, `轉移失敗：${t.seats[p.tgt].name} 被阻擋，不能收下`); return; }
     const L = g.letter;
@@ -1770,7 +1863,8 @@ function tblView(t, cid) {
       v.it.chars = !!g.chars; v.it.deaths = g.deaths.map(d => ({ seat: d.seat }));   // 角色卡模式；出局順序（公開）
       v.it.prompt = g.prompt ? { kind: g.prompt.kind, seat: g.prompt.seat, until: g.prompt.until } : null;   // 等誰做技能決定
       if (role === "seat" && g.prompt && g.prompt.seat === i) v.prompt = itPromptData(t, g.prompt);
-      t.seats.forEach((s, k) => { if (g.chars && s.char) v.seats[k].used = !!s.onceUsed; });   // 一局一次的技能用過沒（公開）
+      t.seats.forEach((s, k) => { if (g.chars && s.char) v.seats[k].used = !!s.onceUsed; });
+      if (role === "seat" && g.chars) v.aimed = t.seats[i].aimTurn === g.turnNo;   // 狙擊手「瞄準」這回合用過了   // 一局一次的技能用過沒（公開）
       if (role === "seat" && g.chars && itSkillReady(t, i, "doubleagent") && !t.seats[i].onceUsed) v.deckDouble = [...new Set(g.deck.filter(c => itCols(c).length === 2))];   // 雙面人生可以找的雙色牌
       const ex = itExtOf(g, false);
       v.it.ext = ex ? { by: [...ex.by], skip: [...ex.skip] } : null;   // 目前這段倒數的加時（誰按了、誰跳過了）
