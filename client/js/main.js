@@ -4889,17 +4889,33 @@ function buildDodge(box, v, mk, gd) {
 // 3 波小怪＋1 隻 Boss（Boss 有血條，一直畫符號直到血條清空）。幽靈由「伺服器給的 seed」決定性地產生（與 worker 的 mgGen、dev_server 的 mg_gen 同一套，隨機只用 dodgeHash）；
 // 符號辨識（$P 點雲比對）在本機，畫對就回報 kill {i}／boss {k}，血量／擊殺／Boss 血量／勝負以伺服器為準，客戶端每秒送 sync 讓伺服器結算沒被消除的幽靈 ----
 const MG_CX = 320, MG_CY = 200, MG_R0 = 390, MG_R_HIT = 28, MG_GRACE = .8, MG_WAVE_START = 3, MG_WAVE_LEN = 28, MG_WAVE_GAP = 4, MG_BOSS_START = 99, MG_HP = 5;
-const MG_N_SYMS = 10, MG_SYMS = [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6]], MG_INTERVAL = [2.6, 2.0, 1.5, 1.1], MG_SPEED = [38, 46, 55, 66], MG_WAVE_MULT = [1.0, .85, .7, 1.8];
+const MG_N_SYMS = 9, MG_SYMS = [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6]], MG_INTERVAL = [2.6, 2.0, 1.5, 1.1], MG_SPEED = [38, 46, 55, 66], MG_WAVE_MULT = [1.0, .85, .7, 1.8];
 const MG_DIFF_NAMES = ['簡易', '中等', '困難', '超難'];
-const MG_SYM_NAMES = ['橫線 —', '直線 |', '圓圈 ○', '尖角 ∧', 'V 字', 'Z 字', 'U 字', '星星 ☆', '波浪 ~', 'L 字'];
+const MG_SYM_NAMES = ['橫線 —', '直線 |', '圓圈 ○', '尖角 ∧', 'V 字', 'Z 字', 'U 字', '波浪 ~', 'L 字'];
 // 符號範本（單筆畫，0～1 的方格內，y 向下）；順序＝出現的先後（越前面越容易辨識）
 const MG_SYM_POLY = (() => {
-  const circle = [], star = [], wave = [];
+  const circle = [], wave = [];
   for (let k = 0; k <= 24; k++) { const a = k / 24 * Math.PI * 2 - Math.PI / 2; circle.push([.5 + .5 * Math.cos(a), .5 + .5 * Math.sin(a)]); }
-  for (const k of [0, 2, 4, 1, 3, 0]) { const a = k / 5 * Math.PI * 2 - Math.PI / 2; star.push([.5 + .5 * Math.cos(a), .5 + .5 * Math.sin(a)]); }
   for (let k = 0; k <= 20; k++) wave.push([k / 20, .5 - .3 * Math.sin(k / 20 * Math.PI * 2)]);
   return [[[0, .5], [1, .5]], [[.5, 0], [.5, 1]], circle, [[0, 1], [.5, 0], [1, 1]], [[0, 0], [.5, 1], [1, 0]], [[0, 0], [1, 0], [0, 1], [1, 1]],
-    [[0, 0], [0, 1], [1, 1], [1, 0]], star, wave, [[0, 0], [0, 1], [1, 1]]];
+    [[0, 0], [0, 1], [1, 1], [1, 0]], wave, [[0, 0], [0, 1], [1, 1]]];
+})();
+// 辨識用的範本變體：真人畫的 U 有圓底／方底、寬窄不一，波浪的起伏有大有小、可能先下後上，Z 有寬窄、橫線斜、轉角圓（只用來辨識；畫在幽靈身上的還是上面那組標準形狀）
+const MG_SYM_VARIANTS = (() => {
+  const v = MG_SYM_POLY.map(p => [p]);
+  for (const amp of [.18, .25, .32, .4]) for (const ph of [0, Math.PI]) { const w = []; for (let k = 0; k <= 20; k++) w.push([k / 20, .5 - amp * Math.sin(k / 20 * Math.PI * 2 + ph)]); v[7].push(w); }
+  for (const wd of [.5, .8, 1.3, 1.7]) for (const [a1, a2] of [[1, 1], [1, .7], [.7, 1]]) v[4].push([[0, 1 - a1], [wd / 2, 1], [wd, 1 - a2]]);   // V：寬窄、兩臂不一樣長（跟 U 分開靠尖底）
+  for (const wd of [.5, .8, 1.1, 1.4]) {   // U：方底（兩臂可不一樣長）、直臂＋半圓底
+    for (const [a1, a2] of [[1, 1], [1, .7], [.7, 1]]) v[6].push([[0, 1 - a1], [0, 1], [wd, 1], [wd, 1 - a2]]);
+    for (const L of [.25, .5]) { const r = [[0, 0], [0, L]]; for (let k = 1; k <= 12; k++) { const t = Math.PI * k / 12; r.push([wd / 2 - wd / 2 * Math.cos(t), L + wd / 2 * Math.sin(t)]); } r.push([wd, L - .3]); v[6].push(r); }
+  }
+  for (const dep of [.4, .6, .8, 1.1, 1.5]) { const r = []; for (let k = 0; k <= 16; k++) { const u = k / 16; r.push([u, dep * (1 - 4 * (u - .5) * (u - .5))]); } v[6].push(r); }   // 拋物線型的 U
+  for (const dep of [.4, .7, 1]) { const r = []; for (let k = 0; k <= 16; k++) { const a = Math.PI * k / 16; r.push([.5 - .5 * Math.cos(a), dep * Math.pow(Math.sin(a), .6)]); } v[6].push(r); }   // 圓弧型的 U
+  for (const wd of [.7, 1, 1.4]) for (const sl of [-.15, 0, .15]) for (const rd of [false, true]) {   // Z：寬窄、上下橫線有沒有斜、轉角圓不圓
+    const p = [[0, 0], [wd, sl], [0, 1], [wd, 1 + sl]], cut = (A, B, f) => [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f];
+    v[5].push(rd ? [p[0], cut(p[0], p[1], .85), p[1], cut(p[1], p[2], .12), cut(p[1], p[2], .88), p[2], cut(p[2], p[3], .15), p[3]] : p);
+  }
+  return v;
 })();
 const MG_PTS = 32;
 function mgResample(pts, n = MG_PTS) {   // 沿路徑等距取 n 點
@@ -4937,13 +4953,20 @@ function mgRecognize(points) {   // 回傳 {id, d, second}（d 越小越像）�
   if (points.length < 4) return null;
   let len = 0; for (let i = 1; i < points.length; i++) len += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
   if (len < 40) return null;
-  if (!MG_TMPL) MG_TMPL = MG_SYM_POLY.map(p => mgNormalize(p));
+  if (!MG_TMPL) MG_TMPL = MG_SYM_VARIANTS.map(vs => vs.map(p => mgNormalize(p)));
   const q = mgNormalize(points), step = Math.floor(Math.sqrt(MG_PTS)), res = [];
-  MG_TMPL.forEach((t, id) => { let d = 1e9; for (let i = 0; i < MG_PTS; i += step) d = Math.min(d, mgCloud(q, t, i), mgCloud(t, q, i)); res.push({ id, d }); });
+  MG_TMPL.forEach((vs, id) => { let d = 1e9; for (const t of vs) for (let i = 0; i < MG_PTS; i += step) d = Math.min(d, mgCloud(q, t, i), mgCloud(t, q, i)); res.push({ id, d }); });
   res.sort((a, b) => a.d - b.d);
+  if ((res[0].id === 4 && res[1].id === 6) || (res[0].id === 6 && res[1].id === 4)) {   // U 和 V 很像：看底部寬不寬（U 的底是平的／圓的，V 是尖的）
+    let y0 = 1e9, y1 = -1e9, x0 = 1e9, x1 = -1e9; for (const p of points) { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); }
+    const band = y1 - (y1 - y0) * .2; let bx0 = 1e9, bx1 = -1e9; for (const p of points) if (p[1] >= band) { bx0 = Math.min(bx0, p[0]); bx1 = Math.max(bx1, p[0]); }
+    const wide = (bx1 - bx0) / Math.max(1, x1 - x0) >= MG_UV_BAND;
+    return { id: wide ? 6 : 4, d: Math.min(res[0].d, res[1].d), second: res[2].d };
+  }
   return { id: res[0].id, d: res[0].d, second: res[1].d };
 }
-const MG_ACCEPT = 2.6, MG_MARGIN = 0.7, MG_GAP = 0.3;   // 接受門檻（點雲距離總和，越小越像）與「第一名比第二名好多少」的最小比例（太接近＝不確定，不判）
+const MG_UV_BAND = 0.32;   // U／V 分辨：筆畫最底下 20% 高度內，點的橫向範圍佔整個筆畫寬度的比例，≥ 這個值就是 U（底是平的或圓的），否則是 V（尖底）
+const MG_ACCEPT = 2.6, MG_MARGIN = 0.85, MG_GAP = 0.15;   // 接受門檻（點雲距離總和，越小越像）與「第一名比第二名好多少」的最小比例（太接近＝不確定，不判）
 function mgGenC(g, upto) {   // 客戶端的幽靈產生器（與 worker mgGen 同一套；多算了 sp、ang 供畫面用）
   const d = g.diff, n = g.n, seed = g.seed;
   for (;;) {
@@ -4959,7 +4982,7 @@ function mgGenC(g, upto) {   // 客戶端的幽靈產生器（與 worker mgGen �
     const m = w === 3 ? MG_SYMS[d][0] : MG_SYMS[d][w];
     const h = j => dodgeHash(seed, 10000 + i * 16 + j), u = j => h(j) / 4294967296;
     const sp = MG_SPEED[d] * (0.85 + 0.3 * u(2)) * (w === 3 ? 0.9 : 1.0) / (1 + 0.3 * (m - 1));
-    g.gh.push({ i, ts: t, syms: Array.from({ length: m }, (_, j) => h(8 + j) % MG_N_SYMS), sp, arr: t + (MG_R0 - MG_R_HIT) / sp, ang: u(0) * Math.PI * 2, w });
+    g.gh.push({ i, ts: t, syms: Array.from({ length: m }, (_, j) => h(8 + j) % MG_N_SYMS), sp, arr: t + (MG_R0 - MG_R_HIT) / sp, ang: w === 3 ? -Math.PI / 4 + u(0) * Math.PI * 1.5 : u(0) * Math.PI * 2, w });   // Boss 戰的小幽靈不從正上方（Boss 在那裡，看不到）出來：避開上方 90 度的扇形
     g.cur = t + MG_INTERVAL[d] * MG_WAVE_MULT[w] / (1 + 0.5 * (n - 1)) * (0.7 + 0.6 * u(4)) * (1 + 0.3 * (m - 1));
   }
 }
@@ -5054,7 +5077,6 @@ function mgDraw(t, mySeat) {
   if (M.shake > now) { g.fillStyle = `rgba(255,40,40,${(M.shake - now) / 350 * .22})`; g.fillRect(0, 0, 640, 400); }   // 打中 Boss：畫面泛紅
   g.restore();
   if (t < 0) { g.fillStyle = 'rgba(8,10,20,.55)'; g.fillRect(0, 0, 640, 400); g.fillStyle = '#ffe08a'; g.font = 'bold 56px "Microsoft JhengHei"'; g.fillText(String(Math.ceil(-t)), MG_CX, MG_CY + 18); }
-  if (t >= 0 && t < 4) { g.fillStyle = 'rgba(255,255,255,.85)'; g.font = '13px "Microsoft JhengHei"'; g.fillText('在畫面上按住滑鼠，畫出幽靈頭上的符號（一筆畫一個，有好幾個就依序畫）', MG_CX, 388); }
   if (mySeat?.dead && v.role === 'seat') { g.fillStyle = 'rgba(8,10,20,.5)'; g.fillRect(0, MG_CY - 28, 640, 56); g.fillStyle = '#ffb347'; g.font = 'bold 22px "Microsoft JhengHei"'; g.fillText('你倒下了（隊友還在戰鬥）', MG_CX, MG_CY + 8); }
 }
 function mgPointer(e, type) {   // 在場地上按住滑鼠畫符號；放開時辨識

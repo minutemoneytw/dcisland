@@ -1778,22 +1778,25 @@ def table_zhtyping():
     return cv
 
 def table_mage():
-    """見習驅魔師：深色桌面，中間一張黃色符紙（紅色符號），旁邊一隻白色小幽靈（有臉）和一個銅鈴。"""
+    """見習驅魔師：深色桌面（有桌腳），中間一本皮革封面的書（金色十字），右邊一瓶聖水，左邊一隻白色小幽靈（有臉）。"""
     cv = Canvas(48, 32)
     wood = hx("#3a2a4a")
     cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.35))
     cv.rect(2, 6, 45, 25, hx("#2a2038"))
-    paper = hx("#f0d878")
-    cv.rect(17, 8, 30, 24, paper); cv.rect(17, 8, 30, 8, shade(paper, .8)); cv.rect(17, 24, 30, 24, shade(paper, .8))   # 符紙（上下有邊）
-    red = hx("#d02a2a")
-    cv.rect(20, 11, 27, 11, red); cv.rect(23, 11, 24, 20, red); cv.rect(20, 15, 27, 15, red); cv.rect(21, 18, 26, 18, red)   # 符紙上的紅色符文
+    leather = hx("#7a4a2a")                                                                                             # 皮書（中間）
+    cv.rect(16, 9, 30, 22, leather); cv.rect(16, 9, 18, 22, shade(leather, .7)); cv.rect(30, 9, 30, 22, shade(leather, .7))   # 書背與書緣
+    cv.rect(19, 10, 29, 10, shade(leather, 1.3)); cv.rect(19, 21, 29, 21, shade(leather, .8))                           # 封面高光與下緣
+    gold = hx("#e8c040")
+    cv.rect(23, 12, 24, 19, gold); cv.rect(21, 14, 26, 15, gold)                                                        # 封面的金色十字
     gh = hx("#eef0ff")                                                                                                  # 小幽靈（左邊）
     cv.ellipse(8.5, 13.5, 4.5, 5, gh); cv.rect(4, 14, 13, 19, gh)
     for x in (4, 7, 10): cv.rect(x, 20, x + 1, 21, gh)                                                                  # 下擺鋸齒
     cv.rect(6, 12, 7, 13, hx("#20204a")); cv.rect(10, 12, 11, 13, hx("#20204a")); cv.rect(8, 16, 9, 16, hx("#20204a")) # 臉：眼睛與嘴
-    bell = hx("#d8a838")                                                                                                # 銅鈴（右邊）
-    cv.ellipse(38.5, 17.5, 4, 4, bell); cv.rect(34, 18, 43, 21, bell); cv.rect(38, 22, 39, 23, shade(bell, .7))
-    cv.rect(38, 10, 39, 13, shade(bell, .7))
+    glass = hx("#c8e4f0")                                                                                               # 聖水瓶（右邊）：瓶身、藍白色的水、軟木塞、瓶上的小十字
+    cv.rect(36, 12, 42, 22, glass); cv.rect(37, 9, 41, 11, glass); cv.rect(38, 7, 40, 8, hx("#9a6a3a"))
+    cv.rect(37, 16, 41, 21, hx("#6ab8ff")); cv.rect(37, 16, 41, 16, hx("#d8f0ff"))
+    cv.rect(39, 17, 39, 20, hx("#ffffff")); cv.rect(38, 18, 40, 18, hx("#ffffff"))
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))                                 # 桌腳
     cv.outline()
     return cv
 

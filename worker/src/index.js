@@ -784,7 +784,7 @@ function dgLeave(t, i, now) {
 const MG_HP = 5, MG_WAVE_START = 3, MG_WAVE_LEN = 28, MG_WAVE_GAP = 4;   // 第 k 波＝[3+32k, 3+32k+28)
 const MG_BOSS_START = MG_WAVE_START + 3 * (MG_WAVE_LEN + MG_WAVE_GAP), MG_BOSS_LIMIT = 180;   // Boss 出場時間（99 秒）；出場後 1.5 秒才能開始打；打不贏的上限
 const MG_R0 = 390, MG_R_HIT = 28, MG_GRACE = 0.8;   // 幽靈出現半徑（場外）、碰到中央的半徑、抵達後多久才結算扣血（容許延遲）
-const MG_N_SYMS = 10;   // 符號種類（不分難度、波數，一開始就有全部 10 種）
+const MG_N_SYMS = 9;   // 符號種類（不分難度、波數，一開始就有全部 9 種）
 const MG_SYMS = [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6]];   // 各難度（簡易／中等／困難／超難）每波「一隻幽靈身上的符號個數」；Boss 戰時的小鬼用第 1 波的個數
 const MG_INTERVAL = [2.6, 2.0, 1.5, 1.1], MG_SPEED = [38, 46, 55, 66];   // 各難度小怪生成間隔（秒，1 人）、幽靈速度（px/s）
 const MG_WAVE_MULT = [1.0, 0.85, 0.7, 1.8];   // 各波間隔倍率（第 4 項＝Boss 戰時的小鬼騷擾，比較稀）
