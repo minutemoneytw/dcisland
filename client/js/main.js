@@ -101,7 +101,7 @@ const S = {
   craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
   craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
   gamesDB: null, tableImgs: {},        // 和平島遊戲桌：遊戲定義（assets/games/games.json，手寫）與桌子圖
-  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, unTimer: 0, unOff: 0, unTimeoutAt: 0, unPick: null, dg: null, dgRaf: 0, dgLast: 0, ty: null, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
+  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, bk: null, bkTimer: 0, bkOff: 0, bkTimeoutAt: 0, unTimer: 0, unOff: 0, unTimeoutAt: 0, unPick: null, dg: null, dgRaf: 0, dgLast: 0, ty: null, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
   titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
@@ -4342,7 +4342,7 @@ function openTable(tb) {
   if (!gameDef(tb.game)) return;
   for (const k of Object.keys(keys)) keys[k] = false;   // 放開所有按住的鍵（畫面蓋住後收不到 keyup，不然回來還在跑）
   S.mouseHeld = false;
-  S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null; S.gamePlayed = false; S.tableLocalLog = [];
+  S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null; S.bk = null; S.gamePlayed = false; S.tableLocalLog = [];
   const inf = S.tblInfo?.[tb.id];
   if (!inf || (!inf.play && inf.n < inf.max)) S.tableChoice = true;   // 還有位子：先讓玩家選「入座」或「觀戰」（沒滿人也可以選觀戰）
   else S.net.tbl({ a: 'join', id: tb.id, role: 'spec' });             // 滿人或已開局：直接觀戰
@@ -4350,7 +4350,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); unStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); unStopTimer(); bkStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
   rulesShow(false); leaveAsk(false);
   $('tableBox').classList.add('hidden');
 }
@@ -4469,6 +4469,7 @@ function buildTable() {
   }
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
+  if (tb?.game === 'blokus') { buildBlokus(box, v, mk, gd); return; }   // 方塊拼圖有自己的畫面（棋盤＋方塊托盤）
   if (tb?.game === 'mage') { buildMage(box, v, mk, gd); return; }   // 見習驅魔師有自己的畫面（畫符號的場地）
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
   if (tb?.game === 'uno') { buildUno(box, v, mk, gd); return; }   // UNO 有自己的畫面（牌桌）
@@ -4633,6 +4634,219 @@ function buildGomoku(box, v, mk) {
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
   const gd = gameDef('gomoku'); if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 方塊拼圖 Blokus（第十一桌 t11；2026-11-13，使用者要求）：20×20 棋盤（canvas）＋我的方塊托盤。選方塊 → 旋轉（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。
+// 合法與否在本機先判（只用來顯示預覽與標出可接的角），最後以伺服器為準（和 worker 的 bkLegal 同一套規則）。棋盤、各人用掉的方塊都是公開資訊，觀戰者也看得到 ----
+const BK_N = 20, BK_CELL = 24, BK_TURN_SEC = 45;
+const BK_SHAPES = [['#'], ['##'], ['###'], ['##', '#.'], ['####'], ['##', '##'], ['###', '.#.'], ['###', '#..'], ['.##', '##.'],
+  ['.##', '##.', '.#.'], ['#####'], ['####', '#...'], ['##..', '.###'], ['##', '##', '#.'], ['###', '.#.', '.#.'], ['#.#', '###'],
+  ['#..', '#..', '###'], ['#..', '##.', '.##'], ['.#.', '###', '.#.'], ['####', '.#..'], ['##.', '.#.', '.##']];   // 與兩份伺服器同一組 21 塊
+const BK_PC = BK_SHAPES.map(rows => { const c = []; rows.forEach((r, y) => [...r].forEach((ch, x) => { if (ch === '#') c.push([x, y]); })); return c; });
+const BK_CORNERS = [[0, 0], [BK_N - 1, 0], [BK_N - 1, BK_N - 1], [0, BK_N - 1]];
+const BK_COL = ['#3b78e8', '#f0c020', '#e04848', '#3cb45a'], BK_CNAME = ['藍', '黃', '紅', '綠'];
+const BK_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]], BK_DIAGS = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+// 第 p 塊轉 rot 次（每次 90 度）、flip＝先左右翻面；回傳 {cells（左上對齊）, pv（滑鼠指著的那一格＝最靠近中心的格）}
+function bkShape(p, rot, flip) {
+  let c = BK_PC[p].map(([x, y]) => [flip ? -x : x, y]);
+  for (let i = 0; i < rot; i++) c = c.map(([x, y]) => [-y, x]);
+  const mx = Math.min(...c.map(q => q[0])), my = Math.min(...c.map(q => q[1]));
+  c = c.map(([x, y]) => [x - mx, y - my]);
+  const cx = c.reduce((a, q) => a + q[0], 0) / c.length, cy = c.reduce((a, q) => a + q[1], 0) / c.length;
+  let pv = c[0], best = 1e9;
+  for (const q of c) { const d = (q[0] - cx) ** 2 + (q[1] - cy) ** 2; if (d < best) { best = d; pv = q; } }
+  return { cells: c, pv };
+}
+const bkAt = (b, x, y) => (x >= 0 && y >= 0 && x < BK_N && y < BK_N ? b[y * BK_N + x] : '#');   // 出界回 '#'
+function bkLegalC(v, cells) {   // 我（座位 v.me）放這些格子（絕對座標）合不合法
+  const b = v.bk.board, ci = v.bk.col[v.me], col = String(ci + 1), first = v.bk.used[v.me].length === 0, [sx, sy] = BK_CORNERS[ci];
+  let corner = false, start = false;
+  for (const [x, y] of cells) {
+    if (bkAt(b, x, y) !== '0') return false;
+    if (x === sx && y === sy) start = true;
+    for (const [dx, dy] of BK_DIRS) if (bkAt(b, x + dx, y + dy) === col) return false;
+    for (const [dx, dy] of BK_DIAGS) if (bkAt(b, x + dx, y + dy) === col) corner = true;
+  }
+  return first ? start : corner;
+}
+function bkAnchors(v) {   // 我下一塊可以接的角（空格、斜對角有我的方塊、四邊沒有我的方塊）；第一塊就是起始角落
+  const b = v.bk.board, ci = v.bk.col[v.me], col = String(ci + 1), out = [];
+  if (v.bk.used[v.me].length === 0) { const [sx, sy] = BK_CORNERS[ci]; return bkAt(b, sx, sy) === '0' ? [[sx, sy]] : []; }
+  for (let y = 0; y < BK_N; y++) for (let x = 0; x < BK_N; x++) {
+    if (b[y * BK_N + x] !== '0') continue;
+    if (BK_DIRS.some(([dx, dy]) => bkAt(b, x + dx, y + dy) === col)) continue;
+    if (BK_DIAGS.some(([dx, dy]) => bkAt(b, x + dx, y + dy) === col)) out.push([x, y]);
+  }
+  return out;
+}
+function bkPreview(v) {   // 目前選的方塊放在滑鼠位置的格子；沒有選或滑鼠不在棋盤上回 null
+  const o = S.bk;
+  if (!o || o.sel == null || o.hx == null) return null;
+  const { cells, pv } = bkShape(o.sel, o.rot, o.flip), abs = cells.map(([x, y]) => [x - pv[0] + o.hx, y - pv[1] + o.hy]);
+  return { cells: abs, ok: bkLegalC(v, abs) };
+}
+function bkDraw(cv, v) {
+  const g = cv.getContext('2d'), C = BK_CELL, size = BK_N * C, b = v.bk.board;
+  g.fillStyle = '#141a2a'; g.fillRect(0, 0, size, size);
+  g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 1;
+  for (let i = 0; i <= BK_N; i++) { g.beginPath(); g.moveTo(i * C + .5, 0); g.lineTo(i * C + .5, size); g.stroke(); g.beginPath(); g.moveTo(0, i * C + .5); g.lineTo(size, i * C + .5); g.stroke(); }
+  v.bk.col.forEach(ci => {   // 各色的起始角落：淡淡的色框
+    const [sx, sy] = BK_CORNERS[ci]; g.strokeStyle = BK_COL[ci]; g.globalAlpha = .55; g.lineWidth = 2; g.strokeRect(sx * C + 2, sy * C + 2, C - 4, C - 4); g.globalAlpha = 1;
+  });
+  for (let i = 0; i < b.length; i++) {
+    if (b[i] === '0') continue;
+    const x = i % BK_N, y = Math.floor(i / BK_N);
+    g.fillStyle = BK_COL[Number(b[i]) - 1]; g.fillRect(x * C + 1, y * C + 1, C - 1, C - 1);
+    g.fillStyle = 'rgba(255,255,255,.28)'; g.fillRect(x * C + 1, y * C + 1, C - 1, 3); g.fillRect(x * C + 1, y * C + 1, 3, C - 1);
+    g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x * C + 1, y * C + C - 3, C - 1, 2); g.fillRect(x * C + C - 3, y * C + 1, 2, C - 1);
+  }
+  if (v.bk.last) {   // 最後一手：白框
+    g.strokeStyle = '#fff'; g.lineWidth = 2;
+    for (const [x, y] of v.bk.last.cells) g.strokeRect(x * C + 2, y * C + 2, C - 3, C - 3);
+  }
+  const seat = v.phase === 'playing' && v.role === 'seat', mine = seat && v.turn === v.me;
+  if (mine) {   // 輪到我：可以接的角用小圓點標出來
+    g.fillStyle = 'rgba(255,255,255,.55)';
+    for (const [x, y] of bkAnchors(v)) { g.beginPath(); g.arc(x * C + C / 2 + .5, y * C + C / 2 + .5, 3, 0, Math.PI * 2); g.fill(); }
+  }
+  const pv = seat ? bkPreview(v) : null;
+  if (pv) {   // 預覽：合法＝我的顏色半透明＋白邊；不合法＝紅色
+    g.globalAlpha = .7; g.fillStyle = pv.ok ? BK_COL[v.bk.col[v.me]] : '#ff3030';
+    for (const [x, y] of pv.cells) if (x >= 0 && y >= 0 && x < BK_N && y < BK_N) g.fillRect(x * C + 1, y * C + 1, C - 1, C - 1);
+    g.globalAlpha = 1;
+    if (pv.ok) { g.strokeStyle = '#fff'; g.lineWidth = 2; for (const [x, y] of pv.cells) g.strokeRect(x * C + 2, y * C + 2, C - 3, C - 3); }
+  }
+}
+function bkPieceCanvas(p, color, rot, flip) {   // 托盤裡的小圖（5×5 格的框）
+  const cv = document.createElement('canvas'), K = 9, { cells } = bkShape(p, rot, flip);
+  cv.width = K * 5; cv.height = K * 5;
+  const g = cv.getContext('2d'), w = Math.max(...cells.map(c => c[0])) + 1, h = Math.max(...cells.map(c => c[1])) + 1, ox = Math.floor((5 - w) * K / 2), oy = Math.floor((5 - h) * K / 2);
+  g.fillStyle = color;
+  for (const [x, y] of cells) { g.fillRect(ox + x * K, oy + y * K, K - 1, K - 1); }
+  return cv;
+}
+function bkStopTimer() { if (S.bkTimer) { clearInterval(S.bkTimer); S.bkTimer = 0; } }
+function bkStartTimer(v) {
+  bkStopTimer();
+  S.bkOff = v.bk.sn - Date.now();   // 伺服器時間 − 本機時間（毫秒，忽略單程延遲）
+  S.bkTimer = setInterval(() => {
+    const cur = S.tableView;
+    if (!S.tableOpen || !cur || cur.game !== 'blokus' || cur.phase !== 'playing') { bkStopTimer(); return; }
+    const left = (cur.bk.deadline - (Date.now() + S.bkOff)) / 1000;
+    const el = $('bkTimer'); if (el) { el.textContent = left > 0 ? `${Math.ceil(left)} 秒` : '時間到'; el.classList.toggle('urgent', left <= 10); }
+    if (left <= 0 && cur.role === 'seat' && Date.now() - (S.bkTimeoutAt || 0) > 1000) { S.bkTimeoutAt = Date.now(); S.net?.tbl?.({ a: 'timeout' }); }
+  }, 250);
+}
+function bkHint(text) {   // 放不下的提示（遊戲畫面蓋住了 toast，所以放在托盤下面）
+  const el = $('bkMsg'); if (!el) return;
+  el.textContent = text; clearTimeout(S.bkMsgT); S.bkMsgT = setTimeout(() => { el.textContent = ''; }, 3500);
+}
+function bkSelect(p) {   // 選方塊；再點一次已選的＝旋轉
+  const o = (S.bk ||= { sel: null, rot: 0, flip: false, hx: null, hy: null });
+  if (o.sel === p) o.rot = (o.rot + 1) % 4; else { o.sel = p; o.rot = 0; o.flip = false; }
+  buildTable();
+}
+function bkRotate(d) { const o = S.bk; if (!o || o.sel == null) return; o.rot = (o.rot + d + 4) % 4; buildTable(); }
+function bkFlip() { const o = S.bk; if (!o || o.sel == null) return; o.flip = !o.flip; buildTable(); }
+function bkKey(e) {   // 遊戲畫面開著且在玩方塊拼圖：R 旋轉、F 翻面
+  const k = e.key.toLowerCase();
+  if (k === 'r') { e.preventDefault(); bkRotate(e.shiftKey ? -1 : 1); } else if (k === 'f') { e.preventDefault(); bkFlip(); }
+}
+function buildBlokus(box, v, mk, gd) {
+  const playing = v.phase === 'playing', seat = v.role === 'seat', myTurn = playing && seat && v.turn === v.me, bk = v.bk;
+  if (!playing) bkStopTimer();
+  const o = (S.bk ||= { sel: null, rot: 0, flip: false, hx: null, hy: null });
+  if (!playing || !seat || (o.sel != null && bk.used[v.me]?.includes(o.sel))) { o.sel = null; o.hx = o.hy = null; }   // 用掉的方塊／不是我的局：取消選取
+  const cname = k => BK_CNAME[bk.col[k]];
+  let status;
+  if (playing) {
+    const who = v.seats[v.turn]?.name;
+    status = !seat ? `觀戰中 · 輪到 ${who}（${cname(v.turn)}）` : myTurn ? `輪到你（${cname(v.me)}）：選一塊方塊，點棋盤放下` : `輪到 ${who}（${cname(v.turn)}）`;
+  } else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始（每手限時 45 秒）';
+  const st = mk('div', 'table-status' + (myTurn ? ' mine' : ''), status);
+  if (playing) { const tm = mk('span', 'bk-timer'); tm.id = 'bkTimer'; st.appendChild(tm); }
+  box.appendChild(st);
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  // 座位
+  const row = mk('div', 'table-seats bk-seats');
+  v.seats.forEach((s, i) => {
+    const seatEl = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && v.turn === i ? ' turn' : '') + (playing && (s.left || bk.done[i]) ? ' out' : ''));
+    const nameEl = mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : ''));
+    if (playing) { const sw = mk('span', 'bk-swatch'); sw.style.background = BK_COL[bk.col[i]]; nameEl.prepend(sw); }
+    seatEl.appendChild(nameEl);
+    seatEl.appendChild(mk('div', 'table-tag', playing ? `${cname(i)} · 剩 ${s.rem} 格${s.left ? '' : bk.done[i] ? ' · 無處可放' : v.turn === i ? ' · 思考中' : ''}` : (s.ready ? '已準備' : '未準備')));
+    row.appendChild(seatEl);
+  });
+  if (!playing) for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  // 上一局的成績
+  if (!playing && v.result?.players) {
+    const sc = mk('div', 'bk-score');
+    [...v.result.players].map((p, k) => ({ p, k })).sort((a, b) => b.p.score - a.p.score).forEach(({ p, k }) => {
+      const line = mk('div', 'bk-score-line' + (v.result.winners.includes(k) ? ' win' : ''));
+      const sw = mk('span', 'bk-swatch'); sw.style.background = BK_COL[p.col]; line.appendChild(sw);
+      line.appendChild(document.createTextNode(`${p.name}${p.left ? '（離開）' : p.forfeit ? '（棄權）' : ''}　剩 ${p.rem} 格${p.rem === 0 ? '，全部放完' : ''}　${p.score} 分`));
+      sc.appendChild(line);
+    });
+    box.appendChild(sc);
+  }
+  // 棋盤＋托盤
+  if (bk) {
+    const main = mk('div', 'bk-main'), size = BK_N * BK_CELL, cv = document.createElement('canvas');
+    cv.width = size; cv.height = size; cv.className = 'bk-board' + (myTurn ? ' mine' : '');
+    bkDraw(cv, v);
+    if (playing && seat) {
+      const at = e => { const r = cv.getBoundingClientRect(), k = size / r.width; return { x: Math.floor((e.clientX - r.left) * k / BK_CELL), y: Math.floor((e.clientY - r.top) * k / BK_CELL) }; };
+      cv.onmousemove = e => { const p = at(e); if (p.x !== o.hx || p.y !== o.hy) { o.hx = p.x; o.hy = p.y; bkDraw(cv, v); } };
+      cv.onmouseleave = () => { o.hx = o.hy = null; bkDraw(cv, v); };
+      cv.onwheel = e => { if (o.sel == null) return; e.preventDefault(); bkRotate(e.deltaY > 0 ? 1 : -1); };
+      cv.oncontextmenu = e => { e.preventDefault(); bkRotate(1); };
+      cv.onclick = e => {
+        if (!myTurn || o.sel == null) return;
+        const p = at(e); o.hx = p.x; o.hy = p.y;
+        const pv = bkPreview(v);
+        if (!pv) return;
+        if (!pv.ok) { bkHint('這裡放不下：要角對角接到自己的方塊、不能邊對邊（第一塊要蓋住自己的角落）'); return; }
+        S.net?.tbl?.({ a: 'place', p: o.sel, c: pv.cells });
+        o.sel = null; o.hx = o.hy = null; buildTable();
+      };
+    }
+    main.appendChild(cv);
+    if (seat && playing) {
+      const side = mk('div', 'bk-side'), used = bk.used[v.me] || [], ci = bk.col[v.me];
+      side.appendChild(mk('div', 'table-label', `你的方塊（${BK_CNAME[ci]}）：點選 → 滑到棋盤上 → 點一下放下`));
+      const tray = mk('div', 'bk-tray');
+      for (let p = 0; p < BK_PC.length; p++) {
+        const isUsed = used.includes(p), el = mk('div', 'bk-pc' + (isUsed ? ' used' : '') + (o.sel === p ? ' sel' : ''));
+        el.appendChild(bkPieceCanvas(p, BK_COL[ci], o.sel === p ? o.rot : 0, o.sel === p ? o.flip : false));
+        if (!isUsed) el.onclick = () => bkSelect(p);
+        tray.appendChild(el);
+      }
+      side.appendChild(tray);
+      const ctl = mk('div', 'table-btns');
+      const rb = mk('button', 'ff-btn small', '↻ 旋轉（R／滾輪／右鍵）'), fb = mk('button', 'ff-btn small', '⇋ 翻面（F）');
+      rb.onclick = () => bkRotate(1); fb.onclick = () => bkFlip(); rb.disabled = fb.disabled = o.sel == null;
+      ctl.appendChild(rb); ctl.appendChild(fb); side.appendChild(ctl);
+      side.appendChild(mk('div', 'table-tag', '圓點是你可以接的角。連續兩次超時會視為棄權。'));
+      const hint = mk('div', 'bk-msg'); hint.id = 'bkMsg'; side.appendChild(hint);
+      main.appendChild(side);
+    }
+    box.appendChild(main);
+    if (playing) bkStartTimer(v);
+  }
+  const btns = mk('div', 'table-btns');
+  if (seat && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const sb = mk('button', 'ff-btn small', '改為觀戰'); sb.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(sb);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 躲彈幕（第五桌 t5）：即時遊戲。彈幕由「伺服器給的 seed＋開始時間 t0」決定性地在每個畫面各自產生（所有人看到的彈幕一樣，不用同步彈幕）；
 // 自己的移動與碰撞在本機算，被打到回報 hit，命數／淘汰／評分以伺服器為準；其他人的位置由 tpos 訊息轉發（約 8 次／秒，客戶端內插）----
@@ -7379,6 +7593,7 @@ addEventListener('keydown', e => {
     if (k === 'escape') { e.preventDefault(); if (!$('rulesBox').classList.contains('hidden')) rulesShow(false); else leaveTable(); }   // 規則視窗開著：Esc 先關；離開確認開著：Esc＝取消規則
     else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
     else if (S.ty) typingKey(e);   // 英文打字競賽：英文字母
+    else if (S.tableView?.game === 'blokus' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') bkKey(e);   // 方塊拼圖：R 旋轉、F 翻面
     else if (S.gmStep != null && S.tableView?.moves && ['arrowleft', 'arrowright', 'home', 'end'].includes(k)) {
       e.preventDefault();
       const N = S.tableView.moves.length;

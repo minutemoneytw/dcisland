@@ -636,8 +636,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -722,6 +722,9 @@ def tbl_leave(t, cid):
         t["specs"].pop(i)
     elif role == "seat":
         name = t["seats"][i]["name"]
+        if t["phase"] == "playing" and t["game"] == "blokus":   # 方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
+            bk_leave(t, i, int(time.time() * 1000))
+            return
         if t["phase"] == "playing" and t["game"] == "dodge":   # 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
             dg_leave(t, i, int(time.time() * 1000))
             return
@@ -906,6 +909,207 @@ def gm_move(t, cid, x, y):
         gm_finish(t, None, None)
     else:
         t["turn"] = 1 - i
+
+# ---- 方塊拼圖 Blokus（第十一桌 t11；2026-11-13，使用者要求）：2～4 人、20×20、每人 21 塊（1～5 格，共 89 格）、標準規則 ----
+# 第一塊要蓋住自己的角落；之後每塊都要「角對角」接到自己的舊方塊，且不能「邊對邊」；碰到別人的不限。放不下的人自動跳過（之後一直跳過），全員放不下就結束。
+# 計分＝−剩下的格數；全部放完 +15、最後一塊是單格再 +5。每手限時 BK_TURN_MS（客戶端到時送 timeout，伺服器核對時鐘；連續超時 BK_IDLE_MAX 次視為棄權）。
+# 排行榜沒有（使用者定）。與 worker/src/index.js 的 bk* 同一套。
+BK_N, BK_TURN_MS, BK_IDLE_MAX, BK_XP, BK_TOTAL = 20, 45000, 2, 6, 89
+BK_SHAPES = [["#"], ["##"], ["###"], ["##", "#."], ["####"], ["##", "##"], ["###", ".#."], ["###", "#.."], [".##", "##."],
+             [".##", "##.", ".#."], ["#####"], ["####", "#..."], ["##..", ".###"], ["##", "##", "#."], ["###", ".#.", ".#."], ["#.#", "###"],
+             ["#..", "#..", "###"], ["#..", "##.", ".##"], [".#.", "###", ".#."], ["####", ".#.."], ["##.", ".#.", ".##"]]   # 21 塊：1／2／3×2／4×5／5×12
+BK_PIECES = [[(x, y) for y, r in enumerate(rows) for x, ch in enumerate(r) if ch == "#"] for rows in BK_SHAPES]
+BK_CORNERS = [(0, 0), (BK_N - 1, 0), (BK_N - 1, BK_N - 1), (0, BK_N - 1)]   # 顏色 0～3 的起始角落（藍左上、黃右上、紅右下、綠左下）
+BK_DIRS = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+BK_DIAGS = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
+
+def bk_norm(cells):
+    mx, my = min(c[0] for c in cells), min(c[1] for c in cells)
+    return sorted(((x - mx, y - my) for x, y in cells), key=lambda c: (c[1], c[0]))
+
+def bk_key(cells):
+    return ";".join(f"{x},{y}" for x, y in bk_norm(cells))
+
+def _bk_orients(cells):
+    """每塊的所有不重複方向（旋轉 4 × 翻面 2）。"""
+    seen = {}
+    c = list(cells)
+    for _f in range(2):
+        for _r in range(4):
+            n = bk_norm(c)
+            seen[bk_key(n)] = n
+            c = [(-y, x) for x, y in c]
+        c = [(-x, y) for x, y in c]
+    return list(seen.values())
+
+BK_ORI = [_bk_orients(c) for c in BK_PIECES]
+BK_ORI_KEYS = [set(bk_key(o) for o in os_) for os_ in BK_ORI]
+
+def bk_legal(g, k, cells):
+    """座標 cells（絕對座標）放給座位 k 合不合法。"""
+    N, col = BK_N, g["col"][k] + 1
+    sx, sy = BK_CORNERS[g["col"][k]]
+    first = g["sd"][k]["placed"] == 0
+    board = g["board"]
+    corner = start = False
+    for x, y in cells:
+        if x < 0 or y < 0 or x >= N or y >= N or board[y * N + x]:
+            return False
+        if x == sx and y == sy:
+            start = True
+        for dx, dy in BK_DIRS:
+            a, b = x + dx, y + dy
+            if 0 <= a < N and 0 <= b < N and board[b * N + a] == col:
+                return False
+        for dx, dy in BK_DIAGS:
+            a, b = x + dx, y + dy
+            if 0 <= a < N and 0 <= b < N and board[b * N + a] == col:
+                corner = True
+    return start if first else corner
+
+def bk_moves(g, k, one=False):
+    """座位 k 所有合法放法 [(p, key, cells)]（依 key 排序，測試用）；one＝True 時找到一個就回（判斷有沒有地方放）。"""
+    N, col, sd = BK_N, g["col"][k] + 1, g["sd"][k]
+    board = g["board"]
+    out, seen, anchors = [], set(), []
+    if sd["placed"] == 0:
+        anchors.append(BK_CORNERS[g["col"][k]])
+    else:
+        mark = set()
+        for y in range(N):
+            for x in range(N):
+                if board[y * N + x] != col:
+                    continue
+                for dx, dy in BK_DIAGS:
+                    a, b = x + dx, y + dy
+                    if a < 0 or b < 0 or a >= N or b >= N or board[b * N + a] or (b * N + a) in mark:
+                        continue
+                    if any(0 <= a + ex < N and 0 <= b + ey < N and board[(b + ey) * N + a + ex] == col for ex, ey in BK_DIRS):
+                        continue
+                    mark.add(b * N + a)
+                    anchors.append((a, b))
+    for p in range(len(BK_PIECES)):
+        if p in sd["used"]:
+            continue
+        for o in BK_ORI[p]:
+            for cx, cy in o:
+                for ax, ay in anchors:
+                    cells = [(x - cx + ax, y - cy + ay) for x, y in o]
+                    if not bk_legal(g, k, cells):
+                        continue
+                    key = f"{p}:" + ",".join(str(v) for v in sorted(c[1] * N + c[0] for c in cells))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    out.append((p, key, cells))
+                    if one:
+                        return out
+    return sorted(out, key=lambda m: m[1])
+
+def bk_rem(g, k):
+    return BK_TOTAL - sum(len(BK_PIECES[p]) for p in g["sd"][k]["used"])
+
+def bk_score(g, k):
+    r = bk_rem(g, k)
+    return -r + (15 + (5 if g["sd"][k]["mono"] else 0) if r == 0 else 0)
+
+def bk_start(t):
+    n, now = len(t["seats"]), int(time.time() * 1000)
+    cols = [0, 2] if n == 2 else [0, 1, 2, 3][:n]   # 2 人坐對角；顏色隨機分配
+    random.shuffle(cols)
+    t["g"] = {"board": [0] * (BK_N * BK_N), "col": cols,
+              "sd": [{"used": [], "placed": 0, "done": False, "idle": 0, "forfeit": False, "mono": False} for _ in cols],
+              "last": None, "moves": 0, "deadline": now + BK_TURN_MS}
+    t["result"], t["phase"], t["turn"] = None, "playing", cols.index(0)   # 藍色先下
+    for s in t["seats"]:
+        s["ready"], s["left"] = False, False
+    tbl_log(t, f"方塊拼圖開始！{n} 人參加，{t['seats'][t['turn']]['name']}（藍）先下")
+
+def bk_advance(t, frm, now):
+    """輪到 frm 之後的下一位還能下的人；放不下的人標成 done（之後一直跳過）；沒有人能下就結束。"""
+    g, n = t["g"], len(t["seats"])
+    for k in range(1, n + 1):
+        j = (frm + k) % n
+        sd = g["sd"][j]
+        if sd["done"]:
+            continue
+        if not bk_moves(g, j, True):
+            sd["done"] = True
+            tbl_log(t, f"{t['seats'][j]['name']} 沒有地方可以放了，之後跳過")
+            continue
+        t["turn"], g["deadline"] = j, now + BK_TURN_MS
+        return
+    bk_finish(t)
+
+def bk_finish(t):
+    g = t["g"]
+    players = [{"name": s["name"], "col": g["col"][k], "rem": bk_rem(g, k), "score": bk_score(g, k), "left": bool(s.get("left")), "forfeit": bool(g["sd"][k]["forfeit"])}
+               for k, s in enumerate(t["seats"])]
+    best = max(p["score"] for p in players)
+    winners = [k for k, p in enumerate(players) if p["score"] == best]
+    stay = [(k, s) for k, s in enumerate(t["seats"]) if not s.get("left")]
+    active = sum(1 for k, s in enumerate(t["seats"]) if not s.get("left") and not g["sd"][k]["forfeit"])
+    xp = [BK_XP if active >= 2 and not g["sd"][k]["forfeit"] else 0 for k, s in stay]
+    names = "、".join(players[k]["name"] for k in winners)
+    text = f"{names} 同分平手（{best} 分）" if len(winners) > 1 else f"{names} 獲勝！（{best} 分）"
+    t["seats"] = [s for _k, s in stay]
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "xp": xp, "players": players, "winners": winners, "draw": len(winners) > 1}
+    tbl_log(t, text)
+    tbl_reset_seats(t)
+    t["g"] = g   # 最後的棋盤留著給大家看，到下一局開始才清掉
+
+def bk_place(t, cid, p, cs, now):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "blokus" or role != "seat" or t["phase"] != "playing" or i != t["turn"] or not g:
+        return
+    if type(p) is not int or p < 0 or p >= len(BK_PIECES) or p in g["sd"][i]["used"] or type(cs) is not list or len(cs) != len(BK_PIECES[p]):
+        return
+    cells = []
+    for c in cs:
+        if type(c) is not list or len(c) != 2 or type(c[0]) is not int or type(c[1]) is not int:
+            return
+        cells.append((c[0], c[1]))
+    if bk_key(cells) not in BK_ORI_KEYS[p] or not bk_legal(g, i, cells):
+        return
+    sd = g["sd"][i]
+    for x, y in cells:
+        g["board"][y * BK_N + x] = g["col"][i] + 1
+    sd["used"].append(p)
+    sd["placed"] += 1
+    sd["idle"] = 0
+    sd["mono"] = p == 0
+    g["last"] = {"seat": i, "cells": [[x, y] for x, y in cells]}
+    g["moves"] += 1
+    bk_advance(t, i, now)
+
+def bk_timeout(t, now):
+    """回合限時到了：跳過；連續超時 BK_IDLE_MAX 次視為棄權（不然一個人掛機整桌會一直等）。"""
+    g = t.get("g")
+    if t["game"] != "blokus" or t["phase"] != "playing" or not g or now < g["deadline"] - 300:
+        return
+    i = t["turn"]
+    sd = g["sd"][i]
+    sd["idle"] += 1
+    if sd["idle"] >= BK_IDLE_MAX:
+        sd["done"], sd["forfeit"] = True, True
+        tbl_log(t, f"{t['seats'][i]['name']} 連續超時，視為棄權")
+    else:
+        tbl_log(t, f"{t['seats'][i]['name']} 超時，跳過這一手")
+    bk_advance(t, i, now)
+
+def bk_leave(t, i, now):
+    """遊戲進行中有人離開：棋子留在棋盤上、之後跳過；沒人能下就結束。"""
+    s, g = t["seats"][i], t["g"]
+    if s.get("left"):
+        return
+    s["left"], s["cid"] = True, None
+    g["sd"][i]["done"] = True
+    tbl_log(t, f"{s['name']} 離開了")
+    if i == t["turn"]:
+        bk_advance(t, i, now)
+    elif all(d["done"] for d in g["sd"]):
+        bk_finish(t)
 
 # ---- 躲彈幕（第五桌 t5；2026-11-08，使用者要求）：1～8 人、每人 3 條命、只能躲不能攻擊，依存活秒數評分 ----
 # 彈幕由客戶端用伺服器給的 seed 與開始時間 t0 決定性地各自產生（每個畫面看到的彈幕一樣）；被打到由各客戶端自判並回報 hit（和島主的招式同一原則，信任客戶端），
@@ -3383,7 +3587,7 @@ def un_set_mode(t, cid, mode):
         s["ready"] = False
     tbl_log(t, f"{t['seats'][0]['name']} 把玩法改成{'無限制' if mode == 'wild' else '傳統'}")
 
-GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
@@ -3467,6 +3671,13 @@ def tbl_view(t, cid):
                 v["stolen"] = t["seats"][i].get("stolen")
             if see_all:
                 v["hands"] = [list(s["hand"]) for s in t["seats"]]
+    elif g and t["game"] == "blokus":   # 方塊拼圖：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
+        v["bk"] = {"board": "".join(str(c) for c in g["board"]), "col": list(g["col"]), "used": [list(d["used"]) for d in g["sd"]], "done": [d["done"] for d in g["sd"]],
+                   "last": g["last"], "moves": g["moves"], "deadline": g["deadline"] if playing else 0, "sn": int(time.time() * 1000)}
+        if playing:
+            for k, s in enumerate(t["seats"]):
+                v["seats"][k]["left"] = bool(s.get("left"))
+                v["seats"][k]["rem"] = bk_rem(g, k)
     elif g and t["game"] == "gomoku":   # 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
         v["board"] = "".join(str(c) for c in g["board"])
         v["last"], v["black"], v["line"], v["moves"] = g["last"], g["black"], g["line"], g["moves"]   # moves：每一手的座標（偶數手＝黑棋）；結束後客戶端用來復盤
@@ -4800,8 +5011,13 @@ class Room:
                         un_say(t, cid)
                     elif a == "catch":
                         un_catch(t, cid)
-                    elif a == "timeout":
-                        un_timeout(t, now_ms)
+                    elif a == "timeout":   # UNO／方塊拼圖：回合限時到了（伺服器核對時鐘）
+                        if t["game"] == "blokus":
+                            bk_timeout(t, now_ms)
+                        else:
+                            un_timeout(t, now_ms)
+                    elif a == "place":   # 方塊拼圖：放方塊 {p 第幾塊, c 佔用的格子座標}
+                        bk_place(t, cid, msg.get("p"), msg.get("c"), now_ms)
                     elif a == "mode":   # UNO：桌主在開局前選玩法（classic／wild）
                         un_set_mode(t, cid, msg.get("v"))
                     elif a == "hit":   # 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）

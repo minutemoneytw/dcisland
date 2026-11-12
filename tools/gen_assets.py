@@ -1693,7 +1693,8 @@ TABLES_BY_TERRAIN = {
               dict(id="t7", game="typing", cell=[64, 32], w=3, h=2),   # 英文打字競賽（2026-11-10，使用者要求）：抽鬼牌右邊、同一排相距 8 格
               dict(id="t8", game="intel", cell=[64, 39], w=3, h=2),   # 秘藥情報戰（2026-11-10，使用者要求）：躲彈幕右邊、英文打字競賽下面
               dict(id="t9", game="zhtyping", cell=[72, 32], w=3, h=2),   # 中文打字競賽（2026-11-11，使用者要求）：英文打字競賽右邊同一排
-              dict(id="t10", game="mage", cell=[72, 39], w=3, h=2)],   # 見習驅魔師（2026-11-12，使用者要求）：中文打字競賽下面、秘藥情報戰右邊
+              dict(id="t10", game="mage", cell=[72, 39], w=3, h=2),   # 見習驅魔師（2026-11-12，使用者要求）：中文打字競賽下面、秘藥情報戰右邊
+              dict(id="t11", game="blokus", cell=[80, 32], w=3, h=2)],   # 方塊拼圖（2026-11-13，使用者要求）：中文打字競賽右邊同一排
 }
 
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
@@ -1797,6 +1798,28 @@ def table_mage():
     cv.rect(37, 16, 41, 21, hx("#6ab8ff")); cv.rect(37, 16, 41, 16, hx("#d8f0ff"))
     cv.rect(39, 17, 39, 20, hx("#ffffff")); cv.rect(38, 18, 40, 18, hx("#ffffff"))
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))                                 # 桌腳
+    cv.outline()
+    return cv
+
+def table_blokus():
+    """方塊拼圖：深藍桌面（有桌腳），桌上散著藍／黃／紅／綠四色的方塊（每格 3×3 像素，有亮邊與暗邊）。"""
+    cv = Canvas(48, 32)
+    wood = hx("#3a4260")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
+    cv.rect(2, 6, 45, 25, hx("#1c2236"))
+    def piece(ox, oy, col, cells):
+        c = hx(col)
+        for cx, cy in cells:
+            x, y = ox + cx * 4, oy + cy * 4
+            cv.rect(x, y, x + 3, y + 3, c); cv.hline(x, x + 3, y, shade(c, 1.35)); cv.vline(x, y, y + 3, shade(c, 1.35)); cv.hline(x, x + 3, y + 3, shade(c, .7)); cv.vline(x + 3, y, y + 3, shade(c, .7))
+    piece(5, 9, "#3b78e8", [(0, 0), (0, 1), (0, 2), (1, 2)])             # 藍 L
+    piece(14, 8, "#f0c020", [(0, 0), (1, 0), (1, 1), (2, 1)])            # 黃 Z
+    piece(28, 9, "#e04848", [(0, 0), (1, 0), (2, 0), (1, 1)])            # 紅 T
+    piece(36, 13, "#3cb45a", [(0, 0), (1, 0), (0, 1), (1, 1)])           # 綠 O
+    piece(18, 16, "#3b78e8", [(0, 0), (1, 0), (1, 1)])                   # 藍 V3
+    piece(28, 17, "#f0c020", [(0, 0), (0, 1)])                           # 黃 I2
+    piece(6, 20, "#e04848", [(0, 0)])                                    # 紅 單格
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
 
@@ -3155,6 +3178,7 @@ def main():
     save(table_intel(), "table_intel.png", "games")
     save(table_zhtyping(), "table_zhtyping.png", "games")
     save(table_mage(), "table_mage.png", "games")
+    save(table_blokus(), "table_blokus.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")

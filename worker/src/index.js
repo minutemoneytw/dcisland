@@ -480,8 +480,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -542,6 +542,7 @@ function tblLeave(t, cid) {
   if (role === "spec") t.specs.splice(i, 1);
   else if (role === "seat") {
     const name = t.seats[i].name;
+    if (t.phase === "playing" && t.game === "blokus") { bkLeave(t, i, Date.now()); return; }   // 方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
     if (t.phase === "playing" && t.game === "mage") { mgLeave(t, i, Date.now()); return; }   // 見習驅魔師：離開不中斷，視同倒下，到場上沒有活人為止
     if (t.phase === "playing" && t.game === "dodge") { dgLeave(t, i, Date.now()); return; }   // 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
     if (t.phase === "playing" && t.game === "uno") { unLeave(t, i, Date.now()); return; }   // UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
@@ -679,6 +680,134 @@ function gmMove(t, cid, x, y) {
   if (line) { g.line = line; gmFinish(t, i); }
   else if (g.board.every(c => c)) gmFinish(t, null);
   else t.turn = 1 - i;
+}
+// ---- 方塊拼圖 Blokus（第十一桌 t11；2026-11-13，使用者要求）：2～4 人、20×20、每人 21 塊（1～5 格，共 89 格）、標準規則 ----
+// 第一塊要蓋住自己的角落；之後每塊都要「角對角」接到自己的舊方塊，且不能「邊對邊」；碰到別人的不限。放不下的人自動跳過（之後一直跳過），全員放不下就結束。
+// 計分＝−剩下的格數；全部放完 +15、最後一塊是單格再 +5。每手限時 BK_TURN_MS（客戶端到時送 timeout，伺服器核對時鐘；連續超時 BK_IDLE_MAX 次視為棄權）。
+// 排行榜沒有（使用者定）。與 tools/dev_server.py 的 bk_* 同一套。
+const BK_N = 20, BK_TURN_MS = 45000, BK_IDLE_MAX = 2, BK_XP = 6, BK_TOTAL = 89;
+const BK_SHAPES = [["#"], ["##"], ["###"], ["##", "#."], ["####"], ["##", "##"], ["###", ".#."], ["###", "#.."], [".##", "##."],
+  [".##", "##.", ".#."], ["#####"], ["####", "#..."], ["##..", ".###"], ["##", "##", "#."], ["###", ".#.", ".#."], ["#.#", "###"],
+  ["#..", "#..", "###"], ["#..", "##.", ".##"], [".#.", "###", ".#."], ["####", ".#.."], ["##.", ".#.", ".##"]];   // 21 塊：1／2／3×2／4×5／5×12
+const BK_PIECES = BK_SHAPES.map(rows => { const c = []; rows.forEach((r, y) => [...r].forEach((ch, x) => { if (ch === "#") c.push([x, y]); })); return c; });
+const BK_CORNERS = [[0, 0], [BK_N - 1, 0], [BK_N - 1, BK_N - 1], [0, BK_N - 1]];   // 顏色 0～3 的起始角落（藍左上、黃右上、紅右下、綠左下）
+function bkNorm(cells) {
+  const mx = Math.min(...cells.map(c => c[0])), my = Math.min(...cells.map(c => c[1]));
+  return cells.map(c => [c[0] - mx, c[1] - my]).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+}
+const bkKey = cells => bkNorm(cells).map(c => c.join(",")).join(";");
+const BK_ORI = BK_PIECES.map(cells => {   // 每塊的所有不重複方向（旋轉 4 × 翻面 2）
+  const seen = new Map(); let c = cells;
+  for (let f = 0; f < 2; f++) { for (let r = 0; r < 4; r++) { const n = bkNorm(c); seen.set(bkKey(n), n); c = c.map(([x, y]) => [-y, x]); } c = c.map(([x, y]) => [-x, y]); }
+  return [...seen.values()];
+});
+const BK_ORI_KEYS = BK_ORI.map(os => new Set(os.map(bkKey)));
+const BK_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]], BK_DIAGS = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+// 座標 cells（絕對座標）放給座位 k 合不合法
+function bkLegal(g, k, cells) {
+  const N = BK_N, col = g.col[k] + 1, [sx, sy] = BK_CORNERS[g.col[k]], first = g.sd[k].placed === 0;
+  let corner = false, start = false;
+  for (const [x, y] of cells) {
+    if (x < 0 || y < 0 || x >= N || y >= N || g.board[y * N + x]) return false;
+    if (x === sx && y === sy) start = true;
+    for (const [dx, dy] of BK_DIRS) { const a = x + dx, b = y + dy; if (a >= 0 && b >= 0 && a < N && b < N && g.board[b * N + a] === col) return false; }
+    for (const [dx, dy] of BK_DIAGS) { const a = x + dx, b = y + dy; if (a >= 0 && b >= 0 && a < N && b < N && g.board[b * N + a] === col) corner = true; }
+  }
+  return first ? start : corner;
+}
+// 座位 k 所有合法放法 [{p, key, cells}]（依 key 排序，測試用）；one＝true 時找到一個就回（判斷有沒有地方放）
+function bkMoves(g, k, one) {
+  const N = BK_N, col = g.col[k] + 1, sd = g.sd[k], out = [], seen = new Set(), anchors = [];
+  if (sd.placed === 0) anchors.push(BK_CORNERS[g.col[k]]);
+  else {
+    const mark = new Set();
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (g.board[y * N + x] !== col) continue;
+      for (const [dx, dy] of BK_DIAGS) {
+        const a = x + dx, b = y + dy;
+        if (a < 0 || b < 0 || a >= N || b >= N || g.board[b * N + a] || mark.has(b * N + a)) continue;
+        if (BK_DIRS.some(([ex, ey]) => { const c = a + ex, d = b + ey; return c >= 0 && d >= 0 && c < N && d < N && g.board[d * N + c] === col; })) continue;
+        mark.add(b * N + a); anchors.push([a, b]);
+      }
+    }
+  }
+  for (let p = 0; p < BK_PIECES.length; p++) {
+    if (sd.used.includes(p)) continue;
+    for (const o of BK_ORI[p]) for (const [cx, cy] of o) for (const [ax, ay] of anchors) {
+      const cells = o.map(([x, y]) => [x - cx + ax, y - cy + ay]);
+      if (!bkLegal(g, k, cells)) continue;
+      const key = p + ":" + cells.map(c => c[1] * N + c[0]).sort((a, b) => a - b).join(",");
+      if (seen.has(key)) continue;
+      seen.add(key); out.push({ p, key, cells });
+      if (one) return out;
+    }
+  }
+  return out.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+}
+const bkRem = (g, k) => BK_TOTAL - g.sd[k].used.reduce((a, p) => a + BK_PIECES[p].length, 0);
+const bkScore = (g, k) => { const r = bkRem(g, k); return -r + (r === 0 ? 15 + (g.sd[k].mono ? 5 : 0) : 0); };
+function bkStart(t) {
+  const n = t.seats.length, now = Date.now(), cols = shuffle(n === 2 ? [0, 2] : [0, 1, 2, 3].slice(0, n));   // 2 人坐對角；顏色隨機分配
+  t.g = { board: new Array(BK_N * BK_N).fill(0), col: cols, sd: cols.map(() => ({ used: [], placed: 0, done: false, idle: 0, forfeit: false, mono: false })), last: null, moves: 0, deadline: now + BK_TURN_MS };
+  t.result = null; t.phase = "playing"; t.turn = cols.indexOf(0);   // 藍色先下
+  for (const s of t.seats) { s.ready = false; s.left = false; }
+  tblLog(t, `方塊拼圖開始！${n} 人參加，${t.seats[t.turn].name}（藍）先下`);
+}
+// 輪到 from 之後的下一位還能下的人；放不下的人標成 done（之後一直跳過）；沒有人能下就結束
+function bkAdvance(t, from, now) {
+  const g = t.g, n = t.seats.length;
+  for (let k = 1; k <= n; k++) {
+    const j = (from + k) % n, sd = g.sd[j];
+    if (sd.done) continue;
+    if (!bkMoves(g, j, true).length) { sd.done = true; tblLog(t, `${t.seats[j].name} 沒有地方可以放了，之後跳過`); continue; }
+    t.turn = j; g.deadline = now + BK_TURN_MS; return;
+  }
+  bkFinish(t);
+}
+function bkFinish(t) {
+  const g = t.g;
+  const players = t.seats.map((s, k) => ({ name: s.name, col: g.col[k], rem: bkRem(g, k), score: bkScore(g, k), left: !!s.left, forfeit: !!g.sd[k].forfeit }));
+  const best = Math.max(...players.map(p => p.score)), winners = players.map((p, k) => (p.score === best ? k : -1)).filter(k => k >= 0);
+  const stay = t.seats.filter(s => !s.left), active = t.seats.filter((s, k) => !s.left && !g.sd[k].forfeit).length;
+  const xp = stay.map(s => (active >= 2 && !g.sd[t.seats.indexOf(s)].forfeit ? BK_XP : 0));
+  const names = winners.map(k => players[k].name).join("、");
+  const text = winners.length > 1 ? `${names} 同分平手（${best} 分）` : `${names} 獲勝！（${best} 分）`;
+  t.seats = stay;
+  t.result = { text, rid: Math.floor(Math.random() * 4294967296), xp, players, winners, draw: winners.length > 1 };
+  tblLog(t, text);
+  tblResetSeats(t);
+  t.g = g;   // 最後的棋盤留著給大家看，到下一局開始才清掉
+}
+function bkPlace(t, cid, p, cs, now) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "blokus" || role !== "seat" || t.phase !== "playing" || i !== t.turn || !g || now < 0) return;
+  if (!Number.isInteger(p) || p < 0 || p >= BK_PIECES.length || g.sd[i].used.includes(p) || !Array.isArray(cs) || cs.length !== BK_PIECES[p].length) return;
+  const cells = [];
+  for (const c of cs) { if (!Array.isArray(c) || c.length !== 2 || !Number.isInteger(c[0]) || !Number.isInteger(c[1])) return; cells.push([c[0], c[1]]); }
+  if (!BK_ORI_KEYS[p].has(bkKey(cells)) || !bkLegal(g, i, cells)) return;
+  const sd = g.sd[i];
+  for (const [x, y] of cells) g.board[y * BK_N + x] = g.col[i] + 1;
+  sd.used.push(p); sd.placed++; sd.idle = 0; sd.mono = p === 0;
+  g.last = { seat: i, cells }; g.moves++;
+  bkAdvance(t, i, now);
+}
+// 回合限時到了：跳過；連續超時 BK_IDLE_MAX 次視為棄權（不然一個人掛機整桌會一直等）
+function bkTimeout(t, now) {
+  const g = t.g;
+  if (t.game !== "blokus" || t.phase !== "playing" || !g || now < g.deadline - 300) return;
+  const i = t.turn, sd = g.sd[i];
+  sd.idle++;
+  if (sd.idle >= BK_IDLE_MAX) { sd.done = true; sd.forfeit = true; tblLog(t, `${t.seats[i].name} 連續超時，視為棄權`); }
+  else tblLog(t, `${t.seats[i].name} 超時，跳過這一手`);
+  bkAdvance(t, i, now);
+}
+function bkLeave(t, i, now) {   // 遊戲進行中有人離開：棋子留在棋盤上、之後跳過；沒人能下就結束
+  const s = t.seats[i], g = t.g;
+  if (s.left) return;
+  s.left = true; s.cid = null; g.sd[i].done = true;
+  tblLog(t, `${s.name} 離開了`);
+  if (i === t.turn) bkAdvance(t, i, now);
+  else if (g.sd.every(d => d.done)) bkFinish(t);
 }
 // ---- 躲彈幕（第五桌 t5；2026-11-08，使用者要求）：1～8 人、每人 3 條命、只能躲不能攻擊，依存活秒數評分 ----
 // 彈幕由客戶端用伺服器給的 seed 與開始時間 t0 決定性地各自產生（每個畫面看到的彈幕一樣）；被打到由各客戶端自判並回報 hit（和島主的招式同一原則，信任客戶端），
@@ -2260,7 +2389,7 @@ function unSetMode(t, cid, mode) {
   for (const s of t.seats) s.ready = false;
   tblLog(t, `${t.seats[0].name} 把玩法改成${mode === "wild" ? "無限制" : "傳統"}`);
 }
-const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 function tblView(t, cid) {
   const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
@@ -2315,6 +2444,10 @@ function tblView(t, cid) {
       if (role === "seat") { v.hand = [...t.seats[i].hand]; v.note = t.seats[i].note || null; v.stolen = t.seats[i].stolen || null; }
       if (all) v.hands = t.seats.map(s => [...s.hand]);
     }
+  } else if (t.g && t.game === "blokus") {   // 方塊拼圖：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
+    const g = t.g;
+    v.bk = { board: g.board.join(""), col: [...g.col], used: g.sd.map(d => [...d.used]), done: g.sd.map(d => d.done), last: g.last, moves: g.moves, deadline: playing ? g.deadline : 0, sn: Date.now() };
+    if (playing) t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].rem = bkRem(g, k); });
   } else if (t.g && t.game === "gomoku") {   // 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
     v.board = t.g.board.join(""); v.last = t.g.last; v.black = t.g.black; v.line = t.g.line; v.moves = t.g.moves || [];   // moves：每一手的座標（偶數手＝黑棋）；結束後客戶端用來復盤
   }
@@ -2886,7 +3019,8 @@ export class Island {
     else if (a === "pass") unPass(t, att.id, now);
     else if (a === "uno") unSay(t, att.id);
     else if (a === "catch") unCatch(t, att.id);
-    else if (a === "timeout") unTimeout(t, now);
+    else if (a === "timeout") { if (t.game === "blokus") bkTimeout(t, now); else unTimeout(t, now); }   // UNO／方塊拼圖：回合限時到了（伺服器核對時鐘）
+    else if (a === "place") bkPlace(t, att.id, msg.p, msg.c, now);   // 方塊拼圖：放方塊 {p 第幾塊, c 佔用的格子座標}
     else if (a === "mode") unSetMode(t, att.id, msg.v);   // UNO：桌主在開局前選玩法（classic／wild）
     else if (a === "hit") dgHit(t, att.id, now);   // 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
     else if (a === "kill") mgKill(t, att.id, msg.i, msg.p, now);   // 見習驅魔師：我消除了幽靈 i（符號辨識在客戶端，伺服器驗時間與先到先得）
