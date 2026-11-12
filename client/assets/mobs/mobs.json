@@ -335,27 +335,59 @@
    "ownerFrac": 12,
    "noBounce": true,
    "anim": {
-    "sheet": "external/img2pixel/goblin_sheet.png",
-    "frames": 8,
-    "rows": 2,
+    "sheet": "external/img2pixel/goblin_folk_sheet.png",
+    "frames": 9,
+    "rows": 4,
     "row0": 0,
-    "fw": 32,
-    "fh": 32,
+    "fw": 64,
+    "fh": 64,
     "rowDir": [
-     "right",
-     "left"
+     "up",
+     "left",
+     "down",
+     "right"
     ],
-    "fps": 8,
+    "fps": 5,
     "scale": 1.0
    },
    "line": "「哥布林」敲了敲手裡的長矛，警惕地看著你。",
-   "footDy": 1,
+   "footDy": 3,
    "hp": 16,
    "atk": 1
   },
   {
    "id": "goblin_forest",
    "name": "哥布林",
+   "fixed": 6,
+   "speed": 34,
+   "flee": 85,
+   "retaliate": true,
+   "ownerFrac": 12,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/goblin_folk_sheet.png",
+    "frames": 9,
+    "rows": 4,
+    "row0": 0,
+    "fw": 64,
+    "fh": 64,
+    "rowDir": [
+     "up",
+     "left",
+     "down",
+     "right"
+    ],
+    "fps": 5,
+    "scale": 1.0
+   },
+   "line": "「哥布林」敲了敲手裡的長矛，警惕地看著你。",
+   "footDy": 3,
+   "hp": 16,
+   "atk": 1
+  },
+  {
+   "id": "imp_snow",
+   "name": "小鬼",
    "fixed": 6,
    "speed": 34,
    "flee": 85,
@@ -376,8 +408,37 @@
     "fps": 8,
     "scale": 1.0
    },
-   "tint": "#8a5a33",
-   "line": "「哥布林」敲了敲手裡的長矛，警惕地看著你。",
+   "tint": "#dfe9ff",
+   "line": "「小鬼」吱吱叫著，揮舞手裡的長矛。",
+   "footDy": 1,
+   "hp": 16,
+   "atk": 1
+  },
+  {
+   "id": "imp_machine",
+   "name": "小鬼",
+   "fixed": 6,
+   "speed": 34,
+   "flee": 85,
+   "retaliate": true,
+   "ownerFrac": 12,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/goblin_sheet.png",
+    "frames": 8,
+    "rows": 2,
+    "row0": 0,
+    "fw": 32,
+    "fh": 32,
+    "rowDir": [
+     "right",
+     "left"
+    ],
+    "fps": 8,
+    "scale": 1.0
+   },
+   "tint": "#9aa4b0",
+   "line": "「小鬼」吱吱叫著，揮舞手裡的長矛。",
    "footDy": 1,
    "hp": 16,
    "atk": 1

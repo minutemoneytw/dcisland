@@ -2127,7 +2127,8 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/slime_sheet.png", frames=3, rows=3, fw=48, fh=48, what="史萊姆的 3 方向（背／側／前）× 3 幀（各島不同色，靠 tint）"),
     dict(sheet="external/img2pixel/bunny_sheet.png", frames=4, rows=2, row0=0, fw=48, fh=32, what="跳跳兔的左／右各 4 幀（沙灘／雪島白／機械島灰；sheet 第 3 列 2 幀沒用到）"),
     dict(sheet="external/img2pixel/dragon_sheet.png", frames=3, rows=4, fw=191, fh=161, what="飛龍的 4 方向（上飛／朝右／下飛／朝左）× 3 幀（各島不同色靠 tint）"),
-    dict(sheet="external/img2pixel/goblin_sheet.png", frames=8, rows=2, fw=32, fh=32, what="哥布林的走路 2 方向（朝右／朝左）× 8 幀（草島原色綠／森林島棕色靠 tint）"),
+    dict(sheet="external/img2pixel/goblin_sheet.png", frames=8, rows=2, fw=32, fh=32, what="小鬼（原哥布林自製素材）的走路 2 方向（朝右／朝左）× 8 幀（雪島白／機械島灰靠 tint）"),
+    dict(sheet="external/img2pixel/goblin_folk_sheet.png", frames=9, rows=4, fw=64, fh=64, what="哥布林（LPC folk 頭＋LPC 身體合成）的 4 方向（上／左／下／右）× 9 幀走路（草島／森林島，原色綠）"),
     dict(sheet="external/img2pixel/zombie_sheet.png", frames=9, rows=4, fw=64, fh=64, what="殭屍（LPC）的 4 方向（上／左／下／右）× 9 幀走路（夜光原色／雪島白／機械島灰靠 tint）"),
     dict(sheet="external/img2pixel/skeleton_sheet.png", frames=9, rows=4, fw=64, fh=64, what="骷髏（LPC）的 4 方向（上／左／下／右）× 9 幀走路（夜光島，原色白骨）"),
     dict(sheet="external/img2pixel/bahamut_fly_sheet.png", frames=6, fw=88, fh=59, what="黃金肥龍的飛行 6 幀（草島島主）"),
@@ -2188,15 +2189,24 @@ MOB_MANIFEST = dict(
                **({"tint": tint, "tintBase": "#ab7943"} if tint else {}),
                line="「跳跳兔」豎起耳朵，隨時準備蹦走。")
           for bid, tint in [("bunny", None), ("bunny_snow", "#f2f6ff"), ("bunny_machine", "#9aa4b0")]],
-        # 哥布林：草島（原色綠）、森林島（棕色靠 tint）。反擊型野怪（跟飛龍同一套：被打不逃、追咬；2026-11-09 使用者定），
+        # 哥布林：草島、森林島（都原色綠）。2026-11-11 使用者定換模組：LPC folk 的哥布林頭（放大版）＋ repo 的 LPC
+        # 基底身體合成（9 幀 × 4 方向，同殭屍／骷髏做法）；原自製素材改名「小鬼」搬到雪島／機械島（下面）。
+        # 反擊型野怪（跟飛龍同一套：被打不逃、追咬；2026-11-09 使用者定），
         # 血量／攻擊力／經驗值＝該地形島主的 1/12（ownerFrac，最低 1）；下面的 post-pass 依 OWNER_BY_TERRAIN 算
-        # 素材來源 OpenGameArt「GOBLIN FREE PIXELART」（CC0，thekingphoenix）；畫面約 25×29（scale 1：人物約 46px，哥布林小隻）
+        # 素材來源 OpenGameArt「LPC folk」（CC-BY-SA 3.0；哥布林頭 by bluecarrot16／Redshrike／William.Thompsonj）；
+        # 畫面約 46×52（scale 1：頭是放大版，略高於人物 46px）
         *[dict(id=gid, name="哥布林", fixed=6, speed=34, flee=85, retaliate=True, ownerFrac=12, noBounce=True,
+               anim=dict(sheet="external/img2pixel/goblin_folk_sheet.png", frames=9, rows=4, row0=0, fw=64, fh=64,
+                         rowDir=["up", "left", "down", "right"], fps=5, scale=1.0),
+               line="「哥布林」敲了敲手裡的長矛，警惕地看著你。")
+          for gid in ["goblin_grass", "goblin_forest"]],
+        # 小鬼（原「哥布林」自製素材，2026-11-11 使用者定改名搬家）：雪島（白化 tint）、機械島（灰 tint）；設定照舊
+        *[dict(id=iid, name="小鬼", fixed=6, speed=34, flee=85, retaliate=True, ownerFrac=12, noBounce=True,
                anim=dict(sheet="external/img2pixel/goblin_sheet.png", frames=8, rows=2, row0=0, fw=32, fh=32,
                          rowDir=["right", "left"], fps=8, scale=1.0),
                **({"tint": tint} if tint else {}),
-               line="「哥布林」敲了敲手裡的長矛，警惕地看著你。")
-          for gid, tint in [("goblin_grass", None), ("goblin_forest", "#8a5a33")]],
+               line="「小鬼」吱吱叫著，揮舞手裡的長矛。")
+          for iid, tint in [("imp_snow", "#dfe9ff"), ("imp_machine", "#9aa4b0")]],
         # 殭屍（LPC；反擊型）：夜光島（原色）、雪島（白）、機械島（灰）；走路 4 方向 × 9 幀；數量走隨機池（不固定）
         # 反擊型但三個比例各給各的（使用者定）：血量 1/5（ownerFrac=5）、攻擊力 1/10（atkFrac=10）、經驗值 1/8（xpFrac=8），都最低 1
         # noBounce：不套用「走動時上下彈」（LPC 本身有走路動畫，再彈會腳離地＝看起來浮起來；2026-11-09 使用者回報）
@@ -2395,11 +2405,11 @@ for _m in MOB_MANIFEST["mobs"]:
 MOBS_BY_TERRAIN = {
     "grass":   [("sheep", 2), ("bird", 1), ("frog", 1), ("chicken", 2), ("slime_grass", 1), ("goblin_grass", 2)],
     "beach":   [("bird", 2), ("frog", 1), ("bunny", 2), ("slime_beach", 1), ("dragon_beach", 1)],
-    "snow":    [("sheep", 2), ("bird", 1), ("bunny_snow", 2), ("slime_snow", 1), ("zombie_snow", 2)],
+    "snow":    [("sheep", 2), ("bird", 1), ("bunny_snow", 2), ("slime_snow", 1), ("zombie_snow", 2), ("imp_snow", 2)],
     "night":   [("frog", 2), ("sheep", 1), ("slime_night", 1), ("dragon_night", 1), ("zombie_night", 2), ("skeleton_night", 2)],
     "forest":  [("sheep", 2), ("bird", 2), ("chicken", 2), ("slime_forest", 1), ("goblin_forest", 2)],
     "volcano": [("frog", 1), ("bird", 1), ("slime_volcano", 1), ("dragon_volcano", 1)],
-    "machine": [("bunny_machine", 2), ("slime_machine", 1), ("zombie_machine", 2)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）
+    "machine": [("bunny_machine", 2), ("slime_machine", 1), ("zombie_machine", 2), ("imp_machine", 2)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）
 }
 
 # ---------------- 地板（裝飾模式的地板層，16×16 無縫磚，畫在地面與家具之間）----------------

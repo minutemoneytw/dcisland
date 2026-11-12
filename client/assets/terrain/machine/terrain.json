@@ -28,6 +28,10 @@
   {
    "id": "zombie_machine",
    "weight": 2
+  },
+  {
+   "id": "imp_machine",
+   "weight": 2
   }
  ],
  "uiColor": "#8a94a4",
