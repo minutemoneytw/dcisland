@@ -486,6 +486,7 @@
    "retaliate": true,
    "ownerFrac": 12,
    "noBounce": true,
+   "swarm": 10,
    "anim": {
     "sheet": "external/img2pixel/skeleton_sheet.png",
     "frames": 9,

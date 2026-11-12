@@ -2328,8 +2328,16 @@ const RETAL_PACK_R = 200;   // 群起半徑：一隻被打，這範圍內的同�
 // 鎖定「發射當下」的目標位置直線飛行（不追蹤，衝刺側移可以躲開）；傷害＝def.atk（照回爪擊同强度），命中才扣血（受害者自判，走 playerDamage：坦克減半照算）。
 const FIREBALL_RANGE = 250, FIREBALL_CD = 2.5, FIREBALL_SPEED = 260, FIREBALL_SCALE = .65, FIREBALL_HIT_R = 16;   // 射程／間隔／飛行速度／顯示倍率（素材單幀 64px）／命中半徑
 function retaliateStep(a, dt, def) {
+  // 群攻（swarm：使用者定 2026-11-11，目前骷髏）：場上同種存活數低於門檻＝全體自動追殺本地玩家
+  //（不用被打、距離不限；有個人仇恨的照個人仇恨追）。回補到門檻以上（擊倒的約 30 秒重生）就脫離：
+  // 群攻期間不刷新 lastHitAt，脫離後只有「真的被打過還在 30 秒內」的繼續追，其餘立即回漫遊
+  const swarm = def.swarm && S.mobs.reduce((s, m) => s + (m.id === a.id && !m.dead ? 1 : 0), 0) < def.swarm;
+  if (swarm) {
+    const me = S.players[0];
+    if (!me.dead && !me.npc && !a.aggroT) a.aggroT = me;   // 沒有個人仇恨才補群攻目標
+  }
   const t = a.aggroT;
-  if (!t || t.dead || S.t - (a.lastHitAt ?? -1e9) > RETAL_DROPOUT) { a.aggroT = null; return false; }   // 沒仇恨：照一般漫遊
+  if (!t || t.dead || (!swarm && S.t - (a.lastHitAt ?? -1e9) > RETAL_DROPOUT)) { a.aggroT = null; return false; }   // 沒仇恨：照一般漫遊
   const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy);
   const rng = 30 + 6 * ((def.big || 1) - 1);   // 貼著判定圈抓：與 hitRadius 同式；火球怪用 FIREBALL_RANGE
   a.face4 = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'left' : 'right') : (dy < 0 ? 'up' : 'down');   // 方向網格：看向目標

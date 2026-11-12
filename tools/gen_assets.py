@@ -2208,11 +2208,13 @@ MOB_MANIFEST = dict(
                line="「殭屍」拖著沉重的腳步，發出低沉的呻吟。")
           for zid, tint in [("zombie_night", None), ("zombie_snow", "#dfe9ff"), ("zombie_machine", "#9aa4b0")]],
         # 骷髏（LPC；反擊型）：夜光島固定 6 隻（fixed；使用者定 2026-11-10）；走路 4 方向 × 9 幀；不套走動彈跳（有真走路動畫）
+        # swarm:10（使用者定 2026-11-11）：場上存活骷髏低於 10 隻＝全部自動群攻本地玩家（不用被打、距離不限），
+        # 回補到 10 隻以上（擊倒的約 30 秒重生）就脫離；實作在 main.js 的 retaliateStep
         # 反擊型比例 1/12（跟哥布林一樣，使用者定）：血／攻擊／經驗都＝島主（笨蛋蛇女）的 1/12、最低 1（產生器 post-pass 算 hp／atk，
         # main.js 的 mobKillXp 算 XP）→ hp 16（200÷12）、atk 1（爪擊 2÷12 落最低值）、擊倒 XP 2（25÷12 無條件捨去）
         # 素材來源 OpenGameArt「LPC skeleton」（CC-BY-SA 3.0；rhimlock 補上刺擊、動畫本體 by wulax／Johannes Sjölund，
         # 改建自 Redshrike 的 LPC 基底）；畫面約 47px 高（scale 1：人物約 46px）
-        dict(id="skeleton_night", name="骷髏", fixed=6, speed=30, flee=110, retaliate=True, ownerFrac=12, noBounce=True,
+        dict(id="skeleton_night", name="骷髏", fixed=6, speed=30, flee=110, retaliate=True, ownerFrac=12, noBounce=True, swarm=10,
              anim=dict(sheet="external/img2pixel/skeleton_sheet.png", frames=9, rows=4, row0=0, fw=64, fh=64,
                        rowDir=["up", "left", "down", "right"], fps=5, scale=1.0),
              line="「骷髏」喀啦喀啦地轉過頭來，空洞的眼窩盯著你。"),
