@@ -695,7 +695,11 @@ const BK_SHAPES = [["#"], ["##"], ["###"], ["##", "#."], ["####"], ["##", "##"],
   [".##", "##.", ".#."], ["#####"], ["####", "#..."], ["##..", ".###"], ["##", "##", "#."], ["###", ".#.", ".#."], ["#.#", "###"],
   ["#..", "#..", "###"], ["#..", "##.", ".##"], [".#.", "###", ".#."], ["####", ".#.."], ["##.", ".#.", ".##"]];   // 21 塊：1／2／3×2／4×5／5×12
 const BK_PIECES = BK_SHAPES.map(rows => { const c = []; rows.forEach((r, y) => [...r].forEach((ch, x) => { if (ch === "#") c.push([x, y]); })); return c; });
-const BK_CORNERS = [[0, 0], [BK_N - 1, 0], [BK_N - 1, BK_N - 1], [0, BK_N - 1]];   // 顏色 0～3 的起始角落（藍左上、黃右上、紅右下、綠左下）
+const BK_CORNERS = [[0, 0], [BK_N - 1, 0], [BK_N - 1, BK_N - 1], [0, BK_N - 1]];
+// 2 人局用 Blokus Duo 規則（2026-11-13，使用者要求）：14×14 的棋盤，兩人的起始格是 (4, 4) 與 (9, 9)（不是角落）；3～4 人仍是 20×20、四個角落。
+// 開局時把棋盤大小 g.size 與各座位的起始格 g.start 記進狀態（舊存檔沒有這兩個欄位：當作 20×20、角落）
+const BK_DUO_N = 14, BK_DUO_START = { 0: [4, 4], 2: [9, 9] };   // 顏色 → 起始格（Duo；2 人用顏色 0 與 2）
+const bkSize = g => g.size || BK_N, bkStartOf = (g, k) => (g.start ? g.start[k] : BK_CORNERS[g.col[k]]);   // 顏色 0～3 的起始角落（藍左上、黃右上、紅右下、綠左下）
 function bkNorm(cells) {
   const mx = Math.min(...cells.map(c => c[0])), my = Math.min(...cells.map(c => c[1]));
   return cells.map(c => [c[0] - mx, c[1] - my]).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
@@ -710,7 +714,7 @@ const BK_ORI_KEYS = BK_ORI.map(os => new Set(os.map(bkKey)));
 const BK_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]], BK_DIAGS = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
 // 座標 cells（絕對座標）放給座位 k 合不合法
 function bkLegal(g, k, cells) {
-  const N = BK_N, col = g.col[k] + 1, [sx, sy] = BK_CORNERS[g.col[k]], first = g.sd[k].placed === 0;
+  const N = bkSize(g), col = g.col[k] + 1, [sx, sy] = bkStartOf(g, k), first = g.sd[k].placed === 0;
   let corner = false, start = false;
   for (const [x, y] of cells) {
     if (x < 0 || y < 0 || x >= N || y >= N || g.board[y * N + x]) return false;
@@ -722,8 +726,8 @@ function bkLegal(g, k, cells) {
 }
 // 座位 k 所有合法放法 [{p, key, cells}]（依 key 排序，測試用）；one＝true 時找到一個就回（判斷有沒有地方放）
 function bkMoves(g, k, one) {
-  const N = BK_N, col = g.col[k] + 1, sd = g.sd[k], out = [], seen = new Set(), anchors = [];
-  if (sd.placed === 0) anchors.push(BK_CORNERS[g.col[k]]);
+  const N = bkSize(g), col = g.col[k] + 1, sd = g.sd[k], out = [], seen = new Set(), anchors = [];
+  if (sd.placed === 0) anchors.push(bkStartOf(g, k));
   else {
     const mark = new Set();
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
@@ -753,7 +757,8 @@ const bkRem = (g, k) => BK_TOTAL - g.sd[k].used.reduce((a, p) => a + BK_PIECES[p
 const bkScore = (g, k) => { const r = bkRem(g, k); return -r + (r === 0 ? 15 + (g.sd[k].mono ? 5 : 0) : 0); };
 function bkStart(t) {
   const n = t.seats.length, now = Date.now(), cols = shuffle(n === 2 ? [0, 2] : [0, 1, 2, 3].slice(0, n));   // 2 人坐對角；顏色隨機分配
-  t.g = { board: new Array(BK_N * BK_N).fill(0), col: cols, sd: cols.map(() => ({ used: [], placed: 0, done: false, idle: 0, forfeit: false, mono: false })), last: null, moves: 0, deadline: now + BK_TURN_MS };
+  const size = n === 2 ? BK_DUO_N : BK_N;   // 2 人＝Blokus Duo（14×14、起始格 (4, 4)／(9, 9)）
+  t.g = { size, start: cols.map(c => (n === 2 ? BK_DUO_START[c] : BK_CORNERS[c])), board: new Array(size * size).fill(0), col: cols, sd: cols.map(() => ({ used: [], placed: 0, done: false, idle: 0, forfeit: false, mono: false })), last: null, moves: 0, deadline: now + BK_TURN_MS };
   t.result = null; t.phase = "playing"; t.turn = cols.indexOf(0);   // 藍色先下
   for (const s of t.seats) { s.ready = false; s.left = false; }
   tblLog(t, `方塊拼圖開始！${n} 人參加，${t.seats[t.turn].name}（藍）先下`);
@@ -791,7 +796,7 @@ function bkPlace(t, cid, p, cs, now) {
   for (const c of cs) { if (!Array.isArray(c) || c.length !== 2 || !Number.isInteger(c[0]) || !Number.isInteger(c[1])) return; cells.push([c[0], c[1]]); }
   if (!BK_ORI_KEYS[p].has(bkKey(cells)) || !bkLegal(g, i, cells)) return;
   const sd = g.sd[i];
-  for (const [x, y] of cells) g.board[y * BK_N + x] = g.col[i] + 1;
+  for (const [x, y] of cells) g.board[y * bkSize(g) + x] = g.col[i] + 1;
   sd.used.push(p); sd.placed++; sd.idle = 0; sd.mono = p === 0;
   g.last = { seat: i, cells }; g.moves++;
   bkAdvance(t, i, now);
@@ -2614,7 +2619,7 @@ function tblView(t, cid) {
     if (playing) t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].rem = tgRem(g, k); });
   } else if (t.g && t.game === "blokus") {   // 方塊拼圖：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
     const g = t.g;
-    v.bk = { board: g.board.join(""), col: [...g.col], used: g.sd.map(d => [...d.used]), done: g.sd.map(d => d.done), last: g.last, moves: g.moves, deadline: playing ? g.deadline : 0, sn: Date.now() };
+    v.bk = { size: bkSize(g), start: g.col.map((c, k) => [...bkStartOf(g, k)]), board: g.board.join(""), col: [...g.col], used: g.sd.map(d => [...d.used]), done: g.sd.map(d => d.done), last: g.last, moves: g.moves, deadline: playing ? g.deadline : 0, sn: Date.now() };
     if (playing) t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].rem = bkRem(g, k); });
   } else if (t.g && t.game === "gomoku") {   // 五子棋：棋盤（225 個字元：0 空／1 黑／2 白）、最後一手、執黑的座位、連線的五子（結束時）；棋盤公開，觀戰者也看得到
     v.board = t.g.board.join(""); v.last = t.g.last; v.black = t.g.black; v.line = t.g.line; v.moves = t.g.moves || [];   // moves：每一手的座標（偶數手＝黑棋）；結束後客戶端用來復盤

@@ -929,7 +929,16 @@ BK_SHAPES = [["#"], ["##"], ["###"], ["##", "#."], ["####"], ["##", "##"], ["###
              [".##", "##.", ".#."], ["#####"], ["####", "#..."], ["##..", ".###"], ["##", "##", "#."], ["###", ".#.", ".#."], ["#.#", "###"],
              ["#..", "#..", "###"], ["#..", "##.", ".##"], [".#.", "###", ".#."], ["####", ".#.."], ["##.", ".#.", ".##"]]   # 21 塊：1／2／3×2／4×5／5×12
 BK_PIECES = [[(x, y) for y, r in enumerate(rows) for x, ch in enumerate(r) if ch == "#"] for rows in BK_SHAPES]
-BK_CORNERS = [(0, 0), (BK_N - 1, 0), (BK_N - 1, BK_N - 1), (0, BK_N - 1)]   # 顏色 0～3 的起始角落（藍左上、黃右上、紅右下、綠左下）
+BK_CORNERS = [(0, 0), (BK_N - 1, 0), (BK_N - 1, BK_N - 1), (0, BK_N - 1)]
+# 2 人局用 Blokus Duo 規則（2026-11-13，使用者要求）：14×14 的棋盤，兩人的起始格是 (4, 4) 與 (9, 9)（不是角落）；3～4 人仍是 20×20、四個角落。
+BK_DUO_N = 14
+BK_DUO_START = {0: (4, 4), 2: (9, 9)}   # 顏色 → 起始格（Duo；2 人用顏色 0 與 2）
+
+def bk_size(g):
+    return g.get("size", BK_N)
+
+def bk_start_of(g, k):
+    return g["start"][k] if g.get("start") else BK_CORNERS[g["col"][k]]   # 顏色 0～3 的起始角落（藍左上、黃右上、紅右下、綠左下）
 BK_DIRS = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 BK_DIAGS = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
 
@@ -957,8 +966,8 @@ BK_ORI_KEYS = [set(bk_key(o) for o in os_) for os_ in BK_ORI]
 
 def bk_legal(g, k, cells):
     """座標 cells（絕對座標）放給座位 k 合不合法。"""
-    N, col = BK_N, g["col"][k] + 1
-    sx, sy = BK_CORNERS[g["col"][k]]
+    N, col = bk_size(g), g["col"][k] + 1
+    sx, sy = bk_start_of(g, k)
     first = g["sd"][k]["placed"] == 0
     board = g["board"]
     corner = start = False
@@ -979,11 +988,11 @@ def bk_legal(g, k, cells):
 
 def bk_moves(g, k, one=False):
     """座位 k 所有合法放法 [(p, key, cells)]（依 key 排序，測試用）；one＝True 時找到一個就回（判斷有沒有地方放）。"""
-    N, col, sd = BK_N, g["col"][k] + 1, g["sd"][k]
+    N, col, sd = bk_size(g), g["col"][k] + 1, g["sd"][k]
     board = g["board"]
     out, seen, anchors = [], set(), []
     if sd["placed"] == 0:
-        anchors.append(BK_CORNERS[g["col"][k]])
+        anchors.append(bk_start_of(g, k))
     else:
         mark = set()
         for y in range(N):
@@ -1027,7 +1036,8 @@ def bk_start(t):
     n, now = len(t["seats"]), int(time.time() * 1000)
     cols = [0, 2] if n == 2 else [0, 1, 2, 3][:n]   # 2 人坐對角；顏色隨機分配
     random.shuffle(cols)
-    t["g"] = {"board": [0] * (BK_N * BK_N), "col": cols,
+    size = BK_DUO_N if n == 2 else BK_N   # 2 人＝Blokus Duo（14×14、起始格 (4, 4)／(9, 9)）
+    t["g"] = {"size": size, "start": [BK_DUO_START[c] if n == 2 else BK_CORNERS[c] for c in cols], "board": [0] * (size * size), "col": cols,
               "sd": [{"used": [], "placed": 0, "done": False, "idle": 0, "forfeit": False, "mono": False} for _ in cols],
               "last": None, "moves": 0, "deadline": now + BK_TURN_MS}
     t["result"], t["phase"], t["turn"] = None, "playing", cols.index(0)   # 藍色先下
@@ -1084,7 +1094,7 @@ def bk_place(t, cid, p, cs, now):
         return
     sd = g["sd"][i]
     for x, y in cells:
-        g["board"][y * BK_N + x] = g["col"][i] + 1
+        g["board"][y * bk_size(g) + x] = g["col"][i] + 1
     sd["used"].append(p)
     sd["placed"] += 1
     sd["idle"] = 0
@@ -3943,7 +3953,7 @@ def tbl_view(t, cid):
                 v["seats"][k]["left"] = bool(s.get("left"))
                 v["seats"][k]["rem"] = tg_rem(g, k)
     elif g and t["game"] == "blokus":   # 方塊拼圖：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
-        v["bk"] = {"board": "".join(str(c) for c in g["board"]), "col": list(g["col"]), "used": [list(d["used"]) for d in g["sd"]], "done": [d["done"] for d in g["sd"]],
+        v["bk"] = {"size": bk_size(g), "start": [list(bk_start_of(g, k)) for k in range(len(g["col"]))], "board": "".join(str(c) for c in g["board"]), "col": list(g["col"]), "used": [list(d["used"]) for d in g["sd"]], "done": [d["done"] for d in g["sd"]],
                    "last": g["last"], "moves": g["moves"], "deadline": g["deadline"] if playing else 0, "sn": int(time.time() * 1000)}
         if playing:
             for k, s in enumerate(t["seats"]):

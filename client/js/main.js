@@ -4657,25 +4657,27 @@ function bkShape(p, rot, flip) {
   for (const q of c) { const d = (q[0] - cx) ** 2 + (q[1] - cy) ** 2; if (d < best) { best = d; pv = q; } }
   return { cells: c, pv };
 }
-const bkAt = (b, x, y) => (x >= 0 && y >= 0 && x < BK_N && y < BK_N ? b[y * BK_N + x] : '#');   // 出界回 '#'
+const bkAt = (b, x, y, n = BK_N) => (x >= 0 && y >= 0 && x < n && y < n ? b[y * n + x] : '#');   // 出界回 '#'
+// 2 人局是 Blokus Duo（14×14、起始格 (4, 4)／(9, 9)），3～4 人是 20×20、四個角落：大小與各座位的起始格由伺服器隨 v.bk 給（舊版伺服器沒給就當 20×20、角落）
+const bkN = v => v.bk.size || BK_N, bkStartOf = (v, k) => v.bk.start?.[k] || BK_CORNERS[v.bk.col[k]], bkCellPx = v => (bkN(v) <= 14 ? 32 : BK_CELL);
 function bkLegalC(v, cells) {   // 我（座位 v.me）放這些格子（絕對座標）合不合法
-  const b = v.bk.board, ci = v.bk.col[v.me], col = String(ci + 1), first = v.bk.used[v.me].length === 0, [sx, sy] = BK_CORNERS[ci];
+  const b = v.bk.board, N = bkN(v), ci = v.bk.col[v.me], col = String(ci + 1), first = v.bk.used[v.me].length === 0, [sx, sy] = bkStartOf(v, v.me);
   let corner = false, start = false;
   for (const [x, y] of cells) {
-    if (bkAt(b, x, y) !== '0') return false;
+    if (bkAt(b, x, y, N) !== '0') return false;
     if (x === sx && y === sy) start = true;
-    for (const [dx, dy] of BK_DIRS) if (bkAt(b, x + dx, y + dy) === col) return false;
-    for (const [dx, dy] of BK_DIAGS) if (bkAt(b, x + dx, y + dy) === col) corner = true;
+    for (const [dx, dy] of BK_DIRS) if (bkAt(b, x + dx, y + dy, N) === col) return false;
+    for (const [dx, dy] of BK_DIAGS) if (bkAt(b, x + dx, y + dy, N) === col) corner = true;
   }
   return first ? start : corner;
 }
 function bkAnchors(v) {   // 我下一塊可以接的角（空格、斜對角有我的方塊、四邊沒有我的方塊）；第一塊就是起始角落
-  const b = v.bk.board, ci = v.bk.col[v.me], col = String(ci + 1), out = [];
-  if (v.bk.used[v.me].length === 0) { const [sx, sy] = BK_CORNERS[ci]; return bkAt(b, sx, sy) === '0' ? [[sx, sy]] : []; }
-  for (let y = 0; y < BK_N; y++) for (let x = 0; x < BK_N; x++) {
-    if (b[y * BK_N + x] !== '0') continue;
-    if (BK_DIRS.some(([dx, dy]) => bkAt(b, x + dx, y + dy) === col)) continue;
-    if (BK_DIAGS.some(([dx, dy]) => bkAt(b, x + dx, y + dy) === col)) out.push([x, y]);
+  const b = v.bk.board, N = bkN(v), ci = v.bk.col[v.me], col = String(ci + 1), out = [];
+  if (v.bk.used[v.me].length === 0) { const [sx, sy] = bkStartOf(v, v.me); return bkAt(b, sx, sy, N) === '0' ? [[sx, sy]] : []; }
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    if (b[y * N + x] !== '0') continue;
+    if (BK_DIRS.some(([dx, dy]) => bkAt(b, x + dx, y + dy, N) === col)) continue;
+    if (BK_DIAGS.some(([dx, dy]) => bkAt(b, x + dx, y + dy, N) === col)) out.push([x, y]);
   }
   return out;
 }
@@ -4686,16 +4688,16 @@ function bkPreview(v) {   // 目前選的方塊放在滑鼠位置的格子；沒
   return { cells: abs, ok: bkLegalC(v, abs) };
 }
 function bkDraw(cv, v) {
-  const g = cv.getContext('2d'), C = BK_CELL, size = BK_N * C, b = v.bk.board;
+  const g = cv.getContext('2d'), N = bkN(v), C = bkCellPx(v), size = N * C, b = v.bk.board;
   g.fillStyle = '#141a2a'; g.fillRect(0, 0, size, size);
   g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 1;
-  for (let i = 0; i <= BK_N; i++) { g.beginPath(); g.moveTo(i * C + .5, 0); g.lineTo(i * C + .5, size); g.stroke(); g.beginPath(); g.moveTo(0, i * C + .5); g.lineTo(size, i * C + .5); g.stroke(); }
-  v.bk.col.forEach(ci => {   // 各色的起始角落：淡淡的色框
-    const [sx, sy] = BK_CORNERS[ci]; g.strokeStyle = BK_COL[ci]; g.globalAlpha = .55; g.lineWidth = 2; g.strokeRect(sx * C + 2, sy * C + 2, C - 4, C - 4); g.globalAlpha = 1;
+  for (let i = 0; i <= N; i++) { g.beginPath(); g.moveTo(i * C + .5, 0); g.lineTo(i * C + .5, size); g.stroke(); g.beginPath(); g.moveTo(0, i * C + .5); g.lineTo(size, i * C + .5); g.stroke(); }
+  v.bk.col.forEach((ci, k) => {   // 各色的起始格（角落或 Duo 的 (4, 4)／(9, 9)）：淡淡的色框
+    const [sx, sy] = bkStartOf(v, k); g.strokeStyle = BK_COL[ci]; g.globalAlpha = .55; g.lineWidth = 2; g.strokeRect(sx * C + 2, sy * C + 2, C - 4, C - 4); g.globalAlpha = 1;
   });
   for (let i = 0; i < b.length; i++) {
     if (b[i] === '0') continue;
-    const x = i % BK_N, y = Math.floor(i / BK_N);
+    const x = i % N, y = Math.floor(i / N);
     g.fillStyle = BK_COL[Number(b[i]) - 1]; g.fillRect(x * C + 1, y * C + 1, C - 1, C - 1);
     g.fillStyle = 'rgba(255,255,255,.28)'; g.fillRect(x * C + 1, y * C + 1, C - 1, 3); g.fillRect(x * C + 1, y * C + 1, 3, C - 1);
     g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(x * C + 1, y * C + C - 3, C - 1, 2); g.fillRect(x * C + C - 3, y * C + 1, 2, C - 1);
@@ -4712,7 +4714,7 @@ function bkDraw(cv, v) {
   const pv = seat ? bkPreview(v) : null;
   if (pv) {   // 預覽：合法＝我的顏色半透明＋白邊；不合法＝紅色
     g.globalAlpha = .7; g.fillStyle = pv.ok ? BK_COL[v.bk.col[v.me]] : '#ff3030';
-    for (const [x, y] of pv.cells) if (x >= 0 && y >= 0 && x < BK_N && y < BK_N) g.fillRect(x * C + 1, y * C + 1, C - 1, C - 1);
+    for (const [x, y] of pv.cells) if (x >= 0 && y >= 0 && x < N && y < N) g.fillRect(x * C + 1, y * C + 1, C - 1, C - 1);
     g.globalAlpha = 1;
     if (pv.ok) { g.strokeStyle = '#fff'; g.lineWidth = 2; for (const [x, y] of pv.cells) g.strokeRect(x * C + 2, y * C + 2, C - 3, C - 3); }
   }
@@ -4792,11 +4794,11 @@ function buildBlokus(box, v, mk, gd) {
   }
   // 棋盤＋托盤
   if (bk) {
-    const main = mk('div', 'bk-main'), size = BK_N * BK_CELL, cv = document.createElement('canvas');
+    const main = mk('div', 'bk-main'), CP = bkCellPx(v), size = bkN(v) * CP, cv = document.createElement('canvas');
     cv.width = size; cv.height = size; cv.className = 'bk-board' + (myTurn ? ' mine' : '');
     bkDraw(cv, v);
     if (playing && seat) {
-      const at = e => { const r = cv.getBoundingClientRect(), k = size / r.width; return { x: Math.floor((e.clientX - r.left) * k / BK_CELL), y: Math.floor((e.clientY - r.top) * k / BK_CELL) }; };
+      const at = e => { const r = cv.getBoundingClientRect(), k = size / r.width; return { x: Math.floor((e.clientX - r.left) * k / CP), y: Math.floor((e.clientY - r.top) * k / CP) }; };
       cv.onmousemove = e => { const p = at(e); if (p.x !== o.hx || p.y !== o.hy) { o.hx = p.x; o.hy = p.y; bkDraw(cv, v); } };
       cv.onmouseleave = () => { o.hx = o.hy = null; bkDraw(cv, v); };
       cv.onwheel = e => { if (o.sel == null) return; e.preventDefault(); bkRotate(e.deltaY > 0 ? 1 : -1); };
