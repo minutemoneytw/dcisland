@@ -4350,7 +4350,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); typingStop(); unStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); unStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
   rulesShow(false); leaveAsk(false);
   $('tableBox').classList.add('hidden');
 }
@@ -4469,6 +4469,7 @@ function buildTable() {
   }
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
+  if (tb?.game === 'mage') { buildMage(box, v, mk, gd); return; }   // 見習驅魔師有自己的畫面（畫符號的場地）
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
   if (tb?.game === 'uno') { buildUno(box, v, mk, gd); return; }   // UNO 有自己的畫面（牌桌）
   if (tb?.game === 'typing' || tb?.game === 'zhtyping') { buildTyping(box, v, mk, gd); return; }   // 英打／中文打字競賽有自己的畫面（題目＋分數）
@@ -4867,6 +4868,260 @@ function buildDodge(box, v, mk, gd) {
     const wrap = mk('div', 'dodge-wrap'), cv = document.createElement('canvas');
     cv.id = 'dgCanvas'; cv.width = DG_W; cv.height = DG_H; cv.className = 'dodge-canvas';
     wrap.appendChild(cv); wrap.appendChild(mk('div', 'dodge-time')); wrap.lastChild.id = 'dgTime';
+    box.appendChild(wrap);
+  }
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 見習驅魔師（第十桌 t10；2026-11-12，使用者要求）：1～4 人合作。玩家在場地正中央，幽靈從四面八方飄向中央，用滑鼠畫出幽靈身上的符號消除它；
+// 3 波小怪＋1 隻 Boss（Boss 有血條，一直畫符號直到血條清空）。幽靈由「伺服器給的 seed」決定性地產生（與 worker 的 mgGen、dev_server 的 mg_gen 同一套，隨機只用 dodgeHash）；
+// 符號辨識（$P 點雲比對）在本機，畫對就回報 kill {i}／boss {k}，血量／擊殺／Boss 血量／勝負以伺服器為準，客戶端每秒送 sync 讓伺服器結算沒被消除的幽靈 ----
+const MG_CX = 320, MG_CY = 200, MG_R0 = 390, MG_R_HIT = 28, MG_GRACE = .8, MG_WAVE_START = 3, MG_WAVE_LEN = 28, MG_WAVE_GAP = 4, MG_BOSS_START = 99, MG_HP = 5;
+const MG_N_SYMS = 10, MG_SYMS = [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6]], MG_INTERVAL = [2.6, 2.0, 1.5, 1.1], MG_SPEED = [38, 46, 55, 66], MG_WAVE_MULT = [1.0, .85, .7, 1.8];
+const MG_DIFF_NAMES = ['簡易', '中等', '困難', '超難'];
+const MG_SYM_NAMES = ['橫線 —', '直線 |', '圓圈 ○', '尖角 ∧', 'V 字', 'Z 字', 'U 字', '星星 ☆', '波浪 ~', 'L 字'];
+// 符號範本（單筆畫，0～1 的方格內，y 向下）；順序＝出現的先後（越前面越容易辨識）
+const MG_SYM_POLY = (() => {
+  const circle = [], star = [], wave = [];
+  for (let k = 0; k <= 24; k++) { const a = k / 24 * Math.PI * 2 - Math.PI / 2; circle.push([.5 + .5 * Math.cos(a), .5 + .5 * Math.sin(a)]); }
+  for (const k of [0, 2, 4, 1, 3, 0]) { const a = k / 5 * Math.PI * 2 - Math.PI / 2; star.push([.5 + .5 * Math.cos(a), .5 + .5 * Math.sin(a)]); }
+  for (let k = 0; k <= 20; k++) wave.push([k / 20, .5 - .3 * Math.sin(k / 20 * Math.PI * 2)]);
+  return [[[0, .5], [1, .5]], [[.5, 0], [.5, 1]], circle, [[0, 1], [.5, 0], [1, 1]], [[0, 0], [.5, 1], [1, 0]], [[0, 0], [1, 0], [0, 1], [1, 1]],
+    [[0, 0], [0, 1], [1, 1], [1, 0]], star, wave, [[0, 0], [0, 1], [1, 1]]];
+})();
+const MG_PTS = 32;
+function mgResample(pts, n = MG_PTS) {   // 沿路徑等距取 n 點
+  let len = 0; for (let i = 1; i < pts.length; i++) len += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  if (len <= 0) return Array.from({ length: n }, () => [pts[0][0], pts[0][1]]);
+  const step = len / (n - 1), out = [[pts[0][0], pts[0][1]]], p = pts.map(q => [q[0], q[1]]); let acc = 0;
+  for (let i = 1; i < p.length; i++) {
+    let d = Math.hypot(p[i][0] - p[i - 1][0], p[i][1] - p[i - 1][1]);
+    while (acc + d >= step && out.length < n) {
+      const t = (step - acc) / d, q = [p[i - 1][0] + t * (p[i][0] - p[i - 1][0]), p[i - 1][1] + t * (p[i][1] - p[i - 1][1])];
+      out.push(q); p.splice(i, 0, q); d = Math.hypot(p[i + 1][0] - q[0], p[i + 1][1] - q[1]); acc = 0; i++;
+    }
+    acc += d;
+  }
+  while (out.length < n) out.push([p[p.length - 1][0], p[p.length - 1][1]]);
+  return out;
+}
+function mgNormalize(pts) {   // 等比例縮放到最大邊＝1、質心移到原點
+  const r = mgResample(pts);
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const q of r) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); }
+  const s = Math.max(x1 - x0, y1 - y0, 1e-6); let cx = 0, cy = 0;
+  const n = r.map(q => [(q[0] - x0) / s, (q[1] - y0) / s]); for (const q of n) { cx += q[0]; cy += q[1]; }
+  cx /= n.length; cy /= n.length; return n.map(q => [q[0] - cx, q[1] - cy]);
+}
+function mgCloud(a, b, start) {   // $P：貪婪點雲距離
+  const n = a.length, used = new Array(n).fill(false); let sum = 0, i = start;
+  do {
+    let best = 1e9, bj = -1; for (let j = 0; j < n; j++) if (!used[j]) { const d = Math.hypot(a[i][0] - b[j][0], a[i][1] - b[j][1]); if (d < best) { best = d; bj = j; } }
+    used[bj] = true; sum += (1 - ((i - start + n) % n) / n) * best; i = (i + 1) % n;
+  } while (i !== start);
+  return sum;
+}
+let MG_TMPL = null;
+function mgRecognize(points) {   // 回傳 {id, d, second}（d 越小越像）或 null（太短）；筆畫太短就不辨識
+  if (points.length < 4) return null;
+  let len = 0; for (let i = 1; i < points.length; i++) len += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+  if (len < 40) return null;
+  if (!MG_TMPL) MG_TMPL = MG_SYM_POLY.map(p => mgNormalize(p));
+  const q = mgNormalize(points), step = Math.floor(Math.sqrt(MG_PTS)), res = [];
+  MG_TMPL.forEach((t, id) => { let d = 1e9; for (let i = 0; i < MG_PTS; i += step) d = Math.min(d, mgCloud(q, t, i), mgCloud(t, q, i)); res.push({ id, d }); });
+  res.sort((a, b) => a.d - b.d);
+  return { id: res[0].id, d: res[0].d, second: res[1].d };
+}
+const MG_ACCEPT = 2.6, MG_MARGIN = 0.7, MG_GAP = 0.3;   // 接受門檻（點雲距離總和，越小越像）與「第一名比第二名好多少」的最小比例（太接近＝不確定，不判）
+function mgGenC(g, upto) {   // 客戶端的幽靈產生器（與 worker mgGen 同一套；多算了 sp、ang 供畫面用）
+  const d = g.diff, n = g.n, seed = g.seed;
+  for (;;) {
+    let t = g.cur;
+    if (t < MG_BOSS_START) {
+      const k = Math.floor((t - MG_WAVE_START) / (MG_WAVE_LEN + MG_WAVE_GAP));
+      if ((t - MG_WAVE_START) - k * (MG_WAVE_LEN + MG_WAVE_GAP) >= MG_WAVE_LEN) t = MG_WAVE_START + (k + 1) * (MG_WAVE_LEN + MG_WAVE_GAP);
+    }
+    if (t >= MG_BOSS_START && t < MG_BOSS_START + 2) t = MG_BOSS_START + 2;
+    g.cur = t;
+    if (t > upto) return;
+    const i = g.gh.length, w = t >= MG_BOSS_START ? 3 : Math.floor((t - MG_WAVE_START) / (MG_WAVE_LEN + MG_WAVE_GAP));
+    const m = w === 3 ? MG_SYMS[d][0] : MG_SYMS[d][w];
+    const h = j => dodgeHash(seed, 10000 + i * 16 + j), u = j => h(j) / 4294967296;
+    const sp = MG_SPEED[d] * (0.85 + 0.3 * u(2)) * (w === 3 ? 0.9 : 1.0) / (1 + 0.3 * (m - 1));
+    g.gh.push({ i, ts: t, syms: Array.from({ length: m }, (_, j) => h(8 + j) % MG_N_SYMS), sp, arr: t + (MG_R0 - MG_R_HIT) / sp, ang: u(0) * Math.PI * 2, w });
+    g.cur = t + MG_INTERVAL[d] * MG_WAVE_MULT[w] / (1 + 0.5 * (n - 1)) * (0.7 + 0.6 * u(4)) * (1 + 0.3 * (m - 1));
+  }
+}
+const mgBossSymC = (seed, k, diff) => dodgeHash(seed, 5000 + k) % MG_N_SYMS;
+function mgStart(v) {   // 一局開始：重置本機狀態
+  const m = v.mg;
+  S.mg = { id: S.tableId, seed: m.seed, t0: m.t0, off: m.sn - Date.now(), diff: m.diff, n: m.n, g: { seed: m.seed, diff: m.diff, n: m.n, cur: MG_WAVE_START, gh: [] },
+    localKilled: new Set(), localProg: new Map(), lastDmg: 0, shake: 0, stroke: null, fb: null, flash: 0, lastHp: null, lastSync: 0, fx: [], bossLocal: 0, bossAt: 0, hitFlash: 0 };
+  if (!S.mgRaf) S.mgRaf = requestAnimationFrame(mgFrame);
+}
+function mageStop() { S.mg = null; if (S.mgRaf) { cancelAnimationFrame(S.mgRaf); S.mgRaf = 0; } }
+const mgNow = () => (Date.now() + S.mg.off - S.mg.t0) / 1000;
+function mgDrawSym(g, id, cx, cy, size, col, lw = 2) {   // 把符號範本畫在 (cx,cy) 為中心、邊長 size 的方格內
+  const p = MG_SYM_POLY[id]; g.strokeStyle = col; g.lineWidth = lw; g.lineJoin = 'round'; g.lineCap = 'round'; g.beginPath();
+  p.forEach((q, k) => { const x = cx + (q[0] - .5) * size, y = cy + (q[1] - .5) * size; if (k) g.lineTo(x, y); else g.moveTo(x, y); }); g.stroke();
+}
+function mgFrame() {
+  const M = S.mg, v = S.tableView;
+  if (!M || !S.tableOpen || !v || v.phase !== 'playing' || v.game !== 'mage') { S.mgRaf = 0; if (S.tableOpen && v?.game === 'mage') buildTable(); return; }
+  S.mgRaf = requestAnimationFrame(mgFrame);
+  const t = mgNow(), mySeat = v.role === 'seat' ? v.seats[v.me] : null;
+  mgGenC(M.g, Math.max(0, t) + 12);
+  if (v.mg && v.mg.dmg > M.lastDmg) { M.lastDmg = v.mg.dmg; M.shake = performance.now() + 350; mgSay('−1', '#ff7a7a', 320, 118); }
+  if (mySeat) { if (M.lastHp != null && mySeat.hp < M.lastHp) M.hitFlash = .4; M.lastHp = mySeat.hp; }
+  M.hitFlash = Math.max(0, M.hitFlash - .016);
+  if (t >= 0 && performance.now() - M.lastSync > 1000) { M.lastSync = performance.now(); S.net?.tbl?.({ a: 'sync' }); }   // 讓伺服器結算沒被消除的幽靈
+  M.t = t; M.vis = v.mg ? mgGhostsNow(t, v.mg) : []; M.bossId = v.mg && mgBossActive(t, v.mg) ? mgBossSymC(M.seed, performance.now() - M.bossAt < 1500 ? Math.max(v.mg.hits, M.bossLocal) : v.mg.hits, M.diff) : -1;   // （自動測試與除錯用：目前時間、場上幽靈、Boss 目前的符號）
+  mgDraw(t, mySeat);
+  const tm = $('mgTime'); if (tm) tm.textContent = t < 0 ? `開始倒數 ${Math.ceil(-t)}` : t < MG_BOSS_START ? `第 ${Math.min(3, Math.floor((t - MG_WAVE_START) / (MG_WAVE_LEN + MG_WAVE_GAP)) + 1)} 波` : 'BOSS';
+}
+const mgProg = (M, m, i) => Math.max(((m.prog || []).find(x => x[0] === i) || [0, 0])[1], M.localProg.get(i) || 0);   // 幽靈 i 已畫完幾個符號（伺服器的與本機預測的取大）
+function mgBossActive(t, m) { return t >= MG_BOSS_START + 1.5 && m && m.dmg < m.boss; }
+function mgGhostsNow(t, m) {   // 目前在場上的幽靈（還沒被消除、還沒抵達太久）
+  const M = S.mg, killed = new Set(m.killed || []);
+  return M.g.gh.filter(x => x.ts <= t && x.arr + .25 > t && !killed.has(x.i) && !M.localKilled.has(x.i));
+}
+function mgDraw(t, mySeat) {
+  const cv = $('mgCanvas'); if (!cv) return;
+  const g = cv.getContext('2d'), M = S.mg, v = S.tableView, m = v.mg, now = performance.now();
+  const shaking = M.shake > now, sh = shaking ? (M.shake - now) / 350 * 7 : 0;
+  g.save(); if (shaking) g.translate((Math.random() - .5) * 2 * sh, (Math.random() - .5) * 2 * sh);   // 打中 Boss：畫面震動
+  g.fillStyle = '#0b0a1a'; g.fillRect(-10, -10, 660, 420);
+  const grad = g.createRadialGradient(MG_CX, MG_CY, 10, MG_CX, MG_CY, 300); grad.addColorStop(0, 'rgba(120,90,220,.28)'); grad.addColorStop(1, 'rgba(10,10,26,0)'); g.fillStyle = grad; g.fillRect(0, 0, 640, 400);
+  g.strokeStyle = 'rgba(160,130,255,.25)'; g.lineWidth = 1; g.beginPath(); g.arc(MG_CX, MG_CY, MG_R_HIT, 0, 6.2832); g.stroke();
+  // 幽靈：有臉；要畫的符號飄在頭上（一隻有好幾個就排成一列，畫完的變暗、目前要畫的亮黃色）
+  g.textAlign = 'center';
+  for (const x of mgGhostsNow(t, m)) {
+    const r = MG_R0 - x.sp * (t - x.ts), px = MG_CX + Math.cos(x.ang) * r, py = MG_CY + Math.sin(x.ang) * r;
+    if (px < -40 || px > 680 || py < -50 || py > 440) continue;
+    const near = r < 130, bob = Math.sin(t * 3 + x.i) * 2, gy = py + bob, prog = mgProg(M, m, x.i);
+    g.fillStyle = near ? '#ffd8e0' : '#e8ecff'; g.beginPath(); g.arc(px, gy - 2, 15, Math.PI, 0); g.lineTo(px + 15, gy + 12);
+    for (let k = 3; k >= -3; k--) g.lineTo(px + k * 5, gy + 12 + (k % 2 ? 0 : 4)); g.lineTo(px - 15, gy + 12); g.closePath(); g.fill();
+    g.fillStyle = '#20204a';   // 眼睛與嘴巴（靠近中央時變成生氣的臉）
+    g.beginPath(); g.arc(px - 5, gy - 3, 2.4, 0, 6.2832); g.arc(px + 5, gy - 3, 2.4, 0, 6.2832); g.fill();
+    if (near) { g.strokeStyle = '#c02040'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(px - 9, gy - 9); g.lineTo(px - 2, gy - 6); g.moveTo(px + 9, gy - 9); g.lineTo(px + 2, gy - 6); g.stroke(); g.fillStyle = '#c02040'; g.beginPath(); g.ellipse(px, gy + 6, 3.5, 2.6, 0, 0, 6.2832); g.fill(); }
+    else { g.strokeStyle = '#20204a'; g.lineWidth = 1.5; g.beginPath(); g.arc(px, gy + 3, 3, .15, Math.PI - .15); g.stroke(); }
+    const n = x.syms.length, sz = 17, gap = 3, w0 = n * sz + (n - 1) * gap, y0 = gy - 32;
+    g.fillStyle = 'rgba(12,8,30,.72)'; g.beginPath(); g.roundRect ? g.roundRect(px - w0 / 2 - 3, y0 - sz / 2 - 3, w0 + 6, sz + 6, 5) : g.rect(px - w0 / 2 - 3, y0 - sz / 2 - 3, w0 + 6, sz + 6); g.fill();
+    x.syms.forEach((id, k) => { const sx = px - w0 / 2 + sz / 2 + k * (sz + gap); mgDrawSym(g, id, sx, y0, sz - 4, k < prog ? 'rgba(160,160,180,.35)' : k === prog ? '#ffe08a' : '#b8c0ff', k === prog ? 2.4 : 1.6); });
+  }
+  // Boss
+  if (t >= MG_BOSS_START && m) {
+    const bx = MG_CX, by = 78, hpFrac = Math.max(0, (m.boss - m.dmg) / m.boss), enter = Math.min(1, (t - MG_BOSS_START) / 1.5), wob = Math.sin(t * 2) * 4;
+    const hurt = M.shake > now; g.globalAlpha = enter; g.fillStyle = hurt ? '#ff4a4a' : '#7a2a8a'; g.beginPath(); g.arc(bx + (hurt ? (Math.random() - .5) * 6 : 0), by + wob, 38, Math.PI, 0); g.lineTo(bx + 38, by + wob + 34);
+    for (let k = 4; k >= -4; k--) g.lineTo(bx + k * 9.5, by + wob + 34 + (k % 2 ? 0 : 8)); g.lineTo(bx - 38, by + wob + 34); g.closePath(); g.fill();
+    g.fillStyle = '#ffe08a'; g.beginPath(); g.arc(bx - 13, by + wob - 2, 6, 0, 6.2832); g.arc(bx + 13, by + wob - 2, 6, 0, 6.2832); g.fill();
+    g.fillStyle = '#2a0a30'; g.beginPath(); g.arc(bx - 13, by + wob - 1, 2.5, 0, 6.2832); g.arc(bx + 13, by + wob - 1, 2.5, 0, 6.2832); g.fill();
+    g.strokeStyle = '#2a0a30'; g.lineWidth = 2; g.beginPath(); if (hurt) { g.arc(bx, by + wob + 16, 7, Math.PI, 0); } else { g.arc(bx, by + wob + 10, 8, .2, Math.PI - .2); } g.stroke();   // 嘴（受傷時張嘴）
+    g.globalAlpha = 1;
+    g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(160, 10, 320, 12); g.fillStyle = hpFrac > .3 ? '#d84a6a' : '#ff9a3a'; g.fillRect(161, 11, 318 * hpFrac, 10);
+    g.strokeStyle = '#ffe08a'; g.lineWidth = 1; g.strokeRect(160.5, 10.5, 319, 11);
+    if (mgBossActive(t, m)) {   // 目前要畫的符號
+      const k = performance.now() - M.bossAt < 1500 ? Math.max(m.hits, M.bossLocal) : m.hits, id = mgBossSymC(M.seed, k, M.diff);
+      g.fillStyle = 'rgba(20,10,40,.85)'; g.beginPath(); g.arc(bx, by + 56 + wob, 21, 0, 6.2832); g.fill(); g.strokeStyle = '#ffe08a'; g.lineWidth = 2; g.stroke();
+      mgDrawSym(g, id, bx, by + 56 + wob, 22, '#ffe08a', 3);
+    }
+  }
+  // 中央的驅魔師們
+  const al = v.seats.length;
+  v.seats.forEach((s, i) => {
+    const a = al > 1 ? i / al * 6.2832 - 1.5708 : 0, px = MG_CX + (al > 1 ? Math.cos(a) * 11 : 0), py = MG_CY + (al > 1 ? Math.sin(a) * 11 : 0), col = DG_COLORS[i % 8], dead = s.dead || s.left;
+    g.globalAlpha = dead ? .3 : 1; g.fillStyle = col; g.beginPath(); g.arc(px, py - 4, 6, 0, 6.2832); g.fill();
+    g.fillStyle = dead ? '#777' : '#e8e4f4'; g.beginPath(); g.moveTo(px - 8, py + 8); g.lineTo(px, py - 4); g.lineTo(px + 8, py + 8); g.closePath(); g.fill();   // 魔法袍
+    g.fillStyle = dead ? '#777' : '#f4f0e0'; g.fillRect(px - 4, py - 15, 8, 11); g.fillStyle = dead ? '#777' : '#d02a2a'; g.fillRect(px - 1, py - 14, 2, 8);   // 額頭的符紙
+    g.globalAlpha = 1;
+  });
+  // 筆跡與回饋
+  if (M.stroke && M.stroke.length > 1) { g.strokeStyle = 'rgba(255,240,150,.9)'; g.lineWidth = 3; g.lineJoin = 'round'; g.lineCap = 'round'; g.beginPath(); M.stroke.forEach((q, k) => { if (k) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.stroke(); }
+  for (const f of M.fx) { const a = Math.max(0, 1 - (performance.now() - f.at) / 700); if (a <= 0) continue; g.globalAlpha = a; g.fillStyle = f.col; g.font = 'bold 16px "Microsoft JhengHei"'; g.fillText(f.text, f.x, f.y - (1 - a) * 24); g.globalAlpha = 1; }
+  M.fx = M.fx.filter(f => performance.now() - f.at < 700);
+  if (M.hitFlash > 0) { g.fillStyle = `rgba(255,60,60,${M.hitFlash})`; g.fillRect(0, 0, 640, 400); }
+  if (M.shake > now) { g.fillStyle = `rgba(255,40,40,${(M.shake - now) / 350 * .22})`; g.fillRect(0, 0, 640, 400); }   // 打中 Boss：畫面泛紅
+  g.restore();
+  if (t < 0) { g.fillStyle = 'rgba(8,10,20,.55)'; g.fillRect(0, 0, 640, 400); g.fillStyle = '#ffe08a'; g.font = 'bold 56px "Microsoft JhengHei"'; g.fillText(String(Math.ceil(-t)), MG_CX, MG_CY + 18); }
+  if (t >= 0 && t < 4) { g.fillStyle = 'rgba(255,255,255,.85)'; g.font = '13px "Microsoft JhengHei"'; g.fillText('在畫面上按住滑鼠，畫出幽靈頭上的符號（一筆畫一個，有好幾個就依序畫）', MG_CX, 388); }
+  if (mySeat?.dead && v.role === 'seat') { g.fillStyle = 'rgba(8,10,20,.5)'; g.fillRect(0, MG_CY - 28, 640, 56); g.fillStyle = '#ffb347'; g.font = 'bold 22px "Microsoft JhengHei"'; g.fillText('你倒下了（隊友還在戰鬥）', MG_CX, MG_CY + 8); }
+}
+function mgPointer(e, type) {   // 在場地上按住滑鼠畫符號；放開時辨識
+  const M = S.mg, v = S.tableView; if (!M || !v || v.phase !== 'playing') return;
+  const cv = $('mgCanvas'); if (!cv) return;
+  const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * 640 / r.width, y = (e.clientY - r.top) * 400 / r.height;
+  const me = v.role === 'seat' ? v.seats[v.me] : null;
+  if (type === 'down') { if (!me || me.dead) return; M.stroke = [[x, y]]; cv.setPointerCapture?.(e.pointerId); }
+  else if (type === 'move') { if (M.stroke) { const l = M.stroke[M.stroke.length - 1]; if (Math.hypot(x - l[0], y - l[1]) >= 2) M.stroke.push([x, y]); } }
+  else if (M.stroke) { const pts = M.stroke; M.stroke = null; mgAct(pts, x, y); }
+}
+function mgSay(text, col, x, y) { S.mg.fx.push({ text, col, x: Math.max(60, Math.min(580, x)), y, at: performance.now() }); }
+function mgAct(pts, ex, ey) {   // 辨識筆畫 → 消除幽靈或打 Boss
+  const M = S.mg, v = S.tableView, m = v.mg, t = mgNow(); if (!m || t < 0) return;
+  const rec = mgRecognize(pts); if (!rec) return;
+  if (rec.d > MG_ACCEPT || !(rec.d <= rec.second * MG_MARGIN || rec.second - rec.d >= MG_GAP)) { mgSay('？', '#ff9a9a', ex, ey); return; }   // 太不像、或和第二名差不多（不確定）就不判
+  const id = rec.id, bossOn = mgBossActive(t, m), bossK = performance.now() - M.bossAt < 1500 ? Math.max(m.hits, M.bossLocal) : m.hits;
+  const cands = mgGhostsNow(t, m).filter(x => x.syms[mgProg(M, m, x.i)] === id).sort((a, b) => a.arr - b.arr);   // 這隻目前要畫的符號就是你畫的
+  if (bossOn && id === mgBossSymC(M.seed, bossK, M.diff) && !(cands.length && cands[0].arr < t + 2.5)) {
+    M.bossLocal = bossK + 1; M.bossAt = performance.now(); M.shake = performance.now() + 350; M.lastDmg = Math.max(M.lastDmg, m.dmg + 1);
+    S.net?.tbl?.({ a: 'boss', k: bossK }); mgSay('命中 Boss！', '#ffe08a', MG_CX, 150); return;
+  }
+  if (cands.length) {
+    const gh = cands[0], r = MG_R0 - gh.sp * (t - gh.ts), p = mgProg(M, m, gh.i);
+    M.localProg.set(gh.i, p + 1); if (p + 1 >= gh.syms.length) M.localKilled.add(gh.i);
+    S.net?.tbl?.({ a: 'kill', i: gh.i, p });
+    mgSay(p + 1 >= gh.syms.length ? '✦' : '✧', '#9affb8', MG_CX + Math.cos(gh.ang) * r, MG_CY + Math.sin(gh.ang) * r - 30);
+  } else mgSay('沒有這個符號的幽靈', '#bbbbbb', ex, ey);
+}
+function buildMage(box, v, mk, gd) {
+  const playing = v.phase === 'playing', mySeat = v.role === 'seat' ? v.seats[v.me] : null, diff = v.diff || 0;
+  if (playing && (!S.mg || S.mg.id !== S.tableId || S.mg.t0 !== v.mg?.t0)) mgStart(v);
+  if (!playing) mageStop();
+  let status;
+  if (playing) status = mySeat ? (mySeat.dead ? '你倒下了' : `${MG_DIFF_NAMES[v.mg?.diff ?? diff]}模式：按住滑鼠畫出幽靈身上的符號消除它，別讓幽靈碰到中央`) : '觀戰中';
+  else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
+  box.appendChild(mk('div', 'table-status' + (playing && mySeat && !mySeat.dead ? ' mine' : ''), status));
+  if (v.result && !playing) {
+    box.appendChild(mk('div', 'table-result', v.result.text));
+    const rk = mk('div', 'dodge-rank');
+    v.result.ranking.forEach((r, i) => rk.appendChild(mk('div', null, `${r.name}　擊殺 ${r.kills}　${r.dead ? '倒下' : `剩 ${r.hp} 滴血`}${r.left ? '（中途離開）' : ''}`)));
+    if (v.result.win) rk.appendChild(mk('div', null, `本局分數：${v.result.score}${v.result.solo ? '（單人，記入排行榜）' : '（多人不進排行榜）'}`));
+    box.appendChild(rk);
+  }
+  if (!playing) {
+    const dr = mk('div', 'table-btns'); dr.appendChild(mk('span', 'table-tag', '難度：'));
+    MG_DIFF_NAMES.forEach((nm, k) => { const b = mk('button', 'ff-btn small' + (diff === k ? ' active' : ''), nm); if (v.role === 'seat' && v.me === 0) b.onclick = () => S.net?.tbl?.({ a: 'mdiff', v: k }); else b.disabled = true; dr.appendChild(b); });
+    box.appendChild(dr);
+    if (v.role !== 'seat' || v.me !== 0) box.appendChild(mk('div', 'table-tag', '難度由桌主（第一位入座的人）選擇'));
+    boardBlock(box, v, mk, sc => `${sc} 分`);
+    box.appendChild(mk('div', 'table-tag', '排行榜只記單人模式的勝利分數'));
+  }
+  const row = mk('div', 'table-seats dodge-seats');
+  v.seats.forEach((s, i) => {
+    const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && s.dead ? ' out' : ''));
+    seat.style.borderColor = playing ? DG_COLORS[i % 8] : '';
+    seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : '')));
+    seat.appendChild(mk('div', 'table-tag', playing ? (s.dead ? `倒下 · 擊殺 ${s.kills}` : '♥'.repeat(Math.max(0, s.hp)) + '♡'.repeat(Math.max(0, MG_HP - s.hp)) + ` · 擊殺 ${s.kills}`) : (s.ready ? '已準備' : '未準備')));
+    row.appendChild(seat);
+  });
+  if (!playing) for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  if (playing) {
+    const wrap = mk('div', 'dodge-wrap'), cv = document.createElement('canvas');
+    cv.id = 'mgCanvas'; cv.width = 640; cv.height = 400; cv.className = 'dodge-canvas'; cv.style.touchAction = 'none'; cv.style.cursor = 'crosshair';
+    cv.onpointerdown = e => { e.preventDefault(); mgPointer(e, 'down'); }; cv.onpointermove = e => mgPointer(e, 'move'); cv.onpointerup = e => mgPointer(e, 'up'); cv.onpointercancel = e => mgPointer(e, 'up');
+    wrap.appendChild(cv); wrap.appendChild(mk('div', 'dodge-time')); wrap.lastChild.id = 'mgTime';
     box.appendChild(wrap);
   }
   const btns = mk('div', 'table-btns');

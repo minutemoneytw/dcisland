@@ -480,8 +480,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -542,6 +542,7 @@ function tblLeave(t, cid) {
   if (role === "spec") t.specs.splice(i, 1);
   else if (role === "seat") {
     const name = t.seats[i].name;
+    if (t.phase === "playing" && t.game === "mage") { mgLeave(t, i, Date.now()); return; }   // 見習驅魔師：離開不中斷，視同倒下，到場上沒有活人為止
     if (t.phase === "playing" && t.game === "dodge") { dgLeave(t, i, Date.now()); return; }   // 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
     if (t.phase === "playing" && t.game === "uno") { unLeave(t, i, Date.now()); return; }   // UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
     if (t.phase === "playing" && isTy(t)) { tyLeave(t, i, Date.now()); return; }   // 英文打字競賽：離開不中斷，照當時分數排名
@@ -776,6 +777,124 @@ function dgLeave(t, i, now) {
   s.left = true; s.cid = null;
   dgCheckEnd(t, now);
 }
+// ---- 見習驅魔師（第十桌 t10；2026-11-12，使用者要求）：1～4 人合作，玩家在場地正中央，幽靈從四面八方飄向中央，用滑鼠畫出幽靈身上的符號消除它 ----
+// 3 波小怪＋1 隻 Boss；沒被消除的幽靈碰到中央就扣某位玩家 1 滴血，全員死亡失敗、打贏 Boss 勝利。幽靈由 seed 決定性地產生（與 dev_server 的 mg_gen、client 的
+// mageGhosts 同一套，隨機只用 dgHash，不用 sin/cos，兩邊結果完全一致）；符號辨識在客戶端，伺服器權威管血量、擊殺（先到先得）、Boss 血量與勝負；
+// 沒被消除的幽靈扣血由伺服器在收到任何訊息時按時間懶惰結算（mgTick，客戶端每秒送 sync）。只有單人勝利進排行榜。與 dev_server 的 mg_* 同一套。
+const MG_HP = 5, MG_WAVE_START = 3, MG_WAVE_LEN = 28, MG_WAVE_GAP = 4;   // 第 k 波＝[3+32k, 3+32k+28)
+const MG_BOSS_START = MG_WAVE_START + 3 * (MG_WAVE_LEN + MG_WAVE_GAP), MG_BOSS_LIMIT = 180;   // Boss 出場時間（99 秒）；出場後 1.5 秒才能開始打；打不贏的上限
+const MG_R0 = 390, MG_R_HIT = 28, MG_GRACE = 0.8;   // 幽靈出現半徑（場外）、碰到中央的半徑、抵達後多久才結算扣血（容許延遲）
+const MG_N_SYMS = 10;   // 符號種類（不分難度、波數，一開始就有全部 10 種）
+const MG_SYMS = [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6]];   // 各難度（簡易／中等／困難／超難）每波「一隻幽靈身上的符號個數」；Boss 戰時的小鬼用第 1 波的個數
+const MG_INTERVAL = [2.6, 2.0, 1.5, 1.1], MG_SPEED = [38, 46, 55, 66];   // 各難度小怪生成間隔（秒，1 人）、幽靈速度（px/s）
+const MG_WAVE_MULT = [1.0, 0.85, 0.7, 1.8];   // 各波間隔倍率（第 4 項＝Boss 戰時的小鬼騷擾，比較稀）
+const MG_BOSS_HP = [12, 18, 26, 38], MG_MULT = [1.0, 1.5, 2.2, 3.2], MG_XP = [4, 6, 8, 10], MG_DIFF_NAMES = ["簡易", "中等", "困難", "超難"];   // Boss 血量（1 人，每多 1 人 +60%）、分數難度倍率、勝利 XP（失敗 1）
+const mgBossHp = (diff, n) => Math.ceil(MG_BOSS_HP[diff] * (1 + 0.6 * (n - 1)) - 1e-9);
+const mgElapsed = (t, now) => (now - t.g.t0) / 1000;
+const mgAlive = t => t.seats.map((s, i) => (s.dead ? -1 : i)).filter(i => i >= 0);
+function mgGen(g, upto) {   // 產生 ts <= upto 的幽靈，附加到 g.gh；每隻 {i, ts, syms（要依序畫的符號）, arr, tgt, w}；g.cur 是下一隻的出現時間。符號個數愈多的幽靈飄得愈慢、出現間隔愈長
+  const d = g.diff, n = g.n, seed = g.seed;
+  for (;;) {
+    let t = g.cur;
+    if (t < MG_BOSS_START) {
+      const k = Math.floor((t - MG_WAVE_START) / (MG_WAVE_LEN + MG_WAVE_GAP));
+      if ((t - MG_WAVE_START) - k * (MG_WAVE_LEN + MG_WAVE_GAP) >= MG_WAVE_LEN) t = MG_WAVE_START + (k + 1) * (MG_WAVE_LEN + MG_WAVE_GAP);   // 波與波之間的空檔：跳到下一波開頭
+    }
+    if (t >= MG_BOSS_START && t < MG_BOSS_START + 2) t = MG_BOSS_START + 2;
+    g.cur = t;
+    if (t > upto) return;
+    const i = g.gh.length, w = t >= MG_BOSS_START ? 3 : Math.floor((t - MG_WAVE_START) / (MG_WAVE_LEN + MG_WAVE_GAP));
+    const m = w === 3 ? MG_SYMS[d][0] : MG_SYMS[d][w];
+    const h = j => dgHash(seed, 10000 + i * 16 + j), u = j => h(j) / 4294967296;
+    const sp = MG_SPEED[d] * (0.85 + 0.3 * u(2)) * (w === 3 ? 0.9 : 1.0) / (1 + 0.3 * (m - 1));
+    g.gh.push({ i, ts: t, syms: Array.from({ length: m }, (_, j) => h(8 + j) % MG_N_SYMS), arr: t + (MG_R0 - MG_R_HIT) / sp, tgt: h(3), w });
+    g.cur = t + MG_INTERVAL[d] * MG_WAVE_MULT[w] / (1 + 0.5 * (n - 1)) * (0.7 + 0.6 * u(4)) * (1 + 0.3 * (m - 1));
+  }
+}
+function mgStart(t) {
+  const now = Date.now(), diff = [0, 1, 2, 3].includes(t.diff) ? t.diff : 0, n = t.seats.length;
+  t.g = { seed: Math.floor(Math.random() * 2147483648), t0: now + DG_COUNTDOWN_MS, diff, n, cur: MG_WAVE_START, gh: [], killed: {}, prog: {}, last: {}, rp: {}, boss: mgBossHp(diff, n), dmg: 0, hits: 0, lastBossAt: 0, credit: [], kills: 0 };
+  t.result = null; t.phase = "playing";
+  for (const s of t.seats) { s.hp = MG_HP; s.dead = false; s.kills = 0; s.left = false; s.ready = false; }
+  tblLog(t, `見習驅魔師（${MG_DIFF_NAMES[diff]}）開始！${n} 人參加，每人 ${MG_HP} 滴血`);
+}
+function mgFinish(t, now, win) {
+  const g = t.g, e = Math.max(0, mgElapsed(t, now));
+  const hpLeft = t.seats.reduce((a, s) => a + (s.dead ? 0 : s.hp), 0), kills = t.seats.reduce((a, s) => a + s.kills, 0);
+  const score = win ? Math.floor(1000 * MG_MULT[g.diff] + kills * 10 + hpLeft * 50 + Math.max(0, 240 - e) * 5) : 0;
+  const ranking = t.seats.map(s => ({ name: s.name, kills: s.kills, hp: Math.max(0, s.hp), dead: !!s.dead, left: !!s.left }));
+  const stay = t.seats.filter(s => !s.left), solo = g.n === 1;
+  const xp = stay.map(() => (win ? MG_XP[g.diff] : 1));
+  let text = win ? `驅魔師們打倒了 Boss！${MG_DIFF_NAMES[g.diff]}模式通關，${score} 分` : `驅魔師們全軍覆沒…（${MG_DIFF_NAMES[g.diff]}模式）`;
+  if (!win && e >= MG_BOSS_START && mgAlive(t).length) text = `Boss 太強了，撐不住…（${MG_DIFF_NAMES[g.diff]}模式）`;
+  t.seats = stay;
+  t.result = { text, rid: Math.floor(Math.random() * 4294967296), ranking, xp, win, score, diff: g.diff, solo, kills };
+  tblLog(t, text);
+  tblResetSeats(t);
+  t.g = null;
+}
+function mgTick(t, now) {   // 依時間結算：抵達中央卻沒被消除的幽靈扣血、全員死亡或 Boss 戰超時就失敗；回傳這次有沒有改變狀態
+  if (t.game !== "mage" || t.phase !== "playing" || !t.g) return false;
+  const g = t.g, e = mgElapsed(t, now);
+  if (e < 0) return false;
+  let changed = false;
+  mgGen(g, e + 0.001);
+  for (const gh of g.gh) {
+    if (g.rp[gh.i] || gh.arr + MG_GRACE > e) continue;
+    g.rp[gh.i] = 1;
+    delete g.prog[gh.i];
+    if (g.killed[gh.i] !== undefined) continue;
+    const al = mgAlive(t);
+    if (!al.length) continue;
+    const s = t.seats[al[gh.tgt % al.length]];
+    s.hp -= 1; changed = true;
+    if (s.hp <= 0) { s.dead = true; tblLog(t, `${s.name} 倒下了`); }
+  }
+  if (g.dmg >= g.boss) { mgFinish(t, now, true); return true; }   // Boss 倒下優先於全員倒下（打倒的瞬間就算贏）
+  if (!mgAlive(t).length) { mgFinish(t, now, false); return true; }
+  if (e >= MG_BOSS_START + MG_BOSS_LIMIT) { mgFinish(t, now, false); return true; }
+  return changed;
+}
+function mgKill(t, cid, i, p, now) {   // 畫對幽靈 i 的第 p 個符號（p＝這隻已完成的符號數）；全部畫完才算消除；同一個符號幾乎同時（700ms 內）畫對的隊友也行（不重複計）
+  const [role, k] = tblFind(t, cid), g = t.g;
+  if (t.game !== "mage" || role !== "seat" || t.phase !== "playing" || !g || !Number.isInteger(i) || i < 0 || !Number.isInteger(p) || p < 0) return;
+  const s = t.seats[k];
+  if (s.dead) return;
+  const e = mgElapsed(t, now);
+  mgGen(g, e + 0.001);
+  if (i >= g.gh.length || g.killed[i] !== undefined) return;
+  const gh = g.gh[i];
+  if (gh.ts > e + 0.3 || e > gh.arr + MG_GRACE) return;
+  const cur = g.prog[i] || 0, last = g.last[i];
+  if (p === cur) { g.prog[i] = cur + 1; g.last[i] = { at: now, by: [k] }; }
+  else if (p === cur - 1 && last && now - last.at <= 700 && !last.by.includes(k)) { last.by.push(k); return; }   // 同一個符號幾乎同時畫對的隊友：接受（不重複前進）
+  else return;
+  if (g.prog[i] >= gh.syms.length) { g.killed[i] = k; delete g.prog[i]; s.kills += 1; g.kills += 1; }   // 最後一個符號畫完：消除
+}
+function mgBossHit(t, cid, kk, now) {
+  const [role, k] = tblFind(t, cid), g = t.g;
+  if (t.game !== "mage" || role !== "seat" || t.phase !== "playing" || !g || !Number.isInteger(kk) || t.seats[k].dead) return;
+  const e = mgElapsed(t, now);
+  if (e < MG_BOSS_START + 1.5 || g.dmg >= g.boss) return;
+  if (kk === g.hits) { g.dmg += 1; g.hits += 1; g.lastBossAt = now; g.credit = [k]; }   // 這個符號第一個畫對的人：Boss 換下一個符號
+  else if (kk === g.hits - 1 && now - g.lastBossAt <= 700 && !g.credit.includes(k)) { g.dmg += 1; g.credit.push(k); }   // 同一個符號幾乎同時畫對的隊友：也算一次傷害（合作）
+  else return;
+  t.seats[k].kills += 1;
+}
+function mgLeave(t, i, now) {   // 遊戲進行中有人離開：視同倒下，遊戲繼續到場上沒有活人為止
+  const s = t.seats[i];
+  s.dead = true; s.left = true; s.cid = null;
+  tblLog(t, `${s.name} 離開了`);
+  mgTick(t, now);
+  if (t.phase === "playing" && !mgAlive(t).length) mgFinish(t, now, false);
+}
+function mgSetDiff(t, cid, v) {   // 桌主（第一位入座的人）在開局前選難度；改了大家要重新準備
+  const [role, i] = tblFind(t, cid);
+  if (t.game !== "mage" || role !== "seat" || i !== 0 || t.phase !== "lobby" || !Number.isInteger(v) || v < 0 || v > 3 || (t.diff || 0) === v) return;
+  t.diff = v;
+  for (const s of t.seats) s.ready = false;
+  tblLog(t, `${t.seats[0].name} 把難度改成${MG_DIFF_NAMES[v]}`);
+}
 // ---- 英文打字競賽（第七桌 t7；2026-11-10，使用者要求）：1～8 人、倒數 3 秒後 30 秒內比誰打完的英文單字多 ----
 // 題目由客戶端用伺服器給的 seed 決定性地產生（大家同一串單字，單字表在 games.json 的 typing.words）；打字與錯字鎖定都在客戶端，
 // 每打完一個字回報 word {n}（n＝目前總分，信任客戶端；伺服器只收「比上次多 1～3」的值），伺服器記分、轉發 tsc {i, n} 給同桌其他人。
@@ -787,7 +906,7 @@ const isTy = t => t.game === "typing" || t.game === "zhtyping";
 const tyUnit = t => (t.game === "zhtyping" ? "詞" : "單字");
 // 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 // 記在這座島的 storage（"boards"），每次結算後更新，table 畫面帶 board 給客戶端顯示。與 tools/dev_server.py 的 BOARDS 同一套
-const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge"]), BOARD_N = 3;
+const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage"]), BOARD_N = 3;
 // 躲彈幕 2026-11-12 起改記「分數」（存活秒數＋道具分），舊的秒數紀錄放在 "dodge" 不再使用，分數另記在 "dodge2"，避免單位混在一起
 const boardKey = game => (game === "dodge" ? "dodge2" : game);
 function boardMerge(list, entries) {
@@ -2141,7 +2260,7 @@ function unSetMode(t, cid, mode) {
   for (const s of t.seats) s.ready = false;
   tblLog(t, `${t.seats[0].name} 把玩法改成${mode === "wild" ? "無限制" : "傳統"}`);
 }
-const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 function tblView(t, cid) {
   const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
@@ -2150,7 +2269,11 @@ function tblView(t, cid) {
     seats: t.seats.map((s, k) => ({ name: s.name, n: playing ? s.hand.length : 0, ready: s.ready, out: playing ? s.out : false, you: role === "seat" && k === i })),
     specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
   };
-  if (t.game === "dodge") {   // 躲彈幕：每個座位的命數／淘汰秒數／是否已離開；進行中附上 seed 與開始時間（彈幕由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
+  if (t.game === "mage") {   // 見習驅魔師：血量／擊殺數／倒下／離開；進行中附上 seed、難度、人數、已擊殺的幽靈編號、Boss 血量與被打中的次數
+    v.diff = t.diff || 0;
+    t.seats.forEach((s, k) => { v.seats[k].hp = Math.max(0, s.hp || 0); v.seats[k].kills = s.kills || 0; v.seats[k].dead = !!s.dead; v.seats[k].left = !!s.left; });
+    if (t.g && playing) v.mg = { seed: t.g.seed, t0: t.g.t0, sn: Date.now(), diff: t.g.diff, n: t.g.n, killed: Object.keys(t.g.killed).map(Number), prog: Object.entries(t.g.prog).map(([x, y]) => [Number(x), y]), boss: t.g.boss, dmg: t.g.dmg, hits: t.g.hits };
+  } else if (t.game === "dodge") {   // 躲彈幕：每個座位的命數／淘汰秒數／是否已離開；進行中附上 seed 與開始時間（彈幕由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
     t.seats.forEach((s, k) => { v.seats[k].lives = s.lives || 0; v.seats[k].died = s.died ?? null; v.seats[k].left = !!s.left; v.seats[k].bonus = s.bonus || 0; });
     if (t.g && playing) v.dg = { seed: t.g.seed, t0: t.g.t0, dur: DG_DUR, sn: Date.now(), n: t.g.n, taken: [...t.g.taken], fx: [...t.g.fx] };
   } else if (isTy(t)) {   // 英打／中文打字競賽：每個座位的分數／是否已離開；進行中附上 seed 與開始時間（題目由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
@@ -2658,7 +2781,7 @@ export class Island {
   async tableBoard(t, resBefore) {
     const r = t.result;
     if (!BOARD_GAMES.has(t.game) || !r || r === resBefore || r.aborted || !r.ranking) return;
-    const ts = Date.now(), entries = r.ranking.filter(x => !x.left).map(x => ({ name: x.name, score: x.score, ts })).filter(e => e.score > 0);
+    const ts = Date.now(), entries = t.game === "mage" ? (r.win && r.solo ? [{ name: r.ranking[0].name, score: r.score, ts }] : []) : r.ranking.filter(x => !x.left).map(x => ({ name: x.name, score: x.score, ts })).filter(e => e.score > 0);   // 見習驅魔師：只有單人勝利進排行榜
     if (!entries.length) return;
     const bk = boardKey(t.game), boards = await this.getBoards(), old = boards[bk] || [], nb = boardMerge(old, entries);
     if (JSON.stringify(nb.map(e => [e.name, e.score])) === JSON.stringify(old.map(e => [e.name, e.score]))) return;
@@ -2684,9 +2807,10 @@ export class Island {
     if (a === "pos" || a === "word") {   // 躲彈幕的位置回報、英文打字競賽的分數回報：自己的限流，不影響 hit／finish 等操作
       if (now - (this.lastTblPos.get(ws) || 0) < TBL_POS_CD_MS) return;
       this.lastTblPos.set(ws, now);
-    } else if (a === "typ") {   // 英文打字競賽的打字進度（只轉發給觀戰者）：自己的限流
+    } else if (a === "typ" || a === "sync") {   // 英文打字競賽的打字進度（只轉發給觀戰者）、見習驅魔師的每秒對時：自己的限流
       if (now - (this.lastTblTyp.get(ws) || 0) < TBL_TYP_CD_MS) return;
       this.lastTblTyp.set(ws, now);
+    } else if (a === "kill" || a === "boss") {   // 見習驅魔師的擊殺／打 Boss：不限流（兩次之間本來就隔著一筆畫，限流反而會吃掉擊殺）
     } else {
       if (now - (this.lastTbl.get(ws) || 0) < TBL_CD_MS) return;
       this.lastTbl.set(ws, now);
@@ -2750,6 +2874,7 @@ export class Island {
     dgCheckEnd(t, now);   // 時間到了就先結算（下面的動作若是 finish／hit 就只是確認）
     tyCheckEnd(t, now);
     itTick(t, now);   // 秘藥情報戰：識破時間過了就生效、逾時自動處理
+    const mgChanged = mgTick(t, now);   // 見習驅魔師：沒被消除的幽靈扣血、勝負
     if (t.game === "intel" && IT_MSGS.has(a)) itMsg(t, att.id, msg, now);   // 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
     else if (a === "ready") tblReady(t, att.id, msg.v);
     else if (a === "sit") tblSit(t, att.id);
@@ -2764,6 +2889,10 @@ export class Island {
     else if (a === "timeout") unTimeout(t, now);
     else if (a === "mode") unSetMode(t, att.id, msg.v);   // UNO：桌主在開局前選玩法（classic／wild）
     else if (a === "hit") dgHit(t, att.id, now);   // 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
+    else if (a === "kill") mgKill(t, att.id, msg.i, msg.p, now);   // 見習驅魔師：我消除了幽靈 i（符號辨識在客戶端，伺服器驗時間與先到先得）
+    else if (a === "boss") mgBossHit(t, att.id, msg.k, now);   // 見習驅魔師：我畫對了 Boss 的第 k 個符號
+    else if (a === "mdiff") mgSetDiff(t, att.id, msg.v);   // 見習驅魔師：桌主選難度
+    else if (a === "sync") { if (!mgChanged && t.phase === "playing") return; }   // 見習驅魔師：客戶端每秒一次，讓伺服器結算沒被消除的幽靈；沒有變化就不存檔、不通知畫面
     else if (a === "pick") dgPick(t, att.id, msg.n, now, msg.x, msg.y);   // 躲彈幕：我吃到道具 n（客戶端自判，伺服器驗時間／距離／先到先得並結算）
     else if (a === "finish") { dgCheckEnd(t, now + 300); tyCheckEnd(t, now + 300); }   // 躲彈幕／英文打字競賽：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）
     else return;

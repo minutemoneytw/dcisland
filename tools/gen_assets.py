@@ -1692,7 +1692,8 @@ TABLES_BY_TERRAIN = {
               dict(id="t5", game="dodge", cell=[56, 39], w=3, h=2),   # 躲彈幕只有一桌（2026-11-08，使用者要求）
               dict(id="t7", game="typing", cell=[64, 32], w=3, h=2),   # 英文打字競賽（2026-11-10，使用者要求）：抽鬼牌右邊、同一排相距 8 格
               dict(id="t8", game="intel", cell=[64, 39], w=3, h=2),   # 秘藥情報戰（2026-11-10，使用者要求）：躲彈幕右邊、英文打字競賽下面
-              dict(id="t9", game="zhtyping", cell=[72, 32], w=3, h=2)],   # 中文打字競賽（2026-11-11，使用者要求）：英文打字競賽右邊同一排
+              dict(id="t9", game="zhtyping", cell=[72, 32], w=3, h=2),   # 中文打字競賽（2026-11-11，使用者要求）：英文打字競賽右邊同一排
+              dict(id="t10", game="mage", cell=[72, 39], w=3, h=2)],   # 見習驅魔師（2026-11-12，使用者要求）：中文打字競賽下面、秘藥情報戰右邊
 }
 
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
@@ -1773,6 +1774,26 @@ def table_zhtyping():
         for x in range(9, 39, 3): cv.rect(x, y, x + 1, y, shade(kb, .78))
     cv.rect(15, 22, 32, 22, shade(kb, .78))                                           # 空白鍵
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    cv.outline()
+    return cv
+
+def table_mage():
+    """見習驅魔師：深色桌面，中間一張黃色符紙（紅色符號），旁邊一隻白色小幽靈（有臉）和一個銅鈴。"""
+    cv = Canvas(48, 32)
+    wood = hx("#3a2a4a")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.35))
+    cv.rect(2, 6, 45, 25, hx("#2a2038"))
+    paper = hx("#f0d878")
+    cv.rect(17, 8, 30, 24, paper); cv.rect(17, 8, 30, 8, shade(paper, .8)); cv.rect(17, 24, 30, 24, shade(paper, .8))   # 符紙（上下有邊）
+    red = hx("#d02a2a")
+    cv.rect(20, 11, 27, 11, red); cv.rect(23, 11, 24, 20, red); cv.rect(20, 15, 27, 15, red); cv.rect(21, 18, 26, 18, red)   # 符紙上的紅色符文
+    gh = hx("#eef0ff")                                                                                                  # 小幽靈（左邊）
+    cv.ellipse(8.5, 13.5, 4.5, 5, gh); cv.rect(4, 14, 13, 19, gh)
+    for x in (4, 7, 10): cv.rect(x, 20, x + 1, 21, gh)                                                                  # 下擺鋸齒
+    cv.rect(6, 12, 7, 13, hx("#20204a")); cv.rect(10, 12, 11, 13, hx("#20204a")); cv.rect(8, 16, 9, 16, hx("#20204a")) # 臉：眼睛與嘴
+    bell = hx("#d8a838")                                                                                                # 銅鈴（右邊）
+    cv.ellipse(38.5, 17.5, 4, 4, bell); cv.rect(34, 18, 43, 21, bell); cv.rect(38, 22, 39, 23, shade(bell, .7))
+    cv.rect(38, 10, 39, 13, shade(bell, .7))
     cv.outline()
     return cv
 
@@ -3130,6 +3151,7 @@ def main():
     save(table_typing(), "table_typing.png", "games")
     save(table_intel(), "table_intel.png", "games")
     save(table_zhtyping(), "table_zhtyping.png", "games")
+    save(table_mage(), "table_mage.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")

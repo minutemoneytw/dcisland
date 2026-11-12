@@ -636,8 +636,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -724,6 +724,9 @@ def tbl_leave(t, cid):
         name = t["seats"][i]["name"]
         if t["phase"] == "playing" and t["game"] == "dodge":   # 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
             dg_leave(t, i, int(time.time() * 1000))
+            return
+        if t["phase"] == "playing" and t["game"] == "mage":   # 見習驅魔師：離開不中斷，視同倒下，到場上沒有活人為止
+            mg_leave(t, i, int(time.time() * 1000))
             return
         if t["phase"] == "playing" and t["game"] == "uno":   # UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
             un_leave(t, i, int(time.time() * 1000))
@@ -1062,6 +1065,208 @@ def dg_leave(t, i, now):
     s["left"], s["cid"] = True, None
     dg_check_end(t, now)
 
+# ---- 見習驅魔師（第十桌 t10；2026-11-12，使用者要求）：1～4 人合作，玩家在場地正中央，幽靈從四面八方飄向中央，用滑鼠畫出幽靈身上的符號消除它 ----
+# 3 波小怪＋1 隻 Boss；沒被消除的幽靈碰到中央就扣某位玩家 1 滴血，全員死亡失敗、打贏 Boss 勝利。幽靈由 seed 決定性地產生（與 worker 的 mgGhosts、client 的
+# mageGhosts 同一套，隨機只用 mg_hash，不用 sin/cos，兩邊結果完全一致）；符號辨識在客戶端，伺服器權威管血量、擊殺（先到先得）、Boss 血量與勝負；
+# 沒被消除的幽靈扣血由伺服器在收到任何訊息時按時間懶惰結算（mg_tick，客戶端每秒送 sync）。只有單人勝利進排行榜。與 worker 的 mg* 同一套。
+MG_HP = 5
+MG_WAVE_START, MG_WAVE_LEN, MG_WAVE_GAP = 3.0, 28.0, 4.0           # 第 k 波＝[3+32k, 3+32k+28)
+MG_BOSS_START = 3.0 + 3 * (MG_WAVE_LEN + MG_WAVE_GAP)              # Boss 出場時間（99 秒）；Boss 出場後 1.5 秒才能開始打
+MG_BOSS_LIMIT = 180.0                                              # Boss 出場後打不贏的上限（秒）
+MG_R0, MG_R_HIT = 390.0, 28.0                                      # 幽靈出現半徑（場外）與碰到中央的半徑
+MG_GRACE = 0.8                                                     # 幽靈抵達後多久才結算扣血（容許延遲）
+MG_N_SYMS = 10                                                     # 符號種類（不分難度、波數，一開始就有全部 10 種）
+MG_SYMS = [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6]]             # 各難度（簡易／中等／困難／超難）每波「一隻幽靈身上的符號個數」；Boss 戰時的小鬼用第 1 波的個數
+MG_INTERVAL = [2.6, 2.0, 1.5, 1.1]                                 # 各難度小怪生成間隔（秒，1 人）
+MG_SPEED = [38.0, 46.0, 55.0, 66.0]                                # 各難度幽靈速度（px/s）
+MG_WAVE_MULT = [1.0, 0.85, 0.7, 1.8]                               # 各波間隔倍率（第 4 項＝Boss 戰時的小鬼騷擾，比較稀）
+MG_BOSS_HP = [12, 18, 26, 38]                                      # 各難度 Boss 血量（1 人），每多 1 人 +60%
+MG_MULT = [1.0, 1.5, 2.2, 3.2]                                     # 分數的難度倍率
+MG_XP = [4, 6, 8, 10]                                              # 勝利每位入座者的 XP（失敗 1）
+MG_DIFF_NAMES = ["簡易", "中等", "困難", "超難"]
+
+def mg_hash(a, b):
+    return dg_hash(a, b)
+
+def mg_boss_hp(diff, n):
+    return int(math.ceil(MG_BOSS_HP[diff] * (1 + 0.6 * (n - 1)) - 1e-9))
+
+def mg_boss_sym(seed, k, diff):
+    """Boss 的第 k 個符號（k＝已被打中的次數）。"""
+    return mg_hash(seed, 5000 + k) % MG_N_SYMS
+
+def mg_gen(g, upto):
+    """產生 ts <= upto 的幽靈，附加到 g["gh"]。每隻 {i, ts, syms（要依序畫的符號）, arr, tgt, w}；之後可以再接著產生（g["cur"] 是下一隻的出現時間）。
+    符號個數愈多的幽靈飄得愈慢、出現間隔愈長（給玩家畫完的時間）。"""
+    d, n, seed = g["diff"], g["n"], g["seed"]
+    while True:
+        t = g["cur"]
+        if t < MG_BOSS_START:
+            k = int((t - MG_WAVE_START) // (MG_WAVE_LEN + MG_WAVE_GAP))
+            if (t - MG_WAVE_START) - k * (MG_WAVE_LEN + MG_WAVE_GAP) >= MG_WAVE_LEN:   # 波與波之間的空檔：跳到下一波開頭
+                t = MG_WAVE_START + (k + 1) * (MG_WAVE_LEN + MG_WAVE_GAP)
+        if t >= MG_BOSS_START and t < MG_BOSS_START + 2:
+            t = MG_BOSS_START + 2.0
+        g["cur"] = t
+        if t > upto:
+            return
+        i = len(g["gh"])
+        w = 3 if t >= MG_BOSS_START else int((t - MG_WAVE_START) // (MG_WAVE_LEN + MG_WAVE_GAP))
+        m = MG_SYMS[d][0] if w == 3 else MG_SYMS[d][w]
+        h = lambda j: mg_hash(seed, 10000 + i * 16 + j)
+        u = lambda j: h(j) / 4294967296.0
+        sp = MG_SPEED[d] * (0.85 + 0.3 * u(2)) * (0.9 if w == 3 else 1.0) / (1 + 0.3 * (m - 1))
+        g["gh"].append({"i": i, "ts": t, "syms": [h(8 + j) % MG_N_SYMS for j in range(m)], "arr": t + (MG_R0 - MG_R_HIT) / sp, "tgt": h(3), "w": w})
+        g["cur"] = t + MG_INTERVAL[d] * MG_WAVE_MULT[w] / (1 + 0.5 * (n - 1)) * (0.7 + 0.6 * u(4)) * (1 + 0.3 * (m - 1))
+
+def mg_elapsed(t, now):
+    return (now - t["g"]["t0"]) / 1000.0
+
+def mg_alive(t):
+    return [i for i, s in enumerate(t["seats"]) if not s.get("dead")]
+
+def mg_start(t):
+    now = int(time.time() * 1000)
+    diff = t.get("diff", 0) if t.get("diff", 0) in (0, 1, 2, 3) else 0
+    n = len(t["seats"])
+    t["g"] = {"seed": random.getrandbits(31), "t0": now + DG_COUNTDOWN_MS, "diff": diff, "n": n, "cur": MG_WAVE_START, "gh": [],
+              "killed": {}, "prog": {}, "last": {}, "rp": {}, "boss": mg_boss_hp(diff, n), "dmg": 0, "hits": 0, "lastBossAt": 0, "credit": [], "kills": 0}
+    t["result"] = None
+    t["phase"] = "playing"
+    for s in t["seats"]:
+        s["hp"], s["dead"], s["kills"], s["left"], s["ready"] = MG_HP, False, 0, False, False
+    tbl_log(t, f"見習驅魔師（{MG_DIFF_NAMES[diff]}）開始！{n} 人參加，每人 {MG_HP} 滴血")
+
+def mg_finish(t, now, win):
+    g = t["g"]
+    e = max(0.0, mg_elapsed(t, now))
+    hp_left = sum(s["hp"] for s in t["seats"] if not s.get("dead"))
+    kills = sum(s["kills"] for s in t["seats"])
+    score = int(1000 * MG_MULT[g["diff"]] + kills * 10 + hp_left * 50 + max(0.0, 240.0 - e) * 5) if win else 0
+    ranking = [{"name": s["name"], "kills": s["kills"], "hp": max(0, s["hp"]), "dead": bool(s.get("dead")), "left": bool(s.get("left"))} for s in t["seats"]]
+    stay = [s for s in t["seats"] if not s.get("left")]
+    xp = [MG_XP[g["diff"]] if win else 1 for s in stay]
+    solo = g["n"] == 1
+    text = f"驅魔師們打倒了 Boss！{MG_DIFF_NAMES[g['diff']]}模式通關，{score} 分" if win else f"驅魔師們全軍覆沒…（{MG_DIFF_NAMES[g['diff']]}模式）"
+    if not win and e >= MG_BOSS_START and mg_alive(t):
+        text = f"Boss 太強了，撐不住…（{MG_DIFF_NAMES[g['diff']]}模式）"
+    if win and solo:
+        board_record(t, [(t["seats"][0]["name"], score)])
+    t["seats"] = stay
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp, "win": win, "score": score, "diff": g["diff"], "solo": solo, "kills": kills}
+    tbl_log(t, text)
+    tbl_reset_seats(t)
+    t["g"] = None
+
+def mg_tick(t, now):
+    """依時間結算：抵達中央卻沒被消除的幽靈扣血、全員死亡或 Boss 戰超時就失敗。回傳這次有沒有改變狀態。"""
+    if t["game"] != "mage" or t["phase"] != "playing" or not t.get("g"):
+        return False
+    g = t["g"]
+    e = mg_elapsed(t, now)
+    if e < 0:
+        return False
+    changed = False
+    mg_gen(g, e + 0.001)
+    for gh in g["gh"]:   # 還沒結算過的（killed 的不用扣）
+        if str(gh["i"]) in g["rp"]:
+            continue
+        if gh["arr"] + MG_GRACE > e:
+            continue
+        g["rp"][str(gh["i"])] = 1
+        g["prog"].pop(str(gh["i"]), None)
+        if str(gh["i"]) in g["killed"]:
+            continue
+        al = mg_alive(t)
+        if not al:
+            continue
+        s = t["seats"][al[gh["tgt"] % len(al)]]
+        s["hp"] -= 1
+        changed = True
+        if s["hp"] <= 0:
+            s["dead"] = True
+            tbl_log(t, f"{s['name']} 倒下了")
+    if g["dmg"] >= g["boss"]:   # Boss 倒下優先於全員倒下（打倒的瞬間就算贏）
+        mg_finish(t, now, True)
+        return True
+    if not mg_alive(t):
+        mg_finish(t, now, False)
+        return True
+    if e >= MG_BOSS_START + MG_BOSS_LIMIT:
+        mg_finish(t, now, False)
+        return True
+    return changed
+
+def mg_kill(t, cid, i, p, now):
+    """畫對幽靈 i 的第 p 個符號（p＝這隻已完成的符號數）。全部畫完才算消除；同一個符號幾乎同時（700ms 內）畫對的隊友也行（不重複計）。"""
+    role, k = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "mage" or role != "seat" or t["phase"] != "playing" or not g or type(i) is not int or i < 0 or type(p) is not int or p < 0:
+        return
+    s = t["seats"][k]
+    if s.get("dead"):
+        return
+    e = mg_elapsed(t, now)
+    mg_gen(g, e + 0.001)
+    if i >= len(g["gh"]) or str(i) in g["killed"]:
+        return
+    gh = g["gh"][i]
+    if gh["ts"] > e + 0.3 or e > gh["arr"] + MG_GRACE:
+        return
+    key = str(i)
+    cur = g["prog"].get(key, 0)
+    if p == cur:
+        g["prog"][key] = cur + 1
+        g["last"][key] = {"at": now, "by": [k]}
+    elif p == cur - 1 and key in g["last"] and now - g["last"][key]["at"] <= 700 and k not in g["last"][key]["by"]:
+        g["last"][key]["by"].append(k)   # 同一個符號幾乎同時畫對的隊友：接受（不重複前進）
+        return
+    else:
+        return
+    if g["prog"][key] >= len(gh["syms"]):   # 最後一個符號畫完：消除
+        g["killed"][key] = k
+        g["prog"].pop(key, None)
+        s["kills"] += 1
+        g["kills"] += 1
+
+def mg_boss_hit(t, cid, kk, now):
+    role, k = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "mage" or role != "seat" or t["phase"] != "playing" or not g or type(kk) is not int or t["seats"][k].get("dead"):
+        return
+    e = mg_elapsed(t, now)
+    if e < MG_BOSS_START + 1.5 or g["dmg"] >= g["boss"]:
+        return
+    if kk == g["hits"]:   # 這個符號第一個畫對的人：Boss 換下一個符號
+        g["dmg"] += 1
+        g["hits"] += 1
+        g["lastBossAt"], g["credit"] = now, [k]
+    elif kk == g["hits"] - 1 and now - g["lastBossAt"] <= 700 and k not in g["credit"]:   # 同一個符號幾乎同時畫對的隊友：也算一次傷害（合作）
+        g["dmg"] += 1
+        g["credit"].append(k)
+    else:
+        return
+    t["seats"][k]["kills"] += 1
+
+def mg_leave(t, i, now):
+    """遊戲進行中有人離開：視同倒下，遊戲繼續到場上沒有活人為止。"""
+    s = t["seats"][i]
+    s["dead"], s["left"], s["cid"] = True, True, None
+    tbl_log(t, f"{s['name']} 離開了")
+    mg_tick(t, now)
+    if t["phase"] == "playing" and not mg_alive(t):
+        mg_finish(t, now, False)
+
+def mg_set_diff(t, cid, v):
+    """桌主（第一位入座的人）在開局前選難度；改了大家要重新準備。"""
+    role, i = tbl_find(t, cid)
+    if t["game"] != "mage" or role != "seat" or i != 0 or t["phase"] != "lobby" or v not in (0, 1, 2, 3) or type(v) is not int or t.get("diff", 0) == v:
+        return
+    t["diff"] = v
+    for s in t["seats"]:
+        s["ready"] = False
+    tbl_log(t, f"{t['seats'][0]['name']} 把難度改成{MG_DIFF_NAMES[v]}")
+
 # ---- 英文打字競賽（第七桌 t7；2026-11-10，使用者要求）：1～8 人、倒數 3 秒後 30 秒內比誰打完的英文單字多 ----
 # 題目由客戶端用伺服器給的 seed 決定性地產生（大家同一串單字，單字表在 games.json 的 typing.words）；打字與錯字鎖定都在客戶端，
 # 每打完一個字回報 word {n}（n＝目前總分，信任客戶端；伺服器只收「比上次多 1～3」的值），伺服器記分、轉發 tsc {i, n} 給同桌其他人。
@@ -1076,7 +1281,7 @@ def ty_unit(t):
 
 # 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 # 這裡記在記憶體（重啟就清掉），Worker 版記在島的 storage；table 畫面帶 board 給客戶端顯示。與 worker 的 boardMerge 同一套
-BOARD_GAMES = {"typing", "zhtyping", "dodge"}
+BOARD_GAMES = {"typing", "zhtyping", "dodge", "mage"}
 BOARD_N = 3
 BOARDS = {}
 
@@ -3178,7 +3383,7 @@ def un_set_mode(t, cid, mode):
         s["ready"] = False
     tbl_log(t, f"{t['seats'][0]['name']} 把玩法改成{'無限制' if mode == 'wild' else '傳統'}")
 
-GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
@@ -3198,6 +3403,14 @@ def tbl_view(t, cid):
             seats[k].update(lives=s.get("lives", 0), died=s.get("died"), left=bool(s.get("left")), bonus=s.get("bonus", 0))
         if g and playing:
             v["dg"] = {"seed": g["seed"], "t0": g["t0"], "dur": DG_DUR, "sn": int(time.time() * 1000), "n": g["n"], "taken": list(g["taken"]), "fx": list(g["fx"])}
+    elif t["game"] == "mage":   # 見習驅魔師：血量／擊殺數／倒下／離開；進行中附上 seed、難度、人數、已擊殺的幽靈編號、Boss 血量與被打中的次數
+        v["diff"] = t.get("diff", 0)
+        for k, s in enumerate(t["seats"]):
+            seats[k].update(hp=max(0, s.get("hp", 0)), kills=s.get("kills", 0), dead=bool(s.get("dead")), left=bool(s.get("left")))
+        if g and playing:
+            v["mg"] = {"seed": g["seed"], "t0": g["t0"], "sn": int(time.time() * 1000), "diff": g["diff"], "n": g["n"], "killed": [int(x) for x in g["killed"]],
+                       "prog": [[int(x), y] for x, y in g["prog"].items()],
+                       "boss": g["boss"], "dmg": g["dmg"], "hits": g["hits"]}
     elif ty_is(t):   # 英打／中文打字競賽：每個座位的分數／是否已離開；進行中附上 seed 與開始時間（題目由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
         for k, s in enumerate(t["seats"]):
             seats[k].update(score=s.get("score", 0), left=bool(s.get("left")))
@@ -4561,6 +4774,7 @@ class Room:
                     dg_check_end(t, now_ms)   # 時間到了就先結算（下面的動作若是 finish／hit 就只是確認）
                     ty_check_end(t, now_ms)
                     it_tick(t, now_ms)   # 秘藥情報戰：識破時間過了就生效、逾時自動處理
+                    mg_changed = mg_tick(t, now_ms)   # 見習驅魔師：沒被消除的幽靈扣血、勝負
                     if t["game"] == "intel" and a in IT_MSGS:   # 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
                         it_msg(t, cid, msg, now_ms)
                     elif a == "ready":
@@ -4592,6 +4806,15 @@ class Room:
                         un_set_mode(t, cid, msg.get("v"))
                     elif a == "hit":   # 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
                         dg_hit(t, cid, now_ms)
+                    elif a == "kill":   # 見習驅魔師：我消除了幽靈 i（符號辨識在客戶端，伺服器驗時間與先到先得）
+                        mg_kill(t, cid, msg.get("i"), msg.get("p"), now_ms)
+                    elif a == "boss":   # 見習驅魔師：我畫對了 Boss 的第 k 個符號
+                        mg_boss_hit(t, cid, msg.get("k"), now_ms)
+                    elif a == "mdiff":   # 見習驅魔師：桌主選難度
+                        mg_set_diff(t, cid, msg.get("v"))
+                    elif a == "sync":   # 見習驅魔師：客戶端每秒一次，讓伺服器結算沒被消除的幽靈（上面已 mg_tick）；沒有變化就不通知畫面
+                        if not mg_changed and t["phase"] == "playing":
+                            return [], None, None
                     elif a == "pick":   # 躲彈幕：我吃到道具 n（客戶端自判，伺服器驗時間／距離／先到先得並結算）
                         dg_pick(t, cid, msg.get("n"), now_ms, msg.get("x"), msg.get("y"))
                     elif a == "finish":   # 躲彈幕／英文打字競賽：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）
@@ -4940,10 +5163,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         if now - last_pos < TBL_POS_CD:
                             continue
                         last_pos = now
-                    elif msg.get("a") == "typ":   # 英文打字競賽的打字進度（只轉發給觀戰者）：自己的限流
+                    elif msg.get("a") in ("typ", "sync"):   # 英文打字競賽的打字進度（只轉發給觀戰者）、見習驅魔師的每秒對時：自己的限流
                         if now - last_typ < TBL_TYP_CD:
                             continue
                         last_typ = now
+                    elif msg.get("a") in ("kill", "boss"):   # 見習驅魔師的擊殺／打 Boss：不限流（兩次之間本來就隔著一筆畫，限流反而會吃掉擊殺）
+                        pass
                     else:
                         if now - last_tbl < TBL_CD:
                             continue
