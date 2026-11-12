@@ -643,8 +643,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -729,6 +729,9 @@ def tbl_leave(t, cid):
         t["specs"].pop(i)
     elif role == "seat":
         name = t["seats"][i]["name"]
+        if t["phase"] == "playing" and t["game"] == "trigon":   # 三角方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
+            tg_leave(t, i, int(time.time() * 1000))
+            return
         if t["phase"] == "playing" and t["game"] == "blokus":   # 方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
             bk_leave(t, i, int(time.time() * 1000))
             return
@@ -1117,6 +1120,251 @@ def bk_leave(t, i, now):
         bk_advance(t, i, now)
     elif all(d["done"] for d in g["sd"]):
         bk_finish(t)
+
+# ---- 方塊拼圖「三角版」Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：2～4 人、正六邊形的三角格棋盤（邊長 9，共 486 格）、每人 22 塊（1～6 個三角形，共 110 格）----
+# 規則與座標系說明見 worker/src/index.js 的 tg*（同一套）：三角形 (x, y)、(x + y) 偶數＝朝上；頂點是格點 (i, j)；方向轉換用軸座標 ((i − j) / 2, j)。
+TG_N, TG_CX, TG_W, TG_ROWS, TG_VW, TG_TURN_MS, TG_IDLE_MAX, TG_XP, TG_TOTAL = 9, 19, 39, 18, 41, 45000, 2, 6, 110
+TG_PIECES = [[(0, 0)], [(0, 0), (0, 1)], [(0, 0), (-1, 1), (0, 1)], [(0, 0), (-1, 1), (0, 1), (-1, 2)], [(0, 0), (-1, 1), (0, 1), (1, 1)], [(0, 0), (-2, 1), (-1, 1), (0, 1)], [(0, 0), (-1, 1), (0, 1), (-1, 2), (0, 2)], [(0, 0), (-1, 1), (0, 1), (-2, 2), (-1, 2)], [(0, 0), (-1, 1), (0, 1), (1, 1), (-1, 2)], [(0, 0), (1, 0), (0, 1), (1, 1), (2, 1)], [(0, 0), (-1, 1), (0, 1), (-1, 2), (0, 2), (0, 3)], [(0, 0), (-1, 1), (0, 1), (-1, 2), (0, 2), (1, 2)], [(0, 0), (-1, 1), (0, 1), (-2, 2), (-1, 2), (-2, 3)], [(0, 0), (-1, 1), (0, 1), (-2, 2), (-1, 2), (0, 2)], [(0, 0), (-1, 1), (0, 1), (-3, 2), (-2, 2), (-1, 2)], [(0, 0), (-1, 1), (0, 1), (1, 1), (-1, 2), (0, 2)], [(0, 0), (-1, 1), (0, 1), (1, 1), (-1, 2), (1, 2)], [(0, 0), (-1, 1), (0, 1), (1, 1), (2, 1), (-1, 2)], [(0, 0), (-1, 1), (0, 1), (1, 1), (2, 1), (1, 2)], [(0, 0), (-2, 1), (-1, 1), (0, 1), (-2, 2), (-1, 2)], [(0, 0), (-3, 1), (-2, 1), (-1, 1), (0, 1), (-3, 2)], [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]]   # 22 塊 polyiamond（1／1／1／3／4／12 種，三角形的 (x, y)，已正規化；與客戶端、Worker 同一份）
+
+def tg_verts(x, y):
+    return [(x, y), (x - 1, y + 1), (x + 1, y + 1)] if (x + y) % 2 == 0 else [(x - 1, y), (x + 1, y), (x, y + 1)]
+
+def tg_from_verts(vs):
+    jm = min(v[1] for v in vs)
+    top = [v for v in vs if v[1] == jm]
+    if len(top) == 2:
+        return (next(v for v in vs if v[1] != jm)[0], jm)
+    return (top[0][0], jm)
+
+def tg_xform(c, rot, flip):
+    out = []
+    for i, j in tg_verts(c[0], c[1]):
+        a, b = (i - j) // 2, j
+        for _ in range(rot):
+            a, b = -b, a + b
+        if flip:
+            a, b = -a - b, b
+        out.append((2 * a + b, b))
+    return tg_from_verts(out)
+
+def tg_norm(cells):
+    y0 = min(c[1] for c in cells)
+    x0 = min(c[0] for c in cells if c[1] == y0)
+    p = (x0 + y0) % 2
+    dx, dy = -x0 + p, -y0
+    return sorted(((c[0] + dx, c[1] + dy) for c in cells), key=lambda c: (c[1], c[0]))
+
+def tg_key(cells):
+    return ";".join(f"{x},{y}" for x, y in tg_norm(cells))
+
+def _tg_orients(cells):
+    seen = {}
+    for f in (0, 1):
+        for r in range(6):
+            n = tg_norm([tg_xform(c, r, f) for c in cells])
+            seen[tg_key(n)] = n
+    return list(seen.values())
+
+TG_ORI = [_tg_orients(c) for c in TG_PIECES]
+TG_ORI_KEYS = [set(tg_key(o) for o in os_) for os_ in TG_ORI]
+
+def tg_left(j): return TG_CX - TG_N - j if j <= TG_N else TG_CX - 3 * TG_N + j
+def tg_right(j): return TG_CX + TG_N + j if j <= TG_N else TG_CX + 3 * TG_N - j
+def tg_in_v(i, j): return 0 <= j <= 2 * TG_N and tg_left(j) <= i <= tg_right(j)
+
+TG_CORNERS = [(TG_CX - TG_N, 0), (TG_CX + TG_N, 0), (TG_CX + 2 * TG_N, TG_N), (TG_CX + TG_N, 2 * TG_N), (TG_CX - TG_N, 2 * TG_N), (TG_CX - 2 * TG_N, TG_N)]   # 六個頂點（左上起順時針）
+TG_SLOTS = {2: [0, 3], 3: [0, 2, 4], 4: [0, 1, 3, 4]}   # 各人數用哪幾個頂點（2 人對角、3 人隔一個、4 人兩兩對稱）
+TG_VALID = [0] * (TG_W * TG_ROWS)
+TG_EDGE, TG_CELLV, TG_AROUND = {}, {}, {}
+for _y in range(TG_ROWS):
+    for _x in range(TG_W):
+        if all(tg_in_v(i, j) for i, j in tg_verts(_x, _y)):
+            TG_VALID[_y * TG_W + _x] = 1
+for _y in range(TG_ROWS):
+    for _x in range(TG_W):
+        _c = _y * TG_W + _x
+        if not TG_VALID[_c]:
+            continue
+        TG_EDGE[_c] = [b * TG_W + a for a, b in ((_x - 1, _y), (_x + 1, _y), (_x, _y + 1 if (_x + _y) % 2 == 0 else _y - 1))
+                       if 0 <= a < TG_W and 0 <= b < TG_ROWS and TG_VALID[b * TG_W + a]]
+        TG_CELLV[_c] = [j * TG_VW + i for i, j in tg_verts(_x, _y)]
+        for _v in TG_CELLV[_c]:
+            TG_AROUND.setdefault(_v, []).append(_c)
+
+def tg_vid(p):
+    return p[1] * TG_VW + p[0]
+
+def tg_legal(g, k, cells):
+    """座位 k 放這些格子（格子編號 y * TG_W + x）合不合法。"""
+    col, corner, first, b = g["col"][k] + 1, tg_vid(TG_CORNERS[g["corner"][k]]), g["sd"][k]["placed"] == 0, g["board"]
+    touch = start = False
+    for c in cells:
+        if not TG_VALID[c] or b[c]:
+            return False
+        for e in TG_EDGE[c]:
+            if b[e] == col:
+                return False
+        for v in TG_CELLV[c]:
+            if v == corner:
+                start = True
+            if not touch:
+                for t in TG_AROUND[v]:
+                    if t != c and b[t] == col:
+                        touch = True
+                        break
+    return start if first else touch
+
+def tg_moves(g, k, one=False):
+    """座位 k 所有合法放法 [(p, key, cells)]（依 key 排序，測試用）；one＝True 時找到一個就回。"""
+    col, sd, b = g["col"][k] + 1, g["sd"][k], g["board"]
+    out, seen, anchors, mark = [], set(), [], set()
+    if sd["placed"] == 0:
+        anchors = [t for t in TG_AROUND[tg_vid(TG_CORNERS[g["corner"][k]])] if not b[t]]
+    else:
+        for c in range(len(b)):
+            if b[c] != col:
+                continue
+            for v in TG_CELLV[c]:
+                for t in TG_AROUND[v]:
+                    if b[t] or t in mark or any(b[e] == col for e in TG_EDGE[t]):
+                        continue
+                    mark.add(t)
+                    anchors.append(t)
+    anchors.sort()
+    for p in range(len(TG_PIECES)):
+        if p in sd["used"]:
+            continue
+        for o in TG_ORI[p]:
+            for ox, oy in o:
+                for a in anchors:
+                    ax, ay = a % TG_W, a // TG_W
+                    if ((ox + oy) ^ (ax + ay)) & 1:
+                        continue   # 方向（朝上／朝下）要一樣，平移才合法
+                    dx, dy = ax - ox, ay - oy
+                    cells = []
+                    okb = True
+                    for x, y in o:
+                        X, Y = x + dx, y + dy
+                        if X < 0 or X >= TG_W or Y < 0 or Y >= TG_ROWS:
+                            okb = False
+                            break
+                        cells.append(Y * TG_W + X)
+                    if not okb or not tg_legal(g, k, cells):
+                        continue
+                    cells.sort()
+                    key = f"{p}:" + ",".join(str(c) for c in cells)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    out.append((p, key, cells))
+                    if one:
+                        return out
+    return sorted(out, key=lambda m: m[1])
+
+def tg_rem(g, k):
+    return TG_TOTAL - sum(len(TG_PIECES[p]) for p in g["sd"][k]["used"])
+
+def tg_score(g, k):
+    r = tg_rem(g, k)
+    return -r + (15 + (5 if g["sd"][k]["mono"] else 0) if r == 0 else 0)
+
+def tg_start(t):
+    n, now = len(t["seats"]), int(time.time() * 1000)
+    cols = [0, 1, 2, 3][:n]   # 顏色隨機分配；顏色 c 固定用第 c 個頂點（TG_SLOTS）
+    random.shuffle(cols)
+    t["g"] = {"board": [0] * (TG_W * TG_ROWS), "col": cols, "corner": [TG_SLOTS[n][c] for c in cols],
+              "sd": [{"used": [], "placed": 0, "done": False, "idle": 0, "forfeit": False, "mono": False} for _ in cols],
+              "last": None, "moves": 0, "deadline": now + TG_TURN_MS}
+    t["result"], t["phase"], t["turn"] = None, "playing", cols.index(0)   # 藍色先下
+    for s in t["seats"]:
+        s["ready"], s["left"] = False, False
+    tbl_log(t, f"三角方塊拼圖開始！{n} 人參加，{t['seats'][t['turn']]['name']}（藍）先下")
+
+def tg_advance(t, frm, now):
+    g, n = t["g"], len(t["seats"])
+    for k in range(1, n + 1):
+        j = (frm + k) % n
+        sd = g["sd"][j]
+        if sd["done"]:
+            continue
+        if not tg_moves(g, j, True):
+            sd["done"] = True
+            tbl_log(t, f"{t['seats'][j]['name']} 沒有地方可以放了，之後跳過")
+            continue
+        t["turn"], g["deadline"] = j, now + TG_TURN_MS
+        return
+    tg_finish(t)
+
+def tg_finish(t):
+    g = t["g"]
+    players = [{"name": s["name"], "col": g["col"][k], "rem": tg_rem(g, k), "score": tg_score(g, k), "left": bool(s.get("left")), "forfeit": bool(g["sd"][k]["forfeit"])}
+               for k, s in enumerate(t["seats"])]
+    best = max(p["score"] for p in players)
+    winners = [k for k, p in enumerate(players) if p["score"] == best]
+    stay = [(k, s) for k, s in enumerate(t["seats"]) if not s.get("left")]
+    active = sum(1 for k, s in enumerate(t["seats"]) if not s.get("left") and not g["sd"][k]["forfeit"])
+    xp = [TG_XP if active >= 2 and not g["sd"][k]["forfeit"] else 0 for k, s in stay]
+    names = "、".join(players[k]["name"] for k in winners)
+    text = f"{names} 同分平手（{best} 分）" if len(winners) > 1 else f"{names} 獲勝！（{best} 分）"
+    t["seats"] = [s for _k, s in stay]
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "xp": xp, "players": players, "winners": winners, "draw": len(winners) > 1}
+    tbl_log(t, text)
+    tbl_reset_seats(t)
+    t["g"] = g   # 最後的棋盤留著給大家看，到下一局開始才清掉
+
+def tg_place(t, cid, p, cs, now):
+    """cs：這塊佔用的格子的絕對座標 [[x, y], …]。"""
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "trigon" or role != "seat" or t["phase"] != "playing" or i != t["turn"] or not g:
+        return
+    if type(p) is not int or p < 0 or p >= len(TG_PIECES) or p in g["sd"][i]["used"] or type(cs) is not list or len(cs) != len(TG_PIECES[p]):
+        return
+    cells, idx = [], []
+    for c in cs:
+        if type(c) is not list or len(c) != 2 or type(c[0]) is not int or type(c[1]) is not int or not (0 <= c[0] < TG_W) or not (0 <= c[1] < TG_ROWS):
+            return
+        cells.append((c[0], c[1]))
+        idx.append(c[1] * TG_W + c[0])
+    if tg_key(cells) not in TG_ORI_KEYS[p] or not tg_legal(g, i, idx):
+        return
+    sd = g["sd"][i]
+    for c in idx:
+        g["board"][c] = g["col"][i] + 1
+    sd["used"].append(p)
+    sd["placed"] += 1
+    sd["idle"] = 0
+    sd["mono"] = p == 0
+    g["last"] = {"seat": i, "cells": [[x, y] for x, y in cells]}
+    g["moves"] += 1
+    tg_advance(t, i, now)
+
+def tg_timeout(t, now):
+    g = t.get("g")
+    if t["game"] != "trigon" or t["phase"] != "playing" or not g or now < g["deadline"] - 300:
+        return
+    i = t["turn"]
+    sd = g["sd"][i]
+    sd["idle"] += 1
+    if sd["idle"] >= TG_IDLE_MAX:
+        sd["done"], sd["forfeit"] = True, True
+        tbl_log(t, f"{t['seats'][i]['name']} 連續超時，視為棄權")
+    else:
+        tbl_log(t, f"{t['seats'][i]['name']} 超時，跳過這一手")
+    tg_advance(t, i, now)
+
+def tg_leave(t, i, now):
+    """遊戲進行中有人離開：棋子留在棋盤上、之後跳過；沒人能下就結束。"""
+    s, g = t["seats"][i], t["g"]
+    if s.get("left"):
+        return
+    s["left"], s["cid"] = True, None
+    g["sd"][i]["done"] = True
+    tbl_log(t, f"{s['name']} 離開了")
+    if i == t["turn"]:
+        tg_advance(t, i, now)
+    elif all(d["done"] for d in g["sd"]):
+        tg_finish(t)
 
 # ---- 躲彈幕（第五桌 t5；2026-11-08，使用者要求）：1～8 人、每人 3 條命、只能躲不能攻擊，依存活秒數評分 ----
 # 彈幕由客戶端用伺服器給的 seed 與開始時間 t0 決定性地各自產生（每個畫面看到的彈幕一樣）；被打到由各客戶端自判並回報 hit（和島主的招式同一原則，信任客戶端），
@@ -3603,7 +3851,7 @@ def un_set_mode(t, cid, mode):
         s["ready"] = False
     tbl_log(t, f"{t['seats'][0]['name']} 把玩法改成{'無限制' if mode == 'wild' else '傳統'}")
 
-GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+GAME_START = {"oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
@@ -3687,6 +3935,13 @@ def tbl_view(t, cid):
                 v["stolen"] = t["seats"][i].get("stolen")
             if see_all:
                 v["hands"] = [list(s["hand"]) for s in t["seats"]]
+    elif g and t["game"] == "trigon":   # 三角方塊拼圖：棋盤（702 個字元：0 空／1～4 顏色，格子編號 y * 39 + x）、各座位顏色、每人用掉的方塊、最後一手、期限；全部公開
+        v["tg"] = {"board": "".join(str(c) for c in g["board"]), "col": list(g["col"]), "corner": list(g["corner"]), "used": [list(d["used"]) for d in g["sd"]], "done": [d["done"] for d in g["sd"]],
+                   "last": g["last"], "moves": g["moves"], "deadline": g["deadline"] if playing else 0, "sn": int(time.time() * 1000)}
+        if playing:
+            for k, s in enumerate(t["seats"]):
+                v["seats"][k]["left"] = bool(s.get("left"))
+                v["seats"][k]["rem"] = tg_rem(g, k)
     elif g and t["game"] == "blokus":   # 方塊拼圖：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
         v["bk"] = {"board": "".join(str(c) for c in g["board"]), "col": list(g["col"]), "used": [list(d["used"]) for d in g["sd"]], "done": [d["done"] for d in g["sd"]],
                    "last": g["last"], "moves": g["moves"], "deadline": g["deadline"] if playing else 0, "sn": int(time.time() * 1000)}
@@ -5030,10 +5285,15 @@ class Room:
                     elif a == "timeout":   # UNO／方塊拼圖：回合限時到了（伺服器核對時鐘）
                         if t["game"] == "blokus":
                             bk_timeout(t, now_ms)
+                        elif t["game"] == "trigon":
+                            tg_timeout(t, now_ms)
                         else:
                             un_timeout(t, now_ms)
                     elif a == "place":   # 方塊拼圖：放方塊 {p 第幾塊, c 佔用的格子座標}
-                        bk_place(t, cid, msg.get("p"), msg.get("c"), now_ms)
+                        if t["game"] == "trigon":
+                            tg_place(t, cid, msg.get("p"), msg.get("c"), now_ms)
+                        else:
+                            bk_place(t, cid, msg.get("p"), msg.get("c"), now_ms)
                     elif a == "mode":   # UNO：桌主在開局前選玩法（classic／wild）
                         un_set_mode(t, cid, msg.get("v"))
                     elif a == "hit":   # 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）

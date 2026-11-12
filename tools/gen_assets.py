@@ -1694,7 +1694,8 @@ TABLES_BY_TERRAIN = {
               dict(id="t8", game="intel", cell=[64, 39], w=3, h=2),   # 秘藥情報戰（2026-11-10，使用者要求）：躲彈幕右邊、英文打字競賽下面
               dict(id="t9", game="zhtyping", cell=[72, 32], w=3, h=2),   # 中文打字競賽（2026-11-11，使用者要求）：英文打字競賽右邊同一排
               dict(id="t10", game="mage", cell=[72, 39], w=3, h=2),   # 見習驅魔師（2026-11-12，使用者要求）：中文打字競賽下面、秘藥情報戰右邊
-              dict(id="t11", game="blokus", cell=[80, 32], w=3, h=2)],   # 方塊拼圖（2026-11-13，使用者要求）：中文打字競賽右邊同一排
+              dict(id="t11", game="blokus", cell=[80, 32], w=3, h=2),   # 方塊拼圖（2026-11-13，使用者要求）：中文打字競賽右邊同一排
+              dict(id="t12", game="trigon", cell=[80, 39], w=3, h=2)],   # 三角方塊拼圖（2026-11-13，使用者要求）：方塊拼圖下面、見習驅魔師右邊
 }
 
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
@@ -1819,6 +1820,29 @@ def table_blokus():
     piece(18, 16, "#3b78e8", [(0, 0), (1, 0), (1, 1)])                   # 藍 V3
     piece(28, 17, "#f0c020", [(0, 0), (0, 1)])                           # 黃 I2
     piece(6, 20, "#e04848", [(0, 0)])                                    # 紅 單格
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    cv.outline()
+    return cv
+
+def table_trigon():
+    """三角方塊拼圖：深藍桌面（有桌腳），桌上一片三角形拼成的色塊（藍／黃／紅／綠四色，每個三角形有亮邊與暗邊）。"""
+    cv = Canvas(48, 32)
+    wood = hx("#3a4260")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
+    cv.rect(2, 6, 45, 25, hx("#1c2236"))
+    def tri(cx, y, h, col, up):
+        c = hx(col)
+        for r in range(h):
+            w = r if up else (h - 1 - r)
+            cv.rect(cx - w, y + r, cx + w, y + r, c)
+        for r in range(h):   # 邊：左邊亮、右邊暗
+            w = r if up else (h - 1 - r)
+            cv.set(cx - w, y + r, shade(c, 1.35)); cv.set(cx + w, y + r, shade(c, .7))
+    h = 6
+    row1 = [(9, "#3b78e8", True), (15, "#f0c020", False), (21, "#e04848", True), (27, "#3cb45a", False), (33, "#3b78e8", True), (39, "#f0c020", False)]
+    row2 = [(6, "#e04848", False), (12, "#3cb45a", True), (18, "#3b78e8", False), (24, "#f0c020", True), (30, "#e04848", False), (36, "#3cb45a", True)]
+    for cx, col, up in row1: tri(cx, 8, h, col, up)
+    for cx, col, up in row2: tri(cx, 15, h, col, up)
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
@@ -3179,6 +3203,7 @@ def main():
     save(table_zhtyping(), "table_zhtyping.png", "games")
     save(table_mage(), "table_mage.png", "games")
     save(table_blokus(), "table_blokus.png", "games")
+    save(table_trigon(), "table_trigon.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")

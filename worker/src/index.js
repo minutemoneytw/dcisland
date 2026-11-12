@@ -484,8 +484,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -546,6 +546,7 @@ function tblLeave(t, cid) {
   if (role === "spec") t.specs.splice(i, 1);
   else if (role === "seat") {
     const name = t.seats[i].name;
+    if (t.phase === "playing" && t.game === "trigon") { tgLeave(t, i, Date.now()); return; }   // 三角方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
     if (t.phase === "playing" && t.game === "blokus") { bkLeave(t, i, Date.now()); return; }   // 方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
     if (t.phase === "playing" && t.game === "mage") { mgLeave(t, i, Date.now()); return; }   // 見習驅魔師：離開不中斷，視同倒下，到場上沒有活人為止
     if (t.phase === "playing" && t.game === "dodge") { dgLeave(t, i, Date.now()); return; }   // 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
@@ -812,6 +813,164 @@ function bkLeave(t, i, now) {   // 遊戲進行中有人離開：棋子留在棋
   tblLog(t, `${s.name} 離開了`);
   if (i === t.turn) bkAdvance(t, i, now);
   else if (g.sd.every(d => d.done)) bkFinish(t);
+}
+// ---- 方塊拼圖「三角版」Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：2～4 人、正六邊形的三角格棋盤（邊長 9，共 486 格）、每人 22 塊（1～6 個三角形，共 110 格）----
+// 規則同方塊拼圖：第一塊要蓋住自己的角落（這裡是「棋盤六個頂點之一」：塊上有一格以那個頂點為角）；之後每塊要「點對點」接到自己的舊方塊（共用至少一個頂點），且不能「邊對邊」（共用一條邊）；
+// 放不下的人自動跳過、全員放不下就結束；計分＝−剩下的格數，全部放完 +15、最後一塊是單格再 +5；每手限時 TG_TURN_MS，連續超時 TG_IDLE_MAX 次視為棄權；沒有排行榜。與 tools/dev_server.py 的 tg_* 同一套。
+// 座標：三角形 (x, y)（y＝第幾列，由上往下；x＝水平位置，每個三角形寬 2 個單位）；(x + y) 為偶數＝尖端朝上、奇數＝尖端朝下。頂點是格點 (i, j)（i + j 為偶數）：
+// 朝上 (x, y) 的頂點＝(x, y)、(x−1, y+1)、(x+1, y+1)；朝下 (x, y) 的頂點＝(x−1, y)、(x+1, y)、(x, y+1)。邊鄰居＝(x±1, y)，再加朝上的 (x, y+1)／朝下的 (x, y−1)。
+// 方向轉換用軸座標 (a, b) ＝ ((i − j) / 2, j)：轉 60 度 (a, b) → (−b, a + b)，左右翻面 (a, b) → (−a − b, b)。
+const TG_N = 9, TG_CX = 19, TG_W = 39, TG_ROWS = 18, TG_VW = 41, TG_TURN_MS = 45000, TG_IDLE_MAX = 2, TG_XP = 6, TG_TOTAL = 110;
+const TG_PIECES = [[[0,0]],[[0,0],[0,1]],[[0,0],[-1,1],[0,1]],[[0,0],[-1,1],[0,1],[-1,2]],[[0,0],[-1,1],[0,1],[1,1]],[[0,0],[-2,1],[-1,1],[0,1]],[[0,0],[-1,1],[0,1],[-1,2],[0,2]],[[0,0],[-1,1],[0,1],[-2,2],[-1,2]],[[0,0],[-1,1],[0,1],[1,1],[-1,2]],[[0,0],[1,0],[0,1],[1,1],[2,1]],[[0,0],[-1,1],[0,1],[-1,2],[0,2],[0,3]],[[0,0],[-1,1],[0,1],[-1,2],[0,2],[1,2]],[[0,0],[-1,1],[0,1],[-2,2],[-1,2],[-2,3]],[[0,0],[-1,1],[0,1],[-2,2],[-1,2],[0,2]],[[0,0],[-1,1],[0,1],[-3,2],[-2,2],[-1,2]],[[0,0],[-1,1],[0,1],[1,1],[-1,2],[0,2]],[[0,0],[-1,1],[0,1],[1,1],[-1,2],[1,2]],[[0,0],[-1,1],[0,1],[1,1],[2,1],[-1,2]],[[0,0],[-1,1],[0,1],[1,1],[2,1],[1,2]],[[0,0],[-2,1],[-1,1],[0,1],[-2,2],[-1,2]],[[0,0],[-3,1],[-2,1],[-1,1],[0,1],[-3,2]],[[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]]];   // 22 塊 polyiamond（1／1／1／3／4／12 種，三角形的 [x, y]，已正規化；與客戶端、dev_server 同一份）
+function tgVerts(x, y) { return ((x + y) & 1) === 0 ? [[x, y], [x - 1, y + 1], [x + 1, y + 1]] : [[x - 1, y], [x + 1, y], [x, y + 1]]; }
+function tgFromVerts(vs) {
+  const jm = Math.min(...vs.map(v => v[1])), top = vs.filter(v => v[1] === jm);
+  return top.length === 2 ? [vs.find(v => v[1] !== jm)[0], jm] : [top[0][0], jm];
+}
+function tgXform(c, rot, flip) {
+  return tgFromVerts(tgVerts(c[0], c[1]).map(([i, j]) => {
+    let a = (i - j) / 2, b = j;
+    for (let r = 0; r < rot; r++) [a, b] = [-b, a + b];
+    if (flip) [a, b] = [-a - b, b];
+    return [2 * a + b, b];
+  }));
+}
+function tgNorm(cells) {   // 平移到最上一列最左的格在 (p, 0)（p＝它的方向：0 朝上、1 朝下；平移必須保持方向，所以 dx + dy 要是偶數）
+  const y0 = Math.min(...cells.map(c => c[1])), x0 = Math.min(...cells.filter(c => c[1] === y0).map(c => c[0]));
+  const p = (((x0 + y0) % 2) + 2) % 2, dx = -x0 + p, dy = -y0;
+  return cells.map(c => [c[0] + dx, c[1] + dy]).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+}
+const tgKey = cells => tgNorm(cells).map(c => c.join(",")).join(";");
+const TG_ORI = TG_PIECES.map(cells => {   // 每塊的所有不重複方向（轉 6 × 翻面 2）
+  const seen = new Map();
+  for (let f = 0; f < 2; f++) for (let r = 0; r < 6; r++) { const n = tgNorm(cells.map(c => tgXform(c, r, f))); seen.set(tgKey(n), n); }
+  return [...seen.values()];
+});
+const TG_ORI_KEYS = TG_ORI.map(os => new Set(os.map(tgKey)));
+// 棋盤：正六邊形（邊長 N），頂點 (i, j)：0 ≤ j ≤ 2N，左右邊界如下；三角形的三個頂點都在內才算格子
+const tgLeft = j => (j <= TG_N ? TG_CX - TG_N - j : TG_CX - 3 * TG_N + j), tgRight = j => (j <= TG_N ? TG_CX + TG_N + j : TG_CX + 3 * TG_N - j);
+const tgInV = (i, j) => j >= 0 && j <= 2 * TG_N && i >= tgLeft(j) && i <= tgRight(j);
+const TG_CORNERS = [[TG_CX - TG_N, 0], [TG_CX + TG_N, 0], [TG_CX + 2 * TG_N, TG_N], [TG_CX + TG_N, 2 * TG_N], [TG_CX - TG_N, 2 * TG_N], [TG_CX - 2 * TG_N, TG_N]];   // 六個頂點（左上起順時針）
+const TG_SLOTS = { 2: [0, 3], 3: [0, 2, 4], 4: [0, 1, 3, 4] };   // 各人數用哪幾個頂點（2 人對角、3 人隔一個、4 人兩兩對稱）
+const TG_VALID = new Uint8Array(TG_W * TG_ROWS), TG_EDGE = [], TG_CELLV = [], TG_AROUND = new Map();
+for (let y = 0; y < TG_ROWS; y++) for (let x = 0; x < TG_W; x++) if (tgVerts(x, y).every(([i, j]) => tgInV(i, j))) TG_VALID[y * TG_W + x] = 1;
+for (let y = 0; y < TG_ROWS; y++) for (let x = 0; x < TG_W; x++) {
+  const c = y * TG_W + x;
+  if (!TG_VALID[c]) continue;
+  TG_EDGE[c] = [[x - 1, y], [x + 1, y], [x, ((x + y) & 1) === 0 ? y + 1 : y - 1]].filter(([a, b]) => a >= 0 && a < TG_W && b >= 0 && b < TG_ROWS && TG_VALID[b * TG_W + a]).map(([a, b]) => b * TG_W + a);
+  TG_CELLV[c] = tgVerts(x, y).map(([i, j]) => j * TG_VW + i);
+  for (const v of TG_CELLV[c]) { if (!TG_AROUND.has(v)) TG_AROUND.set(v, []); TG_AROUND.get(v).push(c); }
+}
+const tgVid = ([i, j]) => j * TG_VW + i;
+// 座位 k 放這些格子（格子編號 y * TG_W + x）合不合法
+function tgLegal(g, k, cells) {
+  const col = g.col[k] + 1, corner = tgVid(TG_CORNERS[g.corner[k]]), first = g.sd[k].placed === 0, b = g.board;
+  let touch = false, start = false;
+  for (const c of cells) {
+    if (!TG_VALID[c] || b[c]) return false;
+    for (const e of TG_EDGE[c]) if (b[e] === col) return false;
+    for (const v of TG_CELLV[c]) {
+      if (v === corner) start = true;
+      if (!touch) for (const t of TG_AROUND.get(v)) if (t !== c && b[t] === col) { touch = true; break; }
+    }
+  }
+  return first ? start : touch;
+}
+// 座位 k 所有合法放法 [{p, key, cells}]（依 key 排序，測試用）；one＝true 時找到一個就回
+function tgMoves(g, k, one) {
+  const col = g.col[k] + 1, sd = g.sd[k], b = g.board, out = [], seen = new Set(), anchors = [], mark = new Set();
+  if (sd.placed === 0) for (const t of TG_AROUND.get(tgVid(TG_CORNERS[g.corner[k]]))) { if (!b[t]) anchors.push(t); }
+  else for (let c = 0; c < b.length; c++) {
+    if (b[c] !== col) continue;
+    for (const v of TG_CELLV[c]) for (const t of TG_AROUND.get(v)) {
+      if (b[t] || mark.has(t) || TG_EDGE[t].some(e => b[e] === col)) continue;
+      mark.add(t); anchors.push(t);
+    }
+  }
+  anchors.sort((a, c) => a - c);
+  for (let p = 0; p < TG_PIECES.length; p++) {
+    if (sd.used.includes(p)) continue;
+    for (const o of TG_ORI[p]) for (const [ox, oy] of o) for (const a of anchors) {
+      const ax = a % TG_W, ay = Math.floor(a / TG_W);
+      if ((((ox + oy) ^ (ax + ay)) & 1) !== 0) continue;   // 方向（朝上／朝下）要一樣，平移才合法
+      const dx = ax - ox, dy = ay - oy, cells = [];
+      let okb = true;
+      for (const [x, y] of o) { const X = x + dx, Y = y + dy; if (X < 0 || X >= TG_W || Y < 0 || Y >= TG_ROWS) { okb = false; break; } cells.push(Y * TG_W + X); }
+      if (!okb || !tgLegal(g, k, cells)) continue;
+      cells.sort((q, r) => q - r);
+      const key = p + ":" + cells.join(",");
+      if (seen.has(key)) continue;
+      seen.add(key); out.push({ p, key, cells });
+      if (one) return out;
+    }
+  }
+  return out.sort((a, c) => (a.key < c.key ? -1 : a.key > c.key ? 1 : 0));
+}
+const tgRem = (g, k) => TG_TOTAL - g.sd[k].used.reduce((a, p) => a + TG_PIECES[p].length, 0);
+const tgScore = (g, k) => { const r = tgRem(g, k); return -r + (r === 0 ? 15 + (g.sd[k].mono ? 5 : 0) : 0); };
+function tgStart(t) {
+  const n = t.seats.length, now = Date.now(), cols = shuffle([0, 1, 2, 3].slice(0, n));   // 顏色隨機分配；顏色 c 固定用第 c 個頂點（TG_SLOTS）
+  t.g = { board: new Array(TG_W * TG_ROWS).fill(0), col: cols, corner: cols.map(c => TG_SLOTS[n][c]), sd: cols.map(() => ({ used: [], placed: 0, done: false, idle: 0, forfeit: false, mono: false })), last: null, moves: 0, deadline: now + TG_TURN_MS };
+  t.result = null; t.phase = "playing"; t.turn = cols.indexOf(0);   // 藍色先下
+  for (const s of t.seats) { s.ready = false; s.left = false; }
+  tblLog(t, `三角方塊拼圖開始！${n} 人參加，${t.seats[t.turn].name}（藍）先下`);
+}
+function tgAdvance(t, from, now) {
+  const g = t.g, n = t.seats.length;
+  for (let k = 1; k <= n; k++) {
+    const j = (from + k) % n, sd = g.sd[j];
+    if (sd.done) continue;
+    if (!tgMoves(g, j, true).length) { sd.done = true; tblLog(t, `${t.seats[j].name} 沒有地方可以放了，之後跳過`); continue; }
+    t.turn = j; g.deadline = now + TG_TURN_MS; return;
+  }
+  tgFinish(t);
+}
+function tgFinish(t) {
+  const g = t.g;
+  const players = t.seats.map((s, k) => ({ name: s.name, col: g.col[k], rem: tgRem(g, k), score: tgScore(g, k), left: !!s.left, forfeit: !!g.sd[k].forfeit }));
+  const best = Math.max(...players.map(p => p.score)), winners = players.map((p, k) => (p.score === best ? k : -1)).filter(k => k >= 0);
+  const stay = t.seats.filter(s => !s.left), active = t.seats.filter((s, k) => !s.left && !g.sd[k].forfeit).length;
+  const xp = stay.map(s => (active >= 2 && !g.sd[t.seats.indexOf(s)].forfeit ? TG_XP : 0));
+  const names = winners.map(k => players[k].name).join("、");
+  const text = winners.length > 1 ? `${names} 同分平手（${best} 分）` : `${names} 獲勝！（${best} 分）`;
+  t.seats = stay;
+  t.result = { text, rid: Math.floor(Math.random() * 4294967296), xp, players, winners, draw: winners.length > 1 };
+  tblLog(t, text);
+  tblResetSeats(t);
+  t.g = g;   // 最後的棋盤留著給大家看，到下一局開始才清掉
+}
+function tgPlace(t, cid, p, cs, now) {   // cs：這塊佔用的格子的絕對座標 [[x, y], …]
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "trigon" || role !== "seat" || t.phase !== "playing" || i !== t.turn || !g) return;
+  if (!Number.isInteger(p) || p < 0 || p >= TG_PIECES.length || g.sd[i].used.includes(p) || !Array.isArray(cs) || cs.length !== TG_PIECES[p].length) return;
+  const cells = [], idx = [];
+  for (const c of cs) {
+    if (!Array.isArray(c) || c.length !== 2 || !Number.isInteger(c[0]) || !Number.isInteger(c[1]) || c[0] < 0 || c[0] >= TG_W || c[1] < 0 || c[1] >= TG_ROWS) return;
+    cells.push([c[0], c[1]]); idx.push(c[1] * TG_W + c[0]);
+  }
+  if (!TG_ORI_KEYS[p].has(tgKey(cells)) || !tgLegal(g, i, idx)) return;
+  const sd = g.sd[i];
+  for (const c of idx) g.board[c] = g.col[i] + 1;
+  sd.used.push(p); sd.placed++; sd.idle = 0; sd.mono = p === 0;
+  g.last = { seat: i, cells }; g.moves++;
+  tgAdvance(t, i, now);
+}
+function tgTimeout(t, now) {
+  const g = t.g;
+  if (t.game !== "trigon" || t.phase !== "playing" || !g || now < g.deadline - 300) return;
+  const i = t.turn, sd = g.sd[i];
+  sd.idle++;
+  if (sd.idle >= TG_IDLE_MAX) { sd.done = true; sd.forfeit = true; tblLog(t, `${t.seats[i].name} 連續超時，視為棄權`); }
+  else tblLog(t, `${t.seats[i].name} 超時，跳過這一手`);
+  tgAdvance(t, i, now);
+}
+function tgLeave(t, i, now) {   // 遊戲進行中有人離開：棋子留在棋盤上、之後跳過；沒人能下就結束
+  const s = t.seats[i], g = t.g;
+  if (s.left) return;
+  s.left = true; s.cid = null; g.sd[i].done = true;
+  tblLog(t, `${s.name} 離開了`);
+  if (i === t.turn) tgAdvance(t, i, now);
+  else if (g.sd.every(d => d.done)) tgFinish(t);
 }
 // ---- 躲彈幕（第五桌 t5；2026-11-08，使用者要求）：1～8 人、每人 3 條命、只能躲不能攻擊，依存活秒數評分 ----
 // 彈幕由客戶端用伺服器給的 seed 與開始時間 t0 決定性地各自產生（每個畫面看到的彈幕一樣）；被打到由各客戶端自判並回報 hit（和島主的招式同一原則，信任客戶端），
@@ -2394,7 +2553,7 @@ function unSetMode(t, cid, mode) {
   for (const s of t.seats) s.ready = false;
   tblLog(t, `${t.seats[0].name} 把玩法改成${mode === "wild" ? "無限制" : "傳統"}`);
 }
-const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 function tblView(t, cid) {
   const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
@@ -2449,6 +2608,10 @@ function tblView(t, cid) {
       if (role === "seat") { v.hand = [...t.seats[i].hand]; v.note = t.seats[i].note || null; v.stolen = t.seats[i].stolen || null; }
       if (all) v.hands = t.seats.map(s => [...s.hand]);
     }
+  } else if (t.g && t.game === "trigon") {   // 三角方塊拼圖：棋盤（702 個字元：0 空／1～4 顏色，格子編號 y * 39 + x）、各座位顏色、每人用掉的方塊、最後一手、期限；全部公開
+    const g = t.g;
+    v.tg = { board: g.board.join(""), col: [...g.col], corner: [...g.corner], used: g.sd.map(d => [...d.used]), done: g.sd.map(d => d.done), last: g.last, moves: g.moves, deadline: playing ? g.deadline : 0, sn: Date.now() };
+    if (playing) t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].rem = tgRem(g, k); });
   } else if (t.g && t.game === "blokus") {   // 方塊拼圖：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
     const g = t.g;
     v.bk = { board: g.board.join(""), col: [...g.col], used: g.sd.map(d => [...d.used]), done: g.sd.map(d => d.done), last: g.last, moves: g.moves, deadline: playing ? g.deadline : 0, sn: Date.now() };
@@ -3033,8 +3196,8 @@ export class Island {
     else if (a === "pass") unPass(t, att.id, now);
     else if (a === "uno") unSay(t, att.id);
     else if (a === "catch") unCatch(t, att.id);
-    else if (a === "timeout") { if (t.game === "blokus") bkTimeout(t, now); else unTimeout(t, now); }   // UNO／方塊拼圖：回合限時到了（伺服器核對時鐘）
-    else if (a === "place") bkPlace(t, att.id, msg.p, msg.c, now);   // 方塊拼圖：放方塊 {p 第幾塊, c 佔用的格子座標}
+    else if (a === "timeout") { if (t.game === "blokus") bkTimeout(t, now); else if (t.game === "trigon") tgTimeout(t, now); else unTimeout(t, now); }   // UNO／方塊拼圖：回合限時到了（伺服器核對時鐘）
+    else if (a === "place") { if (t.game === "trigon") tgPlace(t, att.id, msg.p, msg.c, now); else bkPlace(t, att.id, msg.p, msg.c, now); }   // 方塊拼圖：放方塊 {p 第幾塊, c 佔用的格子座標}
     else if (a === "mode") unSetMode(t, att.id, msg.v);   // UNO：桌主在開局前選玩法（classic／wild）
     else if (a === "hit") dgHit(t, att.id, now);   // 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
     else if (a === "kill") mgKill(t, att.id, msg.i, msg.p, now);   // 見習驅魔師：我消除了幽靈 i（符號辨識在客戶端，伺服器驗時間與先到先得）

@@ -488,3 +488,4 @@ body {
 .nick-hint { font-size: 12px; color: var(--text-dim); margin: 8px 0 10px; line-height: 1.6; }
 #nickInput { width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 15px; text-align: center; background: rgba(255, 255, 255, .06); border: 1px solid var(--gold-dim); color: var(--text); }
 #nickInput:disabled { opacity: .5; }
+.tg-tray { grid-template-columns: repeat(4, 1fr); }   /* 三角版的方塊小圖比較寬：一排 4 個，托盤才不會超出面板 */

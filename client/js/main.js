@@ -101,7 +101,7 @@ const S = {
   craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
   craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
   gamesDB: null, tableImgs: {},        // 和平島遊戲桌：遊戲定義（assets/games/games.json，手寫）與桌子圖
-  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, bk: null, bkTimer: 0, bkOff: 0, bkTimeoutAt: 0, unTimer: 0, unOff: 0, unTimeoutAt: 0, unPick: null, dg: null, dgRaf: 0, dgLast: 0, ty: null, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
+  tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, bk: null, tg: null, bkTimer: 0, bkOff: 0, bkTimeoutAt: 0, unTimer: 0, unOff: 0, unTimeoutAt: 0, unPick: null, dg: null, dgRaf: 0, dgLast: 0, ty: null, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
   titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
@@ -4342,7 +4342,7 @@ function openTable(tb) {
   if (!gameDef(tb.game)) return;
   for (const k of Object.keys(keys)) keys[k] = false;   // 放開所有按住的鍵（畫面蓋住後收不到 keyup，不然回來還在跑）
   S.mouseHeld = false;
-  S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null; S.bk = null; S.gamePlayed = false; S.tableLocalLog = [];
+  S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null; S.bk = null; S.tg = null; S.gamePlayed = false; S.tableLocalLog = [];
   const inf = S.tblInfo?.[tb.id];
   if (!inf || (!inf.play && inf.n < inf.max)) S.tableChoice = true;   // 還有位子：先讓玩家選「入座」或「觀戰」（沒滿人也可以選觀戰）
   else S.net.tbl({ a: 'join', id: tb.id, role: 'spec' });             // 滿人或已開局：直接觀戰
@@ -4469,6 +4469,7 @@ function buildTable() {
   }
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
+  if (tb?.game === 'trigon') { buildTrigon(box, v, mk, gd); return; }   // 三角方塊拼圖有自己的畫面（三角格棋盤＋方塊托盤）
   if (tb?.game === 'blokus') { buildBlokus(box, v, mk, gd); return; }   // 方塊拼圖有自己的畫面（棋盤＋方塊托盤）
   if (tb?.game === 'mage') { buildMage(box, v, mk, gd); return; }   // 見習驅魔師有自己的畫面（畫符號的場地）
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
@@ -4727,11 +4728,11 @@ function bkPieceCanvas(p, color, rot, flip) {   // 托盤裡的小圖（5×5 格
 function bkStopTimer() { if (S.bkTimer) { clearInterval(S.bkTimer); S.bkTimer = 0; } }
 function bkStartTimer(v) {
   bkStopTimer();
-  S.bkOff = v.bk.sn - Date.now();   // 伺服器時間 − 本機時間（毫秒，忽略單程延遲）
+  S.bkOff = (v.bk || v.tg).sn - Date.now();   // 伺服器時間 − 本機時間（毫秒，忽略單程延遲）
   S.bkTimer = setInterval(() => {
     const cur = S.tableView;
-    if (!S.tableOpen || !cur || cur.game !== 'blokus' || cur.phase !== 'playing') { bkStopTimer(); return; }
-    const left = (cur.bk.deadline - (Date.now() + S.bkOff)) / 1000;
+    if (!S.tableOpen || !cur || (cur.game !== 'blokus' && cur.game !== 'trigon') || cur.phase !== 'playing') { bkStopTimer(); return; }
+    const left = ((cur.bk || cur.tg).deadline - (Date.now() + S.bkOff)) / 1000;
     const el = $('bkTimer'); if (el) { el.textContent = left > 0 ? `${Math.ceil(left)} 秒` : '時間到'; el.classList.toggle('urgent', left <= 10); }
     if (left <= 0 && cur.role === 'seat' && Date.now() - (S.bkTimeoutAt || 0) > 1000) { S.bkTimeoutAt = Date.now(); S.net?.tbl?.({ a: 'timeout' }); }
   }, 250);
@@ -4827,6 +4828,228 @@ function buildBlokus(box, v, mk, gd) {
       rb.onclick = () => bkRotate(1); fb.onclick = () => bkFlip(); rb.disabled = fb.disabled = o.sel == null;
       ctl.appendChild(rb); ctl.appendChild(fb); side.appendChild(ctl);
       side.appendChild(mk('div', 'table-tag', '圓點是你可以接的角。連續兩次超時會視為棄權。'));
+      const hint = mk('div', 'bk-msg'); hint.id = 'bkMsg'; side.appendChild(hint);
+      main.appendChild(side);
+    }
+    box.appendChild(main);
+    if (playing) bkStartTimer(v);
+  }
+  const btns = mk('div', 'table-btns');
+  if (seat && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const sb = mk('button', 'ff-btn small', '改為觀戰'); sb.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(sb);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 方塊拼圖「三角版」Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：正六邊形的三角格棋盤（邊長 9，486 格）＋我的方塊托盤（22 塊，1～6 個三角形）。
+// 操作同方塊拼圖：點選方塊 → 旋轉 60 度（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。座標系與規則同 worker 的 tg*（三角形 (x, y)，(x + y) 偶數＝朝上；頂點 (i, j)，i + j 偶數）。
+// 滑鼠指到的是「最近的格點（頂點）」，方塊上最靠近中心的那個頂點對齊它——頂點之間的平移一定保持三角形的方向，所以不用管朝上朝下 ----
+const TG_N = 9, TG_CX = 19, TG_W = 39, TG_ROWS = 18, TG_S = 26, TG_MARGIN = 14;   // TG_S：三角形邊長（像素）
+const TG_PIECES = [[[0,0]],[[0,0],[0,1]],[[0,0],[-1,1],[0,1]],[[0,0],[-1,1],[0,1],[-1,2]],[[0,0],[-1,1],[0,1],[1,1]],[[0,0],[-2,1],[-1,1],[0,1]],[[0,0],[-1,1],[0,1],[-1,2],[0,2]],[[0,0],[-1,1],[0,1],[-2,2],[-1,2]],[[0,0],[-1,1],[0,1],[1,1],[-1,2]],[[0,0],[1,0],[0,1],[1,1],[2,1]],[[0,0],[-1,1],[0,1],[-1,2],[0,2],[0,3]],[[0,0],[-1,1],[0,1],[-1,2],[0,2],[1,2]],[[0,0],[-1,1],[0,1],[-2,2],[-1,2],[-2,3]],[[0,0],[-1,1],[0,1],[-2,2],[-1,2],[0,2]],[[0,0],[-1,1],[0,1],[-3,2],[-2,2],[-1,2]],[[0,0],[-1,1],[0,1],[1,1],[-1,2],[0,2]],[[0,0],[-1,1],[0,1],[1,1],[-1,2],[1,2]],[[0,0],[-1,1],[0,1],[1,1],[2,1],[-1,2]],[[0,0],[-1,1],[0,1],[1,1],[2,1],[1,2]],[[0,0],[-2,1],[-1,1],[0,1],[-2,2],[-1,2]],[[0,0],[-3,1],[-2,1],[-1,1],[0,1],[-3,2]],[[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]]];   // 與兩份伺服器同一份：22 塊 polyiamond（三角形的 [x, y]，已正規化）
+const TG_CORNERS = [[TG_CX - TG_N, 0], [TG_CX + TG_N, 0], [TG_CX + 2 * TG_N, TG_N], [TG_CX + TG_N, 2 * TG_N], [TG_CX - TG_N, 2 * TG_N], [TG_CX - 2 * TG_N, TG_N]];
+const tgVerts = (x, y) => (((x + y) & 1) === 0 ? [[x, y], [x - 1, y + 1], [x + 1, y + 1]] : [[x - 1, y], [x + 1, y], [x, y + 1]]);
+const tgLeft = j => (j <= TG_N ? TG_CX - TG_N - j : TG_CX - 3 * TG_N + j), tgRight = j => (j <= TG_N ? TG_CX + TG_N + j : TG_CX + 3 * TG_N - j);
+const tgInV = (i, j) => j >= 0 && j <= 2 * TG_N && i >= tgLeft(j) && i <= tgRight(j);
+const tgCellOk = (x, y) => x >= 0 && x < TG_W && y >= 0 && y < TG_ROWS && tgVerts(x, y).every(([i, j]) => tgInV(i, j));
+const tgEdge = (x, y) => [[x - 1, y], [x + 1, y], [x, ((x + y) & 1) === 0 ? y + 1 : y - 1]];
+const tgAround = (i, j) => [[i, j], [i + 1, j - 1], [i - 1, j - 1], [i + 1, j], [i - 1, j], [i, j - 1]];   // 共用頂點 (i, j) 的 6 個三角形
+function tgFromVerts(vs) {
+  const jm = Math.min(...vs.map(v => v[1])), top = vs.filter(v => v[1] === jm);
+  return top.length === 2 ? [vs.find(v => v[1] !== jm)[0], jm] : [top[0][0], jm];
+}
+function tgXform(c, rot, flip) {   // 轉 rot × 60 度、flip＝左右翻面
+  return tgFromVerts(tgVerts(c[0], c[1]).map(([i, j]) => {
+    let a = (i - j) / 2, b = j;
+    for (let r = 0; r < rot; r++) [a, b] = [-b, a + b];
+    if (flip) [a, b] = [-a - b, b];
+    return [2 * a + b, b];
+  }));
+}
+// 第 p 塊轉 rot、翻面 flip 之後：回傳 {cells（平移保持方向後的三角形）, pv（對齊滑鼠的頂點：最靠近中心的那個）}
+function tgShape(p, rot, flip) {
+  const c = TG_PIECES[p].map(q => tgXform(q, rot, flip));
+  const vs = new Map(); let cx = 0, cy = 0;
+  for (const [x, y] of c) { const vv = tgVerts(x, y); cx += (vv[0][0] + vv[1][0] + vv[2][0]) / 3; cy += (vv[0][1] + vv[1][1] + vv[2][1]) / 3 * Math.sqrt(3); for (const [i, j] of vv) vs.set(i + ',' + j, [i, j]); }
+  cx /= c.length; cy /= c.length;
+  let pv = null, best = 1e9;
+  for (const [i, j] of [...vs.values()].sort((a, b) => a[1] - b[1] || a[0] - b[0])) { const d = (i - cx) ** 2 + (j * Math.sqrt(3) - cy) ** 2; if (d < best - 1e-9) { best = d; pv = [i, j]; } }
+  return { cells: c, pv };
+}
+const tgAt = (b, x, y) => (tgCellOk(x, y) ? b[y * TG_W + x] : '#');   // 不在棋盤上回 '#'
+function tgLegalC(v, cells) {   // 我（座位 v.me）放這些格子（絕對座標）合不合法
+  const b = v.tg.board, ci = v.tg.col[v.me], col = String(ci + 1), first = v.tg.used[v.me].length === 0, [sx, sy] = TG_CORNERS[v.tg.corner[v.me]];
+  let touch = false, start = false;
+  for (const [x, y] of cells) {
+    if (tgAt(b, x, y) !== '0') return false;
+    for (const [a, c] of tgEdge(x, y)) if (tgAt(b, a, c) === col) return false;
+    for (const [i, j] of tgVerts(x, y)) {
+      if (i === sx && j === sy) start = true;
+      if (!touch) for (const [a, c] of tgAround(i, j)) if ((a !== x || c !== y) && tgAt(b, a, c) === col) touch = true;
+    }
+  }
+  return first ? start : touch;
+}
+function tgAnchors(v) {   // 我下一塊可以接的格子（空格、和我的方塊共用頂點、四邊沒有我的方塊）；第一塊就是自己頂點旁的格子
+  const b = v.tg.board, col = String(v.tg.col[v.me] + 1), out = [], seen = new Set();
+  if (v.tg.used[v.me].length === 0) { const [sx, sy] = TG_CORNERS[v.tg.corner[v.me]]; return tgAround(sx, sy).filter(([x, y]) => tgAt(b, x, y) === '0'); }
+  for (let y = 0; y < TG_ROWS; y++) for (let x = 0; x < TG_W; x++) {
+    if (b[y * TG_W + x] !== col) continue;
+    for (const [i, j] of tgVerts(x, y)) for (const [a, c] of tgAround(i, j)) {
+      if (tgAt(b, a, c) !== '0' || seen.has(a + ',' + c)) continue;
+      seen.add(a + ',' + c);
+      if (tgEdge(a, c).some(([e, f]) => tgAt(b, e, f) === col)) continue;
+      out.push([a, c]);
+    }
+  }
+  return out;
+}
+const tgPx = (i, j) => [TG_MARGIN + i * TG_S / 2 - (TG_CX - 2 * TG_N) * TG_S / 2, TG_MARGIN + j * TG_S * Math.sqrt(3) / 2];   // 頂點 → 畫面座標（左邊界對齊 TG_MARGIN）
+const TG_CW = TG_MARGIN * 2 + 4 * TG_N * TG_S / 2, TG_CH = Math.ceil(TG_MARGIN * 2 + 2 * TG_N * TG_S * Math.sqrt(3) / 2);
+function tgPreview(v) {
+  const o = S.tg;
+  if (!o || o.sel == null || o.hi == null) return null;
+  const { cells, pv } = tgShape(o.sel, o.rot, o.flip), dx = o.hi - pv[0], dy = o.hj - pv[1], abs = cells.map(([x, y]) => [x + dx, y + dy]);
+  return { cells: abs, ok: tgLegalC(v, abs) };
+}
+function tgTri(g, x, y) { const vv = tgVerts(x, y); g.beginPath(); vv.forEach(([i, j], k) => { const [px, py] = tgPx(i, j); if (k) g.lineTo(px, py); else g.moveTo(px, py); }); g.closePath(); }
+function tgDraw(cv, v) {
+  const g = cv.getContext('2d'), b = v.tg.board;
+  g.fillStyle = '#141a2a'; g.fillRect(0, 0, cv.width, cv.height);
+  for (let y = 0; y < TG_ROWS; y++) for (let x = 0; x < TG_W; x++) {   // 棋盤：每格一個三角形，格線淡淡的
+    if (!tgCellOk(x, y)) continue;
+    const c = b[y * TG_W + x];
+    tgTri(g, x, y);
+    g.fillStyle = c === '0' ? ((x + y) & 1 ? '#1a2136' : '#182033') : BK_COL[Number(c) - 1]; g.fill();
+    g.strokeStyle = c === '0' ? 'rgba(255,255,255,.09)' : 'rgba(0,0,0,.35)'; g.lineWidth = 1; g.stroke();
+  }
+  v.tg.col.forEach((ci, k) => {   // 各色的起始頂點：該色的圓點
+    const [px, py] = tgPx(...TG_CORNERS[v.tg.corner[k]]);
+    g.fillStyle = BK_COL[ci]; g.globalAlpha = .9; g.beginPath(); g.arc(px, py, 5, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; g.strokeStyle = '#fff'; g.lineWidth = 1; g.stroke();
+  });
+  if (v.tg.last) { g.strokeStyle = '#fff'; g.lineWidth = 2; for (const [x, y] of v.tg.last.cells) { tgTri(g, x, y); g.stroke(); } }
+  const seat = v.phase === 'playing' && v.role === 'seat', mine = seat && v.turn === v.me;
+  if (mine) {   // 輪到我：可以接的格子用小圓點標出來
+    g.fillStyle = 'rgba(255,255,255,.6)';
+    for (const [x, y] of tgAnchors(v)) { const vv = tgVerts(x, y), cx = vv.reduce((a, q) => a + tgPx(...q)[0], 0) / 3, cy = vv.reduce((a, q) => a + tgPx(...q)[1], 0) / 3; g.beginPath(); g.arc(cx, cy, 2.5, 0, Math.PI * 2); g.fill(); }
+  }
+  const pv = seat ? tgPreview(v) : null;
+  if (pv) {   // 預覽：合法＝我的顏色半透明＋白邊；不合法＝紅色
+    for (const [x, y] of pv.cells) { if (!tgCellOk(x, y)) continue; tgTri(g, x, y); g.globalAlpha = .72; g.fillStyle = pv.ok ? BK_COL[v.tg.col[v.me]] : '#ff3030'; g.fill(); g.globalAlpha = 1; if (pv.ok) { g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke(); } }
+  }
+}
+function tgPieceCanvas(p, color, rot, flip) {   // 托盤裡的小圖
+  const cv = document.createElement('canvas'), { cells } = tgShape(p, rot, flip), W = 64, H = 54, pts = [];
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+  for (const [x, y] of cells) for (const [i, j] of tgVerts(x, y)) { x0 = Math.min(x0, i); x1 = Math.max(x1, i); y0 = Math.min(y0, j); y1 = Math.max(y1, j); }
+  const sc = Math.min((W - 6) / ((x1 - x0) || 1), (H - 6) / (((y1 - y0) * Math.sqrt(3)) || 1), 6.5), ox = (W - (x1 - x0) * sc) / 2, oy = (H - (y1 - y0) * Math.sqrt(3) * sc) / 2;
+  cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'); g.fillStyle = color; g.strokeStyle = 'rgba(0,0,0,.4)'; g.lineWidth = 1;
+  for (const [x, y] of cells) { g.beginPath(); tgVerts(x, y).forEach(([i, j], k) => { const px = ox + (i - x0) * sc, py = oy + (j - y0) * Math.sqrt(3) * sc; if (k) g.lineTo(px, py); else g.moveTo(px, py); }); g.closePath(); g.fill(); g.stroke(); }
+  return cv;
+}
+function tgSelect(p) {   // 選方塊；再點一次已選的＝旋轉
+  const o = (S.tg ||= { sel: null, rot: 0, flip: false, hi: null, hj: null });
+  if (o.sel === p) o.rot = (o.rot + 1) % 6; else { o.sel = p; o.rot = 0; o.flip = false; }
+  buildTable();
+}
+function tgRotate(d) { const o = S.tg; if (!o || o.sel == null) return; o.rot = (o.rot + d + 6) % 6; buildTable(); }
+function tgFlip() { const o = S.tg; if (!o || o.sel == null) return; o.flip = !o.flip; buildTable(); }
+function tgKey(e) {   // 遊戲畫面開著且在玩三角方塊拼圖：R 旋轉、F 翻面
+  const k = e.key.toLowerCase();
+  if (k === 'r') { e.preventDefault(); tgRotate(e.shiftKey ? -1 : 1); } else if (k === 'f') { e.preventDefault(); tgFlip(); }
+}
+function tgNearestVertex(px, py) {   // 畫面座標 → 最近的格點 (i, j)（i + j 為偶數）
+  const u = (px - TG_MARGIN) / (TG_S / 2) + (TG_CX - 2 * TG_N), jf = (py - TG_MARGIN) / (TG_S * Math.sqrt(3) / 2);
+  let best = null, bd = 1e9;
+  for (let j = Math.floor(jf) - 1; j <= Math.ceil(jf) + 1; j++) for (let i = Math.floor(u) - 2; i <= Math.ceil(u) + 2; i++) {
+    if (((i + j) & 1) !== 0) continue;
+    const d = (i - u) ** 2 + ((j - jf) * Math.sqrt(3)) ** 2;
+    if (d < bd) { bd = d; best = [i, j]; }
+  }
+  return best;
+}
+function buildTrigon(box, v, mk, gd) {
+  const playing = v.phase === 'playing', seat = v.role === 'seat', myTurn = playing && seat && v.turn === v.me, tg = v.tg;
+  if (!playing) bkStopTimer();
+  const o = (S.tg ||= { sel: null, rot: 0, flip: false, hi: null, hj: null });
+  if (!playing || !seat || (o.sel != null && tg.used[v.me]?.includes(o.sel))) { o.sel = null; o.hi = o.hj = null; }   // 用掉的方塊／不是我的局：取消選取
+  const cname = k => BK_CNAME[tg.col[k]];
+  let status;
+  if (playing) {
+    const who = v.seats[v.turn]?.name;
+    status = !seat ? `觀戰中 · 輪到 ${who}（${cname(v.turn)}）` : myTurn ? `輪到你（${cname(v.me)}）：選一塊方塊，點棋盤放下` : `輪到 ${who}（${cname(v.turn)}）`;
+  } else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始（每手限時 45 秒）';
+  const st = mk('div', 'table-status' + (myTurn ? ' mine' : ''), status);
+  if (playing) { const tm = mk('span', 'bk-timer'); tm.id = 'bkTimer'; st.appendChild(tm); }
+  box.appendChild(st);
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  const row = mk('div', 'table-seats bk-seats');
+  v.seats.forEach((s, i) => {
+    const seatEl = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && v.turn === i ? ' turn' : '') + (playing && (s.left || tg.done[i]) ? ' out' : ''));
+    const nameEl = mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : ''));
+    if (playing) { const sw = mk('span', 'bk-swatch'); sw.style.background = BK_COL[tg.col[i]]; nameEl.prepend(sw); }
+    seatEl.appendChild(nameEl);
+    seatEl.appendChild(mk('div', 'table-tag', playing ? `${cname(i)} · 剩 ${s.rem} 格${s.left ? '' : tg.done[i] ? ' · 無處可放' : v.turn === i ? ' · 思考中' : ''}` : (s.ready ? '已準備' : '未準備')));
+    row.appendChild(seatEl);
+  });
+  if (!playing) for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  if (!playing && v.result?.players) {   // 上一局的成績
+    const sc = mk('div', 'bk-score');
+    [...v.result.players].map((p, k) => ({ p, k })).sort((a, b) => b.p.score - a.p.score).forEach(({ p, k }) => {
+      const line = mk('div', 'bk-score-line' + (v.result.winners.includes(k) ? ' win' : ''));
+      const sw = mk('span', 'bk-swatch'); sw.style.background = BK_COL[p.col]; line.appendChild(sw);
+      line.appendChild(document.createTextNode(`${p.name}${p.left ? '（離開）' : p.forfeit ? '（棄權）' : ''}　剩 ${p.rem} 格${p.rem === 0 ? '，全部放完' : ''}　${p.score} 分`));
+      sc.appendChild(line);
+    });
+    box.appendChild(sc);
+  }
+  if (tg) {   // 棋盤＋托盤
+    const main = mk('div', 'bk-main'), cv = document.createElement('canvas');
+    cv.width = TG_CW; cv.height = TG_CH; cv.className = 'bk-board' + (myTurn ? ' mine' : '');
+    tgDraw(cv, v);
+    if (playing && seat) {
+      const at = e => { const r = cv.getBoundingClientRect(), k = TG_CW / r.width; return tgNearestVertex((e.clientX - r.left) * k, (e.clientY - r.top) * k); };
+      cv.onmousemove = e => { const p = at(e); if (p && (p[0] !== o.hi || p[1] !== o.hj)) { o.hi = p[0]; o.hj = p[1]; tgDraw(cv, v); } };
+      cv.onmouseleave = () => { o.hi = o.hj = null; tgDraw(cv, v); };
+      cv.onwheel = e => { if (o.sel == null) return; e.preventDefault(); tgRotate(e.deltaY > 0 ? 1 : -1); };
+      cv.oncontextmenu = e => { e.preventDefault(); tgRotate(1); };
+      cv.onclick = e => {
+        if (!myTurn || o.sel == null) return;
+        const p = at(e); if (!p) return;
+        o.hi = p[0]; o.hj = p[1];
+        const pv = tgPreview(v);
+        if (!pv) return;
+        if (!pv.ok) { bkHint('這裡放不下：要「點對點」接到自己的方塊、不能邊對邊（第一塊要蓋住自己的頂點圓點）'); return; }
+        S.net?.tbl?.({ a: 'place', p: o.sel, c: pv.cells });
+        o.sel = null; o.hi = o.hj = null; buildTable();
+      };
+    }
+    main.appendChild(cv);
+    if (seat && playing) {
+      const side = mk('div', 'bk-side'), used = tg.used[v.me] || [], ci = tg.col[v.me];
+      side.appendChild(mk('div', 'table-label', `你的方塊（${BK_CNAME[ci]}）：點選 → 滑到棋盤上 → 點一下放下`));
+      const tray = mk('div', 'bk-tray tg-tray');
+      for (let p = 0; p < TG_PIECES.length; p++) {
+        const isUsed = used.includes(p), el = mk('div', 'bk-pc' + (isUsed ? ' used' : '') + (o.sel === p ? ' sel' : ''));
+        el.appendChild(tgPieceCanvas(p, BK_COL[ci], o.sel === p ? o.rot : 0, o.sel === p ? o.flip : false));
+        if (!isUsed) el.onclick = () => tgSelect(p);
+        tray.appendChild(el);
+      }
+      side.appendChild(tray);
+      const ctl = mk('div', 'table-btns');
+      const rb = mk('button', 'ff-btn small', '↻ 旋轉 60°（R／滾輪／右鍵）'), fb = mk('button', 'ff-btn small', '⇋ 翻面（F）');
+      rb.onclick = () => tgRotate(1); fb.onclick = () => tgFlip(); rb.disabled = fb.disabled = o.sel == null;
+      ctl.appendChild(rb); ctl.appendChild(fb); side.appendChild(ctl);
+      side.appendChild(mk('div', 'table-tag', '大圓點是各色的起始頂點，小圓點是你可以接的格子。連續兩次超時會視為棄權。'));
       const hint = mk('div', 'bk-msg'); hint.id = 'bkMsg'; side.appendChild(hint);
       main.appendChild(side);
     }
@@ -7625,7 +7848,8 @@ addEventListener('keydown', e => {
     if (k === 'escape') { e.preventDefault(); if (!$('rulesBox').classList.contains('hidden')) rulesShow(false); else leaveTable(); }   // 規則視窗開著：Esc 先關；離開確認開著：Esc＝取消規則
     else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
     else if (S.ty) typingKey(e);   // 英文打字競賽：英文字母
-    else if (S.tableView?.game === 'blokus' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') bkKey(e);   // 方塊拼圖：R 旋轉、F 翻面
+    else if (S.tableView?.game === 'blokus' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') bkKey(e);
+    else if (S.tableView?.game === 'trigon' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') tgKey(e);   // 三角方塊拼圖：R 旋轉 60 度、F 翻面   // 方塊拼圖：R 旋轉、F 翻面
     else if (S.gmStep != null && S.tableView?.moves && ['arrowleft', 'arrowright', 'home', 'end'].includes(k)) {
       e.preventDefault();
       const N = S.tableView.moves.length;
