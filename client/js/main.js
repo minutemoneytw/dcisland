@@ -5864,13 +5864,17 @@ function buildIntel(box, v, mk, gd) {
     else if (it.step === 'pick') status = v.choices ? '選擇你的角色卡（2 選 1，另一張棄掉）' : me >= 0 ? `已選好，等其他人（${v.seats.filter(x => x.picked).length}/${v.seats.filter(x => !x.left).length}）` : `選角中（${v.seats.filter(x => x.picked).length}/${v.seats.filter(x => !x.left).length}）`;
     else if (it.prompt) status = it.prompt.seat === me ? '輪到你做技能的決定（見下方）' : `等 ${nm(it.prompt.seat)} 做技能的決定`;
     else if (it.ask) status = it.ask.tgt === me ? `${nm(it.ask.by)} 查驗了你：選擇要怎麼回答` : `等 ${nm(it.ask.tgt)} 回答 ${nm(it.ask.by)} 的查驗`;
-    else if (it.arrive && it.step === 'pass') status = `${kn}到了 ${nm(L.at)} 手上——大家按「準備繼續」後他才能決定（這時可以出鎖定（輪到的人）／攔截／焚信／阻擋）`;
-    else if (it.step === 'ack') status = `${nm(it.ack.by)} 收下了情報——大家看清楚後按「準備繼續」`;
+    else if (it.arrive && it.step === 'pass') status = `${kn}到了 ${nm(L.at)} 手上
+大家按「準備繼續」後他才能決定
+（這時可以出鎖定（輪到的人）／攔截／焚信／阻擋）`;
+    else if (it.step === 'ack') status = `${nm(it.ack.by)} 收下了情報
+大家看清楚後按「準備繼續」`;
     else if (it.step === 'turn') status = myTurn ? '輪到你：可以先用行動牌，再選一張手牌投遞' : `輪到 ${nm(v.turn)} 投遞`;
     else status = holding ? (L.kind === 'direct' && L.next < 0 ? '直達情報交到你手上：必須收下' : L.next < 0 ? `${kn}在你手上：${L.at === L.from ? '大家都不收，退回到你手上，必須收下' : '只能收下'}` : L.next === L.from ? `${kn}在你手上：收下，或退回給發信者 ${nm(L.next)}（發信者必須收下）` : `${kn}在你手上：${(it.blocked || []).includes(me) ? '你被阻擋，本回不能收下，只能傳給 ' + nm(L.next) : '收下，或傳給 ' + nm(L.next)}`) : `${kn}在 ${nm(L?.at)} 手上`;
     if (v.role === 'spec') status = '觀戰中 · ' + status;
   } else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
-  const st = mk('div', 'table-status' + (myTurn || holding ? ' mine' : ''), status);
+  const st = mk('div', 'table-status' + (myTurn || holding ? ' mine' : ''), status); st.style.whiteSpace = 'pre-line';   // 狀態文字裡的 
+ 要換行
   if (playing) { const tm = mk('span', 'it-timer'); tm.id = 'itTimer'; st.appendChild(tm); }
   box.appendChild(st);
   // 加時（限時模式）：倒數中任何活著的入座玩家可以按「加時」（這段倒數變成上限 ×5，同一段最多 2 人、每人每局 3 次）；加時的人可以按「跳過」，全部跳過就縮回 3 秒
@@ -5967,7 +5971,7 @@ function buildIntel(box, v, mk, gd) {
     if (L) {
       const lt = mk('div', 'it-letter');
       lt.appendChild(itCardEl(L.card || null));
-      lt.appendChild(mk('div', null, `${nm(L.from)} 投遞了${IT_KIND[L.kind]} → 現在在 ${nm(L.at)} 手上${L.icpt != null ? `（${nm(L.icpt)} 攔截過）` : ''}${L.kind === 'pub' ? '（公開，大家都看得到）' : L.open ? '（被調包，內容已公開）' : L.card ? (v.role === 'spec' ? '（觀戰看得到內容）' : '（你送出的那張，可能被調包）') : ''}${L.kind === 'direct' ? '　直達：目標可以不收，退回發信者' : ''}`));
+      lt.appendChild(mk('div', null, `${nm(L.from)} 投遞了${IT_KIND[L.kind]} → 現在在 ${nm(L.at)} 手上${L.icpt != null ? `（${nm(L.icpt)} 攔截過）` : ''}${L.kind === 'pub' ? '（公開，大家都看得到）' : L.open ? '（被調包，內容已公開）' : ''}${L.kind === 'direct' ? '　直達：目標可以不收，退回發信者' : ''}`));
       mid.appendChild(lt);
     }
     if (v.stolen) {   // 被竊取的提示：到下一階段（投遞出情報、換下一位）就消失
