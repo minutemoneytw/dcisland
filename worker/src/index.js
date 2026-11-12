@@ -917,9 +917,10 @@ function dgLeave(t, i, now) {
 const MG_HP = 5, MG_WAVE_START = 3, MG_WAVE_LEN = 28, MG_WAVE_GAP = 4;   // 第 k 波＝[3+32k, 3+32k+28)
 const MG_BOSS_START = MG_WAVE_START + 3 * (MG_WAVE_LEN + MG_WAVE_GAP), MG_BOSS_LIMIT = 180;   // Boss 出場時間（99 秒）；出場後 1.5 秒才能開始打；打不贏的上限
 const MG_R0 = 390, MG_R_HIT = 28, MG_GRACE = 0.8;   // 幽靈出現半徑（場外）、碰到中央的半徑、抵達後多久才結算扣血（容許延遲）
-const MG_N_SYMS = 9;   // 符號種類（不分難度、波數，一開始就有全部 9 種）
+const MG_N_SYMS = 10;   // 符號種類（不分難度、波數，一開始就有全部 10 種；2026-11-13 加了 M）
 const MG_SYMS = [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6]];   // 各難度（簡易／中等／困難／超難）每波「一隻幽靈身上的符號個數」；Boss 戰時的小鬼用第 1 波的個數
-const MG_INTERVAL = [2.6, 2.0, 1.5, 1.1], MG_SPEED = [38, 46, 55, 66];   // 各難度小怪生成間隔（秒，1 人）、幽靈速度（px/s）
+const MG_SYM_PTS = 5;   // 計分：每畫對一個符號（小怪身上的、Boss 的都算）+5 分
+const MG_INTERVAL = [2.6, 2.6, 2.6, 2.6], MG_SPEED = [38, 38, 38, 38];   // 各難度小怪生成間隔（秒，1 人）、幽靈速度（px/s）；2026-11-13 起各難度一樣，難度只靠每隻幽靈的符號數量、幽靈速度（px/s）
 const MG_WAVE_MULT = [1.0, 0.85, 0.7, 1.8];   // 各波間隔倍率（第 4 項＝Boss 戰時的小鬼騷擾，比較稀）
 const MG_BOSS_HP = [12, 18, 26, 38], MG_MULT = [1.0, 1.5, 2.2, 3.2], MG_XP = [4, 6, 8, 10], MG_DIFF_NAMES = ["簡易", "中等", "困難", "超難"];   // Boss 血量（1 人，每多 1 人 +60%）、分數難度倍率、勝利 XP（失敗 1）
 const mgBossHp = (diff, n) => Math.ceil(MG_BOSS_HP[diff] * (1 + 0.6 * (n - 1)) - 1e-9);
@@ -948,20 +949,20 @@ function mgStart(t) {
   const now = Date.now(), diff = [0, 1, 2, 3].includes(t.diff) ? t.diff : 0, n = t.seats.length;
   t.g = { seed: Math.floor(Math.random() * 2147483648), t0: now + DG_COUNTDOWN_MS, diff, n, cur: MG_WAVE_START, gh: [], killed: {}, prog: {}, last: {}, rp: {}, boss: mgBossHp(diff, n), dmg: 0, hits: 0, lastBossAt: 0, credit: [], kills: 0 };
   t.result = null; t.phase = "playing";
-  for (const s of t.seats) { s.hp = MG_HP; s.dead = false; s.kills = 0; s.left = false; s.ready = false; }
+  for (const s of t.seats) { s.hp = MG_HP; s.dead = false; s.syms = 0; s.left = false; s.ready = false; }
   tblLog(t, `見習驅魔師（${MG_DIFF_NAMES[diff]}）開始！${n} 人參加，每人 ${MG_HP} 滴血`);
 }
 function mgFinish(t, now, win) {
   const g = t.g, e = Math.max(0, mgElapsed(t, now));
-  const hpLeft = t.seats.reduce((a, s) => a + (s.dead ? 0 : s.hp), 0), kills = t.seats.reduce((a, s) => a + s.kills, 0);
-  const score = win ? Math.floor(1000 * MG_MULT[g.diff] + kills * 10 + hpLeft * 50 + Math.max(0, 240 - e) * 5) : 0;
-  const ranking = t.seats.map(s => ({ name: s.name, uid: s.uid || null, kills: s.kills, hp: Math.max(0, s.hp), dead: !!s.dead, left: !!s.left }));
+  const hpLeft = t.seats.reduce((a, s) => a + (s.dead ? 0 : s.hp), 0), syms = t.seats.reduce((a, s) => a + (s.syms || 0), 0);
+  const score = win ? Math.floor(1000 * MG_MULT[g.diff] + syms * MG_SYM_PTS + hpLeft * 50 + Math.max(0, 240 - e) * 5) : 0;
+  const ranking = t.seats.map(s => ({ name: s.name, uid: s.uid || null, syms: s.syms || 0, hp: Math.max(0, s.hp), dead: !!s.dead, left: !!s.left }));
   const stay = t.seats.filter(s => !s.left), solo = g.n === 1;
   const xp = stay.map(() => (win ? MG_XP[g.diff] : 1));
   let text = win ? `驅魔師們打倒了 Boss！${MG_DIFF_NAMES[g.diff]}模式通關，${score} 分` : `驅魔師們全軍覆沒…（${MG_DIFF_NAMES[g.diff]}模式）`;
   if (!win && e >= MG_BOSS_START && mgAlive(t).length) text = `Boss 太強了，撐不住…（${MG_DIFF_NAMES[g.diff]}模式）`;
   t.seats = stay;
-  t.result = { text, rid: Math.floor(Math.random() * 4294967296), ranking, xp, win, score, diff: g.diff, solo, kills };
+  t.result = { text, rid: Math.floor(Math.random() * 4294967296), ranking, xp, win, score, diff: g.diff, solo, syms };
   tblLog(t, text);
   tblResetSeats(t);
   t.g = null;
@@ -999,10 +1000,10 @@ function mgKill(t, cid, i, p, now) {   // 畫對幽靈 i 的第 p 個符號（p�
   const gh = g.gh[i];
   if (gh.ts > e + 0.3 || e > gh.arr + MG_GRACE) return;
   const cur = g.prog[i] || 0, last = g.last[i];
-  if (p === cur) { g.prog[i] = cur + 1; g.last[i] = { at: now, by: [k] }; }
-  else if (p === cur - 1 && last && now - last.at <= 700 && !last.by.includes(k)) { last.by.push(k); return; }   // 同一個符號幾乎同時畫對的隊友：接受（不重複前進）
+  if (p === cur) { g.prog[i] = cur + 1; g.last[i] = { at: now, by: [k] }; s.syms += 1; }   // 每畫對一個符號就算一個（計分用）
+  else if (p === cur - 1 && last && now - last.at <= 700 && !last.by.includes(k)) { last.by.push(k); s.syms += 1; return; }   // 同一個符號幾乎同時畫對的隊友：接受（不重複前進）
   else return;
-  if (g.prog[i] >= gh.syms.length) { g.killed[i] = k; delete g.prog[i]; s.kills += 1; g.kills += 1; }   // 最後一個符號畫完：消除
+  if (g.prog[i] >= gh.syms.length) { g.killed[i] = k; delete g.prog[i]; }   // 最後一個符號畫完：消除
 }
 function mgBossHit(t, cid, kk, now) {
   const [role, k] = tblFind(t, cid), g = t.g;
@@ -1012,7 +1013,7 @@ function mgBossHit(t, cid, kk, now) {
   if (kk === g.hits) { g.dmg += 1; g.hits += 1; g.lastBossAt = now; g.credit = [k]; }   // 這個符號第一個畫對的人：Boss 換下一個符號
   else if (kk === g.hits - 1 && now - g.lastBossAt <= 700 && !g.credit.includes(k)) { g.dmg += 1; g.credit.push(k); }   // 同一個符號幾乎同時畫對的隊友：也算一次傷害（合作）
   else return;
-  t.seats[k].kills += 1;
+  t.seats[k].syms += 1;
 }
 function mgLeave(t, i, now) {   // 遊戲進行中有人離開：視同倒下，遊戲繼續到場上沒有活人為止
   const s = t.seats[i];
@@ -2404,7 +2405,7 @@ function tblView(t, cid) {
   };
   if (t.game === "mage") {   // 見習驅魔師：血量／擊殺數／倒下／離開；進行中附上 seed、難度、人數、已擊殺的幽靈編號、Boss 血量與被打中的次數
     v.diff = t.diff || 0;
-    t.seats.forEach((s, k) => { v.seats[k].hp = Math.max(0, s.hp || 0); v.seats[k].kills = s.kills || 0; v.seats[k].dead = !!s.dead; v.seats[k].left = !!s.left; });
+    t.seats.forEach((s, k) => { v.seats[k].hp = Math.max(0, s.hp || 0); v.seats[k].syms = s.syms || 0; v.seats[k].dead = !!s.dead; v.seats[k].left = !!s.left; });
     if (t.g && playing) v.mg = { seed: t.g.seed, t0: t.g.t0, sn: Date.now(), diff: t.g.diff, n: t.g.n, killed: Object.keys(t.g.killed).map(Number), prog: Object.entries(t.g.prog).map(([x, y]) => [Number(x), y]), boss: t.g.boss, dmg: t.g.dmg, hits: t.g.hits };
   } else if (t.game === "dodge") {   // 躲彈幕：每個座位的命數／淘汰秒數／是否已離開；進行中附上 seed 與開始時間（彈幕由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
     t.seats.forEach((s, k) => { v.seats[k].lives = s.lives || 0; v.seats[k].died = s.died ?? null; v.seats[k].left = !!s.left; v.seats[k].bonus = s.bonus || 0; });

@@ -1286,10 +1286,11 @@ MG_BOSS_START = 3.0 + 3 * (MG_WAVE_LEN + MG_WAVE_GAP)              # Boss 出場
 MG_BOSS_LIMIT = 180.0                                              # Boss 出場後打不贏的上限（秒）
 MG_R0, MG_R_HIT = 390.0, 28.0                                      # 幽靈出現半徑（場外）與碰到中央的半徑
 MG_GRACE = 0.8                                                     # 幽靈抵達後多久才結算扣血（容許延遲）
-MG_N_SYMS = 9                                                      # 符號種類（不分難度、波數，一開始就有全部 9 種）
+MG_N_SYMS = 10                                                     # 符號種類（不分難度、波數，一開始就有全部 10 種；2026-11-13 加了 M）
 MG_SYMS = [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6]]             # 各難度（簡易／中等／困難／超難）每波「一隻幽靈身上的符號個數」；Boss 戰時的小鬼用第 1 波的個數
-MG_INTERVAL = [2.6, 2.0, 1.5, 1.1]                                 # 各難度小怪生成間隔（秒，1 人）
-MG_SPEED = [38.0, 46.0, 55.0, 66.0]                                # 各難度幽靈速度（px/s）
+MG_SYM_PTS = 5                                                     # 計分：每畫對一個符號（小怪身上的、Boss 的都算）+5 分
+MG_INTERVAL = [2.6, 2.6, 2.6, 2.6]                                 # 各難度小怪生成間隔（秒，1 人）；2026-11-13 起各難度一樣，難度只靠每隻幽靈的符號數量
+MG_SPEED = [38.0, 38.0, 38.0, 38.0]                                # 各難度幽靈速度（px/s）；同上
 MG_WAVE_MULT = [1.0, 0.85, 0.7, 1.8]                               # 各波間隔倍率（第 4 項＝Boss 戰時的小鬼騷擾，比較稀）
 MG_BOSS_HP = [12, 18, 26, 38]                                      # 各難度 Boss 血量（1 人），每多 1 人 +60%
 MG_MULT = [1.0, 1.5, 2.2, 3.2]                                     # 分數的難度倍率
@@ -1345,16 +1346,16 @@ def mg_start(t):
     t["result"] = None
     t["phase"] = "playing"
     for s in t["seats"]:
-        s["hp"], s["dead"], s["kills"], s["left"], s["ready"] = MG_HP, False, 0, False, False
+        s["hp"], s["dead"], s["syms"], s["left"], s["ready"] = MG_HP, False, 0, False, False
     tbl_log(t, f"見習驅魔師（{MG_DIFF_NAMES[diff]}）開始！{n} 人參加，每人 {MG_HP} 滴血")
 
 def mg_finish(t, now, win):
     g = t["g"]
     e = max(0.0, mg_elapsed(t, now))
     hp_left = sum(s["hp"] for s in t["seats"] if not s.get("dead"))
-    kills = sum(s["kills"] for s in t["seats"])
-    score = int(1000 * MG_MULT[g["diff"]] + kills * 10 + hp_left * 50 + max(0.0, 240.0 - e) * 5) if win else 0
-    ranking = [{"name": s["name"], "uid": s.get("uid"), "kills": s["kills"], "hp": max(0, s["hp"]), "dead": bool(s.get("dead")), "left": bool(s.get("left"))} for s in t["seats"]]
+    syms = sum(s.get("syms", 0) for s in t["seats"])
+    score = int(1000 * MG_MULT[g["diff"]] + syms * MG_SYM_PTS + hp_left * 50 + max(0.0, 240.0 - e) * 5) if win else 0
+    ranking = [{"name": s["name"], "uid": s.get("uid"), "syms": s.get("syms", 0), "hp": max(0, s["hp"]), "dead": bool(s.get("dead")), "left": bool(s.get("left"))} for s in t["seats"]]
     stay = [s for s in t["seats"] if not s.get("left")]
     xp = [MG_XP[g["diff"]] if win else 1 for s in stay]
     solo = g["n"] == 1
@@ -1364,7 +1365,7 @@ def mg_finish(t, now, win):
     if win and solo:
         board_record(t, [(t["seats"][0]["name"], score, t["seats"][0].get("uid"))])
     t["seats"] = stay
-    t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp, "win": win, "score": score, "diff": g["diff"], "solo": solo, "kills": kills}
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp, "win": win, "score": score, "diff": g["diff"], "solo": solo, "syms": syms}
     tbl_log(t, text)
     tbl_reset_seats(t)
     t["g"] = None
@@ -1429,16 +1430,16 @@ def mg_kill(t, cid, i, p, now):
     if p == cur:
         g["prog"][key] = cur + 1
         g["last"][key] = {"at": now, "by": [k]}
+        s["syms"] += 1   # 每畫對一個符號就算一個（計分用）
     elif p == cur - 1 and key in g["last"] and now - g["last"][key]["at"] <= 700 and k not in g["last"][key]["by"]:
-        g["last"][key]["by"].append(k)   # 同一個符號幾乎同時畫對的隊友：接受（不重複前進）
+        g["last"][key]["by"].append(k)   # 同一個符號幾乎同時畫對的隊友：接受（不重複前進），符號數也算他一個
+        s["syms"] += 1
         return
     else:
         return
     if g["prog"][key] >= len(gh["syms"]):   # 最後一個符號畫完：消除
         g["killed"][key] = k
         g["prog"].pop(key, None)
-        s["kills"] += 1
-        g["kills"] += 1
 
 def mg_boss_hit(t, cid, kk, now):
     role, k = tbl_find(t, cid)
@@ -1457,7 +1458,7 @@ def mg_boss_hit(t, cid, kk, now):
         g["credit"].append(k)
     else:
         return
-    t["seats"][k]["kills"] += 1
+    t["seats"][k]["syms"] += 1
 
 def mg_leave(t, i, now):
     """遊戲進行中有人離開：視同倒下，遊戲繼續到場上沒有活人為止。"""
@@ -3625,7 +3626,7 @@ def tbl_view(t, cid):
     elif t["game"] == "mage":   # 見習驅魔師：血量／擊殺數／倒下／離開；進行中附上 seed、難度、人數、已擊殺的幽靈編號、Boss 血量與被打中的次數
         v["diff"] = t.get("diff", 0)
         for k, s in enumerate(t["seats"]):
-            seats[k].update(hp=max(0, s.get("hp", 0)), kills=s.get("kills", 0), dead=bool(s.get("dead")), left=bool(s.get("left")))
+            seats[k].update(hp=max(0, s.get("hp", 0)), syms=s.get("syms", 0), dead=bool(s.get("dead")), left=bool(s.get("left")))
         if g and playing:
             v["mg"] = {"seed": g["seed"], "t0": g["t0"], "sn": int(time.time() * 1000), "diff": g["diff"], "n": g["n"], "killed": [int(x) for x in g["killed"]],
                        "prog": [[int(x), y] for x, y in g["prog"].items()],

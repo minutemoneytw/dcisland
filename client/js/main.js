@@ -5103,16 +5103,16 @@ function buildDodge(box, v, mk, gd) {
 // 3 波小怪＋1 隻 Boss（Boss 有血條，一直畫符號直到血條清空）。幽靈由「伺服器給的 seed」決定性地產生（與 worker 的 mgGen、dev_server 的 mg_gen 同一套，隨機只用 dodgeHash）；
 // 符號辨識（$P 點雲比對）在本機，畫對就回報 kill {i}／boss {k}，血量／擊殺／Boss 血量／勝負以伺服器為準，客戶端每秒送 sync 讓伺服器結算沒被消除的幽靈 ----
 const MG_CX = 320, MG_CY = 200, MG_R0 = 390, MG_R_HIT = 28, MG_GRACE = .8, MG_WAVE_START = 3, MG_WAVE_LEN = 28, MG_WAVE_GAP = 4, MG_BOSS_START = 99, MG_HP = 5;
-const MG_N_SYMS = 9, MG_SYMS = [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6]], MG_INTERVAL = [2.6, 2.0, 1.5, 1.1], MG_SPEED = [38, 46, 55, 66], MG_WAVE_MULT = [1.0, .85, .7, 1.8];
+const MG_N_SYMS = 10, MG_SYMS = [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6]], MG_INTERVAL = [2.6, 2.6, 2.6, 2.6], MG_SPEED = [38, 38, 38, 38], MG_WAVE_MULT = [1.0, .85, .7, 1.8];
 const MG_DIFF_NAMES = ['簡易', '中等', '困難', '超難'];
-const MG_SYM_NAMES = ['橫線 —', '直線 |', '圓圈 ○', '尖角 ∧', 'V 字', 'Z 字', 'U 字', '波浪 ~', 'L 字'];
+const MG_SYM_NAMES = ['橫線 —', '直線 |', '圓圈 ○', '尖角 ∧', 'V 字', 'Z 字', 'U 字', '波浪 ~', 'L 字', 'M 字'];
 // 符號範本（單筆畫，0～1 的方格內，y 向下）；順序＝出現的先後（越前面越容易辨識）
 const MG_SYM_POLY = (() => {
   const circle = [], wave = [];
   for (let k = 0; k <= 24; k++) { const a = k / 24 * Math.PI * 2 - Math.PI / 2; circle.push([.5 + .5 * Math.cos(a), .5 + .5 * Math.sin(a)]); }
   for (let k = 0; k <= 20; k++) wave.push([k / 20, .5 - .3 * Math.sin(k / 20 * Math.PI * 2)]);
   return [[[0, .5], [1, .5]], [[.5, 0], [.5, 1]], circle, [[0, 1], [.5, 0], [1, 1]], [[0, 0], [.5, 1], [1, 0]], [[0, 0], [1, 0], [0, 1], [1, 1]],
-    [[0, 0], [0, 1], [1, 1], [1, 0]], wave, [[0, 0], [0, 1], [1, 1]]];
+    [[0, 0], [0, 1], [1, 1], [1, 0]], wave, [[0, 0], [0, 1], [1, 1]], [[0, 1], [0, 0], [.5, .65], [1, 0], [1, 1]]];
 })();
 // 辨識用的範本變體：真人畫的 U 有圓底／方底、寬窄不一，波浪的起伏有大有小、可能先下後上，Z 有寬窄、橫線斜、轉角圓（只用來辨識；畫在幽靈身上的還是上面那組標準形狀）
 const MG_SYM_VARIANTS = (() => {
@@ -5128,6 +5128,32 @@ const MG_SYM_VARIANTS = (() => {
   for (const wd of [.7, 1, 1.4]) for (const sl of [-.15, 0, .15]) for (const rd of [false, true]) {   // Z：寬窄、上下橫線有沒有斜、轉角圓不圓
     const p = [[0, 0], [wd, sl], [0, 1], [wd, 1 + sl]], cut = (A, B, f) => [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f];
     v[5].push(rd ? [p[0], cut(p[0], p[1], .85), p[1], cut(p[1], p[2], .12), cut(p[1], p[2], .88), p[2], cut(p[2], p[3], .15), p[3]] : p);
+  }
+  // O：真人畫的圓常是橢圓、沒收口（缺一塊）、畫過頭（多繞一點）——不加這些會被當成 U
+  const arcPts = (rx, ry, a0, len, n = 28, shrink = 0) => { const r = []; for (let k = 0; k <= n; k++) { const t = a0 + len * k / n, f = 1 - shrink * k / n; r.push([.5 + rx * f * Math.cos(t), .5 + ry * f * Math.sin(t)]); } return r; };
+  for (const [rx, ry] of [[.3, .5], [.4, .5], [.5, .4], [.5, .3]]) v[2].push(arcPts(rx, ry, -Math.PI / 2, Math.PI * 2));   // 橢圓（直扁、橫扁）
+  for (const gap of [-90, -45, 0, 45, 90, 135, 180, -135]) for (const [rx, ry] of [[.5, .5], [.4, .5]]) v[2].push(arcPts(rx, ry, (gap + 20) * Math.PI / 180, Math.PI * 2 * .86));   // 沒收口：缺 14%，缺口在各個方向
+  v[2].push(arcPts(.5, .5, -Math.PI / 2, Math.PI * 2 * 1.18, 34, .12));   // 畫過頭：多繞一點、半徑略縮（螺旋）
+  v[2].push(arcPts(.5, .5, Math.PI / 2, Math.PI * 2 * 1.18, 34, .12));
+  // L：夾角不是剛好 90 度、腳比腿長或短、轉角圓
+  for (const ang of [-.28, 0, .28]) for (const foot of [.5, .7, 1.4, 1.9]) for (const rd of [false, true]) {
+    const A = [0, 0], B = [Math.sin(ang) * .15, 1], C = [B[0] + foot * Math.cos(ang), B[1] - foot * Math.sin(ang)], cutL = (P, Q, f) => [P[0] + (Q[0] - P[0]) * f, P[1] + (Q[1] - P[1]) * f];
+    v[8].push(rd ? [A, cutL(A, B, .85), cutL(A, B, .94), cutL(B, C, Math.min(.5, .12 / foot)), cutL(B, C, Math.min(.7, .24 / foot)), C] : [A, B, C]);
+  }
+  // Z 再加：很寬很扁（寬高比到 2.3）、很窄很高（0.6）——一個人可能畫得扁扁的或瘦瘦的
+  for (const wd of [.6, 1.9, 2.3]) for (const sl of [-.12, 0, .12]) for (const rd of [false, true]) {
+    const p = [[0, 0], [wd, sl], [0, 1], [wd, 1 + sl]], cutZ = (A, B, f) => [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f];
+    v[5].push(rd ? [p[0], cutZ(p[0], p[1], .85), p[1], cutZ(p[1], p[2], .12), cutZ(p[1], p[2], .88), p[2], cutZ(p[2], p[3], .15), p[3]] : p);
+  }
+  // Z 再加：斜體（整個向右傾斜）、上下橫線不一樣長
+  for (const sk of [-.3, .3]) for (const wd of [.6, 1]) v[5].push([[0 + sk * 0, 0], [wd, 0], [0 - sk * 0 + sk, 1], [wd + sk, 1]].map(([x, y], i) => [i < 2 ? x : x - sk, y]).map(([x, y]) => [x + sk * y, y]));
+  for (const [w1, w2] of [[1, .6], [.6, 1]]) v[5].push([[0, 0], [w1, 0], [0, 1], [w2, 1]]);
+  // M：中間的谷深淺不一、外腳外八或收攏、尖或圓
+  for (const dep of [.3, .6, 1]) for (const sp of [0, .2]) for (const rd of [false, true]) {
+    const P = [[0, 1], [sp * .3, 0], [.5, dep], [1 - sp * .3, 0], [1, 1]];
+    if (!rd) { v[9].push(P); continue; }
+    const q = []; for (let i = 1; i < P.length; i++) for (let k = 0; k < 6; k++) q.push([P[i - 1][0] + (P[i][0] - P[i - 1][0]) * k / 6, P[i - 1][1] + (P[i][1] - P[i - 1][1]) * k / 6]);
+    q.push(P[4]); v[9].push(q.map((p, i, arr) => (i > 0 && i < arr.length - 1 ? [(arr[i - 1][0] + p[0] * 2 + arr[i + 1][0]) / 4, (arr[i - 1][1] + p[1] * 2 + arr[i + 1][1]) / 4] : p)));
   }
   return v;
 })();
@@ -5196,7 +5222,7 @@ function mgGenC(g, upto) {   // 客戶端的幽靈產生器（與 worker mgGen �
     const m = w === 3 ? MG_SYMS[d][0] : MG_SYMS[d][w];
     const h = j => dodgeHash(seed, 10000 + i * 16 + j), u = j => h(j) / 4294967296;
     const sp = MG_SPEED[d] * (0.85 + 0.3 * u(2)) * (w === 3 ? 0.9 : 1.0) / (1 + 0.3 * (m - 1));
-    g.gh.push({ i, ts: t, syms: Array.from({ length: m }, (_, j) => h(8 + j) % MG_N_SYMS), sp, arr: t + (MG_R0 - MG_R_HIT) / sp, ang: w === 3 ? -Math.PI / 4 + u(0) * Math.PI * 1.5 : u(0) * Math.PI * 2, w });   // Boss 戰的小幽靈不從正上方（Boss 在那裡，看不到）出來：避開上方 90 度的扇形
+    g.gh.push({ i, ts: t, syms: Array.from({ length: m }, (_, j) => h(8 + j) % MG_N_SYMS), sp, arr: t + (MG_R0 - MG_R_HIT) / sp, ang: (w === 3 || t + (MG_R0 - 82) / sp > MG_BOSS_START) ? -Math.PI / 4 + u(0) * Math.PI * 1.5 : u(0) * Math.PI * 2, w });   // 不從正上方（Boss 在那裡，會被蓋住）出來、避開上方 90 度的扇形：Boss 戰的小鬼，以及出場後還會飛過 Boss 位置（上方距中心 82 以外）的小鬼（2026-11-13）
     g.cur = t + MG_INTERVAL[d] * MG_WAVE_MULT[w] / (1 + 0.5 * (n - 1)) * (0.7 + 0.6 * u(4)) * (1 + 0.3 * (m - 1));
   }
 }
@@ -5308,17 +5334,19 @@ function mgAct(pts, ex, ey) {   // 辨識筆畫 → 消除幽靈或打 Boss
   const rec = mgRecognize(pts); if (!rec) return;
   if (rec.d > MG_ACCEPT || !(rec.d <= rec.second * MG_MARGIN || rec.second - rec.d >= MG_GAP)) { mgSay('？', '#ff9a9a', ex, ey); return; }   // 太不像、或和第二名差不多（不確定）就不判
   const id = rec.id, bossOn = mgBossActive(t, m), bossK = performance.now() - M.bossAt < 1500 ? Math.max(m.hits, M.bossLocal) : m.hits;
-  const cands = mgGhostsNow(t, m).filter(x => x.syms[mgProg(M, m, x.i)] === id).sort((a, b) => a.arr - b.arr);   // 這隻目前要畫的符號就是你畫的
-  if (bossOn && id === mgBossSymC(M.seed, bossK, M.diff) && !(cands.length && cands[0].arr < t + 2.5)) {
+  const cands = mgGhostsNow(t, m).filter(x => x.syms[mgProg(M, m, x.i)] === id).sort((a, b) => a.arr - b.arr);   // 場上「目前要畫的符號就是你畫的」的幽靈：全部一起消除（2026-11-13，使用者要求）
+  const hitBoss = bossOn && id === mgBossSymC(M.seed, bossK, M.diff);   // Boss 現在要的符號也一樣就一起打（不再因為有快到的幽靈而讓位）
+  if (hitBoss) {
     M.bossLocal = bossK + 1; M.bossAt = performance.now(); M.shake = performance.now() + 350; M.lastDmg = Math.max(M.lastDmg, m.dmg + 1);
-    S.net?.tbl?.({ a: 'boss', k: bossK }); mgSay('命中 Boss！', '#ffe08a', MG_CX, 150); return;
+    S.net?.tbl?.({ a: 'boss', k: bossK }); mgSay('命中 Boss！', '#ffe08a', MG_CX, 150);
   }
-  if (cands.length) {
-    const gh = cands[0], r = MG_R0 - gh.sp * (t - gh.ts), p = mgProg(M, m, gh.i);
+  for (const gh of cands) {   // 每隻各送一則 kill（伺服器逐隻驗證，規則沒變；每條連線每秒 40 則的上限遠大於場上同時出現的幽靈數）
+    const r = MG_R0 - gh.sp * (t - gh.ts), p = mgProg(M, m, gh.i);
     M.localProg.set(gh.i, p + 1); if (p + 1 >= gh.syms.length) M.localKilled.add(gh.i);
     S.net?.tbl?.({ a: 'kill', i: gh.i, p });
     mgSay(p + 1 >= gh.syms.length ? '✦' : '✧', '#9affb8', MG_CX + Math.cos(gh.ang) * r, MG_CY + Math.sin(gh.ang) * r - 30);
-  } else mgSay('沒有這個符號的幽靈', '#bbbbbb', ex, ey);
+  }
+  if (!hitBoss && !cands.length) mgSay('沒有這個符號的幽靈', '#bbbbbb', ex, ey);
 }
 function buildMage(box, v, mk, gd) {
   const playing = v.phase === 'playing', mySeat = v.role === 'seat' ? v.seats[v.me] : null, diff = v.diff || 0;
@@ -5331,7 +5359,7 @@ function buildMage(box, v, mk, gd) {
   if (v.result && !playing) {
     box.appendChild(mk('div', 'table-result', v.result.text));
     const rk = mk('div', 'dodge-rank');
-    v.result.ranking.forEach((r, i) => rk.appendChild(mk('div', null, `${r.name}　擊殺 ${r.kills}　${r.dead ? '倒下' : `剩 ${r.hp} 滴血`}${r.left ? '（中途離開）' : ''}`)));
+    v.result.ranking.forEach((r, i) => rk.appendChild(mk('div', null, `${r.name}　畫對 ${r.syms} 個符號　${r.dead ? '倒下' : `剩 ${r.hp} 滴血`}${r.left ? '（中途離開）' : ''}`)));
     if (v.result.win) rk.appendChild(mk('div', null, `本局分數：${v.result.score}${v.result.solo ? '（單人，記入排行榜）' : '（多人不進排行榜）'}`));
     box.appendChild(rk);
   }
