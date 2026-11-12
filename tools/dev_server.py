@@ -914,6 +914,85 @@ DG_INV_MS = 1500      # 被打到後的無敵時間（與客戶端一致）
 DG_COUNTDOWN_MS = 3000
 DG_W, DG_H = 640, 400   # 場地大小（客戶端畫面用；伺服器只用來夾位置）
 
+# 道具（2026-11-12，使用者要求）：分數＝存活秒數×1＋道具分。道具的位置、出現時間、種類由 seed 與編號 n 決定性地算出（客戶端畫面用同一個函式，
+# 與 worker 的 dgItem／client 的 dodgeItem 同一套）：伺服器只在收到 pick {n} 時驗證（時間、距離、沒被別人先吃）並結算。
+# 金幣 +10 分／愛心 +1 命（滿命改 +5 分）／骷髏 領先的對手 −10 分／蝸牛 其他人減速 5 秒／準星 6 秒內場上多出「只會打到別人」的子彈；單人局只有金幣與愛心
+DG_ITEM_LIFE = 9.0          # 道具停留秒數
+DG_ITEM_GAP = 4.0           # 平均每幾秒出現一個
+DG_ITEM_R = 9               # 道具半徑（撿取距離＝道具半徑＋玩家半徑 5，伺服器放寬到 60 以容許延遲）
+DG_COIN, DG_SKULL_PTS, DG_HEART_FULL_PTS = 10, 10, 5
+DG_SLOW_SEC, DG_BUL_SEC = 5.0, 6.0
+
+def dg_hash(a, b):
+    M = 0xFFFFFFFF
+    x = ((((a & M) ^ 0x9e3779b9) * 0x85ebca6b) & M) ^ (((((b & M) + 0x7f4a7c15) & M) * 0xc2b2ae35) & M)
+    x &= M
+    x ^= x >> 15
+    x = (x * 0x2c1b3c6d) & M
+    x ^= x >> 12
+    x = (x * 0x297a2d39) & M
+    x ^= x >> 15
+    return x & M
+
+def dg_item(seed, n, players):
+    """第 n 個道具：{ts 出現秒數, x, y, kind}。kind：coin／heart／skull／slow／bul。"""
+    h = lambda k: dg_hash(seed, n * 8 + k)
+    r = h(3) % 100
+    if players <= 1:
+        kind = "coin" if r < 70 else "heart"
+    else:
+        kind = "coin" if r < 38 else "heart" if r < 55 else "skull" if r < 70 else "slow" if r < 85 else "bul"
+    return {"ts": 3 + DG_ITEM_GAP * n + (h(0) % 2000) / 1000.0, "x": 30 + h(1) % (DG_W - 60), "y": 30 + h(2) % (DG_H - 60), "kind": kind}
+
+def dg_score(s):
+    """分數＝存活秒數（取整）＋道具分，最低 0。"""
+    return max(0, int(s["died"] if s.get("died") is not None else 0) + s.get("bonus", 0))
+
+def dg_pick(t, cid, n, now, x=None, y=None):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "dodge" or role != "seat" or t["phase"] != "playing" or not g or type(n) is not int or n < 0 or n > 10000:
+        return
+    s = t["seats"][i]
+    if s["out"]:
+        return
+    e = (now - g["t0"]) / 1000.0
+    it = dg_item(g["seed"], n, g["n"])
+    if e < it["ts"] - 0.3 or e > it["ts"] + DG_ITEM_LIFE + 0.6 or any(x["n"] == n for x in g["taken"]):
+        return
+    # 位置驗證：客戶端回報撿到時的座標要在道具旁（半徑 22），且離伺服器最後知道的位置不能太遠（pos 約 8 次／秒，留延遲餘裕 120）
+    if type(x) not in (int, float) or type(y) not in (int, float) or (x - it["x"]) ** 2 + (y - it["y"]) ** 2 > 22 * 22:
+        return
+    if s.get("px") is not None and (s["px"] - x) ** 2 + (s["py"] - y) ** 2 > 120 * 120:
+        return
+    k = it["kind"]
+    g["taken"].append({"n": n, "by": i, "k": k})
+    nm = s["name"]
+    if k == "coin":
+        s["bonus"] += DG_COIN
+        tbl_log(t, f"{nm} 吃到金幣 +{DG_COIN} 分")
+    elif k == "heart":
+        if s["lives"] < DG_LIVES:
+            s["lives"] += 1
+            tbl_log(t, f"{nm} 吃到愛心，回復 1 條命")
+        else:
+            s["bonus"] += DG_HEART_FULL_PTS
+            tbl_log(t, f"{nm} 吃到愛心（命已滿）+{DG_HEART_FULL_PTS} 分")
+    elif k == "skull":
+        others = [x for j, x in enumerate(t["seats"]) if j != i and not x["out"]]
+        if others:
+            lead = max(others, key=lambda x: int(e) + x["bonus"])
+            lead["bonus"] -= DG_SKULL_PTS
+            tbl_log(t, f"{nm} 吃到骷髏：領先的 {lead['name']} −{DG_SKULL_PTS} 分")
+        else:
+            tbl_log(t, f"{nm} 吃到骷髏，但沒有對手")
+    elif k == "slow":
+        g["fx"].append({"k": "slow", "by": i, "from": round(e, 2), "until": round(e + DG_SLOW_SEC, 2), "n": n})
+        tbl_log(t, f"{nm} 吃到蝸牛：其他人減速 {int(DG_SLOW_SEC)} 秒")
+    else:
+        g["fx"].append({"k": "bul", "by": i, "from": round(e, 2), "until": round(e + DG_BUL_SEC, 2), "n": n})
+        tbl_log(t, f"{nm} 吃到準星：{int(DG_BUL_SEC)} 秒內場上多出只會打到別人的子彈")
+
 def dg_xp(sec):
     """存活秒數 → XP：不到 10 秒不給（擋刷分）；之後每 30 秒 +1，起跳 1、上限 10。"""
     return 0 if sec < 10 else min(10, 1 + int(sec // 30))
@@ -923,11 +1002,12 @@ def dg_elapsed(t, now):
 
 def dg_start(t):
     now = int(time.time() * 1000)
-    t["g"] = {"seed": random.getrandbits(31), "t0": now + DG_COUNTDOWN_MS}
+    t["g"] = {"seed": random.getrandbits(31), "t0": now + DG_COUNTDOWN_MS, "n": len(t["seats"]), "taken": [], "fx": []}
     t["result"] = None
     t["phase"] = "playing"
     for s in t["seats"]:
         s["lives"], s["out"], s["died"], s["last_hit"], s["left"], s["ready"] = DG_LIVES, False, None, 0, False, False
+        s["bonus"], s["px"], s["py"] = 0, None, None
     tbl_log(t, f"挑戰開始！{len(t['seats'])} 人參加，每人 {DG_LIVES} 條命")
 
 def dg_out(t, s, now, why):
@@ -940,12 +1020,12 @@ def dg_finish(t, now):
         if not s["out"]:   # 時間到還活著的：存活到最後
             s["out"] = True
             s["died"] = round(dg_elapsed(t, now), 1)
-    ranking = sorted(({"name": s["name"], "sec": s["died"], "left": bool(s.get("left"))} for s in t["seats"]), key=lambda r: -r["sec"])
+    ranking = sorted(({"name": s["name"], "sec": s["died"], "bonus": s["bonus"], "score": dg_score(s), "left": bool(s.get("left"))} for s in t["seats"]), key=lambda r: (-r["score"], -r["sec"]))
     stay = [s for s in t["seats"] if not s.get("left")]
     xp = [dg_xp(s["died"]) for s in stay]   # 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
     top = ranking[0] if ranking else None
-    text = f"挑戰結束！第一名 {top['name']}，存活 {top['sec']} 秒" if top else "挑戰結束"
-    board_record(t, [(r["name"], r["sec"]) for r in ranking if not r["left"]])
+    text = f"挑戰結束！第一名 {top['name']}，{top['score']} 分" if top else "挑戰結束"
+    board_record(t, [(r["name"], r["score"]) for r in ranking if not r["left"]])
     t["seats"] = stay
     t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp}
     tbl_log(t, text)
@@ -3115,9 +3195,9 @@ def tbl_view(t, cid):
     g = t.get("g")
     if t["game"] == "dodge":   # 躲彈幕：每個座位的命數／淘汰秒數／是否已離開；進行中附上 seed 與開始時間（彈幕由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
         for k, s in enumerate(t["seats"]):
-            seats[k].update(lives=s.get("lives", 0), died=s.get("died"), left=bool(s.get("left")))
+            seats[k].update(lives=s.get("lives", 0), died=s.get("died"), left=bool(s.get("left")), bonus=s.get("bonus", 0))
         if g and playing:
-            v["dg"] = {"seed": g["seed"], "t0": g["t0"], "dur": DG_DUR, "sn": int(time.time() * 1000)}
+            v["dg"] = {"seed": g["seed"], "t0": g["t0"], "dur": DG_DUR, "sn": int(time.time() * 1000), "n": g["n"], "taken": list(g["taken"]), "fx": list(g["fx"])}
     elif ty_is(t):   # 英打／中文打字競賽：每個座位的分數／是否已離開；進行中附上 seed 與開始時間（題目由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
         for k, s in enumerate(t["seats"]):
             seats[k].update(score=s.get("score", 0), left=bool(s.get("left")))
@@ -4452,6 +4532,7 @@ class Room:
                     if t["game"] == "dodge" and role == "seat" and t["phase"] == "playing" and not t["seats"][i]["out"]:
                         x = max(0.0, min(float(DG_W), _num(msg.get("x"), -1e6, 1e6, 0.0)))
                         y = max(0.0, min(float(DG_H), _num(msg.get("y"), -1e6, 1e6, 0.0)))
+                        t["seats"][i]["px"], t["seats"][i]["py"] = x, y   # 道具撿取驗證用
                         for m in t["seats"] + t["specs"]:
                             if m["cid"] is not None and m["cid"] != cid:
                                 out.append((m["cid"], {"t": "tpos", "i": i, "x": round(x, 1), "y": round(y, 1)}))
@@ -4511,6 +4592,8 @@ class Room:
                         un_set_mode(t, cid, msg.get("v"))
                     elif a == "hit":   # 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
                         dg_hit(t, cid, now_ms)
+                    elif a == "pick":   # 躲彈幕：我吃到道具 n（客戶端自判，伺服器驗時間／距離／先到先得並結算）
+                        dg_pick(t, cid, msg.get("n"), now_ms, msg.get("x"), msg.get("y"))
                     elif a == "finish":   # 躲彈幕／英文打字競賽：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）
                         dg_check_end(t, now_ms + 300)
                         ty_check_end(t, now_ms + 300)

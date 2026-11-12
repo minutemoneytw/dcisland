@@ -4641,7 +4641,7 @@ const DG_KEYS = { w: 'up', arrowup: 'up', s: 'down', arrowdown: 'down', a: 'left
 // 決定性的彈幕產生器：同一個 seed 永遠產生同一批彈幕。彈幕＝{ts（出現時間 s）, x0, y0, vx, vy, r, c（顏色編號 0～2）}，位置＝起點＋速度×(t−ts)
 // 所有彈幕一律從場外出發（2026-11-08，使用者要求）：起點都在場地外，才不會剛好出在玩家身上來不及躲
 const DG_BULLET_SPEED = 1.25;   // 彈幕速度倍率（使用者要求比原本快約 1.25 倍）
-const DG_BULLET_COLORS = [['#ff5a5a', '#ffe0d0'], ['#ffb347', '#fff2c8'], ['#5ab8ff', '#d8f0ff']];   // 三種顏色：紅、橘黃、藍（外圈、內點）；只是好看，不影響判定
+const DG_BULLET_COLORS = [['#ff5a5a', '#ffe0d0'], ['#ffb347', '#fff2c8'], ['#5ab8ff', '#d8f0ff'], ['#c070ff', '#f3d8ff']];   // 第 4 種（紫）＝準星道具的子彈（只會打到別人）；   // 三種顏色：紅、橘黃、藍（外圈、內點）；只是好看，不影響判定
 function dodgeGen(seed) {
   const rng = mulberry32(seed >>> 0);
   const rnd = (a, b) => a + rng() * (b - a), pick = n => Math.floor(rng() * n);
@@ -4682,13 +4682,37 @@ function dodgeGen(seed) {
     },
   };
 }
+// 道具（2026-11-12，使用者要求；與 worker 的 dgItem、dev_server 的 dg_item 同一套）：位置、出現時間、種類由 seed 與編號 n 決定性地算出，
+// 撿到時回報 pick {n}，伺服器驗證後結算並把 taken／fx 放進 table.dg
+const DG_ITEM_LIFE = 9, DG_ITEM_GAP = 4, DG_ITEM_R = 9, DG_SLOW_F = .55;
+const DG_ITEM_ICON = { coin: ['🪙', '+10 分'], heart: ['❤️', '回血'], skull: ['💀', '領先者 −10'], slow: ['🐌', '他人減速'], bul: ['🎯', '只打他人的子彈'] };
+function dodgeHash(a, b) {
+  let x = (Math.imul((a >>> 0) ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(((b >>> 0) + 0x7f4a7c15) >>> 0, 0xc2b2ae35)) >>> 0;
+  x ^= x >>> 15; x = Math.imul(x, 0x2c1b3c6d) >>> 0; x ^= x >>> 12; x = Math.imul(x, 0x297a2d39) >>> 0; x ^= x >>> 15;
+  return x >>> 0;
+}
+function dodgeItem(seed, n, players) {
+  const h = k => dodgeHash(seed, n * 8 + k), r = h(3) % 100;
+  const kind = players <= 1 ? (r < 70 ? 'coin' : 'heart') : r < 38 ? 'coin' : r < 55 ? 'heart' : r < 70 ? 'skull' : r < 85 ? 'slow' : 'bul';
+  return { n, ts: 3 + DG_ITEM_GAP * n + (h(0) % 2000) / 1000, x: 30 + h(1) % (DG_W - 60), y: 30 + h(2) % (DG_H - 60), kind };
+}
+function dodgeFxBullets(seed, fx) {   // 準星：fx.from～fx.until 之間每 0.45 秒從場外朝場內隨機一點射 2 顆（own＝吃道具的人，他不會被打到）；每個 fx 只算一次
+  if (fx._b) return fx._b;
+  const rng = mulberry32(dodgeHash(seed, 100000 + fx.n)), rnd = (a, b) => a + rng() * (b - a), bl = [], sp = 170 * DG_BULLET_SPEED;
+  for (let ts = fx.from + .5; ts < fx.until; ts += .45) {
+    const side = Math.floor(rng() * 4), u = rnd(.1, .9), x = side === 1 ? DG_W + 16 : side === 3 ? -16 : u * DG_W, y = side === 0 ? -16 : side === 2 ? DG_H + 16 : u * DG_H;
+    const a = Math.atan2(rnd(40, DG_H - 40) - y, rnd(40, DG_W - 40) - x);
+    for (const da of [-.12, .12]) bl.push({ ts, x0: x, y0: y, vx: Math.cos(a + da) * sp, vy: Math.sin(a + da) * sp, r: 4, c: 3, own: fx.by });
+  }
+  return (fx._b = bl);
+}
 function dodgeStart(v) {   // 一局開始（伺服器給了 dg）：重置本機狀態
   const dg = v.dg, me = v.me;
   S.dg = {
     id: S.tableId, seed: dg.seed, t0: dg.t0, dur: dg.dur, off: dg.sn - Date.now(),   // off：伺服器時間 − 本機時間（毫秒，忽略單程延遲）
     gen: dodgeGen(dg.seed), act: [],           // act：目前在場上的彈幕
     pos: [], me, x: DG_W / 2 + (me - (v.seats.length - 1) / 2) * 30, y: DG_H * .75, inv: 0, lives: 3, sent: 0, finished: false, last: 0,
-    keys: {}, hitFlash: 0,
+    keys: {}, hitFlash: 0, picked: new Map(),
   };
   S.dg.pos = v.seats.map(() => null);
   if (!S.dgRaf) { S.dgLast = performance.now(); S.dgRaf = requestAnimationFrame(dodgeFrame); }
@@ -4706,8 +4730,10 @@ function dodgeFrame(ts) {
     const k = D.keys;
     let dx = (k.right ? 1 : 0) - (k.left ? 1 : 0), dy = (k.down ? 1 : 0) - (k.up ? 1 : 0);
     if (dx && dy) { dx *= .7071; dy *= .7071; }
-    D.x = Math.max(DG_PLAYER_R, Math.min(DG_W - DG_PLAYER_R, D.x + dx * DG_SPEED * dt));
-    D.y = Math.max(DG_PLAYER_R, Math.min(DG_H - DG_PLAYER_R, D.y + dy * DG_SPEED * dt));
+    const slowF = (v.dg?.fx || []).some(f => f.k === 'slow' && f.by !== D.me && t >= f.from && t <= f.until) ? DG_SLOW_F : 1;   // 蝸牛：被別人吃到的減速
+    D.slow = slowF < 1;
+    D.x = Math.max(DG_PLAYER_R, Math.min(DG_W - DG_PLAYER_R, D.x + dx * DG_SPEED * slowF * dt));
+    D.y = Math.max(DG_PLAYER_R, Math.min(DG_H - DG_PLAYER_R, D.y + dy * DG_SPEED * slowF * dt));
     if (performance.now() - D.sent > 125) { D.sent = performance.now(); S.net?.tbl?.({ a: 'pos', x: Math.round(D.x * 10) / 10, y: Math.round(D.y * 10) / 10 }); }
   }
   // 彈幕：產生到 t+3 秒、挑出目前在場上的
@@ -4722,11 +4748,25 @@ function dodgeFrame(ts) {
       if (x < -20 || x > DG_W + 20 || y < -20 || y > DG_H + 20) { if (age > 12) { bl.splice(i, 1); i--; } continue; }   // 出界很久的丟掉，陣列不會越長越大
       D.act.push({ x, y, r: b.r, c: b.c });
     }
-  } else D.act = [];
+    for (const f of v.dg?.fx || []) if (f.k === 'bul') for (const b of dodgeFxBullets(D.seed, f)) {   // 準星的子彈
+      const age = t - b.ts; if (age < 0 || age > 8) continue;
+      D.act.push({ x: b.x0 + b.vx * age, y: b.y0 + b.vy * age, r: b.r, c: b.c, own: b.own });
+    }
+    // 道具：目前在場上、沒被吃掉的；碰到就回報 pick
+    const taken = new Set((v.dg?.taken || []).map(x => x.n)), n0 = Math.max(0, Math.floor((t - 3 - DG_ITEM_LIFE) / DG_ITEM_GAP) - 1), n1 = Math.floor((t - 3) / DG_ITEM_GAP) + 1;
+    D.items = [];
+    for (let n = n0; n <= n1; n++) {
+      const it = dodgeItem(D.seed, n, v.dg?.n || 1);
+      if (t < it.ts || t > it.ts + DG_ITEM_LIFE || taken.has(n) || (D.picked.get(n) || 0) > performance.now() - 1200) continue;   // 回報過的 1.2 秒內不重送（被伺服器駁回就會重試）
+      D.items.push(it);
+      if (alive && (it.x - D.x) ** 2 + (it.y - D.y) ** 2 < (DG_ITEM_R + DG_PLAYER_R) ** 2) { D.picked.set(n, performance.now()); S.net?.tbl?.({ a: 'pick', n, x: Math.round(D.x * 10) / 10, y: Math.round(D.y * 10) / 10 }); }
+    }
+  } else { D.act = []; D.items = []; }
   // 碰撞：只有自己、已開局、沒在無敵時間內
   D.inv = Math.max(0, D.inv - dt);
   if (alive && t >= 0 && D.inv <= 0) {
     for (const b of D.act) {
+      if (b.own === D.me) continue;   // 自己吃準星射出的子彈打不到自己
       const dx = b.x - D.x, dy = b.y - D.y, rr = b.r + DG_PLAYER_R - 1;
       if (dx * dx + dy * dy < rr * rr) { D.inv = DG_INV; D.hitFlash = .35; S.net?.tbl?.({ a: 'hit' }); break; }
     }
@@ -4737,7 +4777,7 @@ function dodgeFrame(ts) {
   // 其他人的位置內插
   for (const p of D.pos) if (p) { p.x += (p.tx - p.x) * Math.min(1, dt * 14); p.y += (p.ty - p.y) * Math.min(1, dt * 14); }
   dodgeDraw(t, mySeat);
-  const tm = $('dgTime'); if (tm) tm.textContent = t < 0 ? `開始倒數 ${Math.ceil(-t)}` : `${Math.min(D.dur, t).toFixed(1)} 秒`;
+  const tm = $('dgTime'); if (tm) tm.textContent = t < 0 ? `開始倒數 ${Math.ceil(-t)}` : `${Math.min(D.dur, t).toFixed(1)} 秒` + (mySeat && !mySeat.out ? `　${Math.max(0, Math.floor(t) + (mySeat.bonus || 0))} 分` : '') + (D.slow ? '　🐌 減速中' : '');
 }
 function onNetTpos(m) {   // 其他人的位置回報（i＝座位編號）
   const D = S.dg; if (!D || m.i === D.me) return;
@@ -4753,10 +4793,26 @@ function dodgeDraw(t, mySeat) {
   for (let y = 0; y <= DG_H; y += 40) { g.beginPath(); g.moveTo(0, y + .5); g.lineTo(DG_W, y + .5); g.stroke(); }
   // 彈幕
   for (const b of D.act) {
+    if (b.own != null) {   // 準星的子彈：外圈用發射者的玩家顏色；自己的（打不到自己）畫成半透明空心圈，別人的是實心紫色（會打到你）
+      const col = DG_COLORS[b.own % 8];
+      if (b.own === D.me) { g.globalAlpha = .4; g.strokeStyle = col; g.lineWidth = 1.5; g.beginPath(); g.arc(b.x, b.y, b.r + 1, 0, 6.2832); g.stroke(); g.globalAlpha = 1; }
+      else { g.fillStyle = '#c070ff'; g.beginPath(); g.arc(b.x, b.y, b.r, 0, 6.2832); g.fill(); g.strokeStyle = col; g.lineWidth = 1.5; g.beginPath(); g.arc(b.x, b.y, b.r + 1.5, 0, 6.2832); g.stroke(); }
+      continue;
+    }
     const bc = DG_BULLET_COLORS[b.c] || DG_BULLET_COLORS[0];
     g.fillStyle = bc[0]; g.beginPath(); g.arc(b.x, b.y, b.r, 0, 6.2832); g.fill();
     g.fillStyle = bc[1]; g.beginPath(); g.arc(b.x, b.y, b.r * .45, 0, 6.2832); g.fill();
   }
+  // 道具（最後 2 秒閃爍）
+  g.font = '16px "Segoe UI Emoji","Apple Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (const it of D.items || []) {
+    const left = it.ts + DG_ITEM_LIFE - t; if (left < 2 && Math.floor(left * 8) % 2) continue;
+    const bad = it.kind === 'skull' || it.kind === 'slow' || it.kind === 'bul';
+    g.fillStyle = bad ? 'rgba(255,90,90,.25)' : 'rgba(255,224,138,.25)'; g.beginPath(); g.arc(it.x, it.y, DG_ITEM_R + 3, 0, 6.2832); g.fill();
+    g.strokeStyle = bad ? '#ff8a8a' : '#ffe08a'; g.lineWidth = 1.5; g.stroke();
+    g.fillStyle = '#fff'; g.fillText(DG_ITEM_ICON[it.kind][0], it.x, it.y + 1);
+  }
+  g.textBaseline = 'alphabetic';
   // 玩家：自己（有無敵閃爍）、其他人（內插位置）、已出局的變灰
   v.seats.forEach((s, i) => {
     const isMe = i === D.me && v.role === 'seat', p = isMe ? { x: D.x, y: D.y } : D.pos[i];
@@ -4768,10 +4824,11 @@ function dodgeDraw(t, mySeat) {
     g.strokeStyle = isMe ? '#ffffff' : 'rgba(255,255,255,.4)'; g.lineWidth = isMe ? 2 : 1; g.stroke();
     g.globalAlpha = out ? .4 : 1; g.font = '10px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillStyle = '#e8e4d8';
     g.fillText(s.name, p.x, p.y - 10); g.globalAlpha = 1;
+    if (!out && (v.dg?.fx || []).some(f => f.k === 'slow' && f.by !== i && t >= f.from && t <= f.until)) { g.fillText('🐌', p.x + 11, p.y + 4); }   // 被減速中
   });
   if (D.hitFlash > 0) { g.fillStyle = `rgba(255,60,60,${D.hitFlash})`; g.fillRect(0, 0, DG_W, DG_H); }
   if (t < 0) { g.fillStyle = 'rgba(8,10,20,.55)'; g.fillRect(0, 0, DG_W, DG_H); g.fillStyle = '#ffe08a'; g.font = 'bold 56px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillText(String(Math.ceil(-t)), DG_W / 2, DG_H / 2 + 18); }
-  if (mySeat?.out && v.role === 'seat') { g.fillStyle = 'rgba(8,10,20,.5)'; g.fillRect(0, DG_H / 2 - 36, DG_W, 72); g.fillStyle = '#ffb347'; g.font = 'bold 24px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillText(`你出局了：存活 ${mySeat.died ?? '—'} 秒`, DG_W / 2, DG_H / 2 + 8); }
+  if (mySeat?.out && v.role === 'seat') { g.fillStyle = 'rgba(8,10,20,.5)'; g.fillRect(0, DG_H / 2 - 36, DG_W, 72); g.fillStyle = '#ffb347'; g.font = 'bold 24px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillText(`你出局了：${Math.max(0, Math.floor(mySeat.died ?? 0) + (mySeat.bonus || 0))} 分（存活 ${mySeat.died ?? '—'} 秒）`, DG_W / 2, DG_H / 2 + 8); }
 }
 // 排行榜（前三名；英文打字競賽、中文打字競賽、躲彈幕）：伺服器每次結算後更新，table 畫面帶 board（[{name, score, ts}]）；只在大廳與結算畫面顯示
 function boardBlock(box, v, mk, fmt) {
@@ -4786,22 +4843,22 @@ function buildDodge(box, v, mk, gd) {
   if (playing && (!S.dg || S.dg.id !== S.tableId || S.dg.t0 !== v.dg?.t0)) dodgeStart(v);   // 新的一局（或剛進來觀戰一局進行中的）：重置本機狀態
   if (!playing) dodgeStop();
   let status;
-  if (playing) status = mySeat ? (mySeat.out ? '你已出局' : '挑戰中：WASD／方向鍵移動，躲開所有彈幕') : '觀戰中';
+  if (playing) status = mySeat ? (mySeat.out ? '你已出局' : '挑戰中：WASD／方向鍵移動，躲開彈幕、吃道具') : '觀戰中';
   else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
   box.appendChild(mk('div', 'table-status' + (playing && mySeat && !mySeat.out ? ' mine' : ''), status));
-  if (v.result && !playing) {   // 結算：依存活秒數排名
+  if (v.result && !playing) {   // 結算：依分數排名（存活秒數＋道具分）
     box.appendChild(mk('div', 'table-result', v.result.text));
     const rk = mk('div', 'dodge-rank');
-    v.result.ranking.forEach((r, i) => rk.appendChild(mk('div', null, `${i + 1}. ${r.name}　${r.sec} 秒${r.left ? '（中途離開）' : ''}`)));
+    v.result.ranking.forEach((r, i) => rk.appendChild(mk('div', null, `${i + 1}. ${r.name}　${r.score} 分（存活 ${r.sec} 秒${r.bonus ? `，道具 ${r.bonus > 0 ? '+' : ''}${r.bonus}` : ''}）${r.left ? '（中途離開）' : ''}`)));
     box.appendChild(rk);
   }
-  if (!playing) boardBlock(box, v, mk, sc => `${sc} 秒`);
+  if (!playing) boardBlock(box, v, mk, sc => `${sc} 分`);
   const row = mk('div', 'table-seats dodge-seats');   // 每位玩家：名字、命數（♥）、存活秒數
   v.seats.forEach((s, i) => {
     const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && s.out ? ' out' : ''));
     seat.style.borderColor = playing ? DG_COLORS[i % 8] : '';
     seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : '')));
-    seat.appendChild(mk('div', 'table-tag', playing ? (s.out ? `出局 · ${s.died ?? '—'} 秒` : '♥'.repeat(Math.max(0, s.lives)) + '♡'.repeat(Math.max(0, 3 - s.lives))) : (s.ready ? '已準備' : '未準備')));
+    seat.appendChild(mk('div', 'table-tag', playing ? (s.out ? `出局 · ${Math.max(0, Math.floor(s.died ?? 0) + (s.bonus || 0))} 分` : '♥'.repeat(Math.max(0, s.lives)) + '♡'.repeat(Math.max(0, 3 - s.lives)) + ` · ${Math.max(0, Math.floor(Math.max(0, S.dg ? dodgeNow() : 0)) + (s.bonus || 0))} 分`) : (s.ready ? '已準備' : '未準備')));
     row.appendChild(seat);
   });
   if (!playing) for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));

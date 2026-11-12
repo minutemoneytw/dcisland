@@ -688,15 +688,55 @@ const DG_LIVES = 3;
 const DG_INV_MS = 1500;      // 被打到後的無敵時間（與客戶端一致）
 const DG_COUNTDOWN_MS = 3000;
 const DG_W = 640, DG_H = 400;   // 場地大小（客戶端畫面用；伺服器只用來夾位置）
+// 道具（2026-11-12，使用者要求）：分數＝存活秒數×1＋道具分。道具的位置、出現時間、種類由 seed 與編號 n 決定性地算出（客戶端畫面用同一個函式，
+// 與 dev_server 的 dg_item／client 的 dodgeItem 同一套）：伺服器只在收到 pick {n} 時驗證（時間、距離、沒被別人先吃）並結算。
+// 金幣 +10 分／愛心 +1 命（滿命改 +5 分）／骷髏 領先的對手 −10 分／蝸牛 其他人減速 5 秒／準星 6 秒內場上多出「只會打到別人」的子彈；單人局只有金幣與愛心
+const DG_ITEM_LIFE = 9, DG_ITEM_GAP = 4, DG_COIN = 10, DG_SKULL_PTS = 10, DG_HEART_FULL_PTS = 5, DG_SLOW_SEC = 5, DG_BUL_SEC = 6;
+function dgHash(a, b) {
+  let x = (Math.imul((a >>> 0) ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(((b >>> 0) + 0x7f4a7c15) >>> 0, 0xc2b2ae35)) >>> 0;
+  x ^= x >>> 15; x = Math.imul(x, 0x2c1b3c6d) >>> 0; x ^= x >>> 12; x = Math.imul(x, 0x297a2d39) >>> 0; x ^= x >>> 15;
+  return x >>> 0;
+}
+function dgItem(seed, n, players) {   // 第 n 個道具：{ts 出現秒數, x, y, kind}；kind：coin／heart／skull／slow／bul
+  const h = k => dgHash(seed, n * 8 + k), r = h(3) % 100;
+  const kind = players <= 1 ? (r < 70 ? "coin" : "heart") : r < 38 ? "coin" : r < 55 ? "heart" : r < 70 ? "skull" : r < 85 ? "slow" : "bul";
+  return { ts: 3 + DG_ITEM_GAP * n + (h(0) % 2000) / 1000, x: 30 + h(1) % (DG_W - 60), y: 30 + h(2) % (DG_H - 60), kind };
+}
+const dgScore = s => Math.max(0, Math.floor(s.died ?? 0) + (s.bonus || 0));   // 分數＝存活秒數（取整）＋道具分，最低 0
+function dgPick(t, cid, n, now, x, y) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "dodge" || role !== "seat" || t.phase !== "playing" || !g || !Number.isInteger(n) || n < 0 || n > 10000) return;
+  const s = t.seats[i];
+  if (s.out) return;
+  const e = (now - g.t0) / 1000, it = dgItem(g.seed, n, g.n);
+  if (e < it.ts - 0.3 || e > it.ts + DG_ITEM_LIFE + 0.6 || g.taken.some(x => x.n === n)) return;
+  // 位置驗證：客戶端回報撿到時的座標要在道具旁（半徑 22），且離伺服器最後知道的位置不能太遠（pos 約 8 次／秒，留延遲餘裕 120）
+  if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y) || (x - it.x) ** 2 + (y - it.y) ** 2 > 22 * 22) return;
+  if (s.px != null && (s.px - x) ** 2 + (s.py - y) ** 2 > 120 * 120) return;
+  const k = it.kind, nm = s.name;
+  g.taken.push({ n, by: i, k });
+  if (k === "coin") { s.bonus += DG_COIN; tblLog(t, `${nm} 吃到金幣 +${DG_COIN} 分`); }
+  else if (k === "heart") {
+    if (s.lives < DG_LIVES) { s.lives += 1; tblLog(t, `${nm} 吃到愛心，回復 1 條命`); }
+    else { s.bonus += DG_HEART_FULL_PTS; tblLog(t, `${nm} 吃到愛心（命已滿）+${DG_HEART_FULL_PTS} 分`); }
+  } else if (k === "skull") {
+    const others = t.seats.filter((x, j) => j !== i && !x.out);
+    if (others.length) {
+      const lead = others.reduce((a, b) => (Math.floor(e) + b.bonus > Math.floor(e) + a.bonus ? b : a));
+      lead.bonus -= DG_SKULL_PTS; tblLog(t, `${nm} 吃到骷髏：領先的 ${lead.name} −${DG_SKULL_PTS} 分`);
+    } else tblLog(t, `${nm} 吃到骷髏，但沒有對手`);
+  } else if (k === "slow") { g.fx.push({ k: "slow", by: i, from: Math.round(e * 100) / 100, until: Math.round((e + DG_SLOW_SEC) * 100) / 100, n }); tblLog(t, `${nm} 吃到蝸牛：其他人減速 ${DG_SLOW_SEC} 秒`); }
+  else { g.fx.push({ k: "bul", by: i, from: Math.round(e * 100) / 100, until: Math.round((e + DG_BUL_SEC) * 100) / 100, n }); tblLog(t, `${nm} 吃到準星：${DG_BUL_SEC} 秒內場上多出只會打到別人的子彈`); }
+}
 // 存活秒數 → XP：不到 10 秒不給（擋刷分）；之後每 30 秒 +1，起跳 1、上限 10
 const dgXp = sec => (sec < 10 ? 0 : Math.min(10, 1 + Math.floor(sec / 30)));
 const dgElapsed = (t, now) => Math.max(0, Math.min(DG_DUR, (now - t.g.t0) / 1000));
 const round1 = x => Math.round(x * 10) / 10;
 function dgStart(t) {
   const now = Date.now();
-  t.g = { seed: Math.floor(Math.random() * 2147483648), t0: now + DG_COUNTDOWN_MS };
+  t.g = { seed: Math.floor(Math.random() * 2147483648), t0: now + DG_COUNTDOWN_MS, n: t.seats.length, taken: [], fx: [] };
   t.result = null; t.phase = "playing";
-  for (const s of t.seats) { s.lives = DG_LIVES; s.out = false; s.died = null; s.lastHit = 0; s.left = false; s.ready = false; }
+  for (const s of t.seats) { s.lives = DG_LIVES; s.out = false; s.died = null; s.lastHit = 0; s.left = false; s.ready = false; s.bonus = 0; s.px = null; s.py = null; }
   tblLog(t, `挑戰開始！${t.seats.length} 人參加，每人 ${DG_LIVES} 條命`);
 }
 function dgOut(t, s, now, why) {
@@ -705,10 +745,10 @@ function dgOut(t, s, now, why) {
 }
 function dgFinish(t, now) {
   for (const s of t.seats) if (!s.out) { s.out = true; s.died = round1(dgElapsed(t, now)); }   // 時間到還活著的：存活到最後
-  const ranking = t.seats.map(s => ({ name: s.name, sec: s.died, left: !!s.left })).sort((a, b) => b.sec - a.sec);
+  const ranking = t.seats.map(s => ({ name: s.name, sec: s.died, bonus: s.bonus, score: dgScore(s), left: !!s.left })).sort((a, b) => b.score - a.score || b.sec - a.sec);
   const stay = t.seats.filter(s => !s.left);
   const xp = stay.map(s => dgXp(s.died));   // 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
-  const top = ranking[0], text = top ? `挑戰結束！第一名 ${top.name}，存活 ${top.sec} 秒` : "挑戰結束";
+  const top = ranking[0], text = top ? `挑戰結束！第一名 ${top.name}，${top.score} 分` : "挑戰結束";
   t.seats = stay;
   t.result = { text, rid: Math.floor(Math.random() * 4294967296), ranking, xp };
   tblLog(t, text);
@@ -748,6 +788,8 @@ const tyUnit = t => (t.game === "zhtyping" ? "詞" : "單字");
 // 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 // 記在這座島的 storage（"boards"），每次結算後更新，table 畫面帶 board 給客戶端顯示。與 tools/dev_server.py 的 BOARDS 同一套
 const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge"]), BOARD_N = 3;
+// 躲彈幕 2026-11-12 起改記「分數」（存活秒數＋道具分），舊的秒數紀錄放在 "dodge" 不再使用，分數另記在 "dodge2"，避免單位混在一起
+const boardKey = game => (game === "dodge" ? "dodge2" : game);
 function boardMerge(list, entries) {
   const best = new Map();
   for (const e of [...(list || []), ...entries]) { const o = best.get(e.name); if (!o || e.score > o.score) best.set(e.name, e); }
@@ -2109,8 +2151,8 @@ function tblView(t, cid) {
     specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
   };
   if (t.game === "dodge") {   // 躲彈幕：每個座位的命數／淘汰秒數／是否已離開；進行中附上 seed 與開始時間（彈幕由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
-    t.seats.forEach((s, k) => { v.seats[k].lives = s.lives || 0; v.seats[k].died = s.died ?? null; v.seats[k].left = !!s.left; });
-    if (t.g && playing) v.dg = { seed: t.g.seed, t0: t.g.t0, dur: DG_DUR, sn: Date.now() };
+    t.seats.forEach((s, k) => { v.seats[k].lives = s.lives || 0; v.seats[k].died = s.died ?? null; v.seats[k].left = !!s.left; v.seats[k].bonus = s.bonus || 0; });
+    if (t.g && playing) v.dg = { seed: t.g.seed, t0: t.g.t0, dur: DG_DUR, sn: Date.now(), n: t.g.n, taken: [...t.g.taken], fx: [...t.g.fx] };
   } else if (isTy(t)) {   // 英打／中文打字競賽：每個座位的分數／是否已離開；進行中附上 seed 與開始時間（題目由客戶端決定性地產生）、伺服器現在時間（客戶端對時用）
     t.seats.forEach((s, k) => { v.seats[k].score = s.score || 0; v.seats[k].left = !!s.left; });
     if (t.g && playing) v.ty = { seed: t.g.seed, t0: t.g.t0, dur: TY_DUR, sn: Date.now() };
@@ -2567,7 +2609,7 @@ export class Island {
     const game = this.tableGame(tid);
     if (!game) return null;
     t = (await this.state.storage.get("table:" + tid)) || tblNew(tid, game);
-    if (BOARD_GAMES.has(game)) t.board = (await this.getBoards())[game] || [];   // 排行榜（前三名）
+    if (BOARD_GAMES.has(game)) t.board = (await this.getBoards())[boardKey(game)] || [];   // 排行榜（前三名）
     const alive = this.liveIds();
     for (const m of [...t.seats, ...t.specs]) if (!alive.has(m.cid)) tblLeave(t, m.cid);
     this.tables.set(tid, t);
@@ -2616,11 +2658,11 @@ export class Island {
   async tableBoard(t, resBefore) {
     const r = t.result;
     if (!BOARD_GAMES.has(t.game) || !r || r === resBefore || r.aborted || !r.ranking) return;
-    const ts = Date.now(), entries = r.ranking.filter(x => !x.left).map(x => ({ name: x.name, score: t.game === "dodge" ? x.sec : x.score, ts })).filter(e => e.score > 0);
+    const ts = Date.now(), entries = r.ranking.filter(x => !x.left).map(x => ({ name: x.name, score: x.score, ts })).filter(e => e.score > 0);
     if (!entries.length) return;
-    const boards = await this.getBoards(), old = boards[t.game] || [], nb = boardMerge(old, entries);
+    const bk = boardKey(t.game), boards = await this.getBoards(), old = boards[bk] || [], nb = boardMerge(old, entries);
     if (JSON.stringify(nb.map(e => [e.name, e.score])) === JSON.stringify(old.map(e => [e.name, e.score]))) return;
-    boards[t.game] = nb; await this.state.storage.put("boards", boards); t.board = nb;
+    boards[bk] = nb; await this.state.storage.put("boards", boards); t.board = nb;
     await this.saveTable(t); this.tableNotify(t);
   }
   // 這個操作結束了一局：登入的入座者各得 XP（訪客由客戶端看 result.xp 本機補發）；同一帳號 GAME_XP_CD_MS 內只算一次
@@ -2673,6 +2715,7 @@ export class Island {
       const [role, i] = tblFind(t, att.id);
       if (t.game === "dodge" && role === "seat" && t.phase === "playing" && !t.seats[i].out) {
         const x = Math.max(0, Math.min(DG_W, Number(msg.x) || 0)), y = Math.max(0, Math.min(DG_H, Number(msg.y) || 0));
+        t.seats[i].px = x; t.seats[i].py = y;   // 道具撿取驗證用
         const data = JSON.stringify({ t: "tpos", i, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
         for (const m of [...t.seats, ...t.specs]) {
           if (m.cid == null || m.cid === att.id) continue;
@@ -2721,6 +2764,7 @@ export class Island {
     else if (a === "timeout") unTimeout(t, now);
     else if (a === "mode") unSetMode(t, att.id, msg.v);   // UNO：桌主在開局前選玩法（classic／wild）
     else if (a === "hit") dgHit(t, att.id, now);   // 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
+    else if (a === "pick") dgPick(t, att.id, msg.n, now, msg.x, msg.y);   // 躲彈幕：我吃到道具 n（客戶端自判，伺服器驗時間／距離／先到先得並結算）
     else if (a === "finish") { dgCheckEnd(t, now + 300); tyCheckEnd(t, now + 300); }   // 躲彈幕／英文打字競賽：客戶端看時間到了請求結算（伺服器核對時鐘，沒到時間不理）
     else return;
     await this.saveTable(t);
