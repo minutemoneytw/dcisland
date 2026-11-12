@@ -5328,7 +5328,7 @@ function buildDodge(box, v, mk, gd) {
 // 3 波小怪＋1 隻 Boss（Boss 有血條，一直畫符號直到血條清空）。幽靈由「伺服器給的 seed」決定性地產生（與 worker 的 mgGen、dev_server 的 mg_gen 同一套，隨機只用 dodgeHash）；
 // 符號辨識（$P 點雲比對）在本機，畫對就回報 kill {i}／boss {k}，血量／擊殺／Boss 血量／勝負以伺服器為準，客戶端每秒送 sync 讓伺服器結算沒被消除的幽靈 ----
 const MG_CX = 320, MG_CY = 200, MG_R0 = 390, MG_R_HIT = 28, MG_GRACE = .8, MG_WAVE_START = 3, MG_WAVE_LEN = 28, MG_WAVE_GAP = 4, MG_BOSS_START = 99, MG_HP = 5;
-const MG_N_SYMS = 10, MG_SYMS = [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6]], MG_INTERVAL = [2.6, 2.6, 2.6, 2.6], MG_SPEED = [38, 38, 38, 38], MG_WAVE_MULT = [1.0, .85, .7, 1.8];
+const MG_N_SYMS = 10, MG_SYMS = [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6]], MG_INTERVAL = [2.6, 2.6, 2.6, 2.6], MG_SPEED = [38, 46, 55, 66], MG_WAVE_MULT = [1.0, .85, .7, 1.8];
 const MG_DIFF_NAMES = ['簡易', '中等', '困難', '超難'];
 const MG_SYM_NAMES = ['橫線 —', '直線 |', '圓圈 ○', '尖角 ∧', 'V 字', 'Z 字', 'U 字', '波浪 ~', 'L 字', 'M 字'];
 // 符號範本（單筆畫，0～1 的方格內，y 向下）；順序＝出現的先後（越前面越容易辨識）
