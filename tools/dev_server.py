@@ -121,7 +121,7 @@ NAME_MAX = 24
 # 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號（Worker 存 Registry 的 gstats:<uid>，這裡只存記憶體 GSTATS）。各遊戲結算時在 result["gs"]
 # （依「結算後留下的座位」順序，與 result["xp"] 同；None＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器照著記進 GSTATS 並把整份送給本人；
 # result["gs"] 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）。與 worker 的 gsMk／tableStats 同一套
-GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon"}
+GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey"}
 GS_CAP, GS_KEYS_MAX = 1000000, 24
 GSTATS = {}
 
@@ -3975,7 +3975,8 @@ def ar_check_end(t):
     top = rows[0] if rows else None
     mode = "對戰" if g["mode"] == "battle" else "一般"
     text = f"聯機（{mode}模式）結束！第一名 {top['name']}，{top['score']} 分" if top else "聯機結束"
-    t["result"] = {"link": True, "mode": g["mode"], "text": text, "rid": random.getrandbits(32), "ranking": rows, "xp": xp, "cabs": list(g["mem"])}
+    gs = [gs_mk({"lw": 1} if top and not top.get("left") and top.get("cab") == s["cab"] and len(rows) >= 2 else {}, {"lines": s["ln"]}) if s["cab"] in g["mem"] else None for s in t["seats"]]   # lw＝聯機獲勝（第一名且至少 2 人）、lines＝單局消行（取最大）；依 t["seats"] 順序（同 xp）
+    t["result"] = {"link": True, "mode": g["mode"], "text": text, "rid": random.getrandbits(32), "ranking": rows, "xp": xp, "cabs": list(g["mem"]), "gs": gs}
     for s in t["seats"]:
         if s["st"] == "link":
             s["st"], s["dead"] = "idle", False
@@ -3988,7 +3989,8 @@ def ar_solo_over(t, i):
     xp = [AR_XP if (k == i and s["ln"] >= AR_XP_MIN) else 0 for k in range(len(t["seats"]))]
     text = f"{s['name']}（{s['cab'] + 1} 號機）單人模式結束：{s['sc']} 分、{s['ln']} 行"
     t["result"] = {"solo": True, "cab": s["cab"], "text": text, "rid": random.getrandbits(32), "xp": xp,
-                   "ranking": [{"name": s["name"], "uid": s.get("uid"), "score": s["sc"], "lines": s["ln"], "left": False}]}
+                   "ranking": [{"name": s["name"], "uid": s.get("uid"), "score": s["sc"], "lines": s["ln"], "left": False}],
+                   "gs": [gs_mk({}, {"best": s["sc"], "lines": s["ln"]}) if k == i else None for k in range(len(t["seats"]))]}   # best＝單人最高分、lines＝單局消行（都取最大）
     tbl_log(t, text)
     if s["sc"] > 0:
         board_record(t, [(s["name"], s["sc"], s.get("uid"))])   # 只有單人模式進排行榜（使用者定）
@@ -4200,7 +4202,8 @@ def mz_finish(t, win, why, ct=None):
         else:
             t["result"] = {"solo": True, "text": f"挑戰結束！{s['name']} {s['sc']} 分（第 {s['lvl']} 關）", "rid": random.getrandbits(32),
                            "ranking": [{"name": s["name"], "uid": s.get("uid"), "score": s["sc"], "lvl": s["lvl"], "left": False}],
-                           "xp": [MZ_XP if x["sc"] >= MZ_XP_MIN else 0 for x in stay]}
+                           "xp": [MZ_XP if x["sc"] >= MZ_XP_MIN else 0 for x in stay],
+                           "gs": [gs_mk({}, {"best": x["sc"], "lvl": x["lvl"]}) for x in stay]}   # best＝單人最高分、lvl＝抵達的關卡（都取最大）
             if s["sc"] > 0:
                 board_record(t, [(s["name"], s["sc"], s.get("uid"))])   # 只有單人模式進排行榜（使用者定）
     else:
@@ -4211,7 +4214,8 @@ def mz_finish(t, win, why, ct=None):
                             "score": s["sc"] if k == g["pac"] else (ct[gk] if ct and gk >= 0 else 0), "left": bool(s.get("left"))})
         ranking.sort(key=lambda r: 0 if r["role"] == "pac" else 1)
         xp = [MZ_XP if ((s is pac_seat) == (win == "pac")) else 0 for s in stay]   # 中途離開的人不給 XP；依「留下來的座位」順序
-        t["result"] = {"win": win, "text": f"{'豆豆方獲勝' if win == 'pac' else '幽靈方獲勝'}！（{why}）", "rid": random.getrandbits(32), "ranking": ranking, "xp": xp}
+        gs = [gs_mk({"w": 1, **({"wp": 1} if s is pac_seat else {"wg": 1})} if ((s is pac_seat) == (win == "pac")) else {}) for s in stay]   # w＝對抗獲勝、wp／wg＝以豆豆／幽靈方獲勝
+        t["result"] = {"win": win, "text": f"{'豆豆方獲勝' if win == 'pac' else '幽靈方獲勝'}！（{why}）", "rid": random.getrandbits(32), "ranking": ranking, "xp": xp, "gs": gs}
     tbl_log(t, t["result"]["text"])
     t["seats"] = stay
     tbl_reset_seats(t)
@@ -4318,7 +4322,8 @@ def hk_finish(t, sa, sb, why):
     text = f"藍隊 {sa} : {sb} 紅隊，{'平手' if win < 0 else '藍隊獲勝' if win == 0 else '紅隊獲勝'}！" + (f"（{why}）" if why else "")
     t["result"] = {"text": text, "sa": sa, "sb": sb, "win": win, "rid": random.getrandbits(32),
                    "ranking": [{"name": s["name"], "uid": s.get("uid"), "team": i % 2, "left": False} for i, s in enumerate(t["seats"])],
-                   "xp": [HK_XP if i % 2 == win else 0 for i in range(len(t["seats"]))]}
+                   "xp": [HK_XP if i % 2 == win else 0 for i in range(len(t["seats"]))],
+                   "gs": [gs_mk({"w": 1} if i % 2 == win else {}) for i in range(len(t["seats"]))]}   # w＝獲勝（平手沒人記）
     tbl_log(t, text)
     tbl_reset_seats(t)
 

@@ -297,10 +297,10 @@
   {
    "id": "table_regular",
    "name": "牌桌常客",
-   "desc": "和平島的 10 種小遊戲都玩過至少一局",
+   "desc": "和平島的 13 種小遊戲都玩過至少一局",
    "cond": {
     "type": "played",
-    "n": 10
+    "n": 13
    },
    "cat": "game"
   },
@@ -773,6 +773,126 @@
    "cond": {
     "type": "stat",
     "game": "trigon",
+    "key": "w",
+    "n": 20
+   },
+   "cat": "game"
+  },
+  {
+   "id": "ar_10",
+   "name": "消行新手",
+   "desc": "俄羅斯方塊單局消 10 行",
+   "cond": {
+    "type": "stat",
+    "game": "arcade",
+    "key": "lines",
+    "n": 10
+   },
+   "cat": "game"
+  },
+  {
+   "id": "ar_40",
+   "name": "四十行",
+   "desc": "俄羅斯方塊單局消 40 行",
+   "cond": {
+    "type": "stat",
+    "game": "arcade",
+    "key": "lines",
+    "n": 40
+   },
+   "cat": "game"
+  },
+  {
+   "id": "ar_100",
+   "name": "百行斬",
+   "desc": "俄羅斯方塊單局消 100 行",
+   "cond": {
+    "type": "stat",
+    "game": "arcade",
+    "key": "lines",
+    "n": 100
+   },
+   "cat": "game"
+  },
+  {
+   "id": "ar_link",
+   "name": "方塊王者",
+   "desc": "俄羅斯方塊聯機獲勝 5 場",
+   "cond": {
+    "type": "stat",
+    "game": "arcade",
+    "key": "lw",
+    "n": 5
+   },
+   "cat": "game"
+  },
+  {
+   "id": "mz_5",
+   "name": "豆豆探險家",
+   "desc": "豆豆迷宮單人抵達第 5 關",
+   "cond": {
+    "type": "stat",
+    "game": "maze",
+    "key": "lvl",
+    "n": 5
+   },
+   "cat": "game"
+  },
+  {
+   "id": "mz_10",
+   "name": "迷宮行者",
+   "desc": "豆豆迷宮單人抵達第 10 關",
+   "cond": {
+    "type": "stat",
+    "game": "maze",
+    "key": "lvl",
+    "n": 10
+   },
+   "cat": "game"
+  },
+  {
+   "id": "mz_pac",
+   "name": "豆豆勇者",
+   "desc": "豆豆迷宮對抗以豆豆方獲勝 5 場",
+   "cond": {
+    "type": "stat",
+    "game": "maze",
+    "key": "wp",
+    "n": 5
+   },
+   "cat": "game"
+  },
+  {
+   "id": "mz_ghost",
+   "name": "幽靈獵手",
+   "desc": "豆豆迷宮對抗以幽靈方獲勝 5 場",
+   "cond": {
+    "type": "stat",
+    "game": "maze",
+    "key": "wg",
+    "n": 5
+   },
+   "cat": "game"
+  },
+  {
+   "id": "hk_new",
+   "name": "小試身手",
+   "desc": "空氣曲棍球獲勝 1 場",
+   "cond": {
+    "type": "stat",
+    "game": "hockey",
+    "key": "w",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "hk_ace",
+   "name": "冰面霸主",
+   "desc": "空氣曲棍球獲勝 20 場",
+   "cond": {
+    "type": "stat",
+    "game": "hockey",
     "key": "w",
     "n": 20
    },

@@ -499,7 +499,7 @@ const GM_XP_MIN_MOVES = 10;
 // 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號存在 Registry 的 gstats:<uid> = {遊戲 id: {鍵: 數字}}；各遊戲結算時在 result.gs
 // （依「結算後留下的座位」順序，與 result.xp 同；null＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器（tableStats）照著寫進 Registry，
 // 再把整份 gstats 送給本人；result.gs 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）；其餘鍵見 docs/notes.md「小遊戲戰績與稱號」。與 tools/dev_server.py 的 gs_mk 同一套
-const GS_GAMES = new Set(["oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon"]), GS_KEY_RE = /^[a-z0-9_]{1,12}$/, GS_CAP = 1000000, GS_KEYS_MAX = 24;
+const GS_GAMES = new Set(["oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey"]), GS_KEY_RE = /^[a-z0-9_]{1,12}$/, GS_CAP = 1000000, GS_KEYS_MAX = 24;
 const gsMk = (add, mx, mn) => ({ add: { p: 1, ...(add || {}) }, max: mx || {}, min: mn || {} });
 const OM_SYM = { S: "♠", H: "♥", D: "♦", C: "♣" };
 const omRank = c => (c === "JK" ? null : Number(c.slice(1)));
@@ -1216,7 +1216,7 @@ const isTy = t => t.game === "typing" || t.game === "zhtyping";
 const tyUnit = t => (t.game === "zhtyping" ? "詞" : "單字");
 // 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 // 記在這座島的 storage（"boards"），每次結算後更新，table 畫面帶 board 給客戶端顯示。與 tools/dev_server.py 的 BOARDS 同一套
-const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage", "arcade", "maze"]), BOARD_N = 3;   // 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
+const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage", "arcade", "maze"]), BOARD_N = 3, BOARDS_REV = 1;   // 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
 // 躲彈幕 2026-11-12 起改記「分數」（存活秒數＋道具分），舊的秒數紀錄放在 "dodge" 不再使用，分數另記在 "dodge2"，避免單位混在一起
 const boardKey = game => (game === "dodge" ? "dodge2" : game);
 function boardMerge(list, entries) {
@@ -2616,7 +2616,8 @@ function arCheckEnd(t) {
   const xp = t.seats.map(s => (g.mem.includes(s.cab) && s.ln >= AR_XP_MIN ? AR_XP : 0));
   const top = rows[0], mode = g.mode === "battle" ? "對戰" : "一般";
   const text = top ? `聯機（${mode}模式）結束！第一名 ${top.name}，${top.score} 分` : "聯機結束";
-  t.result = { link: true, mode: g.mode, text, rid: Math.floor(Math.random() * 4294967296), ranking: rows, xp, cabs: [...g.mem] };
+  const gs = t.seats.map(s => (g.mem.includes(s.cab) ? gsMk(top && !top.left && top.cab === s.cab && rows.length >= 2 ? { lw: 1 } : {}, { lines: s.ln }) : null));   // lw＝聯機獲勝（第一名且至少 2 人）、lines＝單局消行（取最大）；依 t.seats 順序（同 xp）
+  t.result = { link: true, mode: g.mode, text, rid: Math.floor(Math.random() * 4294967296), ranking: rows, xp, cabs: [...g.mem], gs };
   for (const s of t.seats) if (s.st === "link") { s.st = "idle"; s.dead = false; }
   t.g = null; tblLog(t, text);
 }
@@ -2625,7 +2626,8 @@ function arSoloOver(t, i) {
   s.st = "idle"; s.last = { sc: s.sc, ln: s.ln };
   const text = `${s.name}（${s.cab + 1} 號機）單人模式結束：${s.sc} 分、${s.ln} 行`;
   t.result = { solo: true, cab: s.cab, text, rid: Math.floor(Math.random() * 4294967296), xp: t.seats.map((_, k) => (k === i && s.ln >= AR_XP_MIN ? AR_XP : 0)),
-    ranking: [{ name: s.name, uid: s.uid || null, score: s.sc, lines: s.ln, left: false }] };   // 排行榜由 tableBoard 記（只記單人模式，使用者定）
+    ranking: [{ name: s.name, uid: s.uid || null, score: s.sc, lines: s.ln, left: false }],   // 排行榜由 tableBoard 記（只記單人模式，使用者定）
+    gs: t.seats.map((_, k) => (k === i ? gsMk({}, { best: s.sc, lines: s.ln }) : null)) };   // best＝單人最高分、lines＝單局消行（都取最大）
   tblLog(t, text);
 }
 // 離開機台（Esc、換地形、斷線）：單人局直接作廢（不進排行榜）；聯機中照離開時的分數排名、不中斷其他人
@@ -2781,14 +2783,16 @@ function mzFinish(t, win, why, ct) {
     const s = t.seats[0];
     t.result = s.left ? { aborted: true, text: `${s.name} 離開了，這一局不算` }
       : { solo: true, text: `挑戰結束！${s.name} ${s.sc} 分（第 ${s.lvl} 關）`, rid: Math.floor(Math.random() * 4294967296),
-          ranking: [{ name: s.name, uid: s.uid || null, score: s.sc, lvl: s.lvl, left: false }], xp: stay.map(x => (x.sc >= MZ_XP_MIN ? MZ_XP : 0)) };
+          ranking: [{ name: s.name, uid: s.uid || null, score: s.sc, lvl: s.lvl, left: false }], xp: stay.map(x => (x.sc >= MZ_XP_MIN ? MZ_XP : 0)),
+          gs: stay.map(x => gsMk({}, { best: x.sc, lvl: x.lvl })) };   // best＝單人最高分、lvl＝抵達的關卡（都取最大）
   } else {
     const ranking = t.seats.map((s, k) => {
       const gk = g.gh.indexOf(k);
       return { name: s.name, uid: s.uid || null, role: k === g.pac ? "pac" : "ghost", score: k === g.pac ? s.sc : (ct && gk >= 0 ? ct[gk] : 0), left: !!s.left };
     }).sort((a, b) => (a.role === b.role ? 0 : a.role === "pac" ? -1 : 1));
     const xp = stay.map(s => ((s === pacSeat) === (win === "pac") ? MZ_XP : 0));   // 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
-    t.result = { win, text: `${win === "pac" ? "豆豆方獲勝" : "幽靈方獲勝"}！（${why}）`, rid: Math.floor(Math.random() * 4294967296), ranking, xp };
+    const gs = stay.map(s => gsMk((s === pacSeat) === (win === "pac") ? { w: 1, ...(s === pacSeat ? { wp: 1 } : { wg: 1 }) } : {}));   // w＝對抗獲勝、wp／wg＝以豆豆／幽靈方獲勝
+    t.result = { win, text: `${win === "pac" ? "豆豆方獲勝" : "幽靈方獲勝"}！（${why}）`, rid: Math.floor(Math.random() * 4294967296), ranking, xp, gs };
   }
   tblLog(t, t.result.text);
   t.seats = stay;
@@ -2863,7 +2867,7 @@ function hkFinish(t, sa, sb, why) {
   const win = sa > sb ? 0 : sb > sa ? 1 : -1;
   const text = `藍隊 ${sa} : ${sb} 紅隊，${win < 0 ? "平手" : win === 0 ? "藍隊獲勝" : "紅隊獲勝"}！${why ? `（${why}）` : ""}`;
   t.result = { text, sa, sb, win, rid: Math.floor(Math.random() * 4294967296), ranking: t.seats.map((s, i) => ({ name: s.name, uid: s.uid || null, team: i % 2, left: false })),
-    xp: t.seats.map((_, i) => (i % 2 === win ? HK_XP : 0)) };
+    xp: t.seats.map((_, i) => (i % 2 === win ? HK_XP : 0)), gs: t.seats.map((_, i) => gsMk(i % 2 === win ? { w: 1 } : {})) };   // w＝獲勝（平手沒人記）
   tblLog(t, text);
   tblResetSeats(t);
 }
@@ -3435,7 +3439,17 @@ export class Island {
     await this.tableStats(t, resBefore);
     await this.tableBoard(t, resBefore);
   }
-  async getBoards() { if (!this.boards) this.boards = (await this.state.storage.get("boards")) || {}; return this.boards; }
+  // 排行榜（2026-11-13，使用者要求）：BOARDS_REV 改了就在這座島第一次用到排行榜時清空一次（上線前清掉目前的最高分）；要再清一次就把 BOARDS_REV 加 1
+  async getBoards() {
+    if (!this.boards) {
+      if ((await this.state.storage.get("boardsRev")) !== BOARDS_REV) {
+        this.boards = {};
+        await this.state.storage.put("boards", {});
+        await this.state.storage.put("boardsRev", BOARDS_REV);
+      } else this.boards = (await this.state.storage.get("boards")) || {};
+    }
+    return this.boards;
+  }
   // 暱稱改了：排行榜裡有這個 uid 的項目改成新的顯示名稱（有變動才存檔、通知正在看這桌的人）
   async boardRename(uid, name) {
     const boards = await this.getBoards();
