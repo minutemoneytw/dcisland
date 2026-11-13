@@ -8232,6 +8232,11 @@ function drawMiniWeatherIcon(c, kind, x, y) {   // 資訊條左端的極簡向�
 function drawMinimap() {   // 掛點：draw() 的 drawWeather() 之後（螢幕空間；島主倒數條之下）
   if (!S.world) return;
   if (mmBaseFor !== S.terrain) buildMinimapBase();
+  // 整體縮放（2026-11-13 使用者定：縮到 60%）：以畫布右上角為基準等比縮放——座標、字級、線寬、
+  // 鉚釘、資訊條一起縮，貼齊右上角的位置與構圖不變（函式最後那個 ctx.restore() 就是收這一層）
+  const MM_K = .6;
+  ctx.save();
+  ctx.translate(canvas.width, 0); ctx.scale(MM_K, MM_K); ctx.translate(-canvas.width, 0);
   const cx = canvas.width - 100, cy = 106, R = 80;   // 圓心與半徑：貼著畫布右上角內側
   const wd = WEATHERS[S.weather?.cur || 'clear'];
   // 地圖：整座島等比塞進圓內（平滑縮放＋multiply 暖色，仿範例圖的羊皮紙感）
@@ -8285,7 +8290,7 @@ function drawMinimap() {   // 掛點：draw() 的 drawWeather() 之後（螢幕�
   ctx.fillText(wd.name, bx + 26, by + bh / 2 + 1);
   ctx.textAlign = 'right'; ctx.font = '12px "Microsoft JhengHei"'; ctx.fillStyle = '#e2d8bc';
   if (me) ctx.fillText(`X ${Math.floor(me.x / CELL)} Y ${Math.floor(me.y / CELL)}`, bx + bw - 9, by + bh / 2 + 1);
-  ctx.restore();
+  ctx.restore();   // 收掉 drawMinimap 開頭的整體縮放 save（縮放前的畫布狀態還原）
 }
 function draw() {
   const T = S.terrain, tMan = S.terrains[T], ims = S.tImages[T];
