@@ -8063,7 +8063,11 @@ const WEATHER_TRANS_SEC = 40;    // 換槽時，前一個天氣 → 新天氣的
 const WEATHERS = {   // id → 名稱／色罩（rgba 三元組＋最濃不透明度）／粒子（kind＋數量＋速度等；n＝滿量時的顆數）
   clear:   { name: '晴' },
   rain:    { name: '雨',   tint: [40, 62, 92],    alpha: .16, part: { kind: 'rain',    n: 110, vy: 520, vx: -64, len: 13 } },
-  snow:    { name: '雪',   tint: [226, 236, 250], alpha: .13, part: { kind: 'snow',    n: 90,  vy: 46,  vx: 20, sway: 26, r: 1.6 } },
+  // 雪（2026-11-13 使用者回報看不到：白雪片落在全白雪地上零對比）——色罩改成「結冰感」的冰藍
+  // 漸層（同日使用者定：參考結冰圖，畫面周邊冰藍、越遠越濃；腳色周邊保持清楚 → depth 徑向漸層）；
+  // 雪片用柔邊漸層加大（實心小點在白地上仍不夠明顯）
+  snow:    { name: '雪',   tint: [148, 182, 220], alpha: .55, near: .03, mid: .16, far: .34, core: .1, vis: .85, depth: true,
+             part: { kind: 'snow', n: 120, vy: 52, vx: 18, sway: 26, r: 2.6 } },
   // 霧（2026-11-13 使用者定：要有「一片濛濛、能見度越遠越低」的縱深霧感，參考 FF14 起霧）：
   // depth: true → 不用全畫面平均色罩，改畫以玩家為中心的徑向漸層：身邊（near）幾乎清楚、中距離（mid）、
   // 遠處（far）到能見度半徑（vis×畫面短邊）以外（alpha）整片白濛；core＝身邊這個比例內維持最清楚的濃度
@@ -8225,9 +8229,15 @@ function drawWeather() {
       ctx.fillStyle = `rgba(${150 + 70 * Math.sin(p.ph) | 0},170,80,.75)`;
       ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ph);
       ctx.fillRect(-d.r, -d.r * .4, d.r * 2, d.r * .8); ctx.restore();
-    } else {   // snow
-      ctx.fillStyle = `rgba(245,248,252,${.55 + .3 * Math.sin(p.ph * 2)})`;
-      ctx.beginPath(); ctx.arc(p.x, p.y, d.r, 0, Math.PI * 2); ctx.fill();
+    } else {   // snow：柔邊漸層雪片（白芯 → 淡藍邊 → 透明；實心小圓在白地上對比不夠，2026-11-13 使用者回報看不到）
+      const a = .62 + .25 * Math.sin(p.ph * 2);
+      const rr = d.r * 1.6;
+      const gr = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr);
+      gr.addColorStop(0, `rgba(250,252,255,${a.toFixed(3)})`);
+      gr.addColorStop(.55, `rgba(238,244,252,${(a * .7).toFixed(3)})`);
+      gr.addColorStop(1, 'rgba(225,234,246,0)');
+      ctx.fillStyle = gr;
+      ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
   }
