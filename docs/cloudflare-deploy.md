@@ -103,4 +103,4 @@ npx wrangler deploy             # 更新正式版
 - 玩家目前在哪個地形是連線本身的屬性（不存檔），每位玩家各自切換，只有同地形的人看得到彼此
 - 可破壞物件（樹/石頭/蘑菇）受損與已破壞的狀態也存在 Durable Object 儲存（每個地形一份），壞掉 60 秒後重生，該格有家具則不重生
 - 家具擺設存在 Durable Object 儲存（免費層 SQLite 後端，每個地形各一份），同地形的人共用，不會因重啟而重置；個人島之後再考慮進 D1（免費層）
-- 跨島的玩家資料（目前是魚類圖鑑，依 Discord 帳號）存在全域 Durable Object `Registry`（全站一個實例；`wrangler.toml` 的 `REGISTRY` 綁定，migration `v2` 建立）。需要 `SESSION_SECRET` 才能辨識帳號，沒設時圖鑑只存在各人瀏覽器
+- 跨島的玩家資料（魚類圖鑑、腳色 XP、合成解鎖、擊倒島主紀錄、暱稱，依 Discord 帳號）存在全域 Durable Object `Registry`（全站一個實例；`wrangler.toml` 的 `REGISTRY` 綁定，migration `v2` 建立）。需要 `SESSION_SECRET` 才能辨識帳號，沒設時這些資料只存在各人瀏覽器

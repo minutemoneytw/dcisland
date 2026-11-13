@@ -27,16 +27,16 @@ HUD 是 FFXIV 風格（僅風格參考，**不使用任何 SE／FFXIV 的素材�
 
   | 島 | 島主 | 野外動物 |
   |---|---|---|
-  | 草島 | 黃金肥龍 | 波波羊、圓喙鳥、大肚蛙、咕咕雞、史萊姆、哥布林 |
+  | 草島 | 黃金肥龍 | 波波羊、圓喙鳥、大肚蛙、咕咕雞、史萊姆、哥布林、鹿 |
   | 沙灘島 | — | 圓喙鳥、大肚蛙、跳跳兔、史萊姆、飛龍 |
-  | 雪島 | — | 波波羊、圓喙鳥、跳跳兔、史萊姆、殭屍 |
-  | 夜光島 | 笨蛋蛇女 | 大肚蛙、波波羊、史萊姆、飛龍、殭屍 |
-  | 森林島 | — | 波波羊、圓喙鳥、咕咕雞、史萊姆、哥布林 |
-  | 熔岩島 | 蓋老師 | 大肚蛙、圓喙鳥、史萊姆、飛龍 |
-  | 機械島 | 壓力山大 | 跳跳兔、史萊姆、殭屍 |
-  | 和平島 | — | （室內房間，**沒有任何敵對單位**；有遊戲桌與室內釣魚池） |
+  | 雪島 | — | 波波羊、圓喙鳥、跳跳兔、史萊姆、殭屍、白熊、小鬼 |
+  | 夜光島 | 笨蛋蛇女 | 大肚蛙、波波羊、史萊姆、飛龍、殭屍、蝙蝠、骷髏 |
+  | 森林島 | — | 波波羊、圓喙鳥、咕咕雞、史萊姆、哥布林、野豬 |
+  | 熔岩島 | 蓋老師 | 大肚蛙、圓喙鳥、史萊姆、飛龍、小惡魔 |
+  | 機械島 | 壓力山大 | 跳跳兔、史萊姆、殭屍、魔像、小鬼 |
+  | 和平島 | — | 貓、狗（室內房間，**沒有任何敵對單位**；有遊戲桌、餐飲區與室內釣魚池） |
 
-  飛龍、哥布林、殭屍是**反擊型野怪**（被打會反擊、附近同種群起），其餘被打只會逃。野外動物是各自畫面的模擬，刻意不同步。
+  飛龍、哥布林、小鬼、殭屍、骷髏、野豬、白熊、小惡魔、魔像是**反擊型野怪**（被打會反擊；骷髏場上少於 10 隻會全體追殺），其餘被打只會逃。新怪依等級定素質（各島等級帶每島差 10 級）。野外動物是各自畫面的模擬，刻意不同步。
 - **8 個職業**：騎士／戰士（坦克）、白魔法師／賢者（補師）、忍者／龍騎士（近戰輸出）、吟遊詩人／黑魔法師（遠程輸出）。每個職業有固定的 LPC 裝備、唯一的職業武器、`1`／`2` 兩個職業技能與 `R` 職能技能。
 - **腳色等級**：打怪、採集、釣魚、玩小遊戲得 XP；升級加血量上限、每 3 級加攻擊。登入 Discord 的人等級跟著帳號（伺服器記帳），訪客只存在這台裝置。
 - **島主戰**：四隻島主各有不同攻擊樣式，由伺服器權威同步，會打死人；島主也會升級。見下方[島主](#島主)。
@@ -44,8 +44,9 @@ HUD 是 FFXIV 風格（僅風格參考，**不使用任何 SE／FFXIV 的素材�
 - **合成**：採集素材解鎖進素材圖鑑（不消耗），組合 2～3 種猜配方，可合成素材與家具。
 - **稱號**：圖鑑收集、大尺寸、參與擊倒島主等條件解鎖，顯示在名字上方。
 - **裝飾**：擺家具、鋪地板（可鋪在水上）、寫看板，所有人都能編輯（清空要管理員）；可坐椅子、睡床。
-- **和平島遊戲桌**：抽鬼牌、五子棋（含復盤）、躲彈幕（1～8 人）、UNO（傳統／無限制兩種玩法）、英文打字競賽（1～8 人、限時 30 秒）、見習驅魔師（1～4 人合作，用滑鼠畫符號消除幽靈、打 Boss）、方塊拼圖（Blokus，2～4 人、每手限時 45 秒；2 人局用 Blokus Duo 規則）、三角方塊拼圖（Blokus Trigon，六邊形三角格）、中文打字競賽（同英打規則，用輸入法打繁體中文詞、台灣用語詞庫）、秘藥情報戰（3～8 人的隱藏身分諜報戰，原創規則，有限時／不限時兩種模式，行動牌含攔截、轉移、阻擋、洗白、無人倖免等；可開啟「角色卡」模式，18 個角色，技能分階段實作中，見 docs/intel-characters.md），牌局由伺服器權威。
-- **其他**：營火（範圍內回血，每 3 分鐘換位置）、NPC 與嚮導、玩家列表傳送、空手出拳（純特效）。
+- **和平島遊戲桌**：抽鬼牌、五子棋（含復盤）、躲彈幕（1～8 人）、UNO（傳統／無限制兩種玩法）、英文打字競賽（1～8 人、限時 30 秒）、見習驅魔師（1～4 人合作，用滑鼠畫符號消除幽靈、打 Boss）、Blokus（2～4 人輪流放方塊、每手限時 45 秒；2 人局用 Blokus Duo 規則）、Blokus Trigon（六邊形三角格版）、中文打字競賽（同英打規則，用輸入法打繁體中文詞、台灣用語詞庫）、秘藥情報戰（3～8 人的隱藏身分諜報戰，原創規則，有限時／不限時兩種模式，行動牌含攔截、轉移、阻擋、洗白、無人倖免等；可開啟「角色卡」模式，18 個角色，技能已全數啟用，見 docs/intel-characters.md）、俄羅斯方塊（場地上方 4 台街機，單人／聯機一般／聯機對戰）、豆豆迷宮（吃豆迷宮類，1～5 人）、空氣曲棍球（兩桌，2～8 人、人數要偶數）。牌局由伺服器權威（豆豆迷宮、空氣曲棍球由其中一位玩家的畫面計算）；打字競賽、躲彈幕、見習驅魔師、俄羅斯方塊、豆豆迷宮有排行榜（前三名）。
+- **和平島餐飲區**：自助飲料機與點心吧，走近按 `F` 或點它就吃喝，隨機得到增益或減益（**遊戲內刻意不說明效果**，使用者定）。
+- **其他**：營火（範圍內回血，每 3 分鐘換位置）、NPC 與嚮導、玩家列表傳送、空手出拳（純特效）、天氣（八種，純畫面、不同步）、右上角小地圖、暱稱設定（跟著 Discord 帳號）。
 
 ## 里程碑
 
@@ -69,12 +70,12 @@ client/              純前端（ES module，無 build step），內容由 manif
 worker/              正式環境伺服器（Cloudflare Worker）
   src/index.js       靜態檔 + /api/token、/api/config、/api/log + /ws
                      → Durable Object Island（一座島一個實例：玩家、家具、島主、牌桌）
-                     → Durable Object Registry（全站一個：跟著 Discord 帳號的圖鑑、XP、合成解鎖、擊倒紀錄）
+                     → Durable Object Registry（全站一個：跟著 Discord 帳號的圖鑑、XP、合成解鎖、擊倒紀錄、暱稱）
   wrangler.toml      部署設定（[assets] 指向 ../client、DO 綁定）
 tools/
   dev_server.py      本機伺服器（純 Python 標準庫，不需 Node）；行為與 Worker 版保持一致
   gen_assets.py      素材的唯一來源（改素材先改這裡再重跑；內容感知寫檔，沒變的檔不會重寫）
-  import_external.py 外部逐幀素材（zip 或資料夾）→ 拼成水平 sheet
+  import_external.py 外部素材（逐幀 zip／資料夾、現成 sheet PNG、GIF）→ 拼成水平 sheet
   dev_config.example.json  本機憑證範本
 docs/                規格、實作筆記、Discord 串接、Cloudflare 部署、素材授權
 ```
@@ -116,7 +117,7 @@ git push              # 推到 main → GitHub Actions 自動部署（約 1 分�
 |---|---|
 | 移動／跳 | `WASD` 或方向鍵／`Space` |
 | 跑步 | `Shift` 或右下角圓形按鍵**切換**跑步／步行 |
-| 攻擊、採集、互動 | 左鍵或 `F`（長按自動連續揮擊）。點石頭／貝殼自動用鎬子、點樹木／蘑菇自動用斧頭；在 NPC、椅子／床、看板、遊戲桌旁按 `F` 或點它就互動 |
+| 攻擊、採集、互動 | 左鍵或 `F`（長按自動連續揮擊）。點石頭／貝殼自動用鎬子、點樹木／蘑菇自動用斧頭；在 NPC、椅子／床、看板、遊戲桌、餐飲區旁按 `F` 或點它就互動 |
 | 技能 | `1`／`2` 職業技能、`R` 職能技能（坦克＝挑釁、補師＝群療、近戰輸出＝破綻、遠程輸出＝降傷）；畫面底部有技能列與冷卻 |
 | 換武器 | 左上角武器列：在遊戲畫面上**滾滑鼠滾輪**或直接點，在職業武器／空手／釣竿之間切換 |
 | 遠距武器 | 自動瞄準滑鼠指的目標（射程 320px）。法杖、咒杖要**詠唱**（不能移動，移動或目標出射程就中斷）；賢具、豎琴弓不用詠唱，可以邊走邊射 |
@@ -126,7 +127,7 @@ git push              # 推到 main → GitHub Actions 自動部署（約 1 分�
 | 玩家列表 | `L`（同島的人，點名字傳送過去） |
 | 切換島 | 頂部 chip（倒地中、戰鬥中不能換） |
 | 遊戲桌（和平島） | 走到桌邊按 `F`，或用左鍵／右鍵點桌子，選入座或觀戰；`Esc` 離開 |
-| 面板 | 右上：`圖鑑`（魚類圖鑑／素材圖鑑／合成／配方筆記）、`角色`（職業、裝備、外觀、換色、稱號設定）、齒輪選單（操作說明、名牌等級／血量條／經驗條顯示開關） |
+| 面板 | 右上：`圖鑑`（魚類圖鑑／素材圖鑑／合成／配方筆記）、`角色`（職業、裝備、外觀、換色、稱號設定）、齒輪選單（操作說明、暱稱設定、名牌等級／血量條／經驗條顯示開關）；右上角另有圓形小地圖 |
 
 規則與數值（石化、命令、血量、技能細節等）見 [`docs/notes.md`](docs/notes.md) 與 [`docs/spec.md`](docs/spec.md) 第 9 節。遊戲內嚮導 NPC 與「操作說明」也有簡易說明（來源是 `client/assets/npcs/npcs.json` 的 `help`，操作方式改了要同步更新）。
 
@@ -139,7 +140,7 @@ git push              # 推到 main → GitHub Actions 自動部署（約 1 分�
 | 地形 | `client/assets/terrain/<id>/` 加資料夾＋`terrain.json`（產生器的 `TERRAINS`），並在 `main.js` 的 `TERRAIN_IDS` 登記 |
 | 家具 | `furniture.json` 加條目＋圖（產生器的 `FURN_MANIFEST`）；`use: "sit"／"sleep"` 可坐／睡，`text: true` 可寫字 |
 | 地板 | `floors.json` 加條目＋16×16 無縫磚（`FLOOR_MANIFEST`）；多格地板加 `w`／`h`，邊長最多 4 |
-| 動物／怪物（mobs） | 外部逐幀素材先用 `import_external.py` 拼成 sheet 放進 `client/assets/external/img2pixel/`，再在 `gen_assets.py` 的 `EXTERNAL_BUNDLES` 登記、`MOB_MANIFEST` 加條目、`MOBS_BY_TERRAIN` 指定島與權重。常用欄位：`anim`（含方向網格 `rows`／`rowDir`、`scale`）、`tint`（一張圖做多色系）、`fixed`（每島固定幾隻）、`swim`、`noBounce`、`retaliate`＋`ownerFrac`（反擊型，數值＝島主的 1/N）。**先量大小**：人物畫面上約 46px 高，野外小動物約 20～30px。完整規範見 [`docs/notes.md`](docs/notes.md)「野外動物」與 `client/assets/external/img2pixel/README.md` |
+| 動物／怪物（mobs） | 外部素材（逐幀、現成 sheet PNG 或 GIF）先用 `import_external.py` 拼成 sheet 放進 `client/assets/external/img2pixel/`，再在 `gen_assets.py` 的 `EXTERNAL_BUNDLES` 登記、`MOB_MANIFEST` 加條目、`MOBS_BY_TERRAIN` 指定島與權重。常用欄位：`anim`（含方向網格 `rows`／`rowDir`、`scale`）、`tint`（一張圖做多色系）、`fixed`（每島固定幾隻）、`swim`、`noBounce`、`retaliate`＋`ownerFrac`（反擊型，數值＝島主的 1/N）。**新怪一律給 `lv`**（血量、攻擊力、經驗值照等級算）。**先量大小**：人物畫面上約 46px 高，野外小動物約 20～30px。完整規範見 [`docs/notes.md`](docs/notes.md)「野外動物」與 `client/assets/external/img2pixel/README.md` |
 | 人物造型／服裝／武器 | **只用 LPC 素材**（Universal-LPC-Spritesheet-Character-Generator），每個部位一張 832×1344 的 LPC 通用格式 sheet，由 `gen_assets.py` 產生 `avatar.json`（`tops`／`bottoms`／`hats`、`dye` 可換色、`glam` 可當外觀、`unlock` 解鎖條件）。做法見 [`docs/notes.md`](docs/notes.md)「美術：多幀動畫與人物分層」 |
 | 職業 | `client/assets/jobs/jobs.json`（手寫）：`role`、職業武器、`gear`、`skills`；技能效果在 `main.js` 的 `JOB_SKILLS`；**兩份伺服器的 `JOB_ROLE` 也要加** |
 | NPC／嚮導／操作說明 | `client/assets/npcs/npcs.json`（手寫；`terrains.<地圖>` 各地圖的 NPC，`help` 是說明視窗） |
@@ -171,7 +172,7 @@ git push              # 推到 main → GitHub Actions 自動部署（約 1 分�
 
 ### 新增其他島的島主（照範本，4 步）
 
-1. **造型**：外部自製素材用 `python tools/import_external.py <zip 或資料夾> <輸出.png>` 拼成 sheet 放進 `client/assets/external/img2pixel/`，在 `gen_assets.py` 的 `EXTERNAL_BUNDLES` 登記，並在 `MOB_MANIFEST` 加條目：`owner: true`、`big`、`hp`、`atk`（`dash`／`gaze`／`beam`／`command`）、`line`、`anim`（登記步驟見該資料夾的 README）
+1. **造型**：外部自製素材用 `python tools/import_external.py <zip／資料夾／sheet.png／.gif> <輸出.png>` 拼成 sheet 放進 `client/assets/external/img2pixel/`，在 `gen_assets.py` 的 `EXTERNAL_BUNDLES` 登記，並在 `MOB_MANIFEST` 加條目：`owner: true`、`big`、`hp`、`atk`（`dash`／`gaze`／`beam`／`command`）、`line`、`anim`（登記步驟見該資料夾的 README）
 2. **指定**：`gen_assets.py` 的 `OWNER_BY_TERRAIN` 指定該地形的島主（產生 `terrain.json` 的 `owner`），並在**兩份伺服器的 `OWNER_TERRAINS`** 登記攻擊樣式
 3. **台詞與招式**：`skills.json` 設定招式名稱、`bar`、`say`；台詞寫在 `MOB_MANIFEST` 該條目的 `ownerLines`（加 `ownerLinesSeq: true` 改成照順序說）
 4. **重跑產生器**——說台詞、預警、攻擊、仇恨追殺、死亡重生、等級等都由共用框架處理（兩份伺服器已就緒）
