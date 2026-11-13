@@ -107,6 +107,7 @@ const S = {
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
   titleBook: lsObj('dcisland.m0.titles', {}), gstatsLocal: lsObj('dcisland.m0.gstats', {}), gstats: null, gstatsSrc: 'local', titleTab: 'battle',   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
   titleOpen: false,                    // 稱號一覽視窗是否開著
+  titleForceId: null, titleForceUntil: 0,   // 強制稱號（殺寵懲罰）：本機的生效紀錄在 localStorage 的 dcisland.m0.titleForce
   ownerHitAt: {},                      // 自己最後一次打到各島主／魚人的時刻（S.t；「參與擊倒」＝倒下前 TITLE_ASSIST 秒內打過；訪客的擊倒 XP 獎勵也看這個）
 };
 // 舊存檔／被亂改的 localStorage 也要夾在安全範圍：與兩份伺服器的 XP_MAX 同值（2026-11-07 檢查時補）
@@ -664,7 +665,8 @@ function hitMob(p, a, ranged, force) {
     if (a.hp <= 0) {
       a.dead = true; a.dieT = .6;
       S.floaters.push({ x: a.x, y: a.y - 30, poof: true, life: .55 });
-      if (p === S.players[0] && !od.owner && !od.lurker) { grantExp(mobKillXp(od), p.x, p.y - 60, 'mob'); spawnCraftDrops(S.craftDB?.sources.mob[od.id], a.x, a.y); }   // 合成素材：擊倒野外動物掉落   // 非主動怪（羊／鳥／蛙）：擊倒 +1 XP、會反擊的野怪＝島主經驗 1/10（登入者上報事件由伺服器記；島主／魚人那步由伺服器計）
+      if (p === S.players[0] && isPeacePet(od)) petKillPenalty(od, p);   // 和平島殺寵：不給擊倒 XP、不掉素材，改吃懲罰（掉一等＋強制稱號一小時）
+      else if (p === S.players[0] && !od.owner && !od.lurker) { grantExp(mobKillXp(od), p.x, p.y - 60, 'mob'); spawnCraftDrops(S.craftDB?.sources.mob[od.id], a.x, a.y); }   // 合成素材：擊倒野外動物掉落   // 非主動怪（羊／鳥／蛙）：擊倒 +1 XP、會反擊的野怪＝島主經驗 1/10（登入者上報事件由伺服器記；島主／魚人那步由伺服器計）
       if (!od.owner && !od.lurker) {   // 殺到動物回 1 HP（島主是伺服器權威事件，不算在此；釣上來的怪物也不算）
         const me = S.players[0];
         me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + 1);
@@ -679,7 +681,7 @@ function hitMob(p, a, ranged, force) {
           S.floaters.push({ x: me.x + (Math.random() * 12 - 6), y: me.y - 50, v: '+' + amt, life: .75 });
         }
       }
-      toast(od.lurker ? `${od.name} 被打倒了！` : `${mobDef(a.id).name} 被打倒了！${S.mobsDB.respawn || 30} 秒後重生`, 2200);
+      if (!isPeacePet(od)) toast(od.lurker ? `${od.name} 被打倒了！` : `${mobDef(a.id).name} 被打倒了！${S.mobsDB.respawn || 30} 秒後重生`, 2200);   // 和平島殺寵：改吃 petKillPenalty 的懲罰訊息（不打倒訊息）
       if (od.owner) titleOwnerDown(a.id);   // 單機打倒島主
     }
   }
@@ -872,6 +874,32 @@ function loseExp() {                     // 倒地 10% 機率扣 XP：扣「升�
   saveProfile();
   S.floaters.push({ x: S.players[0].x, y: S.players[0].y - 46, v: `−${loss} XP`, life: 1.2, xpLoss: true });
 }
+// ---- 和平島殺寵懲罰（2026-11-13 使用者定）：殺貓狗掉一等，並強制掛上稱號一小時 ----
+// 稱號看「懲罰生效期間」殺過哪種：殺貓＝《屠貓變態》、殺狗＝《屠狗變態》、兩種都殺過＝《反社會人格變態》；
+// 每次殺都重新計時一小時，過期後恢復原本選的稱號（開機還原見 boot 的 titleForce 段）。
+// 稱號是本機機制（localStorage 的 dcisland.m0.titleForce，靠 state.title 同步給同島的人看，兩種模式都有效）。
+// XP 只有訪客／單機在本機扣——登入連線時 XP 由伺服器記帳（xpe 事件只收正數），連線版要扣得改 worker（另行徵得同意）。
+function petKillPenalty(od, p) {
+  const f = lsObj('dcisland.m0.titleForce', null), alive = f && f.until > Date.now();
+  const kinds = alive && f.kinds ? { ...f.kinds } : {};   // 生效中的紀錄帶著走：這一小時內兩種都殺過就升級
+  kinds[od.id.startsWith('cat') ? 'cat' : 'dog'] = 1;
+  const id = kinds.cat && kinds.dog ? 'kill_pets' : kinds.cat ? 'kill_cat' : 'kill_dog';
+  const until = Date.now() + 3600e3;
+  lsSet('dcisland.m0.titleForce', { id, kinds, until, prev: alive && f.prev !== undefined ? f.prev : (S.me.title ?? null) });
+  S.titleForceId = id; S.titleForceUntil = until;
+  S.me.title = id; saveAvatar();   // 名字正上方立刻換上懲罰稱號；state.title 會同步給同島的人
+  // 掉一等：扣「這級累積＋前一級的需求」＝退到前一等的等級起點；Lv1 扣到 0
+  const li = lvInfo(S.profile.xp);
+  const loss = !xpServer() ? (li.lv > 1 ? li.cur + xpNeed(li.lv - 1) : li.cur) : 0;
+  if (loss > 0) {
+    S.profile.xp = Math.max(0, S.profile.xp - loss);
+    saveProfile();
+    S.floaters.push({ x: p.x, y: p.y - 56, v: `−${loss} XP（掉一等）`, life: 1.6, xpLoss: true });
+  }
+  const pens = [loss > 0 ? '掉 1 等級' : '', `強制戴上《${PET_KILL_TITLES[id]}》一小時`].filter(Boolean);
+  toast(`你殺了和平島的${kinds.cat && kinds.dog ? '貓狗' : od.name}！懲罰：${pens.join('，')}`, 4200);
+}
+const isPeacePet = od => S.terrain === 'peace' && (od.id === 'cat' || od.id === 'dog' || od.id.startsWith('cat_') || od.id.startsWith('dog_'));
 // 伺服器回來的 XP 記帳結果（不廣播、只給本人）：以伺服器為準更新本機映像＋飄字；k＝init（登入時同步存檔）只更新不演出
 function onNetXp(m) {
   if (typeof m.xp !== 'number') return;
@@ -7931,7 +7959,10 @@ const tableNearOther = (tb, p) => tableNear(p) !== tb;   // 4 台挨得很近：
 // 解鎖純客戶端判斷（與職業同樣信任客戶端）：釣魚類從圖鑑推算（登入的人用伺服器存的圖鑑）；擊倒島主記在 localStorage 的 dcisland.m0.titles。
 // 同步只送稱號 id（state.title），文字由各畫面查 titles.json。
 const TITLE_ASSIST = 30;   // 島主倒下前幾秒內打過牠算「參與擊倒」
-const titleDef = id => (id && S.titlesDB?.titles?.find(t => t.id === id)) || null;
+// 殺寵懲罰的強制稱號（petKillPenalty）：不在 titles.json 清單裡（不能自己選、也不會「解鎖」），titleDef 查得到就好
+const PET_KILL_TITLES = { kill_cat: '屠貓變態', kill_dog: '屠狗變態', kill_pets: '反社會人格變態' };
+const titleDef = id => (id && (S.titlesDB?.titles?.find(t => t.id === id)
+  || (PET_KILL_TITLES[id] ? { id, name: PET_KILL_TITLES[id], cond: null } : null))) || null;
 const titleText = id => { const t = titleDef(id); return t ? `《${t.name}》` : null; };
 const allFish = () => Object.entries(S.fishDB?.terrains || {}).flatMap(([t, l]) => l.map(f => ({ t, f })));
 const bigCaught = (t, f) => { const e = S.dex[t]?.[f.id]; return !!e && f.big != null && e.max >= f.big; };
@@ -8015,6 +8046,8 @@ function gstatsLocalApply(game, gs) {   // 訪客：把這局的戰績增量併�
   if (S.gstatsSrc !== 'server') { S.gstats = G; checkTitles(false); }
 }
 function setTitle(id) {
+  // 強制稱號（殺寵懲罰）生效中：不能自己換（「無」也算換）
+  if (S.titleForceUntil > Date.now() && S.titleForceId) { toast(`懲罰稱號《${PET_KILL_TITLES[S.titleForceId]}》生效中，還不能自己換稱號`, 2200); return; }
   S.me.title = id; saveAvatar();
   toast(id ? `稱號設定為 ${titleText(id)}` : '不顯示稱號', 1600);
   buildTitles(); buildAvatarPanel();
@@ -9948,6 +9981,15 @@ async function boot() {
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
   S.me.job = jobIdOf(S.me.job) || DEFAULT_JOB;   // 舊存檔的坦克／補師／輸出照 legacy 轉成騎士／白魔法師／忍者；沒有或不合法＝忍者
   if (S.me.title && !titleDef(S.me.title)) S.me.title = null;   // 稱號已從清單移除：不顯示
+  // 強制稱號（殺寵懲罰）：還有效就重新戴上（分頁重開也接得上）；過期了就恢復本來選的稱號
+  const tf = lsObj('dcisland.m0.titleForce', null);
+  if (tf && tf.until > Date.now() && PET_KILL_TITLES[tf.id]) {
+    S.titleForceId = tf.id; S.titleForceUntil = tf.until;
+    if (S.me.title !== tf.id) { S.me.title = tf.id; saveAvatar(); }
+  } else if (tf) {
+    lsSet('dcisland.m0.titleForce', null);
+    if (S.me.title && PET_KILL_TITLES[S.me.title]) { S.me.title = tf.prev ?? null; saveAvatar(); }
+  }
   // 2026-11-09 和平島加了魚種：「勾人心魄」「魚譜大成」改成每座島（含和平島）都要；「魚太公」「煙波釣徒」「釣場之王」（所有魚種）也自動包含和平島的魚。
   // 之前拿到的拔掉（戴著的卸下、從已提示清單移除，重新達成會再跳提示）；條件本身是即時算的，沒達成就是未解鎖
   if ((S.titleBook.rev || 0) < 1) {
