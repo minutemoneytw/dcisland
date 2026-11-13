@@ -1303,6 +1303,99 @@
     "kind": "material",
     "id": "claw_charm"
    }
+  },
+  {
+   "id": "antler_rack",
+   "in": [
+    "polished_antler",
+    "plank",
+    "rope"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "antler_rack"
+   }
+  },
+  {
+   "id": "hide_rug",
+   "in": [
+    "thick_leather",
+    "thick_leather",
+    "felt"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "hide_rug"
+   }
+  },
+  {
+   "id": "bone_bench",
+   "in": [
+    "bone_beam",
+    "thick_leather"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "bone_bench"
+   }
+  },
+  {
+   "id": "demon_candelabra",
+   "in": [
+    "demon_steel",
+    "glass_pane",
+    "sulfur"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "demon_candelabra"
+   }
+  },
+  {
+   "id": "bat_screen",
+   "in": [
+    "bat_silk",
+    "plank",
+    "plank"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "bat_screen"
+   }
+  },
+  {
+   "id": "golem_gadget",
+   "in": [
+    "golem_engine",
+    "glass_pane"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "golem_gadget"
+   }
+  },
+  {
+   "id": "charm_curtain",
+   "in": [
+    "imp_charm",
+    "claw_charm",
+    "cloth"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "charm_curtain"
+   }
+  },
+  {
+   "id": "compost_bed",
+   "in": [
+    "compost",
+    "brick"
+   ],
+   "out": {
+    "kind": "furniture",
+    "id": "compost_bed"
+   }
   }
  ]
 }

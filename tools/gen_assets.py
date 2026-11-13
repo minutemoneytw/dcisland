@@ -2157,6 +2157,74 @@ def egg_nest():   # 鳥巢擺飾：樹皮編的窩裡有兩顆蛋
     cv.set(12, 6, hx("#e8c070")); cv.set(13, 5, hx("#e8c070"))   # 一根羽毛
     cv.outline(); return cv
 
+def antler_rack():   # 鹿角掛架：木板底座，頂上一對分岔的鹿角
+    a = hx("#d8b078"); w = hx("#8a5a34"); cv = Canvas(16, 24)
+    cv.rect(7, 12, 8, 20, w); cv.rect(4, 20, 11, 22, shade(w, .7)); cv.rect(5, 9, 10, 12, shade(w, 1.15)); cv.hline(5, 10, 9, shade(w, 1.35))   # 立柱、底座、頭骨板
+    for sx, d in ((6, -1), (9, 1)):   # 左右兩支鹿角：主幹往外上方、分出三叉
+        for i in range(7): cv.set(sx + d * (i // 2), 8 - i, a)
+        for ox, oy in ((1, 5), (2, 3), (3, 1)): cv.set(sx + d * ox, 8 - oy, a); cv.set(sx + d * (ox + 1), 8 - oy - 1, a)
+    cv.set(6, 6, shade(a, 1.3)); cv.outline(); return cv
+
+def hide_rug():   # 獸皮地毯：攤開的獸皮，四肢往外撐
+    c = hx("#7a5a3a"); cv = Canvas(16, 13)
+    cv.ellipse(8, 6.5, 5.5, 4, c); cv.ellipse(3, 3, 2, 1.6, c); cv.ellipse(13, 3, 2, 1.6, c); cv.ellipse(3, 10, 2, 1.6, c); cv.ellipse(13, 10, 2, 1.6, c)
+    cv.ellipse(8, 6.5, 3.4, 2.4, shade(c, 1.18)); cv.set(7, 5, shade(c, 1.4)); cv.set(10, 8, shade(c, .75)); cv.set(5, 8, shade(c, .8))
+    cv.outline(); return cv
+
+def bone_bench():   # 骨梁長椅：粗骨梁當椅身與腳，皮革坐墊
+    b = hx("#d8cfb0"); lt = hx("#6a4a2a"); cv = Canvas(16, 15)
+    cv.rect(1, 6, 14, 8, b); cv.hline(1, 14, 6, shade(b, 1.2)); cv.hline(1, 14, 8, shade(b, .75))   # 骨梁椅身
+    cv.rect(2, 4, 13, 5, shade(lt, 1.1)); cv.hline(2, 13, 4, shade(lt, 1.35))                          # 皮革坐墊
+    for x in (0, 14): cv.ellipse(x + .5, 7, 1.6, 1.8, b)                                               # 梁端的骨節
+    for x in (3, 11): cv.rect(x, 9, x + 1, 13, shade(b, .85)); cv.rect(x - 1, 13, x + 2, 13, shade(b, .6))   # 兩隻骨腳
+    cv.outline(); return cv
+
+def demon_candelabra():   # 魔鋼燭台：暗紅魔鋼的三叉燭台，上面飄著硫磺色的火
+    m = hx("#8a2a3a"); f = hx("#e8e03a"); cv = Canvas(16, 24)
+    cv.rect(7, 12, 8, 20, m); cv.rect(4, 20, 11, 22, shade(m, .75)); cv.rect(6, 19, 9, 20, shade(m, 1.2))   # 柱身與底座
+    cv.rect(3, 11, 12, 11, m); cv.vline(3, 8, 11, m); cv.vline(12, 8, 11, m); cv.vline(7, 8, 11, m); cv.vline(8, 8, 11, m)   # 三叉
+    for x in (3, 7, 12):   # 燭與火
+        cv.rect(x, 6, x + (1 if x == 7 else 0), 8, hx("#f0ead8"))
+        cv.ellipse(x + (.5 if x == 7 else 0), 3.5, 1.4, 2.4, f); cv.set(x, 2, hx("#ff9a40")); cv.set(x, 4, hx("#ffffff"))
+    cv.outline(); return cv
+
+def bat_screen():   # 蝠翼綢屏風：三折的紫色蝠翼綢，下緣一圈木框
+    p = hx("#7a5a9a"); w = hx("#8a5a34"); cv = Canvas(16, 24)
+    cv.rect(1, 3, 14, 21, shade(w, .8))
+    for k, x0 in enumerate((2, 6, 10)):
+        c = p if k % 2 == 0 else shade(p, .85); cv.rect(x0, 4, x0 + 3, 20, c); cv.hline(x0, x0 + 3, 4, shade(c, 1.25))
+        cv.set(x0 + 1, 9, hx("#2a1a3a")); cv.set(x0 + 2, 10, hx("#2a1a3a")); cv.set(x0, 11, hx("#2a1a3a")); cv.set(x0 + 3, 11, hx("#2a1a3a")); cv.hline(x0, x0 + 3, 12, hx("#3a2a4a"))   # 蝠翼圖樣
+    cv.rect(1, 21, 14, 22, shade(w, .6)); cv.outline(); return cv
+
+def golem_gadget():   # 魔像機關擺飾：玻璃罩裡一個發藍光的魔像核心，兩側嵌著齒輪
+    cv = Canvas(16, 24); g = hx("#58a8c8")
+    cv.rect(3, 19, 12, 22, hx("#6a7480")); cv.rect(3, 19, 12, 19, hx("#9aa4b0"))   # 底座
+    cv.rect(4, 6, 11, 18, hx("#cfe8f0")); cv.hline(4, 11, 6, hx("#ffffff")); cv.rect(3, 4, 12, 5, hx("#55525e"))   # 玻璃罩
+    cv.ellipse(7.5, 12, 3.4, 3.4, shade(g, .7)); cv.ellipse(7.5, 12, 2.4, 2.4, hx("#7ad0e8")); cv.set(6, 11, hx("#ffffff"))   # 發光核心
+    for x, y in ((5, 8), (10, 16)):   # 小齒輪
+        cv.ellipse(x, y, 1.6, 1.6, hx("#a8b0b8")); cv.set(x, y, hx("#55525e"))
+    cv.outline(); return cv
+
+def charm_curtain():   # 護符門簾：橫桿上垂下一排串飾——紫色護符、熊爪、布條
+    cv = Canvas(16, 24)
+    cv.rect(1, 3, 14, 4, hx("#8a5a34")); cv.hline(1, 14, 3, hx("#b07a44")); cv.rect(0, 2, 0, 5, hx("#6a4424")); cv.rect(15, 2, 15, 5, hx("#6a4424"))   # 橫桿
+    for k, x in enumerate((3, 6, 9, 12)):
+        cv.vline(x, 5, 9 + (k % 2) * 3, hx("#c9b27a"))   # 繩
+        y = 10 + (k % 2) * 3
+        if k % 2 == 0:
+            cv.rect(x - 1, y, x + 1, y + 4, hx("#9a6ad8")); cv.set(x, y + 1, hx("#fff0b0")); cv.set(x - 1, y + 4, shade(hx("#9a6ad8"), .7)); cv.set(x + 1, y + 4, shade(hx("#9a6ad8"), .7))   # 護符
+        else:
+            for i in range(5): cv.set(x - (i // 3), y + i, hx("#d8d0c4")); cv.set(x - (i // 3) + 1, y + i, hx("#c8b090"))   # 熊爪
+    for x in (4, 8, 11): cv.rect(x, 15, x, 21, hx("#d878a0")); cv.set(x, 21, shade(hx("#d878a0"), .7))   # 垂下的布條
+    cv.outline(); return cv
+
+def compost_bed():   # 花圃：木框裡一壟深色堆肥土，長出花
+    cv = Canvas(16, 16); w = hx("#8a5a34"); soil = hx("#4a3a2a")
+    cv.rect(1, 9, 14, 14, w); cv.hline(1, 14, 9, shade(w, 1.25)); cv.rect(2, 10, 13, 12, soil); cv.hline(2, 13, 10, shade(soil, .75))
+    for x in (4, 8, 12): cv.vline(x, 6, 9, hx("#4d9e46"))
+    for cx, cy, c in ((4, 5, "#f08ab8"), (8, 3, "#f2d14a"), (12, 5, "#e8e4f0")): cv.ellipse(cx, cy, 1.9, 1.9, hx(c)); cv.set(cx, cy, hx("#f2a030"))
+    cv.set(5, 11, shade(soil, 1.4)); cv.set(10, 11, shade(soil, 1.4)); cv.outline(); return cv
+
 def dragon_shield():   # 龍鱗盾牌擺飾（立在鐵架上）
     r = hx("#a8404a"); cv = Canvas(16, 24)
     cv.rect(7, 18, 8, 21, hx("#6a7480")); cv.rect(4, 21, 11, 22, hx("#55525e"))
@@ -2206,6 +2274,15 @@ FURN_MANIFEST = dict(
         dict(id="egg_nest",       name="鳥巢擺飾", w=1, h=1, solid=True, sprite="egg_nest.png", craft=True),
         dict(id="dragon_shield",  name="龍鱗盾牌", w=1, h=1, solid=True, sprite="dragon_shield.png", craft=True),
         dict(id="dragon_trophy",  name="龍牙獎盃", w=1, h=1, solid=True, sprite="dragon_trophy.png", craft=True),
+        # 2026-11-14：用新怪物（哥布林、小鬼、骷髏、鹿、野豬、白熊、蝙蝠、小惡魔、魔像、殭屍）的掉落合成的家具
+        dict(id="antler_rack",      name="鹿角掛架",   w=1, h=1, solid=True,  sprite="antler_rack.png", craft=True),
+        dict(id="hide_rug",         name="獸皮地毯",   w=1, h=1, solid=False, sprite="hide_rug.png", craft=True),
+        dict(id="bone_bench",       name="骨梁長椅",   w=1, h=1, solid=True,  sprite="bone_bench.png", use="sit", craft=True),
+        dict(id="demon_candelabra", name="魔鋼燭台",   w=1, h=1, solid=True,  sprite="demon_candelabra.png", craft=True),
+        dict(id="bat_screen",       name="蝠翼綢屏風", w=1, h=1, solid=True,  sprite="bat_screen.png", craft=True),
+        dict(id="golem_gadget",     name="魔像機關擺飾", w=1, h=1, solid=True, sprite="golem_gadget.png", craft=True),
+        dict(id="charm_curtain",    name="護符門簾",   w=1, h=1, solid=True,  sprite="charm_curtain.png", craft=True),
+        dict(id="compost_bed",      name="花圃",       w=1, h=1, solid=True,  sprite="compost_bed.png", craft=True),
     ],
 )
 
@@ -3345,7 +3422,9 @@ def main():
                    ("flower_pot", flower_pot()), ("desk", desk()), ("ice_sculpture", ice_sculpture()), ("moon_lamp", moon_lamp()),
                    ("iron_chair", iron_chair()), ("lava_lamp", lava_lamp()), ("leather_chair", leather_chair()), ("pearl_statue", pearl_statue()),
                    ("rabbit_rug", rabbit_rug()), ("jelly_lamp", jelly_lamp()), ("slime_sofa", slime_sofa()), ("egg_nest", egg_nest()),
-                   ("dragon_shield", dragon_shield()), ("dragon_trophy", dragon_trophy())]:
+                   ("dragon_shield", dragon_shield()), ("dragon_trophy", dragon_trophy()),
+                   ("antler_rack", antler_rack()), ("hide_rug", hide_rug()), ("bone_bench", bone_bench()), ("demon_candelabra", demon_candelabra()),
+                   ("bat_screen", bat_screen()), ("golem_gadget", golem_gadget()), ("charm_curtain", charm_curtain()), ("compost_bed", compost_bed())]:
         save(cv, fn + ".png", "furniture")
     write_json(os.path.join(ASSETS, "furniture", "furniture.json"), FURN_MANIFEST)
     print("  furniture/furniture.json")

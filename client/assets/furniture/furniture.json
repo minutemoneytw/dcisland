@@ -253,6 +253,79 @@
    "solid": true,
    "sprite": "dragon_trophy.png",
    "craft": true
+  },
+  {
+   "id": "antler_rack",
+   "name": "鹿角掛架",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "antler_rack.png",
+   "craft": true
+  },
+  {
+   "id": "hide_rug",
+   "name": "獸皮地毯",
+   "w": 1,
+   "h": 1,
+   "solid": false,
+   "sprite": "hide_rug.png",
+   "craft": true
+  },
+  {
+   "id": "bone_bench",
+   "name": "骨梁長椅",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "bone_bench.png",
+   "use": "sit",
+   "craft": true
+  },
+  {
+   "id": "demon_candelabra",
+   "name": "魔鋼燭台",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "demon_candelabra.png",
+   "craft": true
+  },
+  {
+   "id": "bat_screen",
+   "name": "蝠翼綢屏風",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "bat_screen.png",
+   "craft": true
+  },
+  {
+   "id": "golem_gadget",
+   "name": "魔像機關擺飾",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "golem_gadget.png",
+   "craft": true
+  },
+  {
+   "id": "charm_curtain",
+   "name": "護符門簾",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "charm_curtain.png",
+   "craft": true
+  },
+  {
+   "id": "compost_bed",
+   "name": "花圃",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "compost_bed.png",
+   "craft": true
   }
  ]
 }
