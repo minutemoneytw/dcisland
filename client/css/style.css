@@ -506,3 +506,9 @@ body {
 .ar-cab { flex: 1 1 120px; max-width: 160px; border: 2px solid; padding: 4px 6px; text-align: center; background: rgba(255, 255, 255, .04); opacity: .85; }
 .ar-cab.you { opacity: 1; box-shadow: 0 0 8px rgba(255, 224, 138, .45); }
 .table-ranking { margin: 6px auto; max-width: 360px; text-align: center; }
+/* 增減益圖示（左上角武器列下方）：綠框＝增益、紅框＝減益，右下角剩幾秒；滑鼠移上去只顯示名稱（title） */
+#buffBar { position: absolute; left: 10px; top: 112px; z-index: 12; display: flex; flex-wrap: wrap; gap: 4px; max-width: 260px; user-select: none; }
+#buffBar .buff { position: relative; width: 28px; height: 28px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: rgba(22, 25, 34, .72); border: 1px solid #5aa860; cursor: default; }
+#buffBar .buff.bad { border-color: #d05050; }
+#buffBar .bi { font-size: 16px; line-height: 1; }
+#buffBar .bt { position: absolute; right: 1px; bottom: -1px; font-size: 10px; font-weight: bold; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }

@@ -474,6 +474,8 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
       if (sgn) { S._hits = 1; openSign(sgn); S.holdSkipF = true; return; }
       const seat = quiet ? null : seatNear(p);   // 身邊有椅子/沙發/床就坐下（長按自動連擊不會反覆切換）
       if (seat) { S._hits = 1; usePose(seat); S.holdSkipF = true; return; }
+      const prop = quiet ? null : propNear(p);     // 身邊有餐飲區就吃喝（長按不重複）
+      if (prop) { S._hits = 1; useProp(prop); S.holdSkipF = true; return; }
       const tbl = quiet ? null : tableNear(p);     // 身邊有遊戲桌就入座／觀戰（長按不重複開）
       if (tbl) { S._hits = 1; openTable(tbl); S.holdSkipF = true; return; }
       const npc = quiet ? null : npcNear(p);       // 身邊有 NPC 就跟他說話
@@ -1321,6 +1323,7 @@ function myFx() {   // 給 state 的持續型效果清單（id 要符合伺服�
   for (const k of ['guard', 'kshield', 'wshield', 'vamp', 'wings', 'cared', 'song', 'save']) if (fxOn(k)) out.push(k);   // cared＝被賢者關心中、song＝唱歌加成中、save＝拯救中
   if (F.seal) out.push('seal');
   if (F.triple && F.triple.n > 0 && S.t < F.triple.until) out.push('triple' + F.triple.n);
+  out.push(...foodFxIds());   // 餐飲區吃喝的效果（變大／縮小／透明／暈眩／中毒）：別人也看得到
   return out;
 }
 S.myFx = myFx;
@@ -2496,7 +2499,7 @@ function blocked(px, py, ignoreFurn) { // 像素座標（腳底）；ignoreFurn�
   if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return true;
   if (!groundAt(x, y)) return true;   // 水（水上鋪了地板的可以走）
   if (ignoreFurn) return false;
-  if (tableAtCell(x, y)) return true;   // 和平島的遊戲桌擋路
+  if (tableAtCell(x, y) || propAtCell(x, y)) return true;   // 和平島的遊戲桌、餐飲區擋路
   const fi = S.occ.get(key(x, y));
   if (fi !== undefined) {
     const def = S.furn.items.find(f => f.id === S.furnItems[fi].type);
@@ -2903,13 +2906,15 @@ function stepPlayer(p, dt) {
   if (p === S.players[0] && blocked(p.x, p.y, true)) [p.x, p.y] = landNear(p.x, p.y);
   let dx = 0, dy = 0;
   // 走路與裝飾模式都能移動（裝飾模式要邊走邊擺）；被石化時不能移動（揮擊也不行，在 doAttack／clickAttack 擋）
-  const pet = S.t < (p.petUntil ?? 0);
+  const me = p === S.players[0];
+  const pet = S.t < (p.petUntil ?? 0) || (me && ffOn('stun'));   // 吃喝的暈眩：跟石化一樣原地不能動
   const reeling = p.fish?.ph === 'reel';   // 拉竿的 1 秒拉扯中站定（不能走、不能跳，結果揭曉後才能動）
   if (!pet && !reeling) {
     if (keys['a'] || keys['arrowleft']) dx -= 1;
     if (keys['d'] || keys['arrowright']) dx += 1;
     if (keys['w'] || keys['arrowup']) dy -= 1;
     if (keys['s'] || keys['arrowdown']) dy += 1;
+    if (me && ffOn('confuse')) { dx = -dx; dy = -dy; }   // 吃喝的混亂：方向顛倒
   }
   p.moving = dx !== 0 || dy !== 0;
   if (p.moving) { p.lastMoveAt = S.t; p.lastInputWall = Date.now(); }   // 命令檢定用（行動命令／靜止命令）：最後一次有移動輸入的時刻（真實時鐘一份、遊戲時間一份）
@@ -2929,7 +2934,7 @@ function stepPlayer(p, dt) {
       p.face = dy < 0 ? 'up' : dx !== 0 ? 'side' : 'down';
       p.d8 = dir8Of(dx, dy);   // 畫面用的 8 方向（玩法仍看 face）
     }
-    const len = Math.hypot(dx, dy) || 1, sp = (S.sprint ? 200 : 120) * dt;   // 疾走＝右下角虛擬按鍵或 Shift 切換的狀態
+    const len = Math.hypot(dx, dy) || 1, sp = (S.sprint ? 200 : 120) * dt * (me ? foodSpeedMul() : 1);   // 疾走＝右下角虛擬按鍵或 Shift 切換的狀態
     const nx = clamp(p.x + dx / len * sp, 8, COLS * CELL - 8);
     const ny = clamp(p.y + dy / len * sp, 8, ROWS * CELL - 8);
     // 裝飾模式可穿過擺飾（避免被卡住）；已經被家具圍住/壓在家具上時（例如別人把家具擺在你腳下）也一樣可以走出來。水邊照樣擋
@@ -2938,7 +2943,7 @@ function stepPlayer(p, dt) {
     if (!blocked(p.x, ny, ig)) p.y = ny;
   }
   // 跳躍（走路與裝飾模式都能跳；石化中不能跳）
-  if (!pet && !reeling && keys[' '] && p.z === 0 && p.vz === 0) p.vz = 240;
+  if (!pet && !reeling && keys[' '] && p.z === 0 && p.vz === 0) p.vz = me && ffOn('light') ? 330 : 240;   // 吃喝的輕盈：跳更高
   if (p.z > 0 || p.vz > 0) {
     p.z += p.vz * dt; p.vz -= 780 * dt;
     if (p.z <= 0) { p.z = 0; p.vz = 0; }
@@ -3482,7 +3487,8 @@ function drawFxFloater(f) {
 function drawPerson(p, wi, nameColor) {
   const pose = p.pose === 'sit' || p.pose === 'sleep' ? p.pose : null;
   const race = (p === S.players[0] ? S.me.race : p.look?.race) || 'human';
-  const raceScale = (S.avatar.races?.find(r => r.id === race)?.scale) || 1;   // 種族倍率：拉拉肥 0.5／巨人 1.5（整個模組一起縮）
+  const ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);   // 吃喝的效果（巨大化／縮小／透明／暈眩／中毒）
+  const raceScale = ((S.avatar.races?.find(r => r.id === race)?.scale) || 1) * foodScaleOf(ffx);   // 種族倍率：拉拉肥 0.5／巨人 1.5（整個模組一起縮）；吃喝的巨大化／縮小再乘上去
   let nameY = p.y - p.z - Math.round(52 * raceScale);   // 名牌跟著身高（種族倍率）移
   if (pose === 'sleep') {
     drawSleeper(p);
@@ -3497,6 +3503,8 @@ function drawPerson(p, wi, nameColor) {
     charAnch = { back: charAnchor(cf.fi, 'back'), backView: charAnchor(cf.fi, 'backView'), waist: charAnchor(cf.fi, 'waist'), hand: charAnchor(cf.fi, 'hand') };
     const pet = S.t < (p.petUntil ?? 0);   // 石化：身體灰階（自己的石化即時同步；遠端玩家的石化由光束事件就地推斷，純演出）
     if (pet) { ctx.save(); ctx.filter = 'grayscale(1) brightness(.92)'; }
+    const ghost = ffx?.includes('fghost');   // 吃喝的透明化：整個人半透明
+    if (ghost) ctx.globalAlpha = .35;
     p.rodJit = p.fish?.ph === 'reel' && rodFrameNow(p) != null ? Math.round(Math.sin(S.t * 30)) : 0;   // 拉竿：竿子往後拉住、整個人左右抖 1px（原本拉竿時竿尖抖動的感覺）
     ctx.save(); ctx.translate(p.x + p.rodJit, p.y - p.z);
     // 武器（背在背上／掛在腰間；揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
@@ -3527,6 +3535,8 @@ function drawPerson(p, wi, nameColor) {
     if (wi && !pose && !fish && p.cast) drawStaffRaise(wi, Math.min(1, (S.t - p.cast.t0) / p.cast.dur));
     ctx.restore();
     if (pet) ctx.restore();
+    if (ghost) ctx.globalAlpha = 1;
+    if (ffx?.length) drawFoodOverhead(p, ffx, nameY);   // 暈眩的星星、中毒的泡泡
     if (fish) drawLineAndBobber(p, wi, fish, rodTip);
     if (pose) nameY = p.y - 46;
   }
@@ -6886,6 +6896,208 @@ function arOppEl(v, cab, mk, cs) {
   const sc = mk('div', 'table-tag', `${S.arOpp?.[cab]?.sc ?? s?.sc ?? 0} 分`); sc.id = 'arOppSc' + cab; el.appendChild(sc);
   return el;
 }
+// ---- 和平島餐飲區（2026-11-13，使用者要求）：右上角的自助飲料機與點心吧，走近按 F（或點它）吃喝 ----
+// 每次吃喝隨機得到一個幾秒的增益／減益，或什麼事都沒發生。**遊戲裡刻意不寫任何「吃喝會有效果」的說明**（使用者定），
+// 效果只顯示在左上角武器列下方的小圖示（滑鼠移上去只看到名稱）。純客戶端：別人看得到的部分（變大／縮小／透明／暈眩的星星／中毒的泡泡）
+// 走既有的 state.fx 轉發（id 前面加 f，見 myFx），伺服器不用改。物件位置在 terrain.json 的 props（gen_assets.py 的 PROPS_BY_TERRAIN）。
+const PROP_RANGE = 48;   // 離物件邊多近才能互動（px）
+const propsHere = () => S.terrains[S.terrain]?.props || [];
+const propRect = pr => ({ x: pr.cell[0] * CELL, y: pr.cell[1] * CELL, w: pr.w * CELL, h: pr.h * CELL });
+function propAtCell(x, y) {   // 這格被物件占著（擋路、不能擺家具）
+  for (const pr of propsHere()) if (x >= pr.cell[0] && x < pr.cell[0] + pr.w && y >= pr.cell[1] && y < pr.cell[1] + pr.h) return pr;
+  return null;
+}
+function propDist(pr, px, py) { const r = propRect(pr), dx = Math.max(r.x - px, 0, px - (r.x + r.w)), dy = Math.max(r.y - py, 0, py - (r.y + r.h)); return Math.hypot(dx, dy); }
+function propNear(p) { let best = null, bd = PROP_RANGE; for (const pr of propsHere()) { const d = propDist(pr, p.x, p.y); if (d < bd) { bd = d; best = pr; } } return best; }
+function propAtPoint(wx, wy) { return propsHere().find(pr => { const r = propRect(pr); return wx >= r.x && wx < r.x + r.w && wy >= r.y && wy < r.y + r.h; }) || null; }
+// 效果（name 只用在圖示的滑鼠提示；bad＝減益，圖示紅框）。dur＝秒數
+const FOOD_FX = {
+  hurt:    { name: '扣血', bad: 1, icon: '💔', dur: 1.5 },
+  poison:  { name: '中毒', bad: 1, icon: '🤢', dur: 9 },
+  stun:    { name: '暈眩', bad: 1, icon: '💫', dur: 3 },
+  blind:   { name: '致盲', bad: 1, icon: '🌑', dur: 7 },
+  gray:    { name: '視覺受損', bad: 1, icon: '🌫️', dur: 9 },
+  nausea:  { name: '噁心', bad: 1, icon: '🤮', dur: 7 },
+  weak:    { name: '虛弱', bad: 1, icon: '🐌', dur: 9 },
+  confuse: { name: '混亂', bad: 1, icon: '🌀', dur: 7 },
+  hiccup:  { name: '打嗝', bad: 1, icon: '💭', dur: 9 },
+  haste:   { name: '加速', icon: '👟', dur: 10 },
+  swift:   { name: '神速', icon: '⚡', dur: 6 },
+  fresh:   { name: '神清氣爽', icon: '✨', dur: 12 },
+  big:     { name: '巨大化', icon: '🍄', dur: 12 },
+  tiny:    { name: '縮小', icon: '🐜', dur: 12 },
+  heal:    { name: '回復', icon: '💚', dur: 1.5 },
+  light:   { name: '輕盈', icon: '🎈', dur: 12 },
+  ghost:   { name: '透明化', icon: '👻', dur: 10 },
+};
+const FOOD_GROUP = { haste: ['swift', 'weak'], swift: ['haste', 'weak'], weak: ['haste', 'swift'], big: ['tiny'], tiny: ['big'] };   // 互斥：後吃到的蓋掉前一個
+// 抽獎權重（none＝什麼都沒發生）：飲料偏速度／清爽／打嗝，點心偏回復／體型／肚子痛
+const FOOD_POOL = {
+  drink: { none: 30, haste: 8, swift: 4, fresh: 8, nausea: 6, hiccup: 8, gray: 5, blind: 4, confuse: 5, stun: 4, ghost: 5, light: 5, heal: 4, hurt: 3, poison: 3, weak: 4, big: 3, tiny: 3 },
+  food:  { none: 30, heal: 7, big: 7, tiny: 6, poison: 6, hurt: 5, weak: 6, stun: 4, nausea: 6, fresh: 5, haste: 4, swift: 2, light: 4, ghost: 3, hiccup: 4, gray: 3, blind: 3, confuse: 3 },
+};
+const FOOD_NAMES = { drink: ['可樂', '柳橙汁', '綠茶', '奶茶', '紅茶', '汽水', '冰咖啡', '熱可可', '檸檬紅茶', '蘋果西打'], food: ['薯條', '熱狗', '爆米花', '關東煮', '布丁', '鬆餅', '雞塊', '泡麵', '洋芋片', '飯糰'] };
+const FOOD_CD = 1.5;   // 兩次吃喝的最短間隔（秒）
+S.foodFx = {}; S.foodCdUntil = 0; S.foodNext = { poison: 0, hiccup: 0 };
+const ffOn = k => S.t < (S.foodFx[k] || 0);
+function foodPick(kind) {
+  const pool = FOOD_POOL[kind] || FOOD_POOL.drink, tot = Object.values(pool).reduce((a, b) => a + b, 0);
+  let r = Math.random() * tot;
+  for (const [k, w] of Object.entries(pool)) { r -= w; if (r < 0) return k; }
+  return 'none';
+}
+function useProp(pr) {
+  const p = S.players[0];
+  if (p.dead) return;
+  if (S.t < S.foodCdUntil) { toast(pr.kind === 'food' ? '還在吃…' : '還在喝…', 900); return; }
+  S.foodCdUntil = S.t + FOOD_CD;
+  const names = FOOD_NAMES[pr.kind] || FOOD_NAMES.drink, nm = names[Math.floor(Math.random() * names.length)];
+  toast(pr.kind === 'food' ? `你吃了${nm}` : `你喝了一杯${nm}`, 1600);
+  S.floaters.push({ x: p.x, y: p.y - 50, v: pr.kind === 'food' ? '嚼嚼…' : '咕嚕咕嚕…', life: 1 });
+  const k = foodPick(pr.kind);
+  if (k !== 'none') foodApply(k);
+}
+function foodApply(k) {
+  const d = FOOD_FX[k], p = S.players[0], cap = hpCap(p);
+  for (const o of FOOD_GROUP[k] || []) delete S.foodFx[o];
+  S.foodFx[k] = S.t + d.dur;
+  if (k === 'hurt') { const n = 2 + Math.floor(Math.random() * 2), was = p.hp ?? cap; p.hp = Math.max(1, was - n); if (was > p.hp) S.floaters.push({ x: p.x, y: p.y - 46, v: `-${was - p.hp}`, life: 1 }); }   // 吃喝扣血不會死（最少留 1 滴，助手定）
+  if (k === 'heal') { const was = p.hp ?? cap; p.hp = cap; if (cap > was) S.floaters.push({ x: p.x, y: p.y - 46, v: `+${cap - was}`, life: 1, xpGain: true }); }
+  if (k === 'poison') S.foodNext.poison = S.t + 1.5;
+  if (k === 'hiccup') S.foodNext.hiccup = S.t + .6;
+  buffBarBuild();
+}
+function foodFxIds() {   // 給 state.fx：別人也要畫的效果
+  const out = [];
+  for (const k of ['big', 'tiny', 'ghost', 'stun', 'poison']) if (ffOn(k)) out.push('f' + k);
+  return out;
+}
+const foodSpeedMul = () => (ffOn('swift') ? 1.9 : ffOn('haste') ? 1.4 : ffOn('weak') ? .55 : 1);
+function foodScaleOf(list) { return list?.includes('fbig') ? 1.6 : list?.includes('ftiny') ? .55 : 1; }
+// 每幀（只對自己）：中毒每 1.5 秒扣 1（最少留 1）、打嗝不定時小跳一下、過期的圖示拿掉、畫面濾鏡
+function stepFood(p) {
+  if (p.dead) { if (Object.keys(S.foodFx).length) { S.foodFx = {}; buffBarBuild(); } foodScreenFilter(); return; }
+  if (ffOn('poison') && S.t >= S.foodNext.poison) {
+    S.foodNext.poison = S.t + 1.5;
+    if ((p.hp ?? hpCap(p)) > 1) { p.hp = (p.hp ?? hpCap(p)) - 1; S.floaters.push({ x: p.x, y: p.y - 46, v: '-1', life: .9 }); }
+  }
+  if (ffOn('hiccup') && S.t >= S.foodNext.hiccup) {
+    S.foodNext.hiccup = S.t + 1.1 + Math.random() * 1.4;
+    if (p.z === 0 && p.vz === 0 && !p.pose) p.vz = 130;
+    S.floaters.push({ x: p.x + 10, y: p.y - 48, v: '嗝！', life: .8 });
+  }
+  let gone = false;
+  for (const [k, u] of Object.entries(S.foodFx)) if (S.t >= u) { delete S.foodFx[k]; gone = true; }
+  if (gone) buffBarBuild(); else buffBarTick();
+  foodScreenFilter();
+}
+// 左上角（武器列下方）的增減益圖示：滑鼠移上去只顯示名稱（title），右下角是剩幾秒
+function buffBarBuild() {
+  const bar = $('buffBar'); if (!bar) return;
+  bar.innerHTML = '';
+  const ks = Object.keys(S.foodFx).filter(ffOn);
+  for (const k of ks) {
+    const d = FOOD_FX[k], el = document.createElement('div');
+    el.className = 'buff' + (d.bad ? ' bad' : ' good'); el.title = d.name; el.dataset.k = k;
+    el.innerHTML = `<span class="bi">${d.icon}</span><span class="bt"></span>`;
+    bar.appendChild(el);
+  }
+  bar.classList.toggle('hidden', !ks.length);
+  buffBarTick(true);
+}
+let buffTickAt = 0;
+function buffBarTick(force) {
+  if (!force && S.t - buffTickAt < .2) return;
+  buffTickAt = S.t;
+  for (const el of document.querySelectorAll('#buffBar .buff')) { const left = (S.foodFx[el.dataset.k] || 0) - S.t; el.querySelector('.bt').textContent = left > 0 ? Math.ceil(left) : ''; }
+}
+// 畫面濾鏡：視覺受損＝黑白、噁心＝畫面扭曲（SVG 位移濾鏡，波動跟著時間變）、神清氣爽＝亮一點、飽和一點
+let foodFilterKey = '';
+function foodScreenFilter() {
+  const parts = [];
+  if (ffOn('nausea')) {
+    foodWarpEnsure();
+    const t = S.t, tb = document.getElementById('ffTurb'), dm = document.getElementById('ffDisp');
+    if (tb) tb.setAttribute('baseFrequency', `${(0.008 + 0.004 * Math.sin(t * 1.3)).toFixed(4)} ${(0.012 + 0.005 * Math.cos(t * 1.7)).toFixed(4)}`);
+    if (dm) dm.setAttribute('scale', String(Math.round(12 + 7 * Math.sin(t * 2.1))));
+    parts.push('url(#ffWarp)', `hue-rotate(${Math.round(25 * Math.sin(t * 1.5))}deg)`);
+  }
+  if (ffOn('gray')) parts.push('grayscale(1)');
+  if (ffOn('fresh')) parts.push('brightness(1.08) saturate(1.3)');
+  const key = parts.join(' ');
+  if (key !== foodFilterKey) { foodFilterKey = key; canvas.style.filter = key; }
+}
+function foodWarpEnsure() {
+  if (document.getElementById('ffWarp')) return;
+  const box = document.createElement('div');
+  box.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+  box.innerHTML = '<svg width="0" height="0"><filter id="ffWarp" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence id="ffTurb" type="turbulence" baseFrequency="0.01 0.014" numOctaves="2" seed="3"/><feDisplacementMap id="ffDisp" in="SourceGraphic" scale="20" xChannelSelector="R" yChannelSelector="G"/></filter></svg>';
+  document.body.appendChild(box);
+}
+// 螢幕空間的效果（世界畫完之後）：致盲＝只看得到自己身邊一小圈、神清氣爽＝畫面上閃亮的小星點
+function drawFoodScreen() {
+  const p = S.players[0]; if (!p) return;
+  if (ffOn('blind')) {
+    const sx = p.x - S.cam.x, sy = p.y - p.z - 20 - S.cam.y, R = 70;
+    const g = ctx.createRadialGradient(sx, sy, R * .55, sx, sy, R * 1.5);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.97)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  if (ffOn('fresh')) {
+    ctx.save();
+    for (let i = 0; i < 26; i++) {   // 每顆星點各自的位置與閃爍相位（決定性，不用存狀態）
+      const h = Math.sin(i * 91.7) * 43758.5, u = h - Math.floor(h), h2 = Math.sin(i * 37.3) * 12345.6, v = h2 - Math.floor(h2);
+      const ph = (S.t * (0.6 + u * .8) + i * .37) % 1, a = Math.sin(ph * Math.PI);
+      const x = u * canvas.width, y = ((v + S.t * .02 * (1 + u)) % 1) * canvas.height, r = 1.5 + 2.5 * a;
+      ctx.globalAlpha = .75 * a; ctx.fillStyle = i % 3 ? '#fffbe0' : '#c8f4ff';
+      ctx.beginPath(); ctx.moveTo(x, y - r * 2); ctx.lineTo(x + r * .5, y); ctx.lineTo(x, y + r * 2); ctx.lineTo(x - r * .5, y); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - r * 2, y); ctx.lineTo(x, y + r * .5); ctx.lineTo(x + r * 2, y); ctx.lineTo(x, y - r * .5); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+// 頭上的效果（自己與別人都畫，看 fx 清單）：暈眩＝繞圈的星星、中毒＝冒綠泡泡
+function drawFoodOverhead(p, list, headY) {
+  if (list.includes('fstun')) {
+    ctx.save(); ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+    for (let i = 0; i < 3; i++) {
+      const a = S.t * 4 + i * Math.PI * 2 / 3, x = p.x + Math.cos(a) * 13, y = headY - 14 + Math.sin(a) * 4;   // 名牌上方
+      ctx.globalAlpha = Math.sin(a) > 0 ? 1 : .6; ctx.fillStyle = '#ffe04a'; ctx.fillText('★', x, y);
+    }
+    ctx.restore();
+  }
+  if (list.includes('fpoison')) {
+    ctx.save();
+    for (let i = 0; i < 3; i++) {
+      const ph = (S.t * .9 + i / 3) % 1, x = p.x - 8 + i * 8 + Math.sin(S.t * 3 + i) * 2, y = headY - 12 - ph * 16;
+      ctx.globalAlpha = 1 - ph; ctx.fillStyle = '#7ad04a'; ctx.strokeStyle = '#2f6a1a';
+      ctx.beginPath(); ctx.arc(x, y, 2 + ph * 1.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+// 島上物件的繪製：圖＋名稱（離得近、而且是最近的那個才提示按 F）
+function propDrawEntries(list) {
+  const ims = S.tImages[S.terrain] || {};
+  for (const pr of propsHere()) {
+    const r = propRect(pr), img = ims[pr.img];
+    list.push({
+      y: r.y + r.h, draw: () => {
+        ctx.imageSmoothingEnabled = false;
+        if (img) drawSpr(img, 0, r.x, r.y, r.w, r.h); else { ctx.fillStyle = '#8a5a34'; ctx.fillRect(r.x, r.y, r.w, r.h); }
+        const p = S.players[0], cx = r.x + r.w / 2;
+        ctx.save(); ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)';
+        ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.fillStyle = '#ffe08a';
+        ctx.strokeText(pr.name || '', cx, r.y - 6); ctx.fillText(pr.name || '', cx, r.y - 6);
+        if (!S.tableOpen && propNear(p) === pr) {
+          const t = pr.kind === 'food' ? '按 F 吃點心' : '按 F 喝飲料';
+          ctx.font = '11px "Microsoft JhengHei"'; ctx.fillStyle = '#fff6e0'; ctx.strokeText(t, cx, r.y - 20); ctx.fillText(t, cx, r.y - 20);
+        }
+        ctx.restore();
+      }
+    });
+  }
+}
 // 島上桌子的繪製：圖＋人數標籤（離得近時提示按 F）
 function tableDrawEntries(list) {
   for (const tb of tablesHere()) {
@@ -7388,6 +7600,7 @@ function draw() {
     });
   }
   tableDrawEntries(list);   // 和平島遊戲桌
+  propDrawEntries(list);    // 和平島餐飲區
   // 掉落物
   for (const dr of S.drops) {
     const def = S.toolsDB.items[dr.item] || matDef(dr.item), icon = S.craftImgs[dr.item];
@@ -7779,6 +7992,7 @@ function draw() {
   }
   ctx.restore();
   drawWeather();   // 天氣色罩與粒子（螢幕空間，蓋在世界與名牌上、島主倒數條之下）
+  drawFoodScreen();   // 吃喝的效果：致盲的黑幕、神清氣爽的星點（螢幕空間）
   drawMinimap();   // 小地圖（螢幕空間右上角；圖鑑／角色等 DOM 面板天然蓋在畫布上層）
   if (ownerBar) drawOwnerCastBar(ownerBar.frac, ownerBar.name);   // 島主讀條固定在視窗上方置中（世界座標還原後畫，永遠在最上層）
   drawOwnerLineBanner();   // 島主台詞：除了頭上的泡泡，也固定顯示在視窗上方（離島主太遠、泡泡在畫面外也看得到）
@@ -7941,7 +8155,7 @@ function canPlaceIn(list, typeId, x, y, floor = S.floorMap) {
   const def = furnitureDef(typeId); if (!def) return false;
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
-    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor) || tableAtCell(xx, yy)) return false;
+    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor) || tableAtCell(xx, yy) || propAtCell(xx, yy)) return false;
   }
   return !list.some(it => { const d = furnitureDef(it.type) || { w: 1, h: 1 };
     return x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h; });
@@ -8598,6 +8812,8 @@ function clickAttack(wx, wy) {
     const f = furnAtPoint(wx, wy);
     if (f && furnitureDef(f.type)?.use) { usePose(f); return; }
     if (f && furnitureDef(f.type)?.text) { openSign(f); return; }
+    const pr = propAtPoint(wx, wy);
+    if (pr) { if (propDist(pr, S.players[0].x, S.players[0].y) < PROP_RANGE) useProp(pr); else toast('走近一點', 1200); return; }   // 點餐飲區
     const tb = tableAtPoint(wx, wy);
     if (tb) { if (tableDist(tb, S.players[0].x, S.players[0].y) < TABLE_RANGE) openTable(tb); else toast('走近一點再入座', 1200); return; }   // 點遊戲桌
     const n = npcAt(wx, wy);
@@ -8668,8 +8884,9 @@ canvas.addEventListener('contextmenu', e => {
   if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.tableOpen) return;
   if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身；點遊戲桌就入座／觀戰（2026-11-12 使用者要求）
     const r = canvas.getBoundingClientRect(), wx = e.clientX - r.left + S.cam.x, wy = e.clientY - r.top + S.cam.y;
-    const f = furnAtPoint(wx, wy), tb = tableAtPoint(wx, wy);
-    if (f && furnitureDef(f.type)?.use) usePose(f);
+    const f = furnAtPoint(wx, wy), tb = tableAtPoint(wx, wy), pr = propAtPoint(wx, wy);
+    if (pr) { if (propDist(pr, S.players[0].x, S.players[0].y) < PROP_RANGE) useProp(pr); else toast('走近一點', 1200); }   // 右鍵點餐飲區
+    else if (f && furnitureDef(f.type)?.use) usePose(f);
     else if (f && furnitureDef(f.type)?.text) openSign(f);
     else if (tb) { if (tableDist(tb, S.players[0].x, S.players[0].y) < TABLE_RANGE) openTable(tb); else toast('走近一點再入座', 1200); }
     else { const n = npcAt(wx, wy); if (n) talkTo(n); }
@@ -8784,6 +9001,7 @@ async function ensureTerrain(id) {
   const files = new Set([man.ground, man.edge, man.water]);
   for (const d of man.deco) files.add(d.sprite);
   if (man.walls) for (const k of ['n', 'w', 'e']) if (man.walls[k]) files.add(man.walls[k]);   // 室內房間的牆
+  for (const pr of man.props || []) if (pr.img) files.add(pr.img);   // 固定小物件（餐飲區）
   const ims = {};
   // terrain.json 的 anims：{ 檔名: anim }，地面／岸邊／水／點綴物都可以各自設定動畫（沒設＝單張圖）
   await Promise.all([...files].map(async f => ims[f] = await loadSpr(`assets/terrain/${id}/${f}`, man.anims?.[f])));
@@ -8909,6 +9127,7 @@ async function boot() {
       stepFireballs(dt);  // 飛龍火球：步進與落地命中（純客戶端投射物）
       autoAttack();
       for (const p of S.players) stepPlayer(p, dt);
+      stepFood(S.players[0]);   // 餐飲區吃喝的效果：中毒扣血、打嗝、過期、畫面濾鏡
       if (S.mouseCell && S.mouseClient) {      // 裝飾模式邊走邊擺：鏡頭在動，滑鼠指的格子要跟著重算
         const r = canvas.getBoundingClientRect();
         S.mouseCell = [Math.floor((S.mouseClient[0] - r.left + S.cam.x) / CELL), Math.floor((S.mouseClient[1] - r.top + S.cam.y) / CELL)];

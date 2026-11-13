@@ -192,5 +192,31 @@
   "e": "wall_e.png",
   "h": 3
  },
+ "props": [
+  {
+   "id": "drink",
+   "kind": "drink",
+   "name": "自助飲料",
+   "img": "drink_bar.png",
+   "cell": [
+    77,
+    14.5
+   ],
+   "w": 2,
+   "h": 3
+  },
+  {
+   "id": "snack",
+   "kind": "food",
+   "name": "點心吧",
+   "img": "snack_bar.png",
+   "cell": [
+    80,
+    15
+   ],
+   "w": 4,
+   "h": 2.5
+  }
+ ],
  "campfire": false
 }

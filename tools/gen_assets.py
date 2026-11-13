@@ -1737,6 +1737,69 @@ TABLES_BY_TERRAIN = {
               *[dict(id="t13", game="arcade", cab=k, img=f"arcade_{k}.png", cell=[48 + k * 3, 14.5], w=2, h=3) for k in range(4)]],   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
 }
 
+# 和平島的固定小物件（不是遊戲桌、不是可擺設的家具）：地形 → [物件]。kind＝互動種類（drink 喝飲料／food 吃點心，客戶端 useProp）、
+# img＝這個地形資料夾裡的圖、cell＝左上角格（可以是小數）、w／h＝占幾格。擋路、不能在上面擺家具。
+# 餐飲區（2026-11-13，使用者要求）：房間右上角、靠北牆，自助飲料機＋點心吧（網咖／卡拉 OK 那種）
+PROPS_BY_TERRAIN = {
+    "peace": [dict(id="drink", kind="drink", name="自助飲料", img="drink_bar.png", cell=[77, 14.5], w=2, h=3),
+              dict(id="snack", kind="food", name="點心吧", img="snack_bar.png", cell=[80, 15], w=4, h=2.5)],
+}
+
+def drink_bar():
+    """自助飲料機（32×48，畫 scale 2＝2×3 格）：不鏽鋼機身、上方藍色燈箱、四個出水口（可樂／柳橙／綠茶／奶茶色的按鈕）、
+    下方滴水盤，側邊一疊紙杯。"""
+    cv = Canvas(32, 48)
+    steel, dark = hx("#c4c9d2"), hx("#7a808c")
+    cv.rect(3, 2, 28, 46, steel)
+    cv.rect(3, 2, 4, 46, shade(steel, .8)); cv.rect(27, 2, 28, 46, shade(steel, .75))
+    cv.rect(4, 3, 27, 12, hx("#2f6fd0")); cv.hline(4, 27, 3, hx("#7ab0ff"))   # 燈箱
+    for k, c in enumerate(["#e84848", "#f0a020", "#40b060", "#e0c090"]):   # 燈箱上四種飲料的色塊
+        x = 6 + k * 5; cv.rect(x, 6, x + 3, 9, hx(c)); cv.set(x, 6, shade(hx(c), 1.4))
+    cv.rect(5, 14, 26, 31, hx("#20242c"))                       # 出水區（暗）
+    for k, c in enumerate(["#3a2018", "#f08a20", "#8ac060", "#c8a070"]):
+        x = 7 + k * 5
+        cv.rect(x, 15, x + 2, 17, hx("#9aa0aa")); cv.set(x + 1, 18, hx("#9aa0aa"))   # 出水口
+        cv.rect(x, 21, x + 2, 22, hx(c)); cv.hline(x, x + 2, 21, shade(hx(c), 1.35))   # 按鈕（飲料顏色）
+    cv.rect(6, 26, 11, 30, hx("#e8eef4")); cv.rect(7, 27, 10, 29, hx("#3a2018"))   # 一杯可樂
+    cv.rect(5, 31, 26, 33, dark); cv.hline(5, 26, 31, shade(dark, 1.3))   # 滴水盤
+    for k in range(4): cv.hline(7 + k * 5, 9 + k * 5, 32, hx("#4a505c"))
+    cv.rect(5, 35, 26, 45, shade(steel, .9)); cv.rect(13, 38, 18, 41, dark)   # 下櫃與把手
+    cv.rect(0, 20, 2, 33, hx("#f4f4f0")); cv.hline(0, 2, 20, hx("#d84040"))  # 側邊的一疊紙杯
+    for y in range(23, 33, 3): cv.hline(0, 2, y, hx("#d8d8d0"))
+    cv.outline()
+    return cv
+
+def snack_bar():
+    """點心吧（64×40，畫 scale 2＝4×2.5 格）：木頭櫃台、檯面上有薯條、熱狗、爆米花桶、關東煮鍋（冒熱氣）、布丁與鬆餅。"""
+    cv = Canvas(64, 40)
+    wood, top = hx("#8a5a34"), hx("#d8c8a8")
+    cv.rect(0, 14, 63, 39, wood)
+    cv.rect(0, 14, 63, 18, top); cv.hline(0, 63, 14, shade(top, 1.15)); cv.hline(0, 63, 18, shade(top, .7))   # 檯面
+    for x in range(4, 60, 15):   # 櫃台正面的鑲板
+        cv.rect(x, 22, x + 11, 35, shade(wood, .88)); cv.hline(x, x + 11, 22, shade(wood, .7)); cv.hline(x, x + 11, 35, shade(wood, 1.15))
+    cv.rect(0, 37, 63, 39, shade(wood, .6))
+    # 爆米花桶（紅白條紋）
+    for y in range(4, 16):
+        for x in range(3, 11):
+            cv.set(x, y, hx("#e84848") if (x // 2) % 2 == 0 else hx("#f8f4ec"))
+    for x, y in [(3, 2), (5, 1), (7, 2), (9, 1), (4, 3), (6, 3), (8, 3), (10, 3), (6, 0)]:
+        cv.rect(x, y, x + 1, y + 1, hx("#fff4c0"))
+    # 薯條（紅盒＋黃條）
+    cv.rect(14, 9, 19, 16, hx("#d83838")); cv.hline(14, 19, 9, hx("#f06060"))
+    for x in (14, 16, 17, 19): cv.vline(x, 5 + (x % 3), 9, hx("#f8d040"))
+    # 熱狗（盤子上）
+    cv.rect(22, 13, 31, 15, hx("#f4f4f0")); cv.rect(23, 11, 30, 13, hx("#e8b060")); cv.rect(24, 10, 29, 11, hx("#c0503a")); cv.hline(25, 28, 10, hx("#f0d040"))
+    # 關東煮鍋（冒熱氣）
+    cv.rect(34, 8, 45, 16, hx("#9aa0aa")); cv.rect(35, 9, 44, 11, hx("#c89050"))
+    for x, c in [(36, "#f4f0e0"), (39, "#c84040"), (42, "#e8c070")]: cv.rect(x, 9, x + 1, 10, hx(c))
+    for x, y in [(37, 5), (38, 3), (41, 6), (42, 4), (40, 1)]: cv.set(x, y, hx("#ffffff"))
+    # 布丁兩個、鬆餅一盤
+    for x in (48, 52):
+        cv.rect(x, 12, x + 3, 15, hx("#f0d070")); cv.rect(x, 11, x + 3, 12, hx("#8a4a20"))
+    cv.rect(56, 13, 62, 15, hx("#f4f4f0")); cv.rect(57, 11, 61, 13, hx("#e0a050")); cv.set(59, 10, hx("#ffe8a0"))
+    cv.outline()
+    return cv
+
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
 def table_oldmaid():
     cv = Canvas(48, 32)
@@ -3310,7 +3373,10 @@ def main():
                 if t["id"] in ROOM_BOX:
                     td["roomBox"] = ROOM_BOX[t["id"]]
                     save(wall_face(), "wall.png", sub); save(wall_side(True), "wall_w.png", sub); save(wall_side(False), "wall_e.png", sub)
-                    td["walls"] = dict(n="wall.png", w="wall_w.png", e="wall_e.png", h=WALL_H)   # 東北西三面牆（南面不畫）   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
+                    td["walls"] = dict(n="wall.png", w="wall_w.png", e="wall_e.png", h=WALL_H)   # 東北西三面牆（南面不畫）
+        if t["id"] in PROPS_BY_TERRAIN:   # 固定小物件（餐飲區等）：圖放在地形資料夾
+            td["props"] = PROPS_BY_TERRAIN[t["id"]]
+            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
         if t.get("campfire") is False:
             td["campfire"] = False
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉
