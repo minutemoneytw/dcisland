@@ -1732,6 +1732,9 @@ TABLES_BY_TERRAIN = {
               dict(id="t10", game="mage", cell=[64, 32], w=3, h=2),      # (2,0) 見習驅魔師（2026-11-12，使用者要求）
               dict(id="t5", game="dodge", cell=[64, 39], w=3, h=2),      # (2,1) 躲彈幕只有一桌（2026-11-08，使用者要求）
               dict(id="t14", game="maze", cell=[64, 46], w=3, h=2),      # (2,2) 豆豆迷宮（2026-11-13，使用者要求）
+              # 空氣曲棍球兩桌（2026-11-13，使用者要求）：俄羅斯方塊機台底下，4×2.5 格的長桌，相距 2 格
+              dict(id="t15", game="hockey", cell=[48, 21], w=4, h=2.5),
+              dict(id="t16", game="hockey", cell=[54, 21], w=4, h=2.5),
               dict(id="t9", game="zhtyping", cell=[72, 32], w=3, h=2),   # (3,0) 中文打字競賽（2026-11-11，使用者要求）
               dict(id="t7", game="typing", cell=[72, 39], w=3, h=2),     # (3,1) 英文打字競賽（2026-11-10，使用者要求）
               # 街機方塊（俄羅斯方塊類，2026-11-13，使用者要求）：場地上方一排 4 台，造型一樣、配色不同，間距約一個人（1 格）。
@@ -1899,6 +1902,28 @@ def table_maze():
     for gx, gc in ((17, "#ff6a6a"), (36, "#5aa8ff")):           # 兩隻小幽靈（水滴形）
         cv.ellipse(gx, 16, 2, 1.8, hx(gc)); cv.set(gx + 2, 17, hx(gc)); cv.set(gx + 3, 17, hx(gc)); cv.set(gx - 1, 16, hx("#ffffff")); cv.set(gx + 1, 16, hx("#ffffff"))
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    cv.outline()
+    return cv
+
+def table_hockey():
+    """空氣曲棍球（64×40，畫 scale 2＝4×2.5 格）：亮藍色機身的長桌，白色檯面上滿是出風小孔，中線紅色、兩端各一個球門，
+    左邊藍色握把、右邊紅色握把，中間一顆黑色圓盤，四隻桌腳。"""
+    cv = Canvas(64, 40)
+    body = hx("#2a5aa8")
+    cv.rect(0, 4, 63, 31, body); cv.hline(0, 63, 4, shade(body, 1.35)); cv.rect(0, 30, 63, 31, shade(body, .7))   # 機身（外框）
+    ice = hx("#eef6fa")
+    cv.rect(3, 7, 60, 28, ice)
+    for y in range(9, 28, 3):                                     # 出風小孔
+        for x in range(5 + (y // 3) % 2, 60, 3): cv.set(x, y, hx("#c8dce6"))
+    cv.vline(31, 7, 28, hx("#e04848")); cv.vline(32, 7, 28, hx("#e04848"))   # 中線
+    for k in range(16):
+        cv.set(round(31.5 + 4.5 * math.cos(k * math.pi / 8)), round(17.5 + 4.5 * math.sin(k * math.pi / 8)), hx("#e04848"))   # 中圈
+    cv.rect(3, 13, 4, 22, hx("#1a1a22")); cv.rect(59, 13, 60, 22, hx("#1a1a22"))   # 兩端球門
+    for x in (8, 54): cv.vline(x, 11, 24, hx("#9ab8e8") if x < 32 else hx("#f0a8a8"))   # 球門前的線
+    for cx, c in ((14, "#3b78e8"), (49, "#e04848")):              # 握把（圓盤＋中間的握柄）
+        cv.ellipse(cx, 17.5, 3.6, 3.6, hx(c)); cv.ellipse(cx, 17.5, 1.6, 1.6, shade(hx(c), 1.35)); cv.set(cx - 1, 15, shade(hx(c), 1.5))
+    cv.ellipse(38, 15, 2, 2, hx("#2a2a30")); cv.set(37, 14, hx("#6a6a78"))   # 圓盤
+    for x in (2, 58): cv.rect(x, 32, x + 3, 39, shade(body, .6))  # 桌腳
     cv.outline()
     return cv
 
@@ -3465,6 +3490,7 @@ def main():
     save(table_zhtyping(), "table_zhtyping.png", "games")
     save(table_mage(), "table_mage.png", "games")
     save(table_maze(), "table_maze.png", "games")
+    save(table_hockey(), "table_hockey.png", "games")
     save(table_blokus(), "table_blokus.png", "games")
     save(table_trigon(), "table_trigon.png", "games")
     for k, col in enumerate(ARCADE_COLORS):

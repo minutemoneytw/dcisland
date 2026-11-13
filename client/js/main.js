@@ -4376,7 +4376,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); unStopTimer(); bkStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); hkStop(); unStopTimer(); bkStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
   rulesShow(false); leaveAsk(false);
   $('tableBox').classList.add('hidden');
 }
@@ -4502,6 +4502,7 @@ function buildTable() {
   if (tb?.game === 'mage') { buildMage(box, v, mk, gd); return; }   // 見習驅魔師有自己的畫面（畫符號的場地）
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
   if (tb?.game === 'maze') { buildMaze(box, v, mk, gd); return; }   // 豆豆迷宮有自己的畫面（迷宮）
+  if (tb?.game === 'hockey') { buildHockey(box, v, mk, gd); return; }   // 空氣曲棍球有自己的畫面（球場）
   if (tb?.game === 'uno') { buildUno(box, v, mk, gd); return; }   // UNO 有自己的畫面（牌桌）
   if (tb?.game === 'typing' || tb?.game === 'zhtyping') { buildTyping(box, v, mk, gd); return; }   // 英打／中文打字競賽有自己的畫面（題目＋分數）
   if (tb?.game === 'intel') { buildIntel(box, v, mk, gd); return; }     // 秘藥情報戰有自己的畫面（情報區＋密函）
@@ -5344,6 +5345,226 @@ function buildDodge(box, v, mk, gd) {
     b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
     const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
   } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 空氣曲棍球（t15／t16，2026-11-13，使用者要求）：2～8 人分藍紅兩隊（入座順序輪流：座位 0、2、4、6 藍隊在左，1、3、5、7 紅隊在右），人數要偶數 ----
+// 用滑鼠（或 WASD／方向鍵）移動自己的握把，只能在自己的半場；把圓盤打進對方球門得 1 分，先得 7 分或 3 分鐘到時分數高的贏。
+// **物理在桌主（座位 0）那台**：圓盤的移動、反彈、碰撞、進球、結束都在那台算，約 12 次／秒送快照 hs（伺服器轉成 ths）；
+// 每個人約 12 次／秒送自己握把的位置 hp（伺服器轉成 thp）。桌主用收到的位置算碰撞，別人打到圓盤的判定會晚一點點（網路延遲）。
+const HK_W = 640, HK_H = 320, HK_PR = 18, HK_BR = 11, HK_GOAL = 120, HK_SEND_MS = 80;   // 場地、握把半徑、圓盤半徑、球門寬、回報間隔
+const HK_MAX_PAD = 900, HK_MAX_PUCK = 950, HK_KEY_SPD = 420;                           // 握把最快速度、圓盤最快速度、鍵盤移動速度（px／秒）
+const HK_TEAM_COL = ['#3b78e8', '#e04848'], HK_TEAM_NAME = ['藍隊', '紅隊'];
+const HK_KEYS = { arrowup: 'u', w: 'u', arrowdown: 'd', s: 'd', arrowleft: 'l', a: 'l', arrowright: 'r', d: 'r' };
+function hkHome(i, n) {   // 第 i 位的開球位置：同隊依序排成一直排（4 人以上排兩直排）
+  const team = i % 2, k = Math.floor(i / 2), m = n / 2, cols = m > 2 ? 2 : 1, col = k % cols, row = Math.floor(k / cols), rows = Math.ceil(m / cols);
+  const x = 60 + col * 110, y = HK_H * (row + 1) / (rows + 1);
+  return [team ? HK_W - x : x, y];
+}
+function hkStartLocal(v) {
+  const z = v.hk, n = v.seats.length, me = v.role === 'seat' ? v.me : -1;
+  S.hk = {
+    key: z.seed + ':' + z.t0, t0: z.t0, off: z.sn - Date.now(), lim: z.lim / 1000, goals: z.goals, n, me, host: me === 0,
+    pads: v.seats.map((_, i) => { const [x, y] = hkHome(i, n); return { x, y, tx: x, ty: y, vx: 0, vy: 0, at: 0 }; }),
+    puck: { x: HK_W / 2, y: HK_H / 2, vx: 0, vy: 0 }, view: { x: HK_W / 2, y: HK_H / 2 }, snapAt: 0, snapPerf: 0,
+    sa: 0, sb: 0, f: 0, mx: null, my: null, keys: {}, sendAt: 0, hsAt: 0, over: false, last: performance.now(), flash: null,
+  };
+  if (!S.hkRaf) S.hkRaf = requestAnimationFrame(hkFrame);
+}
+function hkStop() { S.hk = null; if (S.hkRaf) { cancelAnimationFrame(S.hkRaf); S.hkRaf = 0; } }
+const hkNow = H => (Date.now() + H.off - H.t0) / 1000;
+function hkClampPad(p, team) {
+  p.x = Math.max(team ? HK_W / 2 + HK_PR : HK_PR, Math.min(team ? HK_W - HK_PR : HK_W / 2 - HK_PR, p.x));
+  p.y = Math.max(HK_PR, Math.min(HK_H - HK_PR, p.y));
+}
+function hkMoveMine(H, dt) {   // 自己的握把：跟著滑鼠（有最快速度），按住方向鍵時改用鍵盤
+  const p = H.pads[H.me], k = H.keys, ox = p.x, oy = p.y;
+  const kx = (k.r ? 1 : 0) - (k.l ? 1 : 0), ky = (k.d ? 1 : 0) - (k.u ? 1 : 0);
+  if (kx || ky) { const l = Math.hypot(kx, ky); p.x += kx / l * HK_KEY_SPD * dt; p.y += ky / l * HK_KEY_SPD * dt; H.mx = null; }
+  else if (H.mx != null) {
+    const dx = H.mx - p.x, dy = H.my - p.y, d = Math.hypot(dx, dy), step = HK_MAX_PAD * dt;
+    if (d <= step) { p.x = H.mx; p.y = H.my; } else { p.x += dx / d * step; p.y += dy / d * step; }
+  }
+  hkClampPad(p, H.me % 2);
+  p.vx = dt > 0 ? (p.x - ox) / dt : 0; p.vy = dt > 0 ? (p.y - oy) / dt : 0;
+}
+function hkFaceoff(H, toTeam) {   // 進球後：圓盤放在失分那隊的半場、停 1 秒
+  H.puck = { x: toTeam === 0 ? HK_W / 2 - 70 : HK_W / 2 + 70, y: HK_H / 2, vx: 0, vy: 0 };
+  H.f = 1;
+}
+function hkPhysics(H, dt) {   // 桌主：圓盤
+  const P = H.puck;
+  if (H.f > 0) { H.f -= dt; return; }
+  P.x += P.vx * dt; P.y += P.vy * dt;
+  const fr = Math.max(0, 1 - .25 * dt); P.vx *= fr; P.vy *= fr;
+  if (P.y < HK_BR) { P.y = HK_BR; P.vy = Math.abs(P.vy) * .9; }
+  if (P.y > HK_H - HK_BR) { P.y = HK_H - HK_BR; P.vy = -Math.abs(P.vy) * .9; }
+  const inGoal = Math.abs(P.y - HK_H / 2) < HK_GOAL / 2 - HK_BR * .3;
+  if (P.x < HK_BR && !inGoal) { P.x = HK_BR; P.vx = Math.abs(P.vx) * .9; }
+  if (P.x > HK_W - HK_BR && !inGoal) { P.x = HK_W - HK_BR; P.vx = -Math.abs(P.vx) * .9; }
+  if (P.x < -HK_BR) { H.sb++; H.flash = { team: 1, until: performance.now() + 1200 }; hkFaceoff(H, 0); return; }   // 紅隊得分
+  if (P.x > HK_W + HK_BR) { H.sa++; H.flash = { team: 0, until: performance.now() + 1200 }; hkFaceoff(H, 1); return; }   // 藍隊得分
+  H.pads.forEach((p, i) => {   // 握把撞圓盤：推出去、照相對速度反彈
+    const dx = P.x - p.x, dy = P.y - p.y, d = Math.hypot(dx, dy), md = HK_PR + HK_BR;
+    if (d >= md || d < 1e-6) return;
+    const nx = dx / d, ny = dy / d;
+    P.x = p.x + nx * md; P.y = p.y + ny * md;
+    const pvx = i === H.me ? p.vx : p.vx || 0, pvy = i === H.me ? p.vy : p.vy || 0;
+    const rvx = P.vx - pvx, rvy = P.vy - pvy, vn = rvx * nx + rvy * ny;
+    if (vn < 0) { P.vx -= 1.9 * vn * nx; P.vy -= 1.9 * vn * ny; }
+    P.vx += nx * 40; P.vy += ny * 40;
+  });
+  const sp = Math.hypot(P.vx, P.vy); if (sp > HK_MAX_PUCK) { P.vx *= HK_MAX_PUCK / sp; P.vy *= HK_MAX_PUCK / sp; }
+}
+function hkFrame() {
+  const H = S.hk, v = S.tableView;
+  if (!H || !S.tableOpen || !v || v.phase !== 'playing' || v.game !== 'hockey') { S.hkRaf = 0; if (S.tableOpen && v?.game === 'hockey') buildTable(); return; }
+  S.hkRaf = requestAnimationFrame(hkFrame);
+  const now = performance.now(), dt = Math.max(0, Math.min(.05, (now - H.last) / 1000)); H.last = now;
+  const t = hkNow(H);
+  if (H.me >= 0 && t >= 0 && !H.over) {
+    hkMoveMine(H, dt);
+    // 自己的握把位置（桌主的夾在下面的 hs 裡送：hp 與 hs 共用同一個限流）
+    if (!H.host && now - H.sendAt >= HK_SEND_MS) { H.sendAt = now; const p = H.pads[H.me]; S.net?.tbl?.({ a: 'hp', x: Math.round(p.x), y: Math.round(p.y) }); }
+  }
+  H.pads.forEach((p, i) => {   // 別人的握把：往收到的位置平滑移動（速度用兩次回報的差估計，桌主算碰撞用）
+    if (i === H.me) return;
+    const a = 1 - Math.exp(-dt * 18); p.x += (p.tx - p.x) * a; p.y += (p.ty - p.y) * a;
+  });
+  if (H.host && t >= 0 && !H.over) {
+    for (let k = 0; k < 4; k++) hkPhysics(H, dt / 4);
+    if (now - H.hsAt >= HK_SEND_MS) { H.hsAt = now; const P = H.puck; const me = H.pads[0]; S.net?.tbl?.({ a: 'hs', x: Math.round(P.x), y: Math.round(P.y), vx: Math.round(P.vx), vy: Math.round(P.vy), sa: H.sa, sb: H.sb, f: Math.round(Math.max(0, H.f) * 1000), px: Math.round(me.x), py: Math.round(me.y) }); }
+    if (H.sa >= H.goals || H.sb >= H.goals || t >= H.lim) { H.over = true; S.net?.tbl?.({ a: 'hend', sa: H.sa, sb: H.sb }); }
+    H.view.x = H.puck.x; H.view.y = H.puck.y;
+  } else if (!H.host) {   // 其他人：圓盤＝最後一次快照往前推算（碰到上下牆反彈），再平滑
+    const P = H.puck, age = Math.min(.25, (now - H.snapPerf) / 1000);
+    let x = P.x + (H.f > 0 ? 0 : P.vx * age), y = P.y + (H.f > 0 ? 0 : P.vy * age);
+    if (y < HK_BR) y = 2 * HK_BR - y; if (y > HK_H - HK_BR) y = 2 * (HK_H - HK_BR) - y;
+    const a = 1 - Math.exp(-dt * 20), V = H.view;
+    if (Math.hypot(x - V.x, y - V.y) > 80) { V.x = x; V.y = y; } else { V.x += (x - V.x) * a; V.y += (y - V.y) * a; }
+  }
+  hkDraw(H, t, v);
+}
+function onNetThp(m) {   // 別人的握把位置（i＝座位）
+  const H = S.hk; if (!H || m.i === H.me || !H.pads[m.i]) return;
+  const p = H.pads[m.i], now = performance.now(), dt = (now - (p.at || now)) / 1000;
+  if (p.at && dt > .01 && dt < .5) { p.vx = Math.max(-HK_MAX_PAD, Math.min(HK_MAX_PAD, (m.x - p.tx) / dt)); p.vy = Math.max(-HK_MAX_PAD, Math.min(HK_MAX_PAD, (m.y - p.ty) / dt)); }
+  else { p.vx = 0; p.vy = 0; }
+  p.tx = m.x; p.ty = m.y; p.at = now;
+}
+function onNetThs(m) {   // 桌主的圓盤快照
+  const H = S.hk; if (!H || H.host) return;
+  if (m.sa > H.sa) H.flash = { team: 0, until: performance.now() + 1200 };
+  if (m.sb > H.sb) H.flash = { team: 1, until: performance.now() + 1200 };
+  H.puck = { x: m.x, y: m.y, vx: m.vx, vy: m.vy }; H.sa = m.sa; H.sb = m.sb; H.f = m.f / 1000; H.snapPerf = performance.now();
+}
+function hkKey(e, down) {   // 遊戲中的方向鍵（回 true＝已處理）
+  const H = S.hk, k = HK_KEYS[e.key.toLowerCase()];
+  if (!H || H.me < 0 || !k) return false;
+  if (down) e.preventDefault();
+  H.keys[k] = down;
+  return true;
+}
+function hkDraw(H, t, v) {
+  const cv = $('hkCanvas'); if (!cv) return;
+  const g = cv.getContext('2d'), now = performance.now(), Y0 = 34;
+  g.fillStyle = '#0c1424'; g.fillRect(0, 0, cv.width, cv.height);
+  // 分數列
+  g.font = 'bold 18px "Microsoft JhengHei"'; g.textBaseline = 'middle'; g.textAlign = 'center';
+  g.fillStyle = HK_TEAM_COL[0]; g.fillText(`藍隊 ${H.sa}`, HK_W / 2 - 70, 17);
+  g.fillStyle = '#ffe08a'; g.fillText(':', HK_W / 2, 17);
+  g.fillStyle = HK_TEAM_COL[1]; g.fillText(`${H.sb} 紅隊`, HK_W / 2 + 70, 17);
+  const rem = Math.max(0, Math.ceil(H.lim - Math.max(0, t)));
+  g.font = '13px "Microsoft JhengHei"'; g.fillStyle = rem <= 30 ? '#ff7a6a' : '#b8c4dc'; g.textAlign = 'right';
+  g.fillText(`剩 ${Math.floor(rem / 60)}:${String(rem % 60).padStart(2, '0')}　先得 ${H.goals} 分獲勝`, HK_W - 8, 17);
+  g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+  g.save(); g.translate(0, Y0);
+  // 場地
+  g.fillStyle = '#eef6fa'; g.fillRect(0, 0, HK_W, HK_H);
+  g.fillStyle = '#d8e8f0'; for (let y = 12; y < HK_H; y += 16) for (let x = 12 + (y / 16 % 2) * 8; x < HK_W; x += 16) g.fillRect(x, y, 2, 2);   // 出風小孔
+  g.strokeStyle = '#e04848'; g.lineWidth = 3; g.beginPath(); g.moveTo(HK_W / 2, 0); g.lineTo(HK_W / 2, HK_H); g.stroke();
+  g.beginPath(); g.arc(HK_W / 2, HK_H / 2, 46, 0, Math.PI * 2); g.stroke();
+  for (const [x, c] of [[0, HK_TEAM_COL[0]], [HK_W, HK_TEAM_COL[1]]]) {   // 球門前的半圓與球門
+    g.strokeStyle = c; g.lineWidth = 2; g.beginPath(); g.arc(x, HK_H / 2, 70, x ? Math.PI / 2 : -Math.PI / 2, x ? Math.PI * 1.5 : Math.PI / 2); g.stroke();
+    g.fillStyle = '#1a1a22'; g.fillRect(x ? HK_W - 6 : 0, HK_H / 2 - HK_GOAL / 2, 6, HK_GOAL);
+  }
+  if (H.me >= 0) { g.fillStyle = H.me % 2 ? 'rgba(224,72,72,.06)' : 'rgba(59,120,232,.06)'; g.fillRect(H.me % 2 ? HK_W / 2 : 0, 0, HK_W / 2, HK_H); }   // 自己的半場
+  // 圓盤
+  const V = H.host ? H.puck : H.view;
+  g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.arc(V.x + 2, V.y + 3, HK_BR, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#2a2a30'; g.beginPath(); g.arc(V.x, V.y, HK_BR, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#5a5a68'; g.lineWidth = 2; g.beginPath(); g.arc(V.x, V.y, HK_BR - 3, 0, Math.PI * 2); g.stroke();
+  // 握把
+  H.pads.forEach((p, i) => {
+    const c = HK_TEAM_COL[i % 2], s = v.seats[i];
+    g.fillStyle = 'rgba(0,0,0,.2)'; g.beginPath(); g.arc(p.x + 2, p.y + 3, HK_PR, 0, Math.PI * 2); g.fill();
+    g.fillStyle = c; g.beginPath(); g.arc(p.x, p.y, HK_PR, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.arc(p.x, p.y, HK_PR - 5, 0, Math.PI * 2); g.fill();
+    g.fillStyle = c; g.beginPath(); g.arc(p.x, p.y, 8, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.6)'; g.beginPath(); g.arc(p.x - 2, p.y - 2, 3, 0, Math.PI * 2); g.fill();
+    if (i === H.me) { g.strokeStyle = '#ffe08a'; g.lineWidth = 2.5; g.beginPath(); g.arc(p.x, p.y, HK_PR + 3, 0, Math.PI * 2); g.stroke(); }
+    g.font = 'bold 11px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 3; g.strokeStyle = 'rgba(255,255,255,.9)'; g.fillStyle = c;
+    const nm = i === H.me ? '你' : s?.name || '?'; g.strokeText(nm, p.x, p.y - HK_PR - 5); g.fillText(nm, p.x, p.y - HK_PR - 5); g.textAlign = 'left';
+  });
+  // 倒數／得分
+  let msg = null, col = '#ffe08a';
+  if (t < 0) msg = String(Math.ceil(-t));
+  else if (H.flash && H.flash.until > now) { msg = `${HK_TEAM_NAME[H.flash.team]}得分！`; col = HK_TEAM_COL[H.flash.team]; }
+  else if (t < .8) msg = '開始！';
+  if (msg) { g.font = 'bold 34px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 6; g.strokeStyle = 'rgba(255,255,255,.95)'; g.fillStyle = col; g.strokeText(msg, HK_W / 2, HK_H / 2 + 12); g.fillText(msg, HK_W / 2, HK_H / 2 + 12); g.textAlign = 'left'; }
+  g.restore();
+}
+function buildHockey(box, v, mk, gd) {
+  const playing = v.phase === 'playing', z = v.hk;
+  if (playing && z && (!S.hk || S.hk.key !== z.seed + ':' + z.t0)) hkStartLocal(v);
+  if (!playing) hkStop();
+  const n = v.seats.length, mine = v.role === 'seat' ? v.me : -1;
+  let status;
+  if (playing) status = mine >= 0 ? `你是${HK_TEAM_NAME[mine % 2]}：用滑鼠（或 WASD／方向鍵）移動握把，把圓盤打進對方球門！` : '觀戰中';
+  else if (n < v.min) status = `等待玩家入座（2～${v.max} 人，人數要是偶數）`;
+  else if (n % 2) status = `目前 ${n} 人：人數要是偶數（2、4、6、8）才能開始`;
+  else status = `${n / 2} 對 ${n / 2}：全員按「準備」就開始`;
+  box.appendChild(mk('div', 'table-status' + (playing && mine >= 0 ? ' mine' : ''), status));
+  const r = v.result;
+  if (r && !playing) {
+    box.appendChild(mk('div', 'table-result', r.text));
+    if (r.ranking) {
+      const rk = mk('div', 'dodge-rank');
+      for (const team of [0, 1]) rk.appendChild(mk('div', null, `${HK_TEAM_NAME[team]}：${r.ranking.filter(x => x.team === team).map(x => x.name).join('、') || '—'}`));
+      box.appendChild(rk);
+    }
+  }
+  if (!playing) {
+    const row = mk('div', 'table-seats');
+    v.seats.forEach((s, i) => {
+      const seat = mk('div', 'table-seat' + (s.you ? ' you' : ''));
+      seat.style.borderColor = HK_TEAM_COL[i % 2];
+      seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '')));
+      seat.appendChild(mk('div', 'table-tag', `${HK_TEAM_NAME[i % 2]} · ${s.ready ? '已準備' : '未準備'}`));
+      row.appendChild(seat);
+    });
+    for (let i = n; i < v.max; i++) { const e = mk('div', 'table-seat empty', `空位（${HK_TEAM_NAME[i % 2]}）`); row.appendChild(e); }
+    box.appendChild(row);
+  } else {
+    box.appendChild(mk('div', 'table-tag', [0, 1].map(team => `${HK_TEAM_NAME[team]}：${v.seats.filter((_, i) => i % 2 === team).map(s => s.name).join('、')}`).join('　')));
+    const wrap = mk('div', 'mz-wrap'), cv = document.createElement('canvas');
+    cv.id = 'hkCanvas'; cv.width = HK_W; cv.height = HK_H + 34; cv.className = 'hk-canvas';
+    const at = e => { const b = cv.getBoundingClientRect(); return [(e.clientX - b.left) * cv.width / b.width, (e.clientY - b.top) * cv.height / b.height - 34]; };
+    cv.onmousemove = e => { if (S.hk) [S.hk.mx, S.hk.my] = at(e); };
+    wrap.appendChild(cv); box.appendChild(wrap);
+  }
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && n < v.max) {
     const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
   }
   box.appendChild(btns);
@@ -9194,6 +9415,7 @@ addEventListener('keydown', e => {
     else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
     else if (S.ar && arKey(e)) { /* 街機方塊：方向鍵／X／Z／空白鍵／C／Shift */ }
     else if (S.mz && mzKey(e)) { /* 豆豆迷宮：方向鍵／WASD */ }
+    else if (S.hk && hkKey(e, true)) { /* 空氣曲棍球：方向鍵／WASD */ }
     else if (S.ty) typingKey(e);   // 英文打字競賽：英文字母
     else if (S.tableView?.game === 'blokus' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') bkKey(e);
     else if (S.tableView?.game === 'trigon' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') tgKey(e);   // 三角方塊拼圖：R 旋轉 60 度、F 翻面   // 方塊拼圖：R 旋轉、F 翻面
@@ -9232,7 +9454,7 @@ addEventListener('keydown', e => {
   if ((k === '1' || k === '2') && !e.repeat) tryJobSkill(+k - 1);   // 1／2：職業技能
   if (k === 'shift' && !e.repeat) toggleSprint();   // Shift：切換疾走／步行（與右下角虛擬按鍵同一個開關）
 });
-addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; arKeyUp(e.key.toLowerCase()); if (e.key.toLowerCase() === 'f') S.holdSkipF = false; if (S.dg && DG_KEYS[e.key.toLowerCase()]) S.dg.keys[DG_KEYS[e.key.toLowerCase()]] = false; });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; arKeyUp(e.key.toLowerCase()); if (S.hk) hkKey(e, false); if (e.key.toLowerCase() === 'f') S.holdSkipF = false; if (S.dg && DG_KEYS[e.key.toLowerCase()]) S.dg.keys[DG_KEYS[e.key.toLowerCase()]] = false; });
 // ---------------- 疾走虛擬按鍵（畫面右下角）----------------
 // 圓形＋跑步像素小人；點擊或按 Shift 切換疾走／步行（2026-11-06 使用者要求：點擊後持續生效，再點擊或再按 Shift 切回步行）
 function toggleSprint() {
@@ -9708,6 +9930,8 @@ async function boot() {
     onTgb: onNetTgb,           // 街機方塊（對戰模式）：被送垃圾行
     onTms: onNetTms,           // 豆豆迷宮：豆豆的快照
     onTmp: onNetTmp,           // 豆豆迷宮：幽靈玩家的位置
+    onThp: onNetThp,           // 空氣曲棍球：別人的握把位置
+    onThs: onNetThs,           // 空氣曲棍球：桌主的圓盤快照
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）

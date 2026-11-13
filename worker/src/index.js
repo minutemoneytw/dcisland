@@ -484,8 +484,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 8] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -2831,7 +2831,62 @@ function mzOver(t, cid, msg) {
   const win = msg.win === true;
   mzFinish(t, win ? "pac" : "ghost", win ? "豆子全部吃光" : msg.tu === true ? "時間到" : "豆豆的命用完了", ct);
 }
-const GAME_START = { arcade: () => {}, maze: mzStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+// ---- 空氣曲棍球（第十五、十六桌 t15／t16，2026-11-13，使用者要求）：2～8 人分藍紅兩隊（座位 0、2、4、6 藍隊，1、3、5、7 紅隊），人數要偶數 ----
+// 先得 HK_GOALS 分、或 HK_LIM_MS 到時分數高的隊伍贏（同分平手），不進排行榜；有人離開＝這一局結束（一般桌子的規則）。
+// 物理在桌主（座位 0）的客戶端跑：桌主送圓盤快照 hs → ths，每個人送自己握把的位置 hp → thp，桌主判斷結束送 hend。
+// 與 tools/dev_server.py 的 hk_* 同一套，改規則兩邊一起改。
+const HK_W = 640, HK_H = 320, HK_GOALS = 7, HK_LIM_MS = 180000, HK_COUNTDOWN_MS = 3000, HK_XP = 3;
+const HK_MSGS = new Set(["hend"]);
+const hkNum = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
+function hkStart(t) {
+  if (t.seats.length % 2) return;   // 人數要偶數（全員準備了也不開始，畫面會提示）
+  const now = Date.now();
+  t.g = { seed: Math.floor(Math.random() * 2147483648), t0: now + HK_COUNTDOWN_MS, sa: 0, sb: 0 };
+  t.result = null; t.phase = "playing";
+  for (const s of t.seats) s.ready = false;
+  tblLog(t, `比賽開始！${t.seats.length / 2} 對 ${t.seats.length / 2}`);
+}
+function hkFinish(t, sa, sb, why) {
+  const win = sa > sb ? 0 : sb > sa ? 1 : -1;
+  const text = `藍隊 ${sa} : ${sb} 紅隊，${win < 0 ? "平手" : win === 0 ? "藍隊獲勝" : "紅隊獲勝"}！${why ? `（${why}）` : ""}`;
+  t.result = { text, sa, sb, win, rid: Math.floor(Math.random() * 4294967296), ranking: t.seats.map((s, i) => ({ name: s.name, uid: s.uid || null, team: i % 2, left: false })),
+    xp: t.seats.map((_, i) => (i % 2 === win ? HK_XP : 0)) };
+  tblLog(t, text);
+  tblResetSeats(t);
+}
+function hkTick(t, now) {   // 桌主那台當掉沒回報：時間上限過了 20 秒，伺服器照最後的比分結算
+  if (t.game === "hockey" && t.phase === "playing" && t.g && now > t.g.t0 + HK_LIM_MS + 20000) { hkFinish(t, t.g.sa, t.g.sb, "時間到"); return true; }
+  return false;
+}
+// 握把位置／圓盤快照：回要轉發的 [[cid, msg]…]（給同桌其他人與觀戰者）
+function hkRelay(t, cid, msg) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "hockey" || role !== "seat" || t.phase !== "playing" || !g) return [];
+  let data = null;
+  if (msg.a === "hp") {   // 自己握把的位置（px）
+    if (!hkNum(msg.x, 0, HK_W) || !hkNum(msg.y, 0, HK_H)) return [];
+    data = { t: "thp", i, x: Math.round(msg.x), y: Math.round(msg.y) };
+  } else if (msg.a === "hs" && i === 0) {   // 桌主：圓盤 x／y／vx／vy、比分 sa／sb、開球前的凍結毫秒 f、桌主自己的握把 px／py
+    if (!hkNum(msg.x, -60, HK_W + 60) || !hkNum(msg.y, -60, HK_H + 60) || !hkNum(msg.vx, -3000, 3000) || !hkNum(msg.vy, -3000, 3000)) return [];
+    if (!Number.isInteger(msg.sa) || !Number.isInteger(msg.sb) || msg.sa < 0 || msg.sb < 0 || msg.sa > 99 || msg.sb > 99 || !hkNum(msg.f, 0, 5000)) return [];
+    g.sa = msg.sa; g.sb = msg.sb;
+    data = { t: "ths", x: Math.round(msg.x), y: Math.round(msg.y), vx: Math.round(msg.vx), vy: Math.round(msg.vy), sa: msg.sa, sb: msg.sb, f: Math.round(msg.f) };
+  }
+  if (!data) return [];
+  const to = [...t.seats, ...t.specs].filter(m => m.cid != null && m.cid !== cid), out = to.map(m => [m.cid, data]);
+  if (msg.a === "hs" && hkNum(msg.px, 0, HK_W) && hkNum(msg.py, 0, HK_H)) {   // 桌主自己的握把位置也夾在快照裡（hp 與 hs 共用限流，分開送會被吃掉）
+    const pd = { t: "thp", i: 0, x: Math.round(msg.px), y: Math.round(msg.py) };
+    for (const m of to) out.push([m.cid, pd]);
+  }
+  return out;
+}
+function hkEnd(t, cid, msg) {   // 桌主那台回報結束（有一隊到 HK_GOALS 分，或時間到）
+  const [role, i] = tblFind(t, cid);
+  if (t.game !== "hockey" || role !== "seat" || i !== 0 || t.phase !== "playing" || !t.g) return;
+  if (!Number.isInteger(msg.sa) || !Number.isInteger(msg.sb) || msg.sa < 0 || msg.sb < 0 || msg.sa > 99 || msg.sb > 99) return;
+  hkFinish(t, msg.sa, msg.sb, msg.sa >= HK_GOALS || msg.sb >= HK_GOALS ? "" : "時間到");
+}
+const GAME_START = { arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 function tblView(t, cid) {
   const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
@@ -2841,6 +2896,10 @@ function tblView(t, cid) {
     specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
   };
   if (t.game === "arcade") return arView(t, cid, v);   // 街機方塊：每台機台的狀態、聯機狀況；phase 依「我自己是不是正在玩」
+  if (t.game === "hockey") {   // 空氣曲棍球：進行中附上 seed、開始時間、伺服器時間、時間上限、目標分數
+    if (t.g && playing) v.hk = { seed: t.g.seed, t0: t.g.t0, sn: Date.now(), lim: HK_LIM_MS, goals: HK_GOALS };
+    return v;
+  }
   if (t.game === "maze") {   // 豆豆迷宮：誰當豆豆（開局前＝桌主指定的人）、分數／關卡／離開；進行中附上 seed、開始時間、伺服器時間、幽靈位置分配
     v.pac = playing && t.g ? t.g.pac : mzPacIdx(t);
     t.seats.forEach((s, k) => Object.assign(v.seats[k], { sc: s.sc || 0, lvl: s.lvl || 1, left: !!s.left }));
@@ -3400,7 +3459,7 @@ export class Island {
   }
   async tableMsg(ws, att, msg) {
     const now = Date.now(), a = msg.a;
-    if (a === "pos" || a === "word" || a === "tb" || a === "ms" || a === "mp") {   // 躲彈幕的位置回報、英文打字競賽的分數回報、豆豆迷宮的快照／幽靈位置：自己的限流，不影響 hit／finish 等操作
+    if (a === "pos" || a === "word" || a === "tb" || a === "ms" || a === "mp" || a === "hp" || a === "hs") {   // 躲彈幕的位置回報、英文打字競賽的分數回報、豆豆迷宮的快照／幽靈位置：自己的限流，不影響 hit／finish 等操作
       if (now - (this.lastTblPos.get(ws) || 0) < TBL_POS_CD_MS) return;
       this.lastTblPos.set(ws, now);
     } else if (a === "typ" || a === "sync") {   // 英文打字競賽的打字進度（只轉發給觀戰者）、見習驅魔師的每秒對時：自己的限流
@@ -3435,6 +3494,12 @@ export class Island {
     if (!t) return;
     if (t.game === "arcade" && (a === "tb" || a === "clr")) {   // 街機方塊：盤面快照／垃圾行，只轉發（不存檔、不通知整個畫面、不廣播 tblinfo；分數記在記憶體，下一次存檔時一起寫）
       for (const [cid, m] of arMsg(t, att.id, msg, now)[1]) this.sendToId(cid, m);
+      return;
+    }
+    if (t.game === "hockey" && (a === "hp" || a === "hs")) {   // 空氣曲棍球：握把位置／圓盤快照，只轉發（不存檔、不通知畫面）；時間上限過了才順便結算
+      for (const [cid, m] of hkRelay(t, att.id, msg)) this.sendToId(cid, m);
+      const resBefore = t.result;
+      if (hkTick(t, now)) { await this.saveTable(t); this.tableNotify(t); await this.tableBroadcastInfo(terr); await this.tableXp(t, resBefore); }
       return;
     }
     if (t.game === "maze" && (a === "ms" || a === "mp")) {   // 豆豆迷宮：豆豆的快照／幽靈玩家的位置，只轉發（不存檔、不通知畫面）；對抗時間上限過了才順便結算
@@ -3484,11 +3549,13 @@ export class Island {
     itTick(t, now);   // 秘藥情報戰：識破時間過了就生效、逾時自動處理
     const mgChanged = mgTick(t, now);   // 見習驅魔師：沒被消除的幽靈扣血、勝負
     mzTick(t, now);   // 豆豆迷宮：對抗超過時間上限還沒結算
+    hkTick(t, now);   // 空氣曲棍球：超過時間上限還沒結算
     if (t.game === "arcade" && AR_MSGS.has(a)) {   // 街機方塊：單人／聯機邀請／接受／拒絕／開始／結束
       const [changed, extra] = arMsg(t, att.id, msg, now);
       for (const [cid, m] of extra) this.sendToId(cid, m);
       if (!changed) return;
     }
+    else if (t.game === "hockey" && HK_MSGS.has(a)) hkEnd(t, att.id, msg);   // 空氣曲棍球：桌主那台回報結束
     else if (t.game === "maze" && MZ_MSGS.has(a)) { if (a === "mpac") mzSetPac(t, att.id, msg.v); else mzOver(t, att.id, msg); }   // 豆豆迷宮：桌主指定豆豆／豆豆那台回報結束
     else if (t.game === "intel" && IT_MSGS.has(a)) itMsg(t, att.id, msg, now);   // 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
     else if (a === "ready") tblReady(t, att.id, msg.v);

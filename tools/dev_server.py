@@ -643,8 +643,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 8)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -4245,7 +4245,85 @@ def mz_over(t, cid, msg):
     win = msg.get("win") is True
     mz_finish(t, "pac" if win else "ghost", "豆子全部吃光" if win else ("時間到" if msg.get("tu") is True else "豆豆的命用完了"), ct)
 
-GAME_START = {"arcade": lambda t: None, "maze": mz_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+# ---- 空氣曲棍球（第十五、十六桌 t15／t16，2026-11-13，使用者要求）：2～8 人分藍紅兩隊（座位 0、2、4、6 藍隊，1、3、5、7 紅隊），人數要偶數 ----
+# 先得 HK_GOALS 分、或 HK_LIM_MS 到時分數高的隊伍贏（同分平手），不進排行榜；有人離開＝這一局結束（一般桌子的規則）。
+# 物理在桌主（座位 0）的客戶端跑：桌主送圓盤快照 hs → ths，每個人送自己握把的位置 hp → thp，桌主判斷結束送 hend。
+# 與 worker/src/index.js 的 hk* 同一套，改規則兩邊一起改。
+HK_W, HK_H, HK_GOALS, HK_LIM_MS, HK_COUNTDOWN_MS, HK_XP = 640, 320, 7, 180000, 3000, 3
+
+def _hk_num(v, lo, hi):
+    return type(v) in (int, float) and not isinstance(v, bool) and math.isfinite(v) and lo <= v <= hi
+
+def _hk_score(v):
+    return type(v) is int and 0 <= v <= 99
+
+def hk_start(t):
+    if len(t["seats"]) % 2:   # 人數要偶數（全員準備了也不開始，畫面會提示）
+        return
+    now = int(time.time() * 1000)
+    t["g"] = {"seed": random.getrandbits(31), "t0": now + HK_COUNTDOWN_MS, "sa": 0, "sb": 0}
+    t["result"], t["phase"] = None, "playing"
+    for s in t["seats"]:
+        s["ready"] = False
+    tbl_log(t, f"比賽開始！{len(t['seats']) // 2} 對 {len(t['seats']) // 2}")
+
+def hk_finish(t, sa, sb, why):
+    win = 0 if sa > sb else 1 if sb > sa else -1
+    text = f"藍隊 {sa} : {sb} 紅隊，{'平手' if win < 0 else '藍隊獲勝' if win == 0 else '紅隊獲勝'}！" + (f"（{why}）" if why else "")
+    t["result"] = {"text": text, "sa": sa, "sb": sb, "win": win, "rid": random.getrandbits(32),
+                   "ranking": [{"name": s["name"], "uid": s.get("uid"), "team": i % 2, "left": False} for i, s in enumerate(t["seats"])],
+                   "xp": [HK_XP if i % 2 == win else 0 for i in range(len(t["seats"]))]}
+    tbl_log(t, text)
+    tbl_reset_seats(t)
+
+def hk_tick(t, now):
+    """桌主那台當掉沒回報：時間上限過了 20 秒，伺服器照最後的比分結算。"""
+    g = t.get("g")
+    if t["game"] == "hockey" and t["phase"] == "playing" and g and now > g["t0"] + HK_LIM_MS + 20000:
+        hk_finish(t, g["sa"], g["sb"], "時間到")
+        return True
+    return False
+
+def hk_relay(t, cid, msg):
+    """握把位置／圓盤快照：回要轉發的 [(cid, msg)]（給同桌其他人與觀戰者）。"""
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "hockey" or role != "seat" or t["phase"] != "playing" or not g:
+        return []
+    data = None
+    if msg.get("a") == "hp":
+        x, y = msg.get("x"), msg.get("y")
+        if not (_hk_num(x, 0, HK_W) and _hk_num(y, 0, HK_H)):
+            return []
+        data = {"t": "thp", "i": i, "x": round(x), "y": round(y)}
+    elif msg.get("a") == "hs" and i == 0:
+        x, y, vx, vy, sa, sb, f = (msg.get(k) for k in ("x", "y", "vx", "vy", "sa", "sb", "f"))
+        if not (_hk_num(x, -60, HK_W + 60) and _hk_num(y, -60, HK_H + 60) and _hk_num(vx, -3000, 3000) and _hk_num(vy, -3000, 3000)
+                and _hk_score(sa) and _hk_score(sb) and _hk_num(f, 0, 5000)):
+            return []
+        g["sa"], g["sb"] = sa, sb
+        data = {"t": "ths", "x": round(x), "y": round(y), "vx": round(vx), "vy": round(vy), "sa": sa, "sb": sb, "f": round(f)}
+    if data is None:
+        return []
+    to = [m for m in t["seats"] + t["specs"] if m["cid"] is not None and m["cid"] != cid]
+    out = [(m["cid"], data) for m in to]
+    px, py = msg.get("px"), msg.get("py")
+    if msg.get("a") == "hs" and _hk_num(px, 0, HK_W) and _hk_num(py, 0, HK_H):   # 桌主自己的握把位置也夾在快照裡（hp 與 hs 共用限流，分開送會被吃掉）
+        pd = {"t": "thp", "i": 0, "x": round(px), "y": round(py)}
+        out += [(m["cid"], pd) for m in to]
+    return out
+
+def hk_end(t, cid, msg):
+    """桌主那台回報結束（有一隊到 HK_GOALS 分，或時間到）。"""
+    role, i = tbl_find(t, cid)
+    if t["game"] != "hockey" or role != "seat" or i != 0 or t["phase"] != "playing" or not t.get("g"):
+        return
+    sa, sb = msg.get("sa"), msg.get("sb")
+    if not (_hk_score(sa) and _hk_score(sb)):
+        return
+    hk_finish(t, sa, sb, "" if sa >= HK_GOALS or sb >= HK_GOALS else "時間到")
+
+GAME_START = {"arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
@@ -4265,6 +4343,9 @@ def tbl_view(t, cid):
             seats[k].update(lives=s.get("lives", 0), died=s.get("died"), left=bool(s.get("left")), bonus=s.get("bonus", 0))
         if g and playing:
             v["dg"] = {"seed": g["seed"], "t0": g["t0"], "dur": DG_DUR, "sn": int(time.time() * 1000), "n": g["n"], "taken": list(g["taken"]), "fx": list(g["fx"])}
+    elif t["game"] == "hockey":   # 空氣曲棍球：進行中附上 seed、開始時間、伺服器時間、時間上限、目標分數
+        if g and playing:
+            v["hk"] = {"seed": g["seed"], "t0": g["t0"], "sn": int(time.time() * 1000), "lim": HK_LIM_MS, "goals": HK_GOALS}
     elif t["game"] == "maze":   # 豆豆迷宮：誰當豆豆（開局前＝桌主指定的人）、分數／關卡／離開；進行中附上 seed、開始時間、伺服器時間、幽靈位置分配
         v["pac"] = g["pac"] if (g and playing) else mz_pac_idx(t)
         for k, s in enumerate(t["seats"]):
@@ -5627,6 +5708,13 @@ class Room:
                     return [], None, None
                 before = t.get("result")
                 now_ms = int(time.time() * 1000)
+                if t["game"] == "hockey" and a in ("hp", "hs"):   # 空氣曲棍球：握把位置／圓盤快照，只轉發；時間上限過了才順便結算
+                    out = hk_relay(t, cid, msg)
+                    if not hk_tick(t, now_ms):
+                        return out, None, None
+                    self._table_notify_locked(t, out)
+                    self._table_collect_xp(t, before)
+                    return out, self.table_info_msg(c.get("table_terr") or terr), c.get("table_terr") or terr
                 if t["game"] == "maze" and a in ("ms", "mp"):   # 豆豆迷宮：豆豆的快照／幽靈玩家的位置，只轉發；對抗時間上限過了才順便結算
                     out = mz_relay(t, cid, msg)
                     if not mz_tick(t, now_ms):
@@ -5672,6 +5760,7 @@ class Room:
                     it_tick(t, now_ms)   # 秘藥情報戰：識破時間過了就生效、逾時自動處理
                     mg_changed = mg_tick(t, now_ms)   # 見習驅魔師：沒被消除的幽靈扣血、勝負
                     mz_tick(t, now_ms)   # 豆豆迷宮：對抗超過時間上限還沒結算
+                    hk_tick(t, now_ms)   # 空氣曲棍球：超過時間上限還沒結算
                     if t["game"] == "intel" and a in IT_MSGS:   # 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
                         it_msg(t, cid, msg, now_ms)
                     elif t["game"] == "arcade":   # 街機方塊：單人／聯機邀請／接受／拒絕／開始／結束
@@ -5722,6 +5811,8 @@ class Room:
                         mg_kill(t, cid, msg.get("i"), msg.get("p"), now_ms)
                     elif a == "boss":   # 見習驅魔師：我畫對了 Boss 的第 k 個符號
                         mg_boss_hit(t, cid, msg.get("k"), now_ms)
+                    elif a == "hend":   # 空氣曲棍球：桌主那台回報結束
+                        hk_end(t, cid, msg)
                     elif a == "mpac":   # 豆豆迷宮：桌主指定誰當豆豆
                         mz_set_pac(t, cid, msg.get("v"))
                     elif a == "over" and t["game"] == "maze":   # 豆豆迷宮：豆豆那台回報結束
@@ -6104,7 +6195,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             xp_grant(c, amt, "mob")
                 elif t == "tbl":   # 和平島遊戲桌（join／leave／ready／sit／draw）；牌局邏輯全在伺服器
                     now = time.time()
-                    if msg.get("a") in ("pos", "word", "tb", "ms", "mp"):   # 躲彈幕的位置回報、英文打字競賽的分數回報：自己的限流，不影響 hit／finish 等操作
+                    if msg.get("a") in ("pos", "word", "tb", "ms", "mp", "hp", "hs"):   # 躲彈幕的位置回報、英文打字競賽的分數回報：自己的限流，不影響 hit／finish 等操作
                         if now - last_pos < TBL_POS_CD:
                             continue
                         last_pos = now
