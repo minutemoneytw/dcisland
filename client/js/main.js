@@ -6903,13 +6903,14 @@ function arOppEl(v, cab, mk, cs) {
 const PROP_RANGE = 48;   // 離物件邊多近才能互動（px）
 const propsHere = () => S.terrains[S.terrain]?.props || [];
 const propRect = pr => ({ x: pr.cell[0] * CELL, y: pr.cell[1] * CELL, w: pr.w * CELL, h: pr.h * CELL });
-function propAtCell(x, y) {   // 這格被物件占著（擋路、不能擺家具）
-  for (const pr of propsHere()) if (x >= pr.cell[0] && x < pr.cell[0] + pr.w && y >= pr.cell[1] && y < pr.cell[1] + pr.h) return pr;
+const propUse = pr => pr.kind === 'drink' || pr.kind === 'food';   // 能互動（吃喝）的物件；deco（隔板）只擋路、rug（地毯）畫在地板層
+function propAtCell(x, y) {   // 這格被物件占著（擋路、不能擺家具；地毯不算）
+  for (const pr of propsHere()) if (pr.kind !== 'rug' && x >= pr.cell[0] && x < pr.cell[0] + pr.w && y >= pr.cell[1] && y < pr.cell[1] + pr.h) return pr;
   return null;
 }
 function propDist(pr, px, py) { const r = propRect(pr), dx = Math.max(r.x - px, 0, px - (r.x + r.w)), dy = Math.max(r.y - py, 0, py - (r.y + r.h)); return Math.hypot(dx, dy); }
-function propNear(p) { let best = null, bd = PROP_RANGE; for (const pr of propsHere()) { const d = propDist(pr, p.x, p.y); if (d < bd) { bd = d; best = pr; } } return best; }
-function propAtPoint(wx, wy) { return propsHere().find(pr => { const r = propRect(pr); return wx >= r.x && wx < r.x + r.w && wy >= r.y && wy < r.y + r.h; }) || null; }
+function propNear(p) { let best = null, bd = PROP_RANGE; for (const pr of propsHere()) { if (!propUse(pr)) continue; const d = propDist(pr, p.x, p.y); if (d < bd) { bd = d; best = pr; } } return best; }
+function propAtPoint(wx, wy) { return propsHere().find(pr => { if (!propUse(pr)) return false; const r = propRect(pr); return wx >= r.x && wx < r.x + r.w && wy >= r.y && wy < r.y + r.h; }) || null; }
 // 效果（name 只用在圖示的滑鼠提示；bad＝減益，圖示紅框）。dur＝秒數
 const FOOD_FX = {
   hurt:    { name: '扣血', bad: 1, icon: '💔', dur: 1.5 },
@@ -7080,11 +7081,13 @@ function drawFoodOverhead(p, list, headY) {
 function propDrawEntries(list) {
   const ims = S.tImages[S.terrain] || {};
   for (const pr of propsHere()) {
+    if (pr.kind === 'rug') continue;   // 地毯在地板層畫（drawPropRugs）
     const r = propRect(pr), img = ims[pr.img];
     list.push({
       y: r.y + r.h, draw: () => {
         ctx.imageSmoothingEnabled = false;
         if (img) drawSpr(img, 0, r.x, r.y, r.w, r.h); else { ctx.fillStyle = '#8a5a34'; ctx.fillRect(r.x, r.y, r.w, r.h); }
+        if (!pr.name) return;   // 隔板之類：沒有名稱標籤
         const p = S.players[0], cx = r.x + r.w / 2;
         ctx.save(); ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)';
         ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.fillStyle = '#ffe08a';
@@ -7549,6 +7552,7 @@ function draw() {
     drawSpr(spr, spr.stagger ? (tileFi[t] + x * 7 + y * 13) % spr.frames : tileFi[t], x * CELL, y * CELL, CELL, CELL);
   }
   if (roomBox && tMan.walls) drawRoomWalls(tMan.walls, ims, roomBox);   // 室內房間的東北西三面牆（房間外，畫在地面之後、物件之前）
+  for (const pr of tMan.props || []) if (pr.kind === 'rug' && ims[pr.img]) { const r = propRect(pr); drawSpr(ims[pr.img], 0, r.x, r.y, r.w, r.h); }   // 地毯（餐飲區）：地板層、角色與物件之下
   // 地板層：蓋在地面上、家具與角色之下（多格地板從錨點畫整張，錨點在鏡頭左上外也要畫，所以往外多看幾格）
   for (let y = Math.max(0, y0 - FLOOR_MAX + 1); y <= y1; y++) for (let x = Math.max(0, x0 - FLOOR_MAX + 1); x <= x1; x++) {
     const fid = S.floorMap.get(y * COLS + x), spr = fid && S.floorImgs[fid];

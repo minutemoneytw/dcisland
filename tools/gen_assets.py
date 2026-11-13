@@ -1743,7 +1743,10 @@ TABLES_BY_TERRAIN = {
 # 餐飲區（2026-11-13，使用者要求）：房間右上角、靠北牆，自助飲料機＋點心吧（網咖／卡拉 OK 那種）
 PROPS_BY_TERRAIN = {
     "peace": [dict(id="drink", kind="drink", name="自助飲料", img="drink_bar.png", cell=[77, 14.5], w=2, h=3),
-              dict(id="snack", kind="food", name="點心吧", img="snack_bar.png", cell=[80, 15], w=4, h=2.5)],
+              dict(id="snack", kind="food", name="點心吧", img="snack_bar.png", cell=[80, 15], w=4, h=2.5),
+              # 餐飲區的隔板與地毯（2026-11-13，使用者要求）：kind＝deco（擋路、不能互動、沒有名稱）／rug（畫在地板層、不擋路、可以走上去）
+              dict(id="dine_wall", kind="deco", img="dine_partition.png", cell=[75, 14.5], w=1, h=5.5),   # 西側一道矮隔板，從北牆伸到 y＝20（南邊開口當入口）
+              dict(id="dine_rug", kind="rug", img="dine_rug.png", cell=[76, 16], w=9, h=5)],                # 地毯鋪滿隔板右邊到東牆
 }
 
 def drink_bar():
@@ -1768,6 +1771,40 @@ def drink_bar():
     cv.rect(0, 20, 2, 33, hx("#f4f4f0")); cv.hline(0, 2, 20, hx("#d84040"))  # 側邊的一疊紙杯
     for y in range(23, 33, 3): cv.hline(0, 2, y, hx("#d8d8d0"))
     cv.outline()
+    return cv
+
+def dine_partition():
+    """餐飲區隔板（16×88，畫 scale 2＝1×5.5 格）：從北牆往房間裡伸出去的一道矮隔板，從側面看是一條細長的深色木框，
+    中間三段毛玻璃，頂端橫木、尾端一盆小觀葉植物收邊。"""
+    cv = Canvas(16, 88)
+    wood, glass = hx("#6a4428"), hx("#cfe4ec")
+    cv.rect(5, 4, 10, 76, wood)                                   # 木框
+    for y0, y1 in ((7, 26), (29, 48), (51, 70)):                  # 三段毛玻璃
+        cv.rect(6, y0, 9, y1, glass); cv.vline(7, y0 + 1, y1 - 1, shade(glass, 1.08)); cv.hline(6, 9, y1, shade(glass, .82))
+    cv.rect(4, 2, 11, 4, shade(wood, 1.25))                       # 頂端橫木
+    cv.rect(3, 78, 12, 86, hx("#b06a3a")); cv.hline(3, 12, 78, shade(hx("#b06a3a"), 1.25)); cv.hline(3, 12, 86, shade(hx("#b06a3a"), .7))   # 花盆
+    leaf = hx("#3c9a4a")
+    for cx, cy, rx, ry in ((7.5, 74, 4, 3), (4.5, 76, 2.5, 2), (10.5, 76, 2.5, 2), (7.5, 70.5, 2.5, 2.5)):
+        cv.ellipse(cx, cy, rx, ry, leaf)
+    cv.set(6, 72, shade(leaf, 1.35)); cv.set(9, 74, shade(leaf, 1.35))
+    cv.outline()
+    return cv
+
+def dine_rug():
+    """餐飲區地毯（144×80，畫 scale 2＝9×5 格）：酒紅底、米金色雙線邊框，中間一排排小菱形花紋（網咖／卡拉 OK 那種耐髒地毯）。"""
+    W, H = 144, 80
+    cv = Canvas(W, H)
+    base, deep, gold = hx("#8a2f3a"), hx("#6a2230"), hx("#e0c080")
+    cv.rect(0, 0, W - 1, H - 1, deep)
+    cv.rect(3, 3, W - 4, H - 4, base)
+    cv.rect(1, 1, W - 2, 1, gold); cv.rect(1, H - 2, W - 2, H - 2, gold); cv.rect(1, 1, 1, H - 2, gold); cv.rect(W - 2, 1, W - 2, H - 2, gold)   # 外框
+    cv.rect(5, 5, W - 6, 5, gold); cv.rect(5, H - 6, W - 6, H - 6, gold); cv.rect(5, 5, 5, H - 6, gold); cv.rect(W - 6, 5, W - 6, H - 6, gold)   # 內框
+    dia = shade(base, 1.22)
+    for k, y in enumerate(range(13, H - 9, 10)):                  # 菱形花紋（隔排錯開）
+        for x in range(13 + (k % 2) * 6, W - 10, 12):
+            for d in range(3):
+                cv.set(x - d, y - 2 + d, dia); cv.set(x + d, y - 2 + d, dia); cv.set(x - d, y + 2 - d, dia); cv.set(x + d, y + 2 - d, dia)
+            cv.set(x, y, gold)
     return cv
 
 def snack_bar():
@@ -3389,7 +3426,7 @@ def main():
                     td["walls"] = dict(n="wall.png", w="wall_w.png", e="wall_e.png", h=WALL_H)   # 東北西三面牆（南面不畫）
         if t["id"] in PROPS_BY_TERRAIN:   # 固定小物件（餐飲區等）：圖放在地形資料夾
             td["props"] = PROPS_BY_TERRAIN[t["id"]]
-            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
+            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
         if t.get("campfire") is False:
             td["campfire"] = False
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉

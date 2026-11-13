@@ -216,6 +216,28 @@
    ],
    "w": 4,
    "h": 2.5
+  },
+  {
+   "id": "dine_wall",
+   "kind": "deco",
+   "img": "dine_partition.png",
+   "cell": [
+    75,
+    14.5
+   ],
+   "w": 1,
+   "h": 5.5
+  },
+  {
+   "id": "dine_rug",
+   "kind": "rug",
+   "img": "dine_rug.png",
+   "cell": [
+    76,
+    16
+   ],
+   "w": 9,
+   "h": 5
   }
  ],
  "campfire": false
