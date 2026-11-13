@@ -186,5 +186,11 @@
   84,
   55
  ],
+ "walls": {
+  "n": "wall.png",
+  "w": "wall_w.png",
+  "e": "wall_e.png",
+  "h": 3
+ },
  "campfire": false
 }

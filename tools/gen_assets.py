@@ -164,6 +164,42 @@ def indoor_tile(a, b, n=INDOOR_REPEAT):
             cv.set(x, y, c)
     return cv
 
+# 室內房間的牆（2026-11-13，使用者要求：和平島東、北、西三面牆）：北牆畫正面（WALL_H 格高，貼在房間上緣外面），
+# 東西牆是從上往下看到的牆頂（1 格寬的長條，貼在房間左右外側）；南面不畫牆。客戶端看 terrain.json 的 walls 畫（drawRoomWalls）
+WALL_H = 3   # 北牆正面高幾格（比人物與街機高，才像牆）
+
+def wall_face():
+    """北牆正面（16×16·WALL_H，scale 2＝1 格寬）：上緣深色木飾條、米色條紋壁紙、腰線、木護牆板、踢腳板，可左右無縫重複。"""
+    h = 16 * WALL_H
+    cv = Canvas(16, h)
+    trim, paper, stripe, wood = hx("#5a3a28"), hx("#e6d8b8"), hx("#d8c7a0"), hx("#a8744a")
+    cv.rect(0, 0, 15, 2, trim); cv.hline(0, 15, 0, shade(trim, 1.35)); cv.hline(0, 15, 2, shade(trim, .75))
+    pb = h - 13   # 壁紙下緣
+    cv.rect(0, 3, 15, pb, paper)
+    for x in (3, 4, 11, 12):
+        cv.vline(x, 3, pb, stripe)
+    for y in range(6, pb, 6):   # 小菱形花紋
+        cx = 8 if (y // 6) % 2 else 0
+        cv.set(cx, y, hx("#c9a878")); cv.set(cx - 1, y + 1, hx("#c9a878")); cv.set(cx + 1, y + 1, hx("#c9a878")); cv.set(cx, y + 2, hx("#c9a878"))
+    cv.rect(0, pb + 1, 15, pb + 2, hx("#8a5a34")); cv.hline(0, 15, pb + 1, hx("#b07a4a"))   # 腰線
+    cv.rect(0, pb + 3, 15, h - 3, wood)
+    cv.rect(2, pb + 4, 13, h - 4, shade(wood, .9)); cv.hline(2, 13, pb + 4, shade(wood, .75)); cv.vline(2, pb + 4, h - 4, shade(wood, .75)); cv.hline(2, 13, h - 4, shade(wood, 1.15))   # 護牆板的鑲板
+    cv.rect(0, h - 2, 15, h - 1, hx("#4a3020"))   # 踢腳板
+    return cv
+
+def wall_side(inner_right):
+    """東／西牆的牆頂（16×16，scale 2＝1 格）：深色木頭牆頂，靠房間那一側有亮邊與陰影；inner_right＝房間在右邊（西牆）。"""
+    cv = Canvas(16, 16)
+    top = hx("#6a4630")
+    cv.rect(0, 0, 15, 15, top)
+    for y in (3, 11):
+        cv.hline(0, 15, y, shade(top, .88))   # 木紋
+    ix, ox = (15, 0) if inner_right else (0, 15)
+    step = -1 if inner_right else 1
+    cv.vline(ix, 0, 15, shade(top, 1.4)); cv.vline(ix + step, 0, 15, shade(top, 1.2))   # 靠房間的亮邊
+    cv.vline(ox, 0, 15, shade(top, .6))
+    return cv
+
 def dither_tile(base, dot, seed, n=None):
     rng = random.Random(seed)
     cv = Canvas(TILE, TILE)
@@ -3272,7 +3308,9 @@ def main():
             if t["layout"] == "room":
                 td["groundRepeat"] = INDOOR_REPEAT
                 if t["id"] in ROOM_BOX:
-                    td["roomBox"] = ROOM_BOX[t["id"]]   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
+                    td["roomBox"] = ROOM_BOX[t["id"]]
+                    save(wall_face(), "wall.png", sub); save(wall_side(True), "wall_w.png", sub); save(wall_side(False), "wall_e.png", sub)
+                    td["walls"] = dict(n="wall.png", w="wall_w.png", e="wall_e.png", h=WALL_H)   # 東北西三面牆（南面不畫）   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
         if t.get("campfire") is False:
             td["campfire"] = False
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉

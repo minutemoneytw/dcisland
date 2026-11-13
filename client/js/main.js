@@ -118,6 +118,19 @@ if (typeof S.profile.showXp !== 'boolean') S.profile.showXp = true;   // 底部 
 // ---------------- 世界生成 ----------------
 function key(x, y) { return x + ',' + y; }
 
+// 室內房間的牆（2026-11-13，使用者要求）：北牆畫正面（walls.h 格高，貼在房間上緣外）、東西牆畫牆頂（1 格寬，貼在房間左右外側，
+// 從北牆頂端一路到房間底部）；南面不畫。北牆在地板上投一道淡陰影。靠牆的街機（y＝14.5）上半截疊在北牆前面
+function drawRoomWalls(W, ims, [bx0, by0, bx1, by1]) {
+  const h = W.h || 2, top = by0 - h, n = ims[W.n], w = ims[W.w], e = ims[W.e];
+  if (n) for (let x = bx0; x <= bx1; x++) drawSpr(n, 0, x * CELL, top * CELL, CELL, h * CELL);
+  for (let y = top; y <= by1; y++) {
+    if (w) drawSpr(w, 0, (bx0 - 1) * CELL, y * CELL, CELL, CELL);
+    if (e) drawSpr(e, 0, (bx1 + 1) * CELL, y * CELL, CELL, CELL);
+  }
+  const g = ctx.createLinearGradient(0, by0 * CELL, 0, by0 * CELL + 12);
+  g.addColorStop(0, 'rgba(0,0,0,.28)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(bx0 * CELL, by0 * CELL, (bx1 - bx0 + 1) * CELL, 12);
+}
 // 室內地形（layout:'room'）的方形房間範圍 roomBox＝[x0,y0,x1,y1]（含邊界的格）；範圍外不畫、不能走、不能釣魚。沒有 roomBox＝整張地圖
 function inRoom(x, y, id = S.terrain) {
   const td = S.terrains[id], b = td?.layout === 'room' && td.roomBox;
@@ -7323,6 +7336,7 @@ function draw() {
     }
     drawSpr(spr, spr.stagger ? (tileFi[t] + x * 7 + y * 13) % spr.frames : tileFi[t], x * CELL, y * CELL, CELL, CELL);
   }
+  if (roomBox && tMan.walls) drawRoomWalls(tMan.walls, ims, roomBox);   // 室內房間的東北西三面牆（房間外，畫在地面之後、物件之前）
   // 地板層：蓋在地面上、家具與角色之下（多格地板從錨點畫整張，錨點在鏡頭左上外也要畫，所以往外多看幾格）
   for (let y = Math.max(0, y0 - FLOOR_MAX + 1); y <= y1; y++) for (let x = Math.max(0, x0 - FLOOR_MAX + 1); x <= x1; x++) {
     const fid = S.floorMap.get(y * COLS + x), spr = fid && S.floorImgs[fid];
@@ -8769,6 +8783,7 @@ async function ensureTerrain(id) {
   const man = S.terrains[id];
   const files = new Set([man.ground, man.edge, man.water]);
   for (const d of man.deco) files.add(d.sprite);
+  if (man.walls) for (const k of ['n', 'w', 'e']) if (man.walls[k]) files.add(man.walls[k]);   // 室內房間的牆
   const ims = {};
   // terrain.json 的 anims：{ 檔名: anim }，地面／岸邊／水／點綴物都可以各自設定動畫（沒設＝單張圖）
   await Promise.all([...files].map(async f => ims[f] = await loadSpr(`assets/terrain/${id}/${f}`, man.anims?.[f])));
