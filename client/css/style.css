@@ -466,7 +466,7 @@ body {
 .table-board-row { font-size: 13px; color: var(--text); line-height: 1.7; }
 .table-board-row.empty { color: var(--text-dim); font-size: 12px; }
 
-/* 方塊拼圖（Blokus）：棋盤＋方塊托盤 */
+/* Blokus：棋盤＋方塊托盤 */
 .bk-timer { margin-left: 10px; font-size: 20px; color: #ffe08a; font-weight: bold; }
 .bk-timer.urgent { color: #ff6a5a; }
 .bk-seats .table-seat { flex: 1 1 130px; max-width: 180px; min-height: 60px; }
@@ -494,7 +494,7 @@ body {
 #nickInput { width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 15px; text-align: center; background: rgba(255, 255, 255, .06); border: 1px solid var(--gold-dim); color: var(--text); }
 #nickInput:disabled { opacity: .5; }
 .tg-tray { grid-template-columns: repeat(4, 1fr); }   /* 三角版的方塊小圖比較寬：一排 4 個，托盤才不會超出面板 */
-/* 街機方塊（t13）：自己的盤面、聯機對手／觀戰的小盤面、邀請、4 台機台狀態 */
+/* 俄羅斯方塊（t13）：自己的盤面、聯機對手／觀戰的小盤面、邀請、4 台機台狀態 */
 .ar-play { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: flex-start; margin: 8px auto; }
 .ar-main { display: block; max-width: 100%; max-height: calc(100vh - 230px); width: auto; height: auto; border: 2px solid #3a4a8a; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
 .ar-opps { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }

@@ -1727,8 +1727,8 @@ TABLES_BY_TERRAIN = {
               dict(id="t6", game="uno", cell=[48, 39], w=3, h=2),        # (0,1) UNO（2026-11-08，使用者要求）
               dict(id="t1", game="oldmaid", cell=[48, 46], w=3, h=2),    # (0,2)
               dict(id="t8", game="intel", cell=[56, 32], w=3, h=2),      # (1,0) 秘藥情報戰（2026-11-10，使用者要求）
-              dict(id="t11", game="blokus", cell=[56, 39], w=3, h=2),    # (1,1) 方塊拼圖（2026-11-13，使用者要求）
-              dict(id="t12", game="trigon", cell=[56, 46], w=3, h=2),    # (1,2) 三角方塊拼圖（2026-11-13，使用者要求）
+              dict(id="t11", game="blokus", cell=[56, 39], w=3, h=2),    # (1,1) Blokus（2026-11-13，使用者要求）
+              dict(id="t12", game="trigon", cell=[56, 46], w=3, h=2),    # (1,2) Blokus Trigon（2026-11-13，使用者要求）
               dict(id="t10", game="mage", cell=[64, 32], w=3, h=2),      # (2,0) 見習驅魔師（2026-11-12，使用者要求）
               dict(id="t5", game="dodge", cell=[64, 39], w=3, h=2),      # (2,1) 躲彈幕只有一桌（2026-11-08，使用者要求）
               dict(id="t14", game="maze", cell=[64, 46], w=3, h=2),      # (2,2) 豆豆迷宮（2026-11-13，使用者要求）
@@ -1737,7 +1737,7 @@ TABLES_BY_TERRAIN = {
               dict(id="t16", game="hockey", cell=[54, 21], w=4, h=2.5),
               dict(id="t9", game="zhtyping", cell=[72, 32], w=3, h=2),   # (3,0) 中文打字競賽（2026-11-11，使用者要求）
               dict(id="t7", game="typing", cell=[72, 39], w=3, h=2),     # (3,1) 英文打字競賽（2026-11-10，使用者要求）
-              # 街機方塊（俄羅斯方塊類，2026-11-13，使用者要求）：場地上方一排 4 台，造型一樣、配色不同，間距約一個人（1 格）。
+              # 俄羅斯方塊（2026-11-13，使用者要求）：場地上方一排 4 台，造型一樣、配色不同，間距約一個人（1 格）。
               # 4 台共用同一張邏輯桌 t13（伺服器的 TABLE_DEFS 只有 t13），cab＝第幾台（0～3），img＝這台的圖（配色）
               *[dict(id="t13", game="arcade", cab=k, img=f"arcade_{k}.png", cell=[48 + k * 3, 14.5], w=2, h=3) for k in range(4)]],   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
 }
@@ -1988,7 +1988,7 @@ def table_mage():
     return cv
 
 def table_blokus():
-    """方塊拼圖：深藍桌面（有桌腳），桌上散著藍／黃／紅／綠四色的方塊（每格 3×3 像素，有亮邊與暗邊）。"""
+    """Blokus：深藍桌面（有桌腳），桌上散著藍／黃／紅／綠四色的方塊（每格 3×3 像素，有亮邊與暗邊）。"""
     cv = Canvas(48, 32)
     wood = hx("#3a4260")
     cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
@@ -2010,7 +2010,7 @@ def table_blokus():
     return cv
 
 def table_trigon():
-    """三角方塊拼圖：深藍桌面（有桌腳），桌上一片三角形拼成的色塊（藍／黃／紅／綠四色，每個三角形有亮邊與暗邊）。"""
+    """Blokus Trigon：深藍桌面（有桌腳），桌上一片三角形拼成的色塊（藍／黃／紅／綠四色，每個三角形有亮邊與暗邊）。"""
     cv = Canvas(48, 32)
     wood = hx("#3a4260")
     cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
@@ -2054,7 +2054,7 @@ def table_intel():
 ARCADE_COLORS = ["#d84a4a", "#3b78e8", "#3cb45a", "#9a5ad8"]
 
 def arcade_cabinet(col):
-    """街機俄羅斯方塊（32×48，畫 scale 2＝2×3 格）：老街機造型——上方發光招牌、黑框螢幕裡有掉落中的方塊、
+    """俄羅斯方塊街機（32×48，畫 scale 2＝2×3 格）：老街機造型——上方發光招牌、黑框螢幕裡有掉落中的方塊、
     斜面操作台（搖桿＋按鈕）、下方投幣口。4 台造型一樣，只換外殼主色。"""
     cv = Canvas(32, 48)
     c = hx(col); dark = shade(c, .62); lite = shade(c, 1.3)

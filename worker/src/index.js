@@ -546,9 +546,9 @@ function tblLeave(t, cid) {
   if (role === "spec") t.specs.splice(i, 1);
   else if (role === "seat") {
     const name = t.seats[i].name;
-    if (t.game === "arcade") { arLeave(t, i); return; }   // 街機方塊：單人局作廢、聯機照當時分數排名，不中斷其他人
-    if (t.phase === "playing" && t.game === "trigon") { tgLeave(t, i, Date.now()); return; }   // 三角方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
-    if (t.phase === "playing" && t.game === "blokus") { bkLeave(t, i, Date.now()); return; }   // 方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
+    if (t.game === "arcade") { arLeave(t, i); return; }   // 俄羅斯方塊：單人局作廢、聯機照當時分數排名，不中斷其他人
+    if (t.phase === "playing" && t.game === "trigon") { tgLeave(t, i, Date.now()); return; }   // Blokus Trigon：離開不中斷，棋子留在棋盤上、之後跳過
+    if (t.phase === "playing" && t.game === "blokus") { bkLeave(t, i, Date.now()); return; }   // Blokus：離開不中斷，棋子留在棋盤上、之後跳過
     if (t.phase === "playing" && t.game === "mage") { mgLeave(t, i, Date.now()); return; }   // 見習驅魔師：離開不中斷，視同倒下，到場上沒有活人為止
     if (t.phase === "playing" && t.game === "maze") { mzLeave(t, i); return; }   // 豆豆迷宮：幽靈離開改由電腦控制、豆豆離開＝幽靈方贏
     if (t.phase === "playing" && t.game === "dodge") { dgLeave(t, i, Date.now()); return; }   // 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
@@ -565,7 +565,7 @@ function tblLeave(t, cid) {
 }
 function tblSit(t, cid) {
   const [role, i] = tblFind(t, cid);
-  if (role !== "spec" || t.phase !== "lobby" || t.seats.length >= GAME_LIMITS[t.game][1] || t.game === "arcade") return;   // 街機方塊：要入座就走到空機台
+  if (role !== "spec" || t.phase !== "lobby" || t.seats.length >= GAME_LIMITS[t.game][1] || t.game === "arcade") return;   // 俄羅斯方塊：要入座就走到空機台
   const s = t.specs.splice(i, 1)[0];
   t.seats.push({ cid, name: s.name, uid: s.uid || null, ready: false, hand: [], out: false });
   tblLog(t, `${s.name} 入座了`);
@@ -688,7 +688,7 @@ function gmMove(t, cid, x, y) {
   else if (g.board.every(c => c)) gmFinish(t, null);
   else t.turn = 1 - i;
 }
-// ---- 方塊拼圖 Blokus（第十一桌 t11；2026-11-13，使用者要求）：2～4 人、20×20、每人 21 塊（1～5 格，共 89 格）、標準規則 ----
+// ---- Blokus（第十一桌 t11；2026-11-13，使用者要求）：2～4 人、20×20、每人 21 塊（1～5 格，共 89 格）、標準規則 ----
 // 第一塊要蓋住自己的角落；之後每塊都要「角對角」接到自己的舊方塊，且不能「邊對邊」；碰到別人的不限。放不下的人自動跳過（之後一直跳過），全員放不下就結束。
 // 計分＝−剩下的格數；全部放完 +15、最後一塊是單格再 +5。每手限時 BK_TURN_MS（客戶端到時送 timeout，伺服器核對時鐘；連續超時 BK_IDLE_MAX 次視為棄權）。
 // 排行榜沒有（使用者定）。與 tools/dev_server.py 的 bk_* 同一套。
@@ -763,7 +763,7 @@ function bkStart(t) {
   t.g = { size, start: cols.map(c => (n === 2 ? BK_DUO_START[c] : BK_CORNERS[c])), board: new Array(size * size).fill(0), col: cols, sd: cols.map(() => ({ used: [], placed: 0, done: false, idle: 0, forfeit: false, mono: false })), last: null, moves: 0, deadline: now + BK_TURN_MS };
   t.result = null; t.phase = "playing"; t.turn = cols.indexOf(0);   // 藍色先下
   for (const s of t.seats) { s.ready = false; s.left = false; }
-  tblLog(t, `方塊拼圖開始！${n} 人參加，${t.seats[t.turn].name}（藍）先下`);
+  tblLog(t, `Blokus 開始！${n} 人參加，${t.seats[t.turn].name}（藍）先下`);
 }
 // 輪到 from 之後的下一位還能下的人；放不下的人標成 done（之後一直跳過）；沒有人能下就結束
 function bkAdvance(t, from, now) {
@@ -821,8 +821,8 @@ function bkLeave(t, i, now) {   // 遊戲進行中有人離開：棋子留在棋
   if (i === t.turn) bkAdvance(t, i, now);
   else if (g.sd.every(d => d.done)) bkFinish(t);
 }
-// ---- 方塊拼圖「三角版」Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：2～4 人、正六邊形的三角格棋盤（邊長 9，共 486 格）、每人 22 塊（1～6 個三角形，共 110 格）----
-// 規則同方塊拼圖：第一塊要蓋住自己的角落（這裡是「棋盤六個頂點之一」：塊上有一格以那個頂點為角）；之後每塊要「點對點」接到自己的舊方塊（共用至少一個頂點），且不能「邊對邊」（共用一條邊）；
+// ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：2～4 人、正六邊形的三角格棋盤（邊長 9，共 486 格）、每人 22 塊（1～6 個三角形，共 110 格）----
+// 規則同Blokus：第一塊要蓋住自己的角落（這裡是「棋盤六個頂點之一」：塊上有一格以那個頂點為角）；之後每塊要「點對點」接到自己的舊方塊（共用至少一個頂點），且不能「邊對邊」（共用一條邊）；
 // 放不下的人自動跳過、全員放不下就結束；計分＝−剩下的格數，全部放完 +15、最後一塊是單格再 +5；每手限時 TG_TURN_MS，連續超時 TG_IDLE_MAX 次視為棄權；沒有排行榜。與 tools/dev_server.py 的 tg_* 同一套。
 // 座標：三角形 (x, y)（y＝第幾列，由上往下；x＝水平位置，每個三角形寬 2 個單位）；(x + y) 為偶數＝尖端朝上、奇數＝尖端朝下。頂點是格點 (i, j)（i + j 為偶數）：
 // 朝上 (x, y) 的頂點＝(x, y)、(x−1, y+1)、(x+1, y+1)；朝下 (x, y) 的頂點＝(x−1, y)、(x+1, y)、(x, y+1)。邊鄰居＝(x±1, y)，再加朝上的 (x, y+1)／朝下的 (x, y−1)。
@@ -920,7 +920,7 @@ function tgStart(t) {
   t.g = { board: new Array(TG_W * TG_ROWS).fill(0), col: cols, corner: cols.map(c => TG_SLOTS[n][c]), sd: cols.map(() => ({ used: [], placed: 0, done: false, idle: 0, forfeit: false, mono: false })), last: null, moves: 0, deadline: now + TG_TURN_MS };
   t.result = null; t.phase = "playing"; t.turn = cols.indexOf(0);   // 藍色先下
   for (const s of t.seats) { s.ready = false; s.left = false; }
-  tblLog(t, `三角方塊拼圖開始！${n} 人參加，${t.seats[t.turn].name}（藍）先下`);
+  tblLog(t, `Blokus Trigon 開始！${n} 人參加，${t.seats[t.turn].name}（藍）先下`);
 }
 function tgAdvance(t, from, now) {
   const g = t.g, n = t.seats.length;
@@ -1206,7 +1206,7 @@ const isTy = t => t.game === "typing" || t.game === "zhtyping";
 const tyUnit = t => (t.game === "zhtyping" ? "詞" : "單字");
 // 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 // 記在這座島的 storage（"boards"），每次結算後更新，table 畫面帶 board 給客戶端顯示。與 tools/dev_server.py 的 BOARDS 同一套
-const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage", "arcade", "maze"]), BOARD_N = 3;   // 街機方塊／豆豆迷宮：只記單人模式（使用者定）
+const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage", "arcade", "maze"]), BOARD_N = 3;   // 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
 // 躲彈幕 2026-11-12 起改記「分數」（存活秒數＋道具分），舊的秒數紀錄放在 "dodge" 不再使用，分數另記在 "dodge2"，避免單位混在一起
 const boardKey = game => (game === "dodge" ? "dodge2" : game);
 function boardMerge(list, entries) {
@@ -2560,7 +2560,7 @@ function unSetMode(t, cid, mode) {
   for (const s of t.seats) s.ready = false;
   tblLog(t, `${t.seats[0].name} 把玩法改成${mode === "wild" ? "無限制" : "傳統"}`);
 }
-// ---- 街機方塊（俄羅斯方塊類；第十三桌 t13，2026-11-13，使用者要求）：場地上方 4 台街機共用這一張邏輯桌 ----
+// ---- 俄羅斯方塊（第十三桌 t13，2026-11-13，使用者要求）：場地上方 4 台街機共用這一張邏輯桌 ----
 // 每個座位綁一台機台（cab 0～3；同一台只能坐一個人）。每台都是單人遊玩：
 //   單人模式（solo）：各自獨立的一局，結束分數進排行榜；
 //   聯機模式（link）：發起的人（host）開邀請，其他機台「閒置中」的人會看到「要接受聯機邀請嗎？」，最多 4 人；
@@ -2895,7 +2895,7 @@ function tblView(t, cid) {
     seats: t.seats.map((s, k) => ({ name: s.name, n: playing ? s.hand.length : 0, ready: s.ready, out: playing ? s.out : false, you: role === "seat" && k === i })),
     specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
   };
-  if (t.game === "arcade") return arView(t, cid, v);   // 街機方塊：每台機台的狀態、聯機狀況；phase 依「我自己是不是正在玩」
+  if (t.game === "arcade") return arView(t, cid, v);   // 俄羅斯方塊：每台機台的狀態、聯機狀況；phase 依「我自己是不是正在玩」
   if (t.game === "hockey") {   // 空氣曲棍球：進行中附上 seed、開始時間、伺服器時間、時間上限、目標分數
     if (t.g && playing) v.hk = { seed: t.g.seed, t0: t.g.t0, sn: Date.now(), lim: HK_LIM_MS, goals: HK_GOALS };
     return v;
@@ -2952,11 +2952,11 @@ function tblView(t, cid) {
       if (role === "seat") { v.hand = [...t.seats[i].hand]; v.note = t.seats[i].note || null; v.stolen = t.seats[i].stolen || null; }
       if (all) v.hands = t.seats.map(s => [...s.hand]);
     }
-  } else if (t.g && t.game === "trigon") {   // 三角方塊拼圖：棋盤（702 個字元：0 空／1～4 顏色，格子編號 y * 39 + x）、各座位顏色、每人用掉的方塊、最後一手、期限；全部公開
+  } else if (t.g && t.game === "trigon") {   // Blokus Trigon：棋盤（702 個字元：0 空／1～4 顏色，格子編號 y * 39 + x）、各座位顏色、每人用掉的方塊、最後一手、期限；全部公開
     const g = t.g;
     v.tg = { board: g.board.join(""), col: [...g.col], corner: [...g.corner], used: g.sd.map(d => [...d.used]), done: g.sd.map(d => d.done), last: g.last, moves: g.moves, deadline: playing ? g.deadline : 0, sn: Date.now() };
     if (playing) t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].rem = tgRem(g, k); });
-  } else if (t.g && t.game === "blokus") {   // 方塊拼圖：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
+  } else if (t.g && t.game === "blokus") {   // Blokus：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
     const g = t.g;
     v.bk = { size: bkSize(g), start: g.col.map((c, k) => [...bkStartOf(g, k)]), board: g.board.join(""), col: [...g.col], used: g.sd.map(d => [...d.used]), done: g.sd.map(d => d.done), last: g.last, moves: g.moves, deadline: playing ? g.deadline : 0, sn: Date.now() };
     if (playing) t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].rem = bkRem(g, k); });
@@ -3435,7 +3435,7 @@ export class Island {
   async tableBoard(t, resBefore) {
     const r = t.result;
     if (!BOARD_GAMES.has(t.game) || !r || r === resBefore || r.aborted || !r.ranking) return;
-    if ((t.game === "arcade" || t.game === "maze") && !r.solo) return;   // 街機方塊／豆豆迷宮：聯機／對抗分數不進排行榜（使用者定）
+    if ((t.game === "arcade" || t.game === "maze") && !r.solo) return;   // 俄羅斯方塊／豆豆迷宮：聯機／對抗分數不進排行榜（使用者定）
     const ts = Date.now(), entries = t.game === "mage" ? (r.win && r.solo ? [{ name: r.ranking[0].name, uid: r.ranking[0].uid, score: r.score, ts }] : []) : r.ranking.filter(x => !x.left).map(x => ({ name: x.name, uid: x.uid, score: x.score, ts })).filter(e => e.score > 0);   // 見習驅魔師：只有單人勝利進排行榜
     if (!entries.length) return;
     const bk = boardKey(t.game), boards = await this.getBoards(), old = boards[bk] || [], nb = boardMerge(old, entries);
@@ -3465,7 +3465,7 @@ export class Island {
     } else if (a === "typ" || a === "sync") {   // 英文打字競賽的打字進度（只轉發給觀戰者）、見習驅魔師的每秒對時：自己的限流
       if (now - (this.lastTblTyp.get(ws) || 0) < TBL_TYP_CD_MS) return;
       this.lastTblTyp.set(ws, now);
-    } else if (a === "kill" || a === "boss" || a === "clr") {   // 見習驅魔師的擊殺／打 Boss、街機方塊的消行：不限流（兩次之間本來就隔著一筆畫，限流反而會吃掉擊殺）
+    } else if (a === "kill" || a === "boss" || a === "clr") {   // 見習驅魔師的擊殺／打 Boss、俄羅斯方塊的消行：不限流（兩次之間本來就隔著一筆畫，限流反而會吃掉擊殺）
     } else {
       if (now - (this.lastTbl.get(ws) || 0) < TBL_CD_MS) return;
       this.lastTbl.set(ws, now);
@@ -3479,7 +3479,7 @@ export class Island {
       const t = await this.getTable(tid);
       const cur = ws.deserializeAttachment() || {};
       const pname = String((att.state && att.state.name) || (att.user && att.user.name) || `玩家${att.id}`).slice(0, 12);
-      if (game === "arcade") arJoin(t, att.id, pname, msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null, msg.cab);   // 街機方塊：坐哪一台由 cab 決定
+      if (game === "arcade") arJoin(t, att.id, pname, msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null, msg.cab);   // 俄羅斯方塊：坐哪一台由 cab 決定
       else tblJoin(t, att.id, pname, msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null);
       cur.table = tid; ws.serializeAttachment(cur);
       await this.saveTable(t);
@@ -3492,7 +3492,7 @@ export class Island {
     if (a === "leave") { await this.tableLeave(ws); return; }
     const t = await this.getTable(tid);
     if (!t) return;
-    if (t.game === "arcade" && (a === "tb" || a === "clr")) {   // 街機方塊：盤面快照／垃圾行，只轉發（不存檔、不通知整個畫面、不廣播 tblinfo；分數記在記憶體，下一次存檔時一起寫）
+    if (t.game === "arcade" && (a === "tb" || a === "clr")) {   // 俄羅斯方塊：盤面快照／垃圾行，只轉發（不存檔、不通知整個畫面、不廣播 tblinfo；分數記在記憶體，下一次存檔時一起寫）
       for (const [cid, m] of arMsg(t, att.id, msg, now)[1]) this.sendToId(cid, m);
       return;
     }
@@ -3560,7 +3560,7 @@ export class Island {
     const mgChanged = mgTick(t, now);   // 見習驅魔師：沒被消除的幽靈扣血、勝負
     mzTick(t, now);   // 豆豆迷宮：對抗超過時間上限還沒結算
     hkTick(t, now);   // 空氣曲棍球：超過時間上限還沒結算
-    if (t.game === "arcade" && AR_MSGS.has(a)) {   // 街機方塊：單人／聯機邀請／接受／拒絕／開始／結束
+    if (t.game === "arcade" && AR_MSGS.has(a)) {   // 俄羅斯方塊：單人／聯機邀請／接受／拒絕／開始／結束
       const [changed, extra] = arMsg(t, att.id, msg, now);
       for (const [cid, m] of extra) this.sendToId(cid, m);
       if (!changed) return;
@@ -3578,8 +3578,8 @@ export class Island {
     else if (a === "pass") unPass(t, att.id, now);
     else if (a === "uno") unSay(t, att.id);
     else if (a === "catch") unCatch(t, att.id);
-    else if (a === "timeout") { if (t.game === "blokus") bkTimeout(t, now); else if (t.game === "trigon") tgTimeout(t, now); else unTimeout(t, now); }   // UNO／方塊拼圖：回合限時到了（伺服器核對時鐘）
-    else if (a === "place") { if (t.game === "trigon") tgPlace(t, att.id, msg.p, msg.c, now); else bkPlace(t, att.id, msg.p, msg.c, now); }   // 方塊拼圖：放方塊 {p 第幾塊, c 佔用的格子座標}
+    else if (a === "timeout") { if (t.game === "blokus") bkTimeout(t, now); else if (t.game === "trigon") tgTimeout(t, now); else unTimeout(t, now); }   // UNO／Blokus：回合限時到了（伺服器核對時鐘）
+    else if (a === "place") { if (t.game === "trigon") tgPlace(t, att.id, msg.p, msg.c, now); else bkPlace(t, att.id, msg.p, msg.c, now); }   // Blokus：放方塊 {p 第幾塊, c 佔用的格子座標}
     else if (a === "mode") unSetMode(t, att.id, msg.v);   // UNO：桌主在開局前選玩法（classic／wild）
     else if (a === "hit") dgHit(t, att.id, now);   // 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
     else if (a === "kill") mgKill(t, att.id, msg.i, msg.p, now);   // 見習驅魔師：我消除了幽靈 i（符號辨識在客戶端，伺服器驗時間與先到先得）

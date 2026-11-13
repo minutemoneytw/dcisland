@@ -729,13 +729,13 @@ def tbl_leave(t, cid):
         t["specs"].pop(i)
     elif role == "seat":
         name = t["seats"][i]["name"]
-        if t["game"] == "arcade":   # 街機方塊：單人局作廢、聯機照當時分數排名，不中斷其他人
+        if t["game"] == "arcade":   # 俄羅斯方塊：單人局作廢、聯機照當時分數排名，不中斷其他人
             ar_leave(t, i)
             return
-        if t["phase"] == "playing" and t["game"] == "trigon":   # 三角方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
+        if t["phase"] == "playing" and t["game"] == "trigon":   # Blokus Trigon：離開不中斷，棋子留在棋盤上、之後跳過
             tg_leave(t, i, int(time.time() * 1000))
             return
-        if t["phase"] == "playing" and t["game"] == "blokus":   # 方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
+        if t["phase"] == "playing" and t["game"] == "blokus":   # Blokus：離開不中斷，棋子留在棋盤上、之後跳過
             bk_leave(t, i, int(time.time() * 1000))
             return
         if t["phase"] == "playing" and t["game"] == "maze":   # 豆豆迷宮：幽靈離開改由電腦控制、豆豆離開＝幽靈方贏
@@ -782,7 +782,7 @@ def tbl_stand(t, cid):
 def tbl_sit(t, cid):
     role, i = tbl_find(t, cid)
     mn, mx = GAME_LIMITS[t["game"]]
-    if role != "spec" or t["phase"] != "lobby" or len(t["seats"]) >= mx or t["game"] == "arcade":   # 街機方塊：要入座就走到空機台
+    if role != "spec" or t["phase"] != "lobby" or len(t["seats"]) >= mx or t["game"] == "arcade":   # 俄羅斯方塊：要入座就走到空機台
         return
     s = t["specs"].pop(i)
     t["seats"].append({"cid": cid, "name": s["name"], "uid": s.get("uid"), "ready": False, "hand": [], "out": False})
@@ -926,7 +926,7 @@ def gm_move(t, cid, x, y):
     else:
         t["turn"] = 1 - i
 
-# ---- 方塊拼圖 Blokus（第十一桌 t11；2026-11-13，使用者要求）：2～4 人、20×20、每人 21 塊（1～5 格，共 89 格）、標準規則 ----
+# ---- Blokus（第十一桌 t11；2026-11-13，使用者要求）：2～4 人、20×20、每人 21 塊（1～5 格，共 89 格）、標準規則 ----
 # 第一塊要蓋住自己的角落；之後每塊都要「角對角」接到自己的舊方塊，且不能「邊對邊」；碰到別人的不限。放不下的人自動跳過（之後一直跳過），全員放不下就結束。
 # 計分＝−剩下的格數；全部放完 +15、最後一塊是單格再 +5。每手限時 BK_TURN_MS（客戶端到時送 timeout，伺服器核對時鐘；連續超時 BK_IDLE_MAX 次視為棄權）。
 # 排行榜沒有（使用者定）。與 worker/src/index.js 的 bk* 同一套。
@@ -1049,7 +1049,7 @@ def bk_start(t):
     t["result"], t["phase"], t["turn"] = None, "playing", cols.index(0)   # 藍色先下
     for s in t["seats"]:
         s["ready"], s["left"] = False, False
-    tbl_log(t, f"方塊拼圖開始！{n} 人參加，{t['seats'][t['turn']]['name']}（藍）先下")
+    tbl_log(t, f"Blokus 開始！{n} 人參加，{t['seats'][t['turn']]['name']}（藍）先下")
 
 def bk_advance(t, frm, now):
     """輪到 frm 之後的下一位還能下的人；放不下的人標成 done（之後一直跳過）；沒有人能下就結束。"""
@@ -1137,7 +1137,7 @@ def bk_leave(t, i, now):
     elif all(d["done"] for d in g["sd"]):
         bk_finish(t)
 
-# ---- 方塊拼圖「三角版」Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：2～4 人、正六邊形的三角格棋盤（邊長 9，共 486 格）、每人 22 塊（1～6 個三角形，共 110 格）----
+# ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：2～4 人、正六邊形的三角格棋盤（邊長 9，共 486 格）、每人 22 塊（1～6 個三角形，共 110 格）----
 # 規則與座標系說明見 worker/src/index.js 的 tg*（同一套）：三角形 (x, y)、(x + y) 偶數＝朝上；頂點是格點 (i, j)；方向轉換用軸座標 ((i − j) / 2, j)。
 TG_N, TG_CX, TG_W, TG_ROWS, TG_VW, TG_TURN_MS, TG_IDLE_MAX, TG_XP, TG_TOTAL = 9, 19, 39, 18, 41, 45000, 2, 6, 110
 TG_PIECES = [[(0, 0)], [(0, 0), (0, 1)], [(0, 0), (-1, 1), (0, 1)], [(0, 0), (-1, 1), (0, 1), (-1, 2)], [(0, 0), (-1, 1), (0, 1), (1, 1)], [(0, 0), (-2, 1), (-1, 1), (0, 1)], [(0, 0), (-1, 1), (0, 1), (-1, 2), (0, 2)], [(0, 0), (-1, 1), (0, 1), (-2, 2), (-1, 2)], [(0, 0), (-1, 1), (0, 1), (1, 1), (-1, 2)], [(0, 0), (1, 0), (0, 1), (1, 1), (2, 1)], [(0, 0), (-1, 1), (0, 1), (-1, 2), (0, 2), (0, 3)], [(0, 0), (-1, 1), (0, 1), (-1, 2), (0, 2), (1, 2)], [(0, 0), (-1, 1), (0, 1), (-2, 2), (-1, 2), (-2, 3)], [(0, 0), (-1, 1), (0, 1), (-2, 2), (-1, 2), (0, 2)], [(0, 0), (-1, 1), (0, 1), (-3, 2), (-2, 2), (-1, 2)], [(0, 0), (-1, 1), (0, 1), (1, 1), (-1, 2), (0, 2)], [(0, 0), (-1, 1), (0, 1), (1, 1), (-1, 2), (1, 2)], [(0, 0), (-1, 1), (0, 1), (1, 1), (2, 1), (-1, 2)], [(0, 0), (-1, 1), (0, 1), (1, 1), (2, 1), (1, 2)], [(0, 0), (-2, 1), (-1, 1), (0, 1), (-2, 2), (-1, 2)], [(0, 0), (-3, 1), (-2, 1), (-1, 1), (0, 1), (-3, 2)], [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]]   # 22 塊 polyiamond（1／1／1／3／4／12 種，三角形的 (x, y)，已正規化；與客戶端、Worker 同一份）
@@ -1294,7 +1294,7 @@ def tg_start(t):
     t["result"], t["phase"], t["turn"] = None, "playing", cols.index(0)   # 藍色先下
     for s in t["seats"]:
         s["ready"], s["left"] = False, False
-    tbl_log(t, f"三角方塊拼圖開始！{n} 人參加，{t['seats'][t['turn']]['name']}（藍）先下")
+    tbl_log(t, f"Blokus Trigon 開始！{n} 人參加，{t['seats'][t['turn']]['name']}（藍）先下")
 
 def tg_advance(t, frm, now):
     g, n = t["g"], len(t["seats"])
@@ -1757,7 +1757,7 @@ def ty_unit(t):
 
 # 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 # 這裡記在記憶體（重啟就清掉），Worker 版記在島的 storage；table 畫面帶 board 給客戶端顯示。與 worker 的 boardMerge 同一套
-BOARD_GAMES = {"typing", "zhtyping", "dodge", "mage", "arcade", "maze"}   # 街機方塊／豆豆迷宮：只記單人模式（使用者定）
+BOARD_GAMES = {"typing", "zhtyping", "dodge", "mage", "arcade", "maze"}   # 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
 BOARD_N = 3
 BOARDS = {}
 
@@ -3867,7 +3867,7 @@ def un_set_mode(t, cid, mode):
         s["ready"] = False
     tbl_log(t, f"{t['seats'][0]['name']} 把玩法改成{'無限制' if mode == 'wild' else '傳統'}")
 
-# ---- 街機方塊（俄羅斯方塊類；第十三桌 t13，2026-11-13，使用者要求）：場地上方 4 台街機共用這一張邏輯桌 ----
+# ---- 俄羅斯方塊（第十三桌 t13，2026-11-13，使用者要求）：場地上方 4 台街機共用這一張邏輯桌 ----
 # 每個座位綁一台機台（cab 0～3；同一台只能坐一個人）。每台都是單人遊玩：
 #   單人模式（solo）：各自獨立的一局，結束分數進排行榜；
 #   聯機模式（link）：發起的人（host）開邀請，其他機台「閒置中」的人會看到「要接受聯機邀請嗎？」，最多 4 人；
@@ -4416,14 +4416,14 @@ def tbl_view(t, cid):
                 v["stolen"] = t["seats"][i].get("stolen")
             if see_all:
                 v["hands"] = [list(s["hand"]) for s in t["seats"]]
-    elif g and t["game"] == "trigon":   # 三角方塊拼圖：棋盤（702 個字元：0 空／1～4 顏色，格子編號 y * 39 + x）、各座位顏色、每人用掉的方塊、最後一手、期限；全部公開
+    elif g and t["game"] == "trigon":   # Blokus Trigon：棋盤（702 個字元：0 空／1～4 顏色，格子編號 y * 39 + x）、各座位顏色、每人用掉的方塊、最後一手、期限；全部公開
         v["tg"] = {"board": "".join(str(c) for c in g["board"]), "col": list(g["col"]), "corner": list(g["corner"]), "used": [list(d["used"]) for d in g["sd"]], "done": [d["done"] for d in g["sd"]],
                    "last": g["last"], "moves": g["moves"], "deadline": g["deadline"] if playing else 0, "sn": int(time.time() * 1000)}
         if playing:
             for k, s in enumerate(t["seats"]):
                 v["seats"][k]["left"] = bool(s.get("left"))
                 v["seats"][k]["rem"] = tg_rem(g, k)
-    elif g and t["game"] == "blokus":   # 方塊拼圖：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
+    elif g and t["game"] == "blokus":   # Blokus：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
         v["bk"] = {"size": bk_size(g), "start": [list(bk_start_of(g, k)) for k in range(len(g["col"]))], "board": "".join(str(c) for c in g["board"]), "col": list(g["col"]), "used": [list(d["used"]) for d in g["sd"]], "done": [d["done"] for d in g["sd"]],
                    "last": g["last"], "moves": g["moves"], "deadline": g["deadline"] if playing else 0, "sn": int(time.time() * 1000)}
         if playing:
@@ -4454,7 +4454,7 @@ def tbl_view(t, cid):
             else:
                 v["canDraw"] = mine and not g["drawn"]
                 v["canPass"] = mine and g["drawn"]
-    if t["game"] == "arcade":   # 街機方塊：每台機台的狀態、聯機狀況；phase 依「我自己是不是正在玩」
+    if t["game"] == "arcade":   # 俄羅斯方塊：每台機台的狀態、聯機狀況；phase 依「我自己是不是正在玩」
         return ar_view(t, cid, v)
     if role == "spec" and playing and t["game"] in ("oldmaid", "uno"):   # 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
         v["hands"] = [list(s["hand"]) for s in t["seats"]]
@@ -5696,7 +5696,7 @@ class Room:
                     self._table_leave_locked(cid, out)
                 t = self.tables.setdefault(tid, tbl_new(tid, game))
                 name = str((c.get("state") or {}).get("name") or (c.get("user") or {}).get("name") or f"玩家{cid}")[:12]
-                if game == "arcade":   # 街機方塊：坐哪一台由 cab 決定
+                if game == "arcade":   # 俄羅斯方塊：坐哪一台由 cab 決定
                     ar_join(t, cid, name, "spec" if msg.get("role") == "spec" else "seat", (c.get("user") or {}).get("id"), msg.get("cab"))
                 else:
                     tbl_join(t, cid, name, "spec" if msg.get("role") == "spec" else "seat", (c.get("user") or {}).get("id"))
@@ -5757,7 +5757,7 @@ class Room:
                             if m["cid"] is not None and m["cid"] != cid:
                                 out.append((m["cid"], {"t": "tsc", "i": i, "n": n}))
                     return out, None, None
-                if t["game"] == "arcade" and a in ("tb", "clr"):   # 街機方塊：盤面快照／垃圾行，只轉發（不通知整個畫面、不廣播 tblinfo）
+                if t["game"] == "arcade" and a in ("tb", "clr"):   # 俄羅斯方塊：盤面快照／垃圾行，只轉發（不通知整個畫面、不廣播 tblinfo）
                     return ar_msg(t, cid, msg, now_ms)[1], None, None
                 if a == "leave":
                     self._table_leave_locked(cid, out)
@@ -5770,7 +5770,7 @@ class Room:
                     hk_tick(t, now_ms)   # 空氣曲棍球：超過時間上限還沒結算
                     if t["game"] == "intel" and a in IT_MSGS:   # 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
                         it_msg(t, cid, msg, now_ms)
-                    elif t["game"] == "arcade":   # 街機方塊：單人／聯機邀請／接受／拒絕／開始／結束
+                    elif t["game"] == "arcade":   # 俄羅斯方塊：單人／聯機邀請／接受／拒絕／開始／結束
                         changed, extra = ar_msg(t, cid, msg, now_ms)
                         out.extend(extra)
                         if not changed:
@@ -5798,14 +5798,14 @@ class Room:
                         un_say(t, cid)
                     elif a == "catch":
                         un_catch(t, cid)
-                    elif a == "timeout":   # UNO／方塊拼圖：回合限時到了（伺服器核對時鐘）
+                    elif a == "timeout":   # UNO／Blokus：回合限時到了（伺服器核對時鐘）
                         if t["game"] == "blokus":
                             bk_timeout(t, now_ms)
                         elif t["game"] == "trigon":
                             tg_timeout(t, now_ms)
                         else:
                             un_timeout(t, now_ms)
-                    elif a == "place":   # 方塊拼圖：放方塊 {p 第幾塊, c 佔用的格子座標}
+                    elif a == "place":   # Blokus：放方塊 {p 第幾塊, c 佔用的格子座標}
                         if t["game"] == "trigon":
                             tg_place(t, cid, msg.get("p"), msg.get("c"), now_ms)
                         else:
@@ -6210,7 +6210,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         if now - last_typ < TBL_TYP_CD:
                             continue
                         last_typ = now
-                    elif msg.get("a") in ("kill", "boss", "clr"):   # 見習驅魔師的擊殺／打 Boss、街機方塊的消行：不限流（兩次之間本來就隔著一筆畫，限流反而會吃掉擊殺）
+                    elif msg.get("a") in ("kill", "boss", "clr"):   # 見習驅魔師的擊殺／打 Boss、俄羅斯方塊的消行：不限流（兩次之間本來就隔著一筆畫，限流反而會吃掉擊殺）
                         pass
                     else:
                         if now - last_tbl < TBL_CD:

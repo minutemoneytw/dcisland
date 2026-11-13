@@ -101,7 +101,7 @@ const S = {
   craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
   craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
   gamesDB: null, tableImgs: {},        // 和平島遊戲桌：遊戲定義（assets/games/games.json，手寫）與桌子圖
-  ar: null, arOpp: {}, arRaf: 0, tableCab: -1,   // 街機方塊：自己這一局的本機狀態／別台的盤面快照／畫面迴圈／我走到的是第幾台
+  ar: null, arOpp: {}, arRaf: 0, tableCab: -1,   // 俄羅斯方塊：自己這一局的本機狀態／別台的盤面快照／畫面迴圈／我走到的是第幾台
   tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, bk: null, tg: null, bkTimer: 0, bkOff: 0, bkTimeoutAt: 0, unTimer: 0, unOff: 0, unTimeoutAt: 0, unPick: null, dg: null, dgRaf: 0, dgLast: 0, ty: null, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
@@ -4369,7 +4369,7 @@ function openTable(tb) {
   S.mouseHeld = false;
   S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null; S.bk = null; S.tg = null; S.gamePlayed = false; S.tableLocalLog = [];
   const inf = S.tblInfo?.[tb.id];
-  S.tableCab = tb.cab ?? -1; S.ar = null; S.arOpp = {};   // 街機方塊：4 台共用一張桌，坐哪一台由 cab 決定
+  S.tableCab = tb.cab ?? -1; S.ar = null; S.arOpp = {};   // 俄羅斯方塊：4 台共用一張桌，坐哪一台由 cab 決定
   if (tb.game === 'arcade' ? !inf?.cabs?.[tb.cab] : (!inf || (!inf.play && inf.n < inf.max))) S.tableChoice = true;   // 還有位子（街機：這台空著）：先讓玩家選「入座」或「觀戰」（沒滿人也可以選觀戰）
   else S.net.tbl({ a: 'join', id: tb.id, role: 'spec', cab: S.tableCab });             // 滿人或已開局（街機：這台有人）：直接觀戰
   buildTable(); $('tableBox').classList.remove('hidden');
@@ -4456,7 +4456,7 @@ function tableTag(p) {
   if (p.npc) return null;
   const id = p === S.players[0] ? S.net?.id : p.id;
   if (id == null) return null;
-  for (const tb of tablesHere()) { const inf = S.tblInfo?.[tb.id]; if (inf?.seated?.includes(id)) return (inf.playing ? inf.playing.includes(id) : inf.play) ? '遊戲中' : '入座中'; }   // 街機方塊：每台各自在不在玩（playing）
+  for (const tb of tablesHere()) { const inf = S.tblInfo?.[tb.id]; if (inf?.seated?.includes(id)) return (inf.playing ? inf.playing.includes(id) : inf.play) ? '遊戲中' : '入座中'; }   // 俄羅斯方塊：每台各自在不在玩（playing）
   return null;
 }
 const SUIT_SYM = { S: '♠', H: '♥', D: '♦', C: '♣' };
@@ -4479,7 +4479,7 @@ function buildTable() {
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   if (S.tableChoice) {   // 剛走到桌邊：選入座還是觀戰
     const inf = S.tblInfo?.[S.tableId];
-    if (S.tableCab >= 0) box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　${S.tableCab + 1} 號機（空機台）${inf?.n ? `，其他機台 ${inf.n} 人` : ''}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));   // 街機方塊：4 台共用一張桌，說是哪一台
+    if (S.tableCab >= 0) box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　${S.tableCab + 1} 號機（空機台）${inf?.n ? `，其他機台 ${inf.n} 人` : ''}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));   // 俄羅斯方塊：4 台共用一張桌，說是哪一台
     else box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　目前 ${inf ? `${inf.n}/${inf.max} 人入座` : '還沒有人入座'}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));
     if (gd?.story) box.appendChild(mk('div', 'it-story', gd.story));   // 有故事背景的遊戲（秘藥情報戰）：先看故事
     box.appendChild(mk('div', 'table-tag', '要加入遊戲，還是先在旁邊看？（觀戰不用等滿人，之後想玩可以再按「入座」）'));
@@ -4495,10 +4495,10 @@ function buildTable() {
     return;
   }
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
-  if (tb?.game === 'arcade') { buildArcade(box, v, mk, gd); return; }   // 街機方塊有自己的畫面（盤面＋聯機）
+  if (tb?.game === 'arcade') { buildArcade(box, v, mk, gd); return; }   // 俄羅斯方塊有自己的畫面（盤面＋聯機）
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
-  if (tb?.game === 'trigon') { buildTrigon(box, v, mk, gd); return; }   // 三角方塊拼圖有自己的畫面（三角格棋盤＋方塊托盤）
-  if (tb?.game === 'blokus') { buildBlokus(box, v, mk, gd); return; }   // 方塊拼圖有自己的畫面（棋盤＋方塊托盤）
+  if (tb?.game === 'trigon') { buildTrigon(box, v, mk, gd); return; }   // Blokus Trigon有自己的畫面（三角格棋盤＋方塊托盤）
+  if (tb?.game === 'blokus') { buildBlokus(box, v, mk, gd); return; }   // Blokus有自己的畫面（棋盤＋方塊托盤）
   if (tb?.game === 'mage') { buildMage(box, v, mk, gd); return; }   // 見習驅魔師有自己的畫面（畫符號的場地）
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
   if (tb?.game === 'maze') { buildMaze(box, v, mk, gd); return; }   // 豆豆迷宮有自己的畫面（迷宮）
@@ -4666,7 +4666,7 @@ function buildGomoku(box, v, mk) {
   box.appendChild(log);
   const gd = gameDef('gomoku'); if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
-// ---- 方塊拼圖 Blokus（第十一桌 t11；2026-11-13，使用者要求）：20×20 棋盤（canvas）＋我的方塊托盤。選方塊 → 旋轉（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。
+// ---- Blokus（第十一桌 t11；2026-11-13，使用者要求）：20×20 棋盤（canvas）＋我的方塊托盤。選方塊 → 旋轉（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。
 // 合法與否在本機先判（只用來顯示預覽與標出可接的角），最後以伺服器為準（和 worker 的 bkLegal 同一套規則）。棋盤、各人用掉的方塊都是公開資訊，觀戰者也看得到 ----
 const BK_N = 20, BK_CELL = 24, BK_TURN_SEC = 45;
 const BK_SHAPES = [['#'], ['##'], ['###'], ['##', '#.'], ['####'], ['##', '##'], ['###', '.#.'], ['###', '#..'], ['.##', '##.'],
@@ -4780,7 +4780,7 @@ function bkSelect(p) {   // 選方塊；再點一次已選的＝旋轉
 }
 function bkRotate(d) { const o = S.bk; if (!o || o.sel == null) return; o.rot = (o.rot + d + 4) % 4; buildTable(); }
 function bkFlip() { const o = S.bk; if (!o || o.sel == null) return; o.flip = !o.flip; buildTable(); }
-function bkKey(e) {   // 遊戲畫面開著且在玩方塊拼圖：R 旋轉、F 翻面
+function bkKey(e) {   // 遊戲畫面開著且在玩Blokus：R 旋轉、F 翻面
   const k = e.key.toLowerCase();
   if (k === 'r') { e.preventDefault(); bkRotate(e.shiftKey ? -1 : 1); } else if (k === 'f') { e.preventDefault(); bkFlip(); }
 }
@@ -4881,8 +4881,8 @@ function buildBlokus(box, v, mk, gd) {
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
-// ---- 方塊拼圖「三角版」Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：正六邊形的三角格棋盤（邊長 9，486 格）＋我的方塊托盤（22 塊，1～6 個三角形）。
-// 操作同方塊拼圖：點選方塊 → 旋轉 60 度（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。座標系與規則同 worker 的 tg*（三角形 (x, y)，(x + y) 偶數＝朝上；頂點 (i, j)，i + j 偶數）。
+// ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：正六邊形的三角格棋盤（邊長 9，486 格）＋我的方塊托盤（22 塊，1～6 個三角形）。
+// 操作同Blokus：點選方塊 → 旋轉 60 度（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。座標系與規則同 worker 的 tg*（三角形 (x, y)，(x + y) 偶數＝朝上；頂點 (i, j)，i + j 偶數）。
 // 滑鼠指到的是「最近的格點（頂點）」，方塊上最靠近中心的那個頂點對齊它——頂點之間的平移一定保持三角形的方向，所以不用管朝上朝下 ----
 const TG_N = 9, TG_CX = 19, TG_W = 39, TG_ROWS = 18, TG_S = 26, TG_MARGIN = 14;   // TG_S：三角形邊長（像素）
 const TG_PIECES = [[[0,0]],[[0,0],[0,1]],[[0,0],[-1,1],[0,1]],[[0,0],[-1,1],[0,1],[-1,2]],[[0,0],[-1,1],[0,1],[1,1]],[[0,0],[-2,1],[-1,1],[0,1]],[[0,0],[-1,1],[0,1],[-1,2],[0,2]],[[0,0],[-1,1],[0,1],[-2,2],[-1,2]],[[0,0],[-1,1],[0,1],[1,1],[-1,2]],[[0,0],[1,0],[0,1],[1,1],[2,1]],[[0,0],[-1,1],[0,1],[-1,2],[0,2],[0,3]],[[0,0],[-1,1],[0,1],[-1,2],[0,2],[1,2]],[[0,0],[-1,1],[0,1],[-2,2],[-1,2],[-2,3]],[[0,0],[-1,1],[0,1],[-2,2],[-1,2],[0,2]],[[0,0],[-1,1],[0,1],[-3,2],[-2,2],[-1,2]],[[0,0],[-1,1],[0,1],[1,1],[-1,2],[0,2]],[[0,0],[-1,1],[0,1],[1,1],[-1,2],[1,2]],[[0,0],[-1,1],[0,1],[1,1],[2,1],[-1,2]],[[0,0],[-1,1],[0,1],[1,1],[2,1],[1,2]],[[0,0],[-2,1],[-1,1],[0,1],[-2,2],[-1,2]],[[0,0],[-3,1],[-2,1],[-1,1],[0,1],[-3,2]],[[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]]];   // 與兩份伺服器同一份：22 塊 polyiamond（三角形的 [x, y]，已正規化）
@@ -4994,7 +4994,7 @@ function tgSelect(p) {   // 選方塊；再點一次已選的＝旋轉
 }
 function tgRotate(d) { const o = S.tg; if (!o || o.sel == null) return; o.rot = (o.rot + d + 6) % 6; buildTable(); }
 function tgFlip() { const o = S.tg; if (!o || o.sel == null) return; o.flip = !o.flip; buildTable(); }
-function tgKey(e) {   // 遊戲畫面開著且在玩三角方塊拼圖：R 旋轉、F 翻面
+function tgKey(e) {   // 遊戲畫面開著且在玩Blokus Trigon：R 旋轉、F 翻面
   const k = e.key.toLowerCase();
   if (k === 'r') { e.preventDefault(); tgRotate(e.shiftKey ? -1 : 1); } else if (k === 'f') { e.preventDefault(); tgFlip(); }
 }
@@ -7278,7 +7278,7 @@ function buildUno(box, v, mk, gd) {
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
-// ---- 街機方塊（俄羅斯方塊類；t13，2026-11-13，使用者要求）：場地上方 4 台街機共用一張邏輯桌，每台一個人玩 ----
+// ---- 俄羅斯方塊（t13，2026-11-13，使用者要求）：場地上方 4 台街機共用一張邏輯桌，每台一個人玩 ----
 // 單人模式：各自一局，分數進排行榜；聯機模式：發起後其他機台的人收到邀請（最多 4 人），一般模式（各玩各的、全員出局後依分數排名）
 // 或對戰模式（一次消 2／3／4 行送每個對手 1／2／4 行垃圾，使用者定）。方塊遊戲在本機跑（信任客戶端），伺服器只給 seed、轉發盤面快照與垃圾行。
 // 協定見 notes「和平島與遊戲桌」：tbl {a:'solo'|'link'|'lmode'|'ljoin'|'lno'|'lquit'|'lstart'|'tb'|'clr'|'over'}；s→c ttb（盤面快照）、tgb（垃圾行）
@@ -7859,7 +7859,7 @@ function tableDrawEntries(list) {
   }
 }
 
-// 街機方塊的機台標籤：每台頭上一行（玩家名字／空機台），有人在等聯機時空機台與閒置中的機台多一行「聯機邀請中」
+// 俄羅斯方塊的機台標籤：每台頭上一行（玩家名字／空機台），有人在等聯機時空機台與閒置中的機台多一行「聯機邀請中」
 function arcadeLabel(tb, r, inf, p) {
   const c = inf?.cabs?.[tb.cab], cx = r.x + r.w / 2;
   const lines = [];
@@ -9420,12 +9420,12 @@ addEventListener('keydown', e => {
   if (S.tableOpen) {   // 遊戲畫面開著：Esc 離開；五子棋復盤時 ←／→／Home／End 切換步數；其他鍵都不處理（不能走路）
     if (k === 'escape') { e.preventDefault(); if (!$('rulesBox').classList.contains('hidden')) rulesShow(false); else leaveTable(); }   // 規則視窗開著：Esc 先關；離開確認開著：Esc＝取消規則
     else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
-    else if (S.ar && arKey(e)) { /* 街機方塊：方向鍵／X／Z／空白鍵／C／Shift */ }
+    else if (S.ar && arKey(e)) { /* 俄羅斯方塊：方向鍵／X／Z／空白鍵／C／Shift */ }
     else if (S.mz && mzKey(e)) { /* 豆豆迷宮：方向鍵／WASD */ }
     else if (S.hk && hkKey(e, true)) { /* 空氣曲棍球：方向鍵／WASD */ }
     else if (S.ty) typingKey(e);   // 英文打字競賽：英文字母
     else if (S.tableView?.game === 'blokus' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') bkKey(e);
-    else if (S.tableView?.game === 'trigon' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') tgKey(e);   // 三角方塊拼圖：R 旋轉 60 度、F 翻面   // 方塊拼圖：R 旋轉、F 翻面
+    else if (S.tableView?.game === 'trigon' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') tgKey(e);   // Blokus Trigon：R 旋轉 60 度、F 翻面   // Blokus：R 旋轉、F 翻面
     else if (S.gmStep != null && S.tableView?.moves && ['arrowleft', 'arrowright', 'home', 'end'].includes(k)) {
       e.preventDefault();
       const N = S.tableView.moves.length;
@@ -9839,7 +9839,7 @@ async function boot() {
     ...Object.values(S.fishDB.terrains).flat().map(async f => S.fishImgs[f.id] = await optImg(`assets/fish/${f.sprite}`)),
     ...(S.craftDB?.materials || []).map(async m => S.craftImgs[m.id] = await optImg(`assets/craft/${m.id}.png`)),
     ...Object.entries(S.gamesDB?.games || {}).map(async ([id, g]) => S.tableImgs[id] = await optImg(`assets/games/${g.sprite}`)),
-    ...Object.values(S.gamesDB?.games || {}).flatMap(g => g.sprites || []).map(async f => S.tableImgs[f] = await optImg(`assets/games/${f}`)),   // 街機方塊：4 台各自的配色（terrain.json 的 tables[].img）
+    ...Object.values(S.gamesDB?.games || {}).flatMap(g => g.sprites || []).map(async f => S.tableImgs[f] = await optImg(`assets/games/${f}`)),   // 俄羅斯方塊：4 台各自的配色（terrain.json 的 tables[].img）
     ensureTerrain(S.terrain),
   ]);
 
@@ -9934,8 +9934,8 @@ async function boot() {
     onTpg: onNetTpg,           // 英文打字競賽：觀戰者看到的其他玩家打字進度
     onTsc: onNetTsc,           // 英文打字競賽：其他玩家的分數
     onTmx: onNetTmx,           // 英文／中文打字競賽：對手剛打錯（分數框閃紅）
-    onTtb: onNetTtb,           // 街機方塊：別台的盤面快照
-    onTgb: onNetTgb,           // 街機方塊（對戰模式）：被送垃圾行
+    onTtb: onNetTtb,           // 俄羅斯方塊：別台的盤面快照
+    onTgb: onNetTgb,           // 俄羅斯方塊（對戰模式）：被送垃圾行
     onTms: onNetTms,           // 豆豆迷宮：豆豆的快照
     onTmp: onNetTmp,           // 豆豆迷宮：幽靈玩家的位置
     onThp: onNetThp,           // 空氣曲棍球：別人的握把位置
