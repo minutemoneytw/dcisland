@@ -2440,6 +2440,7 @@ function stepMob(a, dt) {
     }
   }
   if (a.startleT > 0 && (a.startleT -= dt) <= 0) a.startle = 0;      // 驚嚇一陣子後恢復平靜
+  petPlayStep(a, dt, def);   // 和平島貓狗玩耍追逐（內部自判地形；玩耍時兩隻互設目標，之後照下面的一般移動走）
   if (a.idle > 0) { a.idle -= dt; a.z = 0; return; }
   if (!a.target || Math.hypot(a.target.x - a.x, a.target.y - a.y) < 5) {
     if (a.target?.flee) { a.idle = 1 + Math.random() * 2; a.target = null; return; }
@@ -2457,7 +2458,8 @@ function stepMob(a, dt) {
     if (!a.target) { a.idle = .5; return; }
   }
   const chasing = def.retaliate && a.aggroT;   // 追殺中：速度用 RETAL_CHASE（走路逃不掉、跑步甩得掉）
-  const sp = (chasing ? RETAL_CHASE : (a.startle ? def.speed * 2.6 : def.speed)) * dt;
+  // 玩耍追逐（和平島貓狗）：追的一方比平常快、被追的慢一點，追的人才追得上（追上就換人）
+  const sp = (chasing ? RETAL_CHASE : (a.startle ? def.speed * 2.6 : a.play ? def.speed * (a.play.role === 'chase' ? 1.9 : 1.6) : def.speed)) * dt;
   const dx = a.target.x - a.x, dy = a.target.y - a.y, len = Math.hypot(dx, dy) || 1;
   if (dx) a.dir = Math.sign(dx);
   // 視覺朝向（4 方向）：給「方向網格」的怪物挑列用；取移動量大的那一軸（靜止時保留上一次）
@@ -2475,6 +2477,54 @@ function stepMob(a, dt) {
     a.bounce += dt * rate;
     a.z = Math.abs(Math.sin(a.bounce * Math.PI)) * 4;
   }
+}
+
+// ---- 和平島貓狗玩耍追逐（2026-11-13 使用者定）：附近的貓狗會互相追逐玩耍，誰追誰、兩隻還是一群都不一定 ----
+// 做法：每隻偶爾「約」附近另一隻一起玩（a.play＝{o: 對方, role: 'chase'／'flee', until}）：追的一方每幀把目標
+// 設成對方，貼近就換人追（或隨機改追附近第三隻＝一群接力）並飄一顆愛心；被追的往反方向逃。玩家揮擊嚇到
+// （startle）、對方死掉或時間到就散。這裡只挑目標與管狀態，移動照 stepMob 下面的一般流程走。
+const PLAY_JOIN_R = 6.5 * CELL, PLAY_CATCH_R = 22, PLAY_FAR_R = 4.5 * CELL;
+
+function petPlayStep(a, dt, def) {
+  if (S.terrain !== 'peace') return;   // 只有和平島的貓狗會玩
+  if (a.play) {
+    const o = a.play.o;
+    // 對方死掉／被移除／被嚇到（自己也一樣）／對方已經跟別的配對（理論上不會）：散場
+    if (!o || o.dead || !S.mobs.includes(o) || o.startle || a.startle || (o.play && o.play.o !== a)) { petPlayEnd(a); return; }
+    if (S.t >= a.play.until) {   // 玩夠了：兩隻都歇一下再回去散步
+      petPlayEnd(a);
+      a.idle = Math.max(a.idle, .6 + Math.random()); o.idle = Math.max(o.idle, .6 + Math.random());
+      return;
+    }
+    if (a.play.role === 'chase') {
+      if (Math.hypot(o.x - a.x, o.y - a.y) < PLAY_CATCH_R) {   // 追上了：飄愛心，換人追（或接力追第三隻）
+        S.floaters.push({ fxk: 'heart', x1: a.x, y1: a.y - 26, x2: o.x, y2: o.y - 24, life: .6 });
+        const third = Math.random() < .35
+          ? S.mobs.find(m => m !== a && m !== o && !m.dead && !m.play && !m.startle && !mobDef(m.id).retaliate && Math.hypot(m.x - a.x, m.y - a.y) < PLAY_JOIN_R)
+          : null;
+        if (third) { o.play = null; a.play.o = third; third.play = { o: a, role: 'flee', until: a.play.until }; }   // 一群：原本的被追者恢復自由
+        else { a.play.role = 'flee'; o.play = { o: a, role: 'chase', until: a.play.until }; }                       // 兩隻互追：換人
+      }
+      if (a.play.role === 'chase') a.target = o;                                    // 繼續追著對方跑
+      else a.target = fleeTarget(a, def, o.x, o.y, 150);                            // 剛被追上：掉頭逃
+    } else if (Math.hypot(o.x - a.x, o.y - a.y) < PLAY_FAR_R) {   // 被追：對方靠近就往反方向逃（對方還遠就照常散步）
+      const d = Math.hypot((a.target?.x ?? -1e9) - a.x, (a.target?.y ?? -1e9) - a.y);
+      if (!a.target || d < 28) a.target = fleeTarget(a, def, o.x, o.y, 150);
+    }
+    return;
+  }
+  if (a.startle || a.idle > 0 || Math.random() >= dt * .12) return;   // 平均約 8 秒起一次玩心；嚇到／歇著不約
+  const mates = S.mobs.filter(m => m !== a && !m.dead && !m.play && !m.startle && Math.hypot(m.x - a.x, m.y - a.y) < PLAY_JOIN_R);
+  if (!mates.length) return;
+  const o = mates[Math.floor(Math.random() * mates.length)];   // 對象隨機：誰追誰不一定
+  const until = S.t + 3 + Math.random() * 4;
+  a.play = { o, role: 'chase', until }; o.play = { o: a, role: 'flee', until };
+  a.idle = 0; o.idle = 0;
+}
+
+function petPlayEnd(a) {   // 散場：把對方也放掉（對方若正在跟別的玩，代表已被接手，不動）
+  const o = a.play?.o; a.play = null;
+  if (o?.play?.o === a) o.play = null;
 }
 
 function rebuildOcc() {
