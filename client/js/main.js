@@ -5896,22 +5896,25 @@ function mzWallLayer() {   // 迷宮牆（只畫一次）：深色牆面＋貼�
   return (MZ_WALLS = c);
 }
 const mzPx = (x, y) => [(x + .5) * MZ_T, MZ_HUD + (y + .5) * MZ_T];
-function mzDrawBean(g, x, y, d, open, scale = 1) {   // 豆豆：圓滾滾的綠豆子，頭上一片小芽，眼睛看著前進方向，嘴巴一開一合
-  const [cx, cy] = mzPx(x, y), r = 8 * scale, fx = d >= 0 ? MZ_DX[d] : 0, fy = d >= 0 ? MZ_DY[d] : 0;
+function mzDrawBean(g, x, y, d, open, scale = 1) {   // 豆豆：圓滾滾的黃色小雞（2026-11-13 使用者選的方案 B）：橘色尖嘴朝前進方向一開一合、翅膀在背後、頭上一撮呆毛
+  const [cx, cy] = mzPx(x, y), s = scale, R = 8 * s, fx = d >= 0 ? MZ_DX[d] : -1, fy = d >= 0 ? MZ_DY[d] : 0, side = fx || 1;
   g.save();
-  g.fillStyle = '#4a9a30'; g.beginPath(); g.ellipse(cx + 3 * scale, cy - r - 1 * scale, 3.5 * scale, 2 * scale, -.5, 0, Math.PI * 2); g.fill();   // 小芽
-  g.strokeStyle = '#3a7a20'; g.lineWidth = 1.5 * scale; g.beginPath(); g.moveTo(cx, cy - r + 1); g.lineTo(cx + 1.5 * scale, cy - r - 1.5 * scale); g.stroke();
-  g.fillStyle = '#7ad048'; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
-  g.strokeStyle = '#3a7a20'; g.lineWidth = 1.2; g.stroke();
-  g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.arc(cx - 3 * scale, cy - 3 * scale, 2.2 * scale, 0, Math.PI * 2); g.fill();
-  if (scale > .3) {
-    for (const sx of [-3.2, 3.2]) {
-      const ex = cx + sx * scale + fx * 1.5 * scale, ey = cy - 1.5 * scale + fy * 1.5 * scale;
-      g.fillStyle = '#fff'; g.beginPath(); g.arc(ex, ey, 2.4 * scale, 0, Math.PI * 2); g.fill();
-      g.fillStyle = '#1a2a10'; g.beginPath(); g.arc(ex + fx * 1, ey + fy * 1, 1.2 * scale, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#f0b830'; g.lineWidth = 1.4 * s; g.beginPath(); g.moveTo(cx - side * 1 * s, cy - R + 1 * s); g.quadraticCurveTo(cx - side * 2 * s, cy - R - 3 * s, cx + side * 1 * s, cy - R - 2.5 * s); g.stroke();   // 呆毛
+  g.fillStyle = '#ffd860'; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#d8a020'; g.lineWidth = 1; g.stroke();
+  g.fillStyle = 'rgba(255,255,255,.4)'; g.beginPath(); g.arc(cx - side * 3 * s, cy - 3.5 * s, 2 * s, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#f0b830'; g.beginPath(); g.ellipse(fx ? cx - fx * 3 * s : cx - 3.5 * s, cy + 2 * s, 3.2 * s, 2.2 * s, fx ? -.4 * fx : -.3, 0, Math.PI * 2); g.fill();   // 翅膀（背後）
+  if (s > .3) {
+    const eyes = fx ? [[cx + fx * 3.2 * s, cy - 2.5 * s]] : [[cx - 2.8 * s, cy - 1.5 * s + fy * 2 * s], [cx + 2.8 * s, cy - 1.5 * s + fy * 2 * s]];
+    for (const [ex, ey] of eyes) {
+      g.fillStyle = '#1a1a22'; g.beginPath(); g.arc(ex, ey, 1.9 * s, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(ex - .6 * s, ey - .7 * s, .7 * s, 0, Math.PI * 2); g.fill();
     }
-    g.fillStyle = '#2a4a18'; g.beginPath(); g.ellipse(cx + fx * 3 * scale, cy + 3.5 * scale + fy * 1.5 * scale, 2.6 * scale, (.6 + 2.2 * open) * scale, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#ffa0a0'; g.beginPath(); g.ellipse(fx ? cx + fx * 4.2 * s : cx, fx ? cy + 1.6 * s : cy + fy * 1 * s + 2 * s, 1.4 * s, .9 * s, 0, 0, Math.PI * 2); g.fill();   // 腮紅
   }
+  const bx = cx + (fx || 0) * 6 * s, by = cy + (fy || 0) * 6 * s, nx = -(fy || 0), ny = fx || 0, w = (.6 + 1.6 * open) * s;   // 尖嘴：嘴根在身體邊緣、往前進方向尖出去
+  g.fillStyle = '#ff9a30'; g.beginPath(); g.moveTo(bx + nx * w, by + ny * w); g.lineTo(bx + (fx || 0) * 5 * s, by + (fy || 0) * 5 * s); g.lineTo(bx - nx * w, by - ny * w); g.fill();
+  if (open > .5) { g.strokeStyle = '#b05a10'; g.lineWidth = .8 * s; g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + (fx || 0) * 4 * s, by + (fy || 0) * 4 * s); g.stroke(); }
   g.restore();
 }
 function mzDrawWisp(g, x, y, d, col, mode, flash, t) {   // 小幽靈：圓頭＋往後飄的尾巴（水滴形）；害怕時變深藍、快結束時閃白；被吃掉只剩眼睛

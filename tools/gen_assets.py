@@ -1605,7 +1605,7 @@ def table_dodge():
     return cv
 
 def table_maze():
-    """豆豆迷宮：深青色桌面（有桌腳），桌上一塊螢幕，裡面是青綠色迷宮線、一排豆子、能量豆、綠色的豆豆（頭上有小芽）和兩隻水滴形小幽靈。"""
+    """豆豆迷宮：深青色桌面（有桌腳），桌上一塊螢幕，裡面是青綠色迷宮線、一排豆子、能量豆、黃色小雞造型的豆豆和兩隻水滴形小幽靈。"""
     cv = Canvas(48, 32)
     wood, screen = hx("#2f4a4a"), hx("#06101c")
     cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
@@ -1616,7 +1616,7 @@ def table_maze():
     for x in range(8, 41, 3): cv.set(x, 16, hx("#ffe0a0"))     # 一排豆子
     for y in (10, 13): cv.set(7, y, hx("#ffe0a0")); cv.set(40, y, hx("#ffe0a0"))
     cv.ellipse(8, 21, 1.4, 1.4, hx("#ffd04a"))                  # 能量豆
-    cv.ellipse(28, 16, 2.2, 2.2, hx("#7ad048")); cv.set(27, 15, hx("#ffffff")); cv.set(29, 13, hx("#4a9a30"))   # 豆豆（綠色圓豆＋小芽）
+    cv.ellipse(28, 16, 2.2, 2.2, hx("#ffd860")); cv.set(29, 15, hx("#1a1a22")); cv.set(31, 16, hx("#ff9a30")); cv.set(28, 13, hx("#f0b830"))   # 豆豆（黃色小雞：眼睛、橘色尖嘴、呆毛；2026-11-13 使用者選的方案 B）
     for gx, gc in ((17, "#ff6a6a"), (36, "#5aa8ff")):           # 兩隻小幽靈（水滴形）
         cv.ellipse(gx, 16, 2, 1.8, hx(gc)); cv.set(gx + 2, 17, hx(gc)); cv.set(gx + 3, 17, hx(gc)); cv.set(gx - 1, 16, hx("#ffffff")); cv.set(gx + 1, 16, hx("#ffffff"))
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
