@@ -878,7 +878,7 @@ function loseExp() {                     // 倒地 10% 機率扣 XP：扣「升�
 // 稱號看「懲罰生效期間」殺過哪種：殺貓＝《屠貓變態》、殺狗＝《屠狗變態》、兩種都殺過＝《反社會人格變態》；
 // 每次殺都重新計時一小時，過期後恢復原本選的稱號（開機還原見 boot 的 titleForce 段）。
 // 稱號是本機機制（localStorage 的 dcisland.m0.titleForce，靠 state.title 同步給同島的人看，兩種模式都有效）。
-// XP 只有訪客／單機在本機扣——登入連線時 XP 由伺服器記帳（xpe 事件只收正數），連線版要扣得改 worker（另行徵得同意）。
+// XP 兩種模式都會掉等：訪客／單機在本機扣；登入連線上報 petkill 事件（xpe），伺服器照現值算扣量後用 xp 回覆演出。
 function petKillPenalty(od, p) {
   const f = lsObj('dcisland.m0.titleForce', null), alive = f && f.until > Date.now();
   const kinds = alive && f.kinds ? { ...f.kinds } : {};   // 生效中的紀錄帶著走：這一小時內兩種都殺過就升級
@@ -888,15 +888,20 @@ function petKillPenalty(od, p) {
   lsSet('dcisland.m0.titleForce', { id, kinds, until, prev: alive && f.prev !== undefined ? f.prev : (S.me.title ?? null) });
   S.titleForceId = id; S.titleForceUntil = until;
   S.me.title = id; saveAvatar();   // 名字正上方立刻換上懲罰稱號；state.title 會同步給同島的人
-  // 掉一等：扣「這級累積＋前一級的需求」＝退到前一等的等級起點；Lv1 扣到 0
+  // XP：訪客／單機在本機扣；登入連線由伺服器記帳（上報 petkill 事件，伺服器照現值算扣量，等 xp 回覆在 onNetXp 演出）
   const li = lvInfo(S.profile.xp);
-  const loss = !xpServer() ? (li.lv > 1 ? li.cur + xpNeed(li.lv - 1) : li.cur) : 0;
-  if (loss > 0) {
-    S.profile.xp = Math.max(0, S.profile.xp - loss);
-    saveProfile();
-    S.floaters.push({ x: p.x, y: p.y - 56, v: `−${loss} XP（掉一等）`, life: 1.6, xpLoss: true });
+  let dropLv = li.lv > 1;   // Lv1 沒等可掉（但仍扣光這級累積）；連線版照本機映像猜，實扣以伺服器為準
+  if (xpServer()) {
+    S.net?.xpPetKill?.();   // toast 文案等 xp 回覆才準確知道扣量，這裡先照本機等級猜
+  } else {
+    const loss = li.lv > 1 ? li.cur + xpNeed(li.lv - 1) : li.cur;
+    if (loss > 0) {
+      S.profile.xp = Math.max(0, S.profile.xp - loss);
+      saveProfile();
+      S.floaters.push({ x: p.x, y: p.y - 56, v: `−${loss} XP${li.lv > 1 ? '（掉一等）' : ''}`, life: 1.6, xpLoss: true });
+    }
   }
-  const pens = [loss > 0 ? '掉 1 等級' : '', `強制戴上《${PET_KILL_TITLES[id]}》一小時`].filter(Boolean);
+  const pens = [dropLv ? '掉 1 等級' : '', `強制戴上《${PET_KILL_TITLES[id]}》一小時`].filter(Boolean);
   toast(`你殺了和平島的${kinds.cat && kinds.dog ? '貓狗' : od.name}！懲罰：${pens.join('，')}`, 4200);
 }
 const isPeacePet = od => S.terrain === 'peace' && (od.id === 'cat' || od.id === 'dog' || od.id.startsWith('cat_') || od.id.startsWith('dog_'));
@@ -916,7 +921,7 @@ function onNetXp(m) {
   S.profile.xp = Math.max(0, Math.floor(m.xp));
   saveProfile();
   if (d > 0) S.floaters.push({ x: p.x, y: p.y - 60, v: `+${d} XP`, life: .9, xpGain: true });
-  else S.floaters.push({ x: p.x, y: p.y - 46, v: `−${-d} XP`, life: 1.2, xpLoss: true });
+  else S.floaters.push({ x: p.x, y: p.y - 46, v: `−${-d} XP${m.k === 'petkill' && lvInfo(S.profile.xp).lv < before ? '（掉一等）' : ''}`, life: 1.2, xpLoss: true });
   const after = lvInfo(S.profile.xp);
   if (after.lv > before) levelUpFx(p, after.lv);
 }

@@ -3760,13 +3760,24 @@ export class Island {
         if (r) try { ws.send(JSON.stringify({ t: "craftdb", craft: r.craft || {} })); } catch { /* 對方已斷線 */ }
       }
     } else if (msg.t === "xpe") {   // 擊倒非主動怪的 XP 事件（伺服器無法驗證：信任事件＋夾頻；2026-11-07 使用者同意）
-      if (att.user && msg.k === "mob" && att.terrain) {
+      if (att.user && att.terrain && (msg.k === "mob" || msg.k === "petkill")) {
         const now = Date.now();
         if (now - (this.lastXpMob.get(ws) || 0) >= XP_MOB_CD_MS) {
           this.lastXpMob.set(ws, now);
-          // 數量照客戶端帶的（會反擊的野怪＝島主經驗 1/10，2026-11-09 使用者同意延伸）；夾 1～XP_XPE_MAX，防亂報
-          const n = Math.min(XP_XPE_MAX, Math.max(1, Math.floor(Number(msg.n) || 1)));
-          await this.grantXp(ws, n, "mob");
+          if (msg.k === "mob") {
+            // 數量照客戶端帶的（會反擊的野怪＝島主經驗 1/10，2026-11-09 使用者同意延伸）；夾 1～XP_XPE_MAX，防亂報
+            const n = Math.min(XP_XPE_MAX, Math.max(1, Math.floor(Number(msg.n) || 1)));
+            await this.grantXp(ws, n, "mob");
+          } else {   // 和平島殺寵懲罰（2026-11-13 使用者定）：扣「掉一等」＝這級累積＋前一級需求，Lv1 扣到 0。限定和平島；扣量照 Registry 現值自己算，不信任客戶端帶的數字
+            if (att.terrain === "peace") {
+              const pr = await this.registryCall("/profile", { uid: att.user.id });
+              if (pr && typeof pr.xp === "number") {
+                const i = xpInfo(pr.xp);
+                const loss = i.lv > 1 ? i.cur + XP_NEED(i.lv - 1) : i.cur;
+                if (loss > 0) await this.grantXp(ws, -loss, "petkill");
+              }
+            }
+          }
         }
       }
     } else if (msg.t === "enter" || msg.t === "terrain") {

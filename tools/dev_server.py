@@ -6257,13 +6257,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             ws_send(sock, json.dumps({"t": "craftdb", "craft": full}))
                 elif t == "xpe":   # 擊倒非主動怪的 XP 事件（伺服器無法驗證：信任事件＋夾頻；2026-11-07 使用者同意）
                     c = room.clients.get(cid)
-                    if c and c.get("user") and msg.get("k") == "mob" and room.terrain_of(cid):
+                    if c and c.get("user") and room.terrain_of(cid) and msg.get("k") in ("mob", "petkill"):
                         now = time.time()
                         if now - last_xp_mob >= XP_MOB_CD:
                             last_xp_mob = now
-                            # 數量照客戶端帶的（會反擊的野怪＝島主經驗 1/10，2026-11-09 使用者同意延伸）；夾 1～25，防亂報
-                            amt = min(XP_XPE_MAX, max(1, int(msg.get("n") or 1)))
-                            xp_grant(c, amt, "mob")
+                            if msg.get("k") == "mob":
+                                # 數量照客戶端帶的（會反擊的野怪＝島主經驗 1/10，2026-11-09 使用者同意延伸）；夾 1～25，防亂報
+                                amt = min(XP_XPE_MAX, max(1, int(msg.get("n") or 1)))
+                                xp_grant(c, amt, "mob")
+                            else:   # 和平島殺寵懲罰（2026-11-13 使用者定）：扣「掉一等」＝這級累積＋前一級需求，Lv1 扣到 0。限定和平島；扣量照 XP_DB 現值自己算
+                                with XP_DB_LOCK:
+                                    i = xp_info(XP_DB.get(c["user"]["id"], 0))
+                                loss = i["cur"] + XP_NEED(i["lv"] - 1) if i["lv"] > 1 else i["cur"]
+                                if loss > 0:
+                                    xp_grant(c, -loss, "petkill")
                 elif t == "tbl":   # 和平島遊戲桌（join／leave／ready／sit／draw）；牌局邏輯全在伺服器
                     now = time.time()
                     if msg.get("a") in ("pos", "word", "tb", "ms", "mp", "hp", "hs"):   # 躲彈幕的位置回報、英文打字競賽的分數回報：自己的限流，不影響 hit／finish 等操作
