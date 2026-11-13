@@ -491,7 +491,7 @@ body {
 .tg-tray { grid-template-columns: repeat(4, 1fr); }   /* 三角版的方塊小圖比較寬：一排 4 個，托盤才不會超出面板 */
 /* 街機方塊（t13）：自己的盤面、聯機對手／觀戰的小盤面、邀請、4 台機台狀態 */
 .ar-play { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: flex-start; margin: 8px auto; }
-.ar-main { display: block; max-width: 100%; height: auto; border: 2px solid #3a4a8a; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+.ar-main { display: block; max-width: 100%; max-height: calc(100vh - 230px); width: auto; height: auto; border: 2px solid #3a4a8a; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
 .ar-opps { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .ar-opp { border: 2px solid var(--gold-dim); background: rgba(255, 255, 255, .04); padding: 4px 6px; text-align: center; white-space: pre-line; }
 .ar-opp.gone { color: var(--text-dim); display: flex; align-items: center; min-width: 110px; justify-content: center; }

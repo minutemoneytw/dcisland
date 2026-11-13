@@ -6539,7 +6539,7 @@ function buildUno(box, v, mk, gd) {
 // 單人模式：各自一局，分數進排行榜；聯機模式：發起後其他機台的人收到邀請（最多 4 人），一般模式（各玩各的、全員出局後依分數排名）
 // 或對戰模式（一次消 2／3／4 行送每個對手 1／2／4 行垃圾，使用者定）。方塊遊戲在本機跑（信任客戶端），伺服器只給 seed、轉發盤面快照與垃圾行。
 // 協定見 notes「和平島與遊戲桌」：tbl {a:'solo'|'link'|'lmode'|'ljoin'|'lno'|'lquit'|'lstart'|'tb'|'clr'|'over'}；s→c ttb（盤面快照）、tgb（垃圾行）
-const AR_W = 10, AR_H = 22, AR_VIS = 20, AR_CELL = 24;   // 盤面 10×22（最上面 2 列在畫面外，方塊從那裡生出來）
+const AR_W = 10, AR_H = 22, AR_VIS = 20, AR_CELL = 20;   // 盤面 10×22（最上面 2 列在畫面外，方塊從那裡生出來）
 const AR_COLORS = ['', '#40c8e0', '#f0c020', '#a060e0', '#3cb45a', '#e04848', '#3b78e8', '#e8902a', '#7a7f8c'];   // 1 I、2 O、3 T、4 S、5 Z、6 J、7 L、8 垃圾
 const AR_CAB_COLORS = ['#d84a4a', '#3b78e8', '#3cb45a', '#9a5ad8'];   // 4 台機台的外殼主色（同 gen_assets.py 的 ARCADE_COLORS）
 const AR_BASE = {   // 每種方塊的初始方向：[盒子大小, 格子 [x, y]]（y 往下）
@@ -6786,7 +6786,7 @@ function buildArcade(box, v, mk, gd) {
   const modeName = m => (m === 'battle' ? '對戰模式' : '一般模式');
   let status;
   if (!me) status = '觀戰中（要玩的話，走到空著的機台按 F）';
-  else if (playing) status = me.st === 'solo' ? '單人模式：←→ 移動、↓ 加速、↑／X 轉、Z 反轉、空白鍵落到底、C 暫存' : `聯機${modeName(lk.mode)}：${S.ar?.dead ? '你已出局，等其他人結束' : '撐到最後、分數越高越好'}`;
+  else if (playing) status = me.st === 'solo' ? '單人模式：←→ 移動、↓ 加速、↑／X 旋轉（順時針）、Z 旋轉（逆時針）、空白鍵落到底、C 暫存' : `聯機${modeName(lk.mode)}：${S.ar?.dead ? '你已出局，等其他人結束' : '撐到最後、分數越高越好'}`;
   else if (me.st === 'link') status = lk.host === me.cab ? `你發起了聯機（${modeName(lk.mode)}），等其他機台的人接受邀請` : `已加入 ${hostName} 的聯機，等他開始`;
   else status = `${arCabName(me.cab)}：選擇單人模式或聯機模式`;
   box.appendChild(mk('div', 'table-status' + (playing && !S.ar?.dead ? ' mine' : ''), status));
