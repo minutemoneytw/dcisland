@@ -2177,6 +2177,52 @@ SLIME_TINTS = {
     "grass": "#58b24a", "forest": "#2f8a4a", "beach": "#3aa0d8", "snow": "#bfe6f5",
     "night": "#8a5ad8", "volcano": "#ff6a2a", "machine": "#9aa4b0",
 }
+
+# 和平島貓狗花色（2026-11-13 使用者定：黑貓／花貓／橘貓、黑狗／花狗／黃狗各 2 隻，白色的數量不變）。
+# 黑／橘／黃用 mobs.json 的 tint 就好（同一張白貓／白狗 sheet 重上色）；花貓（橘黑斑）與花狗（黑斑）
+# 是「白底＋斑塊」，平面 tint 做不出斑塊 → 由白貓／白狗 sheet 現場合成專屬 sheet（value noise 長斑塊，
+# 只染淺色毛、輪廓／眼睛／鼻子不動）。素材來源與授權跟 cat_sheet／dog_sheet 同一份（同一張圖衍生）。
+def pet_variant_sheet(src_name, out_name, patches, fw=32, fh=32, cell=7.0, salt=1):
+    """src_name／out_name：external/img2pixel 底下的檔名。patches＝[(RGBA, 佔比), ...]（依 noise 值依序落入）。
+    fw/fh＝sheet 的格大小：雜訊用「格內座標」算——每幀的斑塊是同一份；用整張 sheet 座標的話，
+    走路換幀會取到完全不同的斑塊分布＝整隻顏色一直閃（實測踩過）。"""
+    src = os.path.join(ASSETS, "external", "img2pixel", src_name)
+    px = read_png_pixels(src)
+    if not px:
+        print(f"  ! 貓狗花色 sheet：找不到來源 {src_name}，跳過 {out_name}")
+        return
+    w, h, pix = px
+    def rnd(ix, iy):
+        n = (ix * 374761393 + iy * 668265263 + salt * 1274126177) & 0xffffffff
+        n = ((n ^ (n >> 13)) * 1274126177) & 0xffffffff
+        return ((n ^ (n >> 16)) & 0xffffffff) / 0xffffffff
+    def noise(x, y):
+        gx, gy = (x % fw) / cell, (y % fh) / cell   # 格內座標：每幀同一份斑塊
+        ix, iy = int(gx), int(gy)
+        fx, fy = gx - ix, gy - iy
+        fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy)
+        v00, v10, v01, v11 = rnd(ix, iy), rnd(ix + 1, iy), rnd(ix, iy + 1), rnd(ix + 1, iy + 1)
+        return (v00 * (1 - fx) + v10 * fx) * (1 - fy) + (v01 * (1 - fx) + v11 * fx) * fy
+    new = bytearray(pix)
+    for y in range(h):
+        for x in range(w):
+            i = (y * w + x) * 4
+            if not new[i + 3]:
+                continue
+            l = 0.2126 * new[i] + 0.7152 * new[i + 1] + 0.0722 * new[i + 2]
+            if l < 150:   # 只染淺色毛（白毛本體）；輪廓／眼睛／深色細節不動
+                continue
+            v = noise(x, y); acc = 0.0
+            for col, share in patches:
+                acc += share
+                if v < acc:
+                    new[i:i + 3] = bytes(col[:3])
+                    break
+    write_png(os.path.join(ASSETS, "external", "img2pixel", out_name), w, h,
+              lambda x, y: tuple(new[(y * w + x) * 4:(y * w + x) * 4 + 4]))
+pet_variant_sheet("cat_sheet.png", "cat_calico_sheet.png", [((224, 150, 62, 255), 0.24), ((42, 38, 46, 255), 0.20)], cell=6.0, salt=10)
+pet_variant_sheet("dog_sheet.png", "dog_spotted_sheet.png", [((44, 40, 48, 255), 0.22)], cell=6.0, salt=10)
+
 MOB_MANIFEST = dict(
     scale=2, respawn=30,
     mobs=[
@@ -2262,6 +2308,22 @@ MOB_MANIFEST = dict(
              anim=dict(sheet="external/img2pixel/dog_sheet.png", frames=3, rows=3, fw=32, fh=32,
                        rowDir=["up", "down", "left"], fps=6, scale=0.9),
              line="「狗」開心地搖著尾巴，繞著你轉圈。"),
+        # 貓狗花色（2026-11-13 使用者定）：黑貓／花貓／橘貓、黑狗／花狗／黃狗各 2 隻，白色的數量不變；
+        # 都是被動小動物（lv 沿用貓 2／狗 3），不違反「和平島不得放敵對怪」。
+        # 黑＝tint 位移法（乘法會整隻全黑）；橘／黃＝tint 乘法；花貓／花狗＝上面的 pet_variant_sheet 合成斑塊 sheet。
+        *[dict(id=pid, name=pname, lv=lv_, fixed=2, speed=sp, flee=60, noBounce=True,
+               anim=dict(sheet=f"external/img2pixel/{sheet}", frames=3, rows=3, fw=32, fh=32,
+                         rowDir=["up", "down", "left"], fps=6, scale=0.9),
+               **({"tint": tint, "tintMode": mode} if tint else {}),
+               line=line)
+          for pid, pname, lv_, sp, sheet, tint, mode, line in [
+              ("cat_black",   "黑貓", 2, 34, "cat_sheet.png",          "#2a2730", "off",  "「黑貓」在暗處只剩兩個亮點盯著你。"),
+              ("cat_calico",  "花貓", 2, 34, "cat_calico_sheet.png",  None,      None,   "「花貓」舔了舔腳掌，瞇起眼睛。"),
+              ("cat_orange",  "橘貓", 2, 34, "cat_sheet.png",         "#e09a3e", None,   "「橘貓」翻出肚皮滾了兩圈。"),
+              ("dog_black",   "黑狗", 3, 40, "dog_sheet.png",         "#2a2730", "off",  "「黑狗」汪了一聲，尾巴搖個不停。"),
+              ("dog_spotted", "花狗", 3, 40, "dog_spotted_sheet.png", None,      None,   "「花狗」歪著頭看你，耳朵抖了抖。"),
+              ("dog_yellow",  "黃狗", 3, 40, "dog_sheet.png",         "#c8924a", None,   "「黃狗」把下巴擱在你的膝蓋上。"),
+          ]],
         # 野豬（森林島）：反擊型野怪，最低階的主動威脅（Lv25）
         dict(id="boar", name="野豬", lv=25, speed=30, flee=85, retaliate=True, noBounce=True,
              anim=dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64,
@@ -2480,7 +2542,7 @@ MOBS_BY_TERRAIN = {
     "forest":  [("sheep", 2), ("bird", 2), ("chicken", 2), ("slime_forest", 1), ("goblin_forest", 2), ("boar", 2)],
     "volcano": [("frog", 1), ("bird", 1), ("slime_volcano", 1), ("dragon_volcano", 1), ("imp_volcano", 2)],
     "machine": [("bunny_machine", 2), ("slime_machine", 1), ("zombie_machine", 2), ("golem_machine", 1), ("imp_machine", 2)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）
-    "peace":   [("cat", 1), ("dog", 1)],   # 和平島（2026-11-12）：只有被動的貓狗（都 fixed＝只生固定那幾隻）；和平島不得放敵對怪
+    "peace":   [("cat", 1), ("dog", 1), ("cat_black", 1), ("cat_calico", 1), ("cat_orange", 1), ("dog_black", 1), ("dog_spotted", 1), ("dog_yellow", 1)],   # 和平島（2026-11-12）：只有被動的貓狗（都 fixed＝只生固定那幾隻）；2026-11-13 使用者定加花色（各色 2 隻、白色數量不變）；和平島不得放敵對怪
 }
 
 # ---------------- 地板（裝飾模式的地板層，16×16 無縫磚，畫在地面與家具之間）----------------

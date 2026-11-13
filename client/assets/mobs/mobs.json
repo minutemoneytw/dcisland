@@ -651,6 +651,176 @@
    "xp": 1
   },
   {
+   "id": "cat_black",
+   "name": "黑貓",
+   "lv": 2,
+   "fixed": 2,
+   "speed": 34,
+   "flee": 60,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/cat_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 32,
+    "fh": 32,
+    "rowDir": [
+     "up",
+     "down",
+     "left"
+    ],
+    "fps": 6,
+    "scale": 0.9
+   },
+   "tint": "#2a2730",
+   "tintMode": "off",
+   "line": "「黑貓」在暗處只剩兩個亮點盯著你。",
+   "footDy": 4,
+   "hp": 4,
+   "xp": 1
+  },
+  {
+   "id": "cat_calico",
+   "name": "花貓",
+   "lv": 2,
+   "fixed": 2,
+   "speed": 34,
+   "flee": 60,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/cat_calico_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 32,
+    "fh": 32,
+    "rowDir": [
+     "up",
+     "down",
+     "left"
+    ],
+    "fps": 6,
+    "scale": 0.9
+   },
+   "line": "「花貓」舔了舔腳掌，瞇起眼睛。",
+   "footDy": 4,
+   "hp": 4,
+   "xp": 1
+  },
+  {
+   "id": "cat_orange",
+   "name": "橘貓",
+   "lv": 2,
+   "fixed": 2,
+   "speed": 34,
+   "flee": 60,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/cat_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 32,
+    "fh": 32,
+    "rowDir": [
+     "up",
+     "down",
+     "left"
+    ],
+    "fps": 6,
+    "scale": 0.9
+   },
+   "tint": "#e09a3e",
+   "tintMode": null,
+   "line": "「橘貓」翻出肚皮滾了兩圈。",
+   "footDy": 4,
+   "hp": 4,
+   "xp": 1
+  },
+  {
+   "id": "dog_black",
+   "name": "黑狗",
+   "lv": 3,
+   "fixed": 2,
+   "speed": 40,
+   "flee": 60,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/dog_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 32,
+    "fh": 32,
+    "rowDir": [
+     "up",
+     "down",
+     "left"
+    ],
+    "fps": 6,
+    "scale": 0.9
+   },
+   "tint": "#2a2730",
+   "tintMode": "off",
+   "line": "「黑狗」汪了一聲，尾巴搖個不停。",
+   "footDy": 4,
+   "hp": 6,
+   "xp": 1
+  },
+  {
+   "id": "dog_spotted",
+   "name": "花狗",
+   "lv": 3,
+   "fixed": 2,
+   "speed": 40,
+   "flee": 60,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/dog_spotted_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 32,
+    "fh": 32,
+    "rowDir": [
+     "up",
+     "down",
+     "left"
+    ],
+    "fps": 6,
+    "scale": 0.9
+   },
+   "line": "「花狗」歪著頭看你，耳朵抖了抖。",
+   "footDy": 4,
+   "hp": 6,
+   "xp": 1
+  },
+  {
+   "id": "dog_yellow",
+   "name": "黃狗",
+   "lv": 3,
+   "fixed": 2,
+   "speed": 40,
+   "flee": 60,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/dog_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 32,
+    "fh": 32,
+    "rowDir": [
+     "up",
+     "down",
+     "left"
+    ],
+    "fps": 6,
+    "scale": 0.9
+   },
+   "tint": "#c8924a",
+   "tintMode": null,
+   "line": "「黃狗」把下巴擱在你的膝蓋上。",
+   "footDy": 4,
+   "hp": 6,
+   "xp": 1
+  },
+  {
    "id": "boar",
    "name": "野豬",
    "lv": 25,

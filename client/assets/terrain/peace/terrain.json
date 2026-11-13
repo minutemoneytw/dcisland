@@ -15,6 +15,30 @@
   {
    "id": "dog",
    "weight": 1
+  },
+  {
+   "id": "cat_black",
+   "weight": 1
+  },
+  {
+   "id": "cat_calico",
+   "weight": 1
+  },
+  {
+   "id": "cat_orange",
+   "weight": 1
+  },
+  {
+   "id": "dog_black",
+   "weight": 1
+  },
+  {
+   "id": "dog_spotted",
+   "weight": 1
+  },
+  {
+   "id": "dog_yellow",
+   "weight": 1
   }
  ],
  "uiColor": "#d9c9a6",
