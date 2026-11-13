@@ -3521,6 +3521,16 @@ export class Island {
       }
       return;
     }
+    if (a === "miss") {   // 英文／中文打字競賽：我剛打錯一次，轉發 tmx {i} 給同桌其他人與觀戰者（對手的分數框閃紅；看不到字）；不存檔、不通知畫面
+      const [role, i] = tblFind(t, att.id);
+      if (!isTy(t) || role !== "seat" || t.phase !== "playing" || !t.g) return;
+      const data = JSON.stringify({ t: "tmx", i });
+      for (const m of [...t.seats, ...t.specs]) {
+        if (m.cid == null || m.cid === att.id) continue;
+        for (const w of this.state.getWebSockets()) if ((w.deserializeAttachment() || {}).id === m.cid) { try { w.send(data); } catch { /* 對方已斷線 */ } }
+      }
+      return;
+    }
     if (a === "typ") {   // 英文打字競賽：打字進度 {n 第幾個字, p 已打對幾個字母, e 是否剛打錯}，只轉發給觀戰者（tpg）；不存檔、不通知畫面、沒人觀戰就什麼都不送
       const [role, i] = tblFind(t, att.id);
       const n = msg.n, p = msg.p;

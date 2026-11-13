@@ -5732,6 +5732,13 @@ class Room:
                             if m["cid"] is not None and m["cid"] != cid:
                                 out.append((m["cid"], {"t": "tpos", "i": i, "x": round(x, 1), "y": round(y, 1)}))
                     return out, None, None
+                if a == "miss":   # 英文／中文打字競賽：我剛打錯一次，轉發 tmx {i} 給同桌其他人與觀戰者（對手的分數框閃紅；看不到字）
+                    role, i = tbl_find(t, cid)
+                    if ty_is(t) and role == "seat" and t["phase"] == "playing" and t.get("g"):
+                        for m in t["seats"] + t["specs"]:
+                            if m["cid"] is not None and m["cid"] != cid:
+                                out.append((m["cid"], {"t": "tmx", "i": i}))
+                    return out, None, None
                 if a == "typ":   # 英文打字競賽：打字進度 {n 第幾個字, p 已打對幾個字母, e 是否剛打錯}，只轉發給觀戰者（tpg）；不存檔、不通知畫面
                     role, i = tbl_find(t, cid)
                     n, p = msg.get("n"), msg.get("p")

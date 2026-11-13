@@ -372,6 +372,8 @@ body {
 .typing-others { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; min-height: 26px; }
 .typing-other { padding: 3px 10px; border: 1px solid #3a4a8a; border-radius: 4px; color: #e8e4d8; font-size: 13px; background: #161c34; }
 .typing-other.left { opacity: .45; }
+.typing-other.flash-ok { border-color: #5ad86a; background: #1c3a24; box-shadow: 0 0 8px rgba(90,216,106,.8); }   /* 對手打對一個字 */
+.typing-other.flash-bad { border-color: #ff5a5a; background: #3a1c22; box-shadow: 0 0 8px rgba(255,90,90,.8); }   /* 對手打錯 */
 .typing-other.solo { border-style: dashed; color: #8a8a98; }
 .typing-time { margin-top: 10px; color: #ffe08a; font-size: 14px; font-weight: bold; }
 .typing-word { margin-top: 14px; min-height: 56px; font: bold 44px Consolas, "Courier New", monospace; letter-spacing: 4px; color: #e8e4d8; }

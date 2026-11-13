@@ -6430,7 +6430,7 @@ function typingKey(e) {
   if (ch === w[T.pos]) {
     T.pos++; T.errPos = -1;
     if (T.pos >= w.length) { T.idx++; T.pos = 0; T.score++; if (v.me >= 0) T.scores[v.me] = T.score; typingSend(); }   // 打完最後一個字母：自動得分、換下一個字
-  } else { T.lockUntil = performance.now() + TY_LOCK_MS; T.errPos = T.pos; T.wordKey = ''; }   // 打錯：該打的字母變紅震動，鎖 0.7 秒；不用刪除
+  } else { T.lockUntil = performance.now() + TY_LOCK_MS; T.errPos = T.pos; T.wordKey = ''; S.net?.tbl?.({ a: 'miss' }); }   // 打錯（並通知對手的畫面閃紅）：該打的字母變紅震動，鎖 0.7 秒；不用刪除
   typingRender();
 }
 // 中文打字競賽：輸入框收到「輸入法送出的文字」（不含組字中）才比對；對得上題目的前綴就算打對的部分，整個詞對了自動 +1 分；
@@ -6448,7 +6448,7 @@ function typingZhCheck(e) {
     else T.pos = val.length;
   } else {
     let k = 0; while (k < val.length && val[k] === w[k]) k++;
-    T.pos = k; T.errPos = k; T.lockUntil = performance.now() + TY_LOCK_MS; T.wordKey = ''; inp.value = w.slice(0, k);
+    T.pos = k; T.errPos = k; T.lockUntil = performance.now() + TY_LOCK_MS; T.wordKey = ''; inp.value = w.slice(0, k); S.net?.tbl?.({ a: 'miss' });
   }
   typingRender();
 }
@@ -6476,11 +6476,18 @@ function onNetTpg(m) {   // 觀戰者才會收到：各座位目前的打字進�
   (T.prog ||= {})[m.i] = { n: m.n, p: m.p, e: m.e };
   typingRender();
 }
-function onNetTsc(m) {   // 其他人的分數（i＝座位編號）
+function onNetTsc(m) {   // 其他人的分數（i＝座位編號）；分數變高＝對手打對一個字，分數框閃綠
   const T = S.ty; if (!T) return;
+  if (m.n > (T.scores[m.i] ?? 0)) (T.flash ||= {})[m.i] = { c: 'ok', until: performance.now() + TY_FLASH_MS };
   T.scores[m.i] = m.n;
   typingRender();
 }
+function onNetTmx(m) {   // 對手剛打錯一次：分數框閃紅（看不到字）
+  const T = S.ty; if (!T) return;
+  (T.flash ||= {})[m.i] = { c: 'bad', until: performance.now() + TY_FLASH_MS };
+  typingRender();
+}
+const TY_FLASH_MS = 450;   // 對手打對／打錯時分數框閃一下的時間
 function typingRender() {
   const T = S.ty, v = S.tableView;
   if (!T || !v) return;
@@ -6492,7 +6499,7 @@ function typingRender() {
     ot.innerHTML = '';
     v.seats.forEach((s, i) => {
       if (seated && i === v.me) return;
-      const e = document.createElement('div'); e.className = 'typing-other' + (s.left ? ' left' : '');
+      const fl = T.flash?.[i], e = document.createElement('div'); e.className = 'typing-other' + (s.left ? ' left' : '') + (fl && fl.until > performance.now() ? ` flash-${fl.c}` : '');
       e.textContent = `${s.name}${s.left ? '（已離開）' : ''}　${T.scores[i] ?? 0}`;
       if (!seated && !s.left) {   // 觀戰者：多顯示這個人正在打的單字與打到哪（伺服器只送給觀戰者，tpg）
         const pr = T.prog?.[i], n = Math.max(T.scores[i] ?? 0, pr?.n ?? 0), p = pr && pr.n === n ? pr.p : 0, w = T.word(n);
@@ -9926,6 +9933,7 @@ async function boot() {
     onTpos: onNetTpos,         // 躲彈幕：其他玩家的位置
     onTpg: onNetTpg,           // 英文打字競賽：觀戰者看到的其他玩家打字進度
     onTsc: onNetTsc,           // 英文打字競賽：其他玩家的分數
+    onTmx: onNetTmx,           // 英文／中文打字競賽：對手剛打錯（分數框閃紅）
     onTtb: onNetTtb,           // 街機方塊：別台的盤面快照
     onTgb: onNetTgb,           // 街機方塊（對戰模式）：被送垃圾行
     onTms: onNetTms,           // 豆豆迷宮：豆豆的快照
