@@ -4563,7 +4563,7 @@ function buildTable() {
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 五子棋畫面：15×15 棋盤（canvas）；輪到自己時點交叉點下子，滑過會顯示淡淡的預覽棋子 ----
-const GM_N = 15, GM_CELL = 32, GM_MARGIN = 20;
+const GM_N = 15, GM_CELL = 26, GM_MARGIN = 16;   // 2026-11-13 使用者要求盤面縮小到約 80%（原本 32／20）
 function gomokuDraw(cv, v, hover, rep) {   // rep＝復盤：{board, last, line, nums（到這一步為止的每一手座標，棋子上畫手數）}
   const g = cv.getContext('2d'), size = GM_MARGIN * 2 + GM_CELL * (GM_N - 1);
   g.fillStyle = '#d8a860'; g.fillRect(0, 0, size, size);
@@ -4586,7 +4586,7 @@ function gomokuDraw(cv, v, hover, rep) {   // rep＝復盤：{board, last, line,
   const board = rep ? rep.board : (v.board || '');
   for (let i = 0; i < board.length; i++) if (board[i] !== '0') stone(i % GM_N, Math.floor(i / GM_N), Number(board[i]));
   if (rep?.nums) {   // 復盤：每顆棋子上寫第幾手
-    g.font = 'bold 12px "Microsoft JhengHei"'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = 'bold 10px "Microsoft JhengHei"'; g.textAlign = 'center'; g.textBaseline = 'middle';
     rep.nums.forEach(([x, y], k) => { g.fillStyle = board[y * GM_N + x] === '1' ? '#f4f0e4' : '#1e1e24'; g.fillText(String(k + 1), GM_MARGIN + x * GM_CELL + .5, GM_MARGIN + y * GM_CELL + 1); });
     g.textBaseline = 'alphabetic';
   }
@@ -4597,7 +4597,7 @@ function gomokuDraw(cv, v, hover, rep) {   // rep＝復盤：{board, last, line,
     for (const [x, y] of line) { g.beginPath(); g.arc(GM_MARGIN + x * GM_CELL + .5, GM_MARGIN + y * GM_CELL + .5, GM_CELL * .5, 0, Math.PI * 2); g.stroke(); }
   }
   if (last && !rep?.nums) { g.fillStyle = '#e8402a'; g.beginPath(); g.arc(GM_MARGIN + last[0] * GM_CELL + .5, GM_MARGIN + last[1] * GM_CELL + .5, 4, 0, Math.PI * 2); g.fill(); }   // 最後一手
-  else if (last) { g.strokeStyle = '#e8402a'; g.lineWidth = 2; g.strokeRect(GM_MARGIN + last[0] * GM_CELL - 13, GM_MARGIN + last[1] * GM_CELL - 13, 27, 27); }   // 復盤：目前這一手用紅框
+  else if (last) { g.strokeStyle = '#e8402a'; g.lineWidth = 2; g.strokeRect(GM_MARGIN + last[0] * GM_CELL - GM_CELL * .4, GM_MARGIN + last[1] * GM_CELL - GM_CELL * .4, GM_CELL * .8 + 1, GM_CELL * .8 + 1); }   // 復盤：目前這一手用紅框
 }
 function buildGomoku(box, v, mk) {
   const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
