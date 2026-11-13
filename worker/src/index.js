@@ -156,7 +156,7 @@ function isAdminId(env, id) {
 }
 
 // 對一份擺設清單套用單一操作（place / remove / clear），成功回 true。清空的權限在呼叫端檢查。
-// ground(x,y)＝那格能不能放東西（陸地，或水上鋪了地板）；規則與 client/js/main.js 的 canPlaceIn、dev_server.py 的 apply_furn_op 一致
+// ground(x,y)＝那格能不能放東西（陸地，或水上鋪了地板）；規則與 client/js/main.js 的 canPlaceIn、dev_server.py 的 edit_furn／commit_furn 一致
 function applyFurnOp(items, defs, op, ground) {
   const cell = op.cell;
   const validCell = Array.isArray(cell) && cell.length === 2 && Number.isInteger(cell[0]) && Number.isInteger(cell[1]);
@@ -1078,7 +1078,7 @@ function dgLeave(t, i, now) {
 }
 // ---- 見習驅魔師（第十桌 t10；2026-11-12，使用者要求）：1～4 人合作，玩家在場地正中央，幽靈從四面八方飄向中央，用滑鼠畫出幽靈身上的符號消除它 ----
 // 3 波小怪＋1 隻 Boss；沒被消除的幽靈碰到中央就扣某位玩家 1 滴血，全員死亡失敗、打贏 Boss 勝利。幽靈由 seed 決定性地產生（與 dev_server 的 mg_gen、client 的
-// mageGhosts 同一套，隨機只用 dgHash，不用 sin/cos，兩邊結果完全一致）；符號辨識在客戶端，伺服器權威管血量、擊殺（先到先得）、Boss 血量與勝負；
+// mgGenC 同一套，隨機只用 dgHash，不用 sin/cos，兩邊結果完全一致）；符號辨識在客戶端，伺服器權威管血量、擊殺（先到先得）、Boss 血量與勝負；
 // 沒被消除的幽靈扣血由伺服器在收到任何訊息時按時間懶惰結算（mgTick，客戶端每秒送 sync）。只有單人勝利進排行榜。與 dev_server 的 mg_* 同一套。
 const MG_HP = 5, MG_WAVE_START = 3, MG_WAVE_LEN = 28, MG_WAVE_GAP = 4;   // 第 k 波＝[3+32k, 3+32k+28)
 const MG_BOSS_START = MG_WAVE_START + 3 * (MG_WAVE_LEN + MG_WAVE_GAP), MG_BOSS_LIMIT = 180;   // Boss 出場時間（99 秒）；出場後 1.5 秒才能開始打；打不贏的上限
@@ -4656,11 +4656,13 @@ export class Island {
   }
 }
 
-// ============ 全域 Registry（跨島的玩家資料；魚類圖鑑＋腳色等級 XP）============
+// ============ 全域 Registry（跨島的玩家資料；魚類圖鑑、腳色等級 XP、合成解鎖、擊倒島主紀錄、暱稱）============
 // 全站只有一個實例（idFromName("global")），只由 Island 透過 REGISTRY 綁定呼叫，沒有對外的路由。
 // 資料：dex:<Discord 使用者 ID> → { 地形: { 魚id: { max（最大尺寸 cm）, n（釣到次數）, first（第一次釣到的時間） } } }
 //       xp:<Discord 使用者 ID> → 總 XP（整數；2026-11-07 腳色等級第 2 步）
 //       craft:<Discord 使用者 ID> → { mat: {素材id: 解鎖時間}, furn: {家具id: 時間}, rec: {配方id: 時間} }（合成：素材圖鑑／配方筆記）
+//       kills:<Discord 使用者 ID> → { 有島主的地形: 時間 }（擊倒島主紀錄，稱號用）
+//       nick:<Discord 使用者 ID> → 暱稱（2026-11-13）
 // 讀寫在同一個請求裡只 await storage，DO 的 input gate 會擋住其他請求插隊，所以同一人同時送兩筆也不會互相覆蓋
 const UID_RE = /^[0-9A-Za-z_-]{1,40}$/;
 export class Registry {

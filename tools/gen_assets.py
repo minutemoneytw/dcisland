@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# DC島 素材產生器 v0.2（程序化繪圖版，全自製 placeholder，零授權風險）
+# DC島 素材產生器 v0.2：地形、家具、地板、魚、圖示等是程式畫的自製 placeholder；
+# 人物／服裝／武器（LPC）與部分怪物、島主用外部素材（EXTERNAL_BUNDLES 登記，授權逐條記在 docs/assets-license.md）。
 # 用法: python tools/gen_assets.py
 import struct, zlib, os, random, json, math
 

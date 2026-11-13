@@ -20,7 +20,7 @@ DISCORD_CLIENT_ID = "1566360574743416872"
 name = "ISLANDS"
 class_name = "Island"
 
-# 全域 Registry：跨島的玩家資料（目前是魚類圖鑑，依 Discord 帳號），全站只有一個實例
+# 全域 Registry：跨島的玩家資料（魚類圖鑑、腳色 XP、合成解鎖、擊倒島主紀錄、暱稱，依 Discord 帳號），全站只有一個實例
 [[durable_objects.bindings]]
 name = "REGISTRY"
 class_name = "Registry"

@@ -7814,7 +7814,7 @@ function drawFoodOverhead(p, list, headY) {
 function propDrawEntries(list) {
   const ims = S.tImages[S.terrain] || {};
   for (const pr of propsHere()) {
-    if (pr.kind === 'rug') continue;   // 地毯在地板層畫（drawPropRugs）
+    if (pr.kind === 'rug') continue;   // 地毯在地板層畫（draw() 裡畫 tMan.props 的那一行）
     const r = propRect(pr), img = ims[pr.img];
     list.push({
       y: r.y + r.h, draw: () => {

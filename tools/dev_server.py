@@ -1,10 +1,12 @@
 ﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# DC島 本機開發伺服器（M1）
+# DC島 本機開發伺服器（行為要與正式站 worker/src/index.js 保持一致）
 # 1) 服務 client/ 靜態檔
 # 2) /api/config   -> 從 dev_config.json 讀 client_id
 # 3) /api/token    -> 用 code+secret 向 Discord 兌換 access_token（secret 只在本機/伺服器端）
-# 用法: python tools/dev_server.py  (先填 tools/dev_config.json)
+# 4) /api/log      -> 前端信標（錯誤／步驟）印到主控台
+# 5) /ws           -> 多人同步（島、島主、遊戲桌；跨島的玩家資料本機只存記憶體）
+# 用法: python tools/dev_server.py  （純本機不需要憑證；要測真 Discord 身分才填 tools/dev_config.json）
 import json, math, os, re, sys, base64, hashlib, hmac, struct, threading, time, random, traceback
 import subprocess, urllib.request, urllib.parse, urllib.error, http.server, socketserver
 
