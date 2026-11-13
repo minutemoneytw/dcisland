@@ -238,6 +238,83 @@
    "color": "#f0ead8"
   },
   {
+   "id": "goblin_ear",
+   "name": "哥布林耳",
+   "group": "wild",
+   "how": "擊倒哥布林",
+   "color": "#6ab04a"
+  },
+  {
+   "id": "imp_horn",
+   "name": "小鬼角",
+   "group": "wild",
+   "how": "擊倒小鬼",
+   "color": "#a8a0d8"
+  },
+  {
+   "id": "rotten_flesh",
+   "name": "腐肉",
+   "group": "wild",
+   "how": "擊倒殭屍",
+   "color": "#8a9a5a"
+  },
+  {
+   "id": "bone",
+   "name": "骨頭",
+   "group": "wild",
+   "how": "擊倒骷髏",
+   "color": "#ece4cc"
+  },
+  {
+   "id": "antler",
+   "name": "鹿角",
+   "group": "wild",
+   "how": "擊倒鹿",
+   "color": "#b88a5a"
+  },
+  {
+   "id": "tusk",
+   "name": "獠牙",
+   "group": "wild",
+   "how": "擊倒野豬",
+   "color": "#e8dcc0"
+  },
+  {
+   "id": "hide",
+   "name": "獸皮",
+   "group": "wild",
+   "how": "擊倒野豬、白熊",
+   "color": "#7a5a3a"
+  },
+  {
+   "id": "bear_claw",
+   "name": "熊爪",
+   "group": "wild",
+   "how": "擊倒白熊",
+   "color": "#d8d0c4"
+  },
+  {
+   "id": "bat_wing",
+   "name": "蝠翼",
+   "group": "wild",
+   "how": "擊倒蝙蝠",
+   "color": "#6a5a8a"
+  },
+  {
+   "id": "demon_horn",
+   "name": "惡魔之角",
+   "group": "wild",
+   "how": "擊倒小惡魔",
+   "color": "#c83a3a"
+  },
+  {
+   "id": "golem_core",
+   "name": "魔像核心",
+   "group": "wild",
+   "how": "擊倒魔像",
+   "color": "#7ad0e8"
+  },
+  {
    "id": "plank",
    "name": "木板",
    "group": "crafted",
@@ -320,6 +397,76 @@
    "group": "crafted",
    "how": "合成：龍鱗＋鋼材",
    "color": "#a8404a"
+  },
+  {
+   "id": "thick_leather",
+   "name": "厚皮革",
+   "group": "crafted",
+   "how": "合成：獸皮＋皮革",
+   "color": "#6a4a2a"
+  },
+  {
+   "id": "bone_beam",
+   "name": "骨梁",
+   "group": "crafted",
+   "how": "合成：骨頭＋骨頭＋樹脂膠",
+   "color": "#d8cfb0"
+  },
+  {
+   "id": "bat_silk",
+   "name": "蝠翼綢",
+   "group": "crafted",
+   "how": "合成：蝠翼＋布料",
+   "color": "#7a5a9a"
+  },
+  {
+   "id": "demon_steel",
+   "name": "魔鋼",
+   "group": "crafted",
+   "how": "合成：惡魔之角＋鋼材",
+   "color": "#8a2a3a"
+  },
+  {
+   "id": "golem_engine",
+   "name": "魔像引擎",
+   "group": "crafted",
+   "how": "合成：魔像核心＋齒輪＋鋼材",
+   "color": "#58a8c8"
+  },
+  {
+   "id": "compost",
+   "name": "堆肥",
+   "group": "crafted",
+   "how": "合成：腐肉＋花瓣",
+   "color": "#6a5a3a"
+  },
+  {
+   "id": "polished_tusk",
+   "name": "磨亮獠牙",
+   "group": "crafted",
+   "how": "合成：獠牙＋細沙",
+   "color": "#fff4dc"
+  },
+  {
+   "id": "polished_antler",
+   "name": "打磨鹿角",
+   "group": "crafted",
+   "how": "合成：鹿角＋細沙",
+   "color": "#d8b078"
+  },
+  {
+   "id": "imp_charm",
+   "name": "小鬼護符",
+   "group": "crafted",
+   "how": "合成：哥布林耳＋小鬼角＋繩索",
+   "color": "#9a6ad8"
+  },
+  {
+   "id": "claw_charm",
+   "name": "熊爪墜飾",
+   "group": "crafted",
+   "how": "合成：熊爪＋繩索",
+   "color": "#c8b090"
   }
  ],
  "sources": {
@@ -604,6 +751,102 @@
     {
      "item": "dragon_fang",
      "chance": 0.25
+    }
+   ],
+   "goblin_grass": [
+    {
+     "item": "goblin_ear",
+     "chance": 1
+    }
+   ],
+   "goblin_forest": [
+    {
+     "item": "goblin_ear",
+     "chance": 1
+    }
+   ],
+   "imp_snow": [
+    {
+     "item": "imp_horn",
+     "chance": 1
+    }
+   ],
+   "imp_machine": [
+    {
+     "item": "imp_horn",
+     "chance": 1
+    }
+   ],
+   "zombie_night": [
+    {
+     "item": "rotten_flesh",
+     "chance": 1
+    }
+   ],
+   "zombie_snow": [
+    {
+     "item": "rotten_flesh",
+     "chance": 1
+    }
+   ],
+   "zombie_machine": [
+    {
+     "item": "rotten_flesh",
+     "chance": 1
+    }
+   ],
+   "skeleton_night": [
+    {
+     "item": "bone",
+     "chance": 1
+    }
+   ],
+   "deer": [
+    {
+     "item": "antler",
+     "chance": 0.5
+    },
+    {
+     "item": "hide",
+     "chance": 0.5
+    }
+   ],
+   "boar": [
+    {
+     "item": "tusk",
+     "chance": 1
+    },
+    {
+     "item": "hide",
+     "chance": 0.5
+    }
+   ],
+   "bear_snow": [
+    {
+     "item": "hide",
+     "chance": 1
+    },
+    {
+     "item": "bear_claw",
+     "chance": 0.4
+    }
+   ],
+   "bat_night": [
+    {
+     "item": "bat_wing",
+     "chance": 1
+    }
+   ],
+   "imp_volcano": [
+    {
+     "item": "demon_horn",
+     "chance": 1
+    }
+   ],
+   "golem_machine": [
+    {
+     "item": "golem_core",
+     "chance": 1
     }
    ]
   }
@@ -946,6 +1189,119 @@
    "out": {
     "kind": "furniture",
     "id": "dragon_trophy"
+   }
+  },
+  {
+   "id": "thick_leather",
+   "in": [
+    "hide",
+    "leather"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "thick_leather"
+   }
+  },
+  {
+   "id": "bone_beam",
+   "in": [
+    "bone",
+    "bone",
+    "glue"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "bone_beam"
+   }
+  },
+  {
+   "id": "bat_silk",
+   "in": [
+    "bat_wing",
+    "cloth"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "bat_silk"
+   }
+  },
+  {
+   "id": "demon_steel",
+   "in": [
+    "demon_horn",
+    "steel"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "demon_steel"
+   }
+  },
+  {
+   "id": "golem_engine",
+   "in": [
+    "golem_core",
+    "gear",
+    "steel"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "golem_engine"
+   }
+  },
+  {
+   "id": "compost",
+   "in": [
+    "rotten_flesh",
+    "petal"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "compost"
+   }
+  },
+  {
+   "id": "polished_tusk",
+   "in": [
+    "tusk",
+    "sand"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "polished_tusk"
+   }
+  },
+  {
+   "id": "polished_antler",
+   "in": [
+    "antler",
+    "sand"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "polished_antler"
+   }
+  },
+  {
+   "id": "imp_charm",
+   "in": [
+    "goblin_ear",
+    "imp_horn",
+    "rope"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "imp_charm"
+   }
+  },
+  {
+   "id": "claw_charm",
+   "in": [
+    "bear_claw",
+    "rope"
+   ],
+   "out": {
+    "kind": "material",
+    "id": "claw_charm"
    }
   }
  ]

@@ -1427,7 +1427,7 @@ TERRAINS = [
 
 # 室內釣魚池（像室內的地形才用）：地形 → [池]。cell＝水面左上角格、w／h＝水面幾格；外圍一圈是池邊（岸，可以走）
 POOLS_BY_TERRAIN = {
-    # 2026-11-14 使用者要求：水池搬到房間左上角（原本在左側中間 [26,33]），周圍加池邊裝飾（PROPS_BY_TERRAIN 的 pool_* ）讓它不要那麼突兀
+    # 2026-11-14 使用者要求：水池搬到房間左上角（原本在左側中間 [26,33]）；同日一度加過池邊裝飾，使用者又要求拿掉
     # （2026-11-09 使用者要求和平島找一小塊做室內釣魚場，遠離中央的遊戲桌；水面 8×6、外圍一圈池邊 → 佔 x 25～34、y 17～24）
     "peace": [dict(cell=[26, 18], w=8, h=6)],
 }
@@ -1471,13 +1471,6 @@ PROPS_BY_TERRAIN = {
               # 餐飲區的隔板與地毯（2026-11-13，使用者要求）：kind＝deco（擋路、不能互動、沒有名稱）／rug（畫在地板層、不擋路、可以走上去）
               dict(id="dine_wall", kind="deco", img="dine_partition.png", cell=[75, 14.5], w=1, h=5.5),   # 西側一道矮隔板，從北牆伸到 y＝20（南邊開口當入口）
               dict(id="dine_rug", kind="rug", img="dine_rug.png", cell=[76, 16], w=9, h=5),                # 地毯鋪滿隔板右邊到東牆
-              # 水池的裝飾（2026-11-14，使用者要求）：池南邊鋪一條木棧板（rug＝地板層、可以走）、棧板上一張長椅，池北邊兩角（貼北牆）與棧板兩端各一盆觀葉植物
-              dict(id="pool_deck", kind="rug", img="pool_deck.png", cell=[25, 25], w=10, h=3),
-              dict(id="pool_bench", kind="deco", img="pool_bench.png", cell=[28.5, 25.5], w=3, h=1.5),
-              dict(id="pool_plant1", kind="deco", img="pool_plant.png", cell=[23, 16], w=1, h=2),
-              dict(id="pool_plant2", kind="deco", img="pool_plant.png", cell=[35, 16], w=1, h=2),
-              dict(id="pool_plant3", kind="deco", img="pool_plant.png", cell=[25, 25.5], w=1, h=2),
-              dict(id="pool_plant4", kind="deco", img="pool_plant.png", cell=[34, 25.5], w=1, h=2),
               # 夾娃娃機與扭蛋機（2026-11-14，使用者要求）：俄羅斯方塊機台右側、靠北牆。先只做外觀框架（kind=deco：擋路、沒有名稱、不能互動），
               # 獎勵怎麼處理還沒決定，之後要開放時把 kind 改成新的互動種類（客戶端 propUse／useProp）
               dict(id="claw", kind="deco", img="claw_machine.png", cell=[61, 14.5], w=3, h=3.5),
@@ -1540,44 +1533,6 @@ def dine_rug():
             for d in range(3):
                 cv.set(x - d, y - 2 + d, dia); cv.set(x + d, y - 2 + d, dia); cv.set(x - d, y + 2 - d, dia); cv.set(x + d, y + 2 - d, dia)
             cv.set(x, y, gold)
-    return cv
-
-def pool_plant():
-    """水池邊的觀葉植物（16×32，畫 scale 2＝1×2 格）：陶盆裡長出一叢往上的大葉子（龜背芋那種）。"""
-    cv = Canvas(16, 32)
-    leaf = hx("#3c9a4a")
-    for cx, cy, rx, ry in ((8, 8, 3, 6), (4.5, 12, 2.6, 5), (11.5, 12, 2.6, 5), (6, 17, 3.5, 3), (10.5, 17, 3.5, 3)):
-        cv.ellipse(cx, cy, rx, ry, leaf)
-    cv.vline(8, 3, 22, shade(leaf, .7)); cv.set(6, 6, shade(leaf, 1.35)); cv.set(10, 10, shade(leaf, 1.35)); cv.set(4, 11, shade(leaf, 1.35))
-    pot, rim = hx("#b06a3a"), hx("#c98150")
-    cv.rect(4, 22, 11, 30, pot); cv.rect(3, 21, 12, 23, rim); cv.hline(3, 12, 21, shade(rim, 1.2)); cv.hline(4, 11, 30, shade(pot, .7))
-    cv.rect(4, 26, 11, 26, shade(pot, .85))   # 花盆上一圈細紋
-    cv.outline()
-    return cv
-
-def pool_bench():
-    """水池邊的長椅（48×24，畫 scale 2＝3×1.5 格）：木條椅面＋椅背，兩端鐵腳。"""
-    cv = Canvas(48, 24)
-    wood, iron = hx("#a8743c"), hx("#4a4e58")
-    cv.rect(2, 3, 45, 5, wood); cv.rect(2, 7, 45, 9, wood); cv.hline(2, 45, 3, shade(wood, 1.25)); cv.hline(2, 45, 7, shade(wood, 1.25))   # 椅背兩條板
-    cv.rect(2, 4, 3, 17, iron); cv.rect(44, 4, 45, 17, iron)                                                                              # 椅背立柱
-    cv.rect(1, 12, 46, 16, wood); cv.hline(1, 46, 12, shade(wood, 1.3)); cv.hline(1, 46, 16, shade(wood, .7))                              # 椅面
-    for x in range(8, 44, 9): cv.vline(x, 13, 15, shade(wood, .8))                                                                       # 木條縫
-    cv.rect(4, 17, 6, 22, iron); cv.rect(41, 17, 43, 22, iron)                                                                            # 椅腳
-    cv.outline()
-    return cv
-
-def pool_deck():
-    """水池南邊的木棧板（160×48，畫 scale 2＝10×3 格）：橫向的木條，一排排深淺相間、接縫錯開，邊緣一條深色壓條。"""
-    W, H = 160, 48
-    cv = Canvas(W, H)
-    base = hx("#b8864e")
-    for k, y in enumerate(range(0, H, 8)):
-        c = shade(base, 1.0 if k % 2 == 0 else .92)
-        cv.rect(0, y, W - 1, y + 6, c); cv.hline(0, W - 1, y, shade(c, 1.15)); cv.hline(0, W - 1, y + 7, shade(c, .6))
-        for x in range(5 + (k % 3) * 9, W, 27): cv.vline(x, y + 1, y + 6, shade(c, .75))   # 木條接縫（每排錯開）
-    cv.rect(0, 0, W - 1, 1, shade(base, .55)); cv.rect(0, H - 2, W - 1, H - 1, shade(base, .55))
-    cv.rect(0, 0, 1, H - 1, shade(base, .55)); cv.rect(W - 2, 0, W - 1, H - 1, shade(base, .55))
     return cv
 
 def snack_bar():
@@ -2095,6 +2050,38 @@ MATERIAL_ICONS.update(
     sulfur=(_mat_crystal, "#e8e03a"), ice=(_mat_cube, "#bfe6f8"), moonstone=(_mat_chunk, "#b8c0f0"), iron_ore=(_mat_ore, "#d88a4a"),
     frog_skin=(_mat_skin, "#6ab04a"), pearl=(_mat_pearl, "#f4f0ec"),
     brick=(_mat_brick, "#c4684a"), paper=(_mat_paper, "#f0ead8"), iron_ingot=(_mat_bar, "#6a7480"), leather=(_mat_leather, "#9a6a40"),
+)
+
+def _mat_bone(c):
+    cv = Canvas(16, 16)
+    for i in range(9): cv.rect(3 + i, 11 - i, 4 + i, 12 - i, c)
+    for x, y in ((2, 11), (4, 13), (11, 2), (13, 4)): cv.ellipse(x + 1, y + 1, 1.6, 1.6, c)
+    cv.set(6, 9, shade(c, 1.3)); cv.outline(); return cv
+def _mat_horn(c):
+    cv = Canvas(16, 16)
+    for i in range(10): cv.rect(4 + i // 2, 12 - i, 8 + i // 2 - i // 3, 12 - i, c)
+    cv.rect(3, 12, 9, 13, shade(c, .75)); cv.vline(6, 5, 11, shade(c, 1.25)); cv.outline(); return cv
+def _mat_wing(c):
+    cv = Canvas(16, 16)
+    for i in range(4): cv.ellipse(4 + i * 3, 9 + (i % 2) * 2, 2.6, 4.5 - i * .3, c)
+    cv.hline(2, 14, 5, shade(c, .6)); cv.set(4, 6, shade(c, 1.3)); cv.outline(); return cv
+def _mat_ear(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 9, 3, 6, c); cv.ellipse(8, 10, 1.4, 3.6, shade(c, 1.25)); cv.set(7, 5, shade(c, 1.4)); cv.outline(); return cv
+def _mat_meat(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 9, 6, 4.5, c); cv.ellipse(6, 8, 2, 1.4, shade(c, 1.3)); cv.set(10, 10, shade(c, .7)); cv.set(11, 8, hx("#6a8a3a")); cv.outline(); return cv
+def _mat_core(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 8, 5.5, 5.5, shade(c, .7)); cv.ellipse(8, 8, 4, 4, c); cv.ellipse(7, 7, 1.6, 1.6, shade(c, 1.5))
+    cv.hline(2, 4, 8, shade(c, .7)); cv.hline(12, 14, 8, shade(c, .7)); cv.outline(); return cv
+def _mat_bundle(c):
+    cv = Canvas(16, 16); cv.rect(4, 4, 11, 12, c); cv.rect(4, 4, 11, 5, shade(c, 1.25)); cv.rect(4, 8, 11, 8, shade(c, .6)); cv.rect(7, 3, 8, 13, shade(c, .7)); cv.outline(); return cv
+
+MATERIAL_ICONS.update(
+    goblin_ear=(_mat_ear, "#6ab04a"), imp_horn=(_mat_horn, "#a8a0d8"), rotten_flesh=(_mat_meat, "#8a9a5a"), bone=(_mat_bone, "#ece4cc"),
+    antler=(_mat_horn, "#b88a5a"), tusk=(_mat_fang, "#e8dcc0"), hide=(_mat_leather, "#7a5a3a"), bear_claw=(_mat_fang, "#d8d0c4"),
+    bat_wing=(_mat_wing, "#6a5a8a"), demon_horn=(_mat_horn, "#c83a3a"), golem_core=(_mat_core, "#7ad0e8"),
+    thick_leather=(_mat_leather, "#6a4a2a"), bone_beam=(_mat_bar, "#d8cfb0"), bat_silk=(_mat_cloth, "#7a5a9a"), demon_steel=(_mat_bar, "#8a2a3a"),
+    golem_engine=(_mat_gear, "#58a8c8"), compost=(_mat_bundle, "#6a5a3a"), polished_tusk=(_mat_fang, "#fff4dc"), polished_antler=(_mat_horn, "#d8b078"),
+    imp_charm=(_mat_bundle, "#9a6ad8"), claw_charm=(_mat_bundle, "#c8b090"),
 )
 
 def flower_pot():
@@ -3341,7 +3328,7 @@ def main():
                     td["walls"] = dict(n="wall.png", w="wall_w.png", e="wall_e.png", h=WALL_H)   # 東北西三面牆（南面不畫）
         if t["id"] in PROPS_BY_TERRAIN:   # 固定小物件（餐飲區等）：圖放在地形資料夾
             td["props"] = PROPS_BY_TERRAIN[t["id"]]
-            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub); save(pool_plant(), "pool_plant.png", sub); save(pool_bench(), "pool_bench.png", sub); save(pool_deck(), "pool_deck.png", sub); save(claw_machine(), "claw_machine.png", sub); save(gacha_machine(), "gacha_machine.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
+            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub); save(claw_machine(), "claw_machine.png", sub); save(gacha_machine(), "gacha_machine.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
         if t.get("campfire") is False:
             td["campfire"] = False
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉
