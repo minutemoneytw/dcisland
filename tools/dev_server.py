@@ -3923,7 +3923,12 @@ def un_set_mode(t, cid, mode):
 AR_CABS = 4
 AR_COUNTDOWN_MS = 3000          # 聯機開局倒數
 AR_SOLO_COUNTDOWN_MS = 1500     # 單人開局倒數
-AR_GARBAGE = {2: 1, 3: 2, 4: 4}  # 對戰模式：一次消幾行 → 送每個對手幾行垃圾（使用者定；消 1 行不送）
+AR_GARBAGE = {2: 1, 3: 2, 4: 4}  # 對戰模式：一次消幾行 → 送每個對手幾行垃圾（使用者定；消 1 行本身不送）
+
+
+def ar_combo_bonus(c):
+    """連擊額外送的垃圾行（2026-11-14 使用者要求）：連擊數 1～2＝0、3～4＝1、5～6＝2、7～8＝3、9～11＝4、12 以上＝5；與 main.js 的 arComboBonus 同一張表。"""
+    return 5 if c >= 12 else 4 if c >= 9 else 3 if c >= 7 else 2 if c >= 5 else 1 if c >= 3 else 0
 AR_XP, AR_XP_MIN = 4, 10        # 一局消了至少 AR_XP_MIN 行的人 +AR_XP（助手先訂的數值）
 AR_SCORE_MAX = 99999999
 
@@ -4084,7 +4089,9 @@ def ar_msg(t, cid, msg, now):
         n = msg.get("n")
         if not (_int_in(n, 1, 4) and s["st"] == "link" and g and g["phase"] == "playing" and g["mode"] == "battle" and not s["dead"] and now >= g["t0"]):
             return False, []
-        k = AR_GARBAGE.get(n, 0)
+        combo = msg.get("combo")
+        combo = combo if _int_in(combo, 0, 1000) else 0   # 舊版客戶端沒帶 combo＝0
+        k = AR_GARBAGE.get(n, 0) + ar_combo_bonus(combo)
         out = []
         if k:
             for c in g["mem"]:

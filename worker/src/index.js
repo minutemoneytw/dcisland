@@ -2584,7 +2584,9 @@ function unSetMode(t, cid, mode) {
 const AR_CABS = 4;
 const AR_COUNTDOWN_MS = 3000;        // 聯機開局倒數
 const AR_SOLO_COUNTDOWN_MS = 1500;   // 單人開局倒數
-const AR_GARBAGE = { 2: 1, 3: 2, 4: 4 };   // 對戰模式：一次消幾行 → 送每個對手幾行垃圾（使用者定；消 1 行不送）
+const AR_GARBAGE = { 2: 1, 3: 2, 4: 4 };   // 對戰模式：一次消幾行 → 送每個對手幾行垃圾（使用者定；消 1 行本身不送）
+// 連擊額外送的垃圾行（2026-11-14 使用者要求）：連擊數 1～2＝0、3～4＝1、5～6＝2、7～8＝3、9～11＝4、12 以上＝5；與 main.js 的 arComboBonus 同一張表
+const arComboBonus = c => (c >= 12 ? 5 : c >= 9 ? 4 : c >= 7 ? 3 : c >= 5 ? 2 : c >= 3 ? 1 : 0);
 const AR_XP = 4, AR_XP_MIN = 10;     // 一局消了至少 AR_XP_MIN 行的人 +AR_XP（助手先訂的數值）
 const AR_SCORE_MAX = 99999999;
 const AR_MSGS = new Set(["solo", "link", "lmode", "ljoin", "lno", "lquit", "lstart", "over"]);
@@ -2708,7 +2710,8 @@ function arMsg(t, cid, msg, now) {
   if (a === "clr") {   // 一次消了 n 行：對戰模式送其他還活著的成員垃圾行
     const n = msg.n;
     if (!(arInt(n, 1, 4) && s.st === "link" && g && g.phase === "playing" && g.mode === "battle" && !s.dead && now >= g.t0)) return [false, []];
-    const k = AR_GARBAGE[n] || 0, out = [];
+    const combo = arInt(msg.combo, 0, 1000) ? msg.combo : 0;   // 舊版客戶端沒帶 combo＝0
+    const k = (AR_GARBAGE[n] || 0) + arComboBonus(combo), out = [];
     if (k) for (const c of g.mem) { const m = arSeat(t, c)[1]; if (m && c !== s.cab && !m.dead && m.cid != null) out.push([m.cid, { t: "tgb", n: k, from: s.cab }]); }
     return [false, out];
   }
