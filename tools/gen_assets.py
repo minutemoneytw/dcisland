@@ -2265,7 +2265,7 @@ MOB_MANIFEST = dict(
         # 野豬（森林島）：反擊型野怪，最低階的主動威脅（Lv25）
         dict(id="boar", name="野豬", lv=25, speed=30, flee=85, retaliate=True, noBounce=True,
              anim=dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64,
-                       rowDir=["up", "left", "down", "right"], fps=6, scale=0.55),
+                       rowDir=["up", "left", "down", "right"], fps=6, scale=0.8),   # 格內實際內容側視 55×30／正面 21×47，畫面側視約 44×24（2026-11-13 使用者定「比羊大隻」——羊約 30×26；原 0.55 側視只有 30×16.5 反而比羊小）
              line="「野豬」磨了磨獠牙，從鼻子裡哼出一團白氣。"),
         # 白熊（雪島）：反擊型、血厚慢速
         dict(id="bear_snow", name="白熊", lv=35, speed=26, flee=90, retaliate=True, noBounce=True,
