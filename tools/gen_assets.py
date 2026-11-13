@@ -407,24 +407,13 @@ SKINS = {
     "tan":   ("#d9a06a", "#b27e4f"),
     "deep":  ("#9c6238", "#7a4a2a"),
 }
-# ---------------- 人物分層 sheet（外部底圖，2026-11-07）----------------
-# 底圖＝使用者自製的像素小人：client/assets/external/img2pixel/char_base_walk.png
-#   （256×256；4 列方向 × 2 幀、每格 64×64；列0 正面、列1 朝右、列2 朝左、列3 背面；每列只有 a,b 兩張走路輪播）
-# 這裡把底圖拆成「軀幹（膚色）」與「褲子」兩層，再依遊戲的標準排列重排：
-#   8 方向（CHAR_DIRS）× [待機 4 幀, 走路 4 幀] ＋ 最後 1 幀坐姿 ＝ 65 幀，每幀 64×64（CHAR_FW×CHAR_FH）、1:1 不縮放。
-#   沒有斜角方向的專用圖：斜角沿用同側的側面圖（BASE_ROW）；待機＝該方向的第 1 幀；坐姿暫用正面待機。
-# 衣服／頭髮／帽子沒有獨立素材，先用同一張底圖的輪廓現地生成 placeholder（見 _draw_part）；
-# 之後換正式素材＝照同一排列畫好、覆蓋同名檔（char_body_*／char_bottom_basic／char_top_*／char_hat_*／char_hair*）。
-# 幀表由下面的 avatar.json 輸出（frames 的 w/h＝CHAR_FW/CHAR_FH、scale＝CHAR_SCALE）。
-BASE_CHAR = "external/img2pixel/char_base_walk.png"
+# ---------------- 人物幀表（8 方向 ×［待機 4 幀＋走路 4 幀］＋坐姿；素材一律用 LPC，見下面「LPC 通用格式」）----------------
+# 幀表由 avatar.json 輸出（frames 的 w/h＝CHAR_FW/CHAR_FH、scale＝CHAR_SCALE）。
 CHAR_FW, CHAR_FH = 64, 64
 CHAR_SCALE = 1                                  # 遊戲把每幀放大幾倍畫（引擎讀 avatar.json 的 frames.scale）；底圖已是 64px，畫 1 倍
 CHAR_DIRS = ["down", "down_right", "right", "up_right", "up", "up_left", "left", "down_left"]
-BASE_ROW = {"down": 0, "down_right": 2, "right": 2, "up_right": 2, "up": 3, "up_left": 1, "left": 1, "down_left": 1}   # 列1 朝左、列2 朝右（依頭部輪廓的不對稱實測：列1 左側突出＝臉朝左）
 CHAR_FRAMES = len(CHAR_DIRS) * 8 + 1
 CHAR_SIT = len(CHAR_DIRS) * 8
-BASE_SKIN = ((255, 225, 183), (247, 175, 143))   # 底圖膚色：亮／暗（做 4 種膚色時以這兩個為對應基準）
-BASE_PANTS_BRIGHT, BASE_PANTS_MID = (164, 165, 181), (106, 108, 130)   # 底圖牛仔褲：亮／中（深的是輪廓）
 
 def char_states():
     st = {}
@@ -436,228 +425,10 @@ def char_states():
         st.update(char_attack_frames()[1])   # 攻擊動作（LPC 揮砍／突刺／施法／射擊）
     return st
 
-_base_px = None
-def _base():
-    global _base_px
-    if _base_px is None:
-        p = read_png_pixels(os.path.join(ASSETS, BASE_CHAR))
-        if p is None:
-            raise SystemExit(f"找不到人物底圖 {BASE_CHAR}（授權見 docs/assets-license.md）")
-        _base_px = p
-    return _base_px
-
-def _bpx(x, y):
-    w, h, d = _base()
-    i = (y * w + x) * 4
-    return (d[i], d[i + 1], d[i + 2], d[i + 3])
-
-def _is_skin(c):
-    r, g, b, a = c
-    return a > 16 and r > 175 and g > 120 and b < 215 and r > b + 12 and r >= g
-
-def _is_gray(c):   # 底圖烘進去的腳下陰影（低飽和灰）：砍掉，遊戲自己會畫影子
-    r, g, b, a = c
-    return a > 16 and abs(r - g) < 12 and abs(g - b) < 20 and 45 < r < 110
-
-_regions_cache = {}
-def _base_regions(fx, fy):
-    """回傳 (minx, miny, maxx, maxy, head_bottom, pants_top, foot_bottom)；座標為幀內 0..63。"""
-    key = (fx, fy)
-    if key in _regions_cache:
-        return _regions_cache[key]
-    minx, miny, maxx, maxy = 999, 999, -1, -1
-    for y in range(CHAR_FH):
-        for x in range(CHAR_FW):
-            if _bpx(fx + x, fy + y)[3] > 16:
-                minx, miny = min(minx, x), min(miny, y)
-                maxx, maxy = max(maxx, x), max(maxy, y)
-    H = maxy - miny + 1
-    foot = maxy
-    for y in range(CHAR_FH - 1, -1, -1):
-        if any(_bpx(fx + x, fy + y)[3] > 16 and not _is_gray(_bpx(fx + x, fy + y)) for x in range(CHAR_FW)):
-            foot = y
-            break
-    # 腳（膚色）從哪一列開始：那列以下算軀幹（腿＝褲子、腳＝膚色）
-    foot_top = foot + 1
-    for y in range(miny + round(0.62 * H), foot + 1):
-        if any(_is_skin(_bpx(fx + x, fy + y)) for x in range(CHAR_FW)):
-            foot_top = y
-            break
-    reg = (minx, miny, maxx, maxy, miny + round(0.24 * H), miny + round(0.62 * H), foot, foot_top)
-    _regions_cache[key] = reg
-    return reg
-
-def _src_frame(d, f):
-    return (f % 2) * CHAR_FW, BASE_ROW[d] * CHAR_FH
-
-def _align(cv, foot):
-    """把腳對齊到幀底（第 CHAR_FH-1 列），讓所有方向的腳站在同一條地上（底圖腳下留了空＋影子列）。"""
-    out = Canvas(CHAR_FW, CHAR_FH)
-    dy = (CHAR_FH - 1) - foot
-    for y in range(CHAR_FH):
-        for x in range(CHAR_FW):
-            c = cv.get(x, y)
-            if c[3]:
-                out.set(x, y + dy, c)
-    return out
-
-_split_cache = {}
-def _draw_split(d, f, part):
-    """part＝'torso'（膚色）或 'pants'（褲子）：把底圖那一幀依腰線／腳切開。"""
-    key = (d, f, part)
-    if key in _split_cache:
-        return _split_cache[key]
-    fx, fy = _src_frame(d, f)
-    minx, miny, maxx, maxy, head_b, pants_t, foot, foot_top = _base_regions(fx, fy)
-    cv = Canvas(CHAR_FW, CHAR_FH)
-    for y in range(CHAR_FH):
-        for x in range(CHAR_FW):
-            c = _bpx(fx + x, fy + y)
-            if c[3] <= 16 or y > foot or _is_gray(c):
-                continue
-            is_pants = pants_t <= y < foot_top and not _is_skin(c)
-            if (part == "pants") == is_pants:
-                cv.set(x, y, c)
-    out = _align(cv, foot)
-    _split_cache[key] = out
-    return out
-
-def _recolor_skin(cv, tb, ts):
-    out = Canvas(cv.w, cv.h)
-    for y in range(cv.h):
-        for x in range(cv.w):
-            c = cv.get(x, y)
-            if c[3] == 0:
-                continue
-            rgb = (c[0], c[1], c[2])
-            if rgb == BASE_SKIN[0] or (rgb[0] > 235 and rgb[1] > 200 and rgb[2] > 160):
-                out.set(x, y, (tb[0], tb[1], tb[2], c[3]))
-            elif rgb == BASE_SKIN[1]:
-                out.set(x, y, (ts[0], ts[1], ts[2], c[3]))
-            else:
-                out.set(x, y, c)
-    return out
-
-def _recolor_pants(cv, main, shd):
-    out = Canvas(cv.w, cv.h)
-    dk = shade(main, 0.5)
-    for y in range(cv.h):
-        for x in range(cv.w):
-            c = cv.get(x, y)
-            if c[3] == 0:
-                continue
-            lum = .299 * c[0] + .587 * c[1] + .114 * c[2]
-            col = main if lum > 140 else shd if lum > 95 else dk
-            out.set(x, y, (col[0], col[1], col[2], c[3]))
-    return out
-
-def _char_sheet(draw):
-    """draw(d, f) → Canvas(CHAR_FW×CHAR_FH) 或 None；排成 65 幀的 sheet（置中、不縮放）。"""
-    sheet = Canvas(CHAR_FW * CHAR_FRAMES, CHAR_FH)
-    def blit(fi, cv):
-        if cv is None:
-            return
-        for y in range(CHAR_FH):
-            for x in range(CHAR_FW):
-                c = cv.get(x, y)
-                if c[3]:
-                    sheet.set(fi * CHAR_FW + x, y, c)
-    for i, d in enumerate(CHAR_DIRS):
-        for k in range(4):
-            blit(i * 8 + k, draw(d, 0))            # 待機 4 幀（同一張）
-        for k in range(4):
-            blit(i * 8 + 4 + k, draw(d, k % 2))    # 走路 a,b,a,b
-    blit(CHAR_SIT, draw("down", 0))                # 坐姿暫用正面待機
-    return sheet
-
-def char_body_sheet(skin_key):
-    tb, ts = hx(SKINS[skin_key][0]), hx(SKINS[skin_key][1])
-    return _char_sheet(lambda d, f: _recolor_skin(_draw_split(d, f, "torso"), tb, ts))
-
-def char_bottom_sheet(main_hex, shd_hex):
-    main, shd = hx(main_hex), hx(shd_hex)
-    return _char_sheet(lambda d, f: _recolor_pants(_draw_split(d, f, "pants"), main, shd))
-
-_part_cache = {}
-def _draw_part(d, f, kind, main, shd, back):
-    """沒有獨立素材的衣服／頭髮／帽子 placeholder：用底圖的輪廓現地塗色。
-    kind：'top'（軀幹膚色範圍＝上衣）／'hair'（頭部上緣＋兩側，正面留臉）／'hat'（頭頂一小塊）。"""
-    key = (d, f, kind, main, shd, back)
-    if key in _part_cache:
-        return _part_cache[key]
-    fx, fy = _src_frame(d, f)
-    minx, miny, maxx, maxy, head_b, pants_t, foot, foot_top = _base_regions(fx, fy)
-    H = maxy - miny + 1
-    cv = Canvas(CHAR_FW, CHAR_FH)
-    for y in range(CHAR_FH):
-        for x in range(CHAR_FW):
-            c = _bpx(fx + x, fy + y)
-            if c[3] <= 16 or y > foot or _is_gray(c) or not _is_skin(c):
-                continue
-            col = None
-            if kind == "top" and head_b <= y < foot_top:
-                col = main if y < (head_b + foot_top) // 2 else shd
-            elif kind == "hair" and miny <= y < head_b:
-                face = (not back) and y >= miny + round(0.16 * H) and minx + 4 <= x <= maxx - 4
-                if not face:
-                    col = main if y < miny + round(0.10 * H) else shd
-            elif kind == "hat" and y < miny + round(0.15 * H):
-                col = main if y < miny + round(0.07 * H) else shd
-            if col:
-                cv.set(x, y, col)
-    out = _align(cv, foot)
-    _part_cache[key] = out
-    return out
-
-# ---------------- 職業裝備與外觀（帽子／上衣／褲子）----------------
-# 每件一張標準排列的 sheet（與 char_top_basic 等同一套排列）。dye＝可染色的原色（第一個是主色；client 換色時
-# 主色換成玩家選的顏色、其他依與主色的明暗比例跟著換），其餘顏色（點綴）不換色。
-# 形狀：上衣／褲子沿用 body() 依顏色拆出的範圍（換成各職業的顏色＋點綴），長袍類（robe）把上衣往下蓋住褲子前 3 列；
-# 帽子另外畫（正面／背面；坐姿整體下移 3 列）。之後換成正式素材只要照排列畫、覆蓋同名檔。
-GEAR_TOPS = {   # id: (名稱, 主色, 陰影, 點綴函式, 長袍)
-    "knight_top":    ("騎士鎧甲", "#8fa6c8", "#6a7f9e", "plate", False),
-    "warrior_top":   ("戰士皮甲", "#b5452f", "#8a3322", "fur", False),
-    "whitemage_top": ("白魔長袍", "#f0ece0", "#c8c0ac", "trim_red", True),
-    "sage_top":      ("賢者長袍", "#3a9a8a", "#2a7466", "trim_gold", True),
-    "ninja_top":     ("忍者上衣", "#4a3a6a", "#352a4e", "sash", False),
-    "dragoon_top":   ("龍騎士鎧甲", "#3a4a8a", "#2a3668", "plate", False),
-    "bard_top":      ("詩人外衣", "#4a8a3a", "#366a2a", "trim_gold", False),
-    "blackmage_top": ("黑魔長袍", "#2e3a7a", "#1f2858", "trim_gold", True),
-}
-GEAR_BOTTOMS = {
-    "knight_bottom":    ("騎士腿甲", "#5a6a88", "#46536c"),
-    "warrior_bottom":   ("戰士褲", "#5a4030", "#45301f"),
-    "whitemage_bottom": ("白魔長褲", "#d8d0bc", "#b0a890"),
-    "sage_bottom":      ("賢者長褲", "#2e6a62", "#1f4e48"),
-    "ninja_bottom":     ("忍者褲", "#3a2e52", "#2a2140"),
-    "dragoon_bottom":   ("龍騎士腿甲", "#2e3a6a", "#222b50"),
-    "bard_bottom":      ("詩人長褲", "#5a4a3a", "#45382a"),
-    "blackmage_bottom": ("黑魔長褲", "#2a3060", "#1d2246"),
-}
-GEAR_HATS = {   # id: (名稱, 主色, 陰影, 畫法)
-    "knight_hat":    ("騎士頭盔", "#a8b8d0", "#7a8aa4", "helm"),
-    "warrior_hat":   ("戰士角盔", "#8a5a3a", "#6a4228", "horned"),
-    "whitemage_hat": ("白魔兜帽", "#f0ece0", "#c8c0ac", "hood"),
-    "sage_hat":      ("賢者頭冠", "#e0c040", "#b08a28", "circlet"),
-    "ninja_hat":     ("忍者頭巾", "#4a3a6a", "#352a4e", "band"),
-    "dragoon_hat":   ("龍騎士頭盔", "#3a4a8a", "#2a3668", "dragoon"),
-    "bard_hat":      ("羽毛帽", "#4a8a3a", "#366a2a", "feather"),
-    "blackmage_hat": ("黑魔尖帽", "#2e3a7a", "#1f2858", "pointy"),
-}
-# ---------------- 衣服／頭髮／帽子的 sheet（用上面的 _draw_part 現地生成 placeholder）----------------
-# 便服上衣（第一款；也是舊客戶端／沒指定時的預設款）；顏色與 avatar.json 的 dye 對應
-def basic_top_sheet():
-    return _char_sheet(lambda d, f: _draw_part(d, f, "top", hx("#d95c68"), hx("#aa474f"), d == "up"))
-
 # ---------------- 髮型模組（LPC 通用格式外部素材）----------------
 # 使用者提供的髮型是 LPC 通用格式：832×1344＝13 欄 × 21 列、每格 64×64（單層、透明底、12 種顏色）。
 # LPC 的列＝動作：0-3 施法(7 幀)、4-7 突刺(8)、8-11 走路(9)、12-15 揮砍(6)、16-19 射擊(13)、20 受擊(6)；
 #   每組四列的順序＝朝上/朝左/朝下/朝右（走路＝列 8 上、9 左、10 下、11 右）。
-# 這裡只取走路四列、縮放 LPC_SCALE 對齊我們底圖的頭部，重排成遊戲的 65 幀髮型 sheet（疊在頭髮層）。
-# 之後再加別的 LPC 髮型：把檔名加進 KIDOL_HAIR（或另開清單）呼叫 lpc_hair_sheet 即可。
-LPC_SCALE = 0.72                 # LPC 模組 → 遊戲底圖的縮放比例（以 64px 底圖的頭部對齊校準；見 docs/notes.md）
-LPC_ROW_OF = {"down": 10, "down_right": 11, "right": 11, "up_right": 11, "up": 8, "up_left": 9, "left": 9, "down_left": 9}
-LPC_PICK = [0, 1, 2, 1]          # 走路 9 幀循環取 4 幀（觸地-通過-觸地-通過）；待機＝站立幀 0
 KIDOL_HAIR = [                   # LPC 短髮模組的 12 種顏色 (檔名後綴, 名稱)
     ("brown", "棕"), ("brown2", "深棕"), ("black", "黑"), ("blonde", "金"),
     ("ashblonde", "灰金"), ("ashplatinum", "銀白"), ("red", "紅"), ("orange", "橘"),
@@ -771,48 +542,6 @@ def kidol_main_hex(cid):
              if 0.299 * (k[0] << 3) + 0.587 * (k[1] << 3) + 0.114 * (k[2] << 3) >= top_lum * .45),
             key=lambda k: cnt[k])   # 常見色裡取「亮度 ≥ 上限 45%」的最常見者
     return "#%02x%02x%02x" % (k[0] << 3, k[1] << 3, k[2] << 3)
-
-def _lpc_hair_cell(w, data, row, f):
-    """把 LPC sheet 的 (列, 幀) 那格縮放 LPC_SCALE、對齊我們的頭部，回傳 Canvas(64×64)。"""
-    k = LPC_SCALE
-    dx = round(CHAR_FW / 2 - CHAR_FW / 2 * k)   # 水平置中
-    dy = round(14 - 13 * k)                      # 髮帽頂（LPC y13）對到我們底圖頭頂上方一點（y14），貼緊頭皮
-    cv = Canvas(CHAR_FW, CHAR_FH)
-    for oy in range(round(CHAR_FH * k)):
-        sy = row * CHAR_FH + min(CHAR_FH - 1, int(round(oy / k)))
-        for ox in range(round(CHAR_FW * k)):
-            sx = f * CHAR_FW + min(CHAR_FW - 1, int(round(ox / k)))
-            i = (sy * w + sx) * 4
-            if data[i + 3] > 16:
-                cv.set(ox + dx, oy + dy, (data[i], data[i + 1], data[i + 2], data[i + 3]))
-    return cv
-
-def lpc_hair_sheet(rel):
-    """rel＝相對 client/assets/ 的 LPC 髮型檔（832×1344）→ 遊戲 65 幀髮型 sheet。"""
-    r = read_png_pixels(os.path.join(ASSETS, rel))
-    if r is None:
-        raise SystemExit(f"找不到髮型模組 {rel}")
-    w, h, data = r
-    cache = {}
-    def cell(d, f):
-        key = (d, f)
-        if key not in cache:
-            cache[key] = _lpc_hair_cell(w, data, LPC_ROW_OF[d], f)
-        return cache[key]
-    sheet = Canvas(CHAR_FW * CHAR_FRAMES, CHAR_FH)
-    def blit(fi, cv):
-        for y in range(CHAR_FH):
-            for x in range(CHAR_FW):
-                c = cv.get(x, y)
-                if c[3]:
-                    sheet.set(fi * CHAR_FW + x, y, c)
-    for i, d in enumerate(CHAR_DIRS):
-        for k2 in range(4):
-            blit(i * 8 + k2, cell(d, 0))                 # 待機 4 幀＝站立
-        for k2 in range(4):
-            blit(i * 8 + 4 + k2, cell(d, LPC_PICK[k2]))  # 走路 4 幀
-    blit(CHAR_SIT, cell("down", 0))                      # 坐姿暫用正面站立
-    return sheet
 
 # ---------------- LPC 通用格式（2026-11-08 大改：角色整個改用 LPC 通用格式）----------------
 # 角色每個部位都是一張 832×1344＝13 欄 × 21 列、每格 64×64 的 LPC 通用格式 sheet（下載的 LPC 素材可直接用）。
@@ -1184,18 +913,6 @@ def with_glow(weapons):
                 g["lpc"] = gl
             out.append(g)
     return out
-
-def gear_top_sheet(tid):
-    _, main, shd = GEAR_TOPS[tid][0], GEAR_TOPS[tid][1], GEAR_TOPS[tid][2]
-    return _char_sheet(lambda d, f: _draw_part(d, f, "top", hx(main), hx(shd), d == "up"))
-
-def gear_bottom_sheet(bid):
-    _, main, shd = GEAR_BOTTOMS[bid]
-    return char_bottom_sheet(main, shd)
-
-def gear_hat_sheet(hid):
-    _, main, shd, _kind = GEAR_HATS[hid]
-    return _char_sheet(lambda d, f: _draw_part(d, f, "hat", hx(main), hx(shd), d == "up"))
 
 # ---------------- 家具 ----------------
 def sofa():
