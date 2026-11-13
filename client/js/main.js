@@ -8037,7 +8037,10 @@ const WEATHERS = {   // id → 名稱／色罩（rgba 三元組＋最濃不透�
   clear:   { name: '晴' },
   rain:    { name: '雨',   tint: [40, 62, 92],    alpha: .16, part: { kind: 'rain',    n: 110, vy: 520, vx: -64, len: 13 } },
   snow:    { name: '雪',   tint: [226, 236, 250], alpha: .13, part: { kind: 'snow',    n: 90,  vy: 46,  vx: 20, sway: 26, r: 1.6 } },
-  fog:     { name: '霧',   tint: [204, 214, 224], alpha: .19, part: { kind: 'fog',     n: 13,  vx: 14, r: 95 } },
+  // 霧（2026-11-13 使用者定：要有「一片濛濛、能見度越遠越低」的縱深霧感，參考 FF14 起霧）：
+  // depth: true → 不用全畫面平均色罩，改畫以玩家為中心的徑向漸層：身邊（near）幾乎清楚、中距離（mid）、
+  // 遠處（far）到能見度半徑（vis×畫面短邊）以外（alpha）整片白濛；core＝身邊這個比例內維持最清楚的濃度
+  fog:     { name: '霧',   tint: [230, 237, 244], alpha: .95, near: .05, mid: .4, far: .75, core: .1, vis: .8, depth: true, part: { kind: 'fog', n: 24, vx: 12, r: 120 } },
   sand:    { name: '沙暴', tint: [222, 190, 122], alpha: .15, part: { kind: 'sand',    n: 70,  vy: 26,  vx: -215, len: 9 } },
   ember:   { name: '落灰', tint: [255, 118, 42],  alpha: .09, part: { kind: 'ember',   n: 60,  vy: -34, vx: 16, r: 1.8 } },
   leaf:    { name: '落葉', part: { kind: 'leaf', n: 24, vy: 42, vx: -34, sway: 42, r: 2.6 } },
@@ -8087,12 +8090,34 @@ function weatherSpawn(p, kind) {   // 粒子出生位置：下雨／雪／沙／
   else { p.x = Math.random() * (canvas.width + 160) - 80; p.y = -8 - Math.random() * 40; }
   p.vx = 0; p.vy = 0; p.ph = Math.random() * Math.PI * 2;
 }
+// 色罩：一般人天氣是全畫面平均色罩；`depth: true`（霧）改畫「距離越遠越濃」的徑向漸層——
+// 以玩家腳邊為圓心、到畫面角落為霧最濃處（近＝near、中＝mid、邊緣＝alpha）。
+// mul＝過渡權重（前一個天氣淡出用 1-bl、當前淡入用 bl），同一層就能平滑交叉。
+function weatherMask(def, mul) {
+  if (!def || !def.tint || mul <= 0) return;
+  const [r, g, b] = def.tint;
+  const fill = a => `rgba(${r},${g},${b},${(a * mul).toFixed(3)})`;
+  if (!def.alpha) return;
+  if (!def.depth) { ctx.fillStyle = fill(def.alpha); ctx.fillRect(0, 0, canvas.width, canvas.height); return; }
+  const me = S.players[0];
+  const cx = me ? me.x - S.cam.x : canvas.width / 2;                 // 玩家在畫面上的位置（鏡頭跟隨，通常在畫面中央偏下）
+  const cy = me ? me.y - 24 - S.cam.y : canvas.height / 2;
+  // 霧最濃處＝「能見度半徑」R：以畫面短邊換算（約 0.8 個短邊），超過就整片白濛——
+  // 所以看得出來的距離有限、愈遠愈看不清（2026-11-13 使用者要「一片濛濛，能見度越遠越低」，參考 FF14 起霧）
+  const R = Math.min(canvas.width, canvas.height) * (def.vis ?? .8);
+  const gr = ctx.createRadialGradient(cx, cy, R * def.core, cx, cy, R);
+  gr.addColorStop(0,   fill(def.near ?? .1));
+  gr.addColorStop(.5,  fill(def.mid ?? (def.alpha * .5)));
+  gr.addColorStop(.82, fill(def.far ?? (def.alpha * .85)));
+  gr.addColorStop(1,   fill(def.alpha));
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
 function drawWeather() {
   const w = S.weather; if (!w) return;
   const P0 = WEATHERS[w.prev], P1 = WEATHERS[w.cur], bl = weatherBlend(), dt = Math.min(.05, S.weatherDt || .016);
   // 色罩：前一個天氣淡出、當前天氣淡入（兩層各畫一次，顏色不同也能平滑交叉）
-  if (bl < 1 && P0.tint && P0.alpha) { ctx.fillStyle = `rgba(${P0.tint[0]},${P0.tint[1]},${P0.tint[2]},${(P0.alpha * (1 - bl)).toFixed(3)})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
-  if (P1.tint && P1.alpha) { ctx.fillStyle = `rgba(${P1.tint[0]},${P1.tint[1]},${P1.tint[2]},${(P1.alpha * bl).toFixed(3)})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+  weatherMask(P0, 1 - bl);
+  weatherMask(P1, bl);
   // 粒子池：目標顆數在過渡期跟著 blend 從前一個天氣的量走向當前的量
   const n0 = P0.part ? P0.part.n : 0, n1 = P1.part ? P1.part.n : 0;
   let target = Math.round(n0 + (n1 - n0) * bl);
@@ -8126,7 +8151,7 @@ function drawWeather() {
       ctx.strokeStyle = 'rgba(238,206,150,.5)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - d.len, p.y + d.len * .3); ctx.stroke();
     } else if (d.kind === 'fog') {
-      ctx.fillStyle = `rgba(228,234,240,${.05 + .03 * Math.sin(p.ph)})`;
+      ctx.fillStyle = `rgba(236,242,248,${.055 + .035 * Math.sin(p.ph)})`;
       ctx.beginPath(); ctx.arc(p.x, p.y, d.r * (0.8 + .2 * Math.sin(p.ph * .7)), 0, Math.PI * 2); ctx.fill();
     } else if (d.kind === 'ember') {
       ctx.fillStyle = `rgba(255,${140 + 60 * Math.sin(p.ph) | 0},70,${.5 + .3 * Math.sin(p.ph * 2)})`;
@@ -8219,7 +8244,9 @@ function drawMinimap() {   // 掛點：draw() 的 drawWeather() 之後（螢幕�
   ctx.globalCompositeOperation = 'multiply';   // 羊皮紙暖色：陸地偏黃、海偏墨綠，像舊地圖
   ctx.fillStyle = '#d8c8a0'; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
   ctx.globalCompositeOperation = 'source-over';
-  if (wd.tint) { ctx.fillStyle = `rgba(${wd.tint.join(',')},${(wd.alpha * 1.6).toFixed(3)})`; ctx.fillRect(cx - R, cy - R, R * 2, R * 2); }   // 天氣色罩（跟世界同一份，小地圖也看得出天氣）
+  // 天氣色罩（跟世界同一份，小地圖也看得出天氣）。上限 0.45：霧這種濃天氣 alpha 很高（.95），
+  // 直接乘會把小地圖整張塗白、看不到島形（2026-11-13 霧改成縱深霧時發現）
+  if (wd.tint) { ctx.fillStyle = `rgba(${wd.tint.join(',')},${Math.min(.45, (wd.alpha || 0) * 1.2).toFixed(3)})`; ctx.fillRect(cx - R, cy - R, R * 2, R * 2); }
   // 點：營火（橘，集合點）、其他玩家（金）、自己（白＋深色描邊放最上）
   const dot = (wx, wy, col, r) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(ox + wx / CELL * sc, oy + wy / CELL * sc, r, 0, Math.PI * 2); ctx.fill(); };
   if (S.campfire) dot(S.campfire.x, S.campfire.y, '#ff9a4a', 2);

@@ -165,6 +165,7 @@
 - **設計定案（2026-11-12，使用者定）**：**決定論**——天氣由「地形＋時刻槽」雜湊抽籤，每個人自己算、算出來都一樣，不用同步；**玩家不影響天氣**；先架構（色罩＋粒子）後素材。天氣時刻槽目前用**現實時鐘**（`weatherSlot()` 的 `Date.now()`），之後接遊戲時間系統時**只改這個函式**。
 - **常數**（`main.js` 天氣區塊，在 `draw()` 前）：`WEATHER_SLOT_MIN`＝8（一個槽 8 分鐘，槽內天氣不變）、`WEATHER_TRANS_SEC`＝40（換槽時前一個天氣→新天氣的色罩與粒子密度過渡秒數）。`WEATHERS`＝8 種天氣的色罩與粒子參數（clear／rain／snow／fog／sand／ember／leaf／firefly）；各地形的天氣表（id＝權重）在 `TERRAIN_WEATHER`；**和平島是室內（ROOM_BOX）不做天氣**（永遠晴）。
 - **實作**：`weatherHash()`＝FNV-1a（純整數運算、各瀏覽器一致，決定論的關鍵）；`weatherPick(T, slot)` 同一（地形, 槽）永遠同一種天氣；`stepWeather(dt)` 換槽／換地形時切天氣（`prev`/`cur`/`t0`/`parts`），粒子池在 `drawWeather()` 每幀補齊；過渡用**雙層色罩 crossfade**（顏色不同也平滑），粒子顆數在過渡期跟著 blend 走，粒子步進的 dt 用 `S.weatherDt`（`stepWeather` 記下）。**掛點**：`loop()` 的 `S.t += dt` 之後呼叫 `stepWeather(dt)`；`draw()` 的 `ctx.restore()` 之後、島主倒數條之前呼叫 `drawWeather()`（螢幕空間，蓋世界與名牌、不蓋倒數條）。只是畫面，不涉及同步與伺服器。
+- **縱深霧（2026-11-13 使用者定：一片濛濛、能見度越遠越低，參考 FF14 起霧）**：`WEATHERS` 的天氣可加 `depth: true`（目前只有霧）就不是全畫面平均色罩，改由 `weatherMask(def, mul)` 畫**以玩家為中心的徑向漸層**——`near`（身邊，靠 `core`×能見度半徑內維持）→ `mid`（中距離）→ `far` → `vis`（能見度半徑＝`vis`×畫面短邊）以外 `alpha`（整片白濛）；沒有 `depth` 的天氣照舊平均色罩。過渡一樣用 blend 的雙層權重交叉淡化。霧參數：tint (230,237,244)、alpha .95、near .05／mid .4／far .75／core .1／vis .8。**連帶**：小地圖的天氣色罩原本寫死 `alpha×1.6`，霧的 alpha 變成 .95 後會把小地圖整張塗白看不到島形 → 上限改成 0.45（`drawMinimap`）。
 - **待辦（交互作用，動工前先查現狀）**：特殊怪照天氣條件出現（mobs.json 加 `spawnIf`，例如雨天才出現；注意 `fixed` 與 `spawnIf` 併用的行為要先想清楚）；植物生長受天氣影響（先查採集重生是本機計時還是伺服器存）；遊戲時間系統（屆時 `weatherSlot()` 改接遊戲時間）。
 
 ## 小地圖
