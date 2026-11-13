@@ -40,6 +40,10 @@
   {
    "id": "goblin_forest",
    "weight": 2
+  },
+  {
+   "id": "boar",
+   "weight": 2
   }
  ],
  "uiColor": "#5b8f46"

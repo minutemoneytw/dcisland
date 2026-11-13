@@ -60,7 +60,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 7. `localStorage` key 前綴為 `dcisland.m0.*`，改格式時要考慮舊資料。
 8. **和平島不能出現任何敵對 NPC／怪物**（島主、野生敵對怪、釣上來的怪物都不行；使用者定，詳見 `docs/notes.md`「和平島與遊戲桌」）。新增會生成敵對單位的機制時，要排除 `peace`。
 9. **人物、服裝、武器只用 LPC 素材，不要用程式畫的暫代圖**（使用者定，2026-11-09）。來源是 Universal-LPC-Spritesheet-Character-Generator，做法與授權記錄見 `docs/notes.md`「美術：多幀動畫與人物分層」。
-10. **新增生物要先量大小**：人物畫面上約 46px 高，量素材實際內容的大小、照這個比例定 `anim.scale`（野外小動物約 20～30px；細節見 `docs/notes.md`「野外動物」的新增怪物規範）。
+10. **新增生物要先量大小**：人物畫面上約 46px 高，量素材實際內容的大小、照這個比例定 `anim.scale`（野外小動物約 20～30px；細節見 `docs/notes.md`「野外動物」的新增怪物規範）。**新怪一律給 `lv`**（血量＝2×lv、攻擊力＝1+lv÷8、經驗值＝1+lv÷4；各島等級帶每島差 10 級；主動怪不會攻擊等級比牠高的角色）。
 11. **使用者做過的設計決定**（例如野外動物刻意不同步、家具開放所有人編輯）記在 `docs/notes.md`，不要自行「修正」。
 
 ## Git
@@ -77,7 +77,9 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 | `mobs.json`、動物游泳、**新增怪物規範（方向網格／調色 tint／fixed／footDy／noBounce）**、**反擊型野怪（`retaliate`）／道德性怪物**、動物重生、捕捉/牧養規劃、釣上來的敵對怪物（lurker） | 野外動物 |
 | 裝飾模式、地板、看板、坐下/睡覺、家具碰撞 | 裝飾、家具、地板、看板 |
 | 採集工具、釣魚與圖鑑、稱號（含擊倒島主紀錄）、NPC、操作說明、**合成（素材圖鑑／配方筆記／合成家具）** | 玩法：採集、釣魚、合成、稱號、NPC |
-| **地圖尺寸（`COLS`／`ROWS`）、和平島、遊戲桌（抽鬼牌／五子棋／躲彈幕／UNO／英文打字競賽／中文打字競賽／秘藥情報戰／見習驅魔師／方塊拼圖／三角方塊拼圖；`tbl`／`table`／`tblinfo` 訊息、`TABLE_DEFS`、`games.json`）** | 和平島與遊戲桌 |
+| **地圖尺寸（`COLS`／`ROWS`）、和平島、遊戲桌（抽鬼牌／五子棋／躲彈幕／UNO／英文打字競賽／中文打字競賽／秘藥情報戰／見習驅魔師／Blokus／Blokus Trigon／俄羅斯方塊（t13，4 台機台共用一張桌）／豆豆迷宮（t14，豆豆那台是權威）／空氣曲棍球（t15／t16，桌主那台算物理）；**餐飲區（`props`、吃喝的增減益 `FOOD_FX`、`#buffBar`）**；`tbl`／`table`／`tblinfo` 訊息、`TABLE_DEFS`、`games.json`）** | 和平島與遊戲桌 |
 | `makeSpr`／`drawSpr`、`anim`、人物分層 sheet、`avatar.json` 的 `frames`、**裝備／外觀／換色（`dye`、`glam`、`wardrobe`）** | 美術：多幀動畫與人物分層 |
+| 天氣（色罩／粒子、`WEATHER_SLOT_MIN` 時刻槽、`weatherSlot` 接遊戲時間、之後 `spawnIf`／植物生長） | 天氣（純客戶端畫面） |
+| **小地圖（`drawMinimap`、`MINI_COLORS`、畫在主畫布右上角、DOM 面板天然蓋過它）** | 小地圖 |
 | 本機 Python／Node 環境、Discord CSP、`dev_server.py` 的 HTTP 設定、主迴圈 `dt`／`S.t` | 環境與部署地雷 |
 | 已被取代的舊做法（舊人物分層、髮型模組縮放） | 歷史紀錄（已過時） |

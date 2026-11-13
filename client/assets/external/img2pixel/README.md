@@ -1,6 +1,8 @@
-# 自製島主素材（img2pixel）
+# 外部素材（img2pixel 資料夾）
 
-使用者**自製**的像素素材（用 `img2pixel` 轉換工具製作，來源圖自繪）。此資料夾不由 `tools/gen_assets.py` 管理。
+不是由 `tools/gen_assets.py` 畫出來的素材都放這裡：最早只有使用者**自製**的島主素材（用 `img2pixel` 轉換工具製作，來源圖自繪），現在也放 OpenGameArt／LPC 的怪物 sheet、營火、火球、`lpc/`（人物、服裝、武器的 LPC 原始圖層）與 `hair_kidol/`（髮型）。此資料夾的檔案不由產生器產生，只在 `gen_assets.py` 的 `EXTERNAL_BUNDLES` 登記與健檢。
+
+下面只詳細記錄幾隻自製島主的規格；**其餘每個檔案的來源、作者與授權逐條記在 `docs/assets-license.md`**，幀數、尺寸與接線看 `gen_assets.py` 的 `EXTERNAL_BUNDLES` 與 `MOB_MANIFEST`。壓力山大（機械島島主，`alexander_idle_sheet.png`）也已接線，規格同樣看那兩處。
 
 ## 笨蛋蛇女（夜光島島主，已接線）
 

@@ -42,6 +42,10 @@
    "weight": 2
   },
   {
+   "id": "bat_night",
+   "weight": 2
+  },
+  {
    "id": "skeleton_night",
    "weight": 2
   }

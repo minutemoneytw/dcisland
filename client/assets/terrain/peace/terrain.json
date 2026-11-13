@@ -7,7 +7,16 @@
  "edge": "edge.png",
  "water": "water.png",
  "deco": [],
- "mobs": [],
+ "mobs": [
+  {
+   "id": "cat",
+   "weight": 1
+  },
+  {
+   "id": "dog",
+   "weight": 1
+  }
+ ],
  "uiColor": "#d9c9a6",
  "tables": [
   {
@@ -15,16 +24,6 @@
    "game": "gomoku",
    "cell": [
     48,
-    32
-   ],
-   "w": 3,
-   "h": 2
-  },
-  {
-   "id": "t1",
-   "game": "oldmaid",
-   "cell": [
-    56,
     32
    ],
    "w": 3,
@@ -41,21 +40,11 @@
    "h": 2
   },
   {
-   "id": "t5",
-   "game": "dodge",
+   "id": "t1",
+   "game": "oldmaid",
    "cell": [
-    56,
-    39
-   ],
-   "w": 3,
-   "h": 2
-  },
-  {
-   "id": "t7",
-   "game": "typing",
-   "cell": [
-    64,
-    32
+    48,
+    46
    ],
    "w": 3,
    "h": 2
@@ -64,11 +53,81 @@
    "id": "t8",
    "game": "intel",
    "cell": [
+    56,
+    32
+   ],
+   "w": 3,
+   "h": 2
+  },
+  {
+   "id": "t11",
+   "game": "blokus",
+   "cell": [
+    56,
+    39
+   ],
+   "w": 3,
+   "h": 2
+  },
+  {
+   "id": "t12",
+   "game": "trigon",
+   "cell": [
+    56,
+    46
+   ],
+   "w": 3,
+   "h": 2
+  },
+  {
+   "id": "t10",
+   "game": "mage",
+   "cell": [
+    64,
+    32
+   ],
+   "w": 3,
+   "h": 2
+  },
+  {
+   "id": "t5",
+   "game": "dodge",
+   "cell": [
     64,
     39
    ],
    "w": 3,
    "h": 2
+  },
+  {
+   "id": "t14",
+   "game": "maze",
+   "cell": [
+    64,
+    46
+   ],
+   "w": 3,
+   "h": 2
+  },
+  {
+   "id": "t15",
+   "game": "hockey",
+   "cell": [
+    48,
+    21
+   ],
+   "w": 4,
+   "h": 2.5
+  },
+  {
+   "id": "t16",
+   "game": "hockey",
+   "cell": [
+    54,
+    21
+   ],
+   "w": 4,
+   "h": 2.5
   },
   {
    "id": "t9",
@@ -81,8 +140,8 @@
    "h": 2
   },
   {
-   "id": "t10",
-   "game": "mage",
+   "id": "t7",
+   "game": "typing",
    "cell": [
     72,
     39
@@ -91,24 +150,52 @@
    "h": 2
   },
   {
-   "id": "t11",
-   "game": "blokus",
+   "id": "t13",
+   "game": "arcade",
+   "cab": 0,
+   "img": "arcade_0.png",
    "cell": [
-    80,
-    32
+    48,
+    14.5
    ],
-   "w": 3,
-   "h": 2
+   "w": 2,
+   "h": 3
   },
   {
-   "id": "t12",
-   "game": "trigon",
+   "id": "t13",
+   "game": "arcade",
+   "cab": 1,
+   "img": "arcade_1.png",
    "cell": [
-    80,
-    39
+    51,
+    14.5
    ],
-   "w": 3,
-   "h": 2
+   "w": 2,
+   "h": 3
+  },
+  {
+   "id": "t13",
+   "game": "arcade",
+   "cab": 2,
+   "img": "arcade_2.png",
+   "cell": [
+    54,
+    14.5
+   ],
+   "w": 2,
+   "h": 3
+  },
+  {
+   "id": "t13",
+   "game": "arcade",
+   "cab": 3,
+   "img": "arcade_3.png",
+   "cell": [
+    57,
+    14.5
+   ],
+   "w": 2,
+   "h": 3
   }
  ],
  "pools": [
@@ -128,6 +215,60 @@
   16,
   84,
   55
+ ],
+ "walls": {
+  "n": "wall.png",
+  "w": "wall_w.png",
+  "e": "wall_e.png",
+  "h": 3
+ },
+ "props": [
+  {
+   "id": "drink",
+   "kind": "drink",
+   "name": "自助飲料",
+   "img": "drink_bar.png",
+   "cell": [
+    77,
+    14.5
+   ],
+   "w": 2,
+   "h": 3
+  },
+  {
+   "id": "snack",
+   "kind": "food",
+   "name": "點心吧",
+   "img": "snack_bar.png",
+   "cell": [
+    80,
+    15
+   ],
+   "w": 4,
+   "h": 2.5
+  },
+  {
+   "id": "dine_wall",
+   "kind": "deco",
+   "img": "dine_partition.png",
+   "cell": [
+    75,
+    14.5
+   ],
+   "w": 1,
+   "h": 5.5
+  },
+  {
+   "id": "dine_rug",
+   "kind": "rug",
+   "img": "dine_rug.png",
+   "cell": [
+    76,
+    16
+   ],
+   "w": 9,
+   "h": 5
+  }
  ],
  "campfire": false
 }

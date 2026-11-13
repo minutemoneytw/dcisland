@@ -36,6 +36,10 @@
   {
    "id": "dragon_volcano",
    "weight": 1
+  },
+  {
+   "id": "imp_volcano",
+   "weight": 2
   }
  ],
  "uiColor": "#6c5a58",

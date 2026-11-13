@@ -42,6 +42,10 @@
    "weight": 2
   },
   {
+   "id": "bear_snow",
+   "weight": 1
+  },
+  {
    "id": "imp_snow",
    "weight": 2
   }

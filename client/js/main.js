@@ -101,6 +101,7 @@ const S = {
   craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
   craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
   gamesDB: null, tableImgs: {},        // 和平島遊戲桌：遊戲定義（assets/games/games.json，手寫）與桌子圖
+  ar: null, arOpp: {}, arRaf: 0, tableCab: -1,   // 俄羅斯方塊：自己這一局的本機狀態／別台的盤面快照／畫面迴圈／我走到的是第幾台
   tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, bk: null, tg: null, bkTimer: 0, bkOff: 0, bkTimeoutAt: 0, unTimer: 0, unOff: 0, unTimeoutAt: 0, unPick: null, dg: null, dgRaf: 0, dgLast: 0, ty: null, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
@@ -117,6 +118,19 @@ if (typeof S.profile.showXp !== 'boolean') S.profile.showXp = true;   // 底部 
 // ---------------- 世界生成 ----------------
 function key(x, y) { return x + ',' + y; }
 
+// 室內房間的牆（2026-11-13，使用者要求）：北牆畫正面（walls.h 格高，貼在房間上緣外）、東西牆畫牆頂（1 格寬，貼在房間左右外側，
+// 從北牆頂端一路到房間底部）；南面不畫。北牆在地板上投一道淡陰影。靠牆的街機（y＝14.5）上半截疊在北牆前面
+function drawRoomWalls(W, ims, [bx0, by0, bx1, by1]) {
+  const h = W.h || 2, top = by0 - h, n = ims[W.n], w = ims[W.w], e = ims[W.e];
+  if (n) for (let x = bx0; x <= bx1; x++) drawSpr(n, 0, x * CELL, top * CELL, CELL, h * CELL);
+  for (let y = top; y <= by1; y++) {
+    if (w) drawSpr(w, 0, (bx0 - 1) * CELL, y * CELL, CELL, CELL);
+    if (e) drawSpr(e, 0, (bx1 + 1) * CELL, y * CELL, CELL, CELL);
+  }
+  const g = ctx.createLinearGradient(0, by0 * CELL, 0, by0 * CELL + 12);
+  g.addColorStop(0, 'rgba(0,0,0,.28)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(bx0 * CELL, by0 * CELL, (bx1 - bx0 + 1) * CELL, 12);
+}
 // 室內地形（layout:'room'）的方形房間範圍 roomBox＝[x0,y0,x1,y1]（含邊界的格）；範圍外不畫、不能走、不能釣魚。沒有 roomBox＝整張地圖
 function inRoom(x, y, id = S.terrain) {
   const td = S.terrains[id], b = td?.layout === 'room' && td.roomBox;
@@ -460,6 +474,8 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
       if (sgn) { S._hits = 1; openSign(sgn); S.holdSkipF = true; return; }
       const seat = quiet ? null : seatNear(p);   // 身邊有椅子/沙發/床就坐下（長按自動連擊不會反覆切換）
       if (seat) { S._hits = 1; usePose(seat); S.holdSkipF = true; return; }
+      const prop = quiet ? null : propNear(p);     // 身邊有餐飲區就吃喝（長按不重複）
+      if (prop) { S._hits = 1; useProp(prop); S.holdSkipF = true; return; }
       const tbl = quiet ? null : tableNear(p);     // 身邊有遊戲桌就入座／觀戰（長按不重複開）
       if (tbl) { S._hits = 1; openTable(tbl); S.holdSkipF = true; return; }
       const npc = quiet ? null : npcNear(p);       // 身邊有 NPC 就跟他說話
@@ -820,6 +836,7 @@ const lurkDmgBonus = lv => Math.floor((Math.max(1, lv) - 1) / 3);    // 魚人�
 const ownerKillXp = lv => 20 + 5 * lv;   // 擊倒島主的 XP 獎勵（30 秒內的參與者）
 const lurkKillXp = lv => 4 + 2 * lv;     // 擊倒魚人的 XP 獎勵（登入者由伺服器在 dead 時直給；訪客在本機記）
 const mobKillXp = def => {   // 擊倒野外動物的 XP（2026-11-09 使用者定）：一般野怪 +1；反擊型野怪＝本島島主經驗值的 1/N、最低 1（N＝def.xpFrac，沒給就用 def.ownerFrac：飛龍 10、哥布林 12、殭屍 8）
+  if (def.xp) return def.xp;   // 等級制新怪（2026-11-12）：產生器依 lv 算好寫在 mobs.json（1+lv÷4），被動怪也有分
   if (!def.retaliate) return 1;
   const ol = S.mobs.find(v => !v.dead && mobDef(v.id)?.owner)?.lvl ?? 1;   // 本島島主現在的等級（島主升級就跟著漲）；沒有島主的地形當 Lv 1
   return Math.max(1, Math.floor(ownerKillXp(ol) / (def.xpFrac || def.ownerFrac || 10)));
@@ -1306,6 +1323,7 @@ function myFx() {   // 給 state 的持續型效果清單（id 要符合伺服�
   for (const k of ['guard', 'kshield', 'wshield', 'vamp', 'wings', 'cared', 'song', 'save']) if (fxOn(k)) out.push(k);   // cared＝被賢者關心中、song＝唱歌加成中、save＝拯救中
   if (F.seal) out.push('seal');
   if (F.triple && F.triple.n > 0 && S.t < F.triple.until) out.push('triple' + F.triple.n);
+  out.push(...foodFxIds());   // 餐飲區吃喝的效果（變大／縮小／透明／暈眩／中毒）：別人也看得到
   return out;
 }
 S.myFx = myFx;
@@ -2481,7 +2499,7 @@ function blocked(px, py, ignoreFurn) { // 像素座標（腳底）；ignoreFurn�
   if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return true;
   if (!groundAt(x, y)) return true;   // 水（水上鋪了地板的可以走）
   if (ignoreFurn) return false;
-  if (tableAtCell(x, y)) return true;   // 和平島的遊戲桌擋路
+  if (tableAtCell(x, y) || propAtCell(x, y)) return true;   // 和平島的遊戲桌、餐飲區擋路
   const fi = S.occ.get(key(x, y));
   if (fi !== undefined) {
     const def = S.furn.items.find(f => f.id === S.furnItems[fi].type);
@@ -2888,13 +2906,15 @@ function stepPlayer(p, dt) {
   if (p === S.players[0] && blocked(p.x, p.y, true)) [p.x, p.y] = landNear(p.x, p.y);
   let dx = 0, dy = 0;
   // 走路與裝飾模式都能移動（裝飾模式要邊走邊擺）；被石化時不能移動（揮擊也不行，在 doAttack／clickAttack 擋）
-  const pet = S.t < (p.petUntil ?? 0);
+  const me = p === S.players[0];
+  const pet = S.t < (p.petUntil ?? 0) || (me && ffOn('stun'));   // 吃喝的暈眩：跟石化一樣原地不能動
   const reeling = p.fish?.ph === 'reel';   // 拉竿的 1 秒拉扯中站定（不能走、不能跳，結果揭曉後才能動）
   if (!pet && !reeling) {
     if (keys['a'] || keys['arrowleft']) dx -= 1;
     if (keys['d'] || keys['arrowright']) dx += 1;
     if (keys['w'] || keys['arrowup']) dy -= 1;
     if (keys['s'] || keys['arrowdown']) dy += 1;
+    if (me && ffOn('confuse')) { dx = -dx; dy = -dy; }   // 吃喝的混亂：方向顛倒
   }
   p.moving = dx !== 0 || dy !== 0;
   if (p.moving) { p.lastMoveAt = S.t; p.lastInputWall = Date.now(); }   // 命令檢定用（行動命令／靜止命令）：最後一次有移動輸入的時刻（真實時鐘一份、遊戲時間一份）
@@ -2914,7 +2934,7 @@ function stepPlayer(p, dt) {
       p.face = dy < 0 ? 'up' : dx !== 0 ? 'side' : 'down';
       p.d8 = dir8Of(dx, dy);   // 畫面用的 8 方向（玩法仍看 face）
     }
-    const len = Math.hypot(dx, dy) || 1, sp = (S.sprint ? 200 : 120) * dt;   // 疾走＝右下角虛擬按鍵或 Shift 切換的狀態
+    const len = Math.hypot(dx, dy) || 1, sp = (S.sprint ? 200 : 120) * dt * (me ? foodSpeedMul() : 1);   // 疾走＝右下角虛擬按鍵或 Shift 切換的狀態
     const nx = clamp(p.x + dx / len * sp, 8, COLS * CELL - 8);
     const ny = clamp(p.y + dy / len * sp, 8, ROWS * CELL - 8);
     // 裝飾模式可穿過擺飾（避免被卡住）；已經被家具圍住/壓在家具上時（例如別人把家具擺在你腳下）也一樣可以走出來。水邊照樣擋
@@ -2923,7 +2943,7 @@ function stepPlayer(p, dt) {
     if (!blocked(p.x, ny, ig)) p.y = ny;
   }
   // 跳躍（走路與裝飾模式都能跳；石化中不能跳）
-  if (!pet && !reeling && keys[' '] && p.z === 0 && p.vz === 0) p.vz = 240;
+  if (!pet && !reeling && keys[' '] && p.z === 0 && p.vz === 0) p.vz = me && ffOn('light') ? 330 : 240;   // 吃喝的輕盈：跳更高
   if (p.z > 0 || p.vz > 0) {
     p.z += p.vz * dt; p.vz -= 780 * dt;
     if (p.z <= 0) { p.z = 0; p.vz = 0; }
@@ -3467,7 +3487,8 @@ function drawFxFloater(f) {
 function drawPerson(p, wi, nameColor) {
   const pose = p.pose === 'sit' || p.pose === 'sleep' ? p.pose : null;
   const race = (p === S.players[0] ? S.me.race : p.look?.race) || 'human';
-  const raceScale = (S.avatar.races?.find(r => r.id === race)?.scale) || 1;   // 種族倍率：拉拉肥 0.5／巨人 1.5（整個模組一起縮）
+  const ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);   // 吃喝的效果（巨大化／縮小／透明／暈眩／中毒）
+  const raceScale = ((S.avatar.races?.find(r => r.id === race)?.scale) || 1) * foodScaleOf(ffx);   // 種族倍率：拉拉肥 0.5／巨人 1.5（整個模組一起縮）；吃喝的巨大化／縮小再乘上去
   let nameY = p.y - p.z - Math.round(52 * raceScale);   // 名牌跟著身高（種族倍率）移
   if (pose === 'sleep') {
     drawSleeper(p);
@@ -3482,6 +3503,8 @@ function drawPerson(p, wi, nameColor) {
     charAnch = { back: charAnchor(cf.fi, 'back'), backView: charAnchor(cf.fi, 'backView'), waist: charAnchor(cf.fi, 'waist'), hand: charAnchor(cf.fi, 'hand') };
     const pet = S.t < (p.petUntil ?? 0);   // 石化：身體灰階（自己的石化即時同步；遠端玩家的石化由光束事件就地推斷，純演出）
     if (pet) { ctx.save(); ctx.filter = 'grayscale(1) brightness(.92)'; }
+    const ghost = ffx?.includes('fghost');   // 吃喝的透明化：整個人半透明
+    if (ghost) ctx.globalAlpha = .35;
     p.rodJit = p.fish?.ph === 'reel' && rodFrameNow(p) != null ? Math.round(Math.sin(S.t * 30)) : 0;   // 拉竿：竿子往後拉住、整個人左右抖 1px（原本拉竿時竿尖抖動的感覺）
     ctx.save(); ctx.translate(p.x + p.rodJit, p.y - p.z);
     // 武器（背在背上／掛在腰間；揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
@@ -3512,6 +3535,8 @@ function drawPerson(p, wi, nameColor) {
     if (wi && !pose && !fish && p.cast) drawStaffRaise(wi, Math.min(1, (S.t - p.cast.t0) / p.cast.dur));
     ctx.restore();
     if (pet) ctx.restore();
+    if (ghost) ctx.globalAlpha = 1;
+    if (ffx?.length) drawFoodOverhead(p, ffx, nameY);   // 暈眩的星星、中毒的泡泡
     if (fish) drawLineAndBobber(p, wi, fish, rodTip);
     if (pose) nameY = p.y - 46;
   }
@@ -4344,13 +4369,14 @@ function openTable(tb) {
   S.mouseHeld = false;
   S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null; S.bk = null; S.tg = null; S.gamePlayed = false; S.tableLocalLog = [];
   const inf = S.tblInfo?.[tb.id];
-  if (!inf || (!inf.play && inf.n < inf.max)) S.tableChoice = true;   // 還有位子：先讓玩家選「入座」或「觀戰」（沒滿人也可以選觀戰）
-  else S.net.tbl({ a: 'join', id: tb.id, role: 'spec' });             // 滿人或已開局：直接觀戰
+  S.tableCab = tb.cab ?? -1; S.ar = null; S.arOpp = {};   // 俄羅斯方塊：4 台共用一張桌，坐哪一台由 cab 決定
+  if (tb.game === 'arcade' ? !inf?.cabs?.[tb.cab] : (!inf || (!inf.play && inf.n < inf.max))) S.tableChoice = true;   // 還有位子（街機：這台空著）：先讓玩家選「入座」或「觀戰」（沒滿人也可以選觀戰）
+  else S.net.tbl({ a: 'join', id: tb.id, role: 'spec', cab: S.tableCab });             // 滿人或已開局（街機：這台有人）：直接觀戰
   buildTable(); $('tableBox').classList.remove('hidden');
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); unStopTimer(); bkStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); hkStop(); unStopTimer(); bkStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
   rulesShow(false); leaveAsk(false);
   $('tableBox').classList.add('hidden');
 }
@@ -4431,7 +4457,7 @@ function tableTag(p) {
   if (p.npc) return null;
   const id = p === S.players[0] ? S.net?.id : p.id;
   if (id == null) return null;
-  for (const tb of tablesHere()) { const inf = S.tblInfo?.[tb.id]; if (inf?.seated?.includes(id)) return inf.play ? '遊戲中' : '入座中'; }
+  for (const tb of tablesHere()) { const inf = S.tblInfo?.[tb.id]; if (inf?.seated?.includes(id)) return (inf.playing ? inf.playing.includes(id) : inf.play) ? '遊戲中' : '入座中'; }   // 俄羅斯方塊：每台各自在不在玩（playing）
   return null;
 }
 const SUIT_SYM = { S: '♠', H: '♥', D: '♦', C: '♣' };
@@ -4454,13 +4480,14 @@ function buildTable() {
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   if (S.tableChoice) {   // 剛走到桌邊：選入座還是觀戰
     const inf = S.tblInfo?.[S.tableId];
-    box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　目前 ${inf ? `${inf.n}/${inf.max} 人入座` : '還沒有人入座'}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));
+    if (S.tableCab >= 0) box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　${S.tableCab + 1} 號機（空機台）${inf?.n ? `，其他機台 ${inf.n} 人` : ''}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));   // 俄羅斯方塊：4 台共用一張桌，說是哪一台
+    else box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　目前 ${inf ? `${inf.n}/${inf.max} 人入座` : '還沒有人入座'}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));
     if (gd?.story) box.appendChild(mk('div', 'it-story', gd.story));   // 有故事背景的遊戲（秘藥情報戰）：先看故事
     box.appendChild(mk('div', 'table-tag', '要加入遊戲，還是先在旁邊看？（觀戰不用等滿人，之後想玩可以再按「入座」）'));
     const bs = mk('div', 'table-btns');
     for (const [label, role] of [['入座', 'seat'], ['觀戰', 'spec']]) {
       const b = mk('button', 'ff-btn', label);
-      b.onclick = () => { S.tableChoice = false; S.net?.tbl?.({ a: 'join', id: S.tableId, role }); buildTable(); };
+      b.onclick = () => { S.tableChoice = false; S.net?.tbl?.({ a: 'join', id: S.tableId, role, cab: S.tableCab }); buildTable(); };
       bs.appendChild(b);
     }
     const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); bs.appendChild(lv);
@@ -4469,11 +4496,14 @@ function buildTable() {
     return;
   }
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
+  if (tb?.game === 'arcade') { buildArcade(box, v, mk, gd); return; }   // 俄羅斯方塊有自己的畫面（盤面＋聯機）
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
-  if (tb?.game === 'trigon') { buildTrigon(box, v, mk, gd); return; }   // 三角方塊拼圖有自己的畫面（三角格棋盤＋方塊托盤）
-  if (tb?.game === 'blokus') { buildBlokus(box, v, mk, gd); return; }   // 方塊拼圖有自己的畫面（棋盤＋方塊托盤）
+  if (tb?.game === 'trigon') { buildTrigon(box, v, mk, gd); return; }   // Blokus Trigon有自己的畫面（三角格棋盤＋方塊托盤）
+  if (tb?.game === 'blokus') { buildBlokus(box, v, mk, gd); return; }   // Blokus有自己的畫面（棋盤＋方塊托盤）
   if (tb?.game === 'mage') { buildMage(box, v, mk, gd); return; }   // 見習驅魔師有自己的畫面（畫符號的場地）
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
+  if (tb?.game === 'maze') { buildMaze(box, v, mk, gd); return; }   // 豆豆迷宮有自己的畫面（迷宮）
+  if (tb?.game === 'hockey') { buildHockey(box, v, mk, gd); return; }   // 空氣曲棍球有自己的畫面（球場）
   if (tb?.game === 'uno') { buildUno(box, v, mk, gd); return; }   // UNO 有自己的畫面（牌桌）
   if (tb?.game === 'typing' || tb?.game === 'zhtyping') { buildTyping(box, v, mk, gd); return; }   // 英打／中文打字競賽有自己的畫面（題目＋分數）
   if (tb?.game === 'intel') { buildIntel(box, v, mk, gd); return; }     // 秘藥情報戰有自己的畫面（情報區＋密函）
@@ -4534,7 +4564,7 @@ function buildTable() {
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 五子棋畫面：15×15 棋盤（canvas）；輪到自己時點交叉點下子，滑過會顯示淡淡的預覽棋子 ----
-const GM_N = 15, GM_CELL = 32, GM_MARGIN = 20;
+const GM_N = 15, GM_CELL = 26, GM_MARGIN = 16;   // 2026-11-13 使用者要求盤面縮小到約 80%（原本 32／20）
 function gomokuDraw(cv, v, hover, rep) {   // rep＝復盤：{board, last, line, nums（到這一步為止的每一手座標，棋子上畫手數）}
   const g = cv.getContext('2d'), size = GM_MARGIN * 2 + GM_CELL * (GM_N - 1);
   g.fillStyle = '#d8a860'; g.fillRect(0, 0, size, size);
@@ -4557,7 +4587,7 @@ function gomokuDraw(cv, v, hover, rep) {   // rep＝復盤：{board, last, line,
   const board = rep ? rep.board : (v.board || '');
   for (let i = 0; i < board.length; i++) if (board[i] !== '0') stone(i % GM_N, Math.floor(i / GM_N), Number(board[i]));
   if (rep?.nums) {   // 復盤：每顆棋子上寫第幾手
-    g.font = 'bold 12px "Microsoft JhengHei"'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = 'bold 10px "Microsoft JhengHei"'; g.textAlign = 'center'; g.textBaseline = 'middle';
     rep.nums.forEach(([x, y], k) => { g.fillStyle = board[y * GM_N + x] === '1' ? '#f4f0e4' : '#1e1e24'; g.fillText(String(k + 1), GM_MARGIN + x * GM_CELL + .5, GM_MARGIN + y * GM_CELL + 1); });
     g.textBaseline = 'alphabetic';
   }
@@ -4568,7 +4598,7 @@ function gomokuDraw(cv, v, hover, rep) {   // rep＝復盤：{board, last, line,
     for (const [x, y] of line) { g.beginPath(); g.arc(GM_MARGIN + x * GM_CELL + .5, GM_MARGIN + y * GM_CELL + .5, GM_CELL * .5, 0, Math.PI * 2); g.stroke(); }
   }
   if (last && !rep?.nums) { g.fillStyle = '#e8402a'; g.beginPath(); g.arc(GM_MARGIN + last[0] * GM_CELL + .5, GM_MARGIN + last[1] * GM_CELL + .5, 4, 0, Math.PI * 2); g.fill(); }   // 最後一手
-  else if (last) { g.strokeStyle = '#e8402a'; g.lineWidth = 2; g.strokeRect(GM_MARGIN + last[0] * GM_CELL - 13, GM_MARGIN + last[1] * GM_CELL - 13, 27, 27); }   // 復盤：目前這一手用紅框
+  else if (last) { g.strokeStyle = '#e8402a'; g.lineWidth = 2; g.strokeRect(GM_MARGIN + last[0] * GM_CELL - GM_CELL * .4, GM_MARGIN + last[1] * GM_CELL - GM_CELL * .4, GM_CELL * .8 + 1, GM_CELL * .8 + 1); }   // 復盤：目前這一手用紅框
 }
 function buildGomoku(box, v, mk) {
   const playing = v.phase === 'playing', myTurn = playing && v.role === 'seat' && v.turn === v.me;
@@ -4637,7 +4667,7 @@ function buildGomoku(box, v, mk) {
   box.appendChild(log);
   const gd = gameDef('gomoku'); if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
-// ---- 方塊拼圖 Blokus（第十一桌 t11；2026-11-13，使用者要求）：20×20 棋盤（canvas）＋我的方塊托盤。選方塊 → 旋轉（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。
+// ---- Blokus（第十一桌 t11；2026-11-13，使用者要求）：20×20 棋盤（canvas）＋我的方塊托盤。選方塊 → 旋轉（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。
 // 合法與否在本機先判（只用來顯示預覽與標出可接的角），最後以伺服器為準（和 worker 的 bkLegal 同一套規則）。棋盤、各人用掉的方塊都是公開資訊，觀戰者也看得到 ----
 const BK_N = 20, BK_CELL = 24, BK_TURN_SEC = 45;
 const BK_SHAPES = [['#'], ['##'], ['###'], ['##', '#.'], ['####'], ['##', '##'], ['###', '.#.'], ['###', '#..'], ['.##', '##.'],
@@ -4751,7 +4781,7 @@ function bkSelect(p) {   // 選方塊；再點一次已選的＝旋轉
 }
 function bkRotate(d) { const o = S.bk; if (!o || o.sel == null) return; o.rot = (o.rot + d + 4) % 4; buildTable(); }
 function bkFlip() { const o = S.bk; if (!o || o.sel == null) return; o.flip = !o.flip; buildTable(); }
-function bkKey(e) {   // 遊戲畫面開著且在玩方塊拼圖：R 旋轉、F 翻面
+function bkKey(e) {   // 遊戲畫面開著且在玩Blokus：R 旋轉、F 翻面
   const k = e.key.toLowerCase();
   if (k === 'r') { e.preventDefault(); bkRotate(e.shiftKey ? -1 : 1); } else if (k === 'f') { e.preventDefault(); bkFlip(); }
 }
@@ -4852,8 +4882,8 @@ function buildBlokus(box, v, mk, gd) {
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
-// ---- 方塊拼圖「三角版」Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：正六邊形的三角格棋盤（邊長 9，486 格）＋我的方塊托盤（22 塊，1～6 個三角形）。
-// 操作同方塊拼圖：點選方塊 → 旋轉 60 度（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。座標系與規則同 worker 的 tg*（三角形 (x, y)，(x + y) 偶數＝朝上；頂點 (i, j)，i + j 偶數）。
+// ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：正六邊形的三角格棋盤（邊長 9，486 格）＋我的方塊托盤（22 塊，1～6 個三角形）。
+// 操作同Blokus：點選方塊 → 旋轉 60 度（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。座標系與規則同 worker 的 tg*（三角形 (x, y)，(x + y) 偶數＝朝上；頂點 (i, j)，i + j 偶數）。
 // 滑鼠指到的是「最近的格點（頂點）」，方塊上最靠近中心的那個頂點對齊它——頂點之間的平移一定保持三角形的方向，所以不用管朝上朝下 ----
 const TG_N = 9, TG_CX = 19, TG_W = 39, TG_ROWS = 18, TG_S = 26, TG_MARGIN = 14;   // TG_S：三角形邊長（像素）
 const TG_PIECES = [[[0,0]],[[0,0],[0,1]],[[0,0],[-1,1],[0,1]],[[0,0],[-1,1],[0,1],[-1,2]],[[0,0],[-1,1],[0,1],[1,1]],[[0,0],[-2,1],[-1,1],[0,1]],[[0,0],[-1,1],[0,1],[-1,2],[0,2]],[[0,0],[-1,1],[0,1],[-2,2],[-1,2]],[[0,0],[-1,1],[0,1],[1,1],[-1,2]],[[0,0],[1,0],[0,1],[1,1],[2,1]],[[0,0],[-1,1],[0,1],[-1,2],[0,2],[0,3]],[[0,0],[-1,1],[0,1],[-1,2],[0,2],[1,2]],[[0,0],[-1,1],[0,1],[-2,2],[-1,2],[-2,3]],[[0,0],[-1,1],[0,1],[-2,2],[-1,2],[0,2]],[[0,0],[-1,1],[0,1],[-3,2],[-2,2],[-1,2]],[[0,0],[-1,1],[0,1],[1,1],[-1,2],[0,2]],[[0,0],[-1,1],[0,1],[1,1],[-1,2],[1,2]],[[0,0],[-1,1],[0,1],[1,1],[2,1],[-1,2]],[[0,0],[-1,1],[0,1],[1,1],[2,1],[1,2]],[[0,0],[-2,1],[-1,1],[0,1],[-2,2],[-1,2]],[[0,0],[-3,1],[-2,1],[-1,1],[0,1],[-3,2]],[[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]]];   // 與兩份伺服器同一份：22 塊 polyiamond（三角形的 [x, y]，已正規化）
@@ -4965,7 +4995,7 @@ function tgSelect(p) {   // 選方塊；再點一次已選的＝旋轉
 }
 function tgRotate(d) { const o = S.tg; if (!o || o.sel == null) return; o.rot = (o.rot + d + 6) % 6; buildTable(); }
 function tgFlip() { const o = S.tg; if (!o || o.sel == null) return; o.flip = !o.flip; buildTable(); }
-function tgKey(e) {   // 遊戲畫面開著且在玩三角方塊拼圖：R 旋轉、F 翻面
+function tgKey(e) {   // 遊戲畫面開著且在玩Blokus Trigon：R 旋轉、F 翻面
   const k = e.key.toLowerCase();
   if (k === 'r') { e.preventDefault(); tgRotate(e.shiftKey ? -1 : 1); } else if (k === 'f') { e.preventDefault(); tgFlip(); }
 }
@@ -5309,6 +5339,733 @@ function buildDodge(box, v, mk, gd) {
     cv.id = 'dgCanvas'; cv.width = DG_W; cv.height = DG_H; cv.className = 'dodge-canvas';
     wrap.appendChild(cv); wrap.appendChild(mk('div', 'dodge-time')); wrap.lastChild.id = 'dgTime';
     box.appendChild(wrap);
+  }
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 空氣曲棍球（t15／t16，2026-11-13，使用者要求）：2～8 人分藍紅兩隊（入座順序輪流：座位 0、2、4、6 藍隊在左，1、3、5、7 紅隊在右），人數要偶數 ----
+// 用滑鼠（或 WASD／方向鍵）移動自己的握把，只能在自己的半場；把圓盤打進對方球門得 1 分，先得 7 分或 3 分鐘到時分數高的贏。
+// **物理在桌主（座位 0）那台**：圓盤的移動、反彈、碰撞、進球、結束都在那台算，約 12 次／秒送快照 hs（伺服器轉成 ths）；
+// 每個人約 12 次／秒送自己握把的位置 hp（伺服器轉成 thp）。桌主用收到的位置算碰撞，別人打到圓盤的判定會晚一點點（網路延遲）。
+const HK_W = 640, HK_H = 320, HK_PR = 18, HK_BR = 11, HK_GOAL = 120, HK_SEND_MS = 80;   // 場地、握把半徑、圓盤半徑、球門寬、回報間隔
+const HK_MAX_PAD = 900, HK_MAX_PUCK = 950, HK_KEY_SPD = 420;                           // 握把最快速度、圓盤最快速度、鍵盤移動速度（px／秒）
+const HK_TEAM_COL = ['#3b78e8', '#e04848'], HK_TEAM_NAME = ['藍隊', '紅隊'];
+const HK_KEYS = { arrowup: 'u', w: 'u', arrowdown: 'd', s: 'd', arrowleft: 'l', a: 'l', arrowright: 'r', d: 'r' };
+function hkHome(i, n) {   // 第 i 位的開球位置：同隊依序排成一直排（4 人以上排兩直排）
+  const team = i % 2, k = Math.floor(i / 2), m = n / 2, cols = m > 2 ? 2 : 1, col = k % cols, row = Math.floor(k / cols), rows = Math.ceil(m / cols);
+  const x = 60 + col * 110, y = HK_H * (row + 1) / (rows + 1);
+  return [team ? HK_W - x : x, y];
+}
+function hkStartLocal(v) {
+  const z = v.hk, n = v.seats.length, me = v.role === 'seat' ? v.me : -1;
+  S.hk = {
+    key: z.seed + ':' + z.t0, t0: z.t0, off: z.sn - Date.now(), lim: z.lim / 1000, goals: z.goals, n, me, host: me === 0,
+    pads: v.seats.map((_, i) => { const [x, y] = hkHome(i, n); return { x, y, tx: x, ty: y, vx: 0, vy: 0, at: 0 }; }),
+    puck: { x: HK_W / 2, y: HK_H / 2, vx: 0, vy: 0 }, view: { x: HK_W / 2, y: HK_H / 2 }, snapAt: 0, snapPerf: 0,
+    sa: 0, sb: 0, f: 0, mx: null, my: null, keys: {}, sendAt: 0, hsAt: 0, over: false, last: performance.now(), flash: null,
+  };
+  if (!S.hkRaf) S.hkRaf = requestAnimationFrame(hkFrame);
+}
+function hkStop() { S.hk = null; if (S.hkRaf) { cancelAnimationFrame(S.hkRaf); S.hkRaf = 0; } }
+const hkNow = H => (Date.now() + H.off - H.t0) / 1000;
+function hkClampPad(p, team) {
+  p.x = Math.max(team ? HK_W / 2 + HK_PR : HK_PR, Math.min(team ? HK_W - HK_PR : HK_W / 2 - HK_PR, p.x));
+  p.y = Math.max(HK_PR, Math.min(HK_H - HK_PR, p.y));
+}
+function hkMoveMine(H, dt) {   // 自己的握把：跟著滑鼠（有最快速度），按住方向鍵時改用鍵盤
+  const p = H.pads[H.me], k = H.keys, ox = p.x, oy = p.y;
+  const kx = (k.r ? 1 : 0) - (k.l ? 1 : 0), ky = (k.d ? 1 : 0) - (k.u ? 1 : 0);
+  if (kx || ky) { const l = Math.hypot(kx, ky); p.x += kx / l * HK_KEY_SPD * dt; p.y += ky / l * HK_KEY_SPD * dt; H.mx = null; }
+  else if (H.mx != null) {
+    const dx = H.mx - p.x, dy = H.my - p.y, d = Math.hypot(dx, dy), step = HK_MAX_PAD * dt;
+    if (d <= step) { p.x = H.mx; p.y = H.my; } else { p.x += dx / d * step; p.y += dy / d * step; }
+  }
+  hkClampPad(p, H.me % 2);
+  p.vx = dt > 0 ? (p.x - ox) / dt : 0; p.vy = dt > 0 ? (p.y - oy) / dt : 0;
+}
+function hkFaceoff(H, toTeam) {   // 進球後：圓盤放在失分那隊的半場、停 1 秒
+  H.puck = { x: toTeam === 0 ? HK_W / 2 - 70 : HK_W / 2 + 70, y: HK_H / 2, vx: 0, vy: 0 };
+  H.f = 1;
+}
+function hkPhysics(H, dt) {   // 桌主：圓盤
+  const P = H.puck;
+  if (H.f > 0) { H.f -= dt; return; }
+  P.x += P.vx * dt; P.y += P.vy * dt;
+  const fr = Math.max(0, 1 - .25 * dt); P.vx *= fr; P.vy *= fr;
+  if (P.y < HK_BR) { P.y = HK_BR; P.vy = Math.abs(P.vy) * .9; }
+  if (P.y > HK_H - HK_BR) { P.y = HK_H - HK_BR; P.vy = -Math.abs(P.vy) * .9; }
+  const inGoal = Math.abs(P.y - HK_H / 2) < HK_GOAL / 2 - HK_BR * .3;
+  if (P.x < HK_BR && !inGoal) { P.x = HK_BR; P.vx = Math.abs(P.vx) * .9; }
+  if (P.x > HK_W - HK_BR && !inGoal) { P.x = HK_W - HK_BR; P.vx = -Math.abs(P.vx) * .9; }
+  if (P.x < -HK_BR) { H.sb++; H.flash = { team: 1, until: performance.now() + 1200 }; hkFaceoff(H, 0); return; }   // 紅隊得分
+  if (P.x > HK_W + HK_BR) { H.sa++; H.flash = { team: 0, until: performance.now() + 1200 }; hkFaceoff(H, 1); return; }   // 藍隊得分
+  H.pads.forEach((p, i) => {   // 握把撞圓盤：推出去、照相對速度反彈
+    const dx = P.x - p.x, dy = P.y - p.y, d = Math.hypot(dx, dy), md = HK_PR + HK_BR;
+    if (d >= md || d < 1e-6) return;
+    const nx = dx / d, ny = dy / d;
+    P.x = p.x + nx * md; P.y = p.y + ny * md;
+    const pvx = i === H.me ? p.vx : p.vx || 0, pvy = i === H.me ? p.vy : p.vy || 0;
+    const rvx = P.vx - pvx, rvy = P.vy - pvy, vn = rvx * nx + rvy * ny;
+    if (vn < 0) { P.vx -= 1.9 * vn * nx; P.vy -= 1.9 * vn * ny; }
+    P.vx += nx * 40; P.vy += ny * 40;
+  });
+  const sp = Math.hypot(P.vx, P.vy); if (sp > HK_MAX_PUCK) { P.vx *= HK_MAX_PUCK / sp; P.vy *= HK_MAX_PUCK / sp; }
+}
+function hkFrame() {
+  const H = S.hk, v = S.tableView;
+  if (!H || !S.tableOpen || !v || v.phase !== 'playing' || v.game !== 'hockey') { S.hkRaf = 0; if (S.tableOpen && v?.game === 'hockey') buildTable(); return; }
+  S.hkRaf = requestAnimationFrame(hkFrame);
+  const now = performance.now(), dt = Math.max(0, Math.min(.05, (now - H.last) / 1000)); H.last = now;
+  const t = hkNow(H);
+  if (H.me >= 0 && t >= 0 && !H.over) {
+    hkMoveMine(H, dt);
+    // 自己的握把位置（桌主的夾在下面的 hs 裡送：hp 與 hs 共用同一個限流）
+    if (!H.host && now - H.sendAt >= HK_SEND_MS) { H.sendAt = now; const p = H.pads[H.me]; S.net?.tbl?.({ a: 'hp', x: Math.round(p.x), y: Math.round(p.y) }); }
+  }
+  H.pads.forEach((p, i) => {   // 別人的握把：往收到的位置平滑移動（速度用兩次回報的差估計，桌主算碰撞用）
+    if (i === H.me) return;
+    const a = 1 - Math.exp(-dt * 18); p.x += (p.tx - p.x) * a; p.y += (p.ty - p.y) * a;
+  });
+  if (H.host && t >= 0 && !H.over) {
+    for (let k = 0; k < 4; k++) hkPhysics(H, dt / 4);
+    if (now - H.hsAt >= HK_SEND_MS) { H.hsAt = now; const P = H.puck; const me = H.pads[0]; S.net?.tbl?.({ a: 'hs', x: Math.round(P.x), y: Math.round(P.y), vx: Math.round(P.vx), vy: Math.round(P.vy), sa: H.sa, sb: H.sb, f: Math.round(Math.max(0, H.f) * 1000), px: Math.round(me.x), py: Math.round(me.y) }); }
+    if (H.sa >= H.goals || H.sb >= H.goals || t >= H.lim) { H.over = true; S.net?.tbl?.({ a: 'hend', sa: H.sa, sb: H.sb }); }
+    H.view.x = H.puck.x; H.view.y = H.puck.y;
+  } else if (!H.host) {   // 其他人：圓盤＝最後一次快照往前推算（碰到上下牆反彈），再平滑
+    const P = H.puck, age = Math.min(.25, (now - H.snapPerf) / 1000);
+    let x = P.x + (H.f > 0 ? 0 : P.vx * age), y = P.y + (H.f > 0 ? 0 : P.vy * age);
+    if (y < HK_BR) y = 2 * HK_BR - y; if (y > HK_H - HK_BR) y = 2 * (HK_H - HK_BR) - y;
+    const a = 1 - Math.exp(-dt * 20), V = H.view;
+    if (Math.hypot(x - V.x, y - V.y) > 80) { V.x = x; V.y = y; } else { V.x += (x - V.x) * a; V.y += (y - V.y) * a; }
+  }
+  hkDraw(H, t, v);
+}
+function onNetThp(m) {   // 別人的握把位置（i＝座位）
+  const H = S.hk; if (!H || m.i === H.me || !H.pads[m.i]) return;
+  const p = H.pads[m.i], now = performance.now(), dt = (now - (p.at || now)) / 1000;
+  if (p.at && dt > .01 && dt < .5) { p.vx = Math.max(-HK_MAX_PAD, Math.min(HK_MAX_PAD, (m.x - p.tx) / dt)); p.vy = Math.max(-HK_MAX_PAD, Math.min(HK_MAX_PAD, (m.y - p.ty) / dt)); }
+  else { p.vx = 0; p.vy = 0; }
+  p.tx = m.x; p.ty = m.y; p.at = now;
+}
+function onNetThs(m) {   // 桌主的圓盤快照
+  const H = S.hk; if (!H || H.host) return;
+  if (m.sa > H.sa) H.flash = { team: 0, until: performance.now() + 1200 };
+  if (m.sb > H.sb) H.flash = { team: 1, until: performance.now() + 1200 };
+  H.puck = { x: m.x, y: m.y, vx: m.vx, vy: m.vy }; H.sa = m.sa; H.sb = m.sb; H.f = m.f / 1000; H.snapPerf = performance.now();
+}
+function hkKey(e, down) {   // 遊戲中的方向鍵（回 true＝已處理）
+  const H = S.hk, k = HK_KEYS[e.key.toLowerCase()];
+  if (!H || H.me < 0 || !k) return false;
+  if (down) e.preventDefault();
+  H.keys[k] = down;
+  return true;
+}
+function hkDraw(H, t, v) {
+  const cv = $('hkCanvas'); if (!cv) return;
+  const g = cv.getContext('2d'), now = performance.now(), Y0 = 34;
+  g.fillStyle = '#0c1424'; g.fillRect(0, 0, cv.width, cv.height);
+  // 分數列
+  g.font = 'bold 18px "Microsoft JhengHei"'; g.textBaseline = 'middle'; g.textAlign = 'center';
+  g.fillStyle = HK_TEAM_COL[0]; g.fillText(`藍隊 ${H.sa}`, HK_W / 2 - 70, 17);
+  g.fillStyle = '#ffe08a'; g.fillText(':', HK_W / 2, 17);
+  g.fillStyle = HK_TEAM_COL[1]; g.fillText(`${H.sb} 紅隊`, HK_W / 2 + 70, 17);
+  const rem = Math.max(0, Math.ceil(H.lim - Math.max(0, t)));
+  g.font = '13px "Microsoft JhengHei"'; g.fillStyle = rem <= 30 ? '#ff7a6a' : '#b8c4dc'; g.textAlign = 'right';
+  g.fillText(`剩 ${Math.floor(rem / 60)}:${String(rem % 60).padStart(2, '0')}　先得 ${H.goals} 分獲勝`, HK_W - 8, 17);
+  g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+  g.save(); g.translate(0, Y0);
+  // 場地
+  g.fillStyle = '#eef6fa'; g.fillRect(0, 0, HK_W, HK_H);
+  g.fillStyle = '#d8e8f0'; for (let y = 12; y < HK_H; y += 16) for (let x = 12 + (y / 16 % 2) * 8; x < HK_W; x += 16) g.fillRect(x, y, 2, 2);   // 出風小孔
+  g.strokeStyle = '#e04848'; g.lineWidth = 3; g.beginPath(); g.moveTo(HK_W / 2, 0); g.lineTo(HK_W / 2, HK_H); g.stroke();
+  g.beginPath(); g.arc(HK_W / 2, HK_H / 2, 46, 0, Math.PI * 2); g.stroke();
+  for (const [x, c] of [[0, HK_TEAM_COL[0]], [HK_W, HK_TEAM_COL[1]]]) {   // 球門前的半圓與球門
+    g.strokeStyle = c; g.lineWidth = 2; g.beginPath(); g.arc(x, HK_H / 2, 70, x ? Math.PI / 2 : -Math.PI / 2, x ? Math.PI * 1.5 : Math.PI / 2); g.stroke();
+    g.fillStyle = '#1a1a22'; g.fillRect(x ? HK_W - 6 : 0, HK_H / 2 - HK_GOAL / 2, 6, HK_GOAL);
+  }
+  if (H.me >= 0) { g.fillStyle = H.me % 2 ? 'rgba(224,72,72,.06)' : 'rgba(59,120,232,.06)'; g.fillRect(H.me % 2 ? HK_W / 2 : 0, 0, HK_W / 2, HK_H); }   // 自己的半場
+  // 圓盤
+  const V = H.host ? H.puck : H.view;
+  g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.arc(V.x + 2, V.y + 3, HK_BR, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#2a2a30'; g.beginPath(); g.arc(V.x, V.y, HK_BR, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#5a5a68'; g.lineWidth = 2; g.beginPath(); g.arc(V.x, V.y, HK_BR - 3, 0, Math.PI * 2); g.stroke();
+  // 握把
+  H.pads.forEach((p, i) => {
+    const c = HK_TEAM_COL[i % 2], s = v.seats[i];
+    g.fillStyle = 'rgba(0,0,0,.2)'; g.beginPath(); g.arc(p.x + 2, p.y + 3, HK_PR, 0, Math.PI * 2); g.fill();
+    g.fillStyle = c; g.beginPath(); g.arc(p.x, p.y, HK_PR, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.arc(p.x, p.y, HK_PR - 5, 0, Math.PI * 2); g.fill();
+    g.fillStyle = c; g.beginPath(); g.arc(p.x, p.y, 8, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.6)'; g.beginPath(); g.arc(p.x - 2, p.y - 2, 3, 0, Math.PI * 2); g.fill();
+    if (i === H.me) { g.strokeStyle = '#ffe08a'; g.lineWidth = 2.5; g.beginPath(); g.arc(p.x, p.y, HK_PR + 3, 0, Math.PI * 2); g.stroke(); }
+    g.font = 'bold 11px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 3; g.strokeStyle = 'rgba(255,255,255,.9)'; g.fillStyle = c;
+    const nm = i === H.me ? '你' : s?.name || '?'; g.strokeText(nm, p.x, p.y - HK_PR - 5); g.fillText(nm, p.x, p.y - HK_PR - 5); g.textAlign = 'left';
+  });
+  // 倒數／得分
+  let msg = null, col = '#ffe08a';
+  if (t < 0) msg = String(Math.ceil(-t));
+  else if (H.flash && H.flash.until > now) { msg = `${HK_TEAM_NAME[H.flash.team]}得分！`; col = HK_TEAM_COL[H.flash.team]; }
+  else if (t < .8) msg = '開始！';
+  if (msg) { g.font = 'bold 34px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 6; g.strokeStyle = 'rgba(255,255,255,.95)'; g.fillStyle = col; g.strokeText(msg, HK_W / 2, HK_H / 2 + 12); g.fillText(msg, HK_W / 2, HK_H / 2 + 12); g.textAlign = 'left'; }
+  g.restore();
+}
+function buildHockey(box, v, mk, gd) {
+  const playing = v.phase === 'playing', z = v.hk;
+  if (playing && z && (!S.hk || S.hk.key !== z.seed + ':' + z.t0)) hkStartLocal(v);
+  if (!playing) hkStop();
+  const n = v.seats.length, mine = v.role === 'seat' ? v.me : -1;
+  let status;
+  if (playing) status = mine >= 0 ? `你是${HK_TEAM_NAME[mine % 2]}：用滑鼠（或 WASD／方向鍵）移動握把，把圓盤打進對方球門！` : '觀戰中';
+  else if (n < v.min) status = `等待玩家入座（2～${v.max} 人，人數要是偶數）`;
+  else if (n % 2) status = `目前 ${n} 人：人數要是偶數（2、4、6、8）才能開始`;
+  else status = `${n / 2} 對 ${n / 2}：全員按「準備」就開始`;
+  box.appendChild(mk('div', 'table-status' + (playing && mine >= 0 ? ' mine' : ''), status));
+  const r = v.result;
+  if (r && !playing) {
+    box.appendChild(mk('div', 'table-result', r.text));
+    if (r.ranking) {
+      const rk = mk('div', 'dodge-rank');
+      for (const team of [0, 1]) rk.appendChild(mk('div', null, `${HK_TEAM_NAME[team]}：${r.ranking.filter(x => x.team === team).map(x => x.name).join('、') || '—'}`));
+      box.appendChild(rk);
+    }
+  }
+  if (!playing) {
+    const row = mk('div', 'table-seats');
+    v.seats.forEach((s, i) => {
+      const seat = mk('div', 'table-seat' + (s.you ? ' you' : ''));
+      seat.style.borderColor = HK_TEAM_COL[i % 2];
+      seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '')));
+      seat.appendChild(mk('div', 'table-tag', `${HK_TEAM_NAME[i % 2]} · ${s.ready ? '已準備' : '未準備'}`));
+      row.appendChild(seat);
+    });
+    for (let i = n; i < v.max; i++) { const e = mk('div', 'table-seat empty', `空位（${HK_TEAM_NAME[i % 2]}）`); row.appendChild(e); }
+    box.appendChild(row);
+  } else {
+    box.appendChild(mk('div', 'table-tag', [0, 1].map(team => `${HK_TEAM_NAME[team]}：${v.seats.filter((_, i) => i % 2 === team).map(s => s.name).join('、')}`).join('　')));
+    const wrap = mk('div', 'mz-wrap'), cv = document.createElement('canvas');
+    cv.id = 'hkCanvas'; cv.width = HK_W; cv.height = HK_H + 34; cv.className = 'hk-canvas';
+    const at = e => { const b = cv.getBoundingClientRect(); return [(e.clientX - b.left) * cv.width / b.width, (e.clientY - b.top) * cv.height / b.height - 34]; };
+    cv.onmousemove = e => { if (S.hk) [S.hk.mx, S.hk.my] = at(e); };
+    wrap.appendChild(cv); box.appendChild(wrap);
+  }
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && n < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 豆豆迷宮（吃豆迷宮類；第十四桌 t14，2026-11-13，使用者要求）：1～5 人，一人當「豆豆」吃光迷宮裡的豆子，其他人當「幽靈」抓豆豆 ----
+// 1 人＝單人：自己當豆豆、對 4 隻電腦幽靈，一關接一關到命用完，分數進排行榜；2～5 人＝對抗：桌主指定誰當豆豆，其他人當幽靈（不足 4 隻由電腦補），
+// 豆子吃光豆豆方贏、命用完或時間到幽靈方贏。**豆豆那台是權威**：豆子、能量、被抓、吃幽靈、電腦幽靈都在那台算，約 10 次／秒送快照 ms（伺服器轉成 tms）；
+// 幽靈玩家各自在本機移動、送位置 mp（伺服器轉成 tmp）；豆豆那台用收到的位置判斷碰撞（延遲大時偶爾「明明沒碰到卻被抓」，使用者接受）。
+// 迷宮、角色外型都是原創（不是任何現有遊戲的關卡／角色）；協定與欄位見 notes「和平島與遊戲桌」。
+const MZ_MAP = [
+  '#####################',
+  '#o.......###.......o#',
+  '#.##.###.###.###.##.#',
+  '#...................#',
+  '#.##.#.#######.#.##.#',
+  '#....#....#....#....#',
+  '####.####.#.####.####',
+  '####.#.........#.####',
+  '####.#.###-###.#.####',
+  '.......#GGGGG#.......',
+  '####.#.#######.#.####',
+  '####.#.........#.####',
+  '####.#.#######.#.####',
+  '#.........#.........#',
+  '#.##.####.#.####.##.#',
+  '#o.#.............#.o#',
+  '##.#.#.#######.#.#.##',
+  '#....#....#....#....#',
+  '#.#######.#.#######.#',
+  '#...................#',
+  '#####################',
+];
+const MZ_W = 21, MZ_H = 21, MZ_T = 20, MZ_HUD = 30;   // 迷宮 21×21 格、每格 20px、上方 30px 的分數列
+const MZ_DX = [0, 1, 0, -1], MZ_DY = [-1, 0, 1, 0];   // 方向 0 上、1 右、2 下、3 左
+const MZ_TUN_Y = 9, MZ_PAC0 = [10, 15], MZ_FRUIT = [10, 11];   // 左右相通的隧道列、豆豆起點、獎勵果實的位置
+const MZ_GHOST0 = [[10, 7], [9, 9], [10, 9], [11, 9]];        // 4 隻幽靈的起點（第 1 隻在門外，其他在家裡）
+const MZ_GCOL = ['#ff6a6a', '#b07aff', '#5aa8ff', '#ffb050'];  // 小紅、小紫、小藍、小橘
+const MZ_GNAME = ['小紅', '小紫', '小藍', '小橘'];
+const MZ_SCATTER = [[20, -2], [0, -2], [20, 22], [0, 22]];      // 電腦幽靈「散開」時各自去的角落
+const MZ_PHASES = [6, 20, 5, 20, 5, 1e9];                       // 電腦幽靈：散開／追擊交替的秒數
+const MZ_KEYS = { arrowup: 0, w: 0, arrowright: 1, d: 1, arrowdown: 2, s: 2, arrowleft: 3, a: 3 };
+const MZ_SNAP_MS = 100, MZ_LIVES = 3, MZ_HIT = .7;              // 快照／位置回報間隔、命數、碰撞距離（格）
+const MZ_DOTS = [], MZ_DOT_IDX = new Map();                     // 豆子清單 [x, y, 是不是能量豆]；格子 → 編號（快照的點陣順序）
+for (let y = 0; y < MZ_H; y++) for (let x = 0; x < MZ_W; x++) {
+  const c = MZ_MAP[y][x];
+  if ((c === '.' || c === 'o') && !(x === MZ_PAC0[0] && y === MZ_PAC0[1])) { MZ_DOT_IDX.set(y * MZ_W + x, MZ_DOTS.length); MZ_DOTS.push([x, y, c === 'o']); }
+}
+const mzCell = (x, y) => { if (y === MZ_TUN_Y) x = ((x % MZ_W) + MZ_W) % MZ_W; return x < 0 || x >= MZ_W || y < 0 || y >= MZ_H ? '#' : MZ_MAP[y][x]; };
+// 能不能往 dir 方向走進 (x, y)：牆不行；幽靈的家只有幽靈能進；家門只有往上（出門）或被吃掉的眼睛（回家）能過
+function mzPass(x, y, ghost, eyes, dir) {
+  const c = mzCell(x, y);
+  if (c === '#') return false;
+  if (c === '-') return ghost && (eyes || dir === 0);
+  if (c === 'G') return ghost;
+  return true;
+}
+function mzField(tx, ty, eyes) {   // 到 (tx, ty) 的步數（BFS）：眼睛回家、從家裡出門用
+  const f = new Array(MZ_W * MZ_H).fill(1e9), q = [[tx, ty]];
+  f[ty * MZ_W + tx] = 0;
+  while (q.length) {
+    const [x, y] = q.shift(), d = f[y * MZ_W + x];
+    for (let k = 0; k < 4; k++) {
+      let nx = x + MZ_DX[k]; const ny = y + MZ_DY[k];
+      if (ny === MZ_TUN_Y) nx = (nx + MZ_W) % MZ_W;
+      if (nx < 0 || nx >= MZ_W || ny < 0 || ny >= MZ_H || mzCell(nx, ny) === '#' || !mzPass(x, y, true, eyes, (k + 2) % 4)) continue;
+      const i = ny * MZ_W + nx; if (f[i] > d + 1) { f[i] = d + 1; q.push([nx, ny]); }
+    }
+  }
+  return f;
+}
+const MZ_F_HOME = mzField(10, 9, true), MZ_F_EXIT = mzField(10, 7, false);
+const mzEnt = (x, y, d = -1) => ({ tx: x, ty: y, d, p: 0, want: -1, moving: false, eyes: false, fr: false, rel: 0 });
+const mzPos = e => (e.d >= 0 ? [e.tx + MZ_DX[e.d] * e.p, e.ty + MZ_DY[e.d] * e.p] : [e.tx, e.ty]);
+function mzWrapX(e) { if (e.tx < 0) e.tx += MZ_W; else if (e.tx >= MZ_W) e.tx -= MZ_W; }
+function mzReverse(e) { if (e.d < 0) return; if (e.p > 0) { e.tx += MZ_DX[e.d]; e.ty += MZ_DY[e.d]; mzWrapX(e); e.p = 1 - e.p; } e.d = (e.d + 2) % 4; }
+// 沿格子移動 sp 格／秒：走到格子中心才決定下一步（think 回方向或 −1＝停）；onTile＝每到一格中心呼叫一次
+function mzMove(e, sp, dt, think, ghost, onTile) {
+  let rem = sp * dt;
+  for (let g = 0; g < 12 && rem > 1e-9; g++) {
+    if (e.p === 0) {
+      const nd = think(e);
+      if (nd < 0 || !mzPass(e.tx + MZ_DX[nd], e.ty + MZ_DY[nd], ghost, e.eyes, nd)) { e.moving = false; return; }
+      e.d = nd; e.moving = true;
+    }
+    const need = 1 - e.p;
+    if (rem < need) { e.p += rem; return; }
+    rem -= need; e.tx += MZ_DX[e.d]; e.ty += MZ_DY[e.d]; e.p = 0; mzWrapX(e);
+    if (onTile) onTile(e);
+  }
+}
+// 玩家操作的角色：按的方向能走就轉（可以提前按，到路口才轉），不能走就照原方向，撞牆就停
+const mzSteer = ghost => e => (e.want >= 0 && mzPass(e.tx + MZ_DX[e.want], e.ty + MZ_DY[e.want], ghost, e.eyes, e.want) ? e.want : e.d >= 0 && mzPass(e.tx + MZ_DX[e.d], e.ty + MZ_DY[e.d], ghost, e.eyes, e.d) ? e.d : -1);
+function mzFieldDir(e, f, eyes) {
+  let best = -1, bd = f[e.ty * MZ_W + e.tx];
+  for (let k = 0; k < 4; k++) {
+    let nx = e.tx + MZ_DX[k]; const ny = e.ty + MZ_DY[k];
+    if (ny === MZ_TUN_Y) nx = (nx + MZ_W) % MZ_W;
+    if (nx < 0 || nx >= MZ_W || ny < 0 || ny >= MZ_H || !mzPass(nx, ny, true, eyes, k)) continue;
+    const d = f[ny * MZ_W + nx]; if (d < bd) { bd = d; best = k; }
+  }
+  return best;
+}
+const mzInHouse = e => { const c = mzCell(e.tx, e.ty); return c === 'G' || c === '-'; };
+function mzTarget(M, k) {   // 電腦幽靈的目標格：散開時去自己的角落；追擊時各有個性（直追／包抄前方／從後面堵／離遠才追）
+  if (M.phase % 2 === 0) return MZ_SCATTER[k];
+  const P = M.pac, d = P.d >= 0 ? P.d : 3, px = P.tx, py = P.ty, e = M.ghosts[k];
+  if (k === 1) return [px + MZ_DX[d] * 4, py + MZ_DY[d] * 4];
+  if (k === 2) return [px - MZ_DX[d] * 3, py - MZ_DY[d] * 3];
+  if (k === 3 && Math.hypot(e.tx - px, e.ty - py) < 6) return MZ_SCATTER[3];
+  return [px, py];
+}
+function mzGhostThink(M, k, e) {
+  if (e.eyes) return mzFieldDir(e, MZ_F_HOME, true);
+  if (mzInHouse(e)) return M.clock >= e.rel ? mzFieldDir(e, MZ_F_EXIT, false) : -1;
+  const opts = [];
+  for (const k2 of [0, 3, 2, 1]) if (k2 !== (e.d + 2) % 4 && mzPass(e.tx + MZ_DX[k2], e.ty + MZ_DY[k2], true, false, k2)) opts.push(k2);
+  if (!opts.length) return (e.d + 2) % 4;
+  if (e.fr) return opts[Math.floor(Math.random() * opts.length)];
+  const [gx, gy] = mzTarget(M, k);
+  let best = opts[0], bd = 1e9;
+  for (const k2 of opts) { const nx = e.tx + MZ_DX[k2], ny = e.ty + MZ_DY[k2], d = (nx - gx) ** 2 + (ny - gy) ** 2; if (d < bd) { bd = d; best = k2; } }
+  return best;
+}
+const mzLvMul = M => 1 + Math.min(.3, (M.lvl - 1) * .05);
+const mzTunnel = (x, y) => y === MZ_TUN_Y && (x <= 4 || x >= 16);
+function mzGhostSpd(M, e, fr) { const [x, y] = mzPos(e); if (e.eyes) return 11; let s = fr ? 3.3 : 5.5 * mzLvMul(M); if (mzTunnel(Math.round(x), Math.round(y))) s *= .55; return s; }
+const mzPowerDur = M => (M.solo ? Math.max(2.5, 7 - (M.lvl - 1) * .8) : 6);
+const mzRelDelay = (M, k) => (M.solo ? [0, 2, 5, 8][k] * Math.max(.3, 1 - (M.lvl - 1) * .15) : [0, 1.5, 3, 4.5][k]);
+function mzDotsHex(d) { let s = ''; for (let i = 0; i < d.length; i += 4) { let v = 0; for (let b = 0; b < 4; b++) if (d[i + b]) v |= 1 << b; s += v.toString(16); } return s; }
+function mzDotsFromHex(h, d) { for (let i = 0; i < d.length; i++) d[i] = (parseInt(h[i >> 2] || '0', 16) >> (i & 3)) & 1; }
+const mzNow = M => (Date.now() + M.off - M.t0) / 1000;   // 開局後的秒數（開局前是負的＝倒數）
+const mzRec = (x, y) => ({ x, y, tx: x, ty: y, d: -1, m: 0, has: false });
+function mzRecSet(r, x, y, d, m) { r.tx = x; r.ty = y; if (!r.has || Math.abs(x - r.x) > 3 || Math.abs(y - r.y) > 3) { r.x = x; r.y = y; } r.d = d; r.m = m; r.has = true; }
+function mzRecStep(r, dt) { const a = 1 - Math.exp(-dt * 14); r.x += (r.tx - r.x) * a; r.y += (r.ty - r.y) * a; }
+// 一局開始（伺服器給了 mz）：建立本機狀態。role＝pac（我是豆豆，權威）／ghost（我是幽靈玩家）／spec（觀戰或還沒輪到）
+function mzStart(v) {
+  const z = v.mz, me = v.role === 'seat' ? v.me : -1;
+  const role = me >= 0 && me === z.pac ? 'pac' : me >= 0 && z.gh.includes(me) ? 'ghost' : 'spec';
+  const M = S.mz = {
+    key: z.seed + ':' + z.t0, role, solo: z.solo, t0: z.t0, off: z.sn - Date.now(), lim: (z.lim || 240000) / 1000, gh: [...z.gh], myK: z.gh.indexOf(me),
+    dots: new Uint8Array(MZ_DOTS.length).fill(1), left: MZ_DOTS.length, eaten: 0, sc: 0, lv: MZ_LIVES, lvl: 1, pw: 0, chain: 0, fz: 0, dead: 0, clear: 0,
+    clock: 0, modeT: 0, phase: 0, rs: 0, ct: [0, 0, 0, 0], bonus: 0, bonusN: 0, extra: false, over: false, snapAt: 0, anim: 0, pops: [], last: performance.now(),
+    pac: mzEnt(...MZ_PAC0, 3), ghosts: MZ_GHOST0.map(([x, y]) => mzEnt(x, y, -1)),
+    hm: MZ_GHOST0.map(([x, y]) => ({ x, y, d: -1, rm: 0, mode: 0, saw: false, t: 0, has: false })),   // 豆豆那台：幽靈玩家的最新位置與狀態
+    rPac: mzRec(...MZ_PAC0), rG: MZ_GHOST0.map(([x, y]) => mzRec(x, y)), rH: MZ_GHOST0.map(([x, y]) => mzRec(x, y)),   // 其他人：畫面上的位置（平滑）
+    mine: role === 'ghost' ? mzEnt(...MZ_GHOST0[z.gh.indexOf(me)], -1) : null, myMode: 0, reviveAt: -9, fzShow: 0,
+  };
+  M.ghosts.forEach((e, k) => { e.rel = mzRelDelay(M, k); });
+  if (!S.mzRaf) S.mzRaf = requestAnimationFrame(mzFrame);
+}
+function mzStop() { S.mz = null; if (S.mzRaf) { cancelAnimationFrame(S.mzRaf); S.mzRaf = 0; } }
+function mzResetPos(M) {   // 被抓後／過關：大家回起點
+  M.pac = mzEnt(...MZ_PAC0, 3);
+  M.ghosts = MZ_GHOST0.map(([x, y], k) => { const e = mzEnt(x, y, -1); e.rel = M.clock + mzRelDelay(M, k); return e; });
+  M.hm.forEach((h, k) => { h.x = MZ_GHOST0[k][0]; h.y = MZ_GHOST0[k][1]; h.mode = 0; h.saw = false; });
+  M.pw = 0; M.chain = 0; M.phase = 0; M.modeT = 0; M.rs++; M.fz = 1.5;
+}
+function mzEnd(M, win, tu) {
+  if (M.over) return;
+  M.over = true; mzSnap(M, true);
+  S.net?.tbl?.({ a: 'over', sc: M.sc, lvl: M.lvl, win: !!win, tu: !!tu, ct: M.ct.map(n => Math.min(99, n)) });
+}
+function mzPower(M) {
+  M.pw = mzPowerDur(M); M.chain = 0;
+  M.ghosts.forEach((e, k) => { if (M.gh[k] < 0 && !e.eyes) { e.fr = true; if (!mzInHouse(e)) mzReverse(e); } });
+  M.hm.forEach((h, k) => { if (M.gh[k] >= 0 && h.mode !== 2) h.mode = 1; });
+}
+function mzEat(M, e) {   // 豆豆走到一格的中心：吃豆子／能量豆／獎勵果實
+  const i = MZ_DOT_IDX.get(e.ty * MZ_W + e.tx);
+  if (i != null && M.dots[i]) {
+    M.dots[i] = 0; M.left--; M.eaten++;
+    if (MZ_DOTS[i][2]) { M.sc += 50; mzPower(M); } else M.sc += 10;
+    if (M.eaten === 70 || M.eaten === 140) { M.bonus = M.clock + 9; M.bonusN++; }
+    if (M.left <= 0) { if (M.solo) M.clear = 2; else mzEnd(M, true); }
+  }
+  if (M.bonus > M.clock && e.tx === MZ_FRUIT[0] && e.ty === MZ_FRUIT[1]) {
+    const pts = M.solo ? 100 * M.lvl : 300; M.sc += pts; M.bonus = 0;
+    M.pops.push({ x: e.tx, y: e.ty, t: `+${pts}`, until: performance.now() + 1000 });
+  }
+  if (M.solo && !M.extra && M.sc >= 10000) { M.extra = true; M.lv = Math.min(9, M.lv + 1); M.pops.push({ x: e.tx, y: e.ty - 1, t: '多一條命！', until: performance.now() + 1500 }); }
+}
+const mzDist = (ax, ay, bx, by) => { let dx = Math.abs(ax - bx); if (dx > MZ_W / 2) dx = MZ_W - dx; return Math.hypot(dx, ay - by); };
+function mzPacStep(M, dt) {   // 我是豆豆：整局的權威模擬
+  if (M.over) return;
+  if (M.dead > 0) {   // 被抓的動畫
+    M.dead -= dt;
+    if (M.dead <= 0) { M.dead = 0; if (M.lv <= 0) mzEnd(M, false); else mzResetPos(M); }
+    return;
+  }
+  if (M.clear > 0) {   // 過關（單人）：迷宮閃一下，下一關
+    M.clear -= dt;
+    if (M.clear <= 0) { M.clear = 0; M.lvl++; M.dots.fill(1); M.left = MZ_DOTS.length; M.eaten = 0; M.bonus = 0; mzResetPos(M); }
+    return;
+  }
+  if (M.fz > 0) { M.fz -= dt; return; }
+  M.clock += dt;
+  if (!M.solo && mzNow(M) >= M.lim) { mzEnd(M, false, true); return; }
+  if (M.pw > 0) { M.pw -= dt; if (M.pw <= 0) { M.pw = 0; M.ghosts.forEach(e => { e.fr = false; }); M.hm.forEach(h => { if (h.mode === 1) h.mode = 0; }); } }
+  else { M.modeT += dt; if (M.modeT >= MZ_PHASES[M.phase]) { M.modeT = 0; M.phase = Math.min(M.phase + 1, MZ_PHASES.length - 1); } }
+  const P = M.pac;
+  if (P.p > 0 && P.want === (P.d + 2) % 4) mzReverse(P);
+  mzMove(P, 6 * mzLvMul(M) * (M.pw > 0 ? 1.1 : 1), dt, mzSteer(false), false, e => mzEat(M, e));
+  if (P.moving) M.anim += dt;
+  if (M.over || M.clear > 0) return;
+  M.ghosts.forEach((e, k) => {
+    if (M.gh[k] >= 0) return;
+    mzMove(e, mzGhostSpd(M, e, e.fr), dt, ee => mzGhostThink(M, k, ee), true);
+    if (e.eyes && e.tx === 10 && e.ty === 9 && e.p === 0) { e.eyes = false; e.fr = false; e.rel = 0; }
+  });
+  M.hm.forEach(h => { if (h.mode === 2 && M.clock - h.t > 12) { h.mode = 0; h.saw = false; } });   // 沒收到「回到家」的回報：12 秒後當作已復活
+  const [px, py] = mzPos(P);
+  for (let k = 0; k < 4; k++) {
+    let gx, gy, mode;
+    if (M.gh[k] < 0) { const e = M.ghosts[k]; [gx, gy] = mzPos(e); mode = e.eyes ? 2 : e.fr ? 1 : 0; }
+    else { const h = M.hm[k]; if (!h.has) continue; gx = h.x; gy = h.y; mode = h.rm === 2 ? 2 : h.mode; }
+    if (mode === 2 || mzDist(px, py, gx, gy) >= MZ_HIT) continue;
+    if (mode === 1) {   // 吃掉害怕中的幽靈
+      const pts = 200 << Math.min(M.chain, 3); M.chain++; M.sc += pts;
+      M.pops.push({ x: gx, y: gy, t: String(pts), until: performance.now() + 900 });
+      if (M.gh[k] < 0) { M.ghosts[k].eyes = true; M.ghosts[k].fr = false; } else { const h = M.hm[k]; h.mode = 2; h.saw = false; h.t = M.clock; }
+      M.fz = .35;
+      return;
+    }
+    M.lv--; M.ct[k]++; M.dead = 1.4; M.pw = 0;   // 被抓
+    return;
+  }
+  if (M.bonus && M.bonus <= M.clock) M.bonus = 0;
+}
+function mzSnap(M, force) {   // 豆豆那台：快照給幽靈玩家與觀戰者
+  const now = performance.now();
+  if (!force && now - M.snapAt < MZ_SNAP_MS) return;
+  M.snapAt = now;
+  const r10 = n => Math.round(n * 10), [px, py] = mzPos(M.pac);
+  const g = M.ghosts.map((e, k) => {
+    if (M.gh[k] < 0) { const [x, y] = mzPos(e); return [r10(x), r10(y), e.d, e.eyes ? 2 : e.fr ? 1 : 0]; }
+    const h = M.hm[k]; return [r10(h.x), r10(h.y), h.d, h.mode];
+  });
+  S.net?.tbl?.({ a: 'ms', p: [r10(px), r10(py), M.pac.d], g, d: mzDotsHex(M.dots), pw: Math.round(M.pw * 1000), sc: M.sc, lv: Math.max(0, M.lv), lvl: M.lvl,
+    rs: M.rs, fz: Math.min(10000, Math.round(Math.max(M.fz, M.dead, M.clear) * 1000)), bn: M.bonus > M.clock ? 1 : 0 });
+}
+function mzGhostStep(M, dt) {   // 我是幽靈玩家：自己移動、回報位置；被吃掉就變成眼睛自動回家
+  const e = M.mine;
+  if (M.fz > 0) { M.fz -= dt; }
+  else {
+    const fr = M.myMode === 1 && !e.eyes;
+    if (!e.eyes && e.p > 0 && e.want === (e.d + 2) % 4) mzReverse(e);
+    mzMove(e, mzGhostSpd(M, e, fr), dt, e.eyes ? ee => mzFieldDir(ee, MZ_F_HOME, true) : mzSteer(true), true);
+    if (e.eyes && e.tx === 10 && e.ty === 9 && e.p === 0) { e.eyes = false; M.reviveAt = performance.now(); }
+  }
+  const now = performance.now();
+  if (now - M.snapAt >= MZ_SNAP_MS) {
+    M.snapAt = now;
+    const [x, y] = mzPos(e);
+    S.net?.tbl?.({ a: 'mp', x: Math.round(x * 10), y: Math.round(y * 10), d: e.d, m: e.eyes ? 2 : 0 });
+  }
+}
+function onNetTms(m) {   // 豆豆的快照（幽靈玩家與觀戰者才收到）
+  const M = S.mz; if (!M || M.role === 'pac') return;
+  M.sc = m.sc; M.lv = m.lv; M.lvl = m.lvl; M.pw = m.pw / 1000; M.bn = m.bn;
+  mzDotsFromHex(m.d, M.dots);
+  mzRecSet(M.rPac, m.p[0] / 10, m.p[1] / 10, m.p[2], 0);
+  m.g.forEach((g, k) => mzRecSet(M.rG[k], g[0] / 10, g[1] / 10, g[2], g[3]));
+  if (m.fz > 0) M.fzShow = m.fz / 1000;
+  if (M.role === 'ghost') {
+    const mine = m.g[M.myK], e = M.mine;
+    if (m.rs !== M.rs) {   // 豆豆被抓後／過關：回起點、凍結
+      M.rs = m.rs; M.mine = mzEnt(...MZ_GHOST0[M.myK], -1); M.mine.want = e.want; M.fz = Math.max(M.fz, m.fz / 1000);
+    } else {
+      if (m.fz > 0) M.fz = Math.max(M.fz, m.fz / 1000);
+      if (mine[3] === 2 && !e.eyes && performance.now() - M.reviveAt > 1000) e.eyes = true;   // 被豆豆吃掉了
+    }
+    M.myMode = mine[3];
+  } else M.rs = m.rs;
+}
+function onNetTmp(m) {   // 幽靈玩家的位置（k＝第幾隻幽靈）
+  const M = S.mz; if (!M || m.k < 0 || m.k > 3) return;
+  if (M.role === 'pac') {
+    const h = M.hm[m.k];
+    h.x = m.x / 10; h.y = m.y / 10; h.d = m.d; h.rm = m.m; h.has = true;
+    if (h.mode === 2) { if (m.m === 2) h.saw = true; else if (h.saw) { h.mode = 0; h.saw = false; } }   // 看過「眼睛」之後又回到一般＝回到家復活了
+  } else if (m.k !== M.myK) mzRecSet(M.rH[m.k], m.x / 10, m.y / 10, m.d, m.m);
+}
+function mzKey(e) {   // 遊戲畫面開著時的按鍵（回 true＝已處理）
+  const M = S.mz, d = MZ_KEYS[e.key.toLowerCase()];
+  if (!M || d == null || M.role === 'spec') return false;
+  e.preventDefault();
+  (M.role === 'pac' ? M.pac : M.mine).want = d;
+  return true;
+}
+function mzFrame(ts) {
+  const M = S.mz, v = S.tableView;
+  if (!M || !S.tableOpen || !v || v.phase !== 'playing' || v.game !== 'maze') { S.mzRaf = 0; if (S.tableOpen && v?.game === 'maze') buildTable(); return; }
+  S.mzRaf = requestAnimationFrame(mzFrame);
+  const now = performance.now(), dt = Math.max(0, Math.min(.05, (now - M.last) / 1000)); M.last = now;
+  const t = mzNow(M);
+  if (t >= 0) {
+    if (M.role === 'pac') { mzPacStep(M, dt); if (!M.over) mzSnap(M, false); }
+    else if (M.role === 'ghost') mzGhostStep(M, dt);
+  }
+  if (M.fzShow > 0) M.fzShow -= dt;
+  for (const r of [M.rPac, ...M.rG, ...M.rH]) mzRecStep(r, dt);
+  if (M.role !== 'pac' && Math.hypot(M.rPac.tx - M.rPac.x, M.rPac.ty - M.rPac.y) > .02) M.anim += dt;
+  mzDraw(M, t, v);
+}
+// ---- 畫面 ----
+let MZ_WALLS = null;
+function mzWallLayer() {   // 迷宮牆（只畫一次）：深色牆面＋貼著通道那一側的亮青色線
+  if (MZ_WALLS) return MZ_WALLS;
+  const c = document.createElement('canvas'); c.width = MZ_W * MZ_T; c.height = MZ_H * MZ_T;
+  const g = c.getContext('2d');
+  g.fillStyle = '#06101c'; g.fillRect(0, 0, c.width, c.height);
+  for (let y = 0; y < MZ_H; y++) for (let x = 0; x < MZ_W; x++) {
+    const ch = MZ_MAP[y][x], X = x * MZ_T, Y = y * MZ_T;
+    if (ch === '-') { g.fillStyle = '#ff8ad8'; g.fillRect(X, Y + MZ_T / 2 - 2, MZ_T, 4); continue; }
+    if (ch !== '#') continue;
+    g.fillStyle = '#0e2a3a'; g.fillRect(X, Y, MZ_T, MZ_T);
+    g.fillStyle = '#2fc8b0';
+    const open = (nx, ny) => nx >= 0 && nx < MZ_W && ny >= 0 && ny < MZ_H && MZ_MAP[ny][nx] !== '#';
+    if (open(x, y - 1)) g.fillRect(X, Y, MZ_T, 2);
+    if (open(x, y + 1)) g.fillRect(X, Y + MZ_T - 2, MZ_T, 2);
+    if (open(x - 1, y)) g.fillRect(X, Y, 2, MZ_T);
+    if (open(x + 1, y)) g.fillRect(X + MZ_T - 2, Y, 2, MZ_T);
+  }
+  return (MZ_WALLS = c);
+}
+const mzPx = (x, y) => [(x + .5) * MZ_T, MZ_HUD + (y + .5) * MZ_T];
+function mzDrawBean(g, x, y, d, open, scale = 1) {   // 豆豆：圓滾滾的黃色小雞（2026-11-13 使用者選的方案 B）：橘色尖嘴朝前進方向一開一合、翅膀在背後、頭上一撮呆毛
+  const [cx, cy] = mzPx(x, y), s = scale, R = 8 * s, fx = d >= 0 ? MZ_DX[d] : -1, fy = d >= 0 ? MZ_DY[d] : 0, side = fx || 1;
+  g.save();
+  g.strokeStyle = '#f0b830'; g.lineWidth = 1.4 * s; g.beginPath(); g.moveTo(cx - side * 1 * s, cy - R + 1 * s); g.quadraticCurveTo(cx - side * 2 * s, cy - R - 3 * s, cx + side * 1 * s, cy - R - 2.5 * s); g.stroke();   // 呆毛
+  g.fillStyle = '#ffd860'; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#d8a020'; g.lineWidth = 1; g.stroke();
+  g.fillStyle = 'rgba(255,255,255,.4)'; g.beginPath(); g.arc(cx - side * 3 * s, cy - 3.5 * s, 2 * s, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#f0b830'; g.beginPath(); g.ellipse(fx ? cx - fx * 3 * s : cx - 3.5 * s, cy + 2 * s, 3.2 * s, 2.2 * s, fx ? -.4 * fx : -.3, 0, Math.PI * 2); g.fill();   // 翅膀（背後）
+  if (s > .3) {
+    const eyes = fx ? [[cx + fx * 3.2 * s, cy - 2.5 * s]] : [[cx - 2.8 * s, cy - 1.5 * s + fy * 2 * s], [cx + 2.8 * s, cy - 1.5 * s + fy * 2 * s]];
+    for (const [ex, ey] of eyes) {
+      g.fillStyle = '#1a1a22'; g.beginPath(); g.arc(ex, ey, 1.9 * s, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(ex - .6 * s, ey - .7 * s, .7 * s, 0, Math.PI * 2); g.fill();
+    }
+    g.fillStyle = '#ffa0a0'; g.beginPath(); g.ellipse(fx ? cx + fx * 4.2 * s : cx, fx ? cy + 1.6 * s : cy + fy * 1 * s + 2 * s, 1.4 * s, .9 * s, 0, 0, Math.PI * 2); g.fill();   // 腮紅
+  }
+  const bx = cx + (fx || 0) * 6 * s, by = cy + (fy || 0) * 6 * s, nx = -(fy || 0), ny = fx || 0, w = (.6 + 1.6 * open) * s;   // 尖嘴：嘴根在身體邊緣、往前進方向尖出去
+  g.fillStyle = '#ff9a30'; g.beginPath(); g.moveTo(bx + nx * w, by + ny * w); g.lineTo(bx + (fx || 0) * 5 * s, by + (fy || 0) * 5 * s); g.lineTo(bx - nx * w, by - ny * w); g.fill();
+  if (open > .5) { g.strokeStyle = '#b05a10'; g.lineWidth = .8 * s; g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + (fx || 0) * 4 * s, by + (fy || 0) * 4 * s); g.stroke(); }
+  g.restore();
+}
+function mzDrawWisp(g, x, y, d, col, mode, flash, t) {   // 小幽靈：圓頭＋往後飄的尾巴（水滴形）；害怕時變深藍、快結束時閃白；被吃掉只剩眼睛
+  const [cx, cy] = mzPx(x, y), fx = d >= 0 ? MZ_DX[d] : 0, fy = d >= 0 ? MZ_DY[d] : 1;
+  const tx = d >= 0 ? -fx : 0, ty = d >= 0 ? -fy : 1, nx = -ty, ny = tx, wig = Math.sin(t * 10) * 2.5;
+  g.save();
+  if (mode !== 2) {
+    g.fillStyle = mode === 1 ? (flash ? '#e8eeff' : '#3a4ad8') : col;
+    g.beginPath();
+    g.moveTo(cx + nx * 7.5, cy + ny * 7.5);
+    g.quadraticCurveTo(cx + tx * 9 + nx * 4, cy + ty * 9 + ny * 4, cx + tx * 14 + nx * wig, cy + ty * 14 + ny * wig);
+    g.quadraticCurveTo(cx + tx * 9 - nx * 4, cy + ty * 9 - ny * 4, cx - nx * 7.5, cy - ny * 7.5);
+    g.fill();
+    g.beginPath(); g.arc(cx, cy, 7.5, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.3)'; g.beginPath(); g.arc(cx - 2.5, cy - 3, 2, 0, Math.PI * 2); g.fill();
+  }
+  if (mode === 1) {   // 害怕：小小的眼睛＋波浪嘴
+    g.fillStyle = flash ? '#d03a3a' : '#ffe0a0';
+    g.fillRect(cx - 3.5, cy - 2.5, 2, 2); g.fillRect(cx + 1.5, cy - 2.5, 2, 2);
+    g.strokeStyle = g.fillStyle; g.lineWidth = 1.2; g.beginPath();
+    for (let i = 0; i <= 6; i++) { const px = cx - 4 + i * 1.33, py = cy + 2.5 + (i % 2 ? -1 : 1); i ? g.lineTo(px, py) : g.moveTo(px, py); }
+    g.stroke();
+  } else {
+    for (const sx of [-3, 3]) {
+      const ex = cx + sx + fx * 1.5, ey = cy - 1.5 + (d >= 0 ? fy : 0) * 1.5;
+      g.fillStyle = '#fff'; g.beginPath(); g.ellipse(ex, ey, 2.3, 2.8, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = mode === 2 ? '#3a4ad8' : '#1a1a2a'; g.beginPath(); g.arc(ex + fx * 1.1, ey + (d >= 0 ? fy : 0) * 1.1, 1.2, 0, Math.PI * 2); g.fill();
+    }
+  }
+  g.restore();
+}
+function mzDraw(M, t, v) {
+  const cv = $('mzCanvas'); if (!cv) return;
+  const g = cv.getContext('2d'), now = performance.now(), W = MZ_W * MZ_T;
+  g.fillStyle = '#0a0e18'; g.fillRect(0, 0, cv.width, cv.height);
+  g.drawImage(mzWallLayer(), 0, MZ_HUD);
+  if (M.clear > 0 && Math.floor(M.clear * 6) % 2) { g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(0, MZ_HUD, W, MZ_H * MZ_T); }
+  // 豆子
+  const pulse = .75 + .25 * Math.sin(now / 160);
+  MZ_DOTS.forEach(([x, y, pw], i) => {
+    if (!M.dots[i]) return;
+    const [cx, cy] = mzPx(x, y);
+    g.fillStyle = pw ? '#ffd04a' : '#ffe0a0'; g.beginPath(); g.arc(cx, cy, pw ? 5.5 * pulse : 2.4, 0, Math.PI * 2); g.fill();
+  });
+  const bonusOn = M.role === 'pac' ? M.bonus > M.clock : !!M.bn;
+  if (bonusOn) {   // 獎勵果實：椰子
+    const [cx, cy] = mzPx(...MZ_FRUIT);
+    g.fillStyle = '#8a5a34'; g.beginPath(); g.arc(cx, cy + 1, 7, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#5a3a1e'; for (const [ox, oy] of [[-2, -1], [2, -1], [0, 2]]) { g.beginPath(); g.arc(cx + ox, cy + oy, 1.2, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#3cb45a'; g.beginPath(); g.ellipse(cx + 4, cy - 7, 5, 2, -.6, 0, Math.PI * 2); g.fill();
+  }
+  // 幽靈
+  const fl = M.pw > 0 && M.pw < 2 && Math.floor(now / 200) % 2 === 0;
+  for (let k = 0; k < 4; k++) {
+    let x, y, d, mode, isMe = false;
+    if (M.role === 'pac') {
+      if (M.gh[k] < 0) { const e = M.ghosts[k]; [x, y] = mzPos(e); d = e.d; mode = e.eyes ? 2 : e.fr ? 1 : 0; }
+      else { const h = M.hm[k]; x = h.x; y = h.y; d = h.d; mode = h.rm === 2 ? 2 : h.mode; }
+    } else if (M.role === 'ghost' && k === M.myK) { const e = M.mine; [x, y] = mzPos(e); d = e.d; mode = e.eyes ? 2 : M.myMode === 1 ? 1 : 0; isMe = true; }
+    else { const r = M.gh[k] >= 0 && M.rH[k].has ? M.rH[k] : M.rG[k]; x = r.x; y = r.y; d = r.d; mode = r.m === 2 || M.rG[k].m === 2 ? 2 : M.rG[k].m; }
+    mzDrawWisp(g, x, y, d, MZ_GCOL[k], mode, fl, now / 1000 + k);
+    const seat = M.gh[k] >= 0 ? v.seats[M.gh[k]] : null;
+    if (seat || isMe) {   // 玩家控制的幽靈：頭上寫名字（自己的加白圈）
+      const [cx, cy] = mzPx(x, y);
+      if (isMe) { g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1.5; g.setLineDash([3, 3]); g.beginPath(); g.arc(cx, cy, 12, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); }
+      g.font = 'bold 10px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.8)'; g.fillStyle = isMe ? '#fff' : MZ_GCOL[k];
+      const nm = isMe ? '你' : seat.name; g.strokeText(nm, cx, cy - 13); g.fillText(nm, cx, cy - 13); g.textAlign = 'left';
+    }
+  }
+  // 豆豆
+  let px, py, pd;
+  if (M.role === 'pac') { [px, py] = mzPos(M.pac); pd = M.pac.d; } else { px = M.rPac.x; py = M.rPac.y; pd = M.rPac.d; }
+  const dying = M.role === 'pac' && M.dead > 0;
+  mzDrawBean(g, px, py, pd, (Math.sin(M.anim * 18) + 1) / 2, dying ? Math.max(0, M.dead / 1.4) : 1);
+  if (M.role === 'pac' && v.mz && !v.mz.solo) { const [cx, cy] = mzPx(px, py); g.font = 'bold 10px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.8)'; g.fillStyle = '#fff'; g.strokeText('你', cx, cy - 14); g.fillText('你', cx, cy - 14); g.textAlign = 'left'; }
+  M.pops = M.pops.filter(p => p.until > now);
+  for (const p of M.pops) { const [cx, cy] = mzPx(p.x, p.y); g.font = 'bold 12px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillStyle = '#7ae8ff'; g.fillText(p.t, cx, cy - 4); g.textAlign = 'left'; }
+  // 分數列
+  g.fillStyle = '#121a2a'; g.fillRect(0, 0, W, MZ_HUD);
+  g.font = 'bold 14px "Microsoft JhengHei"'; g.fillStyle = '#ffe08a'; g.textBaseline = 'middle';
+  g.fillText(`分數 ${M.sc}`, 8, MZ_HUD / 2);
+  g.textAlign = 'center';
+  if (M.solo) g.fillText(`第 ${M.lvl} 關`, W / 2, MZ_HUD / 2);
+  else { const rem = Math.max(0, Math.ceil(M.lim - Math.max(0, t))); g.fillStyle = rem <= 30 ? '#ff7a6a' : '#ffe08a'; g.fillText(`剩 ${Math.floor(rem / 60)}:${String(rem % 60).padStart(2, '0')}`, W / 2, MZ_HUD / 2); }
+  g.textAlign = 'left';
+  for (let i = 0; i < Math.max(0, M.lv); i++) mzDrawBean(g, (W - 18 - i * 20) / MZ_T - .5, -1.25, 3, .3, .6);
+  g.textBaseline = 'alphabetic';
+  // 倒數／準備
+  let msg = null;
+  if (t < 0) msg = String(Math.ceil(-t));
+  else if (M.role === 'pac' ? M.clear > 0 : false) msg = '過關！';
+  else if (M.role === 'pac' ? (M.fz > .5 && M.dead <= 0) : M.fzShow > .5) msg = '準備！';
+  else if (t < .8) msg = '開始！';
+  if (M.over) msg = '結束';
+  if (msg) {
+    g.font = 'bold 30px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 5; g.strokeStyle = 'rgba(0,0,0,.85)'; g.fillStyle = '#ffe08a';
+    const [cx, cy] = mzPx(10, 11); g.strokeText(msg, cx, cy + 10); g.fillText(msg, cx, cy + 10); g.textAlign = 'left';
+  }
+}
+function buildMaze(box, v, mk, gd) {
+  const playing = v.phase === 'playing', z = v.mz;
+  if (playing && z && (!S.mz || S.mz.key !== z.seed + ':' + z.t0)) mzStart(v);
+  if (!playing) mzStop();
+  const M = S.mz;
+  if (M && z) {   // 幽靈玩家中途離開：那隻改由電腦控制（豆豆那台從牠最後的位置接手）
+    z.gh.forEach((c, k) => {
+      if (c >= 0 || M.gh[k] < 0) return;
+      M.gh[k] = -1;
+      if (M.role === 'pac') { const h = M.hm[k], e = mzEnt(Math.round(h.x), Math.round(h.y), -1); e.eyes = h.mode === 2; e.fr = h.mode === 1; e.rel = 0; if (mzCell(e.tx, e.ty) === '#') { e.tx = MZ_GHOST0[k][0]; e.ty = MZ_GHOST0[k][1]; } M.ghosts[k] = e; }
+    });
+  }
+  const pacName = v.seats[v.pac]?.name || '?', solo1 = v.seats.length <= 1;
+  let status;
+  if (playing && M) status = M.role === 'pac' ? (M.solo ? '單人挑戰：方向鍵／WASD 移動，吃光豆子進下一關' : '你是豆豆：方向鍵／WASD 移動，吃光所有豆子就贏！') : M.role === 'ghost' ? `你是幽靈（${MZ_GNAME[M.myK]}）：方向鍵／WASD 移動，抓住豆豆！` : '觀戰中';
+  else if (playing) status = '觀戰中';
+  else status = v.seats.length < v.min ? `等待玩家入座（1～${v.max} 人）` : solo1 ? '1 人＝單人挑戰（分數進排行榜）；全員按「準備」就開始' : `${v.seats.length} 人對抗：${pacName} 當豆豆，其他人當幽靈；全員按「準備」就開始`;
+  box.appendChild(mk('div', 'table-status' + (playing && M && M.role !== 'spec' ? ' mine' : ''), status));
+  const r = v.result;
+  if (r && !playing && !r.aborted) {
+    box.appendChild(mk('div', 'table-result', r.text));
+    if (!r.solo && r.ranking) {
+      const rk = mk('div', 'dodge-rank');
+      r.ranking.forEach(x => rk.appendChild(mk('div', null, `${x.role === 'pac' ? '豆豆' : '幽靈'}　${x.name}　${x.role === 'pac' ? `${x.score} 分` : `抓到 ${x.score} 次`}${x.left ? '（中途離開）' : ''}`)));
+      box.appendChild(rk);
+    }
+  } else if (r?.aborted && !playing) box.appendChild(mk('div', 'table-result', r.text));
+  if (!playing) boardBlock(box, v, mk, sc => `${sc} 分（單人）`);
+  if (playing && z && !z.solo) {   // 遊戲中：座位卡片改成一行（讓迷宮放得下；名字也畫在迷宮裡）
+    const roles = [`豆豆：${pacName}`, ...z.gh.map((c, k) => (c >= 0 ? `${MZ_GNAME[k]}：${v.seats[c]?.name || '?'}` : null)).filter(Boolean)];
+    box.appendChild(mk('div', 'table-tag', roles.join('　') + (z.gh.some(c => c < 0) ? '　（其他幽靈由電腦控制）' : '')));
+  }
+  const row = mk('div', 'table-seats');
+  if (!playing) v.seats.forEach((s, i) => {
+    const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (s.left ? ' out' : ''));
+    const k = playing && z ? z.gh.indexOf(i) : -1;
+    if (k >= 0) seat.style.borderColor = MZ_GCOL[k]; else if (i === v.pac && !solo1) seat.style.borderColor = '#7ad048';
+    seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : '')));
+    const role = solo1 && !playing ? '' : i === v.pac ? '豆豆' : k >= 0 ? `幽靈・${MZ_GNAME[k]}` : '幽靈';
+    seat.appendChild(mk('div', 'table-tag', playing ? role : `${role ? role + ' · ' : ''}${s.ready ? '已準備' : '未準備'}`));
+    if (!playing && !solo1 && v.role === 'seat' && v.me === 0 && i !== v.pac) {   // 桌主：指定誰當豆豆
+      const b = mk('button', 'ff-btn small', '改由他當豆豆'); b.onclick = () => S.net?.tbl?.({ a: 'mpac', v: i }); seat.appendChild(b);
+    }
+    row.appendChild(seat);
+  });
+  if (!playing) { for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位')); box.appendChild(row); }
+  if (!playing && !solo1) box.appendChild(mk('div', 'table-tag', v.me === 0 && v.role === 'seat' ? '你是桌主：可以指定誰當豆豆（改了大家要重新準備）' : `由桌主 ${v.seats[0]?.name || ''} 指定誰當豆豆`));
+  if (playing) {
+    const wrap = mk('div', 'mz-wrap'), cv = document.createElement('canvas');
+    cv.id = 'mzCanvas'; cv.width = MZ_W * MZ_T; cv.height = MZ_HUD + MZ_H * MZ_T; cv.className = 'mz-canvas';
+    wrap.appendChild(cv); box.appendChild(wrap);
   }
   const btns = mk('div', 'table-btns');
   if (v.role === 'seat' && !playing) {
@@ -5677,7 +6434,7 @@ function typingKey(e) {
   if (ch === w[T.pos]) {
     T.pos++; T.errPos = -1;
     if (T.pos >= w.length) { T.idx++; T.pos = 0; T.score++; if (v.me >= 0) T.scores[v.me] = T.score; typingSend(); }   // 打完最後一個字母：自動得分、換下一個字
-  } else { T.lockUntil = performance.now() + TY_LOCK_MS; T.errPos = T.pos; T.wordKey = ''; }   // 打錯：該打的字母變紅震動，鎖 0.7 秒；不用刪除
+  } else { T.lockUntil = performance.now() + TY_LOCK_MS; T.errPos = T.pos; T.wordKey = ''; S.net?.tbl?.({ a: 'miss' }); }   // 打錯（並通知對手的畫面閃紅）：該打的字母變紅震動，鎖 0.7 秒；不用刪除
   typingRender();
 }
 // 中文打字競賽：輸入框收到「輸入法送出的文字」（不含組字中）才比對；對得上題目的前綴就算打對的部分，整個詞對了自動 +1 分；
@@ -5695,7 +6452,7 @@ function typingZhCheck(e) {
     else T.pos = val.length;
   } else {
     let k = 0; while (k < val.length && val[k] === w[k]) k++;
-    T.pos = k; T.errPos = k; T.lockUntil = performance.now() + TY_LOCK_MS; T.wordKey = ''; inp.value = w.slice(0, k);
+    T.pos = k; T.errPos = k; T.lockUntil = performance.now() + TY_LOCK_MS; T.wordKey = ''; inp.value = w.slice(0, k); S.net?.tbl?.({ a: 'miss' });
   }
   typingRender();
 }
@@ -5723,11 +6480,18 @@ function onNetTpg(m) {   // 觀戰者才會收到：各座位目前的打字進�
   (T.prog ||= {})[m.i] = { n: m.n, p: m.p, e: m.e };
   typingRender();
 }
-function onNetTsc(m) {   // 其他人的分數（i＝座位編號）
+function onNetTsc(m) {   // 其他人的分數（i＝座位編號）；分數變高＝對手打對一個字，分數框閃綠
   const T = S.ty; if (!T) return;
+  if (m.n > (T.scores[m.i] ?? 0)) (T.flash ||= {})[m.i] = { c: 'ok', until: performance.now() + TY_FLASH_MS };
   T.scores[m.i] = m.n;
   typingRender();
 }
+function onNetTmx(m) {   // 對手剛打錯一次：分數框閃紅（看不到字）
+  const T = S.ty; if (!T) return;
+  (T.flash ||= {})[m.i] = { c: 'bad', until: performance.now() + TY_FLASH_MS };
+  typingRender();
+}
+const TY_FLASH_MS = 450;   // 對手打對／打錯時分數框閃一下的時間
 function typingRender() {
   const T = S.ty, v = S.tableView;
   if (!T || !v) return;
@@ -5739,7 +6503,7 @@ function typingRender() {
     ot.innerHTML = '';
     v.seats.forEach((s, i) => {
       if (seated && i === v.me) return;
-      const e = document.createElement('div'); e.className = 'typing-other' + (s.left ? ' left' : '');
+      const fl = T.flash?.[i], e = document.createElement('div'); e.className = 'typing-other' + (s.left ? ' left' : '') + (fl && fl.until > performance.now() ? ` flash-${fl.c}` : '');
       e.textContent = `${s.name}${s.left ? '（已離開）' : ''}　${T.scores[i] ?? 0}`;
       if (!seated && !s.left) {   // 觀戰者：多顯示這個人正在打的單字與打到哪（伺服器只送給觀戰者，tpg）
         const pr = T.prog?.[i], n = Math.max(T.scores[i] ?? 0, pr?.n ?? 0), p = pr && pr.n === n ? pr.p : 0, w = T.word(n);
@@ -6518,16 +7282,573 @@ function buildUno(box, v, mk, gd) {
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
+// ---- 俄羅斯方塊（t13，2026-11-13，使用者要求）：場地上方 4 台街機共用一張邏輯桌，每台一個人玩 ----
+// 單人模式：各自一局，分數進排行榜；聯機模式：發起後其他機台的人收到邀請（最多 4 人），一般模式（各玩各的、全員出局後依分數排名）
+// 或對戰模式（一次消 2／3／4 行送每個對手 1／2／4 行垃圾，使用者定）。方塊遊戲在本機跑（信任客戶端），伺服器只給 seed、轉發盤面快照與垃圾行。
+// 協定見 notes「和平島與遊戲桌」：tbl {a:'solo'|'link'|'lmode'|'ljoin'|'lno'|'lquit'|'lstart'|'tb'|'clr'|'over'}；s→c ttb（盤面快照）、tgb（垃圾行）
+const AR_W = 10, AR_H = 22, AR_VIS = 20, AR_CELL = 20;   // 盤面 10×22（最上面 2 列在畫面外，方塊從那裡生出來）
+const AR_COLORS = ['', '#40c8e0', '#f0c020', '#a060e0', '#3cb45a', '#e04848', '#3b78e8', '#e8902a', '#7a7f8c'];   // 1 I、2 O、3 T、4 S、5 Z、6 J、7 L、8 垃圾
+const AR_CAB_COLORS = ['#d84a4a', '#3b78e8', '#3cb45a', '#9a5ad8'];   // 4 台機台的外殼主色（同 gen_assets.py 的 ARCADE_COLORS）
+const AR_BASE = {   // 每種方塊的初始方向：[盒子大小, 格子 [x, y]]（y 往下）
+  1: [4, [[0, 1], [1, 1], [2, 1], [3, 1]]], 2: [2, [[0, 0], [1, 0], [0, 1], [1, 1]]], 3: [3, [[1, 0], [0, 1], [1, 1], [2, 1]]],
+  4: [3, [[1, 0], [2, 0], [0, 1], [1, 1]]], 5: [3, [[0, 0], [1, 0], [1, 1], [2, 1]]], 6: [3, [[0, 0], [0, 1], [1, 1], [2, 1]]], 7: [3, [[2, 0], [0, 1], [1, 1], [2, 1]]],
+};
+const AR_ROT = {};   // AR_ROT[種類][方向 0～3]＝格子（在盒子裡順時針轉）
+for (const [k, [n, cells]] of Object.entries(AR_BASE)) {
+  const r = [cells];
+  for (let d = 1; d < 4; d++) r.push(r[d - 1].map(([x, y]) => [n - 1 - y, x]));
+  AR_ROT[k] = r;
+}
+// 轉向的踢牆位移（常見的 SRS 表；表上 y 往上，套用時 y 取負）
+const AR_KICK = {
+  '01': [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]], '10': [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]], '12': [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]], '21': [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
+  '23': [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]], '32': [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]], '30': [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]], '03': [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+};
+const AR_KICK_I = {
+  '01': [[0, 0], [-2, 0], [1, 0], [-2, -1], [1, 2]], '10': [[0, 0], [2, 0], [-1, 0], [2, 1], [-1, -2]], '12': [[0, 0], [-1, 0], [2, 0], [-1, 2], [2, -1]], '21': [[0, 0], [1, 0], [-2, 0], [1, -2], [-2, 1]],
+  '23': [[0, 0], [2, 0], [-1, 0], [2, 1], [-1, -2]], '32': [[0, 0], [-2, 0], [1, 0], [-2, -1], [1, 2]], '30': [[0, 0], [1, 0], [-2, 0], [1, -2], [-2, 1]], '03': [[0, 0], [-1, 0], [2, 0], [-1, 2], [2, -1]],
+};
+const AR_LINE_PTS = [0, 100, 300, 500, 800];   // 一次消 1～4 行 × 等級
+const AR_DAS = 150, AR_ARR = 40, AR_LOCK = 500, AR_LOCK_RESETS = 15, AR_SNAP_MS = 250;
+const AR_KEYS = { arrowleft: 'L', arrowright: 'R', arrowdown: 'D', arrowup: 'CW', x: 'CW', z: 'CCW', ' ': 'HD', c: 'HOLD', shift: 'HOLD' };
+const arFall = lv => Math.max(30, 1000 * Math.pow(0.8 - (lv - 1) * 0.007, lv - 1));   // 每格落下的毫秒（等級越高越快）
+function arRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function arNew(seed, t0, off, key) {
+  const A = { key, t0, off, rng: arRng(seed), bag: [], queue: [], board: Array.from({ length: AR_H }, () => new Array(AR_W).fill(0)),
+    cur: null, hold: 0, held: false, sc: 0, ln: 0, lv: 1, dead: false, fallAcc: 0, lockT: 0, resets: 0, keys: {}, das: {}, gq: 0,
+    last: performance.now(), snapAt: 0, snapStr: '', flash: null, started: false };
+  for (let i = 0; i < 5; i++) A.queue.push(arDraw(A));
+  return A;
+}
+function arDraw(A) {   // 7 種一袋輪流抽（同一個 seed＝同一串方塊，聯機時大家拿到的方塊一樣）
+  if (!A.bag.length) { A.bag = [1, 2, 3, 4, 5, 6, 7]; for (let i = 6; i > 0; i--) { const j = Math.floor(A.rng() * (i + 1)); [A.bag[i], A.bag[j]] = [A.bag[j], A.bag[i]]; } }
+  return A.bag.pop();
+}
+const arCells = p => AR_ROT[p.k][p.r].map(([x, y]) => [p.x + x, p.y + y]);
+function arFits(A, p) {
+  for (const [x, y] of arCells(p)) if (x < 0 || x >= AR_W || y >= AR_H || (y >= 0 && A.board[y][x])) return false;
+  return true;
+}
+function arSpawn(A, k) {
+  const p = { k, r: 0, x: k === 2 ? 4 : 3, y: 1 };
+  A.cur = p; A.lockT = 0; A.resets = 0; A.fallAcc = 0;
+  if (!arFits(A, p)) arGameOver(A);
+}
+function arNext(A) { const k = A.queue.shift(); A.queue.push(arDraw(A)); arSpawn(A, k); }
+function arGrounded(A) { const p = A.cur; return !arFits(A, { ...p, y: p.y + 1 }); }
+function arMove(A, dx) {
+  const p = A.cur, q = { ...p, x: p.x + dx };
+  if (!arFits(A, q)) return false;
+  A.cur = q; arTouch(A); return true;
+}
+function arRotate(A, dir) {   // dir＝1 順時針、−1 逆時針
+  const p = A.cur; if (p.k === 2) return;
+  const to = (p.r + dir + 4) % 4, kicks = (p.k === 1 ? AR_KICK_I : AR_KICK)[`${p.r}${to}`];
+  for (const [dx, dy] of kicks) {
+    const q = { ...p, r: to, x: p.x + dx, y: p.y - dy };
+    if (arFits(A, q)) { A.cur = q; arTouch(A); return; }
+  }
+}
+function arTouch(A) { if (A.lockT > 0 && A.resets < AR_LOCK_RESETS) { A.lockT = 0; A.resets++; } }   // 落地後還在移動／轉向：重新計算鎖定時間（有次數上限）
+function arHardDrop(A) {
+  let n = 0;
+  while (arFits(A, { ...A.cur, y: A.cur.y + 1 })) { A.cur.y++; n++; }
+  A.sc += n * 2; arLock(A);
+}
+function arHold(A) {
+  if (A.held) return;
+  const k = A.cur.k;
+  if (A.hold) arSpawn(A, A.hold); else arNext(A);
+  A.hold = k; A.held = true;
+}
+function arLock(A) {
+  const cells = arCells(A.cur);
+  for (const [x, y] of cells) if (y >= 0) A.board[y][x] = A.cur.k;
+  if (cells.every(([, y]) => y < AR_H - AR_VIS)) { arGameOver(A); return; }   // 整塊停在畫面外：頂到了
+  const full = [];
+  for (let y = 0; y < AR_H; y++) if (A.board[y].every(c => c)) full.push(y);
+  if (full.length) {
+    for (const y of full) { A.board.splice(y, 1); A.board.unshift(new Array(AR_W).fill(0)); }
+    A.sc += AR_LINE_PTS[full.length] * A.lv; A.ln += full.length; A.lv = Math.min(20, 1 + Math.floor(A.ln / 10));
+    A.flash = { n: full.length, until: performance.now() + 900 };
+    const lk = S.tableView?.link;
+    if (full.length >= 2 && lk?.phase === 'playing' && lk.mode === 'battle') S.net?.tbl?.({ a: 'clr', n: full.length });   // 對戰模式：讓伺服器送對手垃圾行
+  }
+  if (A.gq > 0) {   // 收到的垃圾行在方塊放好時才推上來（同一批的缺口在同一欄）
+    const n = Math.min(A.gq, AR_H), hole = Math.floor(Math.random() * AR_W);
+    A.gq = 0;
+    const over = A.board.slice(0, n).some(r => r.some(c => c));
+    A.board.splice(0, n);
+    for (let i = 0; i < n; i++) { const r = new Array(AR_W).fill(8); r[hole] = 0; A.board.push(r); }
+    if (over) { arGameOver(A); return; }
+  }
+  A.held = false;
+  arNext(A);
+  arSnap(A, true);
+}
+function arGameOver(A) {
+  if (A.dead) return;
+  A.dead = true; A.cur = null;
+  arSnap(A, true);
+  S.net?.tbl?.({ a: 'over', sc: A.sc, ln: A.ln });
+}
+function arBoardStr(A) {   // 畫面上的 20 列（含正在落下的方塊），每格一個數字
+  const b = A.board.slice(AR_H - AR_VIS).map(r => [...r]);
+  if (A.cur) for (const [x, y] of arCells(A.cur)) { const yy = y - (AR_H - AR_VIS); if (yy >= 0) b[yy][x] = A.cur.k; }
+  return b.map(r => r.join('')).join('');
+}
+function arSnap(A, force) {   // 盤面快照給觀戰者與聯機對手看（約 4 次／秒、有變化才送）
+  const now = performance.now();
+  if (!force && now - A.snapAt < AR_SNAP_MS) return;
+  const s = arBoardStr(A);
+  if (!force && s === A.snapStr) return;
+  A.snapAt = now; A.snapStr = s;
+  S.net?.tbl?.({ a: 'tb', b: s, sc: A.sc, ln: A.ln });
+}
+function arStep(A) {
+  const now = performance.now(), dt = Math.min(100, now - A.last);
+  A.last = now;
+  if (A.dead) return;
+  if (Date.now() + A.off < A.t0) return;   // 開局倒數中
+  if (!A.started) { A.started = true; arNext(A); if (A.dead) return; }
+  for (const d of ['L', 'R']) {   // 按住左右：先等 AR_DAS 再每 AR_ARR 移一格
+    if (!A.keys[d]) continue;
+    const st = A.das[d] ||= { t: 0, rep: 0 };
+    st.t += dt;
+    if (st.t >= AR_DAS) { st.rep += dt; while (st.rep >= AR_ARR) { st.rep -= AR_ARR; if (!arMove(A, d === 'L' ? -1 : 1)) break; } }
+  }
+  const fall = A.keys.D ? Math.min(arFall(A.lv), 35) : arFall(A.lv);
+  if (arGrounded(A)) {
+    A.lockT += dt;
+    if (A.lockT >= AR_LOCK) arLock(A);
+  } else {
+    A.fallAcc += dt;
+    while (A.fallAcc >= fall && !arGrounded(A)) { A.fallAcc -= fall; A.cur.y++; if (A.keys.D) A.sc += 1; }
+    if (arGrounded(A)) A.fallAcc = 0;
+  }
+  if (!A.dead) arSnap(A, false);
+}
+function arKey(e) {   // 遊戲畫面開著時的按鍵（回 true＝已處理）
+  const A = S.ar, act = AR_KEYS[e.key.toLowerCase()];
+  if (!A || A.dead || !act) return false;
+  e.preventDefault();
+  if (!A.started || !A.cur) return true;
+  if (act === 'L' || act === 'R') { if (!A.keys[act]) { A.keys[act] = true; A.das[act] = { t: 0, rep: 0 }; A.keys[act === 'L' ? 'R' : 'L'] = false; arMove(A, act === 'L' ? -1 : 1); } }
+  else if (act === 'D') A.keys.D = true;
+  else if (e.repeat) return true;
+  else if (act === 'CW') arRotate(A, 1);
+  else if (act === 'CCW') arRotate(A, -1);
+  else if (act === 'HD') arHardDrop(A);
+  else if (act === 'HOLD') arHold(A);
+  return true;
+}
+function arKeyUp(k) { const A = S.ar, act = AR_KEYS[k]; if (A && (act === 'L' || act === 'R' || act === 'D')) A.keys[act] = false; }
+function onNetTtb(m) { (S.arOpp ||= {})[m.cab] = { b: m.b, sc: m.sc, ln: m.ln }; }   // 別台的盤面快照（觀戰者、同一場聯機的對手才收到）
+function onNetTgb(m) {   // 對戰模式：被送垃圾行
+  const A = S.ar; if (!A || A.dead) return;
+  A.gq += m.n; A.hit = { n: m.n, from: m.from, until: performance.now() + 1200 };
+}
+function arStop() { if (S.arRaf) cancelAnimationFrame(S.arRaf); S.arRaf = 0; S.ar = null; S.arOpp = {}; }
+function arLoop() {
+  S.arRaf = 0;
+  const v = S.tableView;
+  if (!S.tableOpen || !v || v.game !== 'arcade') { arStop(); return; }
+  if (S.ar) arStep(S.ar);
+  arDrawAll();
+  S.arRaf = requestAnimationFrame(arLoop);
+}
+const arCabName = cab => `${cab + 1} 號機`;
+function arDrawCell(g, x, y, c, cs, alpha = 1) {
+  const col = AR_COLORS[c] || '#888';
+  g.globalAlpha = alpha; g.fillStyle = col; g.fillRect(x, y, cs, cs);
+  if (cs >= 8) { g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(x, y, cs, 2); g.fillRect(x, y, 2, cs); g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(x, y + cs - 2, cs, 2); g.fillRect(x + cs - 2, y, 2, cs); }
+  g.globalAlpha = 1;
+}
+function arDrawMini(g, k, ox, oy, cs) {   // 預覽（下一個／暫存）：方塊置中畫在 4×2 格的框裡
+  const cells = AR_ROT[k][0], xs = cells.map(c => c[0]), ys = cells.map(c => c[1]);
+  const w = Math.max(...xs) - Math.min(...xs) + 1, h = Math.max(...ys) - Math.min(...ys) + 1;
+  const bx = ox + (4 - w) * cs / 2 - Math.min(...xs) * cs, by = oy + (2 - h) * cs / 2 - Math.min(...ys) * cs;
+  for (const [x, y] of cells) arDrawCell(g, bx + x * cs, by + y * cs, k, cs);
+}
+function arDrawMain() {   // 自己的盤面：左邊暫存、中間盤面（含落點預覽）、右邊下一個／分數
+  const cv = $('arMain'), A = S.ar; if (!cv || !A) return;
+  const g = cv.getContext('2d'), L = 100, BW = AR_W * AR_CELL, BH = AR_VIS * AR_CELL, top = AR_H - AR_VIS;
+  g.fillStyle = '#0d1424'; g.fillRect(0, 0, cv.width, cv.height);
+  g.fillStyle = '#060a14'; g.fillRect(L, 10, BW, BH);
+  g.strokeStyle = 'rgba(120,150,200,.12)'; g.lineWidth = 1;
+  for (let x = 1; x < AR_W; x++) { g.beginPath(); g.moveTo(L + x * AR_CELL + .5, 10); g.lineTo(L + x * AR_CELL + .5, 10 + BH); g.stroke(); }
+  for (let y = 1; y < AR_VIS; y++) { g.beginPath(); g.moveTo(L, 10 + y * AR_CELL + .5); g.lineTo(L + BW, 10 + y * AR_CELL + .5); g.stroke(); }
+  for (let y = top; y < AR_H; y++) for (let x = 0; x < AR_W; x++) if (A.board[y][x]) arDrawCell(g, L + x * AR_CELL, 10 + (y - top) * AR_CELL, A.board[y][x], AR_CELL);
+  if (A.cur) {
+    let gy = A.cur.y; while (arFits(A, { ...A.cur, y: gy + 1 })) gy++;
+    for (const [x, y] of arCells({ ...A.cur, y: gy })) if (y >= top) arDrawCell(g, L + x * AR_CELL, 10 + (y - top) * AR_CELL, A.cur.k, AR_CELL, .25);   // 落點預覽
+    for (const [x, y] of arCells(A.cur)) if (y >= top) arDrawCell(g, L + x * AR_CELL, 10 + (y - top) * AR_CELL, A.cur.k, AR_CELL);
+  }
+  if (A.gq > 0) { g.fillStyle = '#e04848'; const h = Math.min(BH, A.gq * AR_CELL); g.fillRect(L - 6, 10 + BH - h, 4, h); }   // 等著推上來的垃圾行
+  g.strokeStyle = '#5a6a90'; g.lineWidth = 2; g.strokeRect(L - 1, 9, BW + 2, BH + 2);
+  g.fillStyle = '#c8d4f0'; g.font = 'bold 13px "Microsoft JhengHei"'; g.textAlign = 'left';
+  g.fillText('暫存 C', 12, 28); if (A.hold) arDrawMini(g, A.hold, 10, 38, 18);
+  const R = L + BW + 14;
+  g.fillText('下一個', R, 28);
+  A.queue.slice(0, 3).forEach((k, i) => arDrawMini(g, k, R, 38 + i * 50, i ? 14 : 18));
+  const stat = [['分數', A.sc], ['行數', A.ln], ['等級', A.lv]];
+  stat.forEach(([lbl, n], i) => { g.fillStyle = '#8fa0c8'; g.font = '12px "Microsoft JhengHei"'; g.fillText(lbl, R, 210 + i * 46); g.fillStyle = '#ffe08a'; g.font = 'bold 18px "Microsoft JhengHei"'; g.fillText(String(n), R, 230 + i * 46); });
+  g.textAlign = 'center';
+  const wait = A.t0 - (Date.now() + A.off);
+  const msg = (txt, sub, col = '#ffe08a') => {
+    g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(L, 10 + BH / 2 - 44, BW, 80);
+    g.fillStyle = col; g.font = 'bold 30px "Microsoft JhengHei"'; g.fillText(txt, L + BW / 2, 10 + BH / 2);
+    if (sub) { g.fillStyle = '#fff'; g.font = '14px "Microsoft JhengHei"'; g.fillText(sub, L + BW / 2, 10 + BH / 2 + 24); }
+  };
+  if (A.dead) msg('GAME OVER', `${A.sc} 分 · ${A.ln} 行`, '#ff7a6a');
+  else if (wait > 0) msg(String(Math.ceil(wait / 1000)), '準備……');
+  else if (A.flash && performance.now() < A.flash.until) { g.fillStyle = '#fff6c0'; g.font = 'bold 20px "Microsoft JhengHei"'; g.fillText(['', '', '雙消！', '三消！', '四行消除！'][A.flash.n] || '', L + BW / 2, 44); }
+  if (A.hit && performance.now() < A.hit.until) { g.fillStyle = '#ff8a7a'; g.font = 'bold 15px "Microsoft JhengHei"'; g.fillText(`${arCabName(A.hit.from)} 送來 ${A.hit.n} 行！`, L + BW / 2, 10 + BH - 12); }
+  g.textAlign = 'left';
+}
+function arDrawSmall(cv, snap, dead) {   // 別台的盤面（快照）
+  const g = cv.getContext('2d'), cs = cv.width / AR_W;
+  g.fillStyle = '#060a14'; g.fillRect(0, 0, cv.width, cv.height);
+  const b = snap?.b || '';
+  for (let i = 0; i < b.length; i++) if (b[i] !== '0') arDrawCell(g, (i % AR_W) * cs, Math.floor(i / AR_W) * cs, Number(b[i]), cs);
+  if (dead) { g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(0, 0, cv.width, cv.height); g.fillStyle = '#ff7a6a'; g.font = `bold ${Math.round(cs * 1.4)}px "Microsoft JhengHei"`; g.textAlign = 'center'; g.fillText('出局', cv.width / 2, cv.height / 2); g.textAlign = 'left'; }
+}
+function arDrawAll() {
+  arDrawMain();
+  for (const cv of document.querySelectorAll('canvas.ar-oppcv')) {
+    const cab = Number(cv.dataset.cab), snap = S.arOpp?.[cab], v = S.tableView, s = v?.seats.find(x => x.cab === cab);
+    arDrawSmall(cv, snap, s?.dead);
+    const sc = document.getElementById('arOppSc' + cab); if (sc && snap) sc.textContent = `${snap.sc} 分 · ${snap.ln} 行`;
+  }
+}
+function buildArcade(box, v, mk, gd) {
+  const me = v.role === 'seat' ? v.seats[v.me] : null, lk = v.link, playing = v.phase === 'playing';
+  const off = (v.sn || Date.now()) - Date.now();
+  // 新的一局：單人看自己的 tt、聯機看 link 的 seed（大家同一串方塊）
+  const want = playing ? (me.st === 'solo' && v.tt ? { key: 's' + v.tt.seed + ':' + v.tt.t0, seed: v.tt.seed, t0: v.tt.t0 } : lk?.phase === 'playing' ? { key: 'l' + lk.seed + ':' + lk.t0, seed: lk.seed, t0: lk.t0 } : null) : null;
+  if (want && (!S.ar || S.ar.key !== want.key)) { S.ar = arNew(want.seed, want.t0, off, want.key); S.arOpp = {}; }
+  if (!playing && S.ar && !S.ar.dead) S.ar = null;   // 被結束了（例如聯機取消）：本機這局作廢
+  if (!S.arRaf) S.arRaf = requestAnimationFrame(arLoop);
+  const hostName = lk ? v.seats.find(s => s.cab === lk.host)?.name || arCabName(lk.host) : '';
+  const modeName = m => (m === 'battle' ? '對戰模式' : '一般模式');
+  let status;
+  if (!me) status = '觀戰中（要玩的話，走到空著的機台按 F）';
+  else if (playing) status = me.st === 'solo' ? '單人模式：←→ 移動、↓ 加速、↑／X 旋轉（順時針）、Z 旋轉（逆時針）、空白鍵落到底、C 暫存' : `聯機${modeName(lk.mode)}：${S.ar?.dead ? '你已出局，等其他人結束' : '撐到最後、分數越高越好'}`;
+  else if (me.st === 'link') status = lk.host === me.cab ? `你發起了聯機（${modeName(lk.mode)}），等其他機台的人接受邀請` : `已加入 ${hostName} 的聯機，等他開始`;
+  else status = `${arCabName(me.cab)}：選擇單人模式或聯機模式`;
+  box.appendChild(mk('div', 'table-status' + (playing && !S.ar?.dead ? ' mine' : ''), status));
+  const r = v.result;
+  if (r && !playing && r.link && (me ? r.cabs?.includes(me.cab) : true)) {   // 聯機結算：依分數排名
+    box.appendChild(mk('div', 'table-result', r.text));
+    const ul = mk('div', 'table-ranking');
+    r.ranking.forEach((x, k) => ul.appendChild(mk('div', 'table-board-row', `${k + 1}. ${x.name}　${x.score} 分 · ${x.lines} 行${x.left ? '（中途離開）' : ''}`)));
+    box.appendChild(ul);
+  }
+  if (me && !playing && me.last && me.st === 'idle' && !(r?.link && r.cabs?.includes(me.cab))) box.appendChild(mk('div', 'table-result', `上一局（單人）：${me.last.sc} 分、${me.last.ln} 行`));
+  // 邀請：我閒置中、有人在等聯機、還有位子、我沒拒絕過
+  if (me && me.st === 'idle' && lk?.phase === 'invite' && lk.mem.length < 4 && !lk.no.includes(me.cab)) {
+    const inv = mk('div', 'ar-invite');
+    inv.appendChild(mk('div', null, `${hostName}（${arCabName(lk.host)}）發起了聯機（${modeName(lk.mode)}，目前 ${lk.mem.length}/4 人）`));
+    inv.appendChild(mk('div', 'ar-invite-q', '要接受聯機邀請嗎？'));
+    const bs = mk('div', 'table-btns');
+    const yes = mk('button', 'ff-btn', '接受'); yes.onclick = () => S.net?.tbl?.({ a: 'ljoin' });
+    const no = mk('button', 'ff-btn small', '拒絕'); no.onclick = () => S.net?.tbl?.({ a: 'lno' });
+    bs.appendChild(yes); bs.appendChild(no); inv.appendChild(bs); box.appendChild(inv);
+  }
+  if (me && me.st === 'link' && lk?.phase === 'invite') {   // 聯機等待室
+    const room = mk('div', 'ar-room');
+    room.appendChild(mk('div', 'table-label', `聯機成員（${lk.mem.length}/4）`));
+    const row = mk('div', 'table-seats');
+    for (const c of lk.mem) {
+      const s = v.seats.find(x => x.cab === c), seat = mk('div', 'table-seat' + (c === me.cab ? ' you' : ''));
+      seat.style.borderColor = AR_CAB_COLORS[c];
+      seat.appendChild(mk('div', 'table-name', (s?.name || '?') + (c === me.cab ? '（你）' : '')));
+      seat.appendChild(mk('div', 'table-tag', arCabName(c) + (c === lk.host ? ' · 發起人' : '')));
+      row.appendChild(seat);
+    }
+    room.appendChild(row);
+    const isHost = lk.host === me.cab, bs = mk('div', 'table-btns');
+    if (isHost) {
+      for (const m of ['normal', 'battle']) { const b = mk('button', 'ff-btn small' + (lk.mode === m ? ' on' : ''), (lk.mode === m ? '● ' : '') + modeName(m)); b.onclick = () => S.net?.tbl?.({ a: 'lmode', v: m }); bs.appendChild(b); }
+      const st = mk('button', 'ff-btn', lk.mem.length < 2 ? '開始（至少 2 人）' : '開始'); st.disabled = lk.mem.length < 2; st.onclick = () => S.net?.tbl?.({ a: 'lstart' }); bs.appendChild(st);
+      const cc = mk('button', 'ff-btn small', '取消邀請'); cc.onclick = () => S.net?.tbl?.({ a: 'lquit' }); bs.appendChild(cc);
+    } else {
+      bs.appendChild(mk('span', 'table-tag', `模式：${modeName(lk.mode)}（由 ${hostName} 決定）`));
+      const q = mk('button', 'ff-btn small', '退出聯機'); q.onclick = () => S.net?.tbl?.({ a: 'lquit' }); bs.appendChild(q);
+    }
+    room.appendChild(bs);
+    room.appendChild(mk('div', 'table-tag', lk.mode === 'battle' ? '對戰模式：一次消 2／3／4 行，其他對手最下面多 1／2／4 行垃圾；最後還活著的人最有利。' : '一般模式：大家拿到一樣的方塊順序，各自玩到出局，全員出局後依分數排名。'));
+    box.appendChild(room);
+  }
+  if (me && me.st === 'idle') {   // 選模式
+    const bs = mk('div', 'table-btns');
+    const solo = mk('button', 'ff-btn', '單人模式'); solo.onclick = () => S.net?.tbl?.({ a: 'solo' }); bs.appendChild(solo);
+    const link = mk('button', 'ff-btn', '聯機模式'); link.disabled = !!lk; link.title = lk ? '已經有一場聯機了（同時只能有一場）' : '邀請其他機台的人一起玩（最多 4 人）';
+    link.onclick = () => S.net?.tbl?.({ a: 'link' }); bs.appendChild(link);
+    box.appendChild(bs);
+  }
+  if (me && playing) {   // 遊戲畫面：自己的盤面＋聯機對手的小盤面
+    const wrap = mk('div', 'ar-play');
+    const cv = document.createElement('canvas'); cv.id = 'arMain'; cv.width = 100 + AR_W * AR_CELL + 110; cv.height = AR_VIS * AR_CELL + 20; cv.className = 'ar-main';
+    wrap.appendChild(cv);
+    if (me.st === 'link' && lk) {
+      const opps = mk('div', 'ar-opps');
+      for (const c of lk.mem) if (c !== me.cab) opps.appendChild(arOppEl(v, c, mk, 12));
+      for (const x of lk.gone || []) opps.appendChild(mk('div', 'ar-opp gone', `${x.name}\n中途離開（${x.score} 分）`));
+      wrap.appendChild(opps);
+    }
+    box.appendChild(wrap);
+  }
+  if (!me) {   // 觀戰：每台正在玩的機台
+    const opps = mk('div', 'ar-opps spec');
+    const live = v.seats.filter(s => s.play);
+    for (const s of live) opps.appendChild(arOppEl(v, s.cab, mk, 14));
+    if (!live.length) opps.appendChild(mk('div', 'table-tag', '目前沒有人在玩'));
+    box.appendChild(opps);
+  }
+  // 4 台機台的狀態
+  const cabs = mk('div', 'ar-cabs');
+  for (let c = 0; c < 4; c++) {
+    const s = v.seats.find(x => x.cab === c), el = mk('div', 'ar-cab' + (me && c === me.cab ? ' you' : ''));
+    el.style.borderColor = AR_CAB_COLORS[c];
+    const st = !s ? '空機台' : s.play ? (s.st === 'solo' ? '單人遊玩中' : s.dead ? '聯機・出局' : '聯機遊玩中') : s.st === 'link' ? '聯機等待中' : '閒置';
+    el.appendChild(mk('div', 'table-name', arCabName(c)));
+    el.appendChild(mk('div', 'table-tag', s ? `${s.name} · ${st}` : st));
+    cabs.appendChild(el);
+  }
+  box.appendChild(cabs);
+  if (!playing) boardBlock(box, v, mk, sc => `${sc} 分（單人）`);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+function arOppEl(v, cab, mk, cs) {
+  const s = v.seats.find(x => x.cab === cab), el = mk('div', 'ar-opp');
+  el.style.borderColor = AR_CAB_COLORS[cab];
+  el.appendChild(mk('div', 'table-name', `${s?.name || '?'} · ${arCabName(cab)}`));
+  const cv = document.createElement('canvas'); cv.className = 'ar-oppcv'; cv.dataset.cab = cab; cv.width = AR_W * cs; cv.height = AR_VIS * cs;
+  el.appendChild(cv);
+  const sc = mk('div', 'table-tag', `${S.arOpp?.[cab]?.sc ?? s?.sc ?? 0} 分`); sc.id = 'arOppSc' + cab; el.appendChild(sc);
+  return el;
+}
+// ---- 和平島餐飲區（2026-11-13，使用者要求）：右上角的自助飲料機與點心吧，走近按 F（或點它）吃喝 ----
+// 每次吃喝隨機得到一個幾秒的增益／減益，或什麼事都沒發生。**遊戲裡刻意不寫任何「吃喝會有效果」的說明**（使用者定），
+// 效果只顯示在左上角武器列下方的小圖示（滑鼠移上去只看到名稱）。純客戶端：別人看得到的部分（變大／縮小／透明／暈眩的星星／中毒的泡泡）
+// 走既有的 state.fx 轉發（id 前面加 f，見 myFx），伺服器不用改。物件位置在 terrain.json 的 props（gen_assets.py 的 PROPS_BY_TERRAIN）。
+const PROP_RANGE = 48;   // 離物件邊多近才能互動（px）
+const propsHere = () => S.terrains[S.terrain]?.props || [];
+const propRect = pr => ({ x: pr.cell[0] * CELL, y: pr.cell[1] * CELL, w: pr.w * CELL, h: pr.h * CELL });
+const propUse = pr => pr.kind === 'drink' || pr.kind === 'food';   // 能互動（吃喝）的物件；deco（隔板）只擋路、rug（地毯）畫在地板層
+function propAtCell(x, y) {   // 這格被物件占著（擋路、不能擺家具；地毯不算）
+  for (const pr of propsHere()) if (pr.kind !== 'rug' && x >= pr.cell[0] && x < pr.cell[0] + pr.w && y >= pr.cell[1] && y < pr.cell[1] + pr.h) return pr;
+  return null;
+}
+function propDist(pr, px, py) { const r = propRect(pr), dx = Math.max(r.x - px, 0, px - (r.x + r.w)), dy = Math.max(r.y - py, 0, py - (r.y + r.h)); return Math.hypot(dx, dy); }
+function propNear(p) { let best = null, bd = PROP_RANGE; for (const pr of propsHere()) { if (!propUse(pr)) continue; const d = propDist(pr, p.x, p.y); if (d < bd) { bd = d; best = pr; } } return best; }
+function propAtPoint(wx, wy) { return propsHere().find(pr => { if (!propUse(pr)) return false; const r = propRect(pr); return wx >= r.x && wx < r.x + r.w && wy >= r.y && wy < r.y + r.h; }) || null; }
+// 效果（name 只用在圖示的滑鼠提示；bad＝減益，圖示紅框）。dur＝秒數
+const FOOD_FX = {
+  hurt:    { name: '扣血', bad: 1, icon: '💔', dur: 1.5 },
+  poison:  { name: '中毒', bad: 1, icon: '🤢', dur: 9 },
+  stun:    { name: '暈眩', bad: 1, icon: '💫', dur: 3 },
+  blind:   { name: '致盲', bad: 1, icon: '🌑', dur: 7 },
+  gray:    { name: '視覺受損', bad: 1, icon: '🌫️', dur: 9 },
+  nausea:  { name: '噁心', bad: 1, icon: '🤮', dur: 7 },
+  weak:    { name: '虛弱', bad: 1, icon: '🐌', dur: 9 },
+  confuse: { name: '混亂', bad: 1, icon: '🌀', dur: 7 },
+  hiccup:  { name: '打嗝', bad: 1, icon: '💭', dur: 9 },
+  haste:   { name: '加速', icon: '👟', dur: 10 },
+  swift:   { name: '神速', icon: '⚡', dur: 6 },
+  fresh:   { name: '神清氣爽', icon: '✨', dur: 12 },
+  big:     { name: '巨大化', icon: '🍄', dur: 12 },
+  tiny:    { name: '縮小', icon: '🐜', dur: 12 },
+  heal:    { name: '回復', icon: '💚', dur: 1.5 },
+  light:   { name: '輕盈', icon: '🎈', dur: 12 },
+  ghost:   { name: '透明化', icon: '👻', dur: 10 },
+};
+const FOOD_GROUP = { haste: ['swift', 'weak'], swift: ['haste', 'weak'], weak: ['haste', 'swift'], big: ['tiny'], tiny: ['big'] };   // 互斥：後吃到的蓋掉前一個
+// 抽獎權重（none＝什麼都沒發生）：飲料偏速度／清爽／打嗝，點心偏回復／體型／肚子痛
+const FOOD_POOL = {
+  drink: { none: 30, haste: 8, swift: 4, fresh: 8, nausea: 6, hiccup: 8, gray: 5, blind: 4, confuse: 5, stun: 4, ghost: 5, light: 5, heal: 4, hurt: 3, poison: 3, weak: 4, big: 3, tiny: 3 },
+  food:  { none: 30, heal: 7, big: 7, tiny: 6, poison: 6, hurt: 5, weak: 6, stun: 4, nausea: 6, fresh: 5, haste: 4, swift: 2, light: 4, ghost: 3, hiccup: 4, gray: 3, blind: 3, confuse: 3 },
+};
+const FOOD_NAMES = { drink: ['可樂', '柳橙汁', '綠茶', '奶茶', '紅茶', '汽水', '冰咖啡', '熱可可', '檸檬紅茶', '蘋果西打'], food: ['薯條', '熱狗', '爆米花', '關東煮', '布丁', '鬆餅', '雞塊', '泡麵', '洋芋片', '飯糰'] };
+const FOOD_CD = 1.5;   // 兩次吃喝的最短間隔（秒）
+S.foodFx = {}; S.foodCdUntil = 0; S.foodNext = { poison: 0, hiccup: 0 };
+const ffOn = k => S.t < (S.foodFx[k] || 0);
+function foodPick(kind) {
+  const pool = FOOD_POOL[kind] || FOOD_POOL.drink, tot = Object.values(pool).reduce((a, b) => a + b, 0);
+  let r = Math.random() * tot;
+  for (const [k, w] of Object.entries(pool)) { r -= w; if (r < 0) return k; }
+  return 'none';
+}
+function useProp(pr) {
+  const p = S.players[0];
+  if (p.dead) return;
+  if (S.t < S.foodCdUntil) { toast(pr.kind === 'food' ? '還在吃…' : '還在喝…', 900); return; }
+  S.foodCdUntil = S.t + FOOD_CD;
+  const names = FOOD_NAMES[pr.kind] || FOOD_NAMES.drink, nm = names[Math.floor(Math.random() * names.length)];
+  toast(pr.kind === 'food' ? `你吃了${nm}` : `你喝了一杯${nm}`, 1600);
+  S.floaters.push({ x: p.x, y: p.y - 50, v: pr.kind === 'food' ? '嚼嚼…' : '咕嚕咕嚕…', life: 1 });
+  const k = foodPick(pr.kind);
+  if (k !== 'none') foodApply(k);
+}
+function foodApply(k) {
+  const d = FOOD_FX[k], p = S.players[0], cap = hpCap(p);
+  for (const o of FOOD_GROUP[k] || []) delete S.foodFx[o];
+  S.foodFx[k] = S.t + d.dur;
+  if (k === 'hurt') { const n = 2 + Math.floor(Math.random() * 2), was = p.hp ?? cap; p.hp = Math.max(1, was - n); if (was > p.hp) S.floaters.push({ x: p.x, y: p.y - 46, v: `-${was - p.hp}`, life: 1 }); }   // 吃喝扣血不會死（最少留 1 滴，助手定）
+  if (k === 'heal') { const was = p.hp ?? cap; p.hp = cap; if (cap > was) S.floaters.push({ x: p.x, y: p.y - 46, v: `+${cap - was}`, life: 1, xpGain: true }); }
+  if (k === 'poison') S.foodNext.poison = S.t + 1.5;
+  if (k === 'hiccup') S.foodNext.hiccup = S.t + .6;
+  buffBarBuild();
+}
+function foodFxIds() {   // 給 state.fx：別人也要畫的效果
+  const out = [];
+  for (const k of ['big', 'tiny', 'ghost', 'stun', 'poison']) if (ffOn(k)) out.push('f' + k);
+  return out;
+}
+const foodSpeedMul = () => (ffOn('swift') ? 1.9 : ffOn('haste') ? 1.4 : ffOn('weak') ? .55 : 1);
+function foodScaleOf(list) { return list?.includes('fbig') ? 1.6 : list?.includes('ftiny') ? .55 : 1; }
+// 每幀（只對自己）：中毒每 1.5 秒扣 1（最少留 1）、打嗝不定時小跳一下、過期的圖示拿掉、畫面濾鏡
+function stepFood(p) {
+  if (p.dead) { if (Object.keys(S.foodFx).length) { S.foodFx = {}; buffBarBuild(); } foodScreenFilter(); return; }
+  if (ffOn('poison') && S.t >= S.foodNext.poison) {
+    S.foodNext.poison = S.t + 1.5;
+    if ((p.hp ?? hpCap(p)) > 1) { p.hp = (p.hp ?? hpCap(p)) - 1; S.floaters.push({ x: p.x, y: p.y - 46, v: '-1', life: .9 }); }
+  }
+  if (ffOn('hiccup') && S.t >= S.foodNext.hiccup) {
+    S.foodNext.hiccup = S.t + 1.1 + Math.random() * 1.4;
+    if (p.z === 0 && p.vz === 0 && !p.pose) p.vz = 130;
+    S.floaters.push({ x: p.x + 10, y: p.y - 48, v: '嗝！', life: .8 });
+  }
+  let gone = false;
+  for (const [k, u] of Object.entries(S.foodFx)) if (S.t >= u) { delete S.foodFx[k]; gone = true; }
+  if (gone) buffBarBuild(); else buffBarTick();
+  foodScreenFilter();
+}
+// 左上角（武器列下方）的增減益圖示：滑鼠移上去只顯示名稱（title），右下角是剩幾秒
+function buffBarBuild() {
+  const bar = $('buffBar'); if (!bar) return;
+  bar.innerHTML = '';
+  const ks = Object.keys(S.foodFx).filter(ffOn);
+  for (const k of ks) {
+    const d = FOOD_FX[k], el = document.createElement('div');
+    el.className = 'buff' + (d.bad ? ' bad' : ' good'); el.title = d.name; el.dataset.k = k;
+    el.innerHTML = `<span class="bi">${d.icon}</span><span class="bt"></span>`;
+    bar.appendChild(el);
+  }
+  bar.classList.toggle('hidden', !ks.length);
+  buffBarTick(true);
+}
+let buffTickAt = 0;
+function buffBarTick(force) {
+  if (!force && S.t - buffTickAt < .2) return;
+  buffTickAt = S.t;
+  for (const el of document.querySelectorAll('#buffBar .buff')) { const left = (S.foodFx[el.dataset.k] || 0) - S.t; el.querySelector('.bt').textContent = left > 0 ? Math.ceil(left) : ''; }
+}
+// 畫面濾鏡：視覺受損＝黑白、噁心＝畫面扭曲（SVG 位移濾鏡，波動跟著時間變）、神清氣爽＝亮一點、飽和一點
+let foodFilterKey = '';
+function foodScreenFilter() {
+  const parts = [];
+  if (ffOn('nausea')) {
+    foodWarpEnsure();
+    const t = S.t, tb = document.getElementById('ffTurb'), dm = document.getElementById('ffDisp');
+    if (tb) tb.setAttribute('baseFrequency', `${(0.008 + 0.004 * Math.sin(t * 1.3)).toFixed(4)} ${(0.012 + 0.005 * Math.cos(t * 1.7)).toFixed(4)}`);
+    if (dm) dm.setAttribute('scale', String(Math.round(12 + 7 * Math.sin(t * 2.1))));
+    parts.push('url(#ffWarp)', `hue-rotate(${Math.round(25 * Math.sin(t * 1.5))}deg)`);
+  }
+  if (ffOn('gray')) parts.push('grayscale(1)');
+  if (ffOn('fresh')) parts.push('brightness(1.08) saturate(1.3)');
+  const key = parts.join(' ');
+  if (key !== foodFilterKey) { foodFilterKey = key; canvas.style.filter = key; }
+}
+function foodWarpEnsure() {
+  if (document.getElementById('ffWarp')) return;
+  const box = document.createElement('div');
+  box.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+  box.innerHTML = '<svg width="0" height="0"><filter id="ffWarp" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence id="ffTurb" type="turbulence" baseFrequency="0.01 0.014" numOctaves="2" seed="3"/><feDisplacementMap id="ffDisp" in="SourceGraphic" scale="20" xChannelSelector="R" yChannelSelector="G"/></filter></svg>';
+  document.body.appendChild(box);
+}
+// 螢幕空間的效果（世界畫完之後）：致盲＝只看得到自己身邊一小圈、神清氣爽＝畫面上閃亮的小星點
+function drawFoodScreen() {
+  const p = S.players[0]; if (!p) return;
+  if (ffOn('blind')) {
+    const sx = p.x - S.cam.x, sy = p.y - p.z - 20 - S.cam.y, R = 70;
+    const g = ctx.createRadialGradient(sx, sy, R * .55, sx, sy, R * 1.5);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.97)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  if (ffOn('fresh')) {
+    ctx.save();
+    for (let i = 0; i < 26; i++) {   // 每顆星點各自的位置與閃爍相位（決定性，不用存狀態）
+      const h = Math.sin(i * 91.7) * 43758.5, u = h - Math.floor(h), h2 = Math.sin(i * 37.3) * 12345.6, v = h2 - Math.floor(h2);
+      const ph = (S.t * (0.6 + u * .8) + i * .37) % 1, a = Math.sin(ph * Math.PI);
+      const x = u * canvas.width, y = ((v + S.t * .02 * (1 + u)) % 1) * canvas.height, r = 1.5 + 2.5 * a;
+      ctx.globalAlpha = .75 * a; ctx.fillStyle = i % 3 ? '#fffbe0' : '#c8f4ff';
+      ctx.beginPath(); ctx.moveTo(x, y - r * 2); ctx.lineTo(x + r * .5, y); ctx.lineTo(x, y + r * 2); ctx.lineTo(x - r * .5, y); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - r * 2, y); ctx.lineTo(x, y + r * .5); ctx.lineTo(x + r * 2, y); ctx.lineTo(x, y - r * .5); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+// 頭上的效果（自己與別人都畫，看 fx 清單）：暈眩＝繞圈的星星、中毒＝冒綠泡泡
+function drawFoodOverhead(p, list, headY) {
+  if (list.includes('fstun')) {
+    ctx.save(); ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+    for (let i = 0; i < 3; i++) {
+      const a = S.t * 4 + i * Math.PI * 2 / 3, x = p.x + Math.cos(a) * 13, y = headY - 14 + Math.sin(a) * 4;   // 名牌上方
+      ctx.globalAlpha = Math.sin(a) > 0 ? 1 : .6; ctx.fillStyle = '#ffe04a'; ctx.fillText('★', x, y);
+    }
+    ctx.restore();
+  }
+  if (list.includes('fpoison')) {
+    ctx.save();
+    for (let i = 0; i < 3; i++) {
+      const ph = (S.t * .9 + i / 3) % 1, x = p.x - 8 + i * 8 + Math.sin(S.t * 3 + i) * 2, y = headY - 12 - ph * 16;
+      ctx.globalAlpha = 1 - ph; ctx.fillStyle = '#7ad04a'; ctx.strokeStyle = '#2f6a1a';
+      ctx.beginPath(); ctx.arc(x, y, 2 + ph * 1.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+// 島上物件的繪製：圖＋名稱（離得近、而且是最近的那個才提示按 F）
+function propDrawEntries(list) {
+  const ims = S.tImages[S.terrain] || {};
+  for (const pr of propsHere()) {
+    if (pr.kind === 'rug') continue;   // 地毯在地板層畫（draw() 裡畫 tMan.props 的那一行）
+    const r = propRect(pr), img = ims[pr.img];
+    list.push({
+      y: r.y + r.h, draw: () => {
+        ctx.imageSmoothingEnabled = false;
+        if (img) drawSpr(img, 0, r.x, r.y, r.w, r.h); else { ctx.fillStyle = '#8a5a34'; ctx.fillRect(r.x, r.y, r.w, r.h); }
+        if (!pr.name) return;   // 隔板之類：沒有名稱標籤
+        const p = S.players[0], cx = r.x + r.w / 2;
+        ctx.save(); ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)';
+        ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.fillStyle = '#ffe08a';
+        ctx.strokeText(pr.name || '', cx, r.y - 6); ctx.fillText(pr.name || '', cx, r.y - 6);
+        if (!S.tableOpen && propNear(p) === pr) {
+          const t = pr.kind === 'food' ? '按 F 吃點心' : '按 F 喝飲料';
+          ctx.font = '11px "Microsoft JhengHei"'; ctx.fillStyle = '#fff6e0'; ctx.strokeText(t, cx, r.y - 20); ctx.fillText(t, cx, r.y - 20);
+        }
+        ctx.restore();
+      }
+    });
+  }
+}
 // 島上桌子的繪製：圖＋人數標籤（離得近時提示按 F）
 function tableDrawEntries(list) {
   for (const tb of tablesHere()) {
-    const img = S.tableImgs[tb.game], r = tableRect(tb), gd = gameDef(tb.game);
+    const img = S.tableImgs[tb.img] || S.tableImgs[tb.game], r = tableRect(tb), gd = gameDef(tb.game);
     list.push({
       y: r.y + r.h, draw: () => {
         ctx.imageSmoothingEnabled = false;
         if (img) ctx.drawImage(img, r.x, r.y, r.w, r.h);
         else { ctx.fillStyle = '#2f8a5a'; ctx.fillRect(r.x, r.y, r.w, r.h); }
         const inf = S.tblInfo?.[tb.id], p = S.players[0];
+        if (tb.game === 'arcade') { arcadeLabel(tb, r, inf, p); return; }
         const txt = `${gd?.name || '遊戲桌'} ${inf ? `${inf.n}/${inf.max}${inf.play ? ' 遊戲中' : ''}${inf.s ? ` · ${inf.s} 人觀戰` : ''}` : ''}`;
         ctx.save(); ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.textAlign = 'center';
         ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#ffe08a';
@@ -6541,6 +7862,20 @@ function tableDrawEntries(list) {
     });
   }
 }
+
+// 俄羅斯方塊的機台標籤：每台頭上一行（玩家名字／空機台），有人在等聯機時空機台與閒置中的機台多一行「聯機邀請中」
+function arcadeLabel(tb, r, inf, p) {
+  const c = inf?.cabs?.[tb.cab], cx = r.x + r.w / 2;
+  const lines = [];
+  lines.push([c ? `${c.n}${c.st === 'solo' || c.st === 'link' ? ' 遊戲中' : ''}` : '空機台', c ? '#fff6e0' : '#b8c4dc', '11px']);
+  lines.push([gameDef(tb.game)?.name || '街機', '#ffe08a', 'bold 12px']);   // 遊戲名稱（同其他桌子的標籤）
+  if (inf?.inv && (!c || c.st === 'idle')) lines.push(['聯機邀請中！', '#ff9ad0', 'bold 11px']);
+  if (!S.tableOpen && tableDist(tb, p.x, p.y) < TABLE_RANGE && !tableNearOther(tb, p)) lines.push([c ? '按 F 觀戰' : '按 F 開始玩', '#fff6e0', '11px']);
+  ctx.save(); ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)';
+  lines.forEach(([t, col, font], k) => { ctx.font = `${font} "Microsoft JhengHei"`; ctx.fillStyle = col; const y = r.y - 6 - k * 14; ctx.strokeText(t, cx, y); ctx.fillText(t, cx, y); });
+  ctx.restore();
+}
+const tableNearOther = (tb, p) => tableNear(p) !== tb;   // 4 台挨得很近：只在最近的那台顯示「按 F」
 
 // ---- 稱號：達成條件就解鎖（assets/titles/titles.json），在造型面板的「稱號設定」選一個顯示在名字上方 ----
 // 解鎖純客戶端判斷（與職業同樣信任客戶端）：釣魚類從圖鑑推算（登入的人用伺服器存的圖鑑）；擊倒島主記在 localStorage 的 dcisland.m0.titles。
@@ -6719,6 +8054,271 @@ function drawCampfireGlow(c) {
   ctx.beginPath(); ctx.ellipse(c.x, gy, CAMPFIRE_R, CAMPFIRE_R * .62, 0, 0, Math.PI * 2); ctx.stroke();
   ctx.restore();
 }
+
+// ---------------- 天氣（2026-11-12；純客戶端畫面，零同步） ----------------
+// 決定論：天氣＝雜湊(地形, 時刻槽) 對該地形的天氣表加權抽籤——每個人自己算、算出來都一樣，不用同步、玩家也影響不了。
+// 之後的交互作用（掛點）：特殊怪照天氣條件出現（mobs.json 的 spawnIf）、植物生長受天氣影響（動工前先查採集重生是本機還是伺服器）。
+const WEATHER_SLOT_MIN = 8;      // 一個時刻槽幾分鐘：槽內天氣不變、槽與槽之間用 WEATHER_TRANS_SEC 淡入淡出
+const WEATHER_TRANS_SEC = 40;    // 換槽時，前一個天氣 → 新天氣的色罩與粒子密度過渡秒數
+const WEATHERS = {   // id → 名稱／色罩（rgba 三元組＋最濃不透明度）／粒子（kind＋數量＋速度等；n＝滿量時的顆數）
+  clear:   { name: '晴' },
+  rain:    { name: '雨',   tint: [40, 62, 92],    alpha: .16, part: { kind: 'rain',    n: 110, vy: 520, vx: -64, len: 13 } },
+  snow:    { name: '雪',   tint: [226, 236, 250], alpha: .13, part: { kind: 'snow',    n: 90,  vy: 46,  vx: 20, sway: 26, r: 1.6 } },
+  // 霧（2026-11-13 使用者定：要有「一片濛濛、能見度越遠越低」的縱深霧感，參考 FF14 起霧）：
+  // depth: true → 不用全畫面平均色罩，改畫以玩家為中心的徑向漸層：身邊（near）幾乎清楚、中距離（mid）、
+  // 遠處（far）到能見度半徑（vis×畫面短邊）以外（alpha）整片白濛；core＝身邊這個比例內維持最清楚的濃度
+  fog:     { name: '霧',   tint: [230, 237, 244], alpha: .95, near: .05, mid: .4, far: .75, core: .1, vis: .8, depth: true, part: { kind: 'fog', n: 24, vx: 12, r: 120 } },
+  sand:    { name: '沙暴', tint: [222, 190, 122], alpha: .15, part: { kind: 'sand',    n: 70,  vy: 26,  vx: -215, len: 9 } },
+  ember:   { name: '落灰', tint: [255, 118, 42],  alpha: .09, part: { kind: 'ember',   n: 60,  vy: -34, vx: 16, r: 1.8 } },
+  leaf:    { name: '落葉', part: { kind: 'leaf', n: 24, vy: 42, vx: -34, sway: 42, r: 2.6 } },
+  firefly: { name: '螢光', tint: [30, 36, 70],    alpha: .08, part: { kind: 'firefly', n: 26,  vy: -12, vx: 8, r: 1.4 } },
+};
+// 各地形的天氣表（id＝權重）。和平島是室內房間：不做天氣（永遠晴）
+const TERRAIN_WEATHER = {
+  grass:   [['clear', 6], ['rain', 2], ['leaf', 1], ['fog', 1]],
+  beach:   [['clear', 6], ['rain', 2], ['sand', 1], ['fog', 1]],
+  forest:  [['clear', 5], ['rain', 2], ['leaf', 2], ['fog', 1]],
+  snow:    [['clear', 5], ['snow', 3], ['fog', 1]],
+  night:   [['clear', 5], ['rain', 1], ['fog', 2], ['firefly', 2]],
+  volcano: [['clear', 5], ['ember', 3], ['fog', 2]],
+  machine: [['clear', 6], ['rain', 2], ['fog', 2]],
+  peace:   [['clear', 1]],
+};
+function weatherHash(s) {   // FNV-1a：純整數運算，各瀏覽器結果一致（決定論的關鍵）
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function weatherSlot() { return Math.floor(Date.now() / 60000 / WEATHER_SLOT_MIN); }   // 時刻槽：現在用現實時鐘，之後接遊戲時間時只改這裡
+function weatherPick(T, slot) {   // 同一（地形, 槽）永遠同一種天氣
+  const tab = TERRAIN_WEATHER[T] || TERRAIN_WEATHER.grass;
+  let r = weatherHash(T + ':' + slot) % tab.reduce((s, w) => s + w[1], 0);
+  for (const [id, w] of tab) { if ((r -= w) < 0) return id; }
+  return tab[0][0];
+}
+function weatherBlend() {   // 槽內經過率 0→1：色罩與粒子數在槽剛開始的 WEATHER_TRANS_SEC 內從上一個天氣過來
+  return Math.min(1, (S.t - S.weather.t0) / WEATHER_TRANS_SEC);
+}
+function stepWeather(dt) {   // 換槽／換地形時切天氣；粒子池在 drawWeather 維護（每幀順手補齊）；dt 留給 drawWeather 的粒子步進
+  S.weatherDt = dt;
+  const T = S.terrain, slot = weatherSlot();
+  if (!S.weather || S.weather.T !== T)   // 進新地形：從「晴」淡入當前天氣
+    S.weather = { T, slot, prev: 'clear', cur: weatherPick(T, slot), t0: S.t, parts: [] };
+  else if (S.weather.slot !== slot) {
+    S.weather.prev = S.weather.cur;
+    S.weather.cur = weatherPick(T, slot);
+    S.weather.slot = slot; S.weather.t0 = S.t;
+  }
+}
+function weatherSpawn(p, kind) {   // 粒子出生位置：下雨／雪／沙／葉從畫面上緣外落下，灰燼／螢光從下緣升上來，霧在畫面裡橫飄
+  p.kind = kind;
+  if (kind === 'ember' || kind === 'firefly') { p.x = Math.random() * canvas.width; p.y = canvas.height + 8; }
+  else if (kind === 'fog') { p.x = Math.random() * canvas.width; p.y = Math.random() * canvas.height; }
+  else { p.x = Math.random() * (canvas.width + 160) - 80; p.y = -8 - Math.random() * 40; }
+  p.vx = 0; p.vy = 0; p.ph = Math.random() * Math.PI * 2;
+}
+// 色罩：一般人天氣是全畫面平均色罩；`depth: true`（霧）改畫「距離越遠越濃」的徑向漸層——
+// 以玩家腳邊為圓心、到畫面角落為霧最濃處（近＝near、中＝mid、邊緣＝alpha）。
+// mul＝過渡權重（前一個天氣淡出用 1-bl、當前淡入用 bl），同一層就能平滑交叉。
+function weatherMask(def, mul) {
+  if (!def || !def.tint || mul <= 0) return;
+  const [r, g, b] = def.tint;
+  const fill = a => `rgba(${r},${g},${b},${(a * mul).toFixed(3)})`;
+  if (!def.alpha) return;
+  if (!def.depth) { ctx.fillStyle = fill(def.alpha); ctx.fillRect(0, 0, canvas.width, canvas.height); return; }
+  const me = S.players[0];
+  const cx = me ? me.x - S.cam.x : canvas.width / 2;                 // 玩家在畫面上的位置（鏡頭跟隨，通常在畫面中央偏下）
+  const cy = me ? me.y - 24 - S.cam.y : canvas.height / 2;
+  // 霧最濃處＝「能見度半徑」R：以畫面短邊換算（約 0.8 個短邊），超過就整片白濛——
+  // 所以看得出來的距離有限、愈遠愈看不清（2026-11-13 使用者要「一片濛濛，能見度越遠越低」，參考 FF14 起霧）
+  const R = Math.min(canvas.width, canvas.height) * (def.vis ?? .8);
+  const gr = ctx.createRadialGradient(cx, cy, R * def.core, cx, cy, R);
+  gr.addColorStop(0,   fill(def.near ?? .1));
+  gr.addColorStop(.5,  fill(def.mid ?? (def.alpha * .5)));
+  gr.addColorStop(.82, fill(def.far ?? (def.alpha * .85)));
+  gr.addColorStop(1,   fill(def.alpha));
+  ctx.fillStyle = gr; ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+function drawWeather() {
+  const w = S.weather; if (!w) return;
+  const P0 = WEATHERS[w.prev], P1 = WEATHERS[w.cur], bl = weatherBlend(), dt = Math.min(.05, S.weatherDt || .016);
+  // 色罩：前一個天氣淡出、當前天氣淡入（兩層各畫一次，顏色不同也能平滑交叉）
+  weatherMask(P0, 1 - bl);
+  weatherMask(P1, bl);
+  // 粒子池：目標顆數在過渡期跟著 blend 從前一個天氣的量走向當前的量
+  const n0 = P0.part ? P0.part.n : 0, n1 = P1.part ? P1.part.n : 0;
+  let target = Math.round(n0 + (n1 - n0) * bl);
+  if (w.cur === 'clear' && bl >= 1) target = 0;
+  const parts = w.parts;
+  while (parts.length < target) { const p = {}; weatherSpawn(p, (n1 >= n0 ? P1.part.kind : P0.part.kind)); parts.push(p); }
+  if (parts.length > target) parts.length = target;
+  if (!parts.length) return;
+  for (const p of parts) {
+    const d = P1.part && P1.part.kind === p.kind ? P1.part : (P0.part || P1.part);
+    p.ph += dt * 1.7;
+    if (d.kind === 'rain') { p.x += d.vx * dt; p.y += d.vy * dt; }
+    else if (d.kind === 'sand') { p.x += d.vx * dt; p.y += d.vy * dt + Math.sin(p.ph) * 14 * dt; }
+    else if (d.kind === 'fog') { p.x += d.vx * dt; }
+    else {   // snow／leaf／ember／firefly：飄＋左右搖（sway；沒有 sway 的就是直線）
+      p.x += (d.vx + Math.sin(p.ph) * (d.sway || 0)) * dt;
+      p.y += d.vy * dt;
+    }
+    // 出畫就繞回來（落下型回上緣、上升型回下緣、霧繞橫向）
+    if (p.y > canvas.height + 10) weatherSpawn(p, d.kind);
+    else if (p.y < -12 && (d.kind === 'ember' || d.kind === 'firefly')) weatherSpawn(p, d.kind);
+    else if (d.kind === 'fog') { if (p.x - d.r > canvas.width) p.x = -d.r; }
+    else if (p.x < -90) p.x = canvas.width + 80;
+    // 畫
+    ctx.save();
+    if (d.kind === 'rain') {
+      ctx.strokeStyle = `rgba(178,208,238,${.34 + .2 * Math.sin(p.ph * 3)})`; ctx.lineWidth = 1;
+      const l = d.len * (d.vy / (Math.hypot(d.vx, d.vy) || 1)), lx = d.len * (d.vx / (Math.hypot(d.vx, d.vy) || 1));
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + lx, p.y + l); ctx.stroke();
+    } else if (d.kind === 'sand') {
+      ctx.strokeStyle = 'rgba(238,206,150,.5)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - d.len, p.y + d.len * .3); ctx.stroke();
+    } else if (d.kind === 'fog') {
+      ctx.fillStyle = `rgba(236,242,248,${.055 + .035 * Math.sin(p.ph)})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, d.r * (0.8 + .2 * Math.sin(p.ph * .7)), 0, Math.PI * 2); ctx.fill();
+    } else if (d.kind === 'ember') {
+      ctx.fillStyle = `rgba(255,${140 + 60 * Math.sin(p.ph) | 0},70,${.5 + .3 * Math.sin(p.ph * 2)})`;
+      ctx.fillRect(p.x, p.y, d.r, d.r);
+    } else if (d.kind === 'firefly') {
+      const a = .3 + .45 * (Math.sin(p.ph * 2.2) * .5 + .5);
+      ctx.fillStyle = `rgba(190,255,190,${a.toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, d.r, 0, Math.PI * 2); ctx.fill();
+    } else if (d.kind === 'leaf') {
+      ctx.fillStyle = `rgba(${150 + 70 * Math.sin(p.ph) | 0},170,80,.75)`;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ph);
+      ctx.fillRect(-d.r, -d.r * .4, d.r * 2, d.r * .8); ctx.restore();
+    } else {   // snow
+      ctx.fillStyle = `rgba(245,248,252,${.55 + .3 * Math.sin(p.ph * 2)})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, d.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+// ---------------- 小地圖（2026-11-13，使用者要求；樣式仿使用者提供的範例圖：羊皮紙地圖＋青銅雕花圓框＋指北針＋天氣＋座標） ----------------
+// 直接畫在主畫布右上角（畫布座標，跟著遊戲一起縮放，不會跑到畫面外；2026-11-13 使用者回饋：原本的獨立 DOM canvas 會落在畫布外）。
+const MINI_COLORS = {   // 各地形縮圖配色（地＝uiColor 加深一階、水／岸手調；和平島是室內，房間外畫暗色不是海）
+  grass:   { ground: '#5d9e50', water: '#2e5f8e', shore: '#c8b878' },
+  beach:   { ground: '#dcc788', water: '#2e6f9e', shore: '#efe0ac' },
+  forest:  { ground: '#4d7c3e', water: '#285688', shore: '#a8985e' },
+  snow:    { ground: '#dbe4ec', water: '#33628e', shore: '#b8c2cc' },
+  night:   { ground: '#5d659c', water: '#1c2438', shore: '#464e66' },
+  volcano: { ground: '#5e4c4a', water: '#33343e', shore: '#8a6a50' },
+  machine: { ground: '#7c8694', water: '#2e3e52', shore: '#9aa2ac' },
+  peace:   { ground: '#c4b088', water: '#2e5f8e', shore: '#a8906a', room: '#14171e' },
+};
+let mmBase = null, mmBaseFor = '';
+function buildMinimapBase() {   // 換地形（＝genWorld 重生成）時重畫一次：types（0 水／1 岸／2 地）一格一像素
+  const T = S.terrain, c = MINI_COLORS[T] || MINI_COLORS.grass, room = S.terrains[T]?.layout === 'room';
+  mmBase = document.createElement('canvas');
+  mmBase.width = COLS; mmBase.height = ROWS;
+  const g = mmBase.getContext('2d');
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const t = S.world.types[y * COLS + x];
+    g.fillStyle = t === 2 ? c.ground : t === 1 ? c.shore : room ? c.room : c.water;
+    g.fillRect(x, y, 1, 1);
+  }
+  mmBaseFor = T;
+}
+function drawMiniWeatherIcon(c, kind, x, y) {   // 資訊條左端的極簡向量天氣圖示（約 14px）
+  c.save(); c.translate(x, y); c.lineCap = 'round';
+  if (kind === 'clear') {   // 晴：太陽（圓＋八道光芒）
+    c.fillStyle = '#ffd86b'; c.beginPath(); c.arc(0, 0, 3, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#ffd86b'; c.lineWidth = 1.2;
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; c.beginPath(); c.moveTo(Math.cos(a) * 4.6, Math.sin(a) * 4.6); c.lineTo(Math.cos(a) * 6.6, Math.sin(a) * 6.6); c.stroke(); }
+  } else if (kind === 'rain') {   // 雨：三道斜線
+    c.strokeStyle = '#9cc8ec'; c.lineWidth = 1.6;
+    for (const dx of [-4, 0, 4]) { c.beginPath(); c.moveTo(dx + 1, -4); c.lineTo(dx - 1.5, 5); c.stroke(); }
+  } else if (kind === 'snow') {   // 雪：三線雪花
+    c.strokeStyle = '#eef4fb'; c.lineWidth = 1.4;
+    for (let i = 0; i < 3; i++) { const a = i * Math.PI / 3; c.beginPath(); c.moveTo(-Math.cos(a) * 5.5, -Math.sin(a) * 5.5); c.lineTo(Math.cos(a) * 5.5, Math.sin(a) * 5.5); c.stroke(); }
+  } else if (kind === 'fog') {   // 霧：三條橫線
+    c.strokeStyle = '#cfd6de'; c.lineWidth = 1.6;
+    for (const dy of [-4, 0, 4]) { c.beginPath(); c.moveTo(-5.5, dy); c.lineTo(5.5, dy); c.stroke(); }
+  } else if (kind === 'sand') {   // 沙暴：三道斜沙
+    c.strokeStyle = '#e8ce96'; c.lineWidth = 1.6;
+    for (const dx of [-4, 0, 4]) { c.beginPath(); c.moveTo(dx + 2, -4); c.lineTo(dx - 2, 5); c.stroke(); }
+  } else if (kind === 'ember') {   // 落灰：小火苗
+    c.fillStyle = '#ff9a4a';
+    c.beginPath(); c.moveTo(0, -6); c.quadraticCurveTo(5, -1, 0, 6); c.quadraticCurveTo(-5, -1, 0, -6); c.fill();
+    c.fillStyle = '#ffd86b'; c.beginPath(); c.arc(0, 2, 1.8, 0, Math.PI * 2); c.fill();
+  } else if (kind === 'leaf') {   // 落葉：斜葉片＋葉脈
+    c.fillStyle = '#8fbf5a'; c.beginPath(); c.ellipse(0, 0, 5.5, 2.4, -Math.PI / 4, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#5d8a3a'; c.lineWidth = 1; c.beginPath(); c.moveTo(-3.5, 3.5); c.lineTo(3.5, -3.5); c.stroke();
+  } else {   // firefly：螢光兩點＋光暈
+    c.fillStyle = 'rgba(190,255,190,.35)'; c.beginPath(); c.arc(0, 0, 6, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#c8f0a8';
+    c.beginPath(); c.arc(-2, 1.5, 1.8, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(3, -2, 1.4, 0, Math.PI * 2); c.fill();
+  }
+  c.restore();
+}
+function drawMinimap() {   // 掛點：draw() 的 drawWeather() 之後（螢幕空間；島主倒數條之下）
+  if (!S.world) return;
+  if (mmBaseFor !== S.terrain) buildMinimapBase();
+  // 整體縮放（2026-11-13 使用者定：縮到 60%）：以畫布右上角為基準等比縮放——座標、字級、線寬、
+  // 鉚釘、資訊條一起縮，貼齊右上角的位置與構圖不變（函式最後那個 ctx.restore() 就是收這一層）
+  const MM_K = .6;
+  ctx.save();
+  ctx.translate(canvas.width, 0); ctx.scale(MM_K, MM_K); ctx.translate(-canvas.width, 0);
+  const cx = canvas.width - 100, cy = 106, R = 80;   // 圓心與半徑：貼著畫布右上角內側
+  const wd = WEATHERS[S.weather?.cur || 'clear'];
+  // 地圖：整座島等比塞進圓內（平滑縮放＋multiply 暖色，仿範例圖的羊皮紙感）
+  const mw = 140, mh = mw * ROWS / COLS, sc = mw / COLS, ox = cx - mw / 2, oy = cy - mh / 2;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, R - 3, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = '#3c5468'; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);   // 海
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(mmBase, ox, oy, mw, mh);
+  ctx.globalCompositeOperation = 'multiply';   // 羊皮紙暖色：陸地偏黃、海偏墨綠，像舊地圖
+  ctx.fillStyle = '#d8c8a0'; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+  ctx.globalCompositeOperation = 'source-over';
+  // 天氣色罩（跟世界同一份，小地圖也看得出天氣）。上限 0.45：霧這種濃天氣 alpha 很高（.95），
+  // 直接乘會把小地圖整張塗白、看不到島形（2026-11-13 霧改成縱深霧時發現）
+  if (wd.tint) { ctx.fillStyle = `rgba(${wd.tint.join(',')},${Math.min(.45, (wd.alpha || 0) * 1.2).toFixed(3)})`; ctx.fillRect(cx - R, cy - R, R * 2, R * 2); }
+  // 點：營火（橘，集合點）、其他玩家（金）、自己（白＋深色描邊放最上）
+  const dot = (wx, wy, col, r) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(ox + wx / CELL * sc, oy + wy / CELL * sc, r, 0, Math.PI * 2); ctx.fill(); };
+  if (S.campfire) dot(S.campfire.x, S.campfire.y, '#ff9a4a', 2);
+  for (const r of S.remotes.values()) if (r.x != null) dot(r.x, r.y, '#e8c86a', 1.6);
+  const me = S.players[0];
+  if (me) { dot(me.x, me.y, '#14100a', 3.2); dot(me.x, me.y, '#f4f8fc', 2); }
+  ctx.restore();
+  // 外框與資訊條畫在 clip 外（資訊條壓在圓框下緣、一部分在圓外，clip 內畫會被裁掉——2026-11-13 使用者回饋天氣圖示看不到就是這個原因）
+  // 外框：深青銅粗環＋金環＋內圈暗環＋四顆斜角鉚釘（仿範例圖的雕花框；中央指針使用者說不用，拿掉了）
+  ctx.lineWidth = 6; ctx.strokeStyle = '#2c2012'; ctx.beginPath(); ctx.arc(cx, cy, R - 1, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 2.5; ctx.strokeStyle = '#8a6a34'; ctx.beginPath(); ctx.arc(cx, cy, R - 5, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 1; ctx.strokeStyle = '#e8c878'; ctx.beginPath(); ctx.arc(cx, cy, R - 7, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = '#241a0e'; ctx.beginPath(); ctx.arc(cx, cy, R - 9, 0, Math.PI * 2); ctx.stroke();
+  for (const a of [Math.PI / 4, -Math.PI / 4, Math.PI * 3 / 4, -Math.PI * 3 / 4]) {
+    const rx = cx + Math.cos(a) * (R - 5), ry = cy + Math.sin(a) * (R - 5);
+    const rg = ctx.createRadialGradient(rx - 1.5, ry - 1.5, .5, rx, ry, 4.5);
+    rg.addColorStop(0, '#f0d890'); rg.addColorStop(1, '#7a5c28');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(rx, ry, 4.5, 0, Math.PI * 2); ctx.fill();
+  }
+  // N 指北針字（上緣，深描邊金字）
+  ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(12,8,4,.9)'; ctx.strokeText('N', cx, cy - R + 10);
+  ctx.fillStyle = '#e8c878'; ctx.fillText('N', cx, cy - R + 10);
+  // 底部資訊條（圓角銅牌，壓在圓框下緣）：左＝天氣徽章（圖示）＋名稱、右＝座標（格）
+  const bw = 150, bh = 26, bx = cx - bw / 2, by = cy + R - 14, rr = 7;
+  ctx.fillStyle = '#241a0e';
+  ctx.beginPath();
+  ctx.moveTo(bx + rr, by); ctx.arcTo(bx + bw, by, bx + bw, by + bh, rr); ctx.arcTo(bx + bw, by + bh, bx, by + bh, rr);
+  ctx.arcTo(bx, by + bh, bx, by, rr); ctx.arcTo(bx, by, bx + bw, by, rr); ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = '#c8a44a'; ctx.stroke();
+  // 天氣圖示：圓形徽章底（深底金框），讓圖示壓在任何地圖色上都看得到
+  ctx.fillStyle = '#3a2a18'; ctx.beginPath(); ctx.arc(bx + 16, by + bh / 2, 9, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = '#c8a44a'; ctx.stroke();
+  drawMiniWeatherIcon(ctx, S.weather?.cur || 'clear', bx + 16, by + bh / 2);
+  ctx.textAlign = 'left'; ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.fillStyle = '#f4e8c8';
+  ctx.fillText(wd.name, bx + 26, by + bh / 2 + 1);
+  ctx.textAlign = 'right'; ctx.font = '12px "Microsoft JhengHei"'; ctx.fillStyle = '#e2d8bc';
+  if (me) ctx.fillText(`X ${Math.floor(me.x / CELL)} Y ${Math.floor(me.y / CELL)}`, bx + bw - 9, by + bh / 2 + 1);
+  ctx.restore();   // 收掉 drawMinimap 開頭的整體縮放 save（縮放前的畫布狀態還原）
+}
 function draw() {
   const T = S.terrain, tMan = S.terrains[T], ims = S.tImages[T];
   const SC = tMan.scale;
@@ -6746,6 +8346,8 @@ function draw() {
     }
     drawSpr(spr, spr.stagger ? (tileFi[t] + x * 7 + y * 13) % spr.frames : tileFi[t], x * CELL, y * CELL, CELL, CELL);
   }
+  if (roomBox && tMan.walls) drawRoomWalls(tMan.walls, ims, roomBox);   // 室內房間的東北西三面牆（房間外，畫在地面之後、物件之前）
+  for (const pr of tMan.props || []) if (pr.kind === 'rug' && ims[pr.img]) { const r = propRect(pr); drawSpr(ims[pr.img], 0, r.x, r.y, r.w, r.h); }   // 地毯（餐飲區）：地板層、角色與物件之下
   // 地板層：蓋在地面上、家具與角色之下（多格地板從錨點畫整張，錨點在鏡頭左上外也要畫，所以往外多看幾格）
   for (let y = Math.max(0, y0 - FLOOR_MAX + 1); y <= y1; y++) for (let x = Math.max(0, x0 - FLOOR_MAX + 1); x <= x1; x++) {
     const fid = S.floorMap.get(y * COLS + x), spr = fid && S.floorImgs[fid];
@@ -6797,6 +8399,7 @@ function draw() {
     });
   }
   tableDrawEntries(list);   // 和平島遊戲桌
+  propDrawEntries(list);    // 和平島餐飲區
   // 掉落物
   for (const dr of S.drops) {
     const def = S.toolsDB.items[dr.item] || matDef(dr.item), icon = S.craftImgs[dr.item];
@@ -7187,6 +8790,9 @@ function draw() {
     ctx.restore();
   }
   ctx.restore();
+  drawWeather();   // 天氣色罩與粒子（螢幕空間，蓋在世界與名牌上、島主倒數條之下）
+  drawFoodScreen();   // 吃喝的效果：致盲的黑幕、神清氣爽的星點（螢幕空間）
+  drawMinimap();   // 小地圖（螢幕空間右上角；圖鑑／角色等 DOM 面板天然蓋在畫布上層）
   if (ownerBar) drawOwnerCastBar(ownerBar.frac, ownerBar.name);   // 島主讀條固定在視窗上方置中（世界座標還原後畫，永遠在最上層）
   drawOwnerLineBanner();   // 島主台詞：除了頭上的泡泡，也固定顯示在視窗上方（離島主太遠、泡泡在畫面外也看得到）
 }
@@ -7348,7 +8954,7 @@ function canPlaceIn(list, typeId, x, y, floor = S.floorMap) {
   const def = furnitureDef(typeId); if (!def) return false;
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
-    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor) || tableAtCell(xx, yy)) return false;
+    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor) || tableAtCell(xx, yy) || propAtCell(xx, yy)) return false;
   }
   return !list.some(it => { const d = furnitureDef(it.type) || { w: 1, h: 1 };
     return x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h; });
@@ -7876,9 +9482,12 @@ addEventListener('keydown', e => {
   if (S.tableOpen) {   // 遊戲畫面開著：Esc 離開；五子棋復盤時 ←／→／Home／End 切換步數；其他鍵都不處理（不能走路）
     if (k === 'escape') { e.preventDefault(); if (!$('rulesBox').classList.contains('hidden')) rulesShow(false); else leaveTable(); }   // 規則視窗開著：Esc 先關；離開確認開著：Esc＝取消規則
     else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
+    else if (S.ar && arKey(e)) { /* 俄羅斯方塊：方向鍵／X／Z／空白鍵／C／Shift */ }
+    else if (S.mz && mzKey(e)) { /* 豆豆迷宮：方向鍵／WASD */ }
+    else if (S.hk && hkKey(e, true)) { /* 空氣曲棍球：方向鍵／WASD */ }
     else if (S.ty) typingKey(e);   // 英文打字競賽：英文字母
     else if (S.tableView?.game === 'blokus' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') bkKey(e);
-    else if (S.tableView?.game === 'trigon' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') tgKey(e);   // 三角方塊拼圖：R 旋轉 60 度、F 翻面   // 方塊拼圖：R 旋轉、F 翻面
+    else if (S.tableView?.game === 'trigon' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') tgKey(e);   // Blokus Trigon：R 旋轉 60 度、F 翻面   // Blokus：R 旋轉、F 翻面
     else if (S.gmStep != null && S.tableView?.moves && ['arrowleft', 'arrowright', 'home', 'end'].includes(k)) {
       e.preventDefault();
       const N = S.tableView.moves.length;
@@ -7914,7 +9523,7 @@ addEventListener('keydown', e => {
   if ((k === '1' || k === '2') && !e.repeat) tryJobSkill(+k - 1);   // 1／2：職業技能
   if (k === 'shift' && !e.repeat) toggleSprint();   // Shift：切換疾走／步行（與右下角虛擬按鍵同一個開關）
 });
-addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key.toLowerCase() === 'f') S.holdSkipF = false; if (S.dg && DG_KEYS[e.key.toLowerCase()]) S.dg.keys[DG_KEYS[e.key.toLowerCase()]] = false; });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; arKeyUp(e.key.toLowerCase()); if (S.hk) hkKey(e, false); if (e.key.toLowerCase() === 'f') S.holdSkipF = false; if (S.dg && DG_KEYS[e.key.toLowerCase()]) S.dg.keys[DG_KEYS[e.key.toLowerCase()]] = false; });
 // ---------------- 疾走虛擬按鍵（畫面右下角）----------------
 // 圓形＋跑步像素小人；點擊或按 Shift 切換疾走／步行（2026-11-06 使用者要求：點擊後持續生效，再點擊或再按 Shift 切回步行）
 function toggleSprint() {
@@ -8004,6 +9613,8 @@ function clickAttack(wx, wy) {
     const f = furnAtPoint(wx, wy);
     if (f && furnitureDef(f.type)?.use) { usePose(f); return; }
     if (f && furnitureDef(f.type)?.text) { openSign(f); return; }
+    const pr = propAtPoint(wx, wy);
+    if (pr) { if (propDist(pr, S.players[0].x, S.players[0].y) < PROP_RANGE) useProp(pr); else toast('走近一點', 1200); return; }   // 點餐飲區
     const tb = tableAtPoint(wx, wy);
     if (tb) { if (tableDist(tb, S.players[0].x, S.players[0].y) < TABLE_RANGE) openTable(tb); else toast('走近一點再入座', 1200); return; }   // 點遊戲桌
     const n = npcAt(wx, wy);
@@ -8074,8 +9685,9 @@ canvas.addEventListener('contextmenu', e => {
   if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.tableOpen) return;
   if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身；點遊戲桌就入座／觀戰（2026-11-12 使用者要求）
     const r = canvas.getBoundingClientRect(), wx = e.clientX - r.left + S.cam.x, wy = e.clientY - r.top + S.cam.y;
-    const f = furnAtPoint(wx, wy), tb = tableAtPoint(wx, wy);
-    if (f && furnitureDef(f.type)?.use) usePose(f);
+    const f = furnAtPoint(wx, wy), tb = tableAtPoint(wx, wy), pr = propAtPoint(wx, wy);
+    if (pr) { if (propDist(pr, S.players[0].x, S.players[0].y) < PROP_RANGE) useProp(pr); else toast('走近一點', 1200); }   // 右鍵點餐飲區
+    else if (f && furnitureDef(f.type)?.use) usePose(f);
     else if (f && furnitureDef(f.type)?.text) openSign(f);
     else if (tb) { if (tableDist(tb, S.players[0].x, S.players[0].y) < TABLE_RANGE) openTable(tb); else toast('走近一點再入座', 1200); }
     else { const n = npcAt(wx, wy); if (n) talkTo(n); }
@@ -8135,7 +9747,7 @@ $('menuXp').onclick = () => {   // 設定 → 底部經驗條顯示開關
 // ---- 暱稱（2026-11-13，使用者要求）：設定 → 暱稱設定，只改「顯示名稱」。登入者存在伺服器（Registry，跟著帳號；S.nick 由伺服器的 nick 訊息給，空＝用 Discord 名稱），
 // 訪客存本機 localStorage；身分（uid）不變，排行榜等以 uid 為準。不擋撞名 ----
 const NICK_MAX = 12;
-const cleanNick = v => String(v || '').replace(/\s+/g, ' ').replace(/[ -]/g, '').trim().slice(0, NICK_MAX);
+const cleanNick = v => String(v || '').replace(/\s+/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, NICK_MAX);
 const guestNick = () => { if (S.guestNickMem != null) return S.guestNickMem; try { return cleanNick(localStorage.getItem('dcisland.m0.nick')); } catch { return ''; } };   // guestNickMem：存不了 localStorage 時至少這次有效
 const nickCanSet = () => !S.discordUser || !!(S.net?.connected && S.net.uid);   // 有 Discord 身分就要連線登入才能存到伺服器
 function applyMyName() {   // 自己的顯示名稱：登入者＝暱稱或 Discord 名稱；訪客＝本機暱稱或「訪客」
@@ -8192,6 +9804,8 @@ async function ensureTerrain(id) {
   const man = S.terrains[id];
   const files = new Set([man.ground, man.edge, man.water]);
   for (const d of man.deco) files.add(d.sprite);
+  if (man.walls) for (const k of ['n', 'w', 'e']) if (man.walls[k]) files.add(man.walls[k]);   // 室內房間的牆
+  for (const pr of man.props || []) if (pr.img) files.add(pr.img);   // 固定小物件（餐飲區）
   const ims = {};
   // terrain.json 的 anims：{ 檔名: anim }，地面／岸邊／水／點綴物都可以各自設定動畫（沒設＝單張圖）
   await Promise.all([...files].map(async f => ims[f] = await loadSpr(`assets/terrain/${id}/${f}`, man.anims?.[f])));
@@ -8290,6 +9904,7 @@ async function boot() {
     ...Object.values(S.fishDB.terrains).flat().map(async f => S.fishImgs[f.id] = await optImg(`assets/fish/${f.sprite}`)),
     ...(S.craftDB?.materials || []).map(async m => S.craftImgs[m.id] = await optImg(`assets/craft/${m.id}.png`)),
     ...Object.entries(S.gamesDB?.games || {}).map(async ([id, g]) => S.tableImgs[id] = await optImg(`assets/games/${g.sprite}`)),
+    ...Object.values(S.gamesDB?.games || {}).flatMap(g => g.sprites || []).map(async f => S.tableImgs[f] = await optImg(`assets/games/${f}`)),   // 俄羅斯方塊：4 台各自的配色（terrain.json 的 tables[].img）
     ensureTerrain(S.terrain),
   ]);
 
@@ -8311,10 +9926,12 @@ async function boot() {
     const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;
     try {
       S.t += dt;
+      stepWeather(dt);   // 天氣：時刻槽抽籤與過渡（純客戶端、零同步；詳見 draw() 前的天氣區塊）
       updateCampfire();   // 換時段／換地形就重擲營火位置（每 3 分鐘）
       stepFireballs(dt);  // 飛龍火球：步進與落地命中（純客戶端投射物）
       autoAttack();
       for (const p of S.players) stepPlayer(p, dt);
+      stepFood(S.players[0]);   // 餐飲區吃喝的效果：中毒扣血、打嗝、過期、畫面濾鏡
       if (S.mouseCell && S.mouseClient) {      // 裝飾模式邊走邊擺：鏡頭在動，滑鼠指的格子要跟著重算
         const r = canvas.getBoundingClientRect();
         S.mouseCell = [Math.floor((S.mouseClient[0] - r.left + S.cam.x) / CELL), Math.floor((S.mouseClient[1] - r.top + S.cam.y) / CELL)];
@@ -8381,6 +9998,13 @@ async function boot() {
     onTpos: onNetTpos,         // 躲彈幕：其他玩家的位置
     onTpg: onNetTpg,           // 英文打字競賽：觀戰者看到的其他玩家打字進度
     onTsc: onNetTsc,           // 英文打字競賽：其他玩家的分數
+    onTmx: onNetTmx,           // 英文／中文打字競賽：對手剛打錯（分數框閃紅）
+    onTtb: onNetTtb,           // 俄羅斯方塊：別台的盤面快照
+    onTgb: onNetTgb,           // 俄羅斯方塊（對戰模式）：被送垃圾行
+    onTms: onNetTms,           // 豆豆迷宮：豆豆的快照
+    onTmp: onNetTmp,           // 豆豆迷宮：幽靈玩家的位置
+    onThp: onNetThp,           // 空氣曲棍球：別人的握把位置
+    onThs: onNetThs,           // 空氣曲棍球：桌主的圓盤快照
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）

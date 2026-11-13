@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# DC島 素材產生器 v0.2（程序化繪圖版，全自製 placeholder，零授權風險）
+# DC島 素材產生器 v0.2：地形、家具、地板、魚、圖示等是程式畫的自製 placeholder；
+# 人物／服裝／武器（LPC）與部分怪物、島主用外部素材（EXTERNAL_BUNDLES 登記，授權逐條記在 docs/assets-license.md）。
 # 用法: python tools/gen_assets.py
 import struct, zlib, os, random, json, math
 
@@ -162,6 +163,42 @@ def indoor_tile(a, b, n=INDOOR_REPEAT):
             elif y % sq == 1:
                 c = shade(c, 1.06)
             cv.set(x, y, c)
+    return cv
+
+# 室內房間的牆（2026-11-13，使用者要求：和平島東、北、西三面牆）：北牆畫正面（WALL_H 格高，貼在房間上緣外面），
+# 東西牆是從上往下看到的牆頂（1 格寬的長條，貼在房間左右外側）；南面不畫牆。客戶端看 terrain.json 的 walls 畫（drawRoomWalls）
+WALL_H = 3   # 北牆正面高幾格（比人物與街機高，才像牆）
+
+def wall_face():
+    """北牆正面（16×16·WALL_H，scale 2＝1 格寬）：上緣深色木飾條、米色條紋壁紙、腰線、木護牆板、踢腳板，可左右無縫重複。"""
+    h = 16 * WALL_H
+    cv = Canvas(16, h)
+    trim, paper, stripe, wood = hx("#5a3a28"), hx("#e6d8b8"), hx("#d8c7a0"), hx("#a8744a")
+    cv.rect(0, 0, 15, 2, trim); cv.hline(0, 15, 0, shade(trim, 1.35)); cv.hline(0, 15, 2, shade(trim, .75))
+    pb = h - 13   # 壁紙下緣
+    cv.rect(0, 3, 15, pb, paper)
+    for x in (3, 4, 11, 12):
+        cv.vline(x, 3, pb, stripe)
+    for y in range(6, pb, 6):   # 小菱形花紋
+        cx = 8 if (y // 6) % 2 else 0
+        cv.set(cx, y, hx("#c9a878")); cv.set(cx - 1, y + 1, hx("#c9a878")); cv.set(cx + 1, y + 1, hx("#c9a878")); cv.set(cx, y + 2, hx("#c9a878"))
+    cv.rect(0, pb + 1, 15, pb + 2, hx("#8a5a34")); cv.hline(0, 15, pb + 1, hx("#b07a4a"))   # 腰線
+    cv.rect(0, pb + 3, 15, h - 3, wood)
+    cv.rect(2, pb + 4, 13, h - 4, shade(wood, .9)); cv.hline(2, 13, pb + 4, shade(wood, .75)); cv.vline(2, pb + 4, h - 4, shade(wood, .75)); cv.hline(2, 13, h - 4, shade(wood, 1.15))   # 護牆板的鑲板
+    cv.rect(0, h - 2, 15, h - 1, hx("#4a3020"))   # 踢腳板
+    return cv
+
+def wall_side(inner_right):
+    """東／西牆的牆頂（16×16，scale 2＝1 格）：深色木頭牆頂，靠房間那一側有亮邊與陰影；inner_right＝房間在右邊（西牆）。"""
+    cv = Canvas(16, 16)
+    top = hx("#6a4630")
+    cv.rect(0, 0, 15, 15, top)
+    for y in (3, 11):
+        cv.hline(0, 15, y, shade(top, .88))   # 木紋
+    ix, ox = (15, 0) if inner_right else (0, 15)
+    step = -1 if inner_right else 1
+    cv.vline(ix, 0, 15, shade(top, 1.4)); cv.vline(ix + step, 0, 15, shade(top, 1.2))   # 靠房間的亮邊
+    cv.vline(ox, 0, 15, shade(top, .6))
     return cv
 
 def dither_tile(base, dot, seed, n=None):
@@ -370,24 +407,13 @@ SKINS = {
     "tan":   ("#d9a06a", "#b27e4f"),
     "deep":  ("#9c6238", "#7a4a2a"),
 }
-# ---------------- 人物分層 sheet（外部底圖，2026-11-07）----------------
-# 底圖＝使用者自製的像素小人：client/assets/external/img2pixel/char_base_walk.png
-#   （256×256；4 列方向 × 2 幀、每格 64×64；列0 正面、列1 朝右、列2 朝左、列3 背面；每列只有 a,b 兩張走路輪播）
-# 這裡把底圖拆成「軀幹（膚色）」與「褲子」兩層，再依遊戲的標準排列重排：
-#   8 方向（CHAR_DIRS）× [待機 4 幀, 走路 4 幀] ＋ 最後 1 幀坐姿 ＝ 65 幀，每幀 64×64（CHAR_FW×CHAR_FH）、1:1 不縮放。
-#   沒有斜角方向的專用圖：斜角沿用同側的側面圖（BASE_ROW）；待機＝該方向的第 1 幀；坐姿暫用正面待機。
-# 衣服／頭髮／帽子沒有獨立素材，先用同一張底圖的輪廓現地生成 placeholder（見 _draw_part）；
-# 之後換正式素材＝照同一排列畫好、覆蓋同名檔（char_body_*／char_bottom_basic／char_top_*／char_hat_*／char_hair*）。
-# 幀表由下面的 avatar.json 輸出（frames 的 w/h＝CHAR_FW/CHAR_FH、scale＝CHAR_SCALE）。
-BASE_CHAR = "external/img2pixel/char_base_walk.png"
+# ---------------- 人物幀表（8 方向 ×［待機 4 幀＋走路 4 幀］＋坐姿；素材一律用 LPC，見下面「LPC 通用格式」）----------------
+# 幀表由 avatar.json 輸出（frames 的 w/h＝CHAR_FW/CHAR_FH、scale＝CHAR_SCALE）。
 CHAR_FW, CHAR_FH = 64, 64
 CHAR_SCALE = 1                                  # 遊戲把每幀放大幾倍畫（引擎讀 avatar.json 的 frames.scale）；底圖已是 64px，畫 1 倍
 CHAR_DIRS = ["down", "down_right", "right", "up_right", "up", "up_left", "left", "down_left"]
-BASE_ROW = {"down": 0, "down_right": 2, "right": 2, "up_right": 2, "up": 3, "up_left": 1, "left": 1, "down_left": 1}   # 列1 朝左、列2 朝右（依頭部輪廓的不對稱實測：列1 左側突出＝臉朝左）
 CHAR_FRAMES = len(CHAR_DIRS) * 8 + 1
 CHAR_SIT = len(CHAR_DIRS) * 8
-BASE_SKIN = ((255, 225, 183), (247, 175, 143))   # 底圖膚色：亮／暗（做 4 種膚色時以這兩個為對應基準）
-BASE_PANTS_BRIGHT, BASE_PANTS_MID = (164, 165, 181), (106, 108, 130)   # 底圖牛仔褲：亮／中（深的是輪廓）
 
 def char_states():
     st = {}
@@ -399,228 +425,10 @@ def char_states():
         st.update(char_attack_frames()[1])   # 攻擊動作（LPC 揮砍／突刺／施法／射擊）
     return st
 
-_base_px = None
-def _base():
-    global _base_px
-    if _base_px is None:
-        p = read_png_pixels(os.path.join(ASSETS, BASE_CHAR))
-        if p is None:
-            raise SystemExit(f"找不到人物底圖 {BASE_CHAR}（授權見 docs/assets-license.md）")
-        _base_px = p
-    return _base_px
-
-def _bpx(x, y):
-    w, h, d = _base()
-    i = (y * w + x) * 4
-    return (d[i], d[i + 1], d[i + 2], d[i + 3])
-
-def _is_skin(c):
-    r, g, b, a = c
-    return a > 16 and r > 175 and g > 120 and b < 215 and r > b + 12 and r >= g
-
-def _is_gray(c):   # 底圖烘進去的腳下陰影（低飽和灰）：砍掉，遊戲自己會畫影子
-    r, g, b, a = c
-    return a > 16 and abs(r - g) < 12 and abs(g - b) < 20 and 45 < r < 110
-
-_regions_cache = {}
-def _base_regions(fx, fy):
-    """回傳 (minx, miny, maxx, maxy, head_bottom, pants_top, foot_bottom)；座標為幀內 0..63。"""
-    key = (fx, fy)
-    if key in _regions_cache:
-        return _regions_cache[key]
-    minx, miny, maxx, maxy = 999, 999, -1, -1
-    for y in range(CHAR_FH):
-        for x in range(CHAR_FW):
-            if _bpx(fx + x, fy + y)[3] > 16:
-                minx, miny = min(minx, x), min(miny, y)
-                maxx, maxy = max(maxx, x), max(maxy, y)
-    H = maxy - miny + 1
-    foot = maxy
-    for y in range(CHAR_FH - 1, -1, -1):
-        if any(_bpx(fx + x, fy + y)[3] > 16 and not _is_gray(_bpx(fx + x, fy + y)) for x in range(CHAR_FW)):
-            foot = y
-            break
-    # 腳（膚色）從哪一列開始：那列以下算軀幹（腿＝褲子、腳＝膚色）
-    foot_top = foot + 1
-    for y in range(miny + round(0.62 * H), foot + 1):
-        if any(_is_skin(_bpx(fx + x, fy + y)) for x in range(CHAR_FW)):
-            foot_top = y
-            break
-    reg = (minx, miny, maxx, maxy, miny + round(0.24 * H), miny + round(0.62 * H), foot, foot_top)
-    _regions_cache[key] = reg
-    return reg
-
-def _src_frame(d, f):
-    return (f % 2) * CHAR_FW, BASE_ROW[d] * CHAR_FH
-
-def _align(cv, foot):
-    """把腳對齊到幀底（第 CHAR_FH-1 列），讓所有方向的腳站在同一條地上（底圖腳下留了空＋影子列）。"""
-    out = Canvas(CHAR_FW, CHAR_FH)
-    dy = (CHAR_FH - 1) - foot
-    for y in range(CHAR_FH):
-        for x in range(CHAR_FW):
-            c = cv.get(x, y)
-            if c[3]:
-                out.set(x, y + dy, c)
-    return out
-
-_split_cache = {}
-def _draw_split(d, f, part):
-    """part＝'torso'（膚色）或 'pants'（褲子）：把底圖那一幀依腰線／腳切開。"""
-    key = (d, f, part)
-    if key in _split_cache:
-        return _split_cache[key]
-    fx, fy = _src_frame(d, f)
-    minx, miny, maxx, maxy, head_b, pants_t, foot, foot_top = _base_regions(fx, fy)
-    cv = Canvas(CHAR_FW, CHAR_FH)
-    for y in range(CHAR_FH):
-        for x in range(CHAR_FW):
-            c = _bpx(fx + x, fy + y)
-            if c[3] <= 16 or y > foot or _is_gray(c):
-                continue
-            is_pants = pants_t <= y < foot_top and not _is_skin(c)
-            if (part == "pants") == is_pants:
-                cv.set(x, y, c)
-    out = _align(cv, foot)
-    _split_cache[key] = out
-    return out
-
-def _recolor_skin(cv, tb, ts):
-    out = Canvas(cv.w, cv.h)
-    for y in range(cv.h):
-        for x in range(cv.w):
-            c = cv.get(x, y)
-            if c[3] == 0:
-                continue
-            rgb = (c[0], c[1], c[2])
-            if rgb == BASE_SKIN[0] or (rgb[0] > 235 and rgb[1] > 200 and rgb[2] > 160):
-                out.set(x, y, (tb[0], tb[1], tb[2], c[3]))
-            elif rgb == BASE_SKIN[1]:
-                out.set(x, y, (ts[0], ts[1], ts[2], c[3]))
-            else:
-                out.set(x, y, c)
-    return out
-
-def _recolor_pants(cv, main, shd):
-    out = Canvas(cv.w, cv.h)
-    dk = shade(main, 0.5)
-    for y in range(cv.h):
-        for x in range(cv.w):
-            c = cv.get(x, y)
-            if c[3] == 0:
-                continue
-            lum = .299 * c[0] + .587 * c[1] + .114 * c[2]
-            col = main if lum > 140 else shd if lum > 95 else dk
-            out.set(x, y, (col[0], col[1], col[2], c[3]))
-    return out
-
-def _char_sheet(draw):
-    """draw(d, f) → Canvas(CHAR_FW×CHAR_FH) 或 None；排成 65 幀的 sheet（置中、不縮放）。"""
-    sheet = Canvas(CHAR_FW * CHAR_FRAMES, CHAR_FH)
-    def blit(fi, cv):
-        if cv is None:
-            return
-        for y in range(CHAR_FH):
-            for x in range(CHAR_FW):
-                c = cv.get(x, y)
-                if c[3]:
-                    sheet.set(fi * CHAR_FW + x, y, c)
-    for i, d in enumerate(CHAR_DIRS):
-        for k in range(4):
-            blit(i * 8 + k, draw(d, 0))            # 待機 4 幀（同一張）
-        for k in range(4):
-            blit(i * 8 + 4 + k, draw(d, k % 2))    # 走路 a,b,a,b
-    blit(CHAR_SIT, draw("down", 0))                # 坐姿暫用正面待機
-    return sheet
-
-def char_body_sheet(skin_key):
-    tb, ts = hx(SKINS[skin_key][0]), hx(SKINS[skin_key][1])
-    return _char_sheet(lambda d, f: _recolor_skin(_draw_split(d, f, "torso"), tb, ts))
-
-def char_bottom_sheet(main_hex, shd_hex):
-    main, shd = hx(main_hex), hx(shd_hex)
-    return _char_sheet(lambda d, f: _recolor_pants(_draw_split(d, f, "pants"), main, shd))
-
-_part_cache = {}
-def _draw_part(d, f, kind, main, shd, back):
-    """沒有獨立素材的衣服／頭髮／帽子 placeholder：用底圖的輪廓現地塗色。
-    kind：'top'（軀幹膚色範圍＝上衣）／'hair'（頭部上緣＋兩側，正面留臉）／'hat'（頭頂一小塊）。"""
-    key = (d, f, kind, main, shd, back)
-    if key in _part_cache:
-        return _part_cache[key]
-    fx, fy = _src_frame(d, f)
-    minx, miny, maxx, maxy, head_b, pants_t, foot, foot_top = _base_regions(fx, fy)
-    H = maxy - miny + 1
-    cv = Canvas(CHAR_FW, CHAR_FH)
-    for y in range(CHAR_FH):
-        for x in range(CHAR_FW):
-            c = _bpx(fx + x, fy + y)
-            if c[3] <= 16 or y > foot or _is_gray(c) or not _is_skin(c):
-                continue
-            col = None
-            if kind == "top" and head_b <= y < foot_top:
-                col = main if y < (head_b + foot_top) // 2 else shd
-            elif kind == "hair" and miny <= y < head_b:
-                face = (not back) and y >= miny + round(0.16 * H) and minx + 4 <= x <= maxx - 4
-                if not face:
-                    col = main if y < miny + round(0.10 * H) else shd
-            elif kind == "hat" and y < miny + round(0.15 * H):
-                col = main if y < miny + round(0.07 * H) else shd
-            if col:
-                cv.set(x, y, col)
-    out = _align(cv, foot)
-    _part_cache[key] = out
-    return out
-
-# ---------------- 職業裝備與外觀（帽子／上衣／褲子）----------------
-# 每件一張標準排列的 sheet（與 char_top_basic 等同一套排列）。dye＝可染色的原色（第一個是主色；client 換色時
-# 主色換成玩家選的顏色、其他依與主色的明暗比例跟著換），其餘顏色（點綴）不換色。
-# 形狀：上衣／褲子沿用 body() 依顏色拆出的範圍（換成各職業的顏色＋點綴），長袍類（robe）把上衣往下蓋住褲子前 3 列；
-# 帽子另外畫（正面／背面；坐姿整體下移 3 列）。之後換成正式素材只要照排列畫、覆蓋同名檔。
-GEAR_TOPS = {   # id: (名稱, 主色, 陰影, 點綴函式, 長袍)
-    "knight_top":    ("騎士鎧甲", "#8fa6c8", "#6a7f9e", "plate", False),
-    "warrior_top":   ("戰士皮甲", "#b5452f", "#8a3322", "fur", False),
-    "whitemage_top": ("白魔長袍", "#f0ece0", "#c8c0ac", "trim_red", True),
-    "sage_top":      ("賢者長袍", "#3a9a8a", "#2a7466", "trim_gold", True),
-    "ninja_top":     ("忍者上衣", "#4a3a6a", "#352a4e", "sash", False),
-    "dragoon_top":   ("龍騎士鎧甲", "#3a4a8a", "#2a3668", "plate", False),
-    "bard_top":      ("詩人外衣", "#4a8a3a", "#366a2a", "trim_gold", False),
-    "blackmage_top": ("黑魔長袍", "#2e3a7a", "#1f2858", "trim_gold", True),
-}
-GEAR_BOTTOMS = {
-    "knight_bottom":    ("騎士腿甲", "#5a6a88", "#46536c"),
-    "warrior_bottom":   ("戰士褲", "#5a4030", "#45301f"),
-    "whitemage_bottom": ("白魔長褲", "#d8d0bc", "#b0a890"),
-    "sage_bottom":      ("賢者長褲", "#2e6a62", "#1f4e48"),
-    "ninja_bottom":     ("忍者褲", "#3a2e52", "#2a2140"),
-    "dragoon_bottom":   ("龍騎士腿甲", "#2e3a6a", "#222b50"),
-    "bard_bottom":      ("詩人長褲", "#5a4a3a", "#45382a"),
-    "blackmage_bottom": ("黑魔長褲", "#2a3060", "#1d2246"),
-}
-GEAR_HATS = {   # id: (名稱, 主色, 陰影, 畫法)
-    "knight_hat":    ("騎士頭盔", "#a8b8d0", "#7a8aa4", "helm"),
-    "warrior_hat":   ("戰士角盔", "#8a5a3a", "#6a4228", "horned"),
-    "whitemage_hat": ("白魔兜帽", "#f0ece0", "#c8c0ac", "hood"),
-    "sage_hat":      ("賢者頭冠", "#e0c040", "#b08a28", "circlet"),
-    "ninja_hat":     ("忍者頭巾", "#4a3a6a", "#352a4e", "band"),
-    "dragoon_hat":   ("龍騎士頭盔", "#3a4a8a", "#2a3668", "dragoon"),
-    "bard_hat":      ("羽毛帽", "#4a8a3a", "#366a2a", "feather"),
-    "blackmage_hat": ("黑魔尖帽", "#2e3a7a", "#1f2858", "pointy"),
-}
-# ---------------- 衣服／頭髮／帽子的 sheet（用上面的 _draw_part 現地生成 placeholder）----------------
-# 便服上衣（第一款；也是舊客戶端／沒指定時的預設款）；顏色與 avatar.json 的 dye 對應
-def basic_top_sheet():
-    return _char_sheet(lambda d, f: _draw_part(d, f, "top", hx("#d95c68"), hx("#aa474f"), d == "up"))
-
 # ---------------- 髮型模組（LPC 通用格式外部素材）----------------
 # 使用者提供的髮型是 LPC 通用格式：832×1344＝13 欄 × 21 列、每格 64×64（單層、透明底、12 種顏色）。
 # LPC 的列＝動作：0-3 施法(7 幀)、4-7 突刺(8)、8-11 走路(9)、12-15 揮砍(6)、16-19 射擊(13)、20 受擊(6)；
 #   每組四列的順序＝朝上/朝左/朝下/朝右（走路＝列 8 上、9 左、10 下、11 右）。
-# 這裡只取走路四列、縮放 LPC_SCALE 對齊我們底圖的頭部，重排成遊戲的 65 幀髮型 sheet（疊在頭髮層）。
-# 之後再加別的 LPC 髮型：把檔名加進 KIDOL_HAIR（或另開清單）呼叫 lpc_hair_sheet 即可。
-LPC_SCALE = 0.72                 # LPC 模組 → 遊戲底圖的縮放比例（以 64px 底圖的頭部對齊校準；見 docs/notes.md）
-LPC_ROW_OF = {"down": 10, "down_right": 11, "right": 11, "up_right": 11, "up": 8, "up_left": 9, "left": 9, "down_left": 9}
-LPC_PICK = [0, 1, 2, 1]          # 走路 9 幀循環取 4 幀（觸地-通過-觸地-通過）；待機＝站立幀 0
 KIDOL_HAIR = [                   # LPC 短髮模組的 12 種顏色 (檔名後綴, 名稱)
     ("brown", "棕"), ("brown2", "深棕"), ("black", "黑"), ("blonde", "金"),
     ("ashblonde", "灰金"), ("ashplatinum", "銀白"), ("red", "紅"), ("orange", "橘"),
@@ -734,48 +542,6 @@ def kidol_main_hex(cid):
              if 0.299 * (k[0] << 3) + 0.587 * (k[1] << 3) + 0.114 * (k[2] << 3) >= top_lum * .45),
             key=lambda k: cnt[k])   # 常見色裡取「亮度 ≥ 上限 45%」的最常見者
     return "#%02x%02x%02x" % (k[0] << 3, k[1] << 3, k[2] << 3)
-
-def _lpc_hair_cell(w, data, row, f):
-    """把 LPC sheet 的 (列, 幀) 那格縮放 LPC_SCALE、對齊我們的頭部，回傳 Canvas(64×64)。"""
-    k = LPC_SCALE
-    dx = round(CHAR_FW / 2 - CHAR_FW / 2 * k)   # 水平置中
-    dy = round(14 - 13 * k)                      # 髮帽頂（LPC y13）對到我們底圖頭頂上方一點（y14），貼緊頭皮
-    cv = Canvas(CHAR_FW, CHAR_FH)
-    for oy in range(round(CHAR_FH * k)):
-        sy = row * CHAR_FH + min(CHAR_FH - 1, int(round(oy / k)))
-        for ox in range(round(CHAR_FW * k)):
-            sx = f * CHAR_FW + min(CHAR_FW - 1, int(round(ox / k)))
-            i = (sy * w + sx) * 4
-            if data[i + 3] > 16:
-                cv.set(ox + dx, oy + dy, (data[i], data[i + 1], data[i + 2], data[i + 3]))
-    return cv
-
-def lpc_hair_sheet(rel):
-    """rel＝相對 client/assets/ 的 LPC 髮型檔（832×1344）→ 遊戲 65 幀髮型 sheet。"""
-    r = read_png_pixels(os.path.join(ASSETS, rel))
-    if r is None:
-        raise SystemExit(f"找不到髮型模組 {rel}")
-    w, h, data = r
-    cache = {}
-    def cell(d, f):
-        key = (d, f)
-        if key not in cache:
-            cache[key] = _lpc_hair_cell(w, data, LPC_ROW_OF[d], f)
-        return cache[key]
-    sheet = Canvas(CHAR_FW * CHAR_FRAMES, CHAR_FH)
-    def blit(fi, cv):
-        for y in range(CHAR_FH):
-            for x in range(CHAR_FW):
-                c = cv.get(x, y)
-                if c[3]:
-                    sheet.set(fi * CHAR_FW + x, y, c)
-    for i, d in enumerate(CHAR_DIRS):
-        for k2 in range(4):
-            blit(i * 8 + k2, cell(d, 0))                 # 待機 4 幀＝站立
-        for k2 in range(4):
-            blit(i * 8 + 4 + k2, cell(d, LPC_PICK[k2]))  # 走路 4 幀
-    blit(CHAR_SIT, cell("down", 0))                      # 坐姿暫用正面站立
-    return sheet
 
 # ---------------- LPC 通用格式（2026-11-08 大改：角色整個改用 LPC 通用格式）----------------
 # 角色每個部位都是一張 832×1344＝13 欄 × 21 列、每格 64×64 的 LPC 通用格式 sheet（下載的 LPC 素材可直接用）。
@@ -1147,18 +913,6 @@ def with_glow(weapons):
                 g["lpc"] = gl
             out.append(g)
     return out
-
-def gear_top_sheet(tid):
-    _, main, shd = GEAR_TOPS[tid][0], GEAR_TOPS[tid][1], GEAR_TOPS[tid][2]
-    return _char_sheet(lambda d, f: _draw_part(d, f, "top", hx(main), hx(shd), d == "up"))
-
-def gear_bottom_sheet(bid):
-    _, main, shd = GEAR_BOTTOMS[bid]
-    return char_bottom_sheet(main, shd)
-
-def gear_hat_sheet(hid):
-    _, main, shd, _kind = GEAR_HATS[hid]
-    return _char_sheet(lambda d, f: _draw_part(d, f, "hat", hx(main), hx(shd), d == "up"))
 
 # ---------------- 家具 ----------------
 def sofa():
@@ -1686,17 +1440,125 @@ TABLES_BY_TERRAIN = {
     # 2026-11-09 使用者要求：五子棋、抽鬼牌改回各一桌（t3／t4 拿掉，兩份伺服器的 TABLE_DEFS 一起改），
     # 四桌排成 2×2、圍著島中央（44, 28），左右相距 8 格、上下相距 7 格（中間留空給重生點）
     # （2026-11-09 地圖放大成 108×72，島心移到 (54,36)，桌子座標整體加 (10,8)）
-    "peace": [dict(id="t2", game="gomoku", cell=[48, 32], w=3, h=2),
-              dict(id="t1", game="oldmaid", cell=[56, 32], w=3, h=2),
-              dict(id="t6", game="uno", cell=[48, 39], w=3, h=2),     # UNO（2026-11-08，使用者要求）
-              dict(id="t5", game="dodge", cell=[56, 39], w=3, h=2),   # 躲彈幕只有一桌（2026-11-08，使用者要求）
-              dict(id="t7", game="typing", cell=[64, 32], w=3, h=2),   # 英文打字競賽（2026-11-10，使用者要求）：抽鬼牌右邊、同一排相距 8 格
-              dict(id="t8", game="intel", cell=[64, 39], w=3, h=2),   # 秘藥情報戰（2026-11-10，使用者要求）：躲彈幕右邊、英文打字競賽下面
-              dict(id="t9", game="zhtyping", cell=[72, 32], w=3, h=2),   # 中文打字競賽（2026-11-11，使用者要求）：英文打字競賽右邊同一排
-              dict(id="t10", game="mage", cell=[72, 39], w=3, h=2),   # 見習驅魔師（2026-11-12，使用者要求）：中文打字競賽下面、秘藥情報戰右邊
-              dict(id="t11", game="blokus", cell=[80, 32], w=3, h=2),   # 方塊拼圖（2026-11-13，使用者要求）：中文打字競賽右邊同一排
-              dict(id="t12", game="trigon", cell=[80, 39], w=3, h=2)],   # 三角方塊拼圖（2026-11-13，使用者要求）：方塊拼圖下面、見習驅魔師右邊
+    # 2026-11-13 使用者重排：桌子排成格子，第 (x, y) 格（x 往右、y 往下）＝cell [48 + 8x, 32 + 7y]，五子棋 (0,0) 為基準
+    "peace": [dict(id="t2", game="gomoku", cell=[48, 32], w=3, h=2),     # (0,0)
+              dict(id="t6", game="uno", cell=[48, 39], w=3, h=2),        # (0,1) UNO（2026-11-08，使用者要求）
+              dict(id="t1", game="oldmaid", cell=[48, 46], w=3, h=2),    # (0,2)
+              dict(id="t8", game="intel", cell=[56, 32], w=3, h=2),      # (1,0) 秘藥情報戰（2026-11-10，使用者要求）
+              dict(id="t11", game="blokus", cell=[56, 39], w=3, h=2),    # (1,1) Blokus（2026-11-13，使用者要求）
+              dict(id="t12", game="trigon", cell=[56, 46], w=3, h=2),    # (1,2) Blokus Trigon（2026-11-13，使用者要求）
+              dict(id="t10", game="mage", cell=[64, 32], w=3, h=2),      # (2,0) 見習驅魔師（2026-11-12，使用者要求）
+              dict(id="t5", game="dodge", cell=[64, 39], w=3, h=2),      # (2,1) 躲彈幕只有一桌（2026-11-08，使用者要求）
+              dict(id="t14", game="maze", cell=[64, 46], w=3, h=2),      # (2,2) 豆豆迷宮（2026-11-13，使用者要求）
+              # 空氣曲棍球兩桌（2026-11-13，使用者要求）：俄羅斯方塊機台底下，4×2.5 格的長桌，相距 2 格
+              dict(id="t15", game="hockey", cell=[48, 21], w=4, h=2.5),
+              dict(id="t16", game="hockey", cell=[54, 21], w=4, h=2.5),
+              dict(id="t9", game="zhtyping", cell=[72, 32], w=3, h=2),   # (3,0) 中文打字競賽（2026-11-11，使用者要求）
+              dict(id="t7", game="typing", cell=[72, 39], w=3, h=2),     # (3,1) 英文打字競賽（2026-11-10，使用者要求）
+              # 俄羅斯方塊（2026-11-13，使用者要求）：場地上方一排 4 台，造型一樣、配色不同，間距約一個人（1 格）。
+              # 4 台共用同一張邏輯桌 t13（伺服器的 TABLE_DEFS 只有 t13），cab＝第幾台（0～3），img＝這台的圖（配色）
+              *[dict(id="t13", game="arcade", cab=k, img=f"arcade_{k}.png", cell=[48 + k * 3, 14.5], w=2, h=3) for k in range(4)]],   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
 }
+
+# 和平島的固定小物件（不是遊戲桌、不是可擺設的家具）：地形 → [物件]。kind＝互動種類（drink 喝飲料／food 吃點心，客戶端 useProp）、
+# img＝這個地形資料夾裡的圖、cell＝左上角格（可以是小數）、w／h＝占幾格。擋路、不能在上面擺家具。
+# 餐飲區（2026-11-13，使用者要求）：房間右上角、靠北牆，自助飲料機＋點心吧（網咖／卡拉 OK 那種）
+PROPS_BY_TERRAIN = {
+    "peace": [dict(id="drink", kind="drink", name="自助飲料", img="drink_bar.png", cell=[77, 14.5], w=2, h=3),
+              dict(id="snack", kind="food", name="點心吧", img="snack_bar.png", cell=[80, 15], w=4, h=2.5),
+              # 餐飲區的隔板與地毯（2026-11-13，使用者要求）：kind＝deco（擋路、不能互動、沒有名稱）／rug（畫在地板層、不擋路、可以走上去）
+              dict(id="dine_wall", kind="deco", img="dine_partition.png", cell=[75, 14.5], w=1, h=5.5),   # 西側一道矮隔板，從北牆伸到 y＝20（南邊開口當入口）
+              dict(id="dine_rug", kind="rug", img="dine_rug.png", cell=[76, 16], w=9, h=5)],                # 地毯鋪滿隔板右邊到東牆
+}
+
+def drink_bar():
+    """自助飲料機（32×48，畫 scale 2＝2×3 格）：不鏽鋼機身、上方藍色燈箱、四個出水口（可樂／柳橙／綠茶／奶茶色的按鈕）、
+    下方滴水盤，側邊一疊紙杯。"""
+    cv = Canvas(32, 48)
+    steel, dark = hx("#c4c9d2"), hx("#7a808c")
+    cv.rect(3, 2, 28, 46, steel)
+    cv.rect(3, 2, 4, 46, shade(steel, .8)); cv.rect(27, 2, 28, 46, shade(steel, .75))
+    cv.rect(4, 3, 27, 12, hx("#2f6fd0")); cv.hline(4, 27, 3, hx("#7ab0ff"))   # 燈箱
+    for k, c in enumerate(["#e84848", "#f0a020", "#40b060", "#e0c090"]):   # 燈箱上四種飲料的色塊
+        x = 6 + k * 5; cv.rect(x, 6, x + 3, 9, hx(c)); cv.set(x, 6, shade(hx(c), 1.4))
+    cv.rect(5, 14, 26, 31, hx("#20242c"))                       # 出水區（暗）
+    for k, c in enumerate(["#3a2018", "#f08a20", "#8ac060", "#c8a070"]):
+        x = 7 + k * 5
+        cv.rect(x, 15, x + 2, 17, hx("#9aa0aa")); cv.set(x + 1, 18, hx("#9aa0aa"))   # 出水口
+        cv.rect(x, 21, x + 2, 22, hx(c)); cv.hline(x, x + 2, 21, shade(hx(c), 1.35))   # 按鈕（飲料顏色）
+    cv.rect(6, 26, 11, 30, hx("#e8eef4")); cv.rect(7, 27, 10, 29, hx("#3a2018"))   # 一杯可樂
+    cv.rect(5, 31, 26, 33, dark); cv.hline(5, 26, 31, shade(dark, 1.3))   # 滴水盤
+    for k in range(4): cv.hline(7 + k * 5, 9 + k * 5, 32, hx("#4a505c"))
+    cv.rect(5, 35, 26, 45, shade(steel, .9)); cv.rect(13, 38, 18, 41, dark)   # 下櫃與把手
+    cv.rect(0, 20, 2, 33, hx("#f4f4f0")); cv.hline(0, 2, 20, hx("#d84040"))  # 側邊的一疊紙杯
+    for y in range(23, 33, 3): cv.hline(0, 2, y, hx("#d8d8d0"))
+    cv.outline()
+    return cv
+
+def dine_partition():
+    """餐飲區隔板（16×88，畫 scale 2＝1×5.5 格）：從北牆往房間裡伸出去的一道矮隔板，從側面看是一條細長的深色木框，
+    中間三段毛玻璃，頂端橫木、尾端一盆小觀葉植物收邊。"""
+    cv = Canvas(16, 88)
+    wood, glass = hx("#6a4428"), hx("#cfe4ec")
+    cv.rect(5, 4, 10, 76, wood)                                   # 木框
+    for y0, y1 in ((7, 26), (29, 48), (51, 70)):                  # 三段毛玻璃
+        cv.rect(6, y0, 9, y1, glass); cv.vline(7, y0 + 1, y1 - 1, shade(glass, 1.08)); cv.hline(6, 9, y1, shade(glass, .82))
+    cv.rect(4, 2, 11, 4, shade(wood, 1.25))                       # 頂端橫木
+    cv.rect(3, 78, 12, 86, hx("#b06a3a")); cv.hline(3, 12, 78, shade(hx("#b06a3a"), 1.25)); cv.hline(3, 12, 86, shade(hx("#b06a3a"), .7))   # 花盆
+    leaf = hx("#3c9a4a")
+    for cx, cy, rx, ry in ((7.5, 74, 4, 3), (4.5, 76, 2.5, 2), (10.5, 76, 2.5, 2), (7.5, 70.5, 2.5, 2.5)):
+        cv.ellipse(cx, cy, rx, ry, leaf)
+    cv.set(6, 72, shade(leaf, 1.35)); cv.set(9, 74, shade(leaf, 1.35))
+    cv.outline()
+    return cv
+
+def dine_rug():
+    """餐飲區地毯（144×80，畫 scale 2＝9×5 格）：酒紅底、米金色雙線邊框，中間一排排小菱形花紋（網咖／卡拉 OK 那種耐髒地毯）。"""
+    W, H = 144, 80
+    cv = Canvas(W, H)
+    base, deep, gold = hx("#8a2f3a"), hx("#6a2230"), hx("#e0c080")
+    cv.rect(0, 0, W - 1, H - 1, deep)
+    cv.rect(3, 3, W - 4, H - 4, base)
+    cv.rect(1, 1, W - 2, 1, gold); cv.rect(1, H - 2, W - 2, H - 2, gold); cv.rect(1, 1, 1, H - 2, gold); cv.rect(W - 2, 1, W - 2, H - 2, gold)   # 外框
+    cv.rect(5, 5, W - 6, 5, gold); cv.rect(5, H - 6, W - 6, H - 6, gold); cv.rect(5, 5, 5, H - 6, gold); cv.rect(W - 6, 5, W - 6, H - 6, gold)   # 內框
+    dia = shade(base, 1.22)
+    for k, y in enumerate(range(13, H - 9, 10)):                  # 菱形花紋（隔排錯開）
+        for x in range(13 + (k % 2) * 6, W - 10, 12):
+            for d in range(3):
+                cv.set(x - d, y - 2 + d, dia); cv.set(x + d, y - 2 + d, dia); cv.set(x - d, y + 2 - d, dia); cv.set(x + d, y + 2 - d, dia)
+            cv.set(x, y, gold)
+    return cv
+
+def snack_bar():
+    """點心吧（64×40，畫 scale 2＝4×2.5 格）：木頭櫃台、檯面上有薯條、熱狗、爆米花桶、關東煮鍋（冒熱氣）、布丁與鬆餅。"""
+    cv = Canvas(64, 40)
+    wood, top = hx("#8a5a34"), hx("#d8c8a8")
+    cv.rect(0, 14, 63, 39, wood)
+    cv.rect(0, 14, 63, 18, top); cv.hline(0, 63, 14, shade(top, 1.15)); cv.hline(0, 63, 18, shade(top, .7))   # 檯面
+    for x in range(4, 60, 15):   # 櫃台正面的鑲板
+        cv.rect(x, 22, x + 11, 35, shade(wood, .88)); cv.hline(x, x + 11, 22, shade(wood, .7)); cv.hline(x, x + 11, 35, shade(wood, 1.15))
+    cv.rect(0, 37, 63, 39, shade(wood, .6))
+    # 爆米花桶（紅白條紋）
+    for y in range(4, 16):
+        for x in range(3, 11):
+            cv.set(x, y, hx("#e84848") if (x // 2) % 2 == 0 else hx("#f8f4ec"))
+    for x, y in [(3, 2), (5, 1), (7, 2), (9, 1), (4, 3), (6, 3), (8, 3), (10, 3), (6, 0)]:
+        cv.rect(x, y, x + 1, y + 1, hx("#fff4c0"))
+    # 薯條（紅盒＋黃條）
+    cv.rect(14, 9, 19, 16, hx("#d83838")); cv.hline(14, 19, 9, hx("#f06060"))
+    for x in (14, 16, 17, 19): cv.vline(x, 5 + (x % 3), 9, hx("#f8d040"))
+    # 熱狗（盤子上）
+    cv.rect(22, 13, 31, 15, hx("#f4f4f0")); cv.rect(23, 11, 30, 13, hx("#e8b060")); cv.rect(24, 10, 29, 11, hx("#c0503a")); cv.hline(25, 28, 10, hx("#f0d040"))
+    # 關東煮鍋（冒熱氣）
+    cv.rect(34, 8, 45, 16, hx("#9aa0aa")); cv.rect(35, 9, 44, 11, hx("#c89050"))
+    for x, c in [(36, "#f4f0e0"), (39, "#c84040"), (42, "#e8c070")]: cv.rect(x, 9, x + 1, 10, hx(c))
+    for x, y in [(37, 5), (38, 3), (41, 6), (42, 4), (40, 1)]: cv.set(x, y, hx("#ffffff"))
+    # 布丁兩個、鬆餅一盤
+    for x in (48, 52):
+        cv.rect(x, 12, x + 3, 15, hx("#f0d070")); cv.rect(x, 11, x + 3, 12, hx("#8a4a20"))
+    cv.rect(56, 13, 62, 15, hx("#f4f4f0")); cv.rect(57, 11, 61, 13, hx("#e0a050")); cv.set(59, 10, hx("#ffe8a0"))
+    cv.outline()
+    return cv
 
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
 def table_oldmaid():
@@ -1739,6 +1601,47 @@ def table_dodge():
         cv.ellipse(x, y, 1.6, 1.6, hx(c))
     cv.rect(23, 17, 25, 19, hx("#f4f0e4")); cv.set(24, 16, hx("#f4f0e4"))   # 中間一個小小的「玩家」
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    cv.outline()
+    return cv
+
+def table_maze():
+    """豆豆迷宮：深青色桌面（有桌腳），桌上一塊螢幕，裡面是青綠色迷宮線、一排豆子、能量豆、黃色小雞造型的豆豆和兩隻水滴形小幽靈。"""
+    cv = Canvas(48, 32)
+    wood, screen = hx("#2f4a4a"), hx("#06101c")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
+    cv.rect(3, 7, 44, 24, screen)
+    wall = hx("#2fc8b0")
+    cv.hline(5, 42, 8, wall); cv.hline(5, 42, 23, wall); cv.vline(5, 8, 23, wall); cv.vline(42, 8, 23, wall)   # 迷宮外框
+    cv.rect(9, 11, 15, 12, wall); cv.rect(32, 11, 38, 12, wall); cv.rect(13, 19, 34, 20, wall); cv.rect(23, 8, 24, 13, wall)
+    for x in range(8, 41, 3): cv.set(x, 16, hx("#ffe0a0"))     # 一排豆子
+    for y in (10, 13): cv.set(7, y, hx("#ffe0a0")); cv.set(40, y, hx("#ffe0a0"))
+    cv.ellipse(8, 21, 1.4, 1.4, hx("#ffd04a"))                  # 能量豆
+    cv.ellipse(28, 16, 2.2, 2.2, hx("#ffd860")); cv.set(29, 15, hx("#1a1a22")); cv.set(31, 16, hx("#ff9a30")); cv.set(28, 13, hx("#f0b830"))   # 豆豆（黃色小雞：眼睛、橘色尖嘴、呆毛；2026-11-13 使用者選的方案 B）
+    for gx, gc in ((17, "#ff6a6a"), (36, "#5aa8ff")):           # 兩隻小幽靈（水滴形）
+        cv.ellipse(gx, 16, 2, 1.8, hx(gc)); cv.set(gx + 2, 17, hx(gc)); cv.set(gx + 3, 17, hx(gc)); cv.set(gx - 1, 16, hx("#ffffff")); cv.set(gx + 1, 16, hx("#ffffff"))
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    cv.outline()
+    return cv
+
+def table_hockey():
+    """空氣曲棍球（64×40，畫 scale 2＝4×2.5 格）：亮藍色機身的長桌，白色檯面上滿是出風小孔，中線紅色、兩端各一個球門，
+    左邊藍色握把、右邊紅色握把，中間一顆黑色圓盤，四隻桌腳。"""
+    cv = Canvas(64, 40)
+    body = hx("#2a5aa8")
+    cv.rect(0, 4, 63, 31, body); cv.hline(0, 63, 4, shade(body, 1.35)); cv.rect(0, 30, 63, 31, shade(body, .7))   # 機身（外框）
+    ice = hx("#eef6fa")
+    cv.rect(3, 7, 60, 28, ice)
+    for y in range(9, 28, 3):                                     # 出風小孔
+        for x in range(5 + (y // 3) % 2, 60, 3): cv.set(x, y, hx("#c8dce6"))
+    cv.vline(31, 7, 28, hx("#e04848")); cv.vline(32, 7, 28, hx("#e04848"))   # 中線
+    for k in range(16):
+        cv.set(round(31.5 + 4.5 * math.cos(k * math.pi / 8)), round(17.5 + 4.5 * math.sin(k * math.pi / 8)), hx("#e04848"))   # 中圈
+    cv.rect(3, 13, 4, 22, hx("#1a1a22")); cv.rect(59, 13, 60, 22, hx("#1a1a22"))   # 兩端球門
+    for x in (8, 54): cv.vline(x, 11, 24, hx("#9ab8e8") if x < 32 else hx("#f0a8a8"))   # 球門前的線
+    for cx, c in ((14, "#3b78e8"), (49, "#e04848")):              # 握把（圓盤＋中間的握柄）
+        cv.ellipse(cx, 17.5, 3.6, 3.6, hx(c)); cv.ellipse(cx, 17.5, 1.6, 1.6, shade(hx(c), 1.35)); cv.set(cx - 1, 15, shade(hx(c), 1.5))
+    cv.ellipse(38, 15, 2, 2, hx("#2a2a30")); cv.set(37, 14, hx("#6a6a78"))   # 圓盤
+    for x in (2, 58): cv.rect(x, 32, x + 3, 39, shade(body, .6))  # 桌腳
     cv.outline()
     return cv
 
@@ -1803,7 +1706,7 @@ def table_mage():
     return cv
 
 def table_blokus():
-    """方塊拼圖：深藍桌面（有桌腳），桌上散著藍／黃／紅／綠四色的方塊（每格 3×3 像素，有亮邊與暗邊）。"""
+    """Blokus：深藍桌面（有桌腳），桌上散著藍／黃／紅／綠四色的方塊（每格 3×3 像素，有亮邊與暗邊）。"""
     cv = Canvas(48, 32)
     wood = hx("#3a4260")
     cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
@@ -1825,7 +1728,7 @@ def table_blokus():
     return cv
 
 def table_trigon():
-    """三角方塊拼圖：深藍桌面（有桌腳），桌上一片三角形拼成的色塊（藍／黃／紅／綠四色，每個三角形有亮邊與暗邊）。"""
+    """Blokus Trigon：深藍桌面（有桌腳），桌上一片三角形拼成的色塊（藍／黃／紅／綠四色，每個三角形有亮邊與暗邊）。"""
     cv = Canvas(48, 32)
     wood = hx("#3a4260")
     cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
@@ -1862,6 +1765,39 @@ def table_intel():
     cv.ellipse(38, 16, 4, 4.5, hx("#9a5ad8")); cv.ellipse(37, 15, 1.4, 1.6, hx("#e0c8ff"))
     cv.rect(37, 7, 39, 8, hx("#8a5a34"))                                                # 瓶塞
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    cv.outline()
+    return cv
+
+# 街機外殼的配色（第 k 台）：主色、側板暗色
+ARCADE_COLORS = ["#d84a4a", "#3b78e8", "#3cb45a", "#9a5ad8"]
+
+def arcade_cabinet(col):
+    """俄羅斯方塊街機（32×48，畫 scale 2＝2×3 格）：老街機造型——上方發光招牌、黑框螢幕裡有掉落中的方塊、
+    斜面操作台（搖桿＋按鈕）、下方投幣口。4 台造型一樣，只換外殼主色。"""
+    cv = Canvas(32, 48)
+    c = hx(col); dark = shade(c, .62); lite = shade(c, 1.3)
+    cv.rect(2, 0, 29, 47, c)                                   # 外殼
+    cv.rect(2, 0, 4, 47, dark); cv.rect(27, 0, 29, 47, dark)   # 側板
+    cv.rect(5, 1, 26, 7, hx("#fff0b0")); cv.hline(5, 26, 1, hx("#fffbe0")); cv.hline(5, 26, 7, hx("#e8c060"))   # 招牌（發光）
+    for k, bc in enumerate(["#e04848", "#f0c020", "#3cb45a", "#3b78e8", "#9a5ad8"]):   # 招牌上一排小方塊
+        x = 7 + k * 4; cv.rect(x, 3, x + 2, 5, hx(bc))
+    cv.rect(4, 8, 27, 9, dark)                                 # 招牌下緣
+    cv.rect(5, 10, 26, 24, hx("#1a1a22"))                      # 螢幕框
+    cv.rect(7, 11, 24, 23, hx("#0c1830"))                      # 螢幕
+    def blk(x, y, bc):
+        b = hx(bc); cv.rect(x, y, x + 1, y + 1, b); cv.set(x, y, shade(b, 1.4))
+    for x, y, bc in [(8, 21, "#3cb45a"), (10, 21, "#3cb45a"), (12, 21, "#e04848"), (16, 21, "#3b78e8"), (18, 21, "#3b78e8"), (20, 21, "#f0c020"), (22, 21, "#f0c020"),
+                     (8, 19, "#9a5ad8"), (10, 19, "#3cb45a"), (18, 19, "#3b78e8"), (22, 19, "#f0c020"), (12, 19, "#e04848"),
+                     (14, 13, "#40c8e0"), (14, 15, "#40c8e0"), (16, 15, "#40c8e0"), (16, 13, "#40c8e0")]:
+        blk(x, y, bc)
+    cv.hline(7, 24, 11, hx("#22304c"))                         # 螢幕反光
+    cv.rect(3, 25, 28, 30, lite); cv.hline(3, 28, 25, shade(c, 1.5)); cv.hline(3, 28, 30, dark)   # 操作台（斜面）
+    cv.rect(8, 27, 9, 29, hx("#2a2a30")); cv.rect(7, 25, 10, 27, hx("#e83a3a")); cv.set(8, 25, hx("#ff9a9a"))   # 搖桿
+    for x, bc in [(15, "#f0c020"), (19, "#3b78e8"), (23, "#3cb45a")]:
+        cv.rect(x, 27, x + 2, 28, hx(bc)); cv.hline(x, x + 2, 27, shade(hx(bc), 1.4))   # 按鈕
+    cv.rect(5, 32, 26, 46, shade(c, .85))                      # 下半身
+    cv.rect(12, 35, 19, 41, hx("#2a2a30")); cv.rect(13, 36, 14, 40, hx("#e8a030")); cv.rect(17, 36, 18, 40, hx("#e8a030"))   # 投幣口
+    cv.rect(2, 46, 29, 47, dark)
     cv.outline()
     return cv
 
@@ -2206,6 +2142,15 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/snake_queen_sheet.png", frames=4, fw=88, fh=85, what="笨蛋蛇女的 4 幀（夜光島島主）"),
     dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fw=88, fh=74, what="蓋老師（究極神兵）的走路 6 幀（熔岩島島主）"),
     dict(sheet="external/img2pixel/alexander_idle_sheet.png", frames=4, fw=88, fh=77, what="壓力山大的待機 4 幀（機械島島主）"),
+    # 2026-11-12 素材庫第一批（OpenGameArt LPC；sheet 已裁成只用到的格）：
+    dict(sheet="external/img2pixel/deer_sheet.png", frames=4, rows=4, fw=64, fh=96, what="鹿的 4 方向（下／左／右／上）× 4 幀走路（草島）"),
+    dict(sheet="external/img2pixel/cat_sheet.png", frames=3, rows=3, fw=32, fh=32, what="貓的 3 方向（上／下／左）× 3 幀走路（和平島；白貓原色，靠 tint 可換色）"),
+    dict(sheet="external/img2pixel/dog_sheet.png", frames=3, rows=3, fw=32, fh=32, what="狗的 3 方向（上／下／左）× 3 幀走路（和平島；白狗原色，靠 tint 可換色）"),
+    dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64, what="野豬的 4 方向（上／左／下／右）× 3 幀走路（森林島）"),
+    dict(sheet="external/img2pixel/bear_sheet.png", frames=4, rows=4, fw=64, fh=64, what="白熊的 4 方向（下／右／上／左）× 4 幀走路（雪島；原圖三色只取白熊那一區）"),
+    dict(sheet="external/img2pixel/bat_sheet.png", frames=4, fw=32, fh=32, what="蝙蝠的正面拍翅 4 幀（夜光島；單列，左右靠鏡像）"),
+    dict(sheet="external/img2pixel/imp_sheet.png", frames=4, rows=4, fw=64, fh=64, what="小惡魔的 4 方向（下／上／左／右）× 4 幀走路（熔岩島）"),
+    dict(sheet="external/img2pixel/golem_sheet.png", frames=7, rows=3, fw=64, fh=64, what="魔像的 3 方向（下／右／左）× 7 幀走路（機械島；沒有背面，朝上用正面鏡像）"),
     dict(sheet="external/img2pixel/campfire_sheet.png", frames=8, fw=32, fh=32, what="營火 8 幀（世界物件，不是動物：main.js 直接載入，不經 manifest）"),
     dict(sheet="external/img2pixel/fireball_sheet.png", frames=8, fw=64, fh=64, what="飛龍火球的 8 幀（特效投射物，不是動物：main.js 直接載入，不經 manifest）"),
     dict(sheet="external/img2pixel/fireball_burst.png", frames=12, fw=32, fh=32, what="火球命中爆炸的 12 幀（特效，不是動物：main.js 直接載入，不經 manifest）"),
@@ -2299,6 +2244,49 @@ MOB_MANIFEST = dict(
              anim=dict(sheet="external/img2pixel/skeleton_sheet.png", frames=9, rows=4, row0=0, fw=64, fh=64,
                        rowDir=["up", "left", "down", "right"], fps=5, scale=1.0),
              line="「骷髏」喀啦喀啦地轉過頭來，空洞的眼窩盯著你。"),
+        # ---- 2026-11-12 第一批「依等級分素質」的新怪（素材庫：OpenGameArt LPC）----
+        # lv＝怪物等級，素質由下面的 post-pass 算（hp＝2×lv、攻擊力＝1+lv÷8、經驗值＝1+lv÷4，都無條件捨去、最低 1）；
+        # 各島等級帶＝每島差 10 級：草島 1~10、沙灘 11~20、森林 21~30、雪島 31~40、夜光 41~50、熔岩 51~60、機械 61~70。
+        # 舊怪（ownerFrac 那組）維持原值不動；這一組之後加主動怪時沿用同 sheet＋加 aggro（見 docs/notes.md「野外動物」）。
+        # 鹿（草島）：被動（道德性怪物），4 方向走路
+        dict(id="deer", name="鹿", lv=5, speed=40, flee=120, noBounce=True,
+             anim=dict(sheet="external/img2pixel/deer_sheet.png", frames=4, rows=4, fw=64, fh=96,
+                       rowDir=["down", "left", "right", "up"], fps=6, scale=0.4),   # 畫面約 31px 高（人物約 46px）
+             line="「鹿」豎起耳朵看了你一眼，又低頭繼續啃草。"),
+        # 貓／狗（和平島）：被動、固定生成，補和平島「島上沒有動物」的空虛感；和平島不得放敵對怪，這兩隻是安全的
+        dict(id="cat", name="貓", lv=2, fixed=2, speed=34, flee=60, noBounce=True,
+             anim=dict(sheet="external/img2pixel/cat_sheet.png", frames=3, rows=3, fw=32, fh=32,
+                       rowDir=["up", "down", "left"], fps=6, scale=0.9),
+             line="「貓」瞇著眼，蹭了蹭你的腳邊。"),
+        dict(id="dog", name="狗", lv=3, fixed=2, speed=40, flee=60, noBounce=True,
+             anim=dict(sheet="external/img2pixel/dog_sheet.png", frames=3, rows=3, fw=32, fh=32,
+                       rowDir=["up", "down", "left"], fps=6, scale=0.9),
+             line="「狗」開心地搖著尾巴，繞著你轉圈。"),
+        # 野豬（森林島）：反擊型野怪，最低階的主動威脅（Lv25）
+        dict(id="boar", name="野豬", lv=25, speed=30, flee=85, retaliate=True, noBounce=True,
+             anim=dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64,
+                       rowDir=["up", "left", "down", "right"], fps=6, scale=0.55),
+             line="「野豬」磨了磨獠牙，從鼻子裡哼出一團白氣。"),
+        # 白熊（雪島）：反擊型、血厚慢速
+        dict(id="bear_snow", name="白熊", lv=35, speed=26, flee=90, retaliate=True, noBounce=True,
+             anim=dict(sheet="external/img2pixel/bear_sheet.png", frames=4, rows=4, fw=64, fh=64,
+                       rowDir=["down", "right", "up", "left"], fps=5, scale=0.6),
+             line="「白熊」直起身子吼了一聲，腳邊的雪屑簌簌落下。"),
+        # 蝙蝠（夜光島）：被動、會飛（swim＝能過海）；飛行不套 footDy、影子另調（同飛龍的作法）
+        dict(id="bat_night", name="蝙蝠", lv=45, swim=True, speed=55, flee=90, noBounce=True, footDy=0,
+             anim=dict(sheet="external/img2pixel/bat_sheet.png", frames=4, fw=32, fh=32, fps=9, scale=0.85),
+             shadow=dict(rx=9, ry=3, dx=0, dy=-2),
+             line="「蝙蝠」倒掛著晃了兩下，忽然撲稜稜地飛起來。"),
+        # 小惡魔（熔岩島）：反擊型（補熔岩島沒有人形反擊怪的洞）
+        dict(id="imp_volcano", name="小惡魔", lv=55, speed=40, flee=85, retaliate=True, noBounce=True,
+             anim=dict(sheet="external/img2pixel/imp_sheet.png", frames=4, rows=4, fw=64, fh=64,
+                       rowDir=["down", "up", "left", "right"], fps=7, scale=0.6),
+             line="「小惡魔」朝你彈了個火苗，咯咯咯地笑。"),
+        # 魔像（機械島）：反擊型、慢但硬（big=2＝判定圈 46，比一般野生小動物大一號）
+        dict(id="golem_machine", name="魔像", lv=65, big=2, speed=20, flee=80, retaliate=True, noBounce=True,
+             anim=dict(sheet="external/img2pixel/golem_sheet.png", frames=7, rows=3, fw=64, fh=64,
+                       rowDir=["down", "right", "left"], fps=6, scale=0.7),
+             line="「魔像」緩緩轉過頭，關節發出石磨般的聲音。"),
         # 飛龍：夜光島（黑）、熔岩島（原色紅）、沙灘島（沙）。四列都是飛行視角＝上飛／朝右／下飛／朝左（方向網格）；
         # swim＝會飛所以能過海；big=5＝判定圈 34+6*(5-1)=58（大隻）；shadow 依體型放大、貼在正下方
         # retaliate＝會反擊的野怪：被打不逃、鎖定攻擊者；血量／攻擊力由下面的 post-pass 依該地形島主 1/10 算
@@ -2472,15 +2460,27 @@ for _m in MOB_MANIFEST["mobs"]:
     if _m.get("retaliate"):   # 攻擊力可另給 atkFrac（例如殭屍：血 1/5、攻擊 1/10）；沒給就跟血量同一個分母
         _m["atk"] = max(1, OWNER_CLAW_DMG // max(1, int(_m.get("atkFrac", _frac))))
 
+# 等級制素質（2026-11-12 使用者定）：條目標 lv: N 的怪，血量＝2×lv、攻擊力＝1+lv÷8、經驗值＝1+lv÷4（都無條件捨去、最低 1）。
+# 舊怪（ownerFrac 那組）維持原值不動、兩套並存；之後加主動怪沿用同一張 sheet＋把 lv 拉高就好（再配 aggro）。
+# 注意：XP 事件由兩份伺服器夾在 1~XP_XPE_MAX（＝25），所以 lv > 96 的怪要一起調高那個上限（worker/src/index.js ＋ tools/dev_server.py）。
+for _m in MOB_MANIFEST["mobs"]:
+    if not _m.get("lv"):
+        continue
+    _m["hp"] = max(1, 2 * _m["lv"])
+    if _m.get("retaliate"):
+        _m["atk"] = max(1, 1 + _m["lv"] // 8)
+    _m["xp"] = max(1, 1 + _m["lv"] // 4)
+
 # 各地形出現的小動物（id=權重）
 MOBS_BY_TERRAIN = {
-    "grass":   [("sheep", 2), ("bird", 1), ("frog", 1), ("chicken", 2), ("slime_grass", 1), ("goblin_grass", 2)],
+    "grass":   [("sheep", 2), ("bird", 1), ("frog", 1), ("chicken", 2), ("slime_grass", 1), ("goblin_grass", 2), ("deer", 2)],
     "beach":   [("bird", 2), ("frog", 1), ("bunny", 2), ("slime_beach", 1), ("dragon_beach", 1)],
-    "snow":    [("sheep", 2), ("bird", 1), ("bunny_snow", 2), ("slime_snow", 1), ("zombie_snow", 2), ("imp_snow", 2)],
-    "night":   [("frog", 2), ("sheep", 1), ("slime_night", 1), ("dragon_night", 1), ("zombie_night", 2), ("skeleton_night", 2)],
-    "forest":  [("sheep", 2), ("bird", 2), ("chicken", 2), ("slime_forest", 1), ("goblin_forest", 2)],
-    "volcano": [("frog", 1), ("bird", 1), ("slime_volcano", 1), ("dragon_volcano", 1)],
-    "machine": [("bunny_machine", 2), ("slime_machine", 1), ("zombie_machine", 2), ("imp_machine", 2)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）
+    "snow":    [("sheep", 2), ("bird", 1), ("bunny_snow", 2), ("slime_snow", 1), ("zombie_snow", 2), ("bear_snow", 1), ("imp_snow", 2)],
+    "night":   [("frog", 2), ("sheep", 1), ("slime_night", 1), ("dragon_night", 1), ("zombie_night", 2), ("bat_night", 2), ("skeleton_night", 2)],
+    "forest":  [("sheep", 2), ("bird", 2), ("chicken", 2), ("slime_forest", 1), ("goblin_forest", 2), ("boar", 2)],
+    "volcano": [("frog", 1), ("bird", 1), ("slime_volcano", 1), ("dragon_volcano", 1), ("imp_volcano", 2)],
+    "machine": [("bunny_machine", 2), ("slime_machine", 1), ("zombie_machine", 2), ("golem_machine", 1), ("imp_machine", 2)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）
+    "peace":   [("cat", 1), ("dog", 1)],   # 和平島（2026-11-12）：只有被動的貓狗（都 fixed＝只生固定那幾隻）；和平島不得放敵對怪
 }
 
 # ---------------- 地板（裝飾模式的地板層，16×16 無縫磚，畫在地面與家具之間）----------------
@@ -3172,7 +3172,12 @@ def main():
             if t["layout"] == "room":
                 td["groundRepeat"] = INDOOR_REPEAT
                 if t["id"] in ROOM_BOX:
-                    td["roomBox"] = ROOM_BOX[t["id"]]   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
+                    td["roomBox"] = ROOM_BOX[t["id"]]
+                    save(wall_face(), "wall.png", sub); save(wall_side(True), "wall_w.png", sub); save(wall_side(False), "wall_e.png", sub)
+                    td["walls"] = dict(n="wall.png", w="wall_w.png", e="wall_e.png", h=WALL_H)   # 東北西三面牆（南面不畫）
+        if t["id"] in PROPS_BY_TERRAIN:   # 固定小物件（餐飲區等）：圖放在地形資料夾
+            td["props"] = PROPS_BY_TERRAIN[t["id"]]
+            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
         if t.get("campfire") is False:
             td["campfire"] = False
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉
@@ -3202,8 +3207,12 @@ def main():
     save(table_intel(), "table_intel.png", "games")
     save(table_zhtyping(), "table_zhtyping.png", "games")
     save(table_mage(), "table_mage.png", "games")
+    save(table_maze(), "table_maze.png", "games")
+    save(table_hockey(), "table_hockey.png", "games")
     save(table_blokus(), "table_blokus.png", "games")
     save(table_trigon(), "table_trigon.png", "games")
+    for k, col in enumerate(ARCADE_COLORS):
+        save(arcade_cabinet(col), f"arcade_{k}.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")

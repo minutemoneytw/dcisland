@@ -116,6 +116,13 @@ export function connectNet(S, opts = {}) {
       case 'tpos': if (opts.onTpos) opts.onTpos(msg); break;   // 躲彈幕：其他玩家的位置（i＝座位編號）
       case 'tpg': if (opts.onTpg) opts.onTpg(msg); break;      // 英文打字競賽（觀戰者才收到）：其他玩家的打字進度（i＝座位編號、n＝第幾個字、p＝已打對幾個字母、e＝剛打錯）
       case 'tsc': if (opts.onTsc) opts.onTsc(msg); break;      // 英文打字競賽：其他玩家的分數（i＝座位編號、n＝分數）
+      case 'ttb': if (opts.onTtb) opts.onTtb(msg); break;      // 俄羅斯方塊：別台的盤面快照（cab＝第幾台、b＝200 個數字、sc／ln＝分數／行數）
+      case 'tgb': if (opts.onTgb) opts.onTgb(msg); break;      // 俄羅斯方塊（對戰模式）：被送垃圾行（n＝幾行、from＝哪一台送的）
+      case 'tms': if (opts.onTms) opts.onTms(msg); break;      // 豆豆迷宮：豆豆的快照（i＝座位、p 豆豆、g 4 隻幽靈、d 豆子點陣、pw／sc／lv／lvl／rs／fz／bn）
+      case 'tmp': if (opts.onTmp) opts.onTmp(msg); break;      // 豆豆迷宮：幽靈玩家的位置（i＝座位、k＝第幾隻幽靈、x／y＝格數×10、d 方向、m 0 一般／2 回家中）
+      case 'tmx': if (opts.onTmx) opts.onTmx(msg); break;      // 英文／中文打字競賽：某位對手剛打錯一次（i＝座位；分數框閃紅）
+      case 'thp': if (opts.onThp) opts.onThp(msg); break;      // 空氣曲棍球：別人的握把位置（i＝座位、x／y＝px）
+      case 'ths': if (opts.onThs) opts.onThs(msg); break;      // 空氣曲棍球：桌主的圓盤快照（x／y／vx／vy、sa／sb 比分、f 開球前凍結毫秒）
       case 'tblinfo': if (opts.onTblInfo) opts.onTblInfo(msg.info); break;   // 和平島各桌的人數／狀態
       case 'craftdb': if (opts.onCraftDb) opts.onCraftDb(msg.craft); break;   // 合成解鎖紀錄（登入後由伺服器送來）
       case 'kills': if (opts.onKills) opts.onKills(msg.kills); break;         // 擊倒島主紀錄（登入後、擊倒島主時由伺服器送來；{地形: 時間}）

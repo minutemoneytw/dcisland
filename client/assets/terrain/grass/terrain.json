@@ -44,6 +44,10 @@
   {
    "id": "goblin_grass",
    "weight": 2
+  },
+  {
+   "id": "deer",
+   "weight": 2
   }
  ],
  "uiColor": "#6aaa5a",

@@ -156,7 +156,7 @@ function isAdminId(env, id) {
 }
 
 // 對一份擺設清單套用單一操作（place / remove / clear），成功回 true。清空的權限在呼叫端檢查。
-// ground(x,y)＝那格能不能放東西（陸地，或水上鋪了地板）；規則與 client/js/main.js 的 canPlaceIn、dev_server.py 的 apply_furn_op 一致
+// ground(x,y)＝那格能不能放東西（陸地，或水上鋪了地板）；規則與 client/js/main.js 的 canPlaceIn、dev_server.py 的 edit_furn／commit_furn 一致
 function applyFurnOp(items, defs, op, ground) {
   const cell = op.cell;
   const validCell = Array.isArray(cell) && cell.length === 2 && Number.isInteger(cell[0]) && Number.isInteger(cell[1]);
@@ -484,8 +484,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 8] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -551,9 +551,11 @@ function tblLeave(t, cid) {
   if (role === "spec") t.specs.splice(i, 1);
   else if (role === "seat") {
     const name = t.seats[i].name;
-    if (t.phase === "playing" && t.game === "trigon") { tgLeave(t, i, Date.now()); return; }   // 三角方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
-    if (t.phase === "playing" && t.game === "blokus") { bkLeave(t, i, Date.now()); return; }   // 方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
+    if (t.game === "arcade") { arLeave(t, i); return; }   // 俄羅斯方塊：單人局作廢、聯機照當時分數排名，不中斷其他人
+    if (t.phase === "playing" && t.game === "trigon") { tgLeave(t, i, Date.now()); return; }   // Blokus Trigon：離開不中斷，棋子留在棋盤上、之後跳過
+    if (t.phase === "playing" && t.game === "blokus") { bkLeave(t, i, Date.now()); return; }   // Blokus：離開不中斷，棋子留在棋盤上、之後跳過
     if (t.phase === "playing" && t.game === "mage") { mgLeave(t, i, Date.now()); return; }   // 見習驅魔師：離開不中斷，視同倒下，到場上沒有活人為止
+    if (t.phase === "playing" && t.game === "maze") { mzLeave(t, i); return; }   // 豆豆迷宮：幽靈離開改由電腦控制、豆豆離開＝幽靈方贏
     if (t.phase === "playing" && t.game === "dodge") { dgLeave(t, i, Date.now()); return; }   // 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
     if (t.phase === "playing" && t.game === "uno") { unLeave(t, i, Date.now()); return; }   // UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
     if (t.phase === "playing" && isTy(t)) { tyLeave(t, i, Date.now()); return; }   // 英文打字競賽：離開不中斷，照當時分數排名
@@ -568,14 +570,14 @@ function tblLeave(t, cid) {
 }
 function tblSit(t, cid) {
   const [role, i] = tblFind(t, cid);
-  if (role !== "spec" || t.phase !== "lobby" || t.seats.length >= GAME_LIMITS[t.game][1]) return;
+  if (role !== "spec" || t.phase !== "lobby" || t.seats.length >= GAME_LIMITS[t.game][1] || t.game === "arcade") return;   // 俄羅斯方塊：要入座就走到空機台
   const s = t.specs.splice(i, 1)[0];
   t.seats.push({ cid, name: s.name, uid: s.uid || null, ready: false, hand: [], out: false });
   tblLog(t, `${s.name} 入座了`);
 }
 function tblReady(t, cid, v) {
   const [role, i] = tblFind(t, cid);
-  if (role !== "seat" || t.phase !== "lobby") return;
+  if (role !== "seat" || t.phase !== "lobby" || t.game === "arcade") return;
   t.seats[i].ready = !!v;
   tblCheckStart(t);
 }
@@ -585,7 +587,7 @@ function tblCheckStart(t) {
 // 入座的人改成觀戰（只有還沒開局時；進行中要離開就是 leave，會結束這一局）。剩下的人若都已準備就開局
 function tblStand(t, cid) {
   const [role, i] = tblFind(t, cid);
-  if (role !== "seat" || t.phase !== "lobby") return;
+  if (role !== "seat" || t.phase !== "lobby" || t.game === "arcade") return;
   const s = t.seats.splice(i, 1)[0];
   t.specs.push({ cid, name: s.name, uid: s.uid || null });
   tblLog(t, `${s.name} 改為觀戰`);
@@ -692,7 +694,7 @@ function gmMove(t, cid, x, y) {
   else if (g.board.every(c => c)) gmFinish(t, null);
   else t.turn = 1 - i;
 }
-// ---- 方塊拼圖 Blokus（第十一桌 t11；2026-11-13，使用者要求）：2～4 人、20×20、每人 21 塊（1～5 格，共 89 格）、標準規則 ----
+// ---- Blokus（第十一桌 t11；2026-11-13，使用者要求）：2～4 人、20×20、每人 21 塊（1～5 格，共 89 格）、標準規則 ----
 // 第一塊要蓋住自己的角落；之後每塊都要「角對角」接到自己的舊方塊，且不能「邊對邊」；碰到別人的不限。放不下的人自動跳過（之後一直跳過），全員放不下就結束。
 // 計分＝−剩下的格數；全部放完 +15、最後一塊是單格再 +5。每手限時 BK_TURN_MS（客戶端到時送 timeout，伺服器核對時鐘；連續超時 BK_IDLE_MAX 次視為棄權）。
 // 排行榜沒有（使用者定）。與 tools/dev_server.py 的 bk_* 同一套。
@@ -767,7 +769,7 @@ function bkStart(t) {
   t.g = { size, start: cols.map(c => (n === 2 ? BK_DUO_START[c] : BK_CORNERS[c])), board: new Array(size * size).fill(0), col: cols, sd: cols.map(() => ({ used: [], placed: 0, done: false, idle: 0, forfeit: false, mono: false })), last: null, moves: 0, deadline: now + BK_TURN_MS };
   t.result = null; t.phase = "playing"; t.turn = cols.indexOf(0);   // 藍色先下
   for (const s of t.seats) { s.ready = false; s.left = false; }
-  tblLog(t, `方塊拼圖開始！${n} 人參加，${t.seats[t.turn].name}（藍）先下`);
+  tblLog(t, `Blokus 開始！${n} 人參加，${t.seats[t.turn].name}（藍）先下`);
 }
 // 輪到 from 之後的下一位還能下的人；放不下的人標成 done（之後一直跳過）；沒有人能下就結束
 function bkAdvance(t, from, now) {
@@ -826,8 +828,8 @@ function bkLeave(t, i, now) {   // 遊戲進行中有人離開：棋子留在棋
   if (i === t.turn) bkAdvance(t, i, now);
   else if (g.sd.every(d => d.done)) bkFinish(t);
 }
-// ---- 方塊拼圖「三角版」Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：2～4 人、正六邊形的三角格棋盤（邊長 9，共 486 格）、每人 22 塊（1～6 個三角形，共 110 格）----
-// 規則同方塊拼圖：第一塊要蓋住自己的角落（這裡是「棋盤六個頂點之一」：塊上有一格以那個頂點為角）；之後每塊要「點對點」接到自己的舊方塊（共用至少一個頂點），且不能「邊對邊」（共用一條邊）；
+// ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：2～4 人、正六邊形的三角格棋盤（邊長 9，共 486 格）、每人 22 塊（1～6 個三角形，共 110 格）----
+// 規則同Blokus：第一塊要蓋住自己的角落（這裡是「棋盤六個頂點之一」：塊上有一格以那個頂點為角）；之後每塊要「點對點」接到自己的舊方塊（共用至少一個頂點），且不能「邊對邊」（共用一條邊）；
 // 放不下的人自動跳過、全員放不下就結束；計分＝−剩下的格數，全部放完 +15、最後一塊是單格再 +5；每手限時 TG_TURN_MS，連續超時 TG_IDLE_MAX 次視為棄權；沒有排行榜。與 tools/dev_server.py 的 tg_* 同一套。
 // 座標：三角形 (x, y)（y＝第幾列，由上往下；x＝水平位置，每個三角形寬 2 個單位）；(x + y) 為偶數＝尖端朝上、奇數＝尖端朝下。頂點是格點 (i, j)（i + j 為偶數）：
 // 朝上 (x, y) 的頂點＝(x, y)、(x−1, y+1)、(x+1, y+1)；朝下 (x, y) 的頂點＝(x−1, y)、(x+1, y)、(x, y+1)。邊鄰居＝(x±1, y)，再加朝上的 (x, y+1)／朝下的 (x, y−1)。
@@ -925,7 +927,7 @@ function tgStart(t) {
   t.g = { board: new Array(TG_W * TG_ROWS).fill(0), col: cols, corner: cols.map(c => TG_SLOTS[n][c]), sd: cols.map(() => ({ used: [], placed: 0, done: false, idle: 0, forfeit: false, mono: false })), last: null, moves: 0, deadline: now + TG_TURN_MS };
   t.result = null; t.phase = "playing"; t.turn = cols.indexOf(0);   // 藍色先下
   for (const s of t.seats) { s.ready = false; s.left = false; }
-  tblLog(t, `三角方塊拼圖開始！${n} 人參加，${t.seats[t.turn].name}（藍）先下`);
+  tblLog(t, `Blokus Trigon 開始！${n} 人參加，${t.seats[t.turn].name}（藍）先下`);
 }
 function tgAdvance(t, from, now) {
   const g = t.g, n = t.seats.length;
@@ -1085,7 +1087,7 @@ function dgLeave(t, i, now) {
 }
 // ---- 見習驅魔師（第十桌 t10；2026-11-12，使用者要求）：1～4 人合作，玩家在場地正中央，幽靈從四面八方飄向中央，用滑鼠畫出幽靈身上的符號消除它 ----
 // 3 波小怪＋1 隻 Boss；沒被消除的幽靈碰到中央就扣某位玩家 1 滴血，全員死亡失敗、打贏 Boss 勝利。幽靈由 seed 決定性地產生（與 dev_server 的 mg_gen、client 的
-// mageGhosts 同一套，隨機只用 dgHash，不用 sin/cos，兩邊結果完全一致）；符號辨識在客戶端，伺服器權威管血量、擊殺（先到先得）、Boss 血量與勝負；
+// mgGenC 同一套，隨機只用 dgHash，不用 sin/cos，兩邊結果完全一致）；符號辨識在客戶端，伺服器權威管血量、擊殺（先到先得）、Boss 血量與勝負；
 // 沒被消除的幽靈扣血由伺服器在收到任何訊息時按時間懶惰結算（mgTick，客戶端每秒送 sync）。只有單人勝利進排行榜。與 dev_server 的 mg_* 同一套。
 const MG_HP = 5, MG_WAVE_START = 3, MG_WAVE_LEN = 28, MG_WAVE_GAP = 4;   // 第 k 波＝[3+32k, 3+32k+28)
 const MG_BOSS_START = MG_WAVE_START + 3 * (MG_WAVE_LEN + MG_WAVE_GAP), MG_BOSS_LIMIT = 180;   // Boss 出場時間（99 秒）；出場後 1.5 秒才能開始打；打不贏的上限
@@ -1214,7 +1216,7 @@ const isTy = t => t.game === "typing" || t.game === "zhtyping";
 const tyUnit = t => (t.game === "zhtyping" ? "詞" : "單字");
 // 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 // 記在這座島的 storage（"boards"），每次結算後更新，table 畫面帶 board 給客戶端顯示。與 tools/dev_server.py 的 BOARDS 同一套
-const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage"]), BOARD_N = 3;
+const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage", "arcade", "maze"]), BOARD_N = 3;   // 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
 // 躲彈幕 2026-11-12 起改記「分數」（存活秒數＋道具分），舊的秒數紀錄放在 "dodge" 不再使用，分數另記在 "dodge2"，避免單位混在一起
 const boardKey = game => (game === "dodge" ? "dodge2" : game);
 function boardMerge(list, entries) {
@@ -2571,7 +2573,333 @@ function unSetMode(t, cid, mode) {
   for (const s of t.seats) s.ready = false;
   tblLog(t, `${t.seats[0].name} 把玩法改成${mode === "wild" ? "無限制" : "傳統"}`);
 }
-const GAME_START = { oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+// ---- 俄羅斯方塊（第十三桌 t13，2026-11-13，使用者要求）：場地上方 4 台街機共用這一張邏輯桌 ----
+// 每個座位綁一台機台（cab 0～3；同一台只能坐一個人）。每台都是單人遊玩：
+//   單人模式（solo）：各自獨立的一局，結束分數進排行榜；
+//   聯機模式（link）：發起的人（host）開邀請，其他機台「閒置中」的人會看到「要接受聯機邀請嗎？」，最多 4 人；
+//     host 選「一般模式」（各自玩到全員出局，依分數排名）或「對戰模式」（消 2／3／4 行送每個對手 1／2／4 行垃圾，使用者定），聯機分數不進排行榜。
+// 方塊遊戲本身在客戶端跑（信任客戶端，同打字競賽）：伺服器只給 seed／t0、轉發盤面快照（ttb）與垃圾行（tgb）、收結算分數。
+// 與 tools/dev_server.py 的 ar_* 同一套，改規則兩邊一起改。
+const AR_CABS = 4;
+const AR_COUNTDOWN_MS = 3000;        // 聯機開局倒數
+const AR_SOLO_COUNTDOWN_MS = 1500;   // 單人開局倒數
+const AR_GARBAGE = { 2: 1, 3: 2, 4: 4 };   // 對戰模式：一次消幾行 → 送每個對手幾行垃圾（使用者定；消 1 行不送）
+const AR_XP = 4, AR_XP_MIN = 10;     // 一局消了至少 AR_XP_MIN 行的人 +AR_XP（助手先訂的數值）
+const AR_SCORE_MAX = 99999999;
+const AR_MSGS = new Set(["solo", "link", "lmode", "ljoin", "lno", "lquit", "lstart", "over"]);
+const arInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+function arSeat(t, cab) { const i = t.seats.findIndex(s => s.cab === cab); return [i, i >= 0 ? t.seats[i] : null]; }
+// 走到第 cab 台：那台空著且想入座就坐那台，否則觀戰；已經在這桌觀戰的人也可以藉此坐上空機台
+function arJoin(t, cid, name, want, uid, cab) {
+  const [role, i] = tblFind(t, cid);
+  if (role === "seat") return;
+  const free = arInt(cab, 0, AR_CABS - 1) && !arSeat(t, cab)[1];
+  if (want !== "spec" && free) {
+    if (role === "spec") t.specs.splice(i, 1);
+    t.seats.push({ cid, name, uid: uid || null, ready: false, hand: [], out: false, cab, st: "idle", sc: 0, ln: 0, dead: false, last: null });
+    tblLog(t, `${name} 坐上了 ${cab + 1} 號機`);
+  } else if (!role) { t.specs.push({ cid, name, uid: uid || null }); tblLog(t, `${name} 來觀戰`); }
+}
+const arPlaying = (t, s) => s.st === "solo" || (s.st === "link" && !!t.g && t.g.phase === "playing");
+function arLinkCancel(t, why) {
+  for (const s of t.seats) if (s.st === "link") s.st = "idle";
+  t.g = null; tblLog(t, why);
+}
+// 聯機進行中：還在場上的成員全部出局（或都離開了）就結算
+function arCheckEnd(t) {
+  const g = t.g;
+  if (!g || g.phase !== "playing") return;
+  const mem = g.mem.map(c => arSeat(t, c)[1]);
+  if (mem.some(s => s && !s.dead)) return;
+  const rows = [...mem.filter(Boolean).map(s => ({ name: s.name, uid: s.uid || null, score: s.sc, lines: s.ln, left: false, cab: s.cab })), ...g.gone.map(x => ({ ...x, left: true }))];
+  rows.sort((a, b) => b.score - a.score);
+  const xp = t.seats.map(s => (g.mem.includes(s.cab) && s.ln >= AR_XP_MIN ? AR_XP : 0));
+  const top = rows[0], mode = g.mode === "battle" ? "對戰" : "一般";
+  const text = top ? `聯機（${mode}模式）結束！第一名 ${top.name}，${top.score} 分` : "聯機結束";
+  t.result = { link: true, mode: g.mode, text, rid: Math.floor(Math.random() * 4294967296), ranking: rows, xp, cabs: [...g.mem] };
+  for (const s of t.seats) if (s.st === "link") { s.st = "idle"; s.dead = false; }
+  t.g = null; tblLog(t, text);
+}
+function arSoloOver(t, i) {
+  const s = t.seats[i];
+  s.st = "idle"; s.last = { sc: s.sc, ln: s.ln };
+  const text = `${s.name}（${s.cab + 1} 號機）單人模式結束：${s.sc} 分、${s.ln} 行`;
+  t.result = { solo: true, cab: s.cab, text, rid: Math.floor(Math.random() * 4294967296), xp: t.seats.map((_, k) => (k === i && s.ln >= AR_XP_MIN ? AR_XP : 0)),
+    ranking: [{ name: s.name, uid: s.uid || null, score: s.sc, lines: s.ln, left: false }] };   // 排行榜由 tableBoard 記（只記單人模式，使用者定）
+  tblLog(t, text);
+}
+// 離開機台（Esc、換地形、斷線）：單人局直接作廢（不進排行榜）；聯機中照離開時的分數排名、不中斷其他人
+function arLeave(t, i) {
+  const s = t.seats.splice(i, 1)[0], g = t.g;
+  if (s.st === "link" && g) {
+    if (g.phase === "invite") {
+      if (g.host === s.cab) arLinkCancel(t, `${s.name} 離開了，聯機邀請取消`);
+      else { g.mem.splice(g.mem.indexOf(s.cab), 1); tblLog(t, `${s.name} 離開了聯機`); }
+    } else {
+      g.mem.splice(g.mem.indexOf(s.cab), 1);
+      g.gone.push({ name: s.name, uid: s.uid || null, score: s.sc, lines: s.ln, cab: s.cab });
+      tblLog(t, `${s.name} 離開了聯機（${s.sc} 分）`);
+      arCheckEnd(t);
+    }
+  } else {
+    if (g && g.no.includes(s.cab)) g.no.splice(g.no.indexOf(s.cab), 1);
+    tblLog(t, `${s.name} 離開了 ${s.cab + 1} 號機`);
+  }
+}
+// 回 [畫面有變要通知, 額外要送的訊息 [[cid, msg]…]]
+function arMsg(t, cid, msg, now) {
+  const [role, i] = tblFind(t, cid), a = msg.a;
+  if (t.game !== "arcade" || role !== "seat") return [false, []];
+  const s = t.seats[i], g = t.g;
+  if (a === "solo") {
+    if (s.st !== "idle") return [false, []];
+    Object.assign(s, { st: "solo", sc: 0, ln: 0, dead: false, seed: Math.floor(Math.random() * 2147483648), t0: now + AR_SOLO_COUNTDOWN_MS });
+    if (g && g.no.includes(s.cab)) g.no.splice(g.no.indexOf(s.cab), 1);
+    tblLog(t, `${s.name} 開始了單人模式`);
+    return [true, []];
+  }
+  if (a === "link") {   // 發起聯機邀請（同時只能有一場聯機）
+    if (s.st !== "idle" || g) return [false, []];
+    t.g = { host: s.cab, mode: "normal", phase: "invite", mem: [s.cab], no: [], gone: [] };
+    s.st = "link"; tblLog(t, `${s.name} 發起了聯機邀請`);
+    return [true, []];
+  }
+  if (a === "lmode") {
+    if (g && g.phase === "invite" && g.host === s.cab && (msg.v === "normal" || msg.v === "battle") && g.mode !== msg.v) {
+      g.mode = msg.v; tblLog(t, `聯機改成${g.mode === "battle" ? "對戰" : "一般"}模式`);
+      return [true, []];
+    }
+    return [false, []];
+  }
+  if (a === "ljoin") {
+    if (g && g.phase === "invite" && s.st === "idle" && g.mem.length < AR_CABS) {
+      g.mem.push(s.cab);
+      if (g.no.includes(s.cab)) g.no.splice(g.no.indexOf(s.cab), 1);
+      s.st = "link"; tblLog(t, `${s.name} 接受了聯機邀請`);
+      return [true, []];
+    }
+    return [false, []];
+  }
+  if (a === "lno") {
+    if (g && g.phase === "invite" && s.st === "idle" && !g.no.includes(s.cab)) { g.no.push(s.cab); return [true, []]; }
+    return [false, []];
+  }
+  if (a === "lquit") {   // 聯機等待中退出（host 退出＝取消邀請）
+    if (g && g.phase === "invite" && s.st === "link") {
+      if (g.host === s.cab) arLinkCancel(t, `${s.name} 取消了聯機邀請`);
+      else { g.mem.splice(g.mem.indexOf(s.cab), 1); s.st = "idle"; tblLog(t, `${s.name} 退出了聯機`); }
+      return [true, []];
+    }
+    return [false, []];
+  }
+  if (a === "lstart") {
+    if (g && g.phase === "invite" && g.host === s.cab && g.mem.length >= 2) {
+      Object.assign(g, { phase: "playing", seed: Math.floor(Math.random() * 2147483648), t0: now + AR_COUNTDOWN_MS, no: [] });
+      for (const c of g.mem) Object.assign(arSeat(t, c)[1], { sc: 0, ln: 0, dead: false });
+      t.result = null;
+      tblLog(t, `聯機開始！${g.mem.length} 人，${g.mode === "battle" ? "對戰" : "一般"}模式`);
+      return [true, []];
+    }
+    return [false, []];
+  }
+  if (a === "clr") {   // 一次消了 n 行：對戰模式送其他還活著的成員垃圾行
+    const n = msg.n;
+    if (!(arInt(n, 1, 4) && s.st === "link" && g && g.phase === "playing" && g.mode === "battle" && !s.dead && now >= g.t0)) return [false, []];
+    const k = AR_GARBAGE[n] || 0, out = [];
+    if (k) for (const c of g.mem) { const m = arSeat(t, c)[1]; if (m && c !== s.cab && !m.dead && m.cid != null) out.push([m.cid, { t: "tgb", n: k, from: s.cab }]); }
+    return [false, out];
+  }
+  if (a === "tb") {   // 盤面快照：轉發給觀戰者與同一場聯機的其他成員（不通知整個畫面）
+    const b = msg.b, sc = msg.sc, ln = msg.ln;
+    if (!(arPlaying(t, s) && !s.dead && typeof b === "string" && b.length === 200 && /^[0-8]+$/.test(b) && arInt(sc, 0, AR_SCORE_MAX) && arInt(ln, 0, 100000))) return [false, []];
+    s.sc = sc; s.ln = ln;
+    const data = { t: "ttb", cab: s.cab, b, sc, ln }, out = t.specs.filter(m => m.cid != null).map(m => [m.cid, data]);
+    if (s.st === "link") for (const c of g.mem) { const m = arSeat(t, c)[1]; if (m && c !== s.cab && m.cid != null) out.push([m.cid, data]); }
+    return [false, out];
+  }
+  if (a === "over") {   // 這局結束（方塊頂到最上面）：回報最後分數
+    const sc = msg.sc, ln = msg.ln;
+    if (!(arPlaying(t, s) && !s.dead && arInt(sc, 0, AR_SCORE_MAX) && arInt(ln, 0, 100000))) return [false, []];
+    s.sc = sc; s.ln = ln;
+    if (s.st === "solo") arSoloOver(t, i);
+    else { s.dead = true; tblLog(t, `${s.name} 出局了（${sc} 分）`); arCheckEnd(t); }
+    return [true, []];
+  }
+  return [false, []];
+}
+function arView(t, cid, v) {
+  const [role, i] = tblFind(t, cid), g = t.g, me = role === "seat" ? t.seats[i] : null;
+  v.phase = me && arPlaying(t, me) ? "playing" : "lobby";
+  v.cab = me ? me.cab : -1; v.sn = Date.now();
+  t.seats.forEach((s, k) => Object.assign(v.seats[k], { cab: s.cab, st: s.st, sc: s.sc, ln: s.ln, dead: s.dead, last: s.last || null, play: arPlaying(t, s) }));
+  if (me && me.st === "solo") v.tt = { seed: me.seed, t0: me.t0 };
+  v.link = g ? { host: g.host, mode: g.mode, phase: g.phase, mem: [...g.mem], no: [...g.no], seed: g.seed ?? null, t0: g.t0 ?? null, gone: g.gone.map(x => ({ ...x })) } : null;
+  return v;
+}
+// tblinfo 多帶：每台機台的狀態（島上機台頭上的標籤）、是否有人在等聯機、哪些連線在遊戲中（名牌〔遊戲中〕）
+function arInfo(t) {
+  const g = t.g, cabs = new Array(AR_CABS).fill(null);
+  for (const s of t.seats) cabs[s.cab] = { n: s.name, st: s.st !== "link" ? s.st : (g && g.phase === "playing" ? "link" : "inv") };
+  return { cabs, inv: !!(g && g.phase === "invite" && g.mem.length < AR_CABS), playing: t.seats.filter(s => arPlaying(t, s)).map(s => s.cid) };
+}
+// ---- 豆豆迷宮（吃豆迷宮類；第十四桌 t14，2026-11-13，使用者要求）：1～5 人，一人當豆豆、其他人當幽靈 ----
+// 1 人＝單人模式：自己當豆豆、對 4 隻電腦幽靈，一關接一關到命用完，分數進排行榜（使用者定）；
+// 2～5 人＝對抗：桌主（第一位入座的人）在開局前指定誰當豆豆（預設自己，使用者定），其他人依序當幽靈、空的幽靈由電腦控制；
+//   豆子吃光＝豆豆方贏，3 條命用完（或時間到）＝幽靈方贏，不進排行榜。進行中有人離開不中斷：幽靈離開改由電腦控制、豆豆離開＝幽靈方贏。
+// 遊戲本身在客戶端跑：豆豆那台是權威（豆子、能量、被抓、電腦幽靈都由它決定），伺服器只轉發豆豆的快照（ms → tms）與
+// 幽靈玩家的位置（mp → tmp），並收結算（over）。與 tools/dev_server.py 的 mz_* 同一套，改規則兩邊一起改。
+const MZ_GHOSTS = 4;
+const MZ_COUNTDOWN_MS = 3000, MZ_SOLO_COUNTDOWN_MS = 1500;
+const MZ_VS_MS = 240000;              // 對抗一局的時間上限（豆豆那台到時間就結算幽靈方贏；伺服器多等 20 秒還沒結算就自己結）
+const MZ_XP = 4, MZ_XP_MIN = 3000;    // 單人 ≥ MZ_XP_MIN 分、對抗贏的那一方 +MZ_XP（助手先訂的數值）
+const MZ_SCORE_MAX = 99999999;
+const MZ_MSGS = new Set(["mpac", "over"]);
+const mzInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+function mzPacIdx(t) { const i = t.seats.findIndex(s => s.cid != null && s.cid === t.pacCid); return i >= 0 ? i : 0; }
+function mzSetPac(t, cid, v) {   // 桌主在開局前指定誰當豆豆；改了大家要重新準備
+  const [role, i] = tblFind(t, cid);
+  if (t.game !== "maze" || role !== "seat" || i !== 0 || t.phase !== "lobby" || !mzInt(v, 0, t.seats.length - 1) || mzPacIdx(t) === v) return;
+  t.pacCid = t.seats[v].cid;
+  for (const s of t.seats) s.ready = false;
+  tblLog(t, `${t.seats[0].name} 指定 ${t.seats[v].name} 當豆豆`);
+}
+function mzStart(t) {
+  const now = Date.now(), n = t.seats.length, pac = mzPacIdx(t);
+  const gh = t.seats.map((_, k) => k).filter(k => k !== pac).slice(0, MZ_GHOSTS);
+  while (gh.length < MZ_GHOSTS) gh.push(-1);
+  t.g = { seed: Math.floor(Math.random() * 2147483648), t0: now + (n === 1 ? MZ_SOLO_COUNTDOWN_MS : MZ_COUNTDOWN_MS), pac, gh, solo: n === 1 };
+  t.result = null; t.phase = "playing";
+  for (const s of t.seats) { s.ready = false; s.left = false; s.sc = 0; s.lvl = 1; }
+  tblLog(t, n === 1 ? `${t.seats[0].name} 開始挑戰（單人）` : `對抗開始！${t.seats[pac].name} 當豆豆，${n - 1} 人當幽靈`);
+}
+// 結束：solo＝單人（分數進排行榜）；否則 win＝"pac"／"ghost"。ct＝每個幽靈位置抓到豆豆幾次
+function mzFinish(t, win, why, ct) {
+  const g = t.g;
+  if (!g) return;
+  const stay = t.seats.filter(s => !s.left), pacSeat = t.seats[g.pac];
+  if (g.solo) {
+    const s = t.seats[0];
+    t.result = s.left ? { aborted: true, text: `${s.name} 離開了，這一局不算` }
+      : { solo: true, text: `挑戰結束！${s.name} ${s.sc} 分（第 ${s.lvl} 關）`, rid: Math.floor(Math.random() * 4294967296),
+          ranking: [{ name: s.name, uid: s.uid || null, score: s.sc, lvl: s.lvl, left: false }], xp: stay.map(x => (x.sc >= MZ_XP_MIN ? MZ_XP : 0)) };
+  } else {
+    const ranking = t.seats.map((s, k) => {
+      const gk = g.gh.indexOf(k);
+      return { name: s.name, uid: s.uid || null, role: k === g.pac ? "pac" : "ghost", score: k === g.pac ? s.sc : (ct && gk >= 0 ? ct[gk] : 0), left: !!s.left };
+    }).sort((a, b) => (a.role === b.role ? 0 : a.role === "pac" ? -1 : 1));
+    const xp = stay.map(s => ((s === pacSeat) === (win === "pac") ? MZ_XP : 0));   // 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
+    t.result = { win, text: `${win === "pac" ? "豆豆方獲勝" : "幽靈方獲勝"}！（${why}）`, rid: Math.floor(Math.random() * 4294967296), ranking, xp };
+  }
+  tblLog(t, t.result.text);
+  t.seats = stay;
+  tblResetSeats(t);
+  t.g = null;
+}
+function mzTick(t, now) {   // 豆豆那台當掉、沒回報結算：對抗的時間上限過了 20 秒，伺服器自己結（幽靈方贏）
+  if (t.game === "maze" && t.phase === "playing" && t.g && !t.g.solo && now > t.g.t0 + MZ_VS_MS + 20000) { mzFinish(t, "ghost", "時間到"); return true; }
+  return false;
+}
+// 遊戲進行中有人離開：幽靈→改由電腦控制，遊戲繼續；豆豆→幽靈方贏（單人＝這局不算）
+function mzLeave(t, i) {
+  const s = t.seats[i], g = t.g;
+  s.left = true; s.cid = null;
+  if (i === g.pac) { mzFinish(t, "ghost", `${s.name}（豆豆）離開了`); return; }
+  const k = g.gh.indexOf(i); if (k >= 0) g.gh[k] = -1;
+  tblLog(t, `${s.name} 離開了，那隻幽靈改由電腦控制`);
+}
+// 豆豆的快照（約 10 次／秒）：p 豆豆 [x, y, 方向]（格數×10）、g 4 隻幽靈 [x, y, 方向, 狀態 0 一般／1 害怕／2 被吃掉回家中]、
+// d 剩下的豆子（16 進位點陣）、pw 能量剩幾毫秒、sc 分數、lv 剩幾條命、lvl 第幾關、rs 重來次數（被抓後大家回起點）、fz 凍結毫秒、bn 獎勵果實在不在
+function mzSnap(msg) {
+  const p = msg.p, g = msg.g, d = msg.d;
+  const pt = v => Array.isArray(v) && mzInt(v[0], -20, 400) && mzInt(v[1], -20, 400) && mzInt(v[2], -1, 3);
+  if (!pt(p) || !Array.isArray(g) || g.length !== MZ_GHOSTS || !g.every(x => pt(x) && mzInt(x[3], 0, 3))) return null;
+  if (typeof d !== "string" || !/^[0-9a-f]{1,120}$/.test(d)) return null;
+  if (!mzInt(msg.pw, 0, 60000) || !mzInt(msg.sc, 0, MZ_SCORE_MAX) || !mzInt(msg.lv, 0, 9) || !mzInt(msg.lvl, 1, 999) || !mzInt(msg.rs, 0, 100000) || !mzInt(msg.fz, 0, 10000) || !mzInt(msg.bn, 0, 1)) return null;
+  return { p: p.slice(0, 3), g: g.map(x => x.slice(0, 4)), d, pw: msg.pw, sc: msg.sc, lv: msg.lv, lvl: msg.lvl, rs: msg.rs, fz: msg.fz, bn: msg.bn };
+}
+// 快照／幽靈位置：回要轉發的 [[cid, msg]…]（給同桌其他人與觀戰者）
+function mzRelay(t, cid, msg) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "maze" || role !== "seat" || t.phase !== "playing" || !g) return [];
+  let data = null;
+  if (msg.a === "ms" && i === g.pac) {
+    const d = mzSnap(msg); if (!d) return [];
+    t.seats[i].sc = d.sc; t.seats[i].lvl = d.lvl;
+    data = { t: "tms", i, ...d };
+  } else if (msg.a === "mp" && g.gh.includes(i)) {   // 幽靈玩家的位置（x／y＝格數×10、d＝方向、m＝0 一般／2 被吃掉正在回家）
+    if (!(mzInt(msg.x, -20, 400) && mzInt(msg.y, -20, 400) && mzInt(msg.d, -1, 3) && mzInt(msg.m, 0, 3))) return [];
+    data = { t: "tmp", i, k: g.gh.indexOf(i), x: msg.x, y: msg.y, d: msg.d, m: msg.m };
+  }
+  if (!data) return [];
+  return [...t.seats, ...t.specs].filter(m => m.cid != null && m.cid !== cid).map(m => [m.cid, data]);
+}
+// 豆豆那台回報結束：單人＝命用完（帶 lvl）；對抗＝win（豆子吃光）或沒有（命用完／tu 時間到），ct＝各幽靈位置抓到幾次
+function mzOver(t, cid, msg) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "maze" || role !== "seat" || t.phase !== "playing" || !g || i !== g.pac || !mzInt(msg.sc, 0, MZ_SCORE_MAX)) return;
+  const s = t.seats[i];
+  s.sc = msg.sc;
+  if (g.solo) { if (mzInt(msg.lvl, 1, 999)) s.lvl = msg.lvl; mzFinish(t, null, "命用完了"); return; }
+  const ct = Array.isArray(msg.ct) && msg.ct.length === MZ_GHOSTS && msg.ct.every(x => mzInt(x, 0, 99)) ? msg.ct : null;
+  const win = msg.win === true;
+  mzFinish(t, win ? "pac" : "ghost", win ? "豆子全部吃光" : msg.tu === true ? "時間到" : "豆豆的命用完了", ct);
+}
+// ---- 空氣曲棍球（第十五、十六桌 t15／t16，2026-11-13，使用者要求）：2～8 人分藍紅兩隊（座位 0、2、4、6 藍隊，1、3、5、7 紅隊），人數要偶數 ----
+// 先得 HK_GOALS 分、或 HK_LIM_MS 到時分數高的隊伍贏（同分平手），不進排行榜；有人離開＝這一局結束（一般桌子的規則）。
+// 物理在桌主（座位 0）的客戶端跑：桌主送圓盤快照 hs → ths，每個人送自己握把的位置 hp → thp，桌主判斷結束送 hend。
+// 與 tools/dev_server.py 的 hk_* 同一套，改規則兩邊一起改。
+const HK_W = 640, HK_H = 320, HK_GOALS = 7, HK_LIM_MS = 180000, HK_COUNTDOWN_MS = 3000, HK_XP = 3;
+const HK_MSGS = new Set(["hend"]);
+const hkNum = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
+function hkStart(t) {
+  if (t.seats.length % 2) return;   // 人數要偶數（全員準備了也不開始，畫面會提示）
+  const now = Date.now();
+  t.g = { seed: Math.floor(Math.random() * 2147483648), t0: now + HK_COUNTDOWN_MS, sa: 0, sb: 0 };
+  t.result = null; t.phase = "playing";
+  for (const s of t.seats) s.ready = false;
+  tblLog(t, `比賽開始！${t.seats.length / 2} 對 ${t.seats.length / 2}`);
+}
+function hkFinish(t, sa, sb, why) {
+  const win = sa > sb ? 0 : sb > sa ? 1 : -1;
+  const text = `藍隊 ${sa} : ${sb} 紅隊，${win < 0 ? "平手" : win === 0 ? "藍隊獲勝" : "紅隊獲勝"}！${why ? `（${why}）` : ""}`;
+  t.result = { text, sa, sb, win, rid: Math.floor(Math.random() * 4294967296), ranking: t.seats.map((s, i) => ({ name: s.name, uid: s.uid || null, team: i % 2, left: false })),
+    xp: t.seats.map((_, i) => (i % 2 === win ? HK_XP : 0)) };
+  tblLog(t, text);
+  tblResetSeats(t);
+}
+function hkTick(t, now) {   // 桌主那台當掉沒回報：時間上限過了 20 秒，伺服器照最後的比分結算
+  if (t.game === "hockey" && t.phase === "playing" && t.g && now > t.g.t0 + HK_LIM_MS + 20000) { hkFinish(t, t.g.sa, t.g.sb, "時間到"); return true; }
+  return false;
+}
+// 握把位置／圓盤快照：回要轉發的 [[cid, msg]…]（給同桌其他人與觀戰者）
+function hkRelay(t, cid, msg) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "hockey" || role !== "seat" || t.phase !== "playing" || !g) return [];
+  let data = null;
+  if (msg.a === "hp") {   // 自己握把的位置（px）
+    if (!hkNum(msg.x, 0, HK_W) || !hkNum(msg.y, 0, HK_H)) return [];
+    data = { t: "thp", i, x: Math.round(msg.x), y: Math.round(msg.y) };
+  } else if (msg.a === "hs" && i === 0) {   // 桌主：圓盤 x／y／vx／vy、比分 sa／sb、開球前的凍結毫秒 f、桌主自己的握把 px／py
+    if (!hkNum(msg.x, -60, HK_W + 60) || !hkNum(msg.y, -60, HK_H + 60) || !hkNum(msg.vx, -3000, 3000) || !hkNum(msg.vy, -3000, 3000)) return [];
+    if (!Number.isInteger(msg.sa) || !Number.isInteger(msg.sb) || msg.sa < 0 || msg.sb < 0 || msg.sa > 99 || msg.sb > 99 || !hkNum(msg.f, 0, 5000)) return [];
+    g.sa = msg.sa; g.sb = msg.sb;
+    data = { t: "ths", x: Math.round(msg.x), y: Math.round(msg.y), vx: Math.round(msg.vx), vy: Math.round(msg.vy), sa: msg.sa, sb: msg.sb, f: Math.round(msg.f) };
+  }
+  if (!data) return [];
+  const to = [...t.seats, ...t.specs].filter(m => m.cid != null && m.cid !== cid), out = to.map(m => [m.cid, data]);
+  if (msg.a === "hs" && hkNum(msg.px, 0, HK_W) && hkNum(msg.py, 0, HK_H)) {   // 桌主自己的握把位置也夾在快照裡（hp 與 hs 共用限流，分開送會被吃掉）
+    const pd = { t: "thp", i: 0, x: Math.round(msg.px), y: Math.round(msg.py) };
+    for (const m of to) out.push([m.cid, pd]);
+  }
+  return out;
+}
+function hkEnd(t, cid, msg) {   // 桌主那台回報結束（有一隊到 HK_GOALS 分，或時間到）
+  const [role, i] = tblFind(t, cid);
+  if (t.game !== "hockey" || role !== "seat" || i !== 0 || t.phase !== "playing" || !t.g) return;
+  if (!Number.isInteger(msg.sa) || !Number.isInteger(msg.sb) || msg.sa < 0 || msg.sb < 0 || msg.sa > 99 || msg.sb > 99) return;
+  hkFinish(t, msg.sa, msg.sb, msg.sa >= HK_GOALS || msg.sb >= HK_GOALS ? "" : "時間到");
+}
+const GAME_START = { arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 function tblView(t, cid) {
   const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
@@ -2580,6 +2908,17 @@ function tblView(t, cid) {
     seats: t.seats.map((s, k) => ({ name: s.name, n: playing ? s.hand.length : 0, ready: s.ready, out: playing ? s.out : false, you: role === "seat" && k === i })),
     specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
   };
+  if (t.game === "arcade") return arView(t, cid, v);   // 俄羅斯方塊：每台機台的狀態、聯機狀況；phase 依「我自己是不是正在玩」
+  if (t.game === "hockey") {   // 空氣曲棍球：進行中附上 seed、開始時間、伺服器時間、時間上限、目標分數
+    if (t.g && playing) v.hk = { seed: t.g.seed, t0: t.g.t0, sn: Date.now(), lim: HK_LIM_MS, goals: HK_GOALS };
+    return v;
+  }
+  if (t.game === "maze") {   // 豆豆迷宮：誰當豆豆（開局前＝桌主指定的人）、分數／關卡／離開；進行中附上 seed、開始時間、伺服器時間、幽靈位置分配
+    v.pac = playing && t.g ? t.g.pac : mzPacIdx(t);
+    t.seats.forEach((s, k) => Object.assign(v.seats[k], { sc: s.sc || 0, lvl: s.lvl || 1, left: !!s.left }));
+    if (t.g && playing) v.mz = { seed: t.g.seed, t0: t.g.t0, sn: Date.now(), pac: t.g.pac, gh: [...t.g.gh], solo: t.g.solo, lim: MZ_VS_MS };
+    return v;
+  }
   if (t.game === "mage") {   // 見習驅魔師：血量／擊殺數／倒下／離開；進行中附上 seed、難度、人數、已擊殺的幽靈編號、Boss 血量與被打中的次數
     v.diff = t.diff || 0;
     t.seats.forEach((s, k) => { v.seats[k].hp = Math.max(0, s.hp || 0); v.seats[k].syms = s.syms || 0; v.seats[k].dead = !!s.dead; v.seats[k].left = !!s.left; });
@@ -2626,11 +2965,11 @@ function tblView(t, cid) {
       if (role === "seat") { v.hand = [...t.seats[i].hand]; v.note = t.seats[i].note || null; v.stolen = t.seats[i].stolen || null; }
       if (all) v.hands = t.seats.map(s => [...s.hand]);
     }
-  } else if (t.g && t.game === "trigon") {   // 三角方塊拼圖：棋盤（702 個字元：0 空／1～4 顏色，格子編號 y * 39 + x）、各座位顏色、每人用掉的方塊、最後一手、期限；全部公開
+  } else if (t.g && t.game === "trigon") {   // Blokus Trigon：棋盤（702 個字元：0 空／1～4 顏色，格子編號 y * 39 + x）、各座位顏色、每人用掉的方塊、最後一手、期限；全部公開
     const g = t.g;
     v.tg = { board: g.board.join(""), col: [...g.col], corner: [...g.corner], used: g.sd.map(d => [...d.used]), done: g.sd.map(d => d.done), last: g.last, moves: g.moves, deadline: playing ? g.deadline : 0, sn: Date.now() };
     if (playing) t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].rem = tgRem(g, k); });
-  } else if (t.g && t.game === "blokus") {   // 方塊拼圖：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
+  } else if (t.g && t.game === "blokus") {   // Blokus：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
     const g = t.g;
     v.bk = { size: bkSize(g), start: g.col.map((c, k) => [...bkStartOf(g, k)]), board: g.board.join(""), col: [...g.col], used: g.sd.map(d => [...d.used]), done: g.sd.map(d => d.done), last: g.last, moves: g.moves, deadline: playing ? g.deadline : 0, sn: Date.now() };
     if (playing) t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].rem = bkRem(g, k); });
@@ -2659,7 +2998,7 @@ function tblView(t, cid) {
   return v;
 }
 // seated＝入座中的連線編號：客戶端在他們的名牌後面加「入座中／遊戲中」
-const tblInfo = t => ({ game: t.game, n: t.seats.length, s: t.specs.length, max: GAME_LIMITS[t.game][1], play: t.phase === "playing", seated: t.seats.map(s => s.cid) });
+const tblInfo = t => ({ game: t.game, n: t.seats.length, s: t.specs.length, max: GAME_LIMITS[t.game][1], play: t.phase === "playing", seated: t.seats.map(s => s.cid), ...(t.game === "arcade" ? arInfo(t) : {}) });
 
 // ============ 一座島 ============
 // 用 WebSocket Hibernation：沒人講話時 DO 可以休眠，不計費也省資源
@@ -3110,6 +3449,7 @@ export class Island {
   async tableBoard(t, resBefore) {
     const r = t.result;
     if (!BOARD_GAMES.has(t.game) || !r || r === resBefore || r.aborted || !r.ranking) return;
+    if ((t.game === "arcade" || t.game === "maze") && !r.solo) return;   // 俄羅斯方塊／豆豆迷宮：聯機／對抗分數不進排行榜（使用者定）
     const ts = Date.now(), entries = t.game === "mage" ? (r.win && r.solo ? [{ name: r.ranking[0].name, uid: r.ranking[0].uid, score: r.score, ts }] : []) : r.ranking.filter(x => !x.left).map(x => ({ name: x.name, uid: x.uid, score: x.score, ts })).filter(e => e.score > 0);   // 見習驅魔師：只有單人勝利進排行榜
     if (!entries.length) return;
     const bk = boardKey(t.game), boards = await this.getBoards(), old = boards[bk] || [], nb = boardMerge(old, entries);
@@ -3146,13 +3486,13 @@ export class Island {
   }
   async tableMsg(ws, att, msg) {
     const now = Date.now(), a = msg.a;
-    if (a === "pos" || a === "word") {   // 躲彈幕的位置回報、英文打字競賽的分數回報：自己的限流，不影響 hit／finish 等操作
+    if (a === "pos" || a === "word" || a === "tb" || a === "ms" || a === "mp" || a === "hp" || a === "hs") {   // 躲彈幕的位置回報、英文打字競賽的分數回報、豆豆迷宮的快照／幽靈位置：自己的限流，不影響 hit／finish 等操作
       if (now - (this.lastTblPos.get(ws) || 0) < TBL_POS_CD_MS) return;
       this.lastTblPos.set(ws, now);
     } else if (a === "typ" || a === "sync") {   // 英文打字競賽的打字進度（只轉發給觀戰者）、見習驅魔師的每秒對時：自己的限流
       if (now - (this.lastTblTyp.get(ws) || 0) < TBL_TYP_CD_MS) return;
       this.lastTblTyp.set(ws, now);
-    } else if (a === "kill" || a === "boss") {   // 見習驅魔師的擊殺／打 Boss：不限流（兩次之間本來就隔著一筆畫，限流反而會吃掉擊殺）
+    } else if (a === "kill" || a === "boss" || a === "clr") {   // 見習驅魔師的擊殺／打 Boss、俄羅斯方塊的消行：不限流（兩次之間本來就隔著一筆畫，限流反而會吃掉擊殺）
     } else {
       if (now - (this.lastTbl.get(ws) || 0) < TBL_CD_MS) return;
       this.lastTbl.set(ws, now);
@@ -3165,7 +3505,9 @@ export class Island {
       if (att.table && att.table !== tid) await this.tableLeave(ws);
       const t = await this.getTable(tid);
       const cur = ws.deserializeAttachment() || {};
-      tblJoin(t, att.id, String((att.state && att.state.name) || (att.user && att.user.name) || `玩家${att.id}`).slice(0, 12), msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null);
+      const pname = String((att.state && att.state.name) || (att.user && att.user.name) || `玩家${att.id}`).slice(0, 12);
+      if (game === "arcade") arJoin(t, att.id, pname, msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null, msg.cab);   // 俄羅斯方塊：坐哪一台由 cab 決定
+      else tblJoin(t, att.id, pname, msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null);
       cur.table = tid; ws.serializeAttachment(cur);
       await this.saveTable(t);
       this.tableNotify(t);
@@ -3177,6 +3519,22 @@ export class Island {
     if (a === "leave") { await this.tableLeave(ws); return; }
     const t = await this.getTable(tid);
     if (!t) return;
+    if (t.game === "arcade" && (a === "tb" || a === "clr")) {   // 俄羅斯方塊：盤面快照／垃圾行，只轉發（不存檔、不通知整個畫面、不廣播 tblinfo；分數記在記憶體，下一次存檔時一起寫）
+      for (const [cid, m] of arMsg(t, att.id, msg, now)[1]) this.sendToId(cid, m);
+      return;
+    }
+    if (t.game === "hockey" && (a === "hp" || a === "hs")) {   // 空氣曲棍球：握把位置／圓盤快照，只轉發（不存檔、不通知畫面）；時間上限過了才順便結算
+      for (const [cid, m] of hkRelay(t, att.id, msg)) this.sendToId(cid, m);
+      const resBefore = t.result;
+      if (hkTick(t, now)) { await this.saveTable(t); this.tableNotify(t); await this.tableBroadcastInfo(terr); await this.tableXp(t, resBefore); }
+      return;
+    }
+    if (t.game === "maze" && (a === "ms" || a === "mp")) {   // 豆豆迷宮：豆豆的快照／幽靈玩家的位置，只轉發（不存檔、不通知畫面）；對抗時間上限過了才順便結算
+      for (const [cid, m] of mzRelay(t, att.id, msg)) this.sendToId(cid, m);
+      const resBefore = t.result;
+      if (mzTick(t, now)) { await this.saveTable(t); this.tableNotify(t); await this.tableBroadcastInfo(terr); await this.tableXp(t, resBefore); }
+      return;
+    }
     if (a === "pos") {   // 躲彈幕：位置回報，轉發給同桌其他人（不存檔、不通知畫面、不廣播 tblinfo）
       const [role, i] = tblFind(t, att.id);
       if (t.game === "dodge" && role === "seat" && t.phase === "playing" && !t.seats[i].out) {
@@ -3187,6 +3545,16 @@ export class Island {
           if (m.cid == null || m.cid === att.id) continue;
           for (const w of this.state.getWebSockets()) if ((w.deserializeAttachment() || {}).id === m.cid) { try { w.send(data); } catch { /* 對方已斷線 */ } }
         }
+      }
+      return;
+    }
+    if (a === "miss") {   // 英文／中文打字競賽：我剛打錯一次，轉發 tmx {i} 給同桌其他人與觀戰者（對手的分數框閃紅；看不到字）；不存檔、不通知畫面
+      const [role, i] = tblFind(t, att.id);
+      if (!isTy(t) || role !== "seat" || t.phase !== "playing" || !t.g) return;
+      const data = JSON.stringify({ t: "tmx", i });
+      for (const m of [...t.seats, ...t.specs]) {
+        if (m.cid == null || m.cid === att.id) continue;
+        for (const w of this.state.getWebSockets()) if ((w.deserializeAttachment() || {}).id === m.cid) { try { w.send(data); } catch { /* 對方已斷線 */ } }
       }
       return;
     }
@@ -3217,7 +3585,16 @@ export class Island {
     tyCheckEnd(t, now);
     itTick(t, now);   // 秘藥情報戰：識破時間過了就生效、逾時自動處理
     const mgChanged = mgTick(t, now);   // 見習驅魔師：沒被消除的幽靈扣血、勝負
-    if (t.game === "intel" && IT_MSGS.has(a)) itMsg(t, att.id, msg, now);   // 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
+    mzTick(t, now);   // 豆豆迷宮：對抗超過時間上限還沒結算
+    hkTick(t, now);   // 空氣曲棍球：超過時間上限還沒結算
+    if (t.game === "arcade" && AR_MSGS.has(a)) {   // 俄羅斯方塊：單人／聯機邀請／接受／拒絕／開始／結束
+      const [changed, extra] = arMsg(t, att.id, msg, now);
+      for (const [cid, m] of extra) this.sendToId(cid, m);
+      if (!changed) return;
+    }
+    else if (t.game === "hockey" && HK_MSGS.has(a)) hkEnd(t, att.id, msg);   // 空氣曲棍球：桌主那台回報結束
+    else if (t.game === "maze" && MZ_MSGS.has(a)) { if (a === "mpac") mzSetPac(t, att.id, msg.v); else mzOver(t, att.id, msg); }   // 豆豆迷宮：桌主指定豆豆／豆豆那台回報結束
+    else if (t.game === "intel" && IT_MSGS.has(a)) itMsg(t, att.id, msg, now);   // 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
     else if (a === "ready") tblReady(t, att.id, msg.v);
     else if (a === "sit") tblSit(t, att.id);
     else if (a === "stand") tblStand(t, att.id);
@@ -3228,8 +3605,8 @@ export class Island {
     else if (a === "pass") unPass(t, att.id, now);
     else if (a === "uno") unSay(t, att.id);
     else if (a === "catch") unCatch(t, att.id);
-    else if (a === "timeout") { if (t.game === "blokus") bkTimeout(t, now); else if (t.game === "trigon") tgTimeout(t, now); else unTimeout(t, now); }   // UNO／方塊拼圖：回合限時到了（伺服器核對時鐘）
-    else if (a === "place") { if (t.game === "trigon") tgPlace(t, att.id, msg.p, msg.c, now); else bkPlace(t, att.id, msg.p, msg.c, now); }   // 方塊拼圖：放方塊 {p 第幾塊, c 佔用的格子座標}
+    else if (a === "timeout") { if (t.game === "blokus") bkTimeout(t, now); else if (t.game === "trigon") tgTimeout(t, now); else unTimeout(t, now); }   // UNO／Blokus：回合限時到了（伺服器核對時鐘）
+    else if (a === "place") { if (t.game === "trigon") tgPlace(t, att.id, msg.p, msg.c, now); else bkPlace(t, att.id, msg.p, msg.c, now); }   // Blokus：放方塊 {p 第幾塊, c 佔用的格子座標}
     else if (a === "mode") unSetMode(t, att.id, msg.v);   // UNO：桌主在開局前選玩法（classic／wild）
     else if (a === "hit") dgHit(t, att.id, now);   // 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）
     else if (a === "kill") mgKill(t, att.id, msg.i, msg.p, now);   // 見習驅魔師：我消除了幽靈 i（符號辨識在客戶端，伺服器驗時間與先到先得）
@@ -4309,11 +4686,13 @@ export class Island {
   }
 }
 
-// ============ 全域 Registry（跨島的玩家資料；魚類圖鑑＋腳色等級 XP）============
+// ============ 全域 Registry（跨島的玩家資料；魚類圖鑑、腳色等級 XP、合成解鎖、擊倒島主紀錄、暱稱）============
 // 全站只有一個實例（idFromName("global")），只由 Island 透過 REGISTRY 綁定呼叫，沒有對外的路由。
 // 資料：dex:<Discord 使用者 ID> → { 地形: { 魚id: { max（最大尺寸 cm）, n（釣到次數）, first（第一次釣到的時間） } } }
 //       xp:<Discord 使用者 ID> → 總 XP（整數；2026-11-07 腳色等級第 2 步）
 //       craft:<Discord 使用者 ID> → { mat: {素材id: 解鎖時間}, furn: {家具id: 時間}, rec: {配方id: 時間} }（合成：素材圖鑑／配方筆記）
+//       kills:<Discord 使用者 ID> → { 有島主的地形: 時間 }（擊倒島主紀錄，稱號用）
+//       nick:<Discord 使用者 ID> → 暱稱（2026-11-13）
 // 讀寫在同一個請求裡只 await storage，DO 的 input gate 會擋住其他請求插隊，所以同一人同時送兩筆也不會互相覆蓋
 const UID_RE = /^[0-9A-Za-z_-]{1,40}$/;
 export class Registry {

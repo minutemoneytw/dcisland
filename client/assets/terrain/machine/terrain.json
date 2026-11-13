@@ -30,6 +30,10 @@
    "weight": 2
   },
   {
+   "id": "golem_machine",
+   "weight": 1
+  },
+  {
    "id": "imp_machine",
    "weight": 2
   }
