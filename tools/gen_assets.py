@@ -1477,7 +1477,11 @@ PROPS_BY_TERRAIN = {
               dict(id="pool_plant1", kind="deco", img="pool_plant.png", cell=[23, 16], w=1, h=2),
               dict(id="pool_plant2", kind="deco", img="pool_plant.png", cell=[35, 16], w=1, h=2),
               dict(id="pool_plant3", kind="deco", img="pool_plant.png", cell=[25, 25.5], w=1, h=2),
-              dict(id="pool_plant4", kind="deco", img="pool_plant.png", cell=[34, 25.5], w=1, h=2)],
+              dict(id="pool_plant4", kind="deco", img="pool_plant.png", cell=[34, 25.5], w=1, h=2),
+              # 夾娃娃機與扭蛋機（2026-11-14，使用者要求）：俄羅斯方塊機台右側、靠北牆。先只做外觀框架（kind=deco：擋路、沒有名稱、不能互動），
+              # 獎勵怎麼處理還沒決定，之後要開放時把 kind 改成新的互動種類（客戶端 propUse／useProp）
+              dict(id="claw", kind="deco", img="claw_machine.png", cell=[61, 14.5], w=3, h=3.5),
+              dict(id="gacha", kind="deco", img="gacha_machine.png", cell=[65, 14.5], w=2, h=3)],
 }
 
 def drink_bar():
@@ -1845,6 +1849,57 @@ def arcade_cabinet(col):
     cv.rect(5, 32, 26, 46, shade(c, .85))                      # 下半身
     cv.rect(12, 35, 19, 41, hx("#2a2a30")); cv.rect(13, 36, 14, 40, hx("#e8a030")); cv.rect(17, 36, 18, 40, hx("#e8a030"))   # 投幣口
     cv.rect(2, 46, 29, 47, dark)
+    cv.outline()
+    return cv
+
+def claw_machine():
+    """夾娃娃機（48×56，畫 scale 2＝3×3.5 格）：粉紅外殼與發光招牌、玻璃櫃裡堆著各色玩偶、頂端軌道垂下一支爪子，
+    下方操作台（搖桿＋大按鈕）、投幣口與右下角的取物口。目前只是外觀（不能互動）。"""
+    cv = Canvas(48, 56)
+    c = hx("#e8648c"); dark, lite = shade(c, .62), shade(c, 1.3)
+    cv.rect(1, 0, 46, 55, c)                                           # 外殼
+    cv.rect(1, 0, 3, 55, dark); cv.rect(44, 0, 46, 55, dark)           # 側板
+    cv.rect(4, 1, 43, 8, hx("#fff0b0")); cv.hline(4, 43, 1, hx("#fffbe0")); cv.hline(4, 43, 8, hx("#e8c060"))   # 招牌（發光）
+    for k, bc in enumerate(["#e04848", "#f0c020", "#3cb45a", "#3b78e8", "#9a5ad8", "#e04848", "#f0c020"]):
+        cv.ellipse(8 + k * 5.2, 5, 1.8, 1.8, hx(bc))                   # 招牌上一排彩球
+    cv.rect(4, 9, 43, 10, dark)                                        # 招牌下緣
+    cv.rect(4, 11, 43, 38, hx("#1a1a22"))                              # 玻璃框
+    cv.rect(6, 12, 41, 37, hx("#bfe3f0"))                              # 玻璃（淺藍）
+    cv.rect(6, 12, 41, 14, hx("#dff3f9")); cv.vline(8, 14, 36, hx("#e8f7fb")); cv.vline(9, 18, 30, hx("#e8f7fb"))   # 反光
+    cv.hline(6, 41, 13, hx("#7a808c")); cv.rect(22, 11, 25, 14, hx("#5a606c"))   # 頂端軌道與滑車
+    cv.vline(23, 14, 20, hx("#5a606c")); cv.vline(24, 14, 20, hx("#5a606c"))      # 吊線
+    cv.rect(21, 21, 26, 22, hx("#8a909c"))                                        # 爪座
+    for x0, x1 in ((19, 21), (26, 28)): cv.vline(x0, 22, 27, hx("#8a909c")); cv.set(x1, 27, hx("#8a909c"))   # 兩側爪子
+    cv.set(20, 28, hx("#8a909c")); cv.set(27, 28, hx("#8a909c"))
+    for cx, cy, r, bc in ((10, 33, 3.2, "#f0c020"), (16, 34, 3, "#3b78e8"), (22, 33, 3.4, "#e84848"), (29, 34, 3, "#3cb45a"),
+                          (35, 33, 3.2, "#9a5ad8"), (13, 29, 2.6, "#ff9ad0"), (32, 29, 2.6, "#40c8e0"), (38, 35, 2.6, "#f0c020"), (7, 35, 2.4, "#e84848")):
+        b = hx(bc); cv.ellipse(cx, cy, r, r, b); cv.set(int(cx) - 1, int(cy) - 1, shade(b, 1.4))   # 玩偶（圓滾滾的一團）
+        cv.set(int(cx) - 1, int(cy), hx("#1a1a22")); cv.set(int(cx) + 1, int(cy), hx("#1a1a22"))   # 眼睛
+    cv.rect(4, 39, 43, 44, lite); cv.hline(4, 43, 39, shade(c, 1.5)); cv.hline(4, 43, 44, dark)   # 操作台（斜面）
+    cv.rect(11, 41, 12, 44, hx("#2a2a30")); cv.rect(9, 39, 14, 41, hx("#3b78e8")); cv.set(10, 39, hx("#9ac0ff"))   # 搖桿
+    cv.ellipse(30, 42, 3, 2, hx("#e83a3a")); cv.set(29, 41, hx("#ff9a9a"))                                         # 大按鈕
+    cv.rect(35, 40, 40, 43, hx("#2a2a30")); cv.rect(36, 41, 39, 42, hx("#e8a030"))                                 # 投幣口
+    cv.rect(4, 45, 43, 54, shade(c, .85))                              # 下半身
+    cv.rect(26, 46, 41, 53, hx("#1a1a22")); cv.rect(27, 47, 40, 52, hx("#0c0c12")); cv.hline(26, 41, 46, hx("#5a606c"))   # 取物口
+    cv.rect(1, 54, 46, 55, dark)
+    cv.outline()
+    return cv
+
+def gacha_machine():
+    """扭蛋機（32×48，畫 scale 2＝2×3 格）：上方透明圓罩裡裝滿彩色扭蛋、紅色機身中間一個黃色轉鈕，下方出蛋口。目前只是外觀（不能互動）。"""
+    cv = Canvas(32, 48)
+    cv.rect(4, 36, 27, 46, hx("#5a606c")); cv.rect(4, 36, 27, 37, hx("#7a808c"))     # 底座
+    cv.ellipse(15.5, 13, 13, 13, hx("#bfe3f0")); cv.ellipse(15.5, 13, 11, 11, hx("#d4eef7"))   # 圓罩（外圈＋內層）
+    for cx, cy, bc in ((9, 17, "#e84848"), (15, 19, "#f0c020"), (21, 17, "#3b78e8"), (12, 12, "#3cb45a"), (19, 12, "#ff9ad0"),
+                       (8, 11, "#9a5ad8"), (23, 11, "#e84848"), (15, 6, "#40c8e0"), (11, 7, "#f0c020"), (20, 7, "#3cb45a")):
+        b = hx(bc); cv.ellipse(cx, cy, 3, 3, b); cv.hline(int(cx) - 2, int(cx) + 2, int(cy), shade(b, .78)); cv.set(int(cx) - 1, int(cy) - 2, shade(b, 1.5))   # 扭蛋（上下殼的接縫＋高光）
+    cv.set(8, 6, hx("#ffffff")); cv.set(9, 5, hx("#ffffff")); cv.set(10, 4, hx("#ffffff"))   # 圓罩反光
+    red = hx("#d83a3a")
+    cv.rect(5, 24, 26, 35, red); cv.rect(5, 24, 6, 35, shade(red, .7)); cv.rect(25, 24, 26, 35, shade(red, .7)); cv.hline(5, 26, 24, shade(red, 1.35))   # 機身
+    cv.rect(4, 22, 27, 24, shade(red, .85))                                          # 圓罩底環
+    cv.ellipse(15.5, 29, 4.5, 4.5, hx("#f0c020")); cv.rect(14, 26, 17, 32, hx("#d8a010")); cv.rect(15, 26, 16, 32, hx("#f8dc60"))   # 轉鈕（黃）
+    cv.rect(9, 33, 22, 35, shade(red, .55)); cv.rect(11, 33, 20, 34, hx("#14141a"))   # 出蛋口
+    cv.rect(6, 37, 25, 38, hx("#3a3e48"))
     cv.outline()
     return cv
 
@@ -3286,7 +3341,7 @@ def main():
                     td["walls"] = dict(n="wall.png", w="wall_w.png", e="wall_e.png", h=WALL_H)   # 東北西三面牆（南面不畫）
         if t["id"] in PROPS_BY_TERRAIN:   # 固定小物件（餐飲區等）：圖放在地形資料夾
             td["props"] = PROPS_BY_TERRAIN[t["id"]]
-            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub); save(pool_plant(), "pool_plant.png", sub); save(pool_bench(), "pool_bench.png", sub); save(pool_deck(), "pool_deck.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
+            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub); save(pool_plant(), "pool_plant.png", sub); save(pool_bench(), "pool_bench.png", sub); save(pool_deck(), "pool_deck.png", sub); save(claw_machine(), "claw_machine.png", sub); save(gacha_machine(), "gacha_machine.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
         if t.get("campfire") is False:
             td["campfire"] = False
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉
