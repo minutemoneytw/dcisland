@@ -1471,9 +1471,9 @@ PROPS_BY_TERRAIN = {
               # 餐飲區的隔板與地毯（2026-11-13，使用者要求）：kind＝deco（擋路、不能互動、沒有名稱）／rug（畫在地板層、不擋路、可以走上去）
               dict(id="dine_wall", kind="deco", img="dine_partition.png", cell=[75, 14.5], w=1, h=5.5),   # 西側一道矮隔板，從北牆伸到 y＝20（南邊開口當入口）
               dict(id="dine_rug", kind="rug", img="dine_rug.png", cell=[76, 16], w=9, h=5),                # 地毯鋪滿隔板右邊到東牆
-              # 夾娃娃機與扭蛋機（2026-11-14，使用者要求）：俄羅斯方塊機台右側、靠北牆。先只做外觀框架（kind=deco：擋路、沒有名稱、不能互動），
+              # 夾娃娃機與扭蛋機（2026-11-14，使用者要求）：俄羅斯方塊機台右側、靠北牆；底邊要跟俄羅斯方塊機台對齊（y＋h＝17.5，所以夾娃娃機比較高、y 從 14 開始）。先只做外觀框架（kind=deco：擋路、沒有名稱、不能互動），
               # 獎勵怎麼處理還沒決定，之後要開放時把 kind 改成新的互動種類（客戶端 propUse／useProp）
-              dict(id="claw", kind="deco", img="claw_machine.png", cell=[61, 14.5], w=3, h=3.5),
+              dict(id="claw", kind="deco", img="claw_machine.png", cell=[61, 14], w=3, h=3.5),
               dict(id="gacha", kind="deco", img="gacha_machine.png", cell=[65, 14.5], w=2, h=3)],
 }
 
