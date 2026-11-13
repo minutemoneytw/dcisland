@@ -8068,7 +8068,8 @@ const WEATHERS = {   // id → 名稱／色罩（rgba 三元組＋最濃不透�
   // depth: true → 不用全畫面平均色罩，改畫以玩家為中心的徑向漸層：身邊（near）幾乎清楚、中距離（mid）、
   // 遠處（far）到能見度半徑（vis×畫面短邊）以外（alpha）整片白濛；core＝身邊這個比例內維持最清楚的濃度
   fog:     { name: '霧',   tint: [230, 237, 244], alpha: .95, near: .05, mid: .4, far: .75, core: .1, vis: .8, depth: true, part: { kind: 'fog', n: 24, vx: 12, r: 120 } },
-  sand:    { name: '沙暴', tint: [222, 190, 122], alpha: .15, part: { kind: 'sand',    n: 70,  vy: 26,  vx: -215, len: 9 } },
+  // 沙暴（2026-11-13 使用者定：跟霧一樣改玩家中心的徑向漸層——黃沙色、越遠越看不清；濃度比霧低很多，是沙塵感不是白牆）
+  sand:    { name: '沙暴', tint: [224, 196, 128], alpha: .78, near: .02, mid: .14, far: .42, core: .1, vis: .85, depth: true, part: { kind: 'sand', n: 70, vy: 26, vx: -215, len: 9 } },
   ember:   { name: '落灰', tint: [255, 118, 42],  alpha: .09, part: { kind: 'ember',   n: 60,  vy: -34, vx: 16, r: 1.8 } },
   leaf:    { name: '落葉', part: { kind: 'leaf', n: 24, vy: 42, vx: -34, sway: 42, r: 2.6 } },
   firefly: { name: '螢光', tint: [30, 36, 70],    alpha: .08, part: { kind: 'firefly', n: 26,  vy: -12, vx: 8, r: 1.4 } },
@@ -8174,8 +8175,12 @@ function drawWeather() {
       ctx.strokeStyle = `rgba(178,208,238,${.34 + .2 * Math.sin(p.ph * 3)})`; ctx.lineWidth = 1;
       const l = d.len * (d.vy / (Math.hypot(d.vx, d.vy) || 1)), lx = d.len * (d.vx / (Math.hypot(d.vx, d.vy) || 1));
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + lx, p.y + l); ctx.stroke();
-    } else if (d.kind === 'sand') {
-      ctx.strokeStyle = 'rgba(238,206,150,.5)'; ctx.lineWidth = 1;
+    } else if (d.kind === 'sand') {   // 沙線：沿線方向漸層、兩端淡出到透明（實心線兩端會看出「明顯的邊緣」，2026-11-13 使用者定）
+      const g2 = ctx.createLinearGradient(p.x, p.y, p.x - d.len, p.y + d.len * .3);
+      g2.addColorStop(0, 'rgba(238,206,150,0)');
+      g2.addColorStop(.45, 'rgba(238,206,150,.34)');
+      g2.addColorStop(1, 'rgba(238,206,150,0)');
+      ctx.strokeStyle = g2; ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - d.len, p.y + d.len * .3); ctx.stroke();
     } else if (d.kind === 'fog') {   // 霧團：徑向漸層（中心稍濃、往外淡到透明），看不出圓形輪廓（2026-11-13 使用者定：實心圓會被看出「圓圓的白色」）
       const r = d.r * (0.8 + .2 * Math.sin(p.ph * .7)), a = .075 + .04 * Math.sin(p.ph);
