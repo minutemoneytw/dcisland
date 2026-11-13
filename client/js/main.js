@@ -6812,6 +6812,120 @@ function drawWeather() {
     ctx.restore();
   }
 }
+// ---------------- 小地圖（2026-11-13，使用者要求；樣式仿使用者提供的範例圖：羊皮紙地圖＋青銅雕花圓框＋指北針＋天氣＋座標） ----------------
+// 直接畫在主畫布右上角（畫布座標，跟著遊戲一起縮放，不會跑到畫面外；2026-11-13 使用者回饋：原本的獨立 DOM canvas 會落在畫布外）。
+const MINI_COLORS = {   // 各地形縮圖配色（地＝uiColor 加深一階、水／岸手調；和平島是室內，房間外畫暗色不是海）
+  grass:   { ground: '#5d9e50', water: '#2e5f8e', shore: '#c8b878' },
+  beach:   { ground: '#dcc788', water: '#2e6f9e', shore: '#efe0ac' },
+  forest:  { ground: '#4d7c3e', water: '#285688', shore: '#a8985e' },
+  snow:    { ground: '#dbe4ec', water: '#33628e', shore: '#b8c2cc' },
+  night:   { ground: '#5d659c', water: '#1c2438', shore: '#464e66' },
+  volcano: { ground: '#5e4c4a', water: '#33343e', shore: '#8a6a50' },
+  machine: { ground: '#7c8694', water: '#2e3e52', shore: '#9aa2ac' },
+  peace:   { ground: '#c4b088', water: '#2e5f8e', shore: '#a8906a', room: '#14171e' },
+};
+let mmBase = null, mmBaseFor = '';
+function buildMinimapBase() {   // 換地形（＝genWorld 重生成）時重畫一次：types（0 水／1 岸／2 地）一格一像素
+  const T = S.terrain, c = MINI_COLORS[T] || MINI_COLORS.grass, room = S.terrains[T]?.layout === 'room';
+  mmBase = document.createElement('canvas');
+  mmBase.width = COLS; mmBase.height = ROWS;
+  const g = mmBase.getContext('2d');
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const t = S.world.types[y * COLS + x];
+    g.fillStyle = t === 2 ? c.ground : t === 1 ? c.shore : room ? c.room : c.water;
+    g.fillRect(x, y, 1, 1);
+  }
+  mmBaseFor = T;
+}
+function drawMiniWeatherIcon(c, kind, x, y) {   // 資訊條左端的極簡向量天氣圖示（約 14px）
+  c.save(); c.translate(x, y); c.lineCap = 'round';
+  if (kind === 'clear') {   // 晴：太陽（圓＋八道光芒）
+    c.fillStyle = '#ffd86b'; c.beginPath(); c.arc(0, 0, 3, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#ffd86b'; c.lineWidth = 1.2;
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; c.beginPath(); c.moveTo(Math.cos(a) * 4.6, Math.sin(a) * 4.6); c.lineTo(Math.cos(a) * 6.6, Math.sin(a) * 6.6); c.stroke(); }
+  } else if (kind === 'rain') {   // 雨：三道斜線
+    c.strokeStyle = '#9cc8ec'; c.lineWidth = 1.6;
+    for (const dx of [-4, 0, 4]) { c.beginPath(); c.moveTo(dx + 1, -4); c.lineTo(dx - 1.5, 5); c.stroke(); }
+  } else if (kind === 'snow') {   // 雪：三線雪花
+    c.strokeStyle = '#eef4fb'; c.lineWidth = 1.4;
+    for (let i = 0; i < 3; i++) { const a = i * Math.PI / 3; c.beginPath(); c.moveTo(-Math.cos(a) * 5.5, -Math.sin(a) * 5.5); c.lineTo(Math.cos(a) * 5.5, Math.sin(a) * 5.5); c.stroke(); }
+  } else if (kind === 'fog') {   // 霧：三條橫線
+    c.strokeStyle = '#cfd6de'; c.lineWidth = 1.6;
+    for (const dy of [-4, 0, 4]) { c.beginPath(); c.moveTo(-5.5, dy); c.lineTo(5.5, dy); c.stroke(); }
+  } else if (kind === 'sand') {   // 沙暴：三道斜沙
+    c.strokeStyle = '#e8ce96'; c.lineWidth = 1.6;
+    for (const dx of [-4, 0, 4]) { c.beginPath(); c.moveTo(dx + 2, -4); c.lineTo(dx - 2, 5); c.stroke(); }
+  } else if (kind === 'ember') {   // 落灰：小火苗
+    c.fillStyle = '#ff9a4a';
+    c.beginPath(); c.moveTo(0, -6); c.quadraticCurveTo(5, -1, 0, 6); c.quadraticCurveTo(-5, -1, 0, -6); c.fill();
+    c.fillStyle = '#ffd86b'; c.beginPath(); c.arc(0, 2, 1.8, 0, Math.PI * 2); c.fill();
+  } else if (kind === 'leaf') {   // 落葉：斜葉片＋葉脈
+    c.fillStyle = '#8fbf5a'; c.beginPath(); c.ellipse(0, 0, 5.5, 2.4, -Math.PI / 4, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#5d8a3a'; c.lineWidth = 1; c.beginPath(); c.moveTo(-3.5, 3.5); c.lineTo(3.5, -3.5); c.stroke();
+  } else {   // firefly：螢光兩點＋光暈
+    c.fillStyle = 'rgba(190,255,190,.35)'; c.beginPath(); c.arc(0, 0, 6, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#c8f0a8';
+    c.beginPath(); c.arc(-2, 1.5, 1.8, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(3, -2, 1.4, 0, Math.PI * 2); c.fill();
+  }
+  c.restore();
+}
+function drawMinimap() {   // 掛點：draw() 的 drawWeather() 之後（螢幕空間；島主倒數條之下）
+  if (!S.world) return;
+  if (mmBaseFor !== S.terrain) buildMinimapBase();
+  const cx = canvas.width - 100, cy = 106, R = 80;   // 圓心與半徑：貼著畫布右上角內側
+  const wd = WEATHERS[S.weather?.cur || 'clear'];
+  // 地圖：整座島等比塞進圓內（平滑縮放＋multiply 暖色，仿範例圖的羊皮紙感）
+  const mw = 140, mh = mw * ROWS / COLS, sc = mw / COLS, ox = cx - mw / 2, oy = cy - mh / 2;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, R - 3, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = '#3c5468'; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);   // 海
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(mmBase, ox, oy, mw, mh);
+  ctx.globalCompositeOperation = 'multiply';   // 羊皮紙暖色：陸地偏黃、海偏墨綠，像舊地圖
+  ctx.fillStyle = '#d8c8a0'; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+  ctx.globalCompositeOperation = 'source-over';
+  if (wd.tint) { ctx.fillStyle = `rgba(${wd.tint.join(',')},${(wd.alpha * 1.6).toFixed(3)})`; ctx.fillRect(cx - R, cy - R, R * 2, R * 2); }   // 天氣色罩（跟世界同一份，小地圖也看得出天氣）
+  // 點：營火（橘，集合點）、其他玩家（金）、自己（白＋深色描邊放最上）
+  const dot = (wx, wy, col, r) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(ox + wx / CELL * sc, oy + wy / CELL * sc, r, 0, Math.PI * 2); ctx.fill(); };
+  if (S.campfire) dot(S.campfire.x, S.campfire.y, '#ff9a4a', 2);
+  for (const r of S.remotes.values()) if (r.x != null) dot(r.x, r.y, '#e8c86a', 1.6);
+  const me = S.players[0];
+  if (me) { dot(me.x, me.y, '#14100a', 3.2); dot(me.x, me.y, '#f4f8fc', 2); }
+  ctx.restore();
+  // 外框與資訊條畫在 clip 外（資訊條壓在圓框下緣、一部分在圓外，clip 內畫會被裁掉——2026-11-13 使用者回饋天氣圖示看不到就是這個原因）
+  // 外框：深青銅粗環＋金環＋內圈暗環＋四顆斜角鉚釘（仿範例圖的雕花框；中央指針使用者說不用，拿掉了）
+  ctx.lineWidth = 6; ctx.strokeStyle = '#2c2012'; ctx.beginPath(); ctx.arc(cx, cy, R - 1, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 2.5; ctx.strokeStyle = '#8a6a34'; ctx.beginPath(); ctx.arc(cx, cy, R - 5, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 1; ctx.strokeStyle = '#e8c878'; ctx.beginPath(); ctx.arc(cx, cy, R - 7, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = '#241a0e'; ctx.beginPath(); ctx.arc(cx, cy, R - 9, 0, Math.PI * 2); ctx.stroke();
+  for (const a of [Math.PI / 4, -Math.PI / 4, Math.PI * 3 / 4, -Math.PI * 3 / 4]) {
+    const rx = cx + Math.cos(a) * (R - 5), ry = cy + Math.sin(a) * (R - 5);
+    const rg = ctx.createRadialGradient(rx - 1.5, ry - 1.5, .5, rx, ry, 4.5);
+    rg.addColorStop(0, '#f0d890'); rg.addColorStop(1, '#7a5c28');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(rx, ry, 4.5, 0, Math.PI * 2); ctx.fill();
+  }
+  // N 指北針字（上緣，深描邊金字）
+  ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(12,8,4,.9)'; ctx.strokeText('N', cx, cy - R + 10);
+  ctx.fillStyle = '#e8c878'; ctx.fillText('N', cx, cy - R + 10);
+  // 底部資訊條（圓角銅牌，壓在圓框下緣）：左＝天氣徽章（圖示）＋名稱、右＝座標（格）
+  const bw = 150, bh = 26, bx = cx - bw / 2, by = cy + R - 14, rr = 7;
+  ctx.fillStyle = '#241a0e';
+  ctx.beginPath();
+  ctx.moveTo(bx + rr, by); ctx.arcTo(bx + bw, by, bx + bw, by + bh, rr); ctx.arcTo(bx + bw, by + bh, bx, by + bh, rr);
+  ctx.arcTo(bx, by + bh, bx, by, rr); ctx.arcTo(bx, by, bx + bw, by, rr); ctx.closePath(); ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = '#c8a44a'; ctx.stroke();
+  // 天氣圖示：圓形徽章底（深底金框），讓圖示壓在任何地圖色上都看得到
+  ctx.fillStyle = '#3a2a18'; ctx.beginPath(); ctx.arc(bx + 16, by + bh / 2, 9, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = '#c8a44a'; ctx.stroke();
+  drawMiniWeatherIcon(ctx, S.weather?.cur || 'clear', bx + 16, by + bh / 2);
+  ctx.textAlign = 'left'; ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.fillStyle = '#f4e8c8';
+  ctx.fillText(wd.name, bx + 26, by + bh / 2 + 1);
+  ctx.textAlign = 'right'; ctx.font = '12px "Microsoft JhengHei"'; ctx.fillStyle = '#e2d8bc';
+  if (me) ctx.fillText(`X ${Math.floor(me.x / CELL)} Y ${Math.floor(me.y / CELL)}`, bx + bw - 9, by + bh / 2 + 1);
+  ctx.restore();
+}
 function draw() {
   const T = S.terrain, tMan = S.terrains[T], ims = S.tImages[T];
   const SC = tMan.scale;
@@ -7281,6 +7395,7 @@ function draw() {
   }
   ctx.restore();
   drawWeather();   // 天氣色罩與粒子（螢幕空間，蓋在世界與名牌上、島主倒數條之下）
+  drawMinimap();   // 小地圖（螢幕空間右上角；圖鑑／角色等 DOM 面板天然蓋在畫布上層）
   if (ownerBar) drawOwnerCastBar(ownerBar.frac, ownerBar.name);   // 島主讀條固定在視窗上方置中（世界座標還原後畫，永遠在最上層）
   drawOwnerLineBanner();   // 島主台詞：除了頭上的泡泡，也固定顯示在視窗上方（離島主太遠、泡泡在畫面外也看得到）
 }

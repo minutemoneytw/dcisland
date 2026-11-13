@@ -80,5 +80,6 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 | **地圖尺寸（`COLS`／`ROWS`）、和平島、遊戲桌（抽鬼牌／五子棋／躲彈幕／UNO／英文打字競賽／中文打字競賽／秘藥情報戰／見習驅魔師／方塊拼圖／三角方塊拼圖；`tbl`／`table`／`tblinfo` 訊息、`TABLE_DEFS`、`games.json`）** | 和平島與遊戲桌 |
 | `makeSpr`／`drawSpr`、`anim`、人物分層 sheet、`avatar.json` 的 `frames`、**裝備／外觀／換色（`dye`、`glam`、`wardrobe`）** | 美術：多幀動畫與人物分層 |
 | 天氣（色罩／粒子、`WEATHER_SLOT_MIN` 時刻槽、`weatherSlot` 接遊戲時間、之後 `spawnIf`／植物生長） | 天氣（純客戶端畫面） |
+| **小地圖（`drawMinimap`、`MINI_COLORS`、畫在主畫布右上角、DOM 面板天然蓋過它）** | 小地圖 |
 | 本機 Python／Node 環境、Discord CSP、`dev_server.py` 的 HTTP 設定、主迴圈 `dt`／`S.t` | 環境與部署地雷 |
 | 已被取代的舊做法（舊人物分層、髮型模組縮放） | 歷史紀錄（已過時） |
