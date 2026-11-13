@@ -7,7 +7,16 @@
  "edge": "edge.png",
  "water": "water.png",
  "deco": [],
- "mobs": [],
+ "mobs": [
+  {
+   "id": "cat",
+   "weight": 1
+  },
+  {
+   "id": "dog",
+   "weight": 1
+  }
+ ],
  "uiColor": "#d9c9a6",
  "tables": [
   {

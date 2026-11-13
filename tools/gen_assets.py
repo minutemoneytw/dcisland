@@ -2206,6 +2206,15 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/snake_queen_sheet.png", frames=4, fw=88, fh=85, what="笨蛋蛇女的 4 幀（夜光島島主）"),
     dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fw=88, fh=74, what="蓋老師（究極神兵）的走路 6 幀（熔岩島島主）"),
     dict(sheet="external/img2pixel/alexander_idle_sheet.png", frames=4, fw=88, fh=77, what="壓力山大的待機 4 幀（機械島島主）"),
+    # 2026-11-12 素材庫第一批（OpenGameArt LPC；sheet 已裁成只用到的格）：
+    dict(sheet="external/img2pixel/deer_sheet.png", frames=4, rows=4, fw=64, fh=96, what="鹿的 4 方向（下／左／右／上）× 4 幀走路（草島）"),
+    dict(sheet="external/img2pixel/cat_sheet.png", frames=3, rows=3, fw=32, fh=32, what="貓的 3 方向（上／下／左）× 3 幀走路（和平島；白貓原色，靠 tint 可換色）"),
+    dict(sheet="external/img2pixel/dog_sheet.png", frames=3, rows=3, fw=32, fh=32, what="狗的 3 方向（上／下／左）× 3 幀走路（和平島；白狗原色，靠 tint 可換色）"),
+    dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64, what="野豬的 4 方向（上／左／下／右）× 3 幀走路（森林島）"),
+    dict(sheet="external/img2pixel/bear_sheet.png", frames=4, rows=4, fw=64, fh=64, what="白熊的 4 方向（下／右／上／左）× 4 幀走路（雪島；原圖三色只取白熊那一區）"),
+    dict(sheet="external/img2pixel/bat_sheet.png", frames=4, fw=32, fh=32, what="蝙蝠的正面拍翅 4 幀（夜光島；單列，左右靠鏡像）"),
+    dict(sheet="external/img2pixel/imp_sheet.png", frames=4, rows=4, fw=64, fh=64, what="小惡魔的 4 方向（下／上／左／右）× 4 幀走路（熔岩島）"),
+    dict(sheet="external/img2pixel/golem_sheet.png", frames=7, rows=3, fw=64, fh=64, what="魔像的 3 方向（下／右／左）× 7 幀走路（機械島；沒有背面，朝上用正面鏡像）"),
     dict(sheet="external/img2pixel/campfire_sheet.png", frames=8, fw=32, fh=32, what="營火 8 幀（世界物件，不是動物：main.js 直接載入，不經 manifest）"),
     dict(sheet="external/img2pixel/fireball_sheet.png", frames=8, fw=64, fh=64, what="飛龍火球的 8 幀（特效投射物，不是動物：main.js 直接載入，不經 manifest）"),
     dict(sheet="external/img2pixel/fireball_burst.png", frames=12, fw=32, fh=32, what="火球命中爆炸的 12 幀（特效，不是動物：main.js 直接載入，不經 manifest）"),
@@ -2299,6 +2308,49 @@ MOB_MANIFEST = dict(
              anim=dict(sheet="external/img2pixel/skeleton_sheet.png", frames=9, rows=4, row0=0, fw=64, fh=64,
                        rowDir=["up", "left", "down", "right"], fps=5, scale=1.0),
              line="「骷髏」喀啦喀啦地轉過頭來，空洞的眼窩盯著你。"),
+        # ---- 2026-11-12 第一批「依等級分素質」的新怪（素材庫：OpenGameArt LPC）----
+        # lv＝怪物等級，素質由下面的 post-pass 算（hp＝2×lv、攻擊力＝1+lv÷8、經驗值＝1+lv÷4，都無條件捨去、最低 1）；
+        # 各島等級帶＝每島差 10 級：草島 1~10、沙灘 11~20、森林 21~30、雪島 31~40、夜光 41~50、熔岩 51~60、機械 61~70。
+        # 舊怪（ownerFrac 那組）維持原值不動；這一組之後加主動怪時沿用同 sheet＋加 aggro（見 docs/notes.md「野外動物」）。
+        # 鹿（草島）：被動（道德性怪物），4 方向走路
+        dict(id="deer", name="鹿", lv=5, speed=40, flee=120, noBounce=True,
+             anim=dict(sheet="external/img2pixel/deer_sheet.png", frames=4, rows=4, fw=64, fh=96,
+                       rowDir=["down", "left", "right", "up"], fps=6, scale=0.4),   # 畫面約 31px 高（人物約 46px）
+             line="「鹿」豎起耳朵看了你一眼，又低頭繼續啃草。"),
+        # 貓／狗（和平島）：被動、固定生成，補和平島「島上沒有動物」的空虛感；和平島不得放敵對怪，這兩隻是安全的
+        dict(id="cat", name="貓", lv=2, fixed=2, speed=34, flee=60, noBounce=True,
+             anim=dict(sheet="external/img2pixel/cat_sheet.png", frames=3, rows=3, fw=32, fh=32,
+                       rowDir=["up", "down", "left"], fps=6, scale=0.9),
+             line="「貓」瞇著眼，蹭了蹭你的腳邊。"),
+        dict(id="dog", name="狗", lv=3, fixed=2, speed=40, flee=60, noBounce=True,
+             anim=dict(sheet="external/img2pixel/dog_sheet.png", frames=3, rows=3, fw=32, fh=32,
+                       rowDir=["up", "down", "left"], fps=6, scale=0.9),
+             line="「狗」開心地搖著尾巴，繞著你轉圈。"),
+        # 野豬（森林島）：反擊型野怪，最低階的主動威脅（Lv25）
+        dict(id="boar", name="野豬", lv=25, speed=30, flee=85, retaliate=True, noBounce=True,
+             anim=dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64,
+                       rowDir=["up", "left", "down", "right"], fps=6, scale=0.55),
+             line="「野豬」磨了磨獠牙，從鼻子裡哼出一團白氣。"),
+        # 白熊（雪島）：反擊型、血厚慢速
+        dict(id="bear_snow", name="白熊", lv=35, speed=26, flee=90, retaliate=True, noBounce=True,
+             anim=dict(sheet="external/img2pixel/bear_sheet.png", frames=4, rows=4, fw=64, fh=64,
+                       rowDir=["down", "right", "up", "left"], fps=5, scale=0.6),
+             line="「白熊」直起身子吼了一聲，腳邊的雪屑簌簌落下。"),
+        # 蝙蝠（夜光島）：被動、會飛（swim＝能過海）；飛行不套 footDy、影子另調（同飛龍的作法）
+        dict(id="bat_night", name="蝙蝠", lv=45, swim=True, speed=55, flee=90, noBounce=True, footDy=0,
+             anim=dict(sheet="external/img2pixel/bat_sheet.png", frames=4, fw=32, fh=32, fps=9, scale=0.85),
+             shadow=dict(rx=9, ry=3, dx=0, dy=-2),
+             line="「蝙蝠」倒掛著晃了兩下，忽然撲稜稜地飛起來。"),
+        # 小惡魔（熔岩島）：反擊型（補熔岩島沒有人形反擊怪的洞）
+        dict(id="imp_volcano", name="小惡魔", lv=55, speed=40, flee=85, retaliate=True, noBounce=True,
+             anim=dict(sheet="external/img2pixel/imp_sheet.png", frames=4, rows=4, fw=64, fh=64,
+                       rowDir=["down", "up", "left", "right"], fps=7, scale=0.6),
+             line="「小惡魔」朝你彈了個火苗，咯咯咯地笑。"),
+        # 魔像（機械島）：反擊型、慢但硬（big=2＝判定圈 46，比一般野生小動物大一號）
+        dict(id="golem_machine", name="魔像", lv=65, big=2, speed=20, flee=80, retaliate=True, noBounce=True,
+             anim=dict(sheet="external/img2pixel/golem_sheet.png", frames=7, rows=3, fw=64, fh=64,
+                       rowDir=["down", "right", "left"], fps=6, scale=0.7),
+             line="「魔像」緩緩轉過頭，關節發出石磨般的聲音。"),
         # 飛龍：夜光島（黑）、熔岩島（原色紅）、沙灘島（沙）。四列都是飛行視角＝上飛／朝右／下飛／朝左（方向網格）；
         # swim＝會飛所以能過海；big=5＝判定圈 34+6*(5-1)=58（大隻）；shadow 依體型放大、貼在正下方
         # retaliate＝會反擊的野怪：被打不逃、鎖定攻擊者；血量／攻擊力由下面的 post-pass 依該地形島主 1/10 算
@@ -2472,15 +2524,27 @@ for _m in MOB_MANIFEST["mobs"]:
     if _m.get("retaliate"):   # 攻擊力可另給 atkFrac（例如殭屍：血 1/5、攻擊 1/10）；沒給就跟血量同一個分母
         _m["atk"] = max(1, OWNER_CLAW_DMG // max(1, int(_m.get("atkFrac", _frac))))
 
+# 等級制素質（2026-11-12 使用者定）：條目標 lv: N 的怪，血量＝2×lv、攻擊力＝1+lv÷8、經驗值＝1+lv÷4（都無條件捨去、最低 1）。
+# 舊怪（ownerFrac 那組）維持原值不動、兩套並存；之後加主動怪沿用同一張 sheet＋把 lv 拉高就好（再配 aggro）。
+# 注意：XP 事件由兩份伺服器夾在 1~XP_XPE_MAX（＝25），所以 lv > 96 的怪要一起調高那個上限（worker/src/index.js ＋ tools/dev_server.py）。
+for _m in MOB_MANIFEST["mobs"]:
+    if not _m.get("lv"):
+        continue
+    _m["hp"] = max(1, 2 * _m["lv"])
+    if _m.get("retaliate"):
+        _m["atk"] = max(1, 1 + _m["lv"] // 8)
+    _m["xp"] = max(1, 1 + _m["lv"] // 4)
+
 # 各地形出現的小動物（id=權重）
 MOBS_BY_TERRAIN = {
-    "grass":   [("sheep", 2), ("bird", 1), ("frog", 1), ("chicken", 2), ("slime_grass", 1), ("goblin_grass", 2)],
+    "grass":   [("sheep", 2), ("bird", 1), ("frog", 1), ("chicken", 2), ("slime_grass", 1), ("goblin_grass", 2), ("deer", 2)],
     "beach":   [("bird", 2), ("frog", 1), ("bunny", 2), ("slime_beach", 1), ("dragon_beach", 1)],
-    "snow":    [("sheep", 2), ("bird", 1), ("bunny_snow", 2), ("slime_snow", 1), ("zombie_snow", 2), ("imp_snow", 2)],
-    "night":   [("frog", 2), ("sheep", 1), ("slime_night", 1), ("dragon_night", 1), ("zombie_night", 2), ("skeleton_night", 2)],
-    "forest":  [("sheep", 2), ("bird", 2), ("chicken", 2), ("slime_forest", 1), ("goblin_forest", 2)],
-    "volcano": [("frog", 1), ("bird", 1), ("slime_volcano", 1), ("dragon_volcano", 1)],
-    "machine": [("bunny_machine", 2), ("slime_machine", 1), ("zombie_machine", 2), ("imp_machine", 2)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）
+    "snow":    [("sheep", 2), ("bird", 1), ("bunny_snow", 2), ("slime_snow", 1), ("zombie_snow", 2), ("bear_snow", 1), ("imp_snow", 2)],
+    "night":   [("frog", 2), ("sheep", 1), ("slime_night", 1), ("dragon_night", 1), ("zombie_night", 2), ("bat_night", 2), ("skeleton_night", 2)],
+    "forest":  [("sheep", 2), ("bird", 2), ("chicken", 2), ("slime_forest", 1), ("goblin_forest", 2), ("boar", 2)],
+    "volcano": [("frog", 1), ("bird", 1), ("slime_volcano", 1), ("dragon_volcano", 1), ("imp_volcano", 2)],
+    "machine": [("bunny_machine", 2), ("slime_machine", 1), ("zombie_machine", 2), ("golem_machine", 1), ("imp_machine", 2)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）
+    "peace":   [("cat", 1), ("dog", 1)],   # 和平島（2026-11-12）：只有被動的貓狗（都 fixed＝只生固定那幾隻）；和平島不得放敵對怪
 }
 
 # ---------------- 地板（裝飾模式的地板層，16×16 無縫磚，畫在地面與家具之間）----------------

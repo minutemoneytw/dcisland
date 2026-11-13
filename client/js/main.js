@@ -820,6 +820,7 @@ const lurkDmgBonus = lv => Math.floor((Math.max(1, lv) - 1) / 3);    // 魚人�
 const ownerKillXp = lv => 20 + 5 * lv;   // 擊倒島主的 XP 獎勵（30 秒內的參與者）
 const lurkKillXp = lv => 4 + 2 * lv;     // 擊倒魚人的 XP 獎勵（登入者由伺服器在 dead 時直給；訪客在本機記）
 const mobKillXp = def => {   // 擊倒野外動物的 XP（2026-11-09 使用者定）：一般野怪 +1；反擊型野怪＝本島島主經驗值的 1/N、最低 1（N＝def.xpFrac，沒給就用 def.ownerFrac：飛龍 10、哥布林 12、殭屍 8）
+  if (def.xp) return def.xp;   // 等級制新怪（2026-11-12）：產生器依 lv 算好寫在 mobs.json（1+lv÷4），被動怪也有分
   if (!def.retaliate) return 1;
   const ol = S.mobs.find(v => !v.dead && mobDef(v.id)?.owner)?.lvl ?? 1;   // 本島島主現在的等級（島主升級就跟著漲）；沒有島主的地形當 Lv 1
   return Math.max(1, Math.floor(ownerKillXp(ol) / (def.xpFrac || def.ownerFrac || 10)));

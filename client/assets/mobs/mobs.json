@@ -570,6 +570,230 @@
    "atk": 1
   },
   {
+   "id": "deer",
+   "name": "鹿",
+   "lv": 5,
+   "speed": 40,
+   "flee": 120,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/deer_sheet.png",
+    "frames": 4,
+    "rows": 4,
+    "fw": 64,
+    "fh": 96,
+    "rowDir": [
+     "down",
+     "left",
+     "right",
+     "up"
+    ],
+    "fps": 6,
+    "scale": 0.4
+   },
+   "line": "「鹿」豎起耳朵看了你一眼，又低頭繼續啃草。",
+   "footDy": 2,
+   "hp": 10,
+   "xp": 2
+  },
+  {
+   "id": "cat",
+   "name": "貓",
+   "lv": 2,
+   "fixed": 2,
+   "speed": 34,
+   "flee": 60,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/cat_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 32,
+    "fh": 32,
+    "rowDir": [
+     "up",
+     "down",
+     "left"
+    ],
+    "fps": 6,
+    "scale": 0.9
+   },
+   "line": "「貓」瞇著眼，蹭了蹭你的腳邊。",
+   "footDy": 4,
+   "hp": 4,
+   "xp": 1
+  },
+  {
+   "id": "dog",
+   "name": "狗",
+   "lv": 3,
+   "fixed": 2,
+   "speed": 40,
+   "flee": 60,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/dog_sheet.png",
+    "frames": 3,
+    "rows": 3,
+    "fw": 32,
+    "fh": 32,
+    "rowDir": [
+     "up",
+     "down",
+     "left"
+    ],
+    "fps": 6,
+    "scale": 0.9
+   },
+   "line": "「狗」開心地搖著尾巴，繞著你轉圈。",
+   "footDy": 4,
+   "hp": 6,
+   "xp": 1
+  },
+  {
+   "id": "boar",
+   "name": "野豬",
+   "lv": 25,
+   "speed": 30,
+   "flee": 85,
+   "retaliate": true,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/boar_sheet.png",
+    "frames": 3,
+    "rows": 4,
+    "fw": 64,
+    "fh": 64,
+    "rowDir": [
+     "up",
+     "left",
+     "down",
+     "right"
+    ],
+    "fps": 6,
+    "scale": 0.55
+   },
+   "line": "「野豬」磨了磨獠牙，從鼻子裡哼出一團白氣。",
+   "footDy": 2,
+   "hp": 50,
+   "atk": 4,
+   "xp": 7
+  },
+  {
+   "id": "bear_snow",
+   "name": "白熊",
+   "lv": 35,
+   "speed": 26,
+   "flee": 90,
+   "retaliate": true,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/bear_sheet.png",
+    "frames": 4,
+    "rows": 4,
+    "fw": 64,
+    "fh": 64,
+    "rowDir": [
+     "down",
+     "right",
+     "up",
+     "left"
+    ],
+    "fps": 5,
+    "scale": 0.6
+   },
+   "line": "「白熊」直起身子吼了一聲，腳邊的雪屑簌簌落下。",
+   "footDy": 1,
+   "hp": 70,
+   "atk": 5,
+   "xp": 9
+  },
+  {
+   "id": "bat_night",
+   "name": "蝙蝠",
+   "lv": 45,
+   "swim": true,
+   "speed": 55,
+   "flee": 90,
+   "noBounce": true,
+   "footDy": 0,
+   "anim": {
+    "sheet": "external/img2pixel/bat_sheet.png",
+    "frames": 4,
+    "fw": 32,
+    "fh": 32,
+    "fps": 9,
+    "scale": 0.85
+   },
+   "shadow": {
+    "rx": 9,
+    "ry": 3,
+    "dx": 0,
+    "dy": -2
+   },
+   "line": "「蝙蝠」倒掛著晃了兩下，忽然撲稜稜地飛起來。",
+   "hp": 90,
+   "xp": 12
+  },
+  {
+   "id": "imp_volcano",
+   "name": "小惡魔",
+   "lv": 55,
+   "speed": 40,
+   "flee": 85,
+   "retaliate": true,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/imp_sheet.png",
+    "frames": 4,
+    "rows": 4,
+    "fw": 64,
+    "fh": 64,
+    "rowDir": [
+     "down",
+     "up",
+     "left",
+     "right"
+    ],
+    "fps": 7,
+    "scale": 0.6
+   },
+   "line": "「小惡魔」朝你彈了個火苗，咯咯咯地笑。",
+   "footDy": 12,
+   "hp": 110,
+   "atk": 7,
+   "xp": 14
+  },
+  {
+   "id": "golem_machine",
+   "name": "魔像",
+   "lv": 65,
+   "big": 2,
+   "speed": 20,
+   "flee": 80,
+   "retaliate": true,
+   "noBounce": true,
+   "anim": {
+    "sheet": "external/img2pixel/golem_sheet.png",
+    "frames": 7,
+    "rows": 3,
+    "fw": 64,
+    "fh": 64,
+    "rowDir": [
+     "down",
+     "right",
+     "left"
+    ],
+    "fps": 6,
+    "scale": 0.7
+   },
+   "line": "「魔像」緩緩轉過頭，關節發出石磨般的聲音。",
+   "footDy": 4,
+   "hp": 130,
+   "atk": 9,
+   "xp": 17
+  },
+  {
    "id": "dragon_night",
    "name": "飛龍",
    "fixed": 3,
