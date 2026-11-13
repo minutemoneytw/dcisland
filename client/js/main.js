@@ -8071,8 +8071,10 @@ const WEATHERS = {   // id → 名稱／色罩（rgba 三元組＋最濃不透�
   // 沙暴（2026-11-13 使用者定：跟霧一樣改玩家中心的徑向漸層——黃沙色、越遠越看不清；濃度比霧低很多，是沙塵感不是白牆）
   sand:    { name: '沙暴', tint: [224, 196, 128], alpha: .78, near: .02, mid: .14, far: .42, core: .1, vis: .85, depth: true, part: { kind: 'sand', n: 70, vy: 26, vx: -215, len: 9 } },
   // 落灰（2026-11-13 使用者定「再明顯一點」：原 tint .09＋1.8px 小方點在暗紅地形上幾乎看不到）：
-  // 橘紅色罩加深、顆數加多、粒子改成亮橘火點＋柔光暈
-  ember:   { name: '落灰', tint: [255, 96, 30],   alpha: .16, part: { kind: 'ember',  n: 80,  vy: -34, vx: 16, r: 2.2 } },
+  // 橘紅色罩加深；粒子兩種——亮橘火點往上飄＋同款柔邊的黑灰往下落（同日使用者定）
+  ember:   { name: '落灰', tint: [255, 96, 30],   alpha: .16, parts: [
+             { kind: 'ember', n: 80, vy: -34, vx: 16, r: 2.2 },
+             { kind: 'ash',   n: 46, vy: 46,  vx: 10, sway: 18, r: 2.4 }] },
   leaf:    { name: '落葉', part: { kind: 'leaf', n: 24, vy: 42, vx: -34, sway: 42, r: 2.6 } },
   firefly: { name: '螢光', tint: [30, 36, 70],    alpha: .08, part: { kind: 'firefly', n: 26,  vy: -12, vx: 8, r: 1.4 } },
 };
@@ -8148,16 +8150,20 @@ function drawWeather() {
   // 色罩：前一個天氣淡出、當前天氣淡入（兩層各畫一次，顏色不同也能平滑交叉）
   weatherMask(P0, 1 - bl);
   weatherMask(P1, bl);
-  // 粒子池：目標顆數在過渡期跟著 blend 從前一個天氣的量走向當前的量
-  const n0 = P0.part ? P0.part.n : 0, n1 = P1.part ? P1.part.n : 0;
+  // 粒子池：目標顆數在過渡期跟著 blend 從前一個天氣的量走向當前的量；
+  // 天氣可以有多種粒子（parts 陣列，例如落灰＝火點往上＋黑灰往下；單種的照舊寫 part）
+  const PA0 = P0.parts || (P0.part ? [P0.part] : []), PA1 = P1.parts || (P1.part ? [P1.part] : []);
+  const nOf = A => A.reduce((s, d) => s + d.n, 0);
+  const n0 = nOf(PA0), n1 = nOf(PA1);
   let target = Math.round(n0 + (n1 - n0) * bl);
   if (w.cur === 'clear' && bl >= 1) target = 0;
+  const pickDef = A => { let r = Math.random() * nOf(A); for (const d of A) { if ((r -= d.n) < 0) return d; } return A[A.length - 1]; };
   const parts = w.parts;
-  while (parts.length < target) { const p = {}; weatherSpawn(p, (n1 >= n0 ? P1.part.kind : P0.part.kind)); parts.push(p); }
+  while (parts.length < target) { const def = pickDef(n1 >= n0 ? PA1 : PA0); const p = {}; weatherSpawn(p, def.kind); parts.push(p); }
   if (parts.length > target) parts.length = target;
   if (!parts.length) return;
   for (const p of parts) {
-    const d = P1.part && P1.part.kind === p.kind ? P1.part : (P0.part || P1.part);
+    const d = PA1.find(x => x.kind === p.kind) || PA0.find(x => x.kind === p.kind) || PA1[0] || PA0[0];
     p.ph += dt * 1.7;
     if (d.kind === 'rain') { p.x += d.vx * dt; p.y += d.vy * dt; }
     else if (d.kind === 'sand') { p.x += d.vx * dt; p.y += d.vy * dt + Math.sin(p.ph) * 14 * dt; }
@@ -8200,6 +8206,15 @@ function drawWeather() {
       gr.addColorStop(0, `rgba(255,${170 + 55 * tw | 0},80,${(.25 + .55 * tw).toFixed(3)})`);
       gr.addColorStop(.4, `rgba(255,120,40,${(.28 * tw + .06).toFixed(3)})`);
       gr.addColorStop(1, 'rgba(255,100,30,0)');
+      ctx.fillStyle = gr;
+      ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2); ctx.fill();
+    } else if (d.kind === 'ash') {   // 黑灰：跟火點同款的柔邊做法、但暗色往下落（2026-11-13 使用者定，跟落灰的火點一起出現）
+      const a = .34 + .16 * Math.sin(p.ph);
+      const rr = d.r * 2.2;
+      const gr = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr);
+      gr.addColorStop(0, `rgba(26,24,26,${a.toFixed(3)})`);
+      gr.addColorStop(.55, `rgba(34,30,30,${(a * .55).toFixed(3)})`);
+      gr.addColorStop(1, 'rgba(34,30,30,0)');
       ctx.fillStyle = gr;
       ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2); ctx.fill();
     } else if (d.kind === 'firefly') {
