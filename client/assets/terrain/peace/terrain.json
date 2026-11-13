@@ -118,6 +118,54 @@
    ],
    "w": 3,
    "h": 2
+  },
+  {
+   "id": "t13",
+   "game": "arcade",
+   "cab": 0,
+   "img": "arcade_0.png",
+   "cell": [
+    48,
+    17
+   ],
+   "w": 2,
+   "h": 3
+  },
+  {
+   "id": "t13",
+   "game": "arcade",
+   "cab": 1,
+   "img": "arcade_1.png",
+   "cell": [
+    51,
+    17
+   ],
+   "w": 2,
+   "h": 3
+  },
+  {
+   "id": "t13",
+   "game": "arcade",
+   "cab": 2,
+   "img": "arcade_2.png",
+   "cell": [
+    54,
+    17
+   ],
+   "w": 2,
+   "h": 3
+  },
+  {
+   "id": "t13",
+   "game": "arcade",
+   "cab": 3,
+   "img": "arcade_3.png",
+   "cell": [
+    57,
+    17
+   ],
+   "w": 2,
+   "h": 3
   }
  ],
  "pools": [

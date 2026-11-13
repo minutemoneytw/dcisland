@@ -1695,7 +1695,10 @@ TABLES_BY_TERRAIN = {
               dict(id="t9", game="zhtyping", cell=[72, 32], w=3, h=2),   # 中文打字競賽（2026-11-11，使用者要求）：英文打字競賽右邊同一排
               dict(id="t10", game="mage", cell=[72, 39], w=3, h=2),   # 見習驅魔師（2026-11-12，使用者要求）：中文打字競賽下面、秘藥情報戰右邊
               dict(id="t11", game="blokus", cell=[80, 32], w=3, h=2),   # 方塊拼圖（2026-11-13，使用者要求）：中文打字競賽右邊同一排
-              dict(id="t12", game="trigon", cell=[80, 39], w=3, h=2)],   # 三角方塊拼圖（2026-11-13，使用者要求）：方塊拼圖下面、見習驅魔師右邊
+              dict(id="t12", game="trigon", cell=[80, 39], w=3, h=2),   # 三角方塊拼圖（2026-11-13，使用者要求）：方塊拼圖下面、見習驅魔師右邊
+              # 街機方塊（俄羅斯方塊類，2026-11-13，使用者要求）：場地上方一排 4 台，造型一樣、配色不同，間距約一個人（1 格）。
+              # 4 台共用同一張邏輯桌 t13（伺服器的 TABLE_DEFS 只有 t13），cab＝第幾台（0～3），img＝這台的圖（配色）
+              *[dict(id="t13", game="arcade", cab=k, img=f"arcade_{k}.png", cell=[48 + k * 3, 17], w=2, h=3) for k in range(4)]],
 }
 
 # ---------------- 和平島的遊戲桌（48×32，畫 scale 2＝3×2 格）----------------
@@ -1862,6 +1865,39 @@ def table_intel():
     cv.ellipse(38, 16, 4, 4.5, hx("#9a5ad8")); cv.ellipse(37, 15, 1.4, 1.6, hx("#e0c8ff"))
     cv.rect(37, 7, 39, 8, hx("#8a5a34"))                                                # 瓶塞
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    cv.outline()
+    return cv
+
+# 街機外殼的配色（第 k 台）：主色、側板暗色
+ARCADE_COLORS = ["#d84a4a", "#3b78e8", "#3cb45a", "#9a5ad8"]
+
+def arcade_cabinet(col):
+    """街機俄羅斯方塊（32×48，畫 scale 2＝2×3 格）：老街機造型——上方發光招牌、黑框螢幕裡有掉落中的方塊、
+    斜面操作台（搖桿＋按鈕）、下方投幣口。4 台造型一樣，只換外殼主色。"""
+    cv = Canvas(32, 48)
+    c = hx(col); dark = shade(c, .62); lite = shade(c, 1.3)
+    cv.rect(2, 0, 29, 47, c)                                   # 外殼
+    cv.rect(2, 0, 4, 47, dark); cv.rect(27, 0, 29, 47, dark)   # 側板
+    cv.rect(5, 1, 26, 7, hx("#fff0b0")); cv.hline(5, 26, 1, hx("#fffbe0")); cv.hline(5, 26, 7, hx("#e8c060"))   # 招牌（發光）
+    for k, bc in enumerate(["#e04848", "#f0c020", "#3cb45a", "#3b78e8", "#9a5ad8"]):   # 招牌上一排小方塊
+        x = 7 + k * 4; cv.rect(x, 3, x + 2, 5, hx(bc))
+    cv.rect(4, 8, 27, 9, dark)                                 # 招牌下緣
+    cv.rect(5, 10, 26, 24, hx("#1a1a22"))                      # 螢幕框
+    cv.rect(7, 11, 24, 23, hx("#0c1830"))                      # 螢幕
+    def blk(x, y, bc):
+        b = hx(bc); cv.rect(x, y, x + 1, y + 1, b); cv.set(x, y, shade(b, 1.4))
+    for x, y, bc in [(8, 21, "#3cb45a"), (10, 21, "#3cb45a"), (12, 21, "#e04848"), (16, 21, "#3b78e8"), (18, 21, "#3b78e8"), (20, 21, "#f0c020"), (22, 21, "#f0c020"),
+                     (8, 19, "#9a5ad8"), (10, 19, "#3cb45a"), (18, 19, "#3b78e8"), (22, 19, "#f0c020"), (12, 19, "#e04848"),
+                     (14, 13, "#40c8e0"), (14, 15, "#40c8e0"), (16, 15, "#40c8e0"), (16, 13, "#40c8e0")]:
+        blk(x, y, bc)
+    cv.hline(7, 24, 11, hx("#22304c"))                         # 螢幕反光
+    cv.rect(3, 25, 28, 30, lite); cv.hline(3, 28, 25, shade(c, 1.5)); cv.hline(3, 28, 30, dark)   # 操作台（斜面）
+    cv.rect(8, 27, 9, 29, hx("#2a2a30")); cv.rect(7, 25, 10, 27, hx("#e83a3a")); cv.set(8, 25, hx("#ff9a9a"))   # 搖桿
+    for x, bc in [(15, "#f0c020"), (19, "#3b78e8"), (23, "#3cb45a")]:
+        cv.rect(x, 27, x + 2, 28, hx(bc)); cv.hline(x, x + 2, 27, shade(hx(bc), 1.4))   # 按鈕
+    cv.rect(5, 32, 26, 46, shade(c, .85))                      # 下半身
+    cv.rect(12, 35, 19, 41, hx("#2a2a30")); cv.rect(13, 36, 14, 40, hx("#e8a030")); cv.rect(17, 36, 18, 40, hx("#e8a030"))   # 投幣口
+    cv.rect(2, 46, 29, 47, dark)
     cv.outline()
     return cv
 
@@ -3268,6 +3304,8 @@ def main():
     save(table_mage(), "table_mage.png", "games")
     save(table_blokus(), "table_blokus.png", "games")
     save(table_trigon(), "table_trigon.png", "games")
+    for k, col in enumerate(ARCADE_COLORS):
+        save(arcade_cabinet(col), f"arcade_{k}.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")

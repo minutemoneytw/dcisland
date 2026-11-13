@@ -116,6 +116,8 @@ export function connectNet(S, opts = {}) {
       case 'tpos': if (opts.onTpos) opts.onTpos(msg); break;   // 躲彈幕：其他玩家的位置（i＝座位編號）
       case 'tpg': if (opts.onTpg) opts.onTpg(msg); break;      // 英文打字競賽（觀戰者才收到）：其他玩家的打字進度（i＝座位編號、n＝第幾個字、p＝已打對幾個字母、e＝剛打錯）
       case 'tsc': if (opts.onTsc) opts.onTsc(msg); break;      // 英文打字競賽：其他玩家的分數（i＝座位編號、n＝分數）
+      case 'ttb': if (opts.onTtb) opts.onTtb(msg); break;      // 街機方塊：別台的盤面快照（cab＝第幾台、b＝200 個數字、sc／ln＝分數／行數）
+      case 'tgb': if (opts.onTgb) opts.onTgb(msg); break;      // 街機方塊（對戰模式）：被送垃圾行（n＝幾行、from＝哪一台送的）
       case 'tblinfo': if (opts.onTblInfo) opts.onTblInfo(msg.info); break;   // 和平島各桌的人數／狀態
       case 'craftdb': if (opts.onCraftDb) opts.onCraftDb(msg.craft); break;   // 合成解鎖紀錄（登入後由伺服器送來）
       case 'kills': if (opts.onKills) opts.onKills(msg.kills); break;         // 擊倒島主紀錄（登入後、擊倒島主時由伺服器送來；{地形: 時間}）

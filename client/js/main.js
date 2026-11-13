@@ -101,6 +101,7 @@ const S = {
   craft: craftNorm(lsObj('dcisland.m0.craft', {})),   // 解鎖紀錄 { mat, furn, rec }（登入者以伺服器為準）
   craftOpen: false, craftTab: null, craftSlots: [], craftMsg: '', craftFail: false,
   gamesDB: null, tableImgs: {},        // 和平島遊戲桌：遊戲定義（assets/games/games.json，手寫）與桌子圖
+  ar: null, arOpp: {}, arRaf: 0, tableCab: -1,   // 街機方塊：自己這一局的本機狀態／別台的盤面快照／畫面迴圈／我走到的是第幾台
   tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, bk: null, tg: null, bkTimer: 0, bkOff: 0, bkTimeoutAt: 0, unTimer: 0, unOff: 0, unTimeoutAt: 0, unPick: null, dg: null, dgRaf: 0, dgLast: 0, ty: null, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
@@ -4345,13 +4346,14 @@ function openTable(tb) {
   S.mouseHeld = false;
   S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null; S.bk = null; S.tg = null; S.gamePlayed = false; S.tableLocalLog = [];
   const inf = S.tblInfo?.[tb.id];
-  if (!inf || (!inf.play && inf.n < inf.max)) S.tableChoice = true;   // 還有位子：先讓玩家選「入座」或「觀戰」（沒滿人也可以選觀戰）
-  else S.net.tbl({ a: 'join', id: tb.id, role: 'spec' });             // 滿人或已開局：直接觀戰
+  S.tableCab = tb.cab ?? -1; S.ar = null; S.arOpp = {};   // 街機方塊：4 台共用一張桌，坐哪一台由 cab 決定
+  if (tb.game === 'arcade' ? !inf?.cabs?.[tb.cab] : (!inf || (!inf.play && inf.n < inf.max))) S.tableChoice = true;   // 還有位子（街機：這台空著）：先讓玩家選「入座」或「觀戰」（沒滿人也可以選觀戰）
+  else S.net.tbl({ a: 'join', id: tb.id, role: 'spec', cab: S.tableCab });             // 滿人或已開局（街機：這台有人）：直接觀戰
   buildTable(); $('tableBox').classList.remove('hidden');
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); unStopTimer(); bkStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); arStop(); unStopTimer(); bkStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
   rulesShow(false); leaveAsk(false);
   $('tableBox').classList.add('hidden');
 }
@@ -4431,7 +4433,7 @@ function tableTag(p) {
   if (p.npc) return null;
   const id = p === S.players[0] ? S.net?.id : p.id;
   if (id == null) return null;
-  for (const tb of tablesHere()) { const inf = S.tblInfo?.[tb.id]; if (inf?.seated?.includes(id)) return inf.play ? '遊戲中' : '入座中'; }
+  for (const tb of tablesHere()) { const inf = S.tblInfo?.[tb.id]; if (inf?.seated?.includes(id)) return (inf.playing ? inf.playing.includes(id) : inf.play) ? '遊戲中' : '入座中'; }   // 街機方塊：每台各自在不在玩（playing）
   return null;
 }
 const SUIT_SYM = { S: '♠', H: '♥', D: '♦', C: '♣' };
@@ -4454,13 +4456,14 @@ function buildTable() {
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   if (S.tableChoice) {   // 剛走到桌邊：選入座還是觀戰
     const inf = S.tblInfo?.[S.tableId];
-    box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　目前 ${inf ? `${inf.n}/${inf.max} 人入座` : '還沒有人入座'}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));
+    if (S.tableCab >= 0) box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　${S.tableCab + 1} 號機（空機台）${inf?.n ? `，其他機台 ${inf.n} 人` : ''}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));   // 街機方塊：4 台共用一張桌，說是哪一台
+    else box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　目前 ${inf ? `${inf.n}/${inf.max} 人入座` : '還沒有人入座'}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));
     if (gd?.story) box.appendChild(mk('div', 'it-story', gd.story));   // 有故事背景的遊戲（秘藥情報戰）：先看故事
     box.appendChild(mk('div', 'table-tag', '要加入遊戲，還是先在旁邊看？（觀戰不用等滿人，之後想玩可以再按「入座」）'));
     const bs = mk('div', 'table-btns');
     for (const [label, role] of [['入座', 'seat'], ['觀戰', 'spec']]) {
       const b = mk('button', 'ff-btn', label);
-      b.onclick = () => { S.tableChoice = false; S.net?.tbl?.({ a: 'join', id: S.tableId, role }); buildTable(); };
+      b.onclick = () => { S.tableChoice = false; S.net?.tbl?.({ a: 'join', id: S.tableId, role, cab: S.tableCab }); buildTable(); };
       bs.appendChild(b);
     }
     const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); bs.appendChild(lv);
@@ -4469,6 +4472,7 @@ function buildTable() {
     return;
   }
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
+  if (tb?.game === 'arcade') { buildArcade(box, v, mk, gd); return; }   // 街機方塊有自己的畫面（盤面＋聯機）
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
   if (tb?.game === 'trigon') { buildTrigon(box, v, mk, gd); return; }   // 三角方塊拼圖有自己的畫面（三角格棋盤＋方塊托盤）
   if (tb?.game === 'blokus') { buildBlokus(box, v, mk, gd); return; }   // 方塊拼圖有自己的畫面（棋盤＋方塊托盤）
@@ -6518,16 +6522,368 @@ function buildUno(box, v, mk, gd) {
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
+// ---- 街機方塊（俄羅斯方塊類；t13，2026-11-13，使用者要求）：場地上方 4 台街機共用一張邏輯桌，每台一個人玩 ----
+// 單人模式：各自一局，分數進排行榜；聯機模式：發起後其他機台的人收到邀請（最多 4 人），一般模式（各玩各的、全員出局後依分數排名）
+// 或對戰模式（一次消 2／3／4 行送每個對手 1／2／4 行垃圾，使用者定）。方塊遊戲在本機跑（信任客戶端），伺服器只給 seed、轉發盤面快照與垃圾行。
+// 協定見 notes「和平島與遊戲桌」：tbl {a:'solo'|'link'|'lmode'|'ljoin'|'lno'|'lquit'|'lstart'|'tb'|'clr'|'over'}；s→c ttb（盤面快照）、tgb（垃圾行）
+const AR_W = 10, AR_H = 22, AR_VIS = 20, AR_CELL = 24;   // 盤面 10×22（最上面 2 列在畫面外，方塊從那裡生出來）
+const AR_COLORS = ['', '#40c8e0', '#f0c020', '#a060e0', '#3cb45a', '#e04848', '#3b78e8', '#e8902a', '#7a7f8c'];   // 1 I、2 O、3 T、4 S、5 Z、6 J、7 L、8 垃圾
+const AR_CAB_COLORS = ['#d84a4a', '#3b78e8', '#3cb45a', '#9a5ad8'];   // 4 台機台的外殼主色（同 gen_assets.py 的 ARCADE_COLORS）
+const AR_BASE = {   // 每種方塊的初始方向：[盒子大小, 格子 [x, y]]（y 往下）
+  1: [4, [[0, 1], [1, 1], [2, 1], [3, 1]]], 2: [2, [[0, 0], [1, 0], [0, 1], [1, 1]]], 3: [3, [[1, 0], [0, 1], [1, 1], [2, 1]]],
+  4: [3, [[1, 0], [2, 0], [0, 1], [1, 1]]], 5: [3, [[0, 0], [1, 0], [1, 1], [2, 1]]], 6: [3, [[0, 0], [0, 1], [1, 1], [2, 1]]], 7: [3, [[2, 0], [0, 1], [1, 1], [2, 1]]],
+};
+const AR_ROT = {};   // AR_ROT[種類][方向 0～3]＝格子（在盒子裡順時針轉）
+for (const [k, [n, cells]] of Object.entries(AR_BASE)) {
+  const r = [cells];
+  for (let d = 1; d < 4; d++) r.push(r[d - 1].map(([x, y]) => [n - 1 - y, x]));
+  AR_ROT[k] = r;
+}
+// 轉向的踢牆位移（常見的 SRS 表；表上 y 往上，套用時 y 取負）
+const AR_KICK = {
+  '01': [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]], '10': [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]], '12': [[0, 0], [1, 0], [1, -1], [0, 2], [1, 2]], '21': [[0, 0], [-1, 0], [-1, 1], [0, -2], [-1, -2]],
+  '23': [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]], '32': [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]], '30': [[0, 0], [-1, 0], [-1, -1], [0, 2], [-1, 2]], '03': [[0, 0], [1, 0], [1, 1], [0, -2], [1, -2]],
+};
+const AR_KICK_I = {
+  '01': [[0, 0], [-2, 0], [1, 0], [-2, -1], [1, 2]], '10': [[0, 0], [2, 0], [-1, 0], [2, 1], [-1, -2]], '12': [[0, 0], [-1, 0], [2, 0], [-1, 2], [2, -1]], '21': [[0, 0], [1, 0], [-2, 0], [1, -2], [-2, 1]],
+  '23': [[0, 0], [2, 0], [-1, 0], [2, 1], [-1, -2]], '32': [[0, 0], [-2, 0], [1, 0], [-2, -1], [1, 2]], '30': [[0, 0], [1, 0], [-2, 0], [1, -2], [-2, 1]], '03': [[0, 0], [-1, 0], [2, 0], [-1, 2], [2, -1]],
+};
+const AR_LINE_PTS = [0, 100, 300, 500, 800];   // 一次消 1～4 行 × 等級
+const AR_DAS = 150, AR_ARR = 40, AR_LOCK = 500, AR_LOCK_RESETS = 15, AR_SNAP_MS = 250;
+const AR_KEYS = { arrowleft: 'L', arrowright: 'R', arrowdown: 'D', arrowup: 'CW', x: 'CW', z: 'CCW', ' ': 'HD', c: 'HOLD', shift: 'HOLD' };
+const arFall = lv => Math.max(30, 1000 * Math.pow(0.8 - (lv - 1) * 0.007, lv - 1));   // 每格落下的毫秒（等級越高越快）
+function arRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function arNew(seed, t0, off, key) {
+  const A = { key, t0, off, rng: arRng(seed), bag: [], queue: [], board: Array.from({ length: AR_H }, () => new Array(AR_W).fill(0)),
+    cur: null, hold: 0, held: false, sc: 0, ln: 0, lv: 1, dead: false, fallAcc: 0, lockT: 0, resets: 0, keys: {}, das: {}, gq: 0,
+    last: performance.now(), snapAt: 0, snapStr: '', flash: null, started: false };
+  for (let i = 0; i < 5; i++) A.queue.push(arDraw(A));
+  return A;
+}
+function arDraw(A) {   // 7 種一袋輪流抽（同一個 seed＝同一串方塊，聯機時大家拿到的方塊一樣）
+  if (!A.bag.length) { A.bag = [1, 2, 3, 4, 5, 6, 7]; for (let i = 6; i > 0; i--) { const j = Math.floor(A.rng() * (i + 1)); [A.bag[i], A.bag[j]] = [A.bag[j], A.bag[i]]; } }
+  return A.bag.pop();
+}
+const arCells = p => AR_ROT[p.k][p.r].map(([x, y]) => [p.x + x, p.y + y]);
+function arFits(A, p) {
+  for (const [x, y] of arCells(p)) if (x < 0 || x >= AR_W || y >= AR_H || (y >= 0 && A.board[y][x])) return false;
+  return true;
+}
+function arSpawn(A, k) {
+  const p = { k, r: 0, x: k === 2 ? 4 : 3, y: 1 };
+  A.cur = p; A.lockT = 0; A.resets = 0; A.fallAcc = 0;
+  if (!arFits(A, p)) arGameOver(A);
+}
+function arNext(A) { const k = A.queue.shift(); A.queue.push(arDraw(A)); arSpawn(A, k); }
+function arGrounded(A) { const p = A.cur; return !arFits(A, { ...p, y: p.y + 1 }); }
+function arMove(A, dx) {
+  const p = A.cur, q = { ...p, x: p.x + dx };
+  if (!arFits(A, q)) return false;
+  A.cur = q; arTouch(A); return true;
+}
+function arRotate(A, dir) {   // dir＝1 順時針、−1 逆時針
+  const p = A.cur; if (p.k === 2) return;
+  const to = (p.r + dir + 4) % 4, kicks = (p.k === 1 ? AR_KICK_I : AR_KICK)[`${p.r}${to}`];
+  for (const [dx, dy] of kicks) {
+    const q = { ...p, r: to, x: p.x + dx, y: p.y - dy };
+    if (arFits(A, q)) { A.cur = q; arTouch(A); return; }
+  }
+}
+function arTouch(A) { if (A.lockT > 0 && A.resets < AR_LOCK_RESETS) { A.lockT = 0; A.resets++; } }   // 落地後還在移動／轉向：重新計算鎖定時間（有次數上限）
+function arHardDrop(A) {
+  let n = 0;
+  while (arFits(A, { ...A.cur, y: A.cur.y + 1 })) { A.cur.y++; n++; }
+  A.sc += n * 2; arLock(A);
+}
+function arHold(A) {
+  if (A.held) return;
+  const k = A.cur.k;
+  if (A.hold) arSpawn(A, A.hold); else arNext(A);
+  A.hold = k; A.held = true;
+}
+function arLock(A) {
+  const cells = arCells(A.cur);
+  for (const [x, y] of cells) if (y >= 0) A.board[y][x] = A.cur.k;
+  if (cells.every(([, y]) => y < AR_H - AR_VIS)) { arGameOver(A); return; }   // 整塊停在畫面外：頂到了
+  const full = [];
+  for (let y = 0; y < AR_H; y++) if (A.board[y].every(c => c)) full.push(y);
+  if (full.length) {
+    for (const y of full) { A.board.splice(y, 1); A.board.unshift(new Array(AR_W).fill(0)); }
+    A.sc += AR_LINE_PTS[full.length] * A.lv; A.ln += full.length; A.lv = Math.min(20, 1 + Math.floor(A.ln / 10));
+    A.flash = { n: full.length, until: performance.now() + 900 };
+    const lk = S.tableView?.link;
+    if (full.length >= 2 && lk?.phase === 'playing' && lk.mode === 'battle') S.net?.tbl?.({ a: 'clr', n: full.length });   // 對戰模式：讓伺服器送對手垃圾行
+  }
+  if (A.gq > 0) {   // 收到的垃圾行在方塊放好時才推上來（同一批的缺口在同一欄）
+    const n = Math.min(A.gq, AR_H), hole = Math.floor(Math.random() * AR_W);
+    A.gq = 0;
+    const over = A.board.slice(0, n).some(r => r.some(c => c));
+    A.board.splice(0, n);
+    for (let i = 0; i < n; i++) { const r = new Array(AR_W).fill(8); r[hole] = 0; A.board.push(r); }
+    if (over) { arGameOver(A); return; }
+  }
+  A.held = false;
+  arNext(A);
+  arSnap(A, true);
+}
+function arGameOver(A) {
+  if (A.dead) return;
+  A.dead = true; A.cur = null;
+  arSnap(A, true);
+  S.net?.tbl?.({ a: 'over', sc: A.sc, ln: A.ln });
+}
+function arBoardStr(A) {   // 畫面上的 20 列（含正在落下的方塊），每格一個數字
+  const b = A.board.slice(AR_H - AR_VIS).map(r => [...r]);
+  if (A.cur) for (const [x, y] of arCells(A.cur)) { const yy = y - (AR_H - AR_VIS); if (yy >= 0) b[yy][x] = A.cur.k; }
+  return b.map(r => r.join('')).join('');
+}
+function arSnap(A, force) {   // 盤面快照給觀戰者與聯機對手看（約 4 次／秒、有變化才送）
+  const now = performance.now();
+  if (!force && now - A.snapAt < AR_SNAP_MS) return;
+  const s = arBoardStr(A);
+  if (!force && s === A.snapStr) return;
+  A.snapAt = now; A.snapStr = s;
+  S.net?.tbl?.({ a: 'tb', b: s, sc: A.sc, ln: A.ln });
+}
+function arStep(A) {
+  const now = performance.now(), dt = Math.min(100, now - A.last);
+  A.last = now;
+  if (A.dead) return;
+  if (Date.now() + A.off < A.t0) return;   // 開局倒數中
+  if (!A.started) { A.started = true; arNext(A); if (A.dead) return; }
+  for (const d of ['L', 'R']) {   // 按住左右：先等 AR_DAS 再每 AR_ARR 移一格
+    if (!A.keys[d]) continue;
+    const st = A.das[d] ||= { t: 0, rep: 0 };
+    st.t += dt;
+    if (st.t >= AR_DAS) { st.rep += dt; while (st.rep >= AR_ARR) { st.rep -= AR_ARR; if (!arMove(A, d === 'L' ? -1 : 1)) break; } }
+  }
+  const fall = A.keys.D ? Math.min(arFall(A.lv), 35) : arFall(A.lv);
+  if (arGrounded(A)) {
+    A.lockT += dt;
+    if (A.lockT >= AR_LOCK) arLock(A);
+  } else {
+    A.fallAcc += dt;
+    while (A.fallAcc >= fall && !arGrounded(A)) { A.fallAcc -= fall; A.cur.y++; if (A.keys.D) A.sc += 1; }
+    if (arGrounded(A)) A.fallAcc = 0;
+  }
+  if (!A.dead) arSnap(A, false);
+}
+function arKey(e) {   // 遊戲畫面開著時的按鍵（回 true＝已處理）
+  const A = S.ar, act = AR_KEYS[e.key.toLowerCase()];
+  if (!A || A.dead || !act) return false;
+  e.preventDefault();
+  if (!A.started || !A.cur) return true;
+  if (act === 'L' || act === 'R') { if (!A.keys[act]) { A.keys[act] = true; A.das[act] = { t: 0, rep: 0 }; A.keys[act === 'L' ? 'R' : 'L'] = false; arMove(A, act === 'L' ? -1 : 1); } }
+  else if (act === 'D') A.keys.D = true;
+  else if (e.repeat) return true;
+  else if (act === 'CW') arRotate(A, 1);
+  else if (act === 'CCW') arRotate(A, -1);
+  else if (act === 'HD') arHardDrop(A);
+  else if (act === 'HOLD') arHold(A);
+  return true;
+}
+function arKeyUp(k) { const A = S.ar, act = AR_KEYS[k]; if (A && (act === 'L' || act === 'R' || act === 'D')) A.keys[act] = false; }
+function onNetTtb(m) { (S.arOpp ||= {})[m.cab] = { b: m.b, sc: m.sc, ln: m.ln }; }   // 別台的盤面快照（觀戰者、同一場聯機的對手才收到）
+function onNetTgb(m) {   // 對戰模式：被送垃圾行
+  const A = S.ar; if (!A || A.dead) return;
+  A.gq += m.n; A.hit = { n: m.n, from: m.from, until: performance.now() + 1200 };
+}
+function arStop() { if (S.arRaf) cancelAnimationFrame(S.arRaf); S.arRaf = 0; S.ar = null; S.arOpp = {}; }
+function arLoop() {
+  S.arRaf = 0;
+  const v = S.tableView;
+  if (!S.tableOpen || !v || v.game !== 'arcade') { arStop(); return; }
+  if (S.ar) arStep(S.ar);
+  arDrawAll();
+  S.arRaf = requestAnimationFrame(arLoop);
+}
+const arCabName = cab => `${cab + 1} 號機`;
+function arDrawCell(g, x, y, c, cs, alpha = 1) {
+  const col = AR_COLORS[c] || '#888';
+  g.globalAlpha = alpha; g.fillStyle = col; g.fillRect(x, y, cs, cs);
+  if (cs >= 8) { g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(x, y, cs, 2); g.fillRect(x, y, 2, cs); g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(x, y + cs - 2, cs, 2); g.fillRect(x + cs - 2, y, 2, cs); }
+  g.globalAlpha = 1;
+}
+function arDrawMini(g, k, ox, oy, cs) {   // 預覽（下一個／暫存）：方塊置中畫在 4×2 格的框裡
+  const cells = AR_ROT[k][0], xs = cells.map(c => c[0]), ys = cells.map(c => c[1]);
+  const w = Math.max(...xs) - Math.min(...xs) + 1, h = Math.max(...ys) - Math.min(...ys) + 1;
+  const bx = ox + (4 - w) * cs / 2 - Math.min(...xs) * cs, by = oy + (2 - h) * cs / 2 - Math.min(...ys) * cs;
+  for (const [x, y] of cells) arDrawCell(g, bx + x * cs, by + y * cs, k, cs);
+}
+function arDrawMain() {   // 自己的盤面：左邊暫存、中間盤面（含落點預覽）、右邊下一個／分數
+  const cv = $('arMain'), A = S.ar; if (!cv || !A) return;
+  const g = cv.getContext('2d'), L = 100, BW = AR_W * AR_CELL, BH = AR_VIS * AR_CELL, top = AR_H - AR_VIS;
+  g.fillStyle = '#0d1424'; g.fillRect(0, 0, cv.width, cv.height);
+  g.fillStyle = '#060a14'; g.fillRect(L, 10, BW, BH);
+  g.strokeStyle = 'rgba(120,150,200,.12)'; g.lineWidth = 1;
+  for (let x = 1; x < AR_W; x++) { g.beginPath(); g.moveTo(L + x * AR_CELL + .5, 10); g.lineTo(L + x * AR_CELL + .5, 10 + BH); g.stroke(); }
+  for (let y = 1; y < AR_VIS; y++) { g.beginPath(); g.moveTo(L, 10 + y * AR_CELL + .5); g.lineTo(L + BW, 10 + y * AR_CELL + .5); g.stroke(); }
+  for (let y = top; y < AR_H; y++) for (let x = 0; x < AR_W; x++) if (A.board[y][x]) arDrawCell(g, L + x * AR_CELL, 10 + (y - top) * AR_CELL, A.board[y][x], AR_CELL);
+  if (A.cur) {
+    let gy = A.cur.y; while (arFits(A, { ...A.cur, y: gy + 1 })) gy++;
+    for (const [x, y] of arCells({ ...A.cur, y: gy })) if (y >= top) arDrawCell(g, L + x * AR_CELL, 10 + (y - top) * AR_CELL, A.cur.k, AR_CELL, .25);   // 落點預覽
+    for (const [x, y] of arCells(A.cur)) if (y >= top) arDrawCell(g, L + x * AR_CELL, 10 + (y - top) * AR_CELL, A.cur.k, AR_CELL);
+  }
+  if (A.gq > 0) { g.fillStyle = '#e04848'; const h = Math.min(BH, A.gq * AR_CELL); g.fillRect(L - 6, 10 + BH - h, 4, h); }   // 等著推上來的垃圾行
+  g.strokeStyle = '#5a6a90'; g.lineWidth = 2; g.strokeRect(L - 1, 9, BW + 2, BH + 2);
+  g.fillStyle = '#c8d4f0'; g.font = 'bold 13px "Microsoft JhengHei"'; g.textAlign = 'left';
+  g.fillText('暫存 C', 12, 28); if (A.hold) arDrawMini(g, A.hold, 10, 38, 18);
+  const R = L + BW + 14;
+  g.fillText('下一個', R, 28);
+  A.queue.slice(0, 3).forEach((k, i) => arDrawMini(g, k, R, 38 + i * 50, i ? 14 : 18));
+  const stat = [['分數', A.sc], ['行數', A.ln], ['等級', A.lv]];
+  stat.forEach(([lbl, n], i) => { g.fillStyle = '#8fa0c8'; g.font = '12px "Microsoft JhengHei"'; g.fillText(lbl, R, 210 + i * 46); g.fillStyle = '#ffe08a'; g.font = 'bold 18px "Microsoft JhengHei"'; g.fillText(String(n), R, 230 + i * 46); });
+  g.textAlign = 'center';
+  const wait = A.t0 - (Date.now() + A.off);
+  const msg = (txt, sub, col = '#ffe08a') => {
+    g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(L, 10 + BH / 2 - 44, BW, 80);
+    g.fillStyle = col; g.font = 'bold 30px "Microsoft JhengHei"'; g.fillText(txt, L + BW / 2, 10 + BH / 2);
+    if (sub) { g.fillStyle = '#fff'; g.font = '14px "Microsoft JhengHei"'; g.fillText(sub, L + BW / 2, 10 + BH / 2 + 24); }
+  };
+  if (A.dead) msg('GAME OVER', `${A.sc} 分 · ${A.ln} 行`, '#ff7a6a');
+  else if (wait > 0) msg(String(Math.ceil(wait / 1000)), '準備……');
+  else if (A.flash && performance.now() < A.flash.until) { g.fillStyle = '#fff6c0'; g.font = 'bold 20px "Microsoft JhengHei"'; g.fillText(['', '', '雙消！', '三消！', '四行消除！'][A.flash.n] || '', L + BW / 2, 44); }
+  if (A.hit && performance.now() < A.hit.until) { g.fillStyle = '#ff8a7a'; g.font = 'bold 15px "Microsoft JhengHei"'; g.fillText(`${arCabName(A.hit.from)} 送來 ${A.hit.n} 行！`, L + BW / 2, 10 + BH - 12); }
+  g.textAlign = 'left';
+}
+function arDrawSmall(cv, snap, dead) {   // 別台的盤面（快照）
+  const g = cv.getContext('2d'), cs = cv.width / AR_W;
+  g.fillStyle = '#060a14'; g.fillRect(0, 0, cv.width, cv.height);
+  const b = snap?.b || '';
+  for (let i = 0; i < b.length; i++) if (b[i] !== '0') arDrawCell(g, (i % AR_W) * cs, Math.floor(i / AR_W) * cs, Number(b[i]), cs);
+  if (dead) { g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(0, 0, cv.width, cv.height); g.fillStyle = '#ff7a6a'; g.font = `bold ${Math.round(cs * 1.4)}px "Microsoft JhengHei"`; g.textAlign = 'center'; g.fillText('出局', cv.width / 2, cv.height / 2); g.textAlign = 'left'; }
+}
+function arDrawAll() {
+  arDrawMain();
+  for (const cv of document.querySelectorAll('canvas.ar-oppcv')) {
+    const cab = Number(cv.dataset.cab), snap = S.arOpp?.[cab], v = S.tableView, s = v?.seats.find(x => x.cab === cab);
+    arDrawSmall(cv, snap, s?.dead);
+    const sc = document.getElementById('arOppSc' + cab); if (sc && snap) sc.textContent = `${snap.sc} 分 · ${snap.ln} 行`;
+  }
+}
+function buildArcade(box, v, mk, gd) {
+  const me = v.role === 'seat' ? v.seats[v.me] : null, lk = v.link, playing = v.phase === 'playing';
+  const off = (v.sn || Date.now()) - Date.now();
+  // 新的一局：單人看自己的 tt、聯機看 link 的 seed（大家同一串方塊）
+  const want = playing ? (me.st === 'solo' && v.tt ? { key: 's' + v.tt.seed + ':' + v.tt.t0, seed: v.tt.seed, t0: v.tt.t0 } : lk?.phase === 'playing' ? { key: 'l' + lk.seed + ':' + lk.t0, seed: lk.seed, t0: lk.t0 } : null) : null;
+  if (want && (!S.ar || S.ar.key !== want.key)) { S.ar = arNew(want.seed, want.t0, off, want.key); S.arOpp = {}; }
+  if (!playing && S.ar && !S.ar.dead) S.ar = null;   // 被結束了（例如聯機取消）：本機這局作廢
+  if (!S.arRaf) S.arRaf = requestAnimationFrame(arLoop);
+  const hostName = lk ? v.seats.find(s => s.cab === lk.host)?.name || arCabName(lk.host) : '';
+  const modeName = m => (m === 'battle' ? '對戰模式' : '一般模式');
+  let status;
+  if (!me) status = '觀戰中（要玩的話，走到空著的機台按 F）';
+  else if (playing) status = me.st === 'solo' ? '單人模式：←→ 移動、↓ 加速、↑／X 轉、Z 反轉、空白鍵落到底、C 暫存' : `聯機${modeName(lk.mode)}：${S.ar?.dead ? '你已出局，等其他人結束' : '撐到最後、分數越高越好'}`;
+  else if (me.st === 'link') status = lk.host === me.cab ? `你發起了聯機（${modeName(lk.mode)}），等其他機台的人接受邀請` : `已加入 ${hostName} 的聯機，等他開始`;
+  else status = `${arCabName(me.cab)}：選擇單人模式或聯機模式`;
+  box.appendChild(mk('div', 'table-status' + (playing && !S.ar?.dead ? ' mine' : ''), status));
+  const r = v.result;
+  if (r && !playing && r.link && (me ? r.cabs?.includes(me.cab) : true)) {   // 聯機結算：依分數排名
+    box.appendChild(mk('div', 'table-result', r.text));
+    const ul = mk('div', 'table-ranking');
+    r.ranking.forEach((x, k) => ul.appendChild(mk('div', 'table-board-row', `${k + 1}. ${x.name}　${x.score} 分 · ${x.lines} 行${x.left ? '（中途離開）' : ''}`)));
+    box.appendChild(ul);
+  }
+  if (me && !playing && me.last && me.st === 'idle' && !(r?.link && r.cabs?.includes(me.cab))) box.appendChild(mk('div', 'table-result', `上一局（單人）：${me.last.sc} 分、${me.last.ln} 行`));
+  // 邀請：我閒置中、有人在等聯機、還有位子、我沒拒絕過
+  if (me && me.st === 'idle' && lk?.phase === 'invite' && lk.mem.length < 4 && !lk.no.includes(me.cab)) {
+    const inv = mk('div', 'ar-invite');
+    inv.appendChild(mk('div', null, `${hostName}（${arCabName(lk.host)}）發起了聯機（${modeName(lk.mode)}，目前 ${lk.mem.length}/4 人）`));
+    inv.appendChild(mk('div', 'ar-invite-q', '要接受聯機邀請嗎？'));
+    const bs = mk('div', 'table-btns');
+    const yes = mk('button', 'ff-btn', '接受'); yes.onclick = () => S.net?.tbl?.({ a: 'ljoin' });
+    const no = mk('button', 'ff-btn small', '拒絕'); no.onclick = () => S.net?.tbl?.({ a: 'lno' });
+    bs.appendChild(yes); bs.appendChild(no); inv.appendChild(bs); box.appendChild(inv);
+  }
+  if (me && me.st === 'link' && lk?.phase === 'invite') {   // 聯機等待室
+    const room = mk('div', 'ar-room');
+    room.appendChild(mk('div', 'table-label', `聯機成員（${lk.mem.length}/4）`));
+    const row = mk('div', 'table-seats');
+    for (const c of lk.mem) {
+      const s = v.seats.find(x => x.cab === c), seat = mk('div', 'table-seat' + (c === me.cab ? ' you' : ''));
+      seat.style.borderColor = AR_CAB_COLORS[c];
+      seat.appendChild(mk('div', 'table-name', (s?.name || '?') + (c === me.cab ? '（你）' : '')));
+      seat.appendChild(mk('div', 'table-tag', arCabName(c) + (c === lk.host ? ' · 發起人' : '')));
+      row.appendChild(seat);
+    }
+    room.appendChild(row);
+    const isHost = lk.host === me.cab, bs = mk('div', 'table-btns');
+    if (isHost) {
+      for (const m of ['normal', 'battle']) { const b = mk('button', 'ff-btn small' + (lk.mode === m ? ' on' : ''), (lk.mode === m ? '● ' : '') + modeName(m)); b.onclick = () => S.net?.tbl?.({ a: 'lmode', v: m }); bs.appendChild(b); }
+      const st = mk('button', 'ff-btn', lk.mem.length < 2 ? '開始（至少 2 人）' : '開始'); st.disabled = lk.mem.length < 2; st.onclick = () => S.net?.tbl?.({ a: 'lstart' }); bs.appendChild(st);
+      const cc = mk('button', 'ff-btn small', '取消邀請'); cc.onclick = () => S.net?.tbl?.({ a: 'lquit' }); bs.appendChild(cc);
+    } else {
+      bs.appendChild(mk('span', 'table-tag', `模式：${modeName(lk.mode)}（由 ${hostName} 決定）`));
+      const q = mk('button', 'ff-btn small', '退出聯機'); q.onclick = () => S.net?.tbl?.({ a: 'lquit' }); bs.appendChild(q);
+    }
+    room.appendChild(bs);
+    room.appendChild(mk('div', 'table-tag', lk.mode === 'battle' ? '對戰模式：一次消 2／3／4 行，其他對手最下面多 1／2／4 行垃圾；最後還活著的人最有利。' : '一般模式：大家拿到一樣的方塊順序，各自玩到出局，全員出局後依分數排名。'));
+    box.appendChild(room);
+  }
+  if (me && me.st === 'idle') {   // 選模式
+    const bs = mk('div', 'table-btns');
+    const solo = mk('button', 'ff-btn', '單人模式'); solo.onclick = () => S.net?.tbl?.({ a: 'solo' }); bs.appendChild(solo);
+    const link = mk('button', 'ff-btn', '聯機模式'); link.disabled = !!lk; link.title = lk ? '已經有一場聯機了（同時只能有一場）' : '邀請其他機台的人一起玩（最多 4 人）';
+    link.onclick = () => S.net?.tbl?.({ a: 'link' }); bs.appendChild(link);
+    box.appendChild(bs);
+  }
+  if (me && playing) {   // 遊戲畫面：自己的盤面＋聯機對手的小盤面
+    const wrap = mk('div', 'ar-play');
+    const cv = document.createElement('canvas'); cv.id = 'arMain'; cv.width = 100 + AR_W * AR_CELL + 110; cv.height = AR_VIS * AR_CELL + 20; cv.className = 'ar-main';
+    wrap.appendChild(cv);
+    if (me.st === 'link' && lk) {
+      const opps = mk('div', 'ar-opps');
+      for (const c of lk.mem) if (c !== me.cab) opps.appendChild(arOppEl(v, c, mk, 12));
+      for (const x of lk.gone || []) opps.appendChild(mk('div', 'ar-opp gone', `${x.name}\n中途離開（${x.score} 分）`));
+      wrap.appendChild(opps);
+    }
+    box.appendChild(wrap);
+  }
+  if (!me) {   // 觀戰：每台正在玩的機台
+    const opps = mk('div', 'ar-opps spec');
+    const live = v.seats.filter(s => s.play);
+    for (const s of live) opps.appendChild(arOppEl(v, s.cab, mk, 14));
+    if (!live.length) opps.appendChild(mk('div', 'table-tag', '目前沒有人在玩'));
+    box.appendChild(opps);
+  }
+  // 4 台機台的狀態
+  const cabs = mk('div', 'ar-cabs');
+  for (let c = 0; c < 4; c++) {
+    const s = v.seats.find(x => x.cab === c), el = mk('div', 'ar-cab' + (me && c === me.cab ? ' you' : ''));
+    el.style.borderColor = AR_CAB_COLORS[c];
+    const st = !s ? '空機台' : s.play ? (s.st === 'solo' ? '單人遊玩中' : s.dead ? '聯機・出局' : '聯機遊玩中') : s.st === 'link' ? '聯機等待中' : '閒置';
+    el.appendChild(mk('div', 'table-name', arCabName(c)));
+    el.appendChild(mk('div', 'table-tag', s ? `${s.name} · ${st}` : st));
+    cabs.appendChild(el);
+  }
+  box.appendChild(cabs);
+  if (!playing) boardBlock(box, v, mk, sc => `${sc} 分（單人）`);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+function arOppEl(v, cab, mk, cs) {
+  const s = v.seats.find(x => x.cab === cab), el = mk('div', 'ar-opp');
+  el.style.borderColor = AR_CAB_COLORS[cab];
+  el.appendChild(mk('div', 'table-name', `${s?.name || '?'} · ${arCabName(cab)}`));
+  const cv = document.createElement('canvas'); cv.className = 'ar-oppcv'; cv.dataset.cab = cab; cv.width = AR_W * cs; cv.height = AR_VIS * cs;
+  el.appendChild(cv);
+  const sc = mk('div', 'table-tag', `${S.arOpp?.[cab]?.sc ?? s?.sc ?? 0} 分`); sc.id = 'arOppSc' + cab; el.appendChild(sc);
+  return el;
+}
 // 島上桌子的繪製：圖＋人數標籤（離得近時提示按 F）
 function tableDrawEntries(list) {
   for (const tb of tablesHere()) {
-    const img = S.tableImgs[tb.game], r = tableRect(tb), gd = gameDef(tb.game);
+    const img = S.tableImgs[tb.img] || S.tableImgs[tb.game], r = tableRect(tb), gd = gameDef(tb.game);
     list.push({
       y: r.y + r.h, draw: () => {
         ctx.imageSmoothingEnabled = false;
         if (img) ctx.drawImage(img, r.x, r.y, r.w, r.h);
         else { ctx.fillStyle = '#2f8a5a'; ctx.fillRect(r.x, r.y, r.w, r.h); }
         const inf = S.tblInfo?.[tb.id], p = S.players[0];
+        if (tb.game === 'arcade') { arcadeLabel(tb, r, inf, p); return; }
         const txt = `${gd?.name || '遊戲桌'} ${inf ? `${inf.n}/${inf.max}${inf.play ? ' 遊戲中' : ''}${inf.s ? ` · ${inf.s} 人觀戰` : ''}` : ''}`;
         ctx.save(); ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.textAlign = 'center';
         ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#ffe08a';
@@ -6541,6 +6897,20 @@ function tableDrawEntries(list) {
     });
   }
 }
+
+// 街機方塊的機台標籤：每台頭上一行（玩家名字／空機台），有人在等聯機時空機台與閒置中的機台多一行「聯機邀請中」
+function arcadeLabel(tb, r, inf, p) {
+  const c = inf?.cabs?.[tb.cab], cx = r.x + r.w / 2;
+  const lines = [];
+  lines.push([c ? `${c.n}${c.st === 'solo' || c.st === 'link' ? ' 遊戲中' : ''}` : '空機台', c ? '#fff6e0' : '#b8c4dc', '11px']);
+  lines.push([gameDef(tb.game)?.name || '街機', '#ffe08a', 'bold 12px']);   // 遊戲名稱（同其他桌子的標籤）
+  if (inf?.inv && (!c || c.st === 'idle')) lines.push(['聯機邀請中！', '#ff9ad0', 'bold 11px']);
+  if (!S.tableOpen && tableDist(tb, p.x, p.y) < TABLE_RANGE && !tableNearOther(tb, p)) lines.push([c ? '按 F 觀戰' : '按 F 開始玩', '#fff6e0', '11px']);
+  ctx.save(); ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)';
+  lines.forEach(([t, col, font], k) => { ctx.font = `${font} "Microsoft JhengHei"`; ctx.fillStyle = col; const y = r.y - 6 - k * 14; ctx.strokeText(t, cx, y); ctx.fillText(t, cx, y); });
+  ctx.restore();
+}
+const tableNearOther = (tb, p) => tableNear(p) !== tb;   // 4 台挨得很近：只在最近的那台顯示「按 F」
 
 // ---- 稱號：達成條件就解鎖（assets/titles/titles.json），在造型面板的「稱號設定」選一個顯示在名字上方 ----
 // 解鎖純客戶端判斷（與職業同樣信任客戶端）：釣魚類從圖鑑推算（登入的人用伺服器存的圖鑑）；擊倒島主記在 localStorage 的 dcisland.m0.titles。
@@ -8085,6 +8455,7 @@ addEventListener('keydown', e => {
   if (S.tableOpen) {   // 遊戲畫面開著：Esc 離開；五子棋復盤時 ←／→／Home／End 切換步數；其他鍵都不處理（不能走路）
     if (k === 'escape') { e.preventDefault(); if (!$('rulesBox').classList.contains('hidden')) rulesShow(false); else leaveTable(); }   // 規則視窗開著：Esc 先關；離開確認開著：Esc＝取消規則
     else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
+    else if (S.ar && arKey(e)) { /* 街機方塊：方向鍵／X／Z／空白鍵／C／Shift */ }
     else if (S.ty) typingKey(e);   // 英文打字競賽：英文字母
     else if (S.tableView?.game === 'blokus' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') bkKey(e);
     else if (S.tableView?.game === 'trigon' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') tgKey(e);   // 三角方塊拼圖：R 旋轉 60 度、F 翻面   // 方塊拼圖：R 旋轉、F 翻面
@@ -8123,7 +8494,7 @@ addEventListener('keydown', e => {
   if ((k === '1' || k === '2') && !e.repeat) tryJobSkill(+k - 1);   // 1／2：職業技能
   if (k === 'shift' && !e.repeat) toggleSprint();   // Shift：切換疾走／步行（與右下角虛擬按鍵同一個開關）
 });
-addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; if (e.key.toLowerCase() === 'f') S.holdSkipF = false; if (S.dg && DG_KEYS[e.key.toLowerCase()]) S.dg.keys[DG_KEYS[e.key.toLowerCase()]] = false; });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; arKeyUp(e.key.toLowerCase()); if (e.key.toLowerCase() === 'f') S.holdSkipF = false; if (S.dg && DG_KEYS[e.key.toLowerCase()]) S.dg.keys[DG_KEYS[e.key.toLowerCase()]] = false; });
 // ---------------- 疾走虛擬按鍵（畫面右下角）----------------
 // 圓形＋跑步像素小人；點擊或按 Shift 切換疾走／步行（2026-11-06 使用者要求：點擊後持續生效，再點擊或再按 Shift 切回步行）
 function toggleSprint() {
@@ -8496,6 +8867,7 @@ async function boot() {
     ...Object.values(S.fishDB.terrains).flat().map(async f => S.fishImgs[f.id] = await optImg(`assets/fish/${f.sprite}`)),
     ...(S.craftDB?.materials || []).map(async m => S.craftImgs[m.id] = await optImg(`assets/craft/${m.id}.png`)),
     ...Object.entries(S.gamesDB?.games || {}).map(async ([id, g]) => S.tableImgs[id] = await optImg(`assets/games/${g.sprite}`)),
+    ...Object.values(S.gamesDB?.games || {}).flatMap(g => g.sprites || []).map(async f => S.tableImgs[f] = await optImg(`assets/games/${f}`)),   // 街機方塊：4 台各自的配色（terrain.json 的 tables[].img）
     ensureTerrain(S.terrain),
   ]);
 
@@ -8588,6 +8960,8 @@ async function boot() {
     onTpos: onNetTpos,         // 躲彈幕：其他玩家的位置
     onTpg: onNetTpg,           // 英文打字競賽：觀戰者看到的其他玩家打字進度
     onTsc: onNetTsc,           // 英文打字競賽：其他玩家的分數
+    onTtb: onNetTtb,           // 街機方塊：別台的盤面快照
+    onTgb: onNetTgb,           // 街機方塊（對戰模式）：被送垃圾行
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）
