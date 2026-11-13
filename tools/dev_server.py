@@ -116,6 +116,35 @@ CELL = 32                # 與 client/js/main.js 一致
 # ---- 玩家 state 封包白名單（與 worker/src/index.js 的 sanitizeState 一致，改一邊要改另一邊）----
 ID_RE = re.compile(r"^[a-z0-9_-]{1,24}$")
 NAME_MAX = 24
+# 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號（Worker 存 Registry 的 gstats:<uid>，這裡只存記憶體 GSTATS）。各遊戲結算時在 result["gs"]
+# （依「結算後留下的座位」順序，與 result["xp"] 同；None＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器照著記進 GSTATS 並把整份送給本人；
+# result["gs"] 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）。與 worker 的 gsMk／tableStats 同一套
+GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon"}
+GS_CAP, GS_KEYS_MAX = 1000000, 24
+GSTATS = {}
+
+def gs_mk(add=None, mx=None, mn=None):
+    return {"add": {"p": 1, **(add or {})}, "max": mx or {}, "min": mn or {}}
+
+def gstats_apply(uid, game, gs):
+    """把一局的戰績增量併進帳號的戰績；回整份（深拷貝）。"""
+    all_ = GSTATS.setdefault(uid, {})
+    if game in GS_GAMES and gs:
+        m = all_.setdefault(game, {})
+        for mode, src in (("add", gs.get("add")), ("max", gs.get("max")), ("min", gs.get("min"))):
+            for k, raw in (src or {}).items():
+                if not isinstance(raw, (int, float)) or isinstance(raw, bool) or not re.fullmatch(r"[a-z0-9_]{1,12}", str(k)):
+                    continue
+                v = max(0, min(GS_CAP, int(raw)))
+                if k not in m and len(m) >= GS_KEYS_MAX:
+                    continue
+                if mode == "add":
+                    m[k] = min(GS_CAP, m.get(k, 0) + v)
+                elif mode == "max":
+                    m[k] = max(m.get(k, 0), v)
+                else:
+                    m[k] = v if k not in m else min(m[k], v)
+    return json.loads(json.dumps(all_))
 # 暱稱（2026-11-13，使用者要求）：跟著 Discord 帳號（Worker 存 Registry 的 nick:<uid>，這裡只存記憶體），只改「顯示名稱」——state.name 對登入者＝暱稱，沒設就是 Discord 名稱；
 # 身分仍是 uid（管理員、XP、圖鑑、排行榜去重都看 uid，與名稱無關）。不擋撞名。與 worker 的 nickClean 同一套
 NICK_MAX, NICK_CD_MS = 12, 2000
@@ -813,7 +842,7 @@ def om_start(t):
 def om_finish(t, loser):
     name = t["seats"][loser]["name"]
     t["result"] = {"loser": loser, "name": name, "text": f"{name} 抽到鬼牌，輸了！", "rid": random.getrandbits(32),
-                   "xp": [OM_XP] * len(t["seats"])}
+                   "xp": [OM_XP] * len(t["seats"]), "gs": [gs_mk({"l": 1} if k == loser else {"s": 1}) for k in range(len(t["seats"]))]}
     tbl_log(t, t["result"]["text"])
     tbl_reset_seats(t)
 
@@ -888,12 +917,14 @@ def gm_finish(t, winner, line):
     """對局結束：winner＝座位編號，None＝平手。棋盤留著給大家看（到下一局開始才清掉）。"""
     g = t.get("g")
     enough = len(g["moves"]) >= GM_XP_MIN_MOVES
+    nm = len(g["moves"])
+    gs = [gs_mk({"w": 1} if winner == k else {}, {}, {"fm": nm} if winner == k else {}) if enough else None for k in range(2)]   # 下不到 10 手的不記（同 XP，擋互刷）；fm＝獲勝時的總手數（取最小）
     if winner is None:
-        t["result"] = {"draw": True, "text": "棋盤下滿了，平手！", "rid": random.getrandbits(32), "xp": [GM_XP if enough else 0] * 2}
+        t["result"] = {"draw": True, "text": "棋盤下滿了，平手！", "rid": random.getrandbits(32), "xp": [GM_XP if enough else 0] * 2, "gs": gs}
     else:
         name = t["seats"][winner]["name"]
         t["result"] = {"winner": winner, "name": name, "text": f"{name} 五子連線，獲勝！", "rid": random.getrandbits(32),
-                       "xp": [GM_XP if enough else 0] * 2}
+                       "xp": [GM_XP if enough else 0] * 2, "gs": gs}
     tbl_log(t, t["result"]["text"])
     tbl_reset_seats(t)
     t["g"] = g
@@ -1070,10 +1101,12 @@ def bk_finish(t):
     stay = [(k, s) for k, s in enumerate(t["seats"]) if not s.get("left")]
     active = sum(1 for k, s in enumerate(t["seats"]) if not s.get("left") and not g["sd"][k]["forfeit"])
     xp = [BK_XP if active >= 2 and not g["sd"][k]["forfeit"] else 0 for k, s in stay]
+    gs = [gs_mk({**({"w": 1} if k in winners else {}), **({"all": 1} if players[k]["rem"] == 0 else {}), **({"mono": 1} if players[k]["rem"] == 0 and g["sd"][k]["mono"] else {}), **({"duo": 1} if k in winners and bk_size(g) == 14 else {})})
+          if active >= 2 and not players[k]["forfeit"] else None for k, s in stay]   # all＝21 塊全放完、mono＝最後一塊是單格、duo＝2 人局（Duo）獲勝
     names = "、".join(players[k]["name"] for k in winners)
     text = f"{names} 同分平手（{best} 分）" if len(winners) > 1 else f"{names} 獲勝！（{best} 分）"
     t["seats"] = [s for _k, s in stay]
-    t["result"] = {"text": text, "rid": random.getrandbits(32), "xp": xp, "players": players, "winners": winners, "draw": len(winners) > 1}
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "xp": xp, "players": players, "winners": winners, "draw": len(winners) > 1, "gs": gs}
     tbl_log(t, text)
     tbl_reset_seats(t)
     t["g"] = g   # 最後的棋盤留著給大家看，到下一局開始才清掉
@@ -1314,10 +1347,11 @@ def tg_finish(t):
     stay = [(k, s) for k, s in enumerate(t["seats"]) if not s.get("left")]
     active = sum(1 for k, s in enumerate(t["seats"]) if not s.get("left") and not g["sd"][k]["forfeit"])
     xp = [TG_XP if active >= 2 and not g["sd"][k]["forfeit"] else 0 for k, s in stay]
+    gs = [gs_mk({**({"w": 1} if k in winners else {}), **({"all": 1} if players[k]["rem"] == 0 else {})}) if active >= 2 and not players[k]["forfeit"] else None for k, s in stay]
     names = "、".join(players[k]["name"] for k in winners)
     text = f"{names} 同分平手（{best} 分）" if len(winners) > 1 else f"{names} 獲勝！（{best} 分）"
     t["seats"] = [s for _k, s in stay]
-    t["result"] = {"text": text, "rid": random.getrandbits(32), "xp": xp, "players": players, "winners": winners, "draw": len(winners) > 1}
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "xp": xp, "players": players, "winners": winners, "draw": len(winners) > 1, "gs": gs}
     tbl_log(t, text)
     tbl_reset_seats(t)
     t["g"] = g   # 最後的棋盤留著給大家看，到下一局開始才清掉
@@ -1441,6 +1475,7 @@ def dg_pick(t, cid, n, now, x=None, y=None):
     g["taken"].append({"n": n, "by": i, "k": k})
     nm = s["name"]
     if k == "coin":
+        s["coins"] = s.get("coins", 0) + 1
         s["bonus"] += DG_COIN
         tbl_log(t, f"{nm} 吃到金幣 +{DG_COIN} 分")
     elif k == "heart":
@@ -1480,6 +1515,7 @@ def dg_start(t):
     for s in t["seats"]:
         s["lives"], s["out"], s["died"], s["last_hit"], s["left"], s["ready"] = DG_LIVES, False, None, 0, False, False
         s["bonus"], s["px"], s["py"] = 0, None, None
+        s["coins"] = 0
     tbl_log(t, f"挑戰開始！{len(t['seats'])} 人參加，每人 {DG_LIVES} 條命")
 
 def dg_out(t, s, now, why):
@@ -1498,8 +1534,9 @@ def dg_finish(t, now):
     top = ranking[0] if ranking else None
     text = f"挑戰結束！第一名 {top['name']}，{top['score']} 分" if top else "挑戰結束"
     board_record(t, [(r["name"], r["score"], r.get("uid")) for r in ranking if not r["left"]])
+    gs = [gs_mk({}, {"best": max(0, dg_score(s)), "bsec": int(s.get("died") or 0), "coin": s.get("coins", 0)}) for s in stay]   # best＝分數、bsec＝存活秒數、coin＝這局吃到的金幣數（都取最大）
     t["seats"] = stay
-    t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp}
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp, "gs": gs}
     tbl_log(t, text)
     tbl_reset_seats(t)
     t["g"] = None
@@ -1622,8 +1659,9 @@ def mg_finish(t, now, win):
         text = f"Boss 太強了，撐不住…（{MG_DIFF_NAMES[g['diff']]}模式）"
     if win and solo:
         board_record(t, [(t["seats"][0]["name"], score, t["seats"][0].get("uid"))])
+    gs = [gs_mk({"syms": s.get("syms", 0), **({f"c{g['diff']}": 1, **({"solo": 1} if solo else {}), **({"nd": 1} if not s.get("dead") and s["hp"] >= MG_HP else {})} if win else {})}) for s in stay]   # syms＝畫對的符號數；c0～c3＝各難度通關；solo＝單人通關；nd＝通關且自己沒掉血
     t["seats"] = stay
-    t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp, "win": win, "score": score, "diff": g["diff"], "solo": solo, "syms": syms}
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp, "win": win, "score": score, "diff": g["diff"], "solo": solo, "syms": syms, "gs": gs}
     tbl_log(t, text)
     tbl_reset_seats(t)
     t["g"] = None
@@ -1794,8 +1832,9 @@ def ty_finish(t):
     top = ranking[0] if ranking else None
     text = f"比賽結束！第一名 {top['name']}，打了 {top['score']} 個{ty_unit(t)}" if top else "比賽結束"
     board_record(t, [(r["name"], r["score"], r.get("uid")) for r in ranking if not r["left"]])
+    gs = [gs_mk({}, {"best": s.get("score", 0)}) for s in stay]   # best＝單局最高分（取最大）
     t["seats"] = stay
-    t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp}
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "ranking": ranking, "xp": xp, "gs": gs}
     tbl_log(t, text)
     tbl_reset_seats(t)
 
@@ -2232,7 +2271,9 @@ def it_finish(t, text, winners, xp):
     reveal = [{"name": s["name"], "role": s.get("role"), "char": s.get("char"), "intel": list(s.get("intel") or []), "win": any(s is w for w in winners),
                "left": bool(s.get("left")), "out": bool(s.get("out"))} for s in t["seats"]]
     stay = [s for s in t["seats"] if not s.get("left")]
-    t["result"] = {"text": text, "rid": random.getrandbits(32), "xp": [IT_XP if xp else 0 for _ in stay], "reveal": reveal}
+    camp = {"sand": {"ws": 1}, "water": {"wb": 1}, "mage": {"wm": 1}}
+    gs = [gs_mk({"w": 1, **camp.get(s.get("role"), {})} if any(s is w for w in winners) else {}) for s in stay] if xp else None   # ws／wb／wm＝以沙都／水都／咒術師獲勝；有人中途離開（xp＝False）的局不記
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "xp": [IT_XP if xp else 0 for _ in stay], "reveal": reveal, "gs": gs}
     tbl_log(t, text)
     t["seats"] = stay
     tbl_reset_seats(t)
@@ -3622,7 +3663,10 @@ def un_start(t):
 def un_finish(t, winner, xp):
     name = t["seats"][winner]["name"]
     stay = [s for s in t["seats"] if not s.get("left")]
-    t["result"] = {"winner": winner, "name": name, "text": f"{name} 出完手牌，獲勝！", "rid": random.getrandbits(32), "xp": [UN_XP if xp else 0] * len(stay)}
+    win = t["seats"][winner]
+    wild = bool(t.get("g") and t["g"].get("mode") == "wild")
+    gs = [gs_mk({"w": 1, **({"ww": 1} if wild else {})} if s is win else {}) for s in stay] if xp else None   # ww＝無限制玩法獲勝；有人中途離開（xp＝False）的局不記
+    t["result"] = {"winner": winner, "name": name, "text": f"{name} 出完手牌，獲勝！", "rid": random.getrandbits(32), "xp": [UN_XP if xp else 0] * len(stay), "gs": gs}
     tbl_log(t, t["result"]["text"])
     t["seats"] = stay
     tbl_reset_seats(t)
@@ -4018,6 +4062,7 @@ class Room:
         self.tables = {}         # 桌 id -> 牌桌狀態（和平島的遊戲桌；只放記憶體）
         self.tlock = threading.Lock()   # 牌桌操作串行（table_op）
         self._xp_pending = []           # 對局結束待發的 XP：[(連線編號, XP)]（table_do 在鎖內收集、table_op 在鎖外發）
+        self._gs_pending = []           # 對局結束待記的戰績：[(連線編號, 遊戲 id, 戰績增量)]
         self.game_xp_at = {}            # 帳號 id -> 上次玩小遊戲得 XP 的時間（GAME_XP_CD）
         # 每位玩家各自在某個地形（client["terrain"]）；剛連上時為 None，等 enter
 
@@ -5191,6 +5236,10 @@ class Room:
             for i, s in enumerate(t["seats"]):
                 if s["cid"] is not None and i < len(r["xp"]) and r["xp"][i] > 0:
                     self._xp_pending.append((s["cid"], r["xp"][i]))
+        if r is not None and r is not before and not r.get("aborted") and isinstance(r.get("gs"), list) and t["game"] in GS_GAMES:
+            for i, s in enumerate(t["seats"]):   # 戰績（result["gs"]）：登入者鎖外記進帳號並把整份送給本人；訪客由客戶端本機套用
+                if s["cid"] is not None and i < len(r["gs"]) and r["gs"][i]:
+                    self._gs_pending.append((s["cid"], t["game"], r["gs"][i]))
 
     def _table_leave_locked(self, cid, out):
         c = self.clients.get(cid)
@@ -5363,6 +5412,13 @@ class Room:
         """牌桌操作（算結果＋送出）整段串行：不同連線的操作在不同執行緒，先算好的 tblinfo 若晚送到，客戶端會停在過期的人數／入座名單。"""
         with self.tlock:
             self.table_flush(fn(*args))
+            gpend, self._gs_pending = self._gs_pending, []
+            for cid, game, gs in gpend:
+                with self.lock:
+                    c = self.clients.get(cid)
+                user = c.get("user") if c else None
+                if user:
+                    self.send_to(cid, {"t": "gstats", "gstats": gstats_apply(user["id"], game, gs)})
             pend, self._xp_pending = self._xp_pending, []
             for cid, n in pend:   # 對局結束：登入者的 XP 由伺服器記（同一帳號 GAME_XP_CD 內只算一次）；訪客由客戶端本機補發
                 with self.lock:
@@ -5596,6 +5652,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 ws_send(sock, json.dumps({"t": "dex", "dex": dex}))
                                 ws_send(sock, json.dumps({"t": "craftdb", "craft": craft_add(c["user"]["id"], {})}))   # 合成解鎖紀錄
                                 ws_send(sock, json.dumps({"t": "kills", "kills": kills_add(c["user"]["id"], [])}))   # 擊倒島主紀錄
+                                ws_send(sock, json.dumps({"t": "gstats", "gstats": gstats_apply(c["user"]["id"], "", None)}))   # 遊戲戰績（稱號用）
                                 if xp_known:   # XP 只在「伺服器有紀錄」時送 init；沒有就等 xpsync 上繳
                                     ws_send(sock, json.dumps({"t": "xp", "xp": c.get("xp", 0), "d": 0, "k": "init"}))
                 elif t == "state":

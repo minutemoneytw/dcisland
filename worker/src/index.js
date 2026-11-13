@@ -496,6 +496,11 @@ const GAME_XP_CD_MS = 30000;
 const OM_XP = 4;      // 抽鬼牌：每位入座者（過關者與輸家一樣）
 const GM_XP = 5;      // 五子棋：勝／負／平手都一樣
 const GM_XP_MIN_MOVES = 10;
+// 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號存在 Registry 的 gstats:<uid> = {遊戲 id: {鍵: 數字}}；各遊戲結算時在 result.gs
+// （依「結算後留下的座位」順序，與 result.xp 同；null＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器（tableStats）照著寫進 Registry，
+// 再把整份 gstats 送給本人；result.gs 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）；其餘鍵見 docs/notes.md「小遊戲戰績與稱號」。與 tools/dev_server.py 的 gs_mk 同一套
+const GS_GAMES = new Set(["oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon"]), GS_KEY_RE = /^[a-z0-9_]{1,12}$/, GS_CAP = 1000000, GS_KEYS_MAX = 24;
+const gsMk = (add, mx, mn) => ({ add: { p: 1, ...(add || {}) }, max: mx || {}, min: mn || {} });
 const OM_SYM = { S: "♠", H: "♥", D: "♦", C: "♣" };
 const omRank = c => (c === "JK" ? null : Number(c.slice(1)));
 const omLabel = c => {
@@ -607,7 +612,7 @@ function omStart(t) {
 }
 function omFinish(t, loser) {
   const name = t.seats[loser].name;
-  t.result = { loser, name, text: `${name} 抽到鬼牌，輸了！`, rid: Math.floor(Math.random() * 4294967296), xp: t.seats.map(() => OM_XP) };
+  t.result = { loser, name, text: `${name} 抽到鬼牌，輸了！`, rid: Math.floor(Math.random() * 4294967296), xp: t.seats.map(() => OM_XP), gs: t.seats.map((s, k) => gsMk(k === loser ? { l: 1 } : { s: 1 })) };
   tblLog(t, t.result.text);
   tblResetSeats(t);
 }
@@ -665,9 +670,10 @@ function gmLine(board, x, y, color) {
 }
 // 對局結束：winner＝座位編號，null＝平手。棋盤留著給大家看（到下一局開始才清掉）
 function gmFinish(t, winner) {
-  const g = t.g, enough = (g.moves || []).length >= GM_XP_MIN_MOVES, rid = Math.floor(Math.random() * 4294967296);
-  if (winner === null) t.result = { draw: true, text: "棋盤下滿了，平手！", rid, xp: [enough ? GM_XP : 0, enough ? GM_XP : 0] };
-  else { const name = t.seats[winner].name; t.result = { winner, name, text: `${name} 五子連線，獲勝！`, rid, xp: [enough ? GM_XP : 0, enough ? GM_XP : 0] }; }
+  const g = t.g, nm = (g.moves || []).length, enough = nm >= GM_XP_MIN_MOVES, rid = Math.floor(Math.random() * 4294967296);
+  const gs = [0, 1].map(k => (enough ? gsMk(winner === k ? { w: 1 } : {}, {}, winner === k ? { fm: nm } : {}) : null));   // 下不到 10 手的不記（同 XP，擋互刷）；fm＝獲勝時的總手數（取最小）
+  if (winner === null) t.result = { draw: true, text: "棋盤下滿了，平手！", rid, xp: [enough ? GM_XP : 0, enough ? GM_XP : 0], gs };
+  else { const name = t.seats[winner].name; t.result = { winner, name, text: `${name} 五子連線，獲勝！`, rid, xp: [enough ? GM_XP : 0, enough ? GM_XP : 0], gs }; }
   tblLog(t, t.result.text);
   tblResetSeats(t);
   t.g = g;
@@ -782,8 +788,9 @@ function bkFinish(t) {
   const xp = stay.map(s => (active >= 2 && !g.sd[t.seats.indexOf(s)].forfeit ? BK_XP : 0));
   const names = winners.map(k => players[k].name).join("、");
   const text = winners.length > 1 ? `${names} 同分平手（${best} 分）` : `${names} 獲勝！（${best} 分）`;
+  const gs = stay.map(s => { const k = t.seats.indexOf(s), p = players[k]; return active >= 2 && !p.forfeit ? gsMk({ ...(winners.includes(k) ? { w: 1 } : {}), ...(p.rem === 0 ? { all: 1 } : {}), ...(p.rem === 0 && g.sd[k].mono ? { mono: 1 } : {}), ...(winners.includes(k) && bkSize(g) === 14 ? { duo: 1 } : {}) }) : null; });   // all＝21 塊全放完、mono＝最後一塊是單格、duo＝2 人局（Duo）獲勝
   t.seats = stay;
-  t.result = { text, rid: Math.floor(Math.random() * 4294967296), xp, players, winners, draw: winners.length > 1 };
+  t.result = { text, rid: Math.floor(Math.random() * 4294967296), xp, players, winners, draw: winners.length > 1, gs };
   tblLog(t, text);
   tblResetSeats(t);
   t.g = g;   // 最後的棋盤留著給大家看，到下一局開始才清掉
@@ -938,8 +945,9 @@ function tgFinish(t) {
   const xp = stay.map(s => (active >= 2 && !g.sd[t.seats.indexOf(s)].forfeit ? TG_XP : 0));
   const names = winners.map(k => players[k].name).join("、");
   const text = winners.length > 1 ? `${names} 同分平手（${best} 分）` : `${names} 獲勝！（${best} 分）`;
+  const gs = stay.map(s => { const k = t.seats.indexOf(s), p = players[k]; return active >= 2 && !p.forfeit ? gsMk({ ...(winners.includes(k) ? { w: 1 } : {}), ...(p.rem === 0 ? { all: 1 } : {}) }) : null; });
   t.seats = stay;
-  t.result = { text, rid: Math.floor(Math.random() * 4294967296), xp, players, winners, draw: winners.length > 1 };
+  t.result = { text, rid: Math.floor(Math.random() * 4294967296), xp, players, winners, draw: winners.length > 1, gs };
   tblLog(t, text);
   tblResetSeats(t);
   t.g = g;   // 最後的棋盤留著給大家看，到下一局開始才清掉
@@ -1013,7 +1021,7 @@ function dgPick(t, cid, n, now, x, y) {
   if (s.px != null && (s.px - x) ** 2 + (s.py - y) ** 2 > 120 * 120) return;
   const k = it.kind, nm = s.name;
   g.taken.push({ n, by: i, k });
-  if (k === "coin") { s.bonus += DG_COIN; tblLog(t, `${nm} 吃到金幣 +${DG_COIN} 分`); }
+  if (k === "coin") { s.coins = (s.coins || 0) + 1; s.bonus += DG_COIN; tblLog(t, `${nm} 吃到金幣 +${DG_COIN} 分`); }
   else if (k === "heart") {
     if (s.lives < DG_LIVES) { s.lives += 1; tblLog(t, `${nm} 吃到愛心，回復 1 條命`); }
     else { s.bonus += DG_HEART_FULL_PTS; tblLog(t, `${nm} 吃到愛心（命已滿）+${DG_HEART_FULL_PTS} 分`); }
@@ -1034,7 +1042,7 @@ function dgStart(t) {
   const now = Date.now();
   t.g = { seed: Math.floor(Math.random() * 2147483648), t0: now + DG_COUNTDOWN_MS, n: t.seats.length, taken: [], fx: [] };
   t.result = null; t.phase = "playing";
-  for (const s of t.seats) { s.lives = DG_LIVES; s.out = false; s.died = null; s.lastHit = 0; s.left = false; s.ready = false; s.bonus = 0; s.px = null; s.py = null; }
+  for (const s of t.seats) { s.lives = DG_LIVES; s.out = false; s.died = null; s.lastHit = 0; s.left = false; s.ready = false; s.bonus = 0; s.coins = 0; s.px = null; s.py = null; }
   tblLog(t, `挑戰開始！${t.seats.length} 人參加，每人 ${DG_LIVES} 條命`);
 }
 function dgOut(t, s, now, why) {
@@ -1047,8 +1055,9 @@ function dgFinish(t, now) {
   const stay = t.seats.filter(s => !s.left);
   const xp = stay.map(s => dgXp(s.died));   // 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
   const top = ranking[0], text = top ? `挑戰結束！第一名 ${top.name}，${top.score} 分` : "挑戰結束";
+  const gs = stay.map(s => gsMk({}, { best: Math.max(0, dgScore(s)), bsec: Math.floor(s.died || 0), coin: s.coins || 0 }));   // best＝分數、bsec＝存活秒數、coin＝這局吃到的金幣數（都取最大）
   t.seats = stay;
-  t.result = { text, rid: Math.floor(Math.random() * 4294967296), ranking, xp };
+  t.result = { text, rid: Math.floor(Math.random() * 4294967296), ranking, xp, gs };
   tblLog(t, text);
   tblResetSeats(t);
   t.g = null;
@@ -1125,8 +1134,9 @@ function mgFinish(t, now, win) {
   const xp = stay.map(() => (win ? MG_XP[g.diff] : 1));
   let text = win ? `驅魔師們打倒了 Boss！${MG_DIFF_NAMES[g.diff]}模式通關，${score} 分` : `驅魔師們全軍覆沒…（${MG_DIFF_NAMES[g.diff]}模式）`;
   if (!win && e >= MG_BOSS_START && mgAlive(t).length) text = `Boss 太強了，撐不住…（${MG_DIFF_NAMES[g.diff]}模式）`;
+  const gs = stay.map(s => gsMk({ syms: s.syms || 0, ...(win ? { ["c" + g.diff]: 1, ...(solo ? { solo: 1 } : {}), ...(!s.dead && s.hp >= MG_HP ? { nd: 1 } : {}) } : {}) }));   // syms＝畫對的符號數；c0～c3＝各難度通關；solo＝單人通關；nd＝通關且自己沒掉血
   t.seats = stay;
-  t.result = { text, rid: Math.floor(Math.random() * 4294967296), ranking, xp, win, score, diff: g.diff, solo, syms };
+  t.result = { text, rid: Math.floor(Math.random() * 4294967296), ranking, xp, win, score, diff: g.diff, solo, syms, gs };
   tblLog(t, text);
   tblResetSeats(t);
   t.g = null;
@@ -1229,8 +1239,9 @@ function tyFinish(t) {
   const stay = t.seats.filter(s => !s.left);
   const xp = stay.map(s => ((s.score || 0) >= TY_XP_MIN ? TY_XP : 0));   // 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
   const top = ranking[0], text = top ? `比賽結束！第一名 ${top.name}，打了 ${top.score} 個${tyUnit(t)}` : "比賽結束";
+  const gs = stay.map(s => gsMk({}, { best: s.score || 0 }));   // best＝單局最高分（取最大）
   t.seats = stay;
-  t.result = { text, rid: Math.floor(Math.random() * 4294967296), ranking, xp };
+  t.result = { text, rid: Math.floor(Math.random() * 4294967296), ranking, xp, gs };
   tblLog(t, text);
   tblResetSeats(t);
 }
@@ -1532,7 +1543,8 @@ function itDrawChoice(t, i, now) {
 function itFinish(t, text, winners, xp) {
   const reveal = t.seats.map(s => ({ name: s.name, role: s.role, char: s.char || null, intel: [...(s.intel || [])], win: winners.includes(s), left: !!s.left, out: !!s.out }));
   const stay = t.seats.filter(s => !s.left);
-  t.result = { text, rid: Math.floor(Math.random() * 4294967296), xp: stay.map(() => (xp ? IT_XP : 0)), reveal };
+  const gs = xp ? stay.map(s => (winners.includes(s) ? gsMk({ w: 1, ...({ sand: { ws: 1 }, water: { wb: 1 }, mage: { wm: 1 } }[s.role] || {}) }) : gsMk({}))) : null;   // ws／wb／wm＝以沙都／水都／咒術師獲勝；有人中途離開（xp＝false）的局不記
+  t.result = { text, rid: Math.floor(Math.random() * 4294967296), xp: stay.map(() => (xp ? IT_XP : 0)), reveal, gs };
   tblLog(t, text);
   t.seats = stay;
   tblResetSeats(t);
@@ -2414,8 +2426,9 @@ function unStart(t) {
   tblLog(t, `牌局開始（${mode === "wild" ? "無限制玩法" : "傳統玩法"}）！每人 7 張，起始牌 ${unLabel(top)}，由 ${t.seats[t.turn].name} 先出`);
 }
 function unFinish(t, winner, xp) {
-  const name = t.seats[winner].name, stay = t.seats.filter(s => !s.left);
-  t.result = { winner, name, text: `${name} 出完手牌，獲勝！`, rid: Math.floor(Math.random() * 4294967296), xp: stay.map(() => (xp ? UN_XP : 0)) };
+  const name = t.seats[winner].name, stay = t.seats.filter(s => !s.left), win = t.seats[winner], wild = !!(t.g && t.g.mode === "wild");
+  const gs = xp ? stay.map(s => gsMk(s === win ? { w: 1, ...(wild ? { ww: 1 } : {}) } : {})) : null;   // ww＝無限制玩法獲勝；有人中途離開（xp＝false）的局不記
+  t.result = { winner, name, text: `${name} 出完手牌，獲勝！`, rid: Math.floor(Math.random() * 4294967296), xp: stay.map(() => (xp ? UN_XP : 0)), gs };
   tblLog(t, t.result.text);
   t.seats = stay;
   tblResetSeats(t);
@@ -3080,6 +3093,7 @@ export class Island {
     this.tableNotify(t);
     for (const [terr, defs] of Object.entries(TABLE_DEFS)) if (defs[tid]) await this.tableBroadcastInfo(terr);
     await this.tableXp(t, resBefore);   // 躲彈幕：最後一個活人離開會結束遊戲，留下的入座者照常得 XP
+    await this.tableStats(t, resBefore);
     await this.tableBoard(t, resBefore);
   }
   async getBoards() { if (!this.boards) this.boards = (await this.state.storage.get("boards")) || {}; return this.boards; }
@@ -3102,6 +3116,19 @@ export class Island {
     if (JSON.stringify(nb.map(e => [e.uid, e.name, e.score])) === JSON.stringify(old.map(e => [e.uid, e.name, e.score]))) return;
     boards[bk] = nb; await this.state.storage.put("boards", boards); t.board = nb;
     await this.saveTable(t); this.tableNotify(t);
+  }
+  // 這個操作結束了一局：登入的入座者把這局的戰績（result.gs）記進帳號，再把整份戰績送給本人（訪客由客戶端本機套用）
+  async tableStats(t, resBefore) {
+    const r = t.result;
+    if (!r || r === resBefore || r.aborted || !Array.isArray(r.gs) || !GS_GAMES.has(t.game)) return;
+    for (let i = 0; i < t.seats.length; i++) {
+      const gs = r.gs[i], cid = t.seats[i].cid;
+      if (!gs || cid == null) continue;
+      const ws2 = this.state.getWebSockets().find(w => (w.deserializeAttachment() || {}).id === cid), user = ws2 && (ws2.deserializeAttachment() || {}).user;
+      if (!user) continue;
+      const res = await this.registryCall("/gstats", { uid: user.id, game: t.game, add: gs.add, max: gs.max, min: gs.min });
+      if (res) try { ws2.send(JSON.stringify({ t: "gstats", gstats: res.gstats || {} })); } catch { /* 對方已斷線 */ }
+    }
   }
   // 這個操作結束了一局：登入的入座者各得 XP（訪客由客戶端看 result.xp 本機補發）；同一帳號 GAME_XP_CD_MS 內只算一次
   async tableXp(t, resBefore) {
@@ -3216,6 +3243,7 @@ export class Island {
     this.tableNotify(t);
     await this.tableBroadcastInfo(terr);
     await this.tableXp(t, resBefore);
+    await this.tableStats(t, resBefore);
     await this.tableBoard(t, resBefore);
   }
 
@@ -3275,6 +3303,8 @@ export class Island {
         if (cr) try { ws.send(JSON.stringify({ t: "craftdb", craft: cr.craft || {} })); } catch { /* 對方已斷線 */ }
         const kr = await this.registryCall("/kills", { uid: user.id, add: [] });   // 擊倒島主紀錄
         if (kr) try { ws.send(JSON.stringify({ t: "kills", kills: kr.kills || {} })); } catch { /* 對方已斷線 */ }
+        const gr = await this.registryCall("/gstats", { uid: user.id });   // 遊戲戰績（稱號用）
+        if (gr) try { ws.send(JSON.stringify({ t: "gstats", gstats: gr.gstats || {} })); } catch { /* 對方已斷線 */ }
       }
     } else if (msg.t === "state") {
       const s = sanitizeState(msg.s && typeof msg.s === "object" ? msg.s : {}, att.state);
@@ -4328,6 +4358,23 @@ export class Registry {
       const nk = "nick:" + uid;
       if (typeof body.set === "string") { const v = nickClean(body.set); if (v) await this.state.storage.put(nk, v); else await this.state.storage.delete(nk); }
       return json({ nick: nickClean(await this.state.storage.get(nk)) });
+    }
+    if (url.pathname === "/gstats") {   // 遊戲戰績：有 game 就把 add（累加）／max（取大）／min（取小）併進去，回整份；沒有 game＝只讀
+      const gk = "gstats:" + uid, all = (await this.state.storage.get(gk)) || {};
+      if (typeof body.game === "string" && GS_GAMES.has(body.game)) {
+        const m = all[body.game] || (all[body.game] = {}), val = v => (typeof v === "number" && Number.isFinite(v) ? Math.max(0, Math.min(GS_CAP, Math.floor(v))) : null);
+        for (const [mode, src] of [["add", body.add], ["max", body.max], ["min", body.min]]) {
+          for (const [k, raw] of Object.entries(src && typeof src === "object" ? src : {})) {
+            const v = val(raw);
+            if (v === null || !GS_KEY_RE.test(k) || (m[k] === undefined && Object.keys(m).length >= GS_KEYS_MAX)) continue;
+            if (mode === "add") m[k] = Math.min(GS_CAP, (m[k] || 0) + v);
+            else if (mode === "max") m[k] = Math.max(m[k] || 0, v);
+            else m[k] = m[k] === undefined ? v : Math.min(m[k], v);
+          }
+        }
+        await this.state.storage.put(gk, all);
+      }
+      return json({ gstats: all });
     }
     if (url.pathname === "/kills") {   // 擊倒島主紀錄：add＝[地形…] 併進去（已有的不動），回整份；add 空＝只讀
       const kk = "kills:" + uid, kills = (await this.state.storage.get(kk)) || {};

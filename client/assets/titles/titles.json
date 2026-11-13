@@ -1,5 +1,5 @@
 {
- "_comment": "稱號（手寫，不由產生器產生）。依陣列順序列在稱號一覽。id 只能用小寫英數、底線、連字號（最多 24 字，會進 state 同步）；name＝稱號內容（頭上顯示成《name》）；desc＝解鎖條件說明。cond.type：owner＝參與擊倒島主（mob＝mobs.json 的 id；島主倒下前 30 秒內自己打過牠）、dex＝某地形圖鑑收集 n 種、big＝釣到過大尺寸（fish.json 的 big）的魚種：有 n＝不限島嶼達 n 種，沒有 n＝全部魚種都要（可加 rarity 只看某稀有度）、titles＝ids 裡的稱號全都解鎖。",
+ "_comment": "稱號（手寫，不由產生器產生）。依陣列順序列在稱號一覽。id 只能用小寫英數、底線、連字號（最多 24 字，會進 state 同步）；name＝稱號內容（頭上顯示成《name》）；desc＝解鎖條件說明；cat＝分頁（battle 戰鬥／fishing 釣魚／game 遊戲，沒寫當 fishing）。cond.type：owner＝參與擊倒島主（mob＝mobs.json 的 id；島主倒下前 30 秒內自己打過牠）、dex＝某地形圖鑑收集 n 種、big＝釣到過大尺寸（fish.json 的 big）的魚種：有 n＝不限島嶼達 n 種，沒有 n＝全部魚種都要（可加 rarity 只看某稀有度）、titles＝ids 裡的稱號全都解鎖、stat＝小遊戲戰績（game＝遊戲 id，'*'＝所有遊戲加總；key＝戰績鍵；n＝門檻；op 'le'＝取最小值的鍵，要 ≤ n，例如五子棋獲勝最快手數 fm）、played＝玩過 n 種小遊戲、all＝conds 裡的條件全部達成。戰績鍵見 docs/notes.md「小遊戲戰績與稱號」（p＝局數、w＝勝場，其餘各遊戲不同）。",
  "titles": [
   {
    "id": "legend",
@@ -8,7 +8,8 @@
    "cond": {
     "type": "owner",
     "mob": "gold_dragon"
-   }
+   },
+   "cat": "battle"
   },
   {
    "id": "snake_bane",
@@ -17,7 +18,8 @@
    "cond": {
     "type": "owner",
     "mob": "snake_queen"
-   }
+   },
+   "cat": "battle"
   },
   {
    "id": "ultima",
@@ -26,7 +28,8 @@
    "cond": {
     "type": "owner",
     "mob": "ultima_weapon"
-   }
+   },
+   "cat": "battle"
   },
   {
    "id": "perfect",
@@ -35,7 +38,8 @@
    "cond": {
     "type": "owner",
     "mob": "alexander"
-   }
+   },
+   "cat": "battle"
   },
   {
    "id": "angler_grass",
@@ -45,7 +49,8 @@
     "type": "dex",
     "terrain": "grass",
     "n": 10
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "angler_beach",
@@ -55,7 +60,8 @@
     "type": "dex",
     "terrain": "beach",
     "n": 10
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "angler_snow",
@@ -65,7 +71,8 @@
     "type": "dex",
     "terrain": "snow",
     "n": 10
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "angler_night",
@@ -75,7 +82,8 @@
     "type": "dex",
     "terrain": "night",
     "n": 10
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "angler_forest",
@@ -85,7 +93,8 @@
     "type": "dex",
     "terrain": "forest",
     "n": 10
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "angler_volcano",
@@ -95,7 +104,8 @@
     "type": "dex",
     "terrain": "volcano",
     "n": 10
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "angler_machine",
@@ -105,7 +115,8 @@
     "type": "dex",
     "terrain": "machine",
     "n": 10
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "angler_peace",
@@ -115,7 +126,8 @@
     "type": "dex",
     "terrain": "peace",
     "n": 10
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "notes_grass",
@@ -125,7 +137,8 @@
     "type": "dex",
     "terrain": "grass",
     "n": 30
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "notes_beach",
@@ -135,7 +148,8 @@
     "type": "dex",
     "terrain": "beach",
     "n": 30
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "notes_snow",
@@ -145,7 +159,8 @@
     "type": "dex",
     "terrain": "snow",
     "n": 30
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "notes_night",
@@ -155,7 +170,8 @@
     "type": "dex",
     "terrain": "night",
     "n": 30
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "notes_forest",
@@ -165,7 +181,8 @@
     "type": "dex",
     "terrain": "forest",
     "n": 30
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "notes_volcano",
@@ -175,7 +192,8 @@
     "type": "dex",
     "terrain": "volcano",
     "n": 30
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "notes_machine",
@@ -185,7 +203,8 @@
     "type": "dex",
     "terrain": "machine",
     "n": 30
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "notes_peace",
@@ -195,7 +214,8 @@
     "type": "dex",
     "terrain": "peace",
     "n": 30
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "heart_hook",
@@ -213,7 +233,8 @@
      "angler_machine",
      "angler_peace"
     ]
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "world_angler",
@@ -231,7 +252,8 @@
      "notes_machine",
      "notes_peace"
     ]
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "fish_expert",
@@ -240,7 +262,8 @@
    "cond": {
     "type": "big",
     "n": 30
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "taigong",
@@ -249,7 +272,8 @@
    "cond": {
     "type": "big",
     "rarity": "uncommon"
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "yanbo",
@@ -258,7 +282,8 @@
    "cond": {
     "type": "big",
     "rarity": "rare"
-   }
+   },
+   "cat": "fishing"
   },
   {
    "id": "fishing_king",
@@ -266,7 +291,492 @@
    "desc": "所有魚種都釣到過大尺寸",
    "cond": {
     "type": "big"
-   }
+   },
+   "cat": "fishing"
+  },
+  {
+   "id": "table_regular",
+   "name": "牌桌常客",
+   "desc": "和平島的 10 種小遊戲都玩過至少一局",
+   "cond": {
+    "type": "played",
+    "n": 10
+   },
+   "cat": "game"
+  },
+  {
+   "id": "gambler_vet",
+   "name": "賭桌老手",
+   "desc": "累計玩了 100 局小遊戲",
+   "cond": {
+    "type": "stat",
+    "game": "*",
+    "key": "p",
+    "n": 100
+   },
+   "cat": "game"
+  },
+  {
+   "id": "ghost_bane",
+   "name": "鬼見愁",
+   "desc": "抽鬼牌累計 10 次沒有抽到鬼牌",
+   "cond": {
+    "type": "stat",
+    "game": "oldmaid",
+    "key": "s",
+    "n": 10
+   },
+   "cat": "game"
+  },
+  {
+   "id": "ghost_mate",
+   "name": "與鬼為伴",
+   "desc": "抽鬼牌累計 5 次抽到鬼牌",
+   "cond": {
+    "type": "stat",
+    "game": "oldmaid",
+    "key": "l",
+    "n": 5
+   },
+   "cat": "game"
+  },
+  {
+   "id": "gm_first",
+   "name": "連珠",
+   "desc": "五子棋獲勝 1 場",
+   "cond": {
+    "type": "stat",
+    "game": "gomoku",
+    "key": "w",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "gm_master",
+   "name": "棋聖",
+   "desc": "五子棋獲勝 20 場",
+   "cond": {
+    "type": "stat",
+    "game": "gomoku",
+    "key": "w",
+    "n": 20
+   },
+   "cat": "game"
+  },
+  {
+   "id": "gm_fast",
+   "name": "速戰速決",
+   "desc": "五子棋在 15 手內獲勝（雙方合計手數）",
+   "cond": {
+    "type": "stat",
+    "game": "gomoku",
+    "key": "fm",
+    "n": 15,
+    "op": "le"
+   },
+   "cat": "game"
+  },
+  {
+   "id": "dg_novice",
+   "name": "閃避新手",
+   "desc": "躲彈幕單局分數達 100 分",
+   "cond": {
+    "type": "stat",
+    "game": "dodge",
+    "key": "best",
+    "n": 100
+   },
+   "cat": "game"
+  },
+  {
+   "id": "dg_dancer",
+   "name": "彈幕舞者",
+   "desc": "躲彈幕單局分數達 350 分",
+   "cond": {
+    "type": "stat",
+    "game": "dodge",
+    "key": "best",
+    "n": 350
+   },
+   "cat": "game"
+  },
+  {
+   "id": "dg_full",
+   "name": "見切",
+   "desc": "躲彈幕存活滿 300 秒",
+   "cond": {
+    "type": "stat",
+    "game": "dodge",
+    "key": "bsec",
+    "n": 300
+   },
+   "cat": "game"
+  },
+  {
+   "id": "dg_coin",
+   "name": "貪財鬼",
+   "desc": "躲彈幕單局吃到 10 個金幣",
+   "cond": {
+    "type": "stat",
+    "game": "dodge",
+    "key": "coin",
+    "n": 10
+   },
+   "cat": "game"
+  },
+  {
+   "id": "un_win",
+   "name": "UNO！",
+   "desc": "UNO 獲勝 1 場",
+   "cond": {
+    "type": "stat",
+    "game": "uno",
+    "key": "w",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "un_big",
+   "name": "紙牌大亨",
+   "desc": "UNO 獲勝 20 場",
+   "cond": {
+    "type": "stat",
+    "game": "uno",
+    "key": "w",
+    "n": 20
+   },
+   "cat": "game"
+  },
+  {
+   "id": "un_wild",
+   "name": "無拘無束",
+   "desc": "UNO 無限制玩法獲勝 5 場",
+   "cond": {
+    "type": "stat",
+    "game": "uno",
+    "key": "ww",
+    "n": 5
+   },
+   "cat": "game"
+  },
+  {
+   "id": "ty_star",
+   "name": "手速新星",
+   "desc": "英文打字競賽單局打對 15 個單字",
+   "cond": {
+    "type": "stat",
+    "game": "typing",
+    "key": "best",
+    "n": 15
+   },
+   "cat": "game"
+  },
+  {
+   "id": "ty_key",
+   "name": "鍵盤俠",
+   "desc": "英文打字競賽單局打對 25 個單字",
+   "cond": {
+    "type": "stat",
+    "game": "typing",
+    "key": "best",
+    "n": 25
+   },
+   "cat": "game"
+  },
+  {
+   "id": "ty_wind",
+   "name": "風之指",
+   "desc": "英文打字競賽單局打對 35 個單字",
+   "cond": {
+    "type": "stat",
+    "game": "typing",
+    "key": "best",
+    "n": 35
+   },
+   "cat": "game"
+  },
+  {
+   "id": "zh_word",
+   "name": "詞彙達人",
+   "desc": "中文打字競賽單局打對 10 個詞",
+   "cond": {
+    "type": "stat",
+    "game": "zhtyping",
+    "key": "best",
+    "n": 10
+   },
+   "cat": "game"
+  },
+  {
+   "id": "zh_pen",
+   "name": "妙筆生花",
+   "desc": "中文打字競賽單局打對 18 個詞",
+   "cond": {
+    "type": "stat",
+    "game": "zhtyping",
+    "key": "best",
+    "n": 18
+   },
+   "cat": "game"
+  },
+  {
+   "id": "it_sand",
+   "name": "沙都之人",
+   "desc": "秘藥情報戰以沙都陣營獲勝 5 場",
+   "cond": {
+    "type": "stat",
+    "game": "intel",
+    "key": "ws",
+    "n": 5
+   },
+   "cat": "game"
+  },
+  {
+   "id": "it_water",
+   "name": "水都之人",
+   "desc": "秘藥情報戰以水都陣營獲勝 5 場",
+   "cond": {
+    "type": "stat",
+    "game": "intel",
+    "key": "wb",
+    "n": 5
+   },
+   "cat": "game"
+  },
+  {
+   "id": "it_mage",
+   "name": "影中術士",
+   "desc": "秘藥情報戰以咒術師獲勝 3 場",
+   "cond": {
+    "type": "stat",
+    "game": "intel",
+    "key": "wm",
+    "n": 3
+   },
+   "cat": "game"
+  },
+  {
+   "id": "it_spy",
+   "name": "三面間諜",
+   "desc": "秘藥情報戰沙都、水都、咒術師三種身分都贏過",
+   "cond": {
+    "type": "all",
+    "conds": [
+     {
+      "type": "stat",
+      "game": "intel",
+      "key": "ws",
+      "n": 1
+     },
+     {
+      "type": "stat",
+      "game": "intel",
+      "key": "wb",
+      "n": 1
+     },
+     {
+      "type": "stat",
+      "game": "intel",
+      "key": "wm",
+      "n": 1
+     }
+    ]
+   },
+   "cat": "game"
+  },
+  {
+   "id": "it_master",
+   "name": "諜報大師",
+   "desc": "秘藥情報戰獲勝 20 場",
+   "cond": {
+    "type": "stat",
+    "game": "intel",
+    "key": "w",
+    "n": 20
+   },
+   "cat": "game"
+  },
+  {
+   "id": "mg_easy",
+   "name": "見習驅魔師",
+   "desc": "見習驅魔師通關簡易模式",
+   "cond": {
+    "type": "stat",
+    "game": "mage",
+    "key": "c0",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "mg_mid",
+   "name": "驅魔師",
+   "desc": "見習驅魔師通關中等模式",
+   "cond": {
+    "type": "stat",
+    "game": "mage",
+    "key": "c1",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "mg_hard",
+   "name": "大驅魔師",
+   "desc": "見習驅魔師通關困難模式",
+   "cond": {
+    "type": "stat",
+    "game": "mage",
+    "key": "c2",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "mg_ultra",
+   "name": "驅魔宗師",
+   "desc": "見習驅魔師通關超難模式",
+   "cond": {
+    "type": "stat",
+    "game": "mage",
+    "key": "c3",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "mg_solo",
+   "name": "獨行驅魔人",
+   "desc": "見習驅魔師單人通關",
+   "cond": {
+    "type": "stat",
+    "game": "mage",
+    "key": "solo",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "mg_rune",
+   "name": "符文大師",
+   "desc": "見習驅魔師累計畫對 1000 個符號",
+   "cond": {
+    "type": "stat",
+    "game": "mage",
+    "key": "syms",
+    "n": 1000
+   },
+   "cat": "game"
+  },
+  {
+   "id": "mg_nd",
+   "name": "無傷",
+   "desc": "見習驅魔師通關且自己沒有掉過血",
+   "cond": {
+    "type": "stat",
+    "game": "mage",
+    "key": "nd",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "bk_new",
+   "name": "拼圖新手",
+   "desc": "方塊拼圖獲勝 1 場",
+   "cond": {
+    "type": "stat",
+    "game": "blokus",
+    "key": "w",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "bk_all",
+   "name": "滴水不漏",
+   "desc": "方塊拼圖把自己的方塊全部放完",
+   "cond": {
+    "type": "stat",
+    "game": "blokus",
+    "key": "all",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "bk_mono",
+   "name": "點睛之筆",
+   "desc": "方塊拼圖全部放完，而且最後一塊是單格",
+   "cond": {
+    "type": "stat",
+    "game": "blokus",
+    "key": "mono",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "bk_duo",
+   "name": "雙人對決",
+   "desc": "方塊拼圖 2 人局（Blokus Duo）獲勝 5 場",
+   "cond": {
+    "type": "stat",
+    "game": "blokus",
+    "key": "duo",
+    "n": 5
+   },
+   "cat": "game"
+  },
+  {
+   "id": "bk_master",
+   "name": "拼圖大師",
+   "desc": "方塊拼圖獲勝 20 場",
+   "cond": {
+    "type": "stat",
+    "game": "blokus",
+    "key": "w",
+    "n": 20
+   },
+   "cat": "game"
+  },
+  {
+   "id": "tg_new",
+   "name": "三角學者",
+   "desc": "三角方塊拼圖獲勝 1 場",
+   "cond": {
+    "type": "stat",
+    "game": "trigon",
+    "key": "w",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "tg_all",
+   "name": "稜角分明",
+   "desc": "三角方塊拼圖把自己的方塊全部放完",
+   "cond": {
+    "type": "stat",
+    "game": "trigon",
+    "key": "all",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "tg_king",
+   "name": "六角之王",
+   "desc": "三角方塊拼圖獲勝 20 場",
+   "cond": {
+    "type": "stat",
+    "game": "trigon",
+    "key": "w",
+    "n": 20
+   },
+   "cat": "game"
   }
  ]
 }

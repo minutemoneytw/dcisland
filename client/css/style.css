@@ -489,3 +489,8 @@ body {
 #nickInput { width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 15px; text-align: center; background: rgba(255, 255, 255, .06); border: 1px solid var(--gold-dim); color: var(--text); }
 #nickInput:disabled { opacity: .5; }
 .tg-tray { grid-template-columns: repeat(4, 1fr); }   /* 三角版的方塊小圖比較寬：一排 4 個，托盤才不會超出面板 */
+
+/* 稱號一覽的分頁（戰鬥／釣魚／遊戲） */
+.title-tabs { display: flex; gap: 6px; margin: 4px 0 6px; }
+.title-tabs .ff-btn { flex: 1; }
+.title-tabs .ff-btn.active { background: rgba(200, 170, 79, .28); border-color: var(--gold); color: #ffe9a8; }

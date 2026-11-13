@@ -104,7 +104,7 @@ const S = {
   tableOpen: false, tableId: null, tableView: null, tableChoice: false, gmStep: null, bk: null, tg: null, bkTimer: 0, bkOff: 0, bkTimeoutAt: 0, unTimer: 0, unOff: 0, unTimeoutAt: 0, unPick: null, dg: null, dgRaf: 0, dgLast: 0, ty: null, gamePlayed: false, gameXpSeen: 0, tblInfo: {},   // 遊戲畫面是否開著／哪一桌／伺服器給我的牌桌畫面／各桌人數（tblinfo）
   dexOpen: false, dexTab: null,        // 圖鑑視窗是否開著／正在看哪個地形
   titlesDB: { titles: [] },            // 稱號清單（assets/titles/titles.json，手寫）
-  titleBook: lsObj('dcisland.m0.titles', {}),   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
+  titleBook: lsObj('dcisland.m0.titles', {}), gstatsLocal: lsObj('dcisland.m0.gstats', {}), gstats: null, gstatsSrc: 'local', titleTab: 'battle',   // 稱號的本機紀錄：kills＝參與擊倒過的島主 {mob id: 1}；known＝已經提示過解鎖的稱號 id（避免重複跳提示）
   titleOpen: false,                    // 稱號一覽視窗是否開著
   ownerHitAt: {},                      // 自己最後一次打到各島主／魚人的時刻（S.t；「參與擊倒」＝倒下前 TITLE_ASSIST 秒內打過；訪客的擊倒 XP 獎勵也看這個）
 };
@@ -4416,7 +4416,8 @@ function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已
   const rs = m.v.result;
   if (S.gamePlayed && rs && rs.rid && rs.rid !== S.gameXpSeen && m.v.phase !== 'playing') {
     S.gameXpSeen = rs.rid; S.gamePlayed = false;
-    const n = rs.xp?.[m.v.me] || 0;
+    const n = rs.xp?.[m.v.me] || 0, gs = rs.gs?.[m.v.me];
+    if (gs && !xpServer()) gstatsLocalApply(m.v.game, gs);   // 訪客：戰績（稱號用）本機累加；登入者由伺服器記並送 gstats
     if (n > 0 && !xpServer()) { const p0 = S.players[0]; grantExp(n, p0.x, p0.y - 60, 'game'); tableXpLine(n); }   // 訪客：本機補發，提示放進牌桌下方的系統訊息
   }
   S.tableView = m.v; buildTable();
@@ -6562,6 +6563,13 @@ function titleProgress(c, depth = 0) {
       const l = allFish().filter(x => !c.rarity || x.f.rarity === c.rarity);
       return { cur: l.filter(x => bigCaught(x.t, x.f)).length, need: c.n || Math.max(1, l.length) };
     }
+    case 'stat': {   // 小遊戲戰績（見 docs/notes.md「小遊戲戰績與稱號」）：game＝遊戲 id（'*'＝全部加總）、key＝戰績鍵、op 'le'＝取最小值的鍵要 ≤ n
+      const G = S.gstats || S.gstatsLocal || {}, val = c.game === '*' ? Object.values(G).reduce((a, m) => a + (m[c.key] || 0), 0) : G[c.game]?.[c.key];
+      if (c.op === 'le') return { cur: val !== undefined && val <= c.n ? 1 : 0, need: 1 };
+      return { cur: val || 0, need: c.n || 1 };
+    }
+    case 'played': return { cur: Object.values(S.gstats || S.gstatsLocal || {}).filter(m => (m.p || 0) >= 1).length, need: c.n || 1 };   // 玩過幾種小遊戲
+    case 'all': { const l = c.conds || []; return { cur: l.filter(x => titleMet(x, depth + 1)).length, need: Math.max(1, l.length) }; }   // 全部子條件達成
     case 'titles': {
       const ids = c.ids || [];
       return { cur: ids.filter(id => { const d = titleDef(id); return d && titleMet(d.cond, depth + 1); }).length, need: Math.max(1, ids.length) };
@@ -6605,6 +6613,22 @@ function onNetKills(k) {
   if (changed) lsSet('dcisland.m0.titles', S.titleBook);
   checkTitles(true);   // 重算稱號與外觀解鎖（不跳提示：換電腦登入時一次補回來）
 }
+// 小遊戲戰績（2026-11-13）：登入者由伺服器記進帳號（Registry 的 gstats:<uid>），結算後與登入時送來整份；訪客在這裡依 result.gs 本機累加（存 localStorage，不上傳，登入後看的是帳號的）
+function onNetGstats(g) {
+  const first = S.gstatsSrc !== 'server';
+  S.gstats = g && typeof g === 'object' ? g : {}; S.gstatsSrc = 'server';
+  checkTitles(first);   // 第一次（登入後補回來）不跳提示；之後每局結算送來的才跳「獲得稱號」
+}
+function gstatsLocalApply(game, gs) {   // 訪客：把這局的戰績增量併進本機戰績（與伺服器的 gstats 同一套規則）
+  const G = S.gstatsLocal, m = G[game] ||= {};
+  for (const [mode, src] of [['add', gs.add], ['max', gs.max], ['min', gs.min]]) for (const [k, raw] of Object.entries(src || {})) {
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) continue;
+    const v = Math.max(0, Math.min(1000000, Math.floor(raw)));
+    if (mode === 'add') m[k] = Math.min(1000000, (m[k] || 0) + v); else if (mode === 'max') m[k] = Math.max(m[k] || 0, v); else m[k] = m[k] === undefined ? v : Math.min(m[k], v);
+  }
+  lsSet('dcisland.m0.gstats', G);
+  if (S.gstatsSrc !== 'server') { S.gstats = G; checkTitles(false); }
+}
 function setTitle(id) {
   S.me.title = id; saveAvatar();
   toast(id ? `稱號設定為 ${titleText(id)}` : '不顯示稱號', 1600);
@@ -6612,9 +6636,12 @@ function setTitle(id) {
 }
 function openTitles() { S.titleOpen = true; buildTitles(); $('titleBox').classList.remove('hidden'); }
 function closeTitles() { S.titleOpen = false; $('titleBox').classList.add('hidden'); }
+const TITLE_TABS = ['battle', 'fishing', 'game'];
 function buildTitles() {
-  const list = S.titlesDB?.titles || [], got = unlockedTitles();
-  $('titleHint').textContent = `已解鎖 ${got.size}／${list.length}` + (S.dexSource === 'server' ? ' · 以 Discord 帳號保存' : ' · 訪客／未連線：釣魚與擊倒島主的紀錄只存在這台電腦');
+  const all = S.titlesDB?.titles || [], got = unlockedTitles(), tab = TITLE_TABS.includes(S.titleTab) ? S.titleTab : 'battle';
+  const list = all.filter(t => (t.cat || 'fishing') === tab);   // 分頁：戰鬥（擊倒島主）／釣魚（圖鑑）／遊戲（小遊戲戰績）；稱號 cat 沒寫當釣魚
+  document.querySelectorAll('#titleTabs button').forEach(b => { b.classList.toggle('active', b.dataset.tab === tab); b.onclick = () => { S.titleTab = b.dataset.tab; buildTitles(); }; });
+  $('titleHint').textContent = `此分頁 ${list.filter(t => got.has(t.id)).length}／${list.length}（全部 ${got.size}／${all.length}）` + (S.dexSource === 'server' ? ' · 以 Discord 帳號保存' : ' · 訪客／未連線：圖鑑、擊倒島主與遊戲戰績只存在這台電腦');
   const box = $('titleList'); box.innerHTML = '';
   const row = (id, name, desc, ok, prog) => {
     const o = document.createElement('div');
@@ -7875,7 +7902,7 @@ addEventListener('keydown', e => {
   if (S.glamOpen) { if (k === 'escape') closeGlams(); return; }                            // 外觀一覽開著：Esc 關閉（仍可走路）
   if (S.helpOpen) { if (k === 'escape' || k === 'enter') closeHelp(); return; }       // 操作說明開著：Esc / Enter 關閉，其他鍵不處理
   if (S.confirmOpen) { if (k === 'escape') closeConfirm(); return; }   // 「要保存嗎？」開著時：Esc＝繼續編輯，其他鍵不處理
-  if (k === 'escape' && !$('avatarPanel').classList.contains('hidden')) { $('avatarPanel').classList.add('hidden'); return; }   // 造型面板開著：Esc 先關面板（不會同時離開裝飾模式）；其他鍵照常
+  if (k === 'escape' && !$('avatarPanel').classList.contains('hidden')) { closeAvatar(); return; }   // 造型面板開著：Esc 先關面板（不會同時離開裝飾模式）；其他鍵照常
   if (k === 'e' && !e.repeat) {
     if (S.mode === 'decor') requestExitDecor();                       // 離開不受死亡影響
     else if (S.mode === 'walk') { if (S.players[0].dead) toast('你在墓碑裡動不了', 1400); else enterDecor(); }
@@ -8142,8 +8169,11 @@ $('nickInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.pre
 document.addEventListener('click', e => {   // 點齒輪與選單以外的地方就收起來
   if (!(e.target instanceof Element) || !e.target.closest('#settingsBox')) $('settingsMenu')?.classList.add('hidden');
 });
-$('btnAvatar').onclick = () => { $('avatarPanel').classList.toggle('hidden'); buildAvatarPanel(); };
-$('avatarClose').onclick = () => { closeColor(false); closeGlams(); $('avatarPanel').classList.add('hidden'); };
+// 視窗的父子關係（2026-11-13，使用者要求）：從某個視窗裡面打開的視窗是它的「子視窗」，**關掉父視窗時子視窗要跟著關**（反過來關子視窗不影響父視窗），
+// 這樣不用一個一個關。目前：造型面板（角色）→ 稱號一覽、外觀一覽、選色視窗。之後新增「從某視窗裡開的視窗」，把它的關閉函式加進該父視窗的 closeXxx。
+function closeAvatar() { closeColor(false); closeGlams(); closeTitles(); $('avatarPanel').classList.add('hidden'); }
+$('btnAvatar').onclick = () => { if ($('avatarPanel').classList.contains('hidden')) { $('avatarPanel').classList.remove('hidden'); buildAvatarPanel(); } else closeAvatar(); };   // 再按一次＝關閉（子視窗一起關）
+$('avatarClose').onclick = closeAvatar;
 $('tableClose').onclick = () => leaveTable();
 $('leaveStay').onclick = () => leaveAsk(false);
 $('leaveGo').onclick = () => { leaveAsk(false); closeTable(); };
@@ -8354,7 +8384,8 @@ async function boot() {
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）
-    onNick: nick => { S.nick = nick || ''; applyMyName(); },   // 登入後／改暱稱後伺服器送來的暱稱（跟著帳號）
+    onNick: nick => { S.nick = nick || ''; applyMyName(); },
+    onGstats: onNetGstats,   // 登入後／每局結算後伺服器送來的遊戲戰績（跟著帳號，稱號用）   // 登入後／改暱稱後伺服器送來的暱稱（跟著帳號）
     onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); checkTitles(true); },   // 登入後伺服器送來的圖鑑（稱號跟著重算，不跳提示）
     onOpen: net => {
       if (S.tableOpen) closeTable(false);   // 重連：伺服器已當作我離開牌桌，畫面跟著關
