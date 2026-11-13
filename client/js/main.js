@@ -6442,7 +6442,7 @@ function buildMage(box, v, mk, gd) {
     const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && s.dead ? ' out' : ''));
     seat.style.borderColor = playing ? DG_COLORS[i % 8] : '';
     seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : '')));
-    seat.appendChild(mk('div', 'table-tag', playing ? (s.dead ? `倒下 · 擊殺 ${s.kills}` : '♥'.repeat(Math.max(0, s.hp)) + '♡'.repeat(Math.max(0, MG_HP - s.hp)) + ` · 擊殺 ${s.kills}`) : (s.ready ? '已準備' : '未準備')));
+    seat.appendChild(mk('div', 'table-tag', playing ? (s.dead ? `倒下 · 畫對 ${s.syms}` : '♥'.repeat(Math.max(0, s.hp)) + '♡'.repeat(Math.max(0, MG_HP - s.hp)) + ` · 畫對 ${s.syms}`) : (s.ready ? '已準備' : '未準備')));
     row.appendChild(seat);
   });
   if (!playing) for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
