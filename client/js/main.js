@@ -8109,7 +8109,7 @@ $('menuXp').onclick = () => {   // 設定 → 底部經驗條顯示開關
 // ---- 暱稱（2026-11-13，使用者要求）：設定 → 暱稱設定，只改「顯示名稱」。登入者存在伺服器（Registry，跟著帳號；S.nick 由伺服器的 nick 訊息給，空＝用 Discord 名稱），
 // 訪客存本機 localStorage；身分（uid）不變，排行榜等以 uid 為準。不擋撞名 ----
 const NICK_MAX = 12;
-const cleanNick = v => String(v || '').replace(/\s+/g, ' ').replace(/[ -]/g, '').trim().slice(0, NICK_MAX);
+const cleanNick = v => String(v || '').replace(/\s+/g, ' ').replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, NICK_MAX);
 const guestNick = () => { if (S.guestNickMem != null) return S.guestNickMem; try { return cleanNick(localStorage.getItem('dcisland.m0.nick')); } catch { return ''; } };   // guestNickMem：存不了 localStorage 時至少這次有效
 const nickCanSet = () => !S.discordUser || !!(S.net?.connected && S.net.uid);   // 有 Discord 身分就要連線登入才能存到伺服器
 function applyMyName() {   // 自己的顯示名稱：登入者＝暱稱或 Discord 名稱；訪客＝本機暱稱或「訪客」
