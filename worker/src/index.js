@@ -1216,7 +1216,7 @@ const isTy = t => t.game === "typing" || t.game === "zhtyping";
 const tyUnit = t => (t.game === "zhtyping" ? "詞" : "單字");
 // 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 // 記在這座島的 storage（"boards"），每次結算後更新，table 畫面帶 board 給客戶端顯示。與 tools/dev_server.py 的 BOARDS 同一套
-const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage", "arcade", "maze"]), BOARD_N = 3, BOARDS_REV = 1;   // 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
+const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage", "arcade", "maze"]), BOARD_N = 3;   // 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
 // 躲彈幕 2026-11-12 起改記「分數」（存活秒數＋道具分），舊的秒數紀錄放在 "dodge" 不再使用，分數另記在 "dodge2"，避免單位混在一起
 const boardKey = game => (game === "dodge" ? "dodge2" : game);
 function boardMerge(list, entries) {
@@ -3440,15 +3440,9 @@ export class Island {
     await this.tableStats(t, resBefore);
     await this.tableBoard(t, resBefore);
   }
-  // 排行榜（2026-11-13，使用者要求）：BOARDS_REV 改了就在這座島第一次用到排行榜時清空一次（上線前清掉目前的最高分）；要再清一次就把 BOARDS_REV 加 1
+  // 排行榜：每座島一份，記在 storage 的 boards。2026-11-14 使用者定：今後上線都不清空排行榜（曾有過 BOARDS_REV 一次性清空機制，尚未上線就拿掉了）
   async getBoards() {
-    if (!this.boards) {
-      if ((await this.state.storage.get("boardsRev")) !== BOARDS_REV) {
-        this.boards = {};
-        await this.state.storage.put("boards", {});
-        await this.state.storage.put("boardsRev", BOARDS_REV);
-      } else this.boards = (await this.state.storage.get("boards")) || {};
-    }
+    if (!this.boards) this.boards = (await this.state.storage.get("boards")) || {};
     return this.boards;
   }
   // 暱稱改了：排行榜裡有這個 uid 的項目改成新的顯示名稱（有變動才存檔、通知正在看這桌的人）
