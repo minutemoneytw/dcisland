@@ -156,6 +156,13 @@
 - **發光武器外觀（2026-11-09，使用者要求）**：取得稱號《究極》（`ultima`，參與擊倒蓋老師）→ **每個職業的武器都多一個天藍發光外觀**；取得《傳奇》（`legend`，參與擊倒黃金肥龍）→ 金黃發光外觀；取得《完美》（`perfect`，參與擊倒壓力山大）→ **金色武器配粉紅光暈**（`_pink`，同日使用者追加）。`avatar.json` 武器清單由 `gen_assets.py` 的 `with_glow()` 補上 `<武器 id>_sky`／`<武器 id>_gold`（名稱「武器名・天藍輝光／金黃輝光」，`glam`、同 `type`，`unlock`＝`{type:"titles", ids:[…]}`，所以是「拿到稱號」就解鎖，跟稱號條件同步）。**圖**：`glow_image()` 把原武器的每張 LPC 圖層（一般格與 `over` 超大格）和武器小圖依亮度重上色成主色（明暗壓縮、深色也帶色），外圍加兩圈半透明光暈（只在同一格內）；檔名＝原檔加 `_sky`／`_gold`／`_pink`（主色與光暈色分開設定）。武器清單在 `GLOW_JOB_WEAPONS`、顏色與條件在 `WEAPON_GLOWS`；新職業武器要加進清單。賢者的賢具不是 LPC 圖，發光版是舊小圖重上色。發光是烘在圖上的（沒有閃爍動畫）。
 - **CC-BY-SA 衍生授權（2026-11-12 查 Creative Commons 官方 FAQ 確認）**：**ShareAlike 只綁「素材檔案本身」，不傳染整個遊戲**——CC 官方 FAQ 明確：放進合集（遊戲就是）不觸發 SA，所以遊戲程式碼不受影響、維持現狀；但**切格／重拼／tint 過的 sheet 檔＝衍生作品**，對外散佈時要以**同款同版號** CC-BY-SA 釋出（照 `docs/assets-license.md` 的記法標註即可）。挑包規則：多授權包（同頁列 CC-BY／CC-BY-SA／GPL／OGA-BY）一律挑 **CC-BY 或 OGA-BY**，**不要挑 GPL**（選 GPL 反而有人主張素材與程式碼合成一體時程式碼要跟著 GPL，灰色地帶）。真 CC-BY-SA-only（沒有 CC-BY／OGA-BY 逃逸口）的包**可以用**：野豬舊版 `lpc-wild-boar`（已用 `pigs-rework` CC-BY 版取代）、公牛、公羊、游魚、蛇、怪物包（章魚／蛇妖）、幽靈、狼人、羊男與牛頭怪、豬人、狼男、大蘑菇怪。清單裡的「花（生長循環）」是 CC-BY、「獨眼巨人（眼球怪）」是 CC0，都不受 SA 限制。
 
+## 天氣（純客戶端畫面，零同步）
+
+- **設計定案（2026-11-12，使用者定）**：**決定論**——天氣由「地形＋時刻槽」雜湊抽籤，每個人自己算、算出來都一樣，不用同步；**玩家不影響天氣**；先架構（色罩＋粒子）後素材。天氣時刻槽目前用**現實時鐘**（`weatherSlot()` 的 `Date.now()`），之後接遊戲時間系統時**只改這個函式**。
+- **常數**（`main.js` 天氣區塊，在 `draw()` 前）：`WEATHER_SLOT_MIN`＝8（一個槽 8 分鐘，槽內天氣不變）、`WEATHER_TRANS_SEC`＝40（換槽時前一個天氣→新天氣的色罩與粒子密度過渡秒數）。`WEATHERS`＝8 種天氣的色罩與粒子參數（clear／rain／snow／fog／sand／ember／leaf／firefly）；各地形的天氣表（id＝權重）在 `TERRAIN_WEATHER`；**和平島是室內（ROOM_BOX）不做天氣**（永遠晴）。
+- **實作**：`weatherHash()`＝FNV-1a（純整數運算、各瀏覽器一致，決定論的關鍵）；`weatherPick(T, slot)` 同一（地形, 槽）永遠同一種天氣；`stepWeather(dt)` 換槽／換地形時切天氣（`prev`/`cur`/`t0`/`parts`），粒子池在 `drawWeather()` 每幀補齊；過渡用**雙層色罩 crossfade**（顏色不同也平滑），粒子顆數在過渡期跟著 blend 走，粒子步進的 dt 用 `S.weatherDt`（`stepWeather` 記下）。**掛點**：`loop()` 的 `S.t += dt` 之後呼叫 `stepWeather(dt)`；`draw()` 的 `ctx.restore()` 之後、島主倒數條之前呼叫 `drawWeather()`（螢幕空間，蓋世界與名牌、不蓋倒數條）。只是畫面，不涉及同步與伺服器。
+- **待辦（交互作用，動工前先查現狀）**：特殊怪照天氣條件出現（mobs.json 加 `spawnIf`，例如雨天才出現；注意 `fixed` 與 `spawnIf` 併用的行為要先想清楚）；植物生長受天氣影響（先查採集重生是本機計時還是伺服器存）；遊戲時間系統（屆時 `weatherSlot()` 改接遊戲時間）。
+
 ## 環境與部署地雷
 
 - 本機若 `python` 指向 Windows 商店空殼，請用 `py -3` 或 `python3`（或實際安裝路徑）；本機 Node 版本若 <22 則跑不了 `wrangler dev`，Worker 改動需另找環境驗證。

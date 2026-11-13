@@ -6693,6 +6693,125 @@ function drawCampfireGlow(c) {
   ctx.beginPath(); ctx.ellipse(c.x, gy, CAMPFIRE_R, CAMPFIRE_R * .62, 0, 0, Math.PI * 2); ctx.stroke();
   ctx.restore();
 }
+
+// ---------------- 天氣（2026-11-12；純客戶端畫面，零同步） ----------------
+// 決定論：天氣＝雜湊(地形, 時刻槽) 對該地形的天氣表加權抽籤——每個人自己算、算出來都一樣，不用同步、玩家也影響不了。
+// 之後的交互作用（掛點）：特殊怪照天氣條件出現（mobs.json 的 spawnIf）、植物生長受天氣影響（動工前先查採集重生是本機還是伺服器）。
+const WEATHER_SLOT_MIN = 8;      // 一個時刻槽幾分鐘：槽內天氣不變、槽與槽之間用 WEATHER_TRANS_SEC 淡入淡出
+const WEATHER_TRANS_SEC = 40;    // 換槽時，前一個天氣 → 新天氣的色罩與粒子密度過渡秒數
+const WEATHERS = {   // id → 名稱／色罩（rgba 三元組＋最濃不透明度）／粒子（kind＋數量＋速度等；n＝滿量時的顆數）
+  clear:   { name: '晴' },
+  rain:    { name: '雨',   tint: [40, 62, 92],    alpha: .16, part: { kind: 'rain',    n: 110, vy: 520, vx: -64, len: 13 } },
+  snow:    { name: '雪',   tint: [226, 236, 250], alpha: .13, part: { kind: 'snow',    n: 90,  vy: 46,  vx: 20, sway: 26, r: 1.6 } },
+  fog:     { name: '霧',   tint: [204, 214, 224], alpha: .19, part: { kind: 'fog',     n: 13,  vx: 14, r: 95 } },
+  sand:    { name: '沙暴', tint: [222, 190, 122], alpha: .15, part: { kind: 'sand',    n: 70,  vy: 26,  vx: -215, len: 9 } },
+  ember:   { name: '落灰', tint: [255, 118, 42],  alpha: .09, part: { kind: 'ember',   n: 60,  vy: -34, vx: 16, r: 1.8 } },
+  leaf:    { name: '落葉', part: { kind: 'leaf', n: 24, vy: 42, vx: -34, sway: 42, r: 2.6 } },
+  firefly: { name: '螢光', tint: [30, 36, 70],    alpha: .08, part: { kind: 'firefly', n: 26,  vy: -12, vx: 8, r: 1.4 } },
+};
+// 各地形的天氣表（id＝權重）。和平島是室內房間：不做天氣（永遠晴）
+const TERRAIN_WEATHER = {
+  grass:   [['clear', 6], ['rain', 2], ['leaf', 1], ['fog', 1]],
+  beach:   [['clear', 6], ['rain', 2], ['sand', 1], ['fog', 1]],
+  forest:  [['clear', 5], ['rain', 2], ['leaf', 2], ['fog', 1]],
+  snow:    [['clear', 5], ['snow', 3], ['fog', 1]],
+  night:   [['clear', 5], ['rain', 1], ['fog', 2], ['firefly', 2]],
+  volcano: [['clear', 5], ['ember', 3], ['fog', 2]],
+  machine: [['clear', 6], ['rain', 2], ['fog', 2]],
+  peace:   [['clear', 1]],
+};
+function weatherHash(s) {   // FNV-1a：純整數運算，各瀏覽器結果一致（決定論的關鍵）
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function weatherSlot() { return Math.floor(Date.now() / 60000 / WEATHER_SLOT_MIN); }   // 時刻槽：現在用現實時鐘，之後接遊戲時間時只改這裡
+function weatherPick(T, slot) {   // 同一（地形, 槽）永遠同一種天氣
+  const tab = TERRAIN_WEATHER[T] || TERRAIN_WEATHER.grass;
+  let r = weatherHash(T + ':' + slot) % tab.reduce((s, w) => s + w[1], 0);
+  for (const [id, w] of tab) { if ((r -= w) < 0) return id; }
+  return tab[0][0];
+}
+function weatherBlend() {   // 槽內經過率 0→1：色罩與粒子數在槽剛開始的 WEATHER_TRANS_SEC 內從上一個天氣過來
+  return Math.min(1, (S.t - S.weather.t0) / WEATHER_TRANS_SEC);
+}
+function stepWeather(dt) {   // 換槽／換地形時切天氣；粒子池在 drawWeather 維護（每幀順手補齊）；dt 留給 drawWeather 的粒子步進
+  S.weatherDt = dt;
+  const T = S.terrain, slot = weatherSlot();
+  if (!S.weather || S.weather.T !== T)   // 進新地形：從「晴」淡入當前天氣
+    S.weather = { T, slot, prev: 'clear', cur: weatherPick(T, slot), t0: S.t, parts: [] };
+  else if (S.weather.slot !== slot) {
+    S.weather.prev = S.weather.cur;
+    S.weather.cur = weatherPick(T, slot);
+    S.weather.slot = slot; S.weather.t0 = S.t;
+  }
+}
+function weatherSpawn(p, kind) {   // 粒子出生位置：下雨／雪／沙／葉從畫面上緣外落下，灰燼／螢光從下緣升上來，霧在畫面裡橫飄
+  p.kind = kind;
+  if (kind === 'ember' || kind === 'firefly') { p.x = Math.random() * canvas.width; p.y = canvas.height + 8; }
+  else if (kind === 'fog') { p.x = Math.random() * canvas.width; p.y = Math.random() * canvas.height; }
+  else { p.x = Math.random() * (canvas.width + 160) - 80; p.y = -8 - Math.random() * 40; }
+  p.vx = 0; p.vy = 0; p.ph = Math.random() * Math.PI * 2;
+}
+function drawWeather() {
+  const w = S.weather; if (!w) return;
+  const P0 = WEATHERS[w.prev], P1 = WEATHERS[w.cur], bl = weatherBlend(), dt = Math.min(.05, S.weatherDt || .016);
+  // 色罩：前一個天氣淡出、當前天氣淡入（兩層各畫一次，顏色不同也能平滑交叉）
+  if (bl < 1 && P0.tint && P0.alpha) { ctx.fillStyle = `rgba(${P0.tint[0]},${P0.tint[1]},${P0.tint[2]},${(P0.alpha * (1 - bl)).toFixed(3)})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+  if (P1.tint && P1.alpha) { ctx.fillStyle = `rgba(${P1.tint[0]},${P1.tint[1]},${P1.tint[2]},${(P1.alpha * bl).toFixed(3)})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+  // 粒子池：目標顆數在過渡期跟著 blend 從前一個天氣的量走向當前的量
+  const n0 = P0.part ? P0.part.n : 0, n1 = P1.part ? P1.part.n : 0;
+  let target = Math.round(n0 + (n1 - n0) * bl);
+  if (w.cur === 'clear' && bl >= 1) target = 0;
+  const parts = w.parts;
+  while (parts.length < target) { const p = {}; weatherSpawn(p, (n1 >= n0 ? P1.part.kind : P0.part.kind)); parts.push(p); }
+  if (parts.length > target) parts.length = target;
+  if (!parts.length) return;
+  for (const p of parts) {
+    const d = P1.part && P1.part.kind === p.kind ? P1.part : (P0.part || P1.part);
+    p.ph += dt * 1.7;
+    if (d.kind === 'rain') { p.x += d.vx * dt; p.y += d.vy * dt; }
+    else if (d.kind === 'sand') { p.x += d.vx * dt; p.y += d.vy * dt + Math.sin(p.ph) * 14 * dt; }
+    else if (d.kind === 'fog') { p.x += d.vx * dt; }
+    else {   // snow／leaf／ember／firefly：飄＋左右搖（sway；沒有 sway 的就是直線）
+      p.x += (d.vx + Math.sin(p.ph) * (d.sway || 0)) * dt;
+      p.y += d.vy * dt;
+    }
+    // 出畫就繞回來（落下型回上緣、上升型回下緣、霧繞橫向）
+    if (p.y > canvas.height + 10) weatherSpawn(p, d.kind);
+    else if (p.y < -12 && (d.kind === 'ember' || d.kind === 'firefly')) weatherSpawn(p, d.kind);
+    else if (d.kind === 'fog') { if (p.x - d.r > canvas.width) p.x = -d.r; }
+    else if (p.x < -90) p.x = canvas.width + 80;
+    // 畫
+    ctx.save();
+    if (d.kind === 'rain') {
+      ctx.strokeStyle = `rgba(178,208,238,${.34 + .2 * Math.sin(p.ph * 3)})`; ctx.lineWidth = 1;
+      const l = d.len * (d.vy / (Math.hypot(d.vx, d.vy) || 1)), lx = d.len * (d.vx / (Math.hypot(d.vx, d.vy) || 1));
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + lx, p.y + l); ctx.stroke();
+    } else if (d.kind === 'sand') {
+      ctx.strokeStyle = 'rgba(238,206,150,.5)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - d.len, p.y + d.len * .3); ctx.stroke();
+    } else if (d.kind === 'fog') {
+      ctx.fillStyle = `rgba(228,234,240,${.05 + .03 * Math.sin(p.ph)})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, d.r * (0.8 + .2 * Math.sin(p.ph * .7)), 0, Math.PI * 2); ctx.fill();
+    } else if (d.kind === 'ember') {
+      ctx.fillStyle = `rgba(255,${140 + 60 * Math.sin(p.ph) | 0},70,${.5 + .3 * Math.sin(p.ph * 2)})`;
+      ctx.fillRect(p.x, p.y, d.r, d.r);
+    } else if (d.kind === 'firefly') {
+      const a = .3 + .45 * (Math.sin(p.ph * 2.2) * .5 + .5);
+      ctx.fillStyle = `rgba(190,255,190,${a.toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, d.r, 0, Math.PI * 2); ctx.fill();
+    } else if (d.kind === 'leaf') {
+      ctx.fillStyle = `rgba(${150 + 70 * Math.sin(p.ph) | 0},170,80,.75)`;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.ph);
+      ctx.fillRect(-d.r, -d.r * .4, d.r * 2, d.r * .8); ctx.restore();
+    } else {   // snow
+      ctx.fillStyle = `rgba(245,248,252,${.55 + .3 * Math.sin(p.ph * 2)})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, d.r, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
 function draw() {
   const T = S.terrain, tMan = S.terrains[T], ims = S.tImages[T];
   const SC = tMan.scale;
@@ -7161,6 +7280,7 @@ function draw() {
     ctx.restore();
   }
   ctx.restore();
+  drawWeather();   // 天氣色罩與粒子（螢幕空間，蓋在世界與名牌上、島主倒數條之下）
   if (ownerBar) drawOwnerCastBar(ownerBar.frac, ownerBar.name);   // 島主讀條固定在視窗上方置中（世界座標還原後畫，永遠在最上層）
   drawOwnerLineBanner();   // 島主台詞：除了頭上的泡泡，也固定顯示在視窗上方（離島主太遠、泡泡在畫面外也看得到）
 }
@@ -8282,6 +8402,7 @@ async function boot() {
     const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;
     try {
       S.t += dt;
+      stepWeather(dt);   // 天氣：時刻槽抽籤與過渡（純客戶端、零同步；詳見 draw() 前的天氣區塊）
       updateCampfire();   // 換時段／換地形就重擲營火位置（每 3 分鐘）
       stepFireballs(dt);  // 飛龍火球：步進與落地命中（純客戶端投射物）
       autoAttack();
