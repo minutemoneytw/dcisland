@@ -8177,9 +8177,15 @@ function drawWeather() {
     } else if (d.kind === 'sand') {
       ctx.strokeStyle = 'rgba(238,206,150,.5)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - d.len, p.y + d.len * .3); ctx.stroke();
-    } else if (d.kind === 'fog') {
-      ctx.fillStyle = `rgba(236,242,248,${.055 + .035 * Math.sin(p.ph)})`;
-      ctx.beginPath(); ctx.arc(p.x, p.y, d.r * (0.8 + .2 * Math.sin(p.ph * .7)), 0, Math.PI * 2); ctx.fill();
+    } else if (d.kind === 'fog') {   // 霧團：徑向漸層（中心稍濃、往外淡到透明），看不出圓形輪廓（2026-11-13 使用者定：實心圓會被看出「圓圓的白色」）
+      const r = d.r * (0.8 + .2 * Math.sin(p.ph * .7)), a = .075 + .04 * Math.sin(p.ph);
+      const gr = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+      gr.addColorStop(0, `rgba(236,242,248,${(a * .9).toFixed(3)})`);
+      gr.addColorStop(.5, `rgba(236,242,248,${(a * .55).toFixed(3)})`);
+      gr.addColorStop(.8, `rgba(236,242,248,${(a * .18).toFixed(3)})`);
+      gr.addColorStop(1, 'rgba(236,242,248,0)');
+      ctx.fillStyle = gr;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
     } else if (d.kind === 'ember') {
       ctx.fillStyle = `rgba(255,${140 + 60 * Math.sin(p.ph) | 0},70,${.5 + .3 * Math.sin(p.ph * 2)})`;
       ctx.fillRect(p.x, p.y, d.r, d.r);
