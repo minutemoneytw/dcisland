@@ -89,6 +89,72 @@
    "text": true
   },
   {
+   "id": "park_bench",
+   "name": "長椅",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "park_bench.png",
+   "use": "sit"
+  },
+  {
+   "id": "beanbag",
+   "name": "懶骨頭",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "beanbag.png",
+   "use": "sit"
+  },
+  {
+   "id": "wardrobe",
+   "name": "衣櫃",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "wardrobe.png"
+  },
+  {
+   "id": "coffee_table",
+   "name": "茶几",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "coffee_table.png"
+  },
+  {
+   "id": "piano",
+   "name": "鋼琴",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "piano.png"
+  },
+  {
+   "id": "fireplace",
+   "name": "壁爐",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "fireplace.png"
+  },
+  {
+   "id": "floor_mirror",
+   "name": "落地鏡",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "floor_mirror.png"
+  },
+  {
+   "id": "folding_screen",
+   "name": "屏風",
+   "w": 1,
+   "h": 1,
+   "solid": true,
+   "sprite": "folding_screen.png"
+  },
+  {
    "id": "stool",
    "name": "木凳",
    "w": 1,

@@ -2157,6 +2157,74 @@ def egg_nest():   # 鳥巢擺飾：樹皮編的窩裡有兩顆蛋
     cv.set(12, 6, hx("#e8c070")); cv.set(13, 5, hx("#e8c070"))   # 一根羽毛
     cv.outline(); return cv
 
+def park_bench():   # 長椅：公園那種木長椅，鐵腳
+    w = hx("#b8864e"); iron = hx("#4a4e58"); cv = Canvas(16, 16)
+    cv.rect(1, 3, 14, 4, w); cv.rect(1, 6, 14, 7, w); cv.hline(1, 14, 3, shade(w, 1.25)); cv.hline(1, 14, 6, shade(w, 1.25))   # 椅背兩條板
+    cv.rect(1, 4, 2, 11, iron); cv.rect(13, 4, 14, 11, iron)                                                                   # 椅背立柱（兼扶手）
+    cv.rect(0, 9, 15, 11, w); cv.hline(0, 15, 9, shade(w, 1.3)); cv.hline(0, 15, 11, shade(w, .7))                             # 椅面
+    cv.rect(2, 12, 3, 14, iron); cv.rect(12, 12, 13, 14, iron)                                                                 # 椅腳
+    cv.outline(); return cv
+
+def beanbag():   # 懶骨頭：圓滾滾、頂端凹下去的坐墊
+    c = hx("#e8648c"); cv = Canvas(16, 14)
+    cv.ellipse(8, 8, 7, 5, c); cv.ellipse(8, 5.5, 4.5, 2.4, shade(c, .8))   # 本體與頂端的凹陷
+    cv.ellipse(5, 8, 1.6, 1.2, shade(c, 1.3)); cv.set(11, 10, shade(c, .75)); cv.hline(4, 12, 12, shade(c, .7))
+    cv.outline(); return cv
+
+def wardrobe():   # 衣櫃：深色木頭雙開門，門上兩個把手
+    w = hx("#7a5230"); cv = Canvas(16, 24)
+    cv.rect(2, 1, 13, 22, w); cv.rect(2, 1, 13, 2, shade(w, 1.3)); cv.rect(1, 0, 14, 1, shade(w, 1.15))   # 櫃身與頂板
+    cv.rect(3, 3, 7, 20, shade(w, 1.1)); cv.rect(8, 3, 12, 20, shade(w, 1.1)); cv.vline(7, 3, 20, shade(w, .6))   # 兩扇門
+    for x0 in (3, 8): cv.rect(x0 + 1, 5, x0 + 3, 9, shade(w, .92)); cv.rect(x0 + 1, 12, x0 + 3, 18, shade(w, .92))   # 門板的凹格
+    cv.set(6, 11, hx("#e8c070")); cv.set(8, 11, hx("#e8c070"))   # 把手
+    cv.rect(3, 22, 4, 23, shade(w, .6)); cv.rect(11, 22, 12, 23, shade(w, .6))   # 櫃腳
+    cv.outline(); return cv
+
+def coffee_table():   # 茶几：矮矮的圓木桌，上面一杯茶和一本書
+    w = hx("#c89a5a"); cv = Canvas(16, 14)
+    cv.ellipse(8, 6, 7, 3.5, shade(w, 1.1)); cv.ellipse(8, 5.5, 5.5, 2.4, shade(w, 1.25))   # 桌面
+    cv.rect(7, 9, 8, 12, shade(w, .8)); cv.rect(4, 12, 11, 12, shade(w, .65))                 # 桌腳與底座
+    cv.rect(4, 3, 7, 5, hx("#6a8ac8")); cv.hline(4, 7, 3, hx("#9ab8f0"))                      # 一本書
+    cv.rect(10, 2, 12, 5, hx("#f4f0e4")); cv.hline(10, 12, 2, hx("#8a5a34")); cv.set(13, 3, hx("#e8e4d8"))   # 茶杯
+    cv.outline(); return cv
+
+def piano():   # 鋼琴：黑色直立式鋼琴，前面一排黑白琴鍵
+    cv = Canvas(16, 18); k = hx("#22222a")
+    cv.rect(1, 1, 14, 11, k); cv.rect(1, 1, 14, 2, shade(k, 1.8)); cv.rect(3, 4, 12, 8, shade(k, 1.25)); cv.rect(5, 4, 10, 7, hx("#f0e6c8")); cv.hline(6, 9, 5, hx("#6a6a72")); cv.hline(6, 9, 6, hx("#6a6a72"))   # 琴身與譜架（上面一張樂譜）
+    cv.rect(0, 12, 15, 13, shade(k, 1.4))                                                                                     # 琴鍵蓋
+    cv.rect(1, 13, 14, 14, hx("#f4f0e4"))
+    for x in (2, 4, 7, 9, 11): cv.rect(x, 13, x, 14, k)                                                                       # 黑鍵
+    cv.rect(2, 15, 3, 17, shade(k, .8)); cv.rect(12, 15, 13, 17, shade(k, .8))                                                # 琴腳
+    cv.outline(); return cv
+
+def fireplace():   # 壁爐：磚砌的壁爐，爐膛裡燒著火，上面一塊木頭爐台
+    b = hx("#b4583e"); cv = Canvas(16, 22)
+    cv.rect(1, 2, 14, 21, b)
+    for y in range(3, 21, 3):
+        cv.hline(1, 14, y, shade(b, .7))
+        for x in range(2 + (y // 3 % 2) * 3, 14, 6): cv.vline(x, y - 2 if y > 3 else y, y, shade(b, .7))
+    cv.rect(0, 0, 15, 2, hx("#8a5a34")); cv.hline(0, 15, 0, hx("#b07a44"))   # 爐台
+    cv.rect(4, 9, 11, 21, hx("#1c1214"))                                       # 爐膛
+    cv.ellipse(7.5, 18, 3.5, 2.6, hx("#e8801a")); cv.ellipse(7.5, 17, 2.2, 3.2, hx("#f8c030")); cv.set(7, 15, hx("#fff0a0")); cv.set(8, 14, hx("#f8c030"))   # 火
+    cv.rect(4, 20, 11, 21, hx("#5a4a3a"))                                      # 柴
+    cv.outline(); return cv
+
+def floor_mirror():   # 落地鏡：木框的長鏡子，斜斜的反光
+    w = hx("#8a5a34"); cv = Canvas(16, 24)
+    cv.rect(3, 1, 12, 20, w); cv.rect(4, 2, 11, 19, hx("#bfe3f0"))
+    for i in range(5): cv.set(5 + i, 6 - i + 8, hx("#ffffff")); cv.set(6 + i, 6 - i + 8, hx("#e8f7fb"))   # 斜向反光
+    cv.hline(4, 11, 2, hx("#dff3f9")); cv.rect(7, 20, 8, 21, shade(w, .8)); cv.rect(4, 22, 11, 22, shade(w, .65))   # 支架與底座
+    cv.outline(); return cv
+
+def folding_screen():   # 屏風：木框紙面的三折屏風，畫著遠山與月亮
+    w = hx("#8a5a34"); paper = hx("#f0e6c8"); cv = Canvas(16, 24)
+    cv.rect(1, 2, 14, 21, w)
+    for x0 in (2, 6, 10):
+        cv.rect(x0, 3, x0 + 3, 20, paper); cv.hline(x0, x0 + 3, 3, shade(paper, 1.08))
+    cv.ellipse(11.5, 7, 1.6, 1.6, hx("#e8c070"))                                                  # 月亮
+    for x, y in ((3, 16), (4, 15), (5, 14), (6, 14), (7, 15), (8, 16), (9, 15), (10, 14), (11, 15), (12, 16)): cv.rect(x, y, x, 19, hx("#6a8a7a") if x < 7 else hx("#5a7a6a"))   # 遠山
+    cv.rect(1, 21, 14, 22, shade(w, .6)); cv.outline(); return cv
+
 def antler_rack():   # 鹿角掛架：木板底座，頂上一對分岔的鹿角
     a = hx("#d8b078"); w = hx("#8a5a34"); cv = Canvas(16, 24)
     cv.rect(7, 12, 8, 20, w); cv.rect(4, 20, 11, 22, shade(w, .7)); cv.rect(5, 9, 10, 12, shade(w, 1.15)); cv.hline(5, 10, 9, shade(w, 1.35))   # 立柱、底座、頭骨板
@@ -2254,6 +2322,15 @@ FURN_MANIFEST = dict(
         dict(id="bed",   name="床",    w=1, h=1, solid=True,  sprite="bed.png", use="sleep", quiltRow=13),
         dict(id="shelf", name="書架",  w=1, h=1, solid=True,  sprite="shelf.png"),
         dict(id="sign",  name="看板",  w=1, h=1, solid=True,  sprite="sign.png", text=True),
+        # 2026-11-14：新增的預設家具（不用合成）
+        dict(id="park_bench",      name="長椅",   w=1, h=1, solid=True, sprite="park_bench.png", use="sit"),
+        dict(id="beanbag",         name="懶骨頭", w=1, h=1, solid=True, sprite="beanbag.png", use="sit"),
+        dict(id="wardrobe",        name="衣櫃",   w=1, h=1, solid=True, sprite="wardrobe.png"),
+        dict(id="coffee_table",    name="茶几",   w=1, h=1, solid=True, sprite="coffee_table.png"),
+        dict(id="piano",           name="鋼琴",   w=1, h=1, solid=True, sprite="piano.png"),
+        dict(id="fireplace",       name="壁爐",   w=1, h=1, solid=True, sprite="fireplace.png"),
+        dict(id="floor_mirror",    name="落地鏡", w=1, h=1, solid=True, sprite="floor_mirror.png"),
+        dict(id="folding_screen",  name="屏風",   w=1, h=1, solid=True, sprite="folding_screen.png"),
         # 以下是「合成家具」：craft=True＝要在合成面板做出來才解鎖（解鎖後無限使用），配方在 client/assets/craft/craft.json
         dict(id="stool",       name="木凳",   w=1, h=1, solid=True,  sprite="stool.png", use="sit", craft=True),
         dict(id="glow_lamp",   name="螢光燈", w=1, h=1, solid=True,  sprite="glow_lamp.png", craft=True),
@@ -3423,6 +3500,8 @@ def main():
                    ("iron_chair", iron_chair()), ("lava_lamp", lava_lamp()), ("leather_chair", leather_chair()), ("pearl_statue", pearl_statue()),
                    ("rabbit_rug", rabbit_rug()), ("jelly_lamp", jelly_lamp()), ("slime_sofa", slime_sofa()), ("egg_nest", egg_nest()),
                    ("dragon_shield", dragon_shield()), ("dragon_trophy", dragon_trophy()),
+                   ("park_bench", park_bench()), ("beanbag", beanbag()), ("wardrobe", wardrobe()), ("coffee_table", coffee_table()),
+                   ("piano", piano()), ("fireplace", fireplace()), ("floor_mirror", floor_mirror()), ("folding_screen", folding_screen()),
                    ("antler_rack", antler_rack()), ("hide_rug", hide_rug()), ("bone_bench", bone_bench()), ("demon_candelabra", demon_candelabra()),
                    ("bat_screen", bat_screen()), ("golem_gadget", golem_gadget()), ("charm_curtain", charm_curtain()), ("compost_bed", compost_bed())]:
         save(cv, fn + ".png", "furniture")
