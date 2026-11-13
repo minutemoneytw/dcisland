@@ -1870,33 +1870,15 @@ def table_uno():
     cv.outline()
     return cv
 
-def cocktail_cabinet(col):
-    """桌型街機（48×32，畫 scale 2＝3×2 格；2026-11-13 使用者要求電子遊戲桌改成這個造型）：老電玩店那種桌面就是朝上螢幕的機台，
-    機殼主色 col、黑色邊框裡一塊發光的螢幕（內容由各遊戲自己畫，螢幕範圍 x 7～40、y 8～21）、前後兩邊各一組搖桿＋按鈕、中間一根底座。
-    回傳 (canvas, 螢幕底色)。"""
-    cv = Canvas(48, 32)
-    c = hx(col); dark = shade(c, .6)
-    cv.rect(17, 27, 30, 30, shade(c, .5)); cv.rect(13, 30, 34, 31, shade(c, .45))   # 底座
-    cv.rect(0, 2, 47, 26, c); cv.hline(0, 47, 2, shade(c, 1.35)); cv.hline(0, 47, 26, dark)   # 機殼（桌面）
-    cv.rect(0, 23, 47, 25, shade(c, .8))                         # 前緣（操作台）
-    cv.rect(5, 6, 42, 23, hx("#101018"))                         # 螢幕黑框
-    scr = hx("#0a1424")
-    cv.rect(7, 8, 40, 21, scr)
-    cv.hline(7, 40, 8, shade(scr, 1.8))                          # 螢幕上緣的反光
-    for x, bc in ((9, "#e83a3a"), (36, "#3a8ae8")):              # 前緣兩組搖桿（球頭）＋按鈕
-        cv.rect(x, 23, x + 1, 24, hx("#2a2a30")); cv.ellipse(x + .5, 22.6, 1.4, 1.2, hx(bc)); cv.set(x, 22, shade(hx(bc), 1.5))
-        bx = x + 4 if x < 24 else x - 6
-        cv.rect(bx, 24, bx + 1, 24, hx("#f0c020")); cv.rect(bx + 3, 24, bx + 4, 24, hx("#40c060"))
-    for x in (11, 34): cv.rect(x, 4, x + 2, 4, hx("#2a2a30"))     # 後緣的另一組搖桿（從這邊看只露出一點）
-    cv.rect(21, 4, 26, 4, shade(c, 1.2))                          # 後緣的投幣孔
-    return cv, scr
-
 def table_dodge():
-    """躲彈幕：桌型街機（藍灰），螢幕上滿是彈幕，中間一個小小的玩家。"""
-    cv, scr = cocktail_cabinet("#3a4a6a")
-    for x, y, c in ((10, 11, "#ff5a5a"), (15, 18, "#ffb347"), (20, 10, "#ff5a5a"), (27, 15, "#7ae8d0"), (33, 19, "#ff5a5a"), (37, 11, "#ffb347"), (12, 19, "#7ae8d0"), (30, 10, "#ffb347"), (35, 15, "#7ae8d0")):
-        cv.ellipse(x, y, 1.4, 1.4, hx(c))
-    cv.rect(23, 15, 24, 17, hx("#f4f0e4")); cv.set(23, 14, hx("#f4f0e4"))   # 中間一個小小的「玩家」
+    cv = Canvas(48, 32)
+    wood, screen = hx("#3a3f52"), hx("#141826")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
+    cv.rect(3, 7, 44, 24, screen)
+    for x, y, c in ((8, 10, "#ff5a5a"), (14, 18, "#ffb347"), (20, 9, "#ff5a5a"), (27, 15, "#7ae8d0"), (33, 21, "#ff5a5a"), (38, 11, "#ffb347"), (12, 22, "#7ae8d0"), (30, 8, "#ffb347")):
+        cv.ellipse(x, y, 1.6, 1.6, hx(c))
+    cv.rect(23, 17, 25, 19, hx("#f4f0e4")); cv.set(24, 16, hx("#f4f0e4"))   # 中間一個小小的「玩家」
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
 
@@ -1938,19 +1920,25 @@ def table_zhtyping():
     return cv
 
 def table_mage():
-    """見習驅魔師：桌型街機（深紫），螢幕裡一隻白色小幽靈（有臉）、身上一個金色符號，旁邊一圈淡淡的魔法陣。"""
-    cv, scr = cocktail_cabinet("#4a3a68")
-    cv.rect(7, 8, 40, 21, hx("#160e26")); cv.hline(7, 40, 8, hx("#2e2448"))   # 螢幕底色（深紫）
-    ring = hx("#5a4a90")                                          # 魔法陣（右邊）
-    for k in range(16):
-        cv.set(round(32 + 5.5 * math.cos(k * math.pi / 8)), round(15 + 4.5 * math.sin(k * math.pi / 8)), ring)
-    cv.rect(31, 14, 33, 16, hx("#e8c040"))                       # 魔法陣中心的金光
-    gh = hx("#eef0ff")                                            # 小幽靈（左邊）
-    cv.ellipse(17.5, 13.5, 4, 3.5, gh); cv.rect(14, 14, 21, 18, gh)
-    for x in (14, 17, 20): cv.rect(x, 19, x + 1, 19, gh)          # 下擺鋸齒
-    cv.set(16, 13, hx("#20204a")); cv.set(19, 13, hx("#20204a"))  # 眼睛
+    """見習驅魔師：深色桌面（有桌腳），中間一本皮革封面的書（金色十字），右邊一瓶聖水，左邊一隻白色小幽靈（有臉）。"""
+    cv = Canvas(48, 32)
+    wood = hx("#3a2a4a")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.35))
+    cv.rect(2, 6, 45, 25, hx("#2a2038"))
+    leather = hx("#7a4a2a")                                                                                             # 皮書（中間）
+    cv.rect(16, 9, 30, 22, leather); cv.rect(16, 9, 18, 22, shade(leather, .7)); cv.rect(30, 9, 30, 22, shade(leather, .7))   # 書背與書緣
+    cv.rect(19, 10, 29, 10, shade(leather, 1.3)); cv.rect(19, 21, 29, 21, shade(leather, .8))                           # 封面高光與下緣
     gold = hx("#e8c040")
-    cv.rect(17, 15, 18, 17, gold); cv.hline(16, 19, 16, gold)     # 身上的符號（小十字）
+    cv.rect(23, 12, 24, 19, gold); cv.rect(21, 14, 26, 15, gold)                                                        # 封面的金色十字
+    gh = hx("#eef0ff")                                                                                                  # 小幽靈（左邊）
+    cv.ellipse(8.5, 13.5, 4.5, 5, gh); cv.rect(4, 14, 13, 19, gh)
+    for x in (4, 7, 10): cv.rect(x, 20, x + 1, 21, gh)                                                                  # 下擺鋸齒
+    cv.rect(6, 12, 7, 13, hx("#20204a")); cv.rect(10, 12, 11, 13, hx("#20204a")); cv.rect(8, 16, 9, 16, hx("#20204a")) # 臉：眼睛與嘴
+    glass = hx("#c8e4f0")                                                                                               # 聖水瓶（右邊）：瓶身、藍白色的水、軟木塞、瓶上的小十字
+    cv.rect(36, 12, 42, 22, glass); cv.rect(37, 9, 41, 11, glass); cv.rect(38, 7, 40, 8, hx("#9a6a3a"))
+    cv.rect(37, 16, 41, 21, hx("#6ab8ff")); cv.rect(37, 16, 41, 16, hx("#d8f0ff"))
+    cv.rect(39, 17, 39, 20, hx("#ffffff")); cv.rect(38, 18, 40, 18, hx("#ffffff"))
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))                                 # 桌腳
     cv.outline()
     return cv
 
