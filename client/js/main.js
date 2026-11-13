@@ -5443,7 +5443,9 @@ function buildDodge(box, v, mk, gd) {
 // **物理在桌主（座位 0）那台**：圓盤的移動、反彈、碰撞、進球、結束都在那台算，約 12 次／秒送快照 hs（伺服器轉成 ths）；
 // 每個人約 12 次／秒送自己握把的位置 hp（伺服器轉成 thp）。桌主用收到的位置算碰撞，別人打到圓盤的判定會晚一點點（網路延遲）。
 const HK_W = 640, HK_H = 320, HK_PR = 18, HK_BR = 11, HK_GOAL = 120, HK_SEND_MS = 80;   // 場地、握把半徑、圓盤半徑、球門寬、回報間隔
-const HK_MAX_PAD = 900, HK_MAX_PUCK = 950, HK_KEY_SPD = 420;                           // 握把最快速度、圓盤最快速度、鍵盤移動速度（px／秒）
+const HK_MAX_PAD = 1700, HK_MAX_PUCK = 950, HK_KEY_SPD = 600, HK_STEP_PX = 10;          // 握把最快速度、圓盤最快速度、鍵盤移動速度（px／秒）、桌主算碰撞時握把每小段最多移動幾 px
+// 手感調整（2026-11-14 使用者說「手感有點差、增加靈敏度」）：握把最快速度 900→1700（快甩滑鼠時握把不再落在滑鼠後面）、鍵盤 420→600、別人的握把追蹤 18→28；
+// 握把變快後一個畫格會移動很遠，所以桌主算碰撞時把這一格內握把的移動切成小段（每段不超過 HK_STEP_PX），避免高速握把穿過圓盤
 const HK_TEAM_COL = ['#3b78e8', '#e04848'], HK_TEAM_NAME = ['藍隊', '紅隊'];
 const HK_KEYS = { arrowup: 'u', w: 'u', arrowdown: 'd', s: 'd', arrowleft: 'l', a: 'l', arrowright: 'r', d: 'r' };
 function hkHome(i, n) {   // 第 i 位的開球位置：同隊依序排成一直排（4 人以上排兩直排）
@@ -5512,6 +5514,7 @@ function hkFrame() {
   S.hkRaf = requestAnimationFrame(hkFrame);
   const now = performance.now(), dt = Math.max(0, Math.min(.05, (now - H.last) / 1000)); H.last = now;
   const t = hkNow(H);
+  H.pads.forEach(p => { p.x0 = p.x; p.y0 = p.y; });   // 這一格開始時的位置（桌主切小段算碰撞用）
   if (H.me >= 0 && t >= 0 && !H.over) {
     hkMoveMine(H, dt);
     // 自己的握把位置（桌主的夾在下面的 hs 裡送：hp 與 hs 共用同一個限流）
@@ -5519,10 +5522,16 @@ function hkFrame() {
   }
   H.pads.forEach((p, i) => {   // 別人的握把：往收到的位置平滑移動（速度用兩次回報的差估計，桌主算碰撞用）
     if (i === H.me) return;
-    const a = 1 - Math.exp(-dt * 18); p.x += (p.tx - p.x) * a; p.y += (p.ty - p.y) * a;
+    const a = 1 - Math.exp(-dt * 28); p.x += (p.tx - p.x) * a; p.y += (p.ty - p.y) * a;
   });
   if (H.host && t >= 0 && !H.over) {
-    for (let k = 0; k < 4; k++) hkPhysics(H, dt / 4);
+    const mv = Math.max(...H.pads.map(p => Math.hypot(p.x - p.x0, p.y - p.y0))), n = Math.max(4, Math.min(24, Math.ceil(mv / HK_STEP_PX)));   // 這一格握把最多移動 mv px → 切成 n 小段
+    const fin = H.pads.map(p => [p.x, p.y]);
+    for (let k = 1; k <= n; k++) {
+      H.pads.forEach((p, i) => { p.x = p.x0 + (fin[i][0] - p.x0) * k / n; p.y = p.y0 + (fin[i][1] - p.y0) * k / n; });   // 握把走到這一小段的位置
+      hkPhysics(H, dt / n);
+    }
+    H.pads.forEach((p, i) => { p.x = fin[i][0]; p.y = fin[i][1]; });
     if (now - H.hsAt >= HK_SEND_MS) { H.hsAt = now; const P = H.puck; const me = H.pads[0]; S.net?.tbl?.({ a: 'hs', x: Math.round(P.x), y: Math.round(P.y), vx: Math.round(P.vx), vy: Math.round(P.vy), sa: H.sa, sb: H.sb, f: Math.round(Math.max(0, H.f) * 1000), px: Math.round(me.x), py: Math.round(me.y) }); }
     if (H.sa >= H.goals || H.sb >= H.goals || t >= H.lim) { H.over = true; S.net?.tbl?.({ a: 'hend', sa: H.sa, sb: H.sb }); }
     H.view.x = H.puck.x; H.view.y = H.puck.y;
