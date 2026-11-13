@@ -2251,7 +2251,7 @@ MOB_MANIFEST = dict(
         # 鹿（草島）：被動（道德性怪物），4 方向走路
         dict(id="deer", name="鹿", lv=5, speed=40, flee=120, noBounce=True,
              anim=dict(sheet="external/img2pixel/deer_sheet.png", frames=4, rows=4, fw=64, fh=96,
-                       rowDir=["down", "left", "right", "up"], fps=6, scale=0.4),   # 畫面約 31px 高（人物約 46px）
+                       rowDir=["down", "left", "right", "up"], fps=6, scale=0.52),   # 格內實際內容 22×78，畫面約 41px 高（人物約 46px；2026-11-13 使用者定「大隻一點，比雞大」，由 0.4 放大——雞只有約 24px）
              line="「鹿」豎起耳朵看了你一眼，又低頭繼續啃草。"),
         # 貓／狗（和平島）：被動、固定生成，補和平島「島上沒有動物」的空虛感；和平島不得放敵對怪，這兩隻是安全的
         dict(id="cat", name="貓", lv=2, fixed=2, speed=34, flee=60, noBounce=True,
