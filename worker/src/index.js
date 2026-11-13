@@ -484,8 +484,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -550,6 +550,7 @@ function tblLeave(t, cid) {
     if (t.phase === "playing" && t.game === "trigon") { tgLeave(t, i, Date.now()); return; }   // 三角方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
     if (t.phase === "playing" && t.game === "blokus") { bkLeave(t, i, Date.now()); return; }   // 方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
     if (t.phase === "playing" && t.game === "mage") { mgLeave(t, i, Date.now()); return; }   // 見習驅魔師：離開不中斷，視同倒下，到場上沒有活人為止
+    if (t.phase === "playing" && t.game === "maze") { mzLeave(t, i); return; }   // 豆豆迷宮：幽靈離開改由電腦控制、豆豆離開＝幽靈方贏
     if (t.phase === "playing" && t.game === "dodge") { dgLeave(t, i, Date.now()); return; }   // 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
     if (t.phase === "playing" && t.game === "uno") { unLeave(t, i, Date.now()); return; }   // UNO：離開不中斷，手牌收回牌堆，只剩 1 人時那人獲勝
     if (t.phase === "playing" && isTy(t)) { tyLeave(t, i, Date.now()); return; }   // 英文打字競賽：離開不中斷，照當時分數排名
@@ -1205,7 +1206,7 @@ const isTy = t => t.game === "typing" || t.game === "zhtyping";
 const tyUnit = t => (t.game === "zhtyping" ? "詞" : "單字");
 // 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 // 記在這座島的 storage（"boards"），每次結算後更新，table 畫面帶 board 給客戶端顯示。與 tools/dev_server.py 的 BOARDS 同一套
-const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage", "arcade"]), BOARD_N = 3;   // 街機方塊：只記單人模式（使用者定）
+const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage", "arcade", "maze"]), BOARD_N = 3;   // 街機方塊／豆豆迷宮：只記單人模式（使用者定）
 // 躲彈幕 2026-11-12 起改記「分數」（存活秒數＋道具分），舊的秒數紀錄放在 "dodge" 不再使用，分數另記在 "dodge2"，避免單位混在一起
 const boardKey = game => (game === "dodge" ? "dodge2" : game);
 function boardMerge(list, entries) {
@@ -2728,7 +2729,109 @@ function arInfo(t) {
   for (const s of t.seats) cabs[s.cab] = { n: s.name, st: s.st !== "link" ? s.st : (g && g.phase === "playing" ? "link" : "inv") };
   return { cabs, inv: !!(g && g.phase === "invite" && g.mem.length < AR_CABS), playing: t.seats.filter(s => arPlaying(t, s)).map(s => s.cid) };
 }
-const GAME_START = { arcade: () => {}, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+// ---- 豆豆迷宮（吃豆迷宮類；第十四桌 t14，2026-11-13，使用者要求）：1～5 人，一人當豆豆、其他人當幽靈 ----
+// 1 人＝單人模式：自己當豆豆、對 4 隻電腦幽靈，一關接一關到命用完，分數進排行榜（使用者定）；
+// 2～5 人＝對抗：桌主（第一位入座的人）在開局前指定誰當豆豆（預設自己，使用者定），其他人依序當幽靈、空的幽靈由電腦控制；
+//   豆子吃光＝豆豆方贏，3 條命用完（或時間到）＝幽靈方贏，不進排行榜。進行中有人離開不中斷：幽靈離開改由電腦控制、豆豆離開＝幽靈方贏。
+// 遊戲本身在客戶端跑：豆豆那台是權威（豆子、能量、被抓、電腦幽靈都由它決定），伺服器只轉發豆豆的快照（ms → tms）與
+// 幽靈玩家的位置（mp → tmp），並收結算（over）。與 tools/dev_server.py 的 mz_* 同一套，改規則兩邊一起改。
+const MZ_GHOSTS = 4;
+const MZ_COUNTDOWN_MS = 3000, MZ_SOLO_COUNTDOWN_MS = 1500;
+const MZ_VS_MS = 240000;              // 對抗一局的時間上限（豆豆那台到時間就結算幽靈方贏；伺服器多等 20 秒還沒結算就自己結）
+const MZ_XP = 4, MZ_XP_MIN = 3000;    // 單人 ≥ MZ_XP_MIN 分、對抗贏的那一方 +MZ_XP（助手先訂的數值）
+const MZ_SCORE_MAX = 99999999;
+const MZ_MSGS = new Set(["mpac", "over"]);
+const mzInt = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+function mzPacIdx(t) { const i = t.seats.findIndex(s => s.cid != null && s.cid === t.pacCid); return i >= 0 ? i : 0; }
+function mzSetPac(t, cid, v) {   // 桌主在開局前指定誰當豆豆；改了大家要重新準備
+  const [role, i] = tblFind(t, cid);
+  if (t.game !== "maze" || role !== "seat" || i !== 0 || t.phase !== "lobby" || !mzInt(v, 0, t.seats.length - 1) || mzPacIdx(t) === v) return;
+  t.pacCid = t.seats[v].cid;
+  for (const s of t.seats) s.ready = false;
+  tblLog(t, `${t.seats[0].name} 指定 ${t.seats[v].name} 當豆豆`);
+}
+function mzStart(t) {
+  const now = Date.now(), n = t.seats.length, pac = mzPacIdx(t);
+  const gh = t.seats.map((_, k) => k).filter(k => k !== pac).slice(0, MZ_GHOSTS);
+  while (gh.length < MZ_GHOSTS) gh.push(-1);
+  t.g = { seed: Math.floor(Math.random() * 2147483648), t0: now + (n === 1 ? MZ_SOLO_COUNTDOWN_MS : MZ_COUNTDOWN_MS), pac, gh, solo: n === 1 };
+  t.result = null; t.phase = "playing";
+  for (const s of t.seats) { s.ready = false; s.left = false; s.sc = 0; s.lvl = 1; }
+  tblLog(t, n === 1 ? `${t.seats[0].name} 開始挑戰（單人）` : `對抗開始！${t.seats[pac].name} 當豆豆，${n - 1} 人當幽靈`);
+}
+// 結束：solo＝單人（分數進排行榜）；否則 win＝"pac"／"ghost"。ct＝每個幽靈位置抓到豆豆幾次
+function mzFinish(t, win, why, ct) {
+  const g = t.g;
+  if (!g) return;
+  const stay = t.seats.filter(s => !s.left), pacSeat = t.seats[g.pac];
+  if (g.solo) {
+    const s = t.seats[0];
+    t.result = s.left ? { aborted: true, text: `${s.name} 離開了，這一局不算` }
+      : { solo: true, text: `挑戰結束！${s.name} ${s.sc} 分（第 ${s.lvl} 關）`, rid: Math.floor(Math.random() * 4294967296),
+          ranking: [{ name: s.name, uid: s.uid || null, score: s.sc, lvl: s.lvl, left: false }], xp: stay.map(x => (x.sc >= MZ_XP_MIN ? MZ_XP : 0)) };
+  } else {
+    const ranking = t.seats.map((s, k) => {
+      const gk = g.gh.indexOf(k);
+      return { name: s.name, uid: s.uid || null, role: k === g.pac ? "pac" : "ghost", score: k === g.pac ? s.sc : (ct && gk >= 0 ? ct[gk] : 0), left: !!s.left };
+    }).sort((a, b) => (a.role === b.role ? 0 : a.role === "pac" ? -1 : 1));
+    const xp = stay.map(s => ((s === pacSeat) === (win === "pac") ? MZ_XP : 0));   // 中途離開的人不給 XP；result.xp 依「留下來的座位」順序
+    t.result = { win, text: `${win === "pac" ? "豆豆方獲勝" : "幽靈方獲勝"}！（${why}）`, rid: Math.floor(Math.random() * 4294967296), ranking, xp };
+  }
+  tblLog(t, t.result.text);
+  t.seats = stay;
+  tblResetSeats(t);
+  t.g = null;
+}
+function mzTick(t, now) {   // 豆豆那台當掉、沒回報結算：對抗的時間上限過了 20 秒，伺服器自己結（幽靈方贏）
+  if (t.game === "maze" && t.phase === "playing" && t.g && !t.g.solo && now > t.g.t0 + MZ_VS_MS + 20000) { mzFinish(t, "ghost", "時間到"); return true; }
+  return false;
+}
+// 遊戲進行中有人離開：幽靈→改由電腦控制，遊戲繼續；豆豆→幽靈方贏（單人＝這局不算）
+function mzLeave(t, i) {
+  const s = t.seats[i], g = t.g;
+  s.left = true; s.cid = null;
+  if (i === g.pac) { mzFinish(t, "ghost", `${s.name}（豆豆）離開了`); return; }
+  const k = g.gh.indexOf(i); if (k >= 0) g.gh[k] = -1;
+  tblLog(t, `${s.name} 離開了，那隻幽靈改由電腦控制`);
+}
+// 豆豆的快照（約 10 次／秒）：p 豆豆 [x, y, 方向]（格數×10）、g 4 隻幽靈 [x, y, 方向, 狀態 0 一般／1 害怕／2 被吃掉回家中]、
+// d 剩下的豆子（16 進位點陣）、pw 能量剩幾毫秒、sc 分數、lv 剩幾條命、lvl 第幾關、rs 重來次數（被抓後大家回起點）、fz 凍結毫秒、bn 獎勵果實在不在
+function mzSnap(msg) {
+  const p = msg.p, g = msg.g, d = msg.d;
+  const pt = v => Array.isArray(v) && mzInt(v[0], -20, 400) && mzInt(v[1], -20, 400) && mzInt(v[2], -1, 3);
+  if (!pt(p) || !Array.isArray(g) || g.length !== MZ_GHOSTS || !g.every(x => pt(x) && mzInt(x[3], 0, 3))) return null;
+  if (typeof d !== "string" || !/^[0-9a-f]{1,120}$/.test(d)) return null;
+  if (!mzInt(msg.pw, 0, 60000) || !mzInt(msg.sc, 0, MZ_SCORE_MAX) || !mzInt(msg.lv, 0, 9) || !mzInt(msg.lvl, 1, 999) || !mzInt(msg.rs, 0, 100000) || !mzInt(msg.fz, 0, 10000) || !mzInt(msg.bn, 0, 1)) return null;
+  return { p: p.slice(0, 3), g: g.map(x => x.slice(0, 4)), d, pw: msg.pw, sc: msg.sc, lv: msg.lv, lvl: msg.lvl, rs: msg.rs, fz: msg.fz, bn: msg.bn };
+}
+// 快照／幽靈位置：回要轉發的 [[cid, msg]…]（給同桌其他人與觀戰者）
+function mzRelay(t, cid, msg) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "maze" || role !== "seat" || t.phase !== "playing" || !g) return [];
+  let data = null;
+  if (msg.a === "ms" && i === g.pac) {
+    const d = mzSnap(msg); if (!d) return [];
+    t.seats[i].sc = d.sc; t.seats[i].lvl = d.lvl;
+    data = { t: "tms", i, ...d };
+  } else if (msg.a === "mp" && g.gh.includes(i)) {   // 幽靈玩家的位置（x／y＝格數×10、d＝方向、m＝0 一般／2 被吃掉正在回家）
+    if (!(mzInt(msg.x, -20, 400) && mzInt(msg.y, -20, 400) && mzInt(msg.d, -1, 3) && mzInt(msg.m, 0, 3))) return [];
+    data = { t: "tmp", i, k: g.gh.indexOf(i), x: msg.x, y: msg.y, d: msg.d, m: msg.m };
+  }
+  if (!data) return [];
+  return [...t.seats, ...t.specs].filter(m => m.cid != null && m.cid !== cid).map(m => [m.cid, data]);
+}
+// 豆豆那台回報結束：單人＝命用完（帶 lvl）；對抗＝win（豆子吃光）或沒有（命用完／tu 時間到），ct＝各幽靈位置抓到幾次
+function mzOver(t, cid, msg) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "maze" || role !== "seat" || t.phase !== "playing" || !g || i !== g.pac || !mzInt(msg.sc, 0, MZ_SCORE_MAX)) return;
+  const s = t.seats[i];
+  s.sc = msg.sc;
+  if (g.solo) { if (mzInt(msg.lvl, 1, 999)) s.lvl = msg.lvl; mzFinish(t, null, "命用完了"); return; }
+  const ct = Array.isArray(msg.ct) && msg.ct.length === MZ_GHOSTS && msg.ct.every(x => mzInt(x, 0, 99)) ? msg.ct : null;
+  const win = msg.win === true;
+  mzFinish(t, win ? "pac" : "ghost", win ? "豆子全部吃光" : msg.tu === true ? "時間到" : "豆豆的命用完了", ct);
+}
+const GAME_START = { arcade: () => {}, maze: mzStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 function tblView(t, cid) {
   const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
@@ -2738,6 +2841,12 @@ function tblView(t, cid) {
     specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
   };
   if (t.game === "arcade") return arView(t, cid, v);   // 街機方塊：每台機台的狀態、聯機狀況；phase 依「我自己是不是正在玩」
+  if (t.game === "maze") {   // 豆豆迷宮：誰當豆豆（開局前＝桌主指定的人）、分數／關卡／離開；進行中附上 seed、開始時間、伺服器時間、幽靈位置分配
+    v.pac = playing && t.g ? t.g.pac : mzPacIdx(t);
+    t.seats.forEach((s, k) => Object.assign(v.seats[k], { sc: s.sc || 0, lvl: s.lvl || 1, left: !!s.left }));
+    if (t.g && playing) v.mz = { seed: t.g.seed, t0: t.g.t0, sn: Date.now(), pac: t.g.pac, gh: [...t.g.gh], solo: t.g.solo, lim: MZ_VS_MS };
+    return v;
+  }
   if (t.game === "mage") {   // 見習驅魔師：血量／擊殺數／倒下／離開；進行中附上 seed、難度、人數、已擊殺的幽靈編號、Boss 血量與被打中的次數
     v.diff = t.diff || 0;
     t.seats.forEach((s, k) => { v.seats[k].hp = Math.max(0, s.hp || 0); v.seats[k].syms = s.syms || 0; v.seats[k].dead = !!s.dead; v.seats[k].left = !!s.left; });
@@ -3267,7 +3376,7 @@ export class Island {
   async tableBoard(t, resBefore) {
     const r = t.result;
     if (!BOARD_GAMES.has(t.game) || !r || r === resBefore || r.aborted || !r.ranking) return;
-    if (t.game === "arcade" && !r.solo) return;   // 街機方塊：聯機分數不進排行榜（使用者定）
+    if ((t.game === "arcade" || t.game === "maze") && !r.solo) return;   // 街機方塊／豆豆迷宮：聯機／對抗分數不進排行榜（使用者定）
     const ts = Date.now(), entries = t.game === "mage" ? (r.win && r.solo ? [{ name: r.ranking[0].name, uid: r.ranking[0].uid, score: r.score, ts }] : []) : r.ranking.filter(x => !x.left).map(x => ({ name: x.name, uid: x.uid, score: x.score, ts })).filter(e => e.score > 0);   // 見習驅魔師：只有單人勝利進排行榜
     if (!entries.length) return;
     const bk = boardKey(t.game), boards = await this.getBoards(), old = boards[bk] || [], nb = boardMerge(old, entries);
@@ -3291,7 +3400,7 @@ export class Island {
   }
   async tableMsg(ws, att, msg) {
     const now = Date.now(), a = msg.a;
-    if (a === "pos" || a === "word" || a === "tb") {   // 躲彈幕的位置回報、英文打字競賽的分數回報：自己的限流，不影響 hit／finish 等操作
+    if (a === "pos" || a === "word" || a === "tb" || a === "ms" || a === "mp") {   // 躲彈幕的位置回報、英文打字競賽的分數回報、豆豆迷宮的快照／幽靈位置：自己的限流，不影響 hit／finish 等操作
       if (now - (this.lastTblPos.get(ws) || 0) < TBL_POS_CD_MS) return;
       this.lastTblPos.set(ws, now);
     } else if (a === "typ" || a === "sync") {   // 英文打字競賽的打字進度（只轉發給觀戰者）、見習驅魔師的每秒對時：自己的限流
@@ -3326,6 +3435,12 @@ export class Island {
     if (!t) return;
     if (t.game === "arcade" && (a === "tb" || a === "clr")) {   // 街機方塊：盤面快照／垃圾行，只轉發（不存檔、不通知整個畫面、不廣播 tblinfo；分數記在記憶體，下一次存檔時一起寫）
       for (const [cid, m] of arMsg(t, att.id, msg, now)[1]) this.sendToId(cid, m);
+      return;
+    }
+    if (t.game === "maze" && (a === "ms" || a === "mp")) {   // 豆豆迷宮：豆豆的快照／幽靈玩家的位置，只轉發（不存檔、不通知畫面）；對抗時間上限過了才順便結算
+      for (const [cid, m] of mzRelay(t, att.id, msg)) this.sendToId(cid, m);
+      const resBefore = t.result;
+      if (mzTick(t, now)) { await this.saveTable(t); this.tableNotify(t); await this.tableBroadcastInfo(terr); await this.tableXp(t, resBefore); }
       return;
     }
     if (a === "pos") {   // 躲彈幕：位置回報，轉發給同桌其他人（不存檔、不通知畫面、不廣播 tblinfo）
@@ -3368,11 +3483,13 @@ export class Island {
     tyCheckEnd(t, now);
     itTick(t, now);   // 秘藥情報戰：識破時間過了就生效、逾時自動處理
     const mgChanged = mgTick(t, now);   // 見習驅魔師：沒被消除的幽靈扣血、勝負
+    mzTick(t, now);   // 豆豆迷宮：對抗超過時間上限還沒結算
     if (t.game === "arcade" && AR_MSGS.has(a)) {   // 街機方塊：單人／聯機邀請／接受／拒絕／開始／結束
       const [changed, extra] = arMsg(t, att.id, msg, now);
       for (const [cid, m] of extra) this.sendToId(cid, m);
       if (!changed) return;
     }
+    else if (t.game === "maze" && MZ_MSGS.has(a)) { if (a === "mpac") mzSetPac(t, att.id, msg.v); else mzOver(t, att.id, msg); }   // 豆豆迷宮：桌主指定豆豆／豆豆那台回報結束
     else if (t.game === "intel" && IT_MSGS.has(a)) itMsg(t, att.id, msg, now);   // 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
     else if (a === "ready") tblReady(t, att.id, msg.v);
     else if (a === "sit") tblSit(t, att.id);

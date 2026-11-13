@@ -643,8 +643,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -737,6 +737,9 @@ def tbl_leave(t, cid):
             return
         if t["phase"] == "playing" and t["game"] == "blokus":   # 方塊拼圖：離開不中斷，棋子留在棋盤上、之後跳過
             bk_leave(t, i, int(time.time() * 1000))
+            return
+        if t["phase"] == "playing" and t["game"] == "maze":   # 豆豆迷宮：幽靈離開改由電腦控制、豆豆離開＝幽靈方贏
+            mz_leave(t, i)
             return
         if t["phase"] == "playing" and t["game"] == "dodge":   # 躲彈幕：離開不中斷，視同淘汰，到場上沒有活人為止
             dg_leave(t, i, int(time.time() * 1000))
@@ -1754,7 +1757,7 @@ def ty_unit(t):
 
 # 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 # 這裡記在記憶體（重啟就清掉），Worker 版記在島的 storage；table 畫面帶 board 給客戶端顯示。與 worker 的 boardMerge 同一套
-BOARD_GAMES = {"typing", "zhtyping", "dodge", "mage", "arcade"}   # 街機方塊：只記單人模式（使用者定）
+BOARD_GAMES = {"typing", "zhtyping", "dodge", "mage", "arcade", "maze"}   # 街機方塊／豆豆迷宮：只記單人模式（使用者定）
 BOARD_N = 3
 BOARDS = {}
 
@@ -4094,7 +4097,155 @@ def ar_info(t):
     return {"cabs": cabs, "inv": bool(g and g["phase"] == "invite" and len(g["mem"]) < AR_CABS),
             "playing": [s["cid"] for s in t["seats"] if ar_playing(t, s)]}
 
-GAME_START = {"arcade": lambda t: None, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+# ---- 豆豆迷宮（吃豆迷宮類；第十四桌 t14，2026-11-13，使用者要求）：1～5 人，一人當豆豆、其他人當幽靈 ----
+# 1 人＝單人模式：自己當豆豆、對 4 隻電腦幽靈，一關接一關到命用完，分數進排行榜（使用者定）；
+# 2～5 人＝對抗：桌主（第一位入座的人）在開局前指定誰當豆豆（預設自己，使用者定），其他人依序當幽靈、空的幽靈由電腦控制；
+#   豆子吃光＝豆豆方贏，3 條命用完（或時間到）＝幽靈方贏，不進排行榜。進行中幽靈離開改由電腦控制、豆豆離開＝幽靈方贏。
+# 遊戲本身在客戶端跑：豆豆那台是權威，伺服器只轉發豆豆的快照（ms → tms）與幽靈玩家的位置（mp → tmp），並收結算（over）。
+# 與 worker/src/index.js 的 mz* 同一套，改規則兩邊一起改。
+MZ_GHOSTS = 4
+MZ_COUNTDOWN_MS, MZ_SOLO_COUNTDOWN_MS = 3000, 1500
+MZ_VS_MS = 240000              # 對抗一局的時間上限（豆豆那台到時間就結算；伺服器多等 20 秒還沒結算就自己結）
+MZ_XP, MZ_XP_MIN = 4, 3000     # 單人 ≥ MZ_XP_MIN 分、對抗贏的那一方 +MZ_XP（助手先訂的數值）
+MZ_SCORE_MAX = 99999999
+_MZ_HEX = re.compile(r"^[0-9a-f]{1,120}$")
+
+def _mz_int(v, lo, hi):
+    return type(v) is int and lo <= v <= hi
+
+def mz_pac_idx(t):
+    pc = t.get("pac_cid")
+    for i, s in enumerate(t["seats"]):
+        if s["cid"] is not None and s["cid"] == pc:
+            return i
+    return 0
+
+def mz_set_pac(t, cid, v):
+    """桌主在開局前指定誰當豆豆；改了大家要重新準備。"""
+    role, i = tbl_find(t, cid)
+    if t["game"] != "maze" or role != "seat" or i != 0 or t["phase"] != "lobby" or not _mz_int(v, 0, len(t["seats"]) - 1) or mz_pac_idx(t) == v:
+        return
+    t["pac_cid"] = t["seats"][v]["cid"]
+    for s in t["seats"]:
+        s["ready"] = False
+    tbl_log(t, f"{t['seats'][0]['name']} 指定 {t['seats'][v]['name']} 當豆豆")
+
+def mz_start(t):
+    now = int(time.time() * 1000)
+    n, pac = len(t["seats"]), mz_pac_idx(t)
+    gh = [k for k in range(n) if k != pac][:MZ_GHOSTS]
+    gh += [-1] * (MZ_GHOSTS - len(gh))
+    t["g"] = {"seed": random.getrandbits(31), "t0": now + (MZ_SOLO_COUNTDOWN_MS if n == 1 else MZ_COUNTDOWN_MS), "pac": pac, "gh": gh, "solo": n == 1}
+    t["result"], t["phase"] = None, "playing"
+    for s in t["seats"]:
+        s.update(ready=False, left=False, sc=0, lvl=1)
+    tbl_log(t, f"{t['seats'][0]['name']} 開始挑戰（單人）" if n == 1 else f"對抗開始！{t['seats'][pac]['name']} 當豆豆，{n - 1} 人當幽靈")
+
+def mz_finish(t, win, why, ct=None):
+    g = t.get("g")
+    if not g:
+        return
+    stay = [s for s in t["seats"] if not s.get("left")]
+    pac_seat = t["seats"][g["pac"]]
+    if g["solo"]:
+        s = t["seats"][0]
+        if s.get("left"):
+            t["result"] = {"aborted": True, "text": f"{s['name']} 離開了，這一局不算"}
+        else:
+            t["result"] = {"solo": True, "text": f"挑戰結束！{s['name']} {s['sc']} 分（第 {s['lvl']} 關）", "rid": random.getrandbits(32),
+                           "ranking": [{"name": s["name"], "uid": s.get("uid"), "score": s["sc"], "lvl": s["lvl"], "left": False}],
+                           "xp": [MZ_XP if x["sc"] >= MZ_XP_MIN else 0 for x in stay]}
+            if s["sc"] > 0:
+                board_record(t, [(s["name"], s["sc"], s.get("uid"))])   # 只有單人模式進排行榜（使用者定）
+    else:
+        ranking = []
+        for k, s in enumerate(t["seats"]):
+            gk = g["gh"].index(k) if k in g["gh"] else -1
+            ranking.append({"name": s["name"], "uid": s.get("uid"), "role": "pac" if k == g["pac"] else "ghost",
+                            "score": s["sc"] if k == g["pac"] else (ct[gk] if ct and gk >= 0 else 0), "left": bool(s.get("left"))})
+        ranking.sort(key=lambda r: 0 if r["role"] == "pac" else 1)
+        xp = [MZ_XP if ((s is pac_seat) == (win == "pac")) else 0 for s in stay]   # 中途離開的人不給 XP；依「留下來的座位」順序
+        t["result"] = {"win": win, "text": f"{'豆豆方獲勝' if win == 'pac' else '幽靈方獲勝'}！（{why}）", "rid": random.getrandbits(32), "ranking": ranking, "xp": xp}
+    tbl_log(t, t["result"]["text"])
+    t["seats"] = stay
+    tbl_reset_seats(t)
+    t["g"] = None
+
+def mz_tick(t, now):
+    """豆豆那台當掉、沒回報結算：對抗的時間上限過了 20 秒，伺服器自己結（幽靈方贏）。"""
+    g = t.get("g")
+    if t["game"] == "maze" and t["phase"] == "playing" and g and not g["solo"] and now > g["t0"] + MZ_VS_MS + 20000:
+        mz_finish(t, "ghost", "時間到")
+        return True
+    return False
+
+def mz_leave(t, i):
+    """遊戲進行中有人離開：幽靈→改由電腦控制，遊戲繼續；豆豆→幽靈方贏（單人＝這局不算）。"""
+    s, g = t["seats"][i], t["g"]
+    s["left"], s["cid"] = True, None
+    if i == g["pac"]:
+        mz_finish(t, "ghost", f"{s['name']}（豆豆）離開了")
+        return
+    if i in g["gh"]:
+        g["gh"][g["gh"].index(i)] = -1
+    tbl_log(t, f"{s['name']} 離開了，那隻幽靈改由電腦控制")
+
+def mz_snap(msg):
+    """豆豆的快照檢查（欄位見 worker 的 mzSnap）；不合法回 None。"""
+    p, g, d = msg.get("p"), msg.get("g"), msg.get("d")
+    def pt(v):
+        return isinstance(v, list) and len(v) >= 3 and _mz_int(v[0], -20, 400) and _mz_int(v[1], -20, 400) and _mz_int(v[2], -1, 3)
+    if not pt(p) or not isinstance(g, list) or len(g) != MZ_GHOSTS or not all(pt(x) and len(x) >= 4 and _mz_int(x[3], 0, 3) for x in g):
+        return None
+    if not isinstance(d, str) or not _MZ_HEX.match(d):
+        return None
+    for k, lo, hi in (("pw", 0, 60000), ("sc", 0, MZ_SCORE_MAX), ("lv", 0, 9), ("lvl", 1, 999), ("rs", 0, 100000), ("fz", 0, 10000), ("bn", 0, 1)):
+        if not _mz_int(msg.get(k), lo, hi):
+            return None
+    return {"p": p[:3], "g": [x[:4] for x in g], "d": d, "pw": msg["pw"], "sc": msg["sc"], "lv": msg["lv"], "lvl": msg["lvl"], "rs": msg["rs"], "fz": msg["fz"], "bn": msg["bn"]}
+
+def mz_relay(t, cid, msg):
+    """快照／幽靈位置：回要轉發的 [(cid, msg)]（給同桌其他人與觀戰者）。"""
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "maze" or role != "seat" or t["phase"] != "playing" or not g:
+        return []
+    data = None
+    if msg.get("a") == "ms" and i == g["pac"]:
+        d = mz_snap(msg)
+        if d is None:
+            return []
+        t["seats"][i]["sc"], t["seats"][i]["lvl"] = d["sc"], d["lvl"]
+        data = dict(t="tms", i=i, **d)
+    elif msg.get("a") == "mp" and i in g["gh"]:
+        x, y, dd, m = msg.get("x"), msg.get("y"), msg.get("d"), msg.get("m")
+        if not (_mz_int(x, -20, 400) and _mz_int(y, -20, 400) and _mz_int(dd, -1, 3) and _mz_int(m, 0, 3)):
+            return []
+        data = {"t": "tmp", "i": i, "k": g["gh"].index(i), "x": x, "y": y, "d": dd, "m": m}
+    if data is None:
+        return []
+    return [(m["cid"], data) for m in t["seats"] + t["specs"] if m["cid"] is not None and m["cid"] != cid]
+
+def mz_over(t, cid, msg):
+    """豆豆那台回報結束：單人＝命用完（帶 lvl）；對抗＝win（豆子吃光）或沒有（命用完／tu 時間到），ct＝各幽靈位置抓到幾次。"""
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    sc = msg.get("sc")
+    if t["game"] != "maze" or role != "seat" or t["phase"] != "playing" or not g or i != g["pac"] or not _mz_int(sc, 0, MZ_SCORE_MAX):
+        return
+    s = t["seats"][i]
+    s["sc"] = sc
+    if g["solo"]:
+        if _mz_int(msg.get("lvl"), 1, 999):
+            s["lvl"] = msg["lvl"]
+        mz_finish(t, None, "命用完了")
+        return
+    ct = msg.get("ct")
+    ct = ct if isinstance(ct, list) and len(ct) == MZ_GHOSTS and all(_mz_int(x, 0, 99) for x in ct) else None
+    win = msg.get("win") is True
+    mz_finish(t, "pac" if win else "ghost", "豆子全部吃光" if win else ("時間到" if msg.get("tu") is True else "豆豆的命用完了"), ct)
+
+GAME_START = {"arcade": lambda t: None, "maze": mz_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
@@ -4114,6 +4265,12 @@ def tbl_view(t, cid):
             seats[k].update(lives=s.get("lives", 0), died=s.get("died"), left=bool(s.get("left")), bonus=s.get("bonus", 0))
         if g and playing:
             v["dg"] = {"seed": g["seed"], "t0": g["t0"], "dur": DG_DUR, "sn": int(time.time() * 1000), "n": g["n"], "taken": list(g["taken"]), "fx": list(g["fx"])}
+    elif t["game"] == "maze":   # 豆豆迷宮：誰當豆豆（開局前＝桌主指定的人）、分數／關卡／離開；進行中附上 seed、開始時間、伺服器時間、幽靈位置分配
+        v["pac"] = g["pac"] if (g and playing) else mz_pac_idx(t)
+        for k, s in enumerate(t["seats"]):
+            seats[k].update(sc=s.get("sc", 0), lvl=s.get("lvl", 1), left=bool(s.get("left")))
+        if g and playing:
+            v["mz"] = {"seed": g["seed"], "t0": g["t0"], "sn": int(time.time() * 1000), "pac": g["pac"], "gh": list(g["gh"]), "solo": g["solo"], "lim": MZ_VS_MS}
     elif t["game"] == "mage":   # 見習驅魔師：血量／擊殺數／倒下／離開；進行中附上 seed、難度、人數、已擊殺的幽靈編號、Boss 血量與被打中的次數
         v["diff"] = t.get("diff", 0)
         for k, s in enumerate(t["seats"]):
@@ -5470,6 +5627,13 @@ class Room:
                     return [], None, None
                 before = t.get("result")
                 now_ms = int(time.time() * 1000)
+                if t["game"] == "maze" and a in ("ms", "mp"):   # 豆豆迷宮：豆豆的快照／幽靈玩家的位置，只轉發；對抗時間上限過了才順便結算
+                    out = mz_relay(t, cid, msg)
+                    if not mz_tick(t, now_ms):
+                        return out, None, None
+                    self._table_notify_locked(t, out)
+                    self._table_collect_xp(t, before)
+                    return out, self.table_info_msg(c.get("table_terr") or terr), c.get("table_terr") or terr
                 if a == "pos":   # 躲彈幕：位置回報，轉發給同桌其他人（不通知畫面、不廣播 tblinfo）
                     role, i = tbl_find(t, cid)
                     if t["game"] == "dodge" and role == "seat" and t["phase"] == "playing" and not t["seats"][i]["out"]:
@@ -5507,6 +5671,7 @@ class Room:
                     ty_check_end(t, now_ms)
                     it_tick(t, now_ms)   # 秘藥情報戰：識破時間過了就生效、逾時自動處理
                     mg_changed = mg_tick(t, now_ms)   # 見習驅魔師：沒被消除的幽靈扣血、勝負
+                    mz_tick(t, now_ms)   # 豆豆迷宮：對抗超過時間上限還沒結算
                     if t["game"] == "intel" and a in IT_MSGS:   # 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
                         it_msg(t, cid, msg, now_ms)
                     elif t["game"] == "arcade":   # 街機方塊：單人／聯機邀請／接受／拒絕／開始／結束
@@ -5557,6 +5722,10 @@ class Room:
                         mg_kill(t, cid, msg.get("i"), msg.get("p"), now_ms)
                     elif a == "boss":   # 見習驅魔師：我畫對了 Boss 的第 k 個符號
                         mg_boss_hit(t, cid, msg.get("k"), now_ms)
+                    elif a == "mpac":   # 豆豆迷宮：桌主指定誰當豆豆
+                        mz_set_pac(t, cid, msg.get("v"))
+                    elif a == "over" and t["game"] == "maze":   # 豆豆迷宮：豆豆那台回報結束
+                        mz_over(t, cid, msg)
                     elif a == "mdiff":   # 見習驅魔師：桌主選難度
                         mg_set_diff(t, cid, msg.get("v"))
                     elif a == "sync":   # 見習驅魔師：客戶端每秒一次，讓伺服器結算沒被消除的幽靈（上面已 mg_tick）；沒有變化就不通知畫面
@@ -5935,7 +6104,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                             xp_grant(c, amt, "mob")
                 elif t == "tbl":   # 和平島遊戲桌（join／leave／ready／sit／draw）；牌局邏輯全在伺服器
                     now = time.time()
-                    if msg.get("a") in ("pos", "word", "tb"):   # 躲彈幕的位置回報、英文打字競賽的分數回報：自己的限流，不影響 hit／finish 等操作
+                    if msg.get("a") in ("pos", "word", "tb", "ms", "mp"):   # 躲彈幕的位置回報、英文打字競賽的分數回報：自己的限流，不影響 hit／finish 等操作
                         if now - last_pos < TBL_POS_CD:
                             continue
                         last_pos = now

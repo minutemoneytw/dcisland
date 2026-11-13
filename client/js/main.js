@@ -4376,7 +4376,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); arStop(); unStopTimer(); bkStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); unStopTimer(); bkStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
   rulesShow(false); leaveAsk(false);
   $('tableBox').classList.add('hidden');
 }
@@ -4501,6 +4501,7 @@ function buildTable() {
   if (tb?.game === 'blokus') { buildBlokus(box, v, mk, gd); return; }   // 方塊拼圖有自己的畫面（棋盤＋方塊托盤）
   if (tb?.game === 'mage') { buildMage(box, v, mk, gd); return; }   // 見習驅魔師有自己的畫面（畫符號的場地）
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
+  if (tb?.game === 'maze') { buildMaze(box, v, mk, gd); return; }   // 豆豆迷宮有自己的畫面（迷宮）
   if (tb?.game === 'uno') { buildUno(box, v, mk, gd); return; }   // UNO 有自己的畫面（牌桌）
   if (tb?.game === 'typing' || tb?.game === 'zhtyping') { buildTyping(box, v, mk, gd); return; }   // 英打／中文打字競賽有自己的畫面（題目＋分數）
   if (tb?.game === 'intel') { buildIntel(box, v, mk, gd); return; }     // 秘藥情報戰有自己的畫面（情報區＋密函）
@@ -5336,6 +5337,510 @@ function buildDodge(box, v, mk, gd) {
     cv.id = 'dgCanvas'; cv.width = DG_W; cv.height = DG_H; cv.className = 'dodge-canvas';
     wrap.appendChild(cv); wrap.appendChild(mk('div', 'dodge-time')); wrap.lastChild.id = 'dgTime';
     box.appendChild(wrap);
+  }
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 豆豆迷宮（吃豆迷宮類；第十四桌 t14，2026-11-13，使用者要求）：1～5 人，一人當「豆豆」吃光迷宮裡的豆子，其他人當「幽靈」抓豆豆 ----
+// 1 人＝單人：自己當豆豆、對 4 隻電腦幽靈，一關接一關到命用完，分數進排行榜；2～5 人＝對抗：桌主指定誰當豆豆，其他人當幽靈（不足 4 隻由電腦補），
+// 豆子吃光豆豆方贏、命用完或時間到幽靈方贏。**豆豆那台是權威**：豆子、能量、被抓、吃幽靈、電腦幽靈都在那台算，約 10 次／秒送快照 ms（伺服器轉成 tms）；
+// 幽靈玩家各自在本機移動、送位置 mp（伺服器轉成 tmp）；豆豆那台用收到的位置判斷碰撞（延遲大時偶爾「明明沒碰到卻被抓」，使用者接受）。
+// 迷宮、角色外型都是原創（不是任何現有遊戲的關卡／角色）；協定與欄位見 notes「和平島與遊戲桌」。
+const MZ_MAP = [
+  '#####################',
+  '#o.......###.......o#',
+  '#.##.###.###.###.##.#',
+  '#...................#',
+  '#.##.#.#######.#.##.#',
+  '#....#....#....#....#',
+  '####.####.#.####.####',
+  '####.#.........#.####',
+  '####.#.###-###.#.####',
+  '.......#GGGGG#.......',
+  '####.#.#######.#.####',
+  '####.#.........#.####',
+  '####.#.#######.#.####',
+  '#.........#.........#',
+  '#.##.####.#.####.##.#',
+  '#o.#.............#.o#',
+  '##.#.#.#######.#.#.##',
+  '#....#....#....#....#',
+  '#.#######.#.#######.#',
+  '#...................#',
+  '#####################',
+];
+const MZ_W = 21, MZ_H = 21, MZ_T = 20, MZ_HUD = 30;   // 迷宮 21×21 格、每格 20px、上方 30px 的分數列
+const MZ_DX = [0, 1, 0, -1], MZ_DY = [-1, 0, 1, 0];   // 方向 0 上、1 右、2 下、3 左
+const MZ_TUN_Y = 9, MZ_PAC0 = [10, 15], MZ_FRUIT = [10, 11];   // 左右相通的隧道列、豆豆起點、獎勵果實的位置
+const MZ_GHOST0 = [[10, 7], [9, 9], [10, 9], [11, 9]];        // 4 隻幽靈的起點（第 1 隻在門外，其他在家裡）
+const MZ_GCOL = ['#ff6a6a', '#b07aff', '#5aa8ff', '#ffb050'];  // 小紅、小紫、小藍、小橘
+const MZ_GNAME = ['小紅', '小紫', '小藍', '小橘'];
+const MZ_SCATTER = [[20, -2], [0, -2], [20, 22], [0, 22]];      // 電腦幽靈「散開」時各自去的角落
+const MZ_PHASES = [6, 20, 5, 20, 5, 1e9];                       // 電腦幽靈：散開／追擊交替的秒數
+const MZ_KEYS = { arrowup: 0, w: 0, arrowright: 1, d: 1, arrowdown: 2, s: 2, arrowleft: 3, a: 3 };
+const MZ_SNAP_MS = 100, MZ_LIVES = 3, MZ_HIT = .7;              // 快照／位置回報間隔、命數、碰撞距離（格）
+const MZ_DOTS = [], MZ_DOT_IDX = new Map();                     // 豆子清單 [x, y, 是不是能量豆]；格子 → 編號（快照的點陣順序）
+for (let y = 0; y < MZ_H; y++) for (let x = 0; x < MZ_W; x++) {
+  const c = MZ_MAP[y][x];
+  if ((c === '.' || c === 'o') && !(x === MZ_PAC0[0] && y === MZ_PAC0[1])) { MZ_DOT_IDX.set(y * MZ_W + x, MZ_DOTS.length); MZ_DOTS.push([x, y, c === 'o']); }
+}
+const mzCell = (x, y) => { if (y === MZ_TUN_Y) x = ((x % MZ_W) + MZ_W) % MZ_W; return x < 0 || x >= MZ_W || y < 0 || y >= MZ_H ? '#' : MZ_MAP[y][x]; };
+// 能不能往 dir 方向走進 (x, y)：牆不行；幽靈的家只有幽靈能進；家門只有往上（出門）或被吃掉的眼睛（回家）能過
+function mzPass(x, y, ghost, eyes, dir) {
+  const c = mzCell(x, y);
+  if (c === '#') return false;
+  if (c === '-') return ghost && (eyes || dir === 0);
+  if (c === 'G') return ghost;
+  return true;
+}
+function mzField(tx, ty, eyes) {   // 到 (tx, ty) 的步數（BFS）：眼睛回家、從家裡出門用
+  const f = new Array(MZ_W * MZ_H).fill(1e9), q = [[tx, ty]];
+  f[ty * MZ_W + tx] = 0;
+  while (q.length) {
+    const [x, y] = q.shift(), d = f[y * MZ_W + x];
+    for (let k = 0; k < 4; k++) {
+      let nx = x + MZ_DX[k]; const ny = y + MZ_DY[k];
+      if (ny === MZ_TUN_Y) nx = (nx + MZ_W) % MZ_W;
+      if (nx < 0 || nx >= MZ_W || ny < 0 || ny >= MZ_H || mzCell(nx, ny) === '#' || !mzPass(x, y, true, eyes, (k + 2) % 4)) continue;
+      const i = ny * MZ_W + nx; if (f[i] > d + 1) { f[i] = d + 1; q.push([nx, ny]); }
+    }
+  }
+  return f;
+}
+const MZ_F_HOME = mzField(10, 9, true), MZ_F_EXIT = mzField(10, 7, false);
+const mzEnt = (x, y, d = -1) => ({ tx: x, ty: y, d, p: 0, want: -1, moving: false, eyes: false, fr: false, rel: 0 });
+const mzPos = e => (e.d >= 0 ? [e.tx + MZ_DX[e.d] * e.p, e.ty + MZ_DY[e.d] * e.p] : [e.tx, e.ty]);
+function mzWrapX(e) { if (e.tx < 0) e.tx += MZ_W; else if (e.tx >= MZ_W) e.tx -= MZ_W; }
+function mzReverse(e) { if (e.d < 0) return; if (e.p > 0) { e.tx += MZ_DX[e.d]; e.ty += MZ_DY[e.d]; mzWrapX(e); e.p = 1 - e.p; } e.d = (e.d + 2) % 4; }
+// 沿格子移動 sp 格／秒：走到格子中心才決定下一步（think 回方向或 −1＝停）；onTile＝每到一格中心呼叫一次
+function mzMove(e, sp, dt, think, ghost, onTile) {
+  let rem = sp * dt;
+  for (let g = 0; g < 12 && rem > 1e-9; g++) {
+    if (e.p === 0) {
+      const nd = think(e);
+      if (nd < 0 || !mzPass(e.tx + MZ_DX[nd], e.ty + MZ_DY[nd], ghost, e.eyes, nd)) { e.moving = false; return; }
+      e.d = nd; e.moving = true;
+    }
+    const need = 1 - e.p;
+    if (rem < need) { e.p += rem; return; }
+    rem -= need; e.tx += MZ_DX[e.d]; e.ty += MZ_DY[e.d]; e.p = 0; mzWrapX(e);
+    if (onTile) onTile(e);
+  }
+}
+// 玩家操作的角色：按的方向能走就轉（可以提前按，到路口才轉），不能走就照原方向，撞牆就停
+const mzSteer = ghost => e => (e.want >= 0 && mzPass(e.tx + MZ_DX[e.want], e.ty + MZ_DY[e.want], ghost, e.eyes, e.want) ? e.want : e.d >= 0 && mzPass(e.tx + MZ_DX[e.d], e.ty + MZ_DY[e.d], ghost, e.eyes, e.d) ? e.d : -1);
+function mzFieldDir(e, f, eyes) {
+  let best = -1, bd = f[e.ty * MZ_W + e.tx];
+  for (let k = 0; k < 4; k++) {
+    let nx = e.tx + MZ_DX[k]; const ny = e.ty + MZ_DY[k];
+    if (ny === MZ_TUN_Y) nx = (nx + MZ_W) % MZ_W;
+    if (nx < 0 || nx >= MZ_W || ny < 0 || ny >= MZ_H || !mzPass(nx, ny, true, eyes, k)) continue;
+    const d = f[ny * MZ_W + nx]; if (d < bd) { bd = d; best = k; }
+  }
+  return best;
+}
+const mzInHouse = e => { const c = mzCell(e.tx, e.ty); return c === 'G' || c === '-'; };
+function mzTarget(M, k) {   // 電腦幽靈的目標格：散開時去自己的角落；追擊時各有個性（直追／包抄前方／從後面堵／離遠才追）
+  if (M.phase % 2 === 0) return MZ_SCATTER[k];
+  const P = M.pac, d = P.d >= 0 ? P.d : 3, px = P.tx, py = P.ty, e = M.ghosts[k];
+  if (k === 1) return [px + MZ_DX[d] * 4, py + MZ_DY[d] * 4];
+  if (k === 2) return [px - MZ_DX[d] * 3, py - MZ_DY[d] * 3];
+  if (k === 3 && Math.hypot(e.tx - px, e.ty - py) < 6) return MZ_SCATTER[3];
+  return [px, py];
+}
+function mzGhostThink(M, k, e) {
+  if (e.eyes) return mzFieldDir(e, MZ_F_HOME, true);
+  if (mzInHouse(e)) return M.clock >= e.rel ? mzFieldDir(e, MZ_F_EXIT, false) : -1;
+  const opts = [];
+  for (const k2 of [0, 3, 2, 1]) if (k2 !== (e.d + 2) % 4 && mzPass(e.tx + MZ_DX[k2], e.ty + MZ_DY[k2], true, false, k2)) opts.push(k2);
+  if (!opts.length) return (e.d + 2) % 4;
+  if (e.fr) return opts[Math.floor(Math.random() * opts.length)];
+  const [gx, gy] = mzTarget(M, k);
+  let best = opts[0], bd = 1e9;
+  for (const k2 of opts) { const nx = e.tx + MZ_DX[k2], ny = e.ty + MZ_DY[k2], d = (nx - gx) ** 2 + (ny - gy) ** 2; if (d < bd) { bd = d; best = k2; } }
+  return best;
+}
+const mzLvMul = M => 1 + Math.min(.3, (M.lvl - 1) * .05);
+const mzTunnel = (x, y) => y === MZ_TUN_Y && (x <= 4 || x >= 16);
+function mzGhostSpd(M, e, fr) { const [x, y] = mzPos(e); if (e.eyes) return 11; let s = fr ? 3.3 : 5.5 * mzLvMul(M); if (mzTunnel(Math.round(x), Math.round(y))) s *= .55; return s; }
+const mzPowerDur = M => (M.solo ? Math.max(2.5, 7 - (M.lvl - 1) * .8) : 6);
+const mzRelDelay = (M, k) => (M.solo ? [0, 2, 5, 8][k] * Math.max(.3, 1 - (M.lvl - 1) * .15) : [0, 1.5, 3, 4.5][k]);
+function mzDotsHex(d) { let s = ''; for (let i = 0; i < d.length; i += 4) { let v = 0; for (let b = 0; b < 4; b++) if (d[i + b]) v |= 1 << b; s += v.toString(16); } return s; }
+function mzDotsFromHex(h, d) { for (let i = 0; i < d.length; i++) d[i] = (parseInt(h[i >> 2] || '0', 16) >> (i & 3)) & 1; }
+const mzNow = M => (Date.now() + M.off - M.t0) / 1000;   // 開局後的秒數（開局前是負的＝倒數）
+const mzRec = (x, y) => ({ x, y, tx: x, ty: y, d: -1, m: 0, has: false });
+function mzRecSet(r, x, y, d, m) { r.tx = x; r.ty = y; if (!r.has || Math.abs(x - r.x) > 3 || Math.abs(y - r.y) > 3) { r.x = x; r.y = y; } r.d = d; r.m = m; r.has = true; }
+function mzRecStep(r, dt) { const a = 1 - Math.exp(-dt * 14); r.x += (r.tx - r.x) * a; r.y += (r.ty - r.y) * a; }
+// 一局開始（伺服器給了 mz）：建立本機狀態。role＝pac（我是豆豆，權威）／ghost（我是幽靈玩家）／spec（觀戰或還沒輪到）
+function mzStart(v) {
+  const z = v.mz, me = v.role === 'seat' ? v.me : -1;
+  const role = me >= 0 && me === z.pac ? 'pac' : me >= 0 && z.gh.includes(me) ? 'ghost' : 'spec';
+  const M = S.mz = {
+    key: z.seed + ':' + z.t0, role, solo: z.solo, t0: z.t0, off: z.sn - Date.now(), lim: (z.lim || 240000) / 1000, gh: [...z.gh], myK: z.gh.indexOf(me),
+    dots: new Uint8Array(MZ_DOTS.length).fill(1), left: MZ_DOTS.length, eaten: 0, sc: 0, lv: MZ_LIVES, lvl: 1, pw: 0, chain: 0, fz: 0, dead: 0, clear: 0,
+    clock: 0, modeT: 0, phase: 0, rs: 0, ct: [0, 0, 0, 0], bonus: 0, bonusN: 0, extra: false, over: false, snapAt: 0, anim: 0, pops: [], last: performance.now(),
+    pac: mzEnt(...MZ_PAC0, 3), ghosts: MZ_GHOST0.map(([x, y]) => mzEnt(x, y, -1)),
+    hm: MZ_GHOST0.map(([x, y]) => ({ x, y, d: -1, rm: 0, mode: 0, saw: false, t: 0, has: false })),   // 豆豆那台：幽靈玩家的最新位置與狀態
+    rPac: mzRec(...MZ_PAC0), rG: MZ_GHOST0.map(([x, y]) => mzRec(x, y)), rH: MZ_GHOST0.map(([x, y]) => mzRec(x, y)),   // 其他人：畫面上的位置（平滑）
+    mine: role === 'ghost' ? mzEnt(...MZ_GHOST0[z.gh.indexOf(me)], -1) : null, myMode: 0, reviveAt: -9, fzShow: 0,
+  };
+  M.ghosts.forEach((e, k) => { e.rel = mzRelDelay(M, k); });
+  if (!S.mzRaf) S.mzRaf = requestAnimationFrame(mzFrame);
+}
+function mzStop() { S.mz = null; if (S.mzRaf) { cancelAnimationFrame(S.mzRaf); S.mzRaf = 0; } }
+function mzResetPos(M) {   // 被抓後／過關：大家回起點
+  M.pac = mzEnt(...MZ_PAC0, 3);
+  M.ghosts = MZ_GHOST0.map(([x, y], k) => { const e = mzEnt(x, y, -1); e.rel = M.clock + mzRelDelay(M, k); return e; });
+  M.hm.forEach((h, k) => { h.x = MZ_GHOST0[k][0]; h.y = MZ_GHOST0[k][1]; h.mode = 0; h.saw = false; });
+  M.pw = 0; M.chain = 0; M.phase = 0; M.modeT = 0; M.rs++; M.fz = 1.5;
+}
+function mzEnd(M, win, tu) {
+  if (M.over) return;
+  M.over = true; mzSnap(M, true);
+  S.net?.tbl?.({ a: 'over', sc: M.sc, lvl: M.lvl, win: !!win, tu: !!tu, ct: M.ct.map(n => Math.min(99, n)) });
+}
+function mzPower(M) {
+  M.pw = mzPowerDur(M); M.chain = 0;
+  M.ghosts.forEach((e, k) => { if (M.gh[k] < 0 && !e.eyes) { e.fr = true; if (!mzInHouse(e)) mzReverse(e); } });
+  M.hm.forEach((h, k) => { if (M.gh[k] >= 0 && h.mode !== 2) h.mode = 1; });
+}
+function mzEat(M, e) {   // 豆豆走到一格的中心：吃豆子／能量豆／獎勵果實
+  const i = MZ_DOT_IDX.get(e.ty * MZ_W + e.tx);
+  if (i != null && M.dots[i]) {
+    M.dots[i] = 0; M.left--; M.eaten++;
+    if (MZ_DOTS[i][2]) { M.sc += 50; mzPower(M); } else M.sc += 10;
+    if (M.eaten === 70 || M.eaten === 140) { M.bonus = M.clock + 9; M.bonusN++; }
+    if (M.left <= 0) { if (M.solo) M.clear = 2; else mzEnd(M, true); }
+  }
+  if (M.bonus > M.clock && e.tx === MZ_FRUIT[0] && e.ty === MZ_FRUIT[1]) {
+    const pts = M.solo ? 100 * M.lvl : 300; M.sc += pts; M.bonus = 0;
+    M.pops.push({ x: e.tx, y: e.ty, t: `+${pts}`, until: performance.now() + 1000 });
+  }
+  if (M.solo && !M.extra && M.sc >= 10000) { M.extra = true; M.lv = Math.min(9, M.lv + 1); M.pops.push({ x: e.tx, y: e.ty - 1, t: '多一條命！', until: performance.now() + 1500 }); }
+}
+const mzDist = (ax, ay, bx, by) => { let dx = Math.abs(ax - bx); if (dx > MZ_W / 2) dx = MZ_W - dx; return Math.hypot(dx, ay - by); };
+function mzPacStep(M, dt) {   // 我是豆豆：整局的權威模擬
+  if (M.over) return;
+  if (M.dead > 0) {   // 被抓的動畫
+    M.dead -= dt;
+    if (M.dead <= 0) { M.dead = 0; if (M.lv <= 0) mzEnd(M, false); else mzResetPos(M); }
+    return;
+  }
+  if (M.clear > 0) {   // 過關（單人）：迷宮閃一下，下一關
+    M.clear -= dt;
+    if (M.clear <= 0) { M.clear = 0; M.lvl++; M.dots.fill(1); M.left = MZ_DOTS.length; M.eaten = 0; M.bonus = 0; mzResetPos(M); }
+    return;
+  }
+  if (M.fz > 0) { M.fz -= dt; return; }
+  M.clock += dt;
+  if (!M.solo && mzNow(M) >= M.lim) { mzEnd(M, false, true); return; }
+  if (M.pw > 0) { M.pw -= dt; if (M.pw <= 0) { M.pw = 0; M.ghosts.forEach(e => { e.fr = false; }); M.hm.forEach(h => { if (h.mode === 1) h.mode = 0; }); } }
+  else { M.modeT += dt; if (M.modeT >= MZ_PHASES[M.phase]) { M.modeT = 0; M.phase = Math.min(M.phase + 1, MZ_PHASES.length - 1); } }
+  const P = M.pac;
+  if (P.p > 0 && P.want === (P.d + 2) % 4) mzReverse(P);
+  mzMove(P, 6 * mzLvMul(M) * (M.pw > 0 ? 1.1 : 1), dt, mzSteer(false), false, e => mzEat(M, e));
+  if (P.moving) M.anim += dt;
+  if (M.over || M.clear > 0) return;
+  M.ghosts.forEach((e, k) => {
+    if (M.gh[k] >= 0) return;
+    mzMove(e, mzGhostSpd(M, e, e.fr), dt, ee => mzGhostThink(M, k, ee), true);
+    if (e.eyes && e.tx === 10 && e.ty === 9 && e.p === 0) { e.eyes = false; e.fr = false; e.rel = 0; }
+  });
+  M.hm.forEach(h => { if (h.mode === 2 && M.clock - h.t > 12) { h.mode = 0; h.saw = false; } });   // 沒收到「回到家」的回報：12 秒後當作已復活
+  const [px, py] = mzPos(P);
+  for (let k = 0; k < 4; k++) {
+    let gx, gy, mode;
+    if (M.gh[k] < 0) { const e = M.ghosts[k]; [gx, gy] = mzPos(e); mode = e.eyes ? 2 : e.fr ? 1 : 0; }
+    else { const h = M.hm[k]; if (!h.has) continue; gx = h.x; gy = h.y; mode = h.rm === 2 ? 2 : h.mode; }
+    if (mode === 2 || mzDist(px, py, gx, gy) >= MZ_HIT) continue;
+    if (mode === 1) {   // 吃掉害怕中的幽靈
+      const pts = 200 << Math.min(M.chain, 3); M.chain++; M.sc += pts;
+      M.pops.push({ x: gx, y: gy, t: String(pts), until: performance.now() + 900 });
+      if (M.gh[k] < 0) { M.ghosts[k].eyes = true; M.ghosts[k].fr = false; } else { const h = M.hm[k]; h.mode = 2; h.saw = false; h.t = M.clock; }
+      M.fz = .35;
+      return;
+    }
+    M.lv--; M.ct[k]++; M.dead = 1.4; M.pw = 0;   // 被抓
+    return;
+  }
+  if (M.bonus && M.bonus <= M.clock) M.bonus = 0;
+}
+function mzSnap(M, force) {   // 豆豆那台：快照給幽靈玩家與觀戰者
+  const now = performance.now();
+  if (!force && now - M.snapAt < MZ_SNAP_MS) return;
+  M.snapAt = now;
+  const r10 = n => Math.round(n * 10), [px, py] = mzPos(M.pac);
+  const g = M.ghosts.map((e, k) => {
+    if (M.gh[k] < 0) { const [x, y] = mzPos(e); return [r10(x), r10(y), e.d, e.eyes ? 2 : e.fr ? 1 : 0]; }
+    const h = M.hm[k]; return [r10(h.x), r10(h.y), h.d, h.mode];
+  });
+  S.net?.tbl?.({ a: 'ms', p: [r10(px), r10(py), M.pac.d], g, d: mzDotsHex(M.dots), pw: Math.round(M.pw * 1000), sc: M.sc, lv: Math.max(0, M.lv), lvl: M.lvl,
+    rs: M.rs, fz: Math.min(10000, Math.round(Math.max(M.fz, M.dead, M.clear) * 1000)), bn: M.bonus > M.clock ? 1 : 0 });
+}
+function mzGhostStep(M, dt) {   // 我是幽靈玩家：自己移動、回報位置；被吃掉就變成眼睛自動回家
+  const e = M.mine;
+  if (M.fz > 0) { M.fz -= dt; }
+  else {
+    const fr = M.myMode === 1 && !e.eyes;
+    if (!e.eyes && e.p > 0 && e.want === (e.d + 2) % 4) mzReverse(e);
+    mzMove(e, mzGhostSpd(M, e, fr), dt, e.eyes ? ee => mzFieldDir(ee, MZ_F_HOME, true) : mzSteer(true), true);
+    if (e.eyes && e.tx === 10 && e.ty === 9 && e.p === 0) { e.eyes = false; M.reviveAt = performance.now(); }
+  }
+  const now = performance.now();
+  if (now - M.snapAt >= MZ_SNAP_MS) {
+    M.snapAt = now;
+    const [x, y] = mzPos(e);
+    S.net?.tbl?.({ a: 'mp', x: Math.round(x * 10), y: Math.round(y * 10), d: e.d, m: e.eyes ? 2 : 0 });
+  }
+}
+function onNetTms(m) {   // 豆豆的快照（幽靈玩家與觀戰者才收到）
+  const M = S.mz; if (!M || M.role === 'pac') return;
+  M.sc = m.sc; M.lv = m.lv; M.lvl = m.lvl; M.pw = m.pw / 1000; M.bn = m.bn;
+  mzDotsFromHex(m.d, M.dots);
+  mzRecSet(M.rPac, m.p[0] / 10, m.p[1] / 10, m.p[2], 0);
+  m.g.forEach((g, k) => mzRecSet(M.rG[k], g[0] / 10, g[1] / 10, g[2], g[3]));
+  if (m.fz > 0) M.fzShow = m.fz / 1000;
+  if (M.role === 'ghost') {
+    const mine = m.g[M.myK], e = M.mine;
+    if (m.rs !== M.rs) {   // 豆豆被抓後／過關：回起點、凍結
+      M.rs = m.rs; M.mine = mzEnt(...MZ_GHOST0[M.myK], -1); M.mine.want = e.want; M.fz = Math.max(M.fz, m.fz / 1000);
+    } else {
+      if (m.fz > 0) M.fz = Math.max(M.fz, m.fz / 1000);
+      if (mine[3] === 2 && !e.eyes && performance.now() - M.reviveAt > 1000) e.eyes = true;   // 被豆豆吃掉了
+    }
+    M.myMode = mine[3];
+  } else M.rs = m.rs;
+}
+function onNetTmp(m) {   // 幽靈玩家的位置（k＝第幾隻幽靈）
+  const M = S.mz; if (!M || m.k < 0 || m.k > 3) return;
+  if (M.role === 'pac') {
+    const h = M.hm[m.k];
+    h.x = m.x / 10; h.y = m.y / 10; h.d = m.d; h.rm = m.m; h.has = true;
+    if (h.mode === 2) { if (m.m === 2) h.saw = true; else if (h.saw) { h.mode = 0; h.saw = false; } }   // 看過「眼睛」之後又回到一般＝回到家復活了
+  } else if (m.k !== M.myK) mzRecSet(M.rH[m.k], m.x / 10, m.y / 10, m.d, m.m);
+}
+function mzKey(e) {   // 遊戲畫面開著時的按鍵（回 true＝已處理）
+  const M = S.mz, d = MZ_KEYS[e.key.toLowerCase()];
+  if (!M || d == null || M.role === 'spec') return false;
+  e.preventDefault();
+  (M.role === 'pac' ? M.pac : M.mine).want = d;
+  return true;
+}
+function mzFrame(ts) {
+  const M = S.mz, v = S.tableView;
+  if (!M || !S.tableOpen || !v || v.phase !== 'playing' || v.game !== 'maze') { S.mzRaf = 0; if (S.tableOpen && v?.game === 'maze') buildTable(); return; }
+  S.mzRaf = requestAnimationFrame(mzFrame);
+  const now = performance.now(), dt = Math.max(0, Math.min(.05, (now - M.last) / 1000)); M.last = now;
+  const t = mzNow(M);
+  if (t >= 0) {
+    if (M.role === 'pac') { mzPacStep(M, dt); if (!M.over) mzSnap(M, false); }
+    else if (M.role === 'ghost') mzGhostStep(M, dt);
+  }
+  if (M.fzShow > 0) M.fzShow -= dt;
+  for (const r of [M.rPac, ...M.rG, ...M.rH]) mzRecStep(r, dt);
+  if (M.role !== 'pac' && Math.hypot(M.rPac.tx - M.rPac.x, M.rPac.ty - M.rPac.y) > .02) M.anim += dt;
+  mzDraw(M, t, v);
+}
+// ---- 畫面 ----
+let MZ_WALLS = null;
+function mzWallLayer() {   // 迷宮牆（只畫一次）：深色牆面＋貼著通道那一側的亮青色線
+  if (MZ_WALLS) return MZ_WALLS;
+  const c = document.createElement('canvas'); c.width = MZ_W * MZ_T; c.height = MZ_H * MZ_T;
+  const g = c.getContext('2d');
+  g.fillStyle = '#06101c'; g.fillRect(0, 0, c.width, c.height);
+  for (let y = 0; y < MZ_H; y++) for (let x = 0; x < MZ_W; x++) {
+    const ch = MZ_MAP[y][x], X = x * MZ_T, Y = y * MZ_T;
+    if (ch === '-') { g.fillStyle = '#ff8ad8'; g.fillRect(X, Y + MZ_T / 2 - 2, MZ_T, 4); continue; }
+    if (ch !== '#') continue;
+    g.fillStyle = '#0e2a3a'; g.fillRect(X, Y, MZ_T, MZ_T);
+    g.fillStyle = '#2fc8b0';
+    const open = (nx, ny) => nx >= 0 && nx < MZ_W && ny >= 0 && ny < MZ_H && MZ_MAP[ny][nx] !== '#';
+    if (open(x, y - 1)) g.fillRect(X, Y, MZ_T, 2);
+    if (open(x, y + 1)) g.fillRect(X, Y + MZ_T - 2, MZ_T, 2);
+    if (open(x - 1, y)) g.fillRect(X, Y, 2, MZ_T);
+    if (open(x + 1, y)) g.fillRect(X + MZ_T - 2, Y, 2, MZ_T);
+  }
+  return (MZ_WALLS = c);
+}
+const mzPx = (x, y) => [(x + .5) * MZ_T, MZ_HUD + (y + .5) * MZ_T];
+function mzDrawBean(g, x, y, d, open, scale = 1) {   // 豆豆：圓滾滾的綠豆子，頭上一片小芽，眼睛看著前進方向，嘴巴一開一合
+  const [cx, cy] = mzPx(x, y), r = 8 * scale, fx = d >= 0 ? MZ_DX[d] : 0, fy = d >= 0 ? MZ_DY[d] : 0;
+  g.save();
+  g.fillStyle = '#4a9a30'; g.beginPath(); g.ellipse(cx + 3 * scale, cy - r - 1 * scale, 3.5 * scale, 2 * scale, -.5, 0, Math.PI * 2); g.fill();   // 小芽
+  g.strokeStyle = '#3a7a20'; g.lineWidth = 1.5 * scale; g.beginPath(); g.moveTo(cx, cy - r + 1); g.lineTo(cx + 1.5 * scale, cy - r - 1.5 * scale); g.stroke();
+  g.fillStyle = '#7ad048'; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#3a7a20'; g.lineWidth = 1.2; g.stroke();
+  g.fillStyle = 'rgba(255,255,255,.35)'; g.beginPath(); g.arc(cx - 3 * scale, cy - 3 * scale, 2.2 * scale, 0, Math.PI * 2); g.fill();
+  if (scale > .3) {
+    for (const sx of [-3.2, 3.2]) {
+      const ex = cx + sx * scale + fx * 1.5 * scale, ey = cy - 1.5 * scale + fy * 1.5 * scale;
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(ex, ey, 2.4 * scale, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#1a2a10'; g.beginPath(); g.arc(ex + fx * 1, ey + fy * 1, 1.2 * scale, 0, Math.PI * 2); g.fill();
+    }
+    g.fillStyle = '#2a4a18'; g.beginPath(); g.ellipse(cx + fx * 3 * scale, cy + 3.5 * scale + fy * 1.5 * scale, 2.6 * scale, (.6 + 2.2 * open) * scale, 0, 0, Math.PI * 2); g.fill();
+  }
+  g.restore();
+}
+function mzDrawWisp(g, x, y, d, col, mode, flash, t) {   // 小幽靈：圓頭＋往後飄的尾巴（水滴形）；害怕時變深藍、快結束時閃白；被吃掉只剩眼睛
+  const [cx, cy] = mzPx(x, y), fx = d >= 0 ? MZ_DX[d] : 0, fy = d >= 0 ? MZ_DY[d] : 1;
+  const tx = d >= 0 ? -fx : 0, ty = d >= 0 ? -fy : 1, nx = -ty, ny = tx, wig = Math.sin(t * 10) * 2.5;
+  g.save();
+  if (mode !== 2) {
+    g.fillStyle = mode === 1 ? (flash ? '#e8eeff' : '#3a4ad8') : col;
+    g.beginPath();
+    g.moveTo(cx + nx * 7.5, cy + ny * 7.5);
+    g.quadraticCurveTo(cx + tx * 9 + nx * 4, cy + ty * 9 + ny * 4, cx + tx * 14 + nx * wig, cy + ty * 14 + ny * wig);
+    g.quadraticCurveTo(cx + tx * 9 - nx * 4, cy + ty * 9 - ny * 4, cx - nx * 7.5, cy - ny * 7.5);
+    g.fill();
+    g.beginPath(); g.arc(cx, cy, 7.5, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.3)'; g.beginPath(); g.arc(cx - 2.5, cy - 3, 2, 0, Math.PI * 2); g.fill();
+  }
+  if (mode === 1) {   // 害怕：小小的眼睛＋波浪嘴
+    g.fillStyle = flash ? '#d03a3a' : '#ffe0a0';
+    g.fillRect(cx - 3.5, cy - 2.5, 2, 2); g.fillRect(cx + 1.5, cy - 2.5, 2, 2);
+    g.strokeStyle = g.fillStyle; g.lineWidth = 1.2; g.beginPath();
+    for (let i = 0; i <= 6; i++) { const px = cx - 4 + i * 1.33, py = cy + 2.5 + (i % 2 ? -1 : 1); i ? g.lineTo(px, py) : g.moveTo(px, py); }
+    g.stroke();
+  } else {
+    for (const sx of [-3, 3]) {
+      const ex = cx + sx + fx * 1.5, ey = cy - 1.5 + (d >= 0 ? fy : 0) * 1.5;
+      g.fillStyle = '#fff'; g.beginPath(); g.ellipse(ex, ey, 2.3, 2.8, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = mode === 2 ? '#3a4ad8' : '#1a1a2a'; g.beginPath(); g.arc(ex + fx * 1.1, ey + (d >= 0 ? fy : 0) * 1.1, 1.2, 0, Math.PI * 2); g.fill();
+    }
+  }
+  g.restore();
+}
+function mzDraw(M, t, v) {
+  const cv = $('mzCanvas'); if (!cv) return;
+  const g = cv.getContext('2d'), now = performance.now(), W = MZ_W * MZ_T;
+  g.fillStyle = '#0a0e18'; g.fillRect(0, 0, cv.width, cv.height);
+  g.drawImage(mzWallLayer(), 0, MZ_HUD);
+  if (M.clear > 0 && Math.floor(M.clear * 6) % 2) { g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(0, MZ_HUD, W, MZ_H * MZ_T); }
+  // 豆子
+  const pulse = .75 + .25 * Math.sin(now / 160);
+  MZ_DOTS.forEach(([x, y, pw], i) => {
+    if (!M.dots[i]) return;
+    const [cx, cy] = mzPx(x, y);
+    g.fillStyle = pw ? '#ffd04a' : '#ffe0a0'; g.beginPath(); g.arc(cx, cy, pw ? 5.5 * pulse : 2.4, 0, Math.PI * 2); g.fill();
+  });
+  const bonusOn = M.role === 'pac' ? M.bonus > M.clock : !!M.bn;
+  if (bonusOn) {   // 獎勵果實：椰子
+    const [cx, cy] = mzPx(...MZ_FRUIT);
+    g.fillStyle = '#8a5a34'; g.beginPath(); g.arc(cx, cy + 1, 7, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#5a3a1e'; for (const [ox, oy] of [[-2, -1], [2, -1], [0, 2]]) { g.beginPath(); g.arc(cx + ox, cy + oy, 1.2, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#3cb45a'; g.beginPath(); g.ellipse(cx + 4, cy - 7, 5, 2, -.6, 0, Math.PI * 2); g.fill();
+  }
+  // 幽靈
+  const fl = M.pw > 0 && M.pw < 2 && Math.floor(now / 200) % 2 === 0;
+  for (let k = 0; k < 4; k++) {
+    let x, y, d, mode, isMe = false;
+    if (M.role === 'pac') {
+      if (M.gh[k] < 0) { const e = M.ghosts[k]; [x, y] = mzPos(e); d = e.d; mode = e.eyes ? 2 : e.fr ? 1 : 0; }
+      else { const h = M.hm[k]; x = h.x; y = h.y; d = h.d; mode = h.rm === 2 ? 2 : h.mode; }
+    } else if (M.role === 'ghost' && k === M.myK) { const e = M.mine; [x, y] = mzPos(e); d = e.d; mode = e.eyes ? 2 : M.myMode === 1 ? 1 : 0; isMe = true; }
+    else { const r = M.gh[k] >= 0 && M.rH[k].has ? M.rH[k] : M.rG[k]; x = r.x; y = r.y; d = r.d; mode = r.m === 2 || M.rG[k].m === 2 ? 2 : M.rG[k].m; }
+    mzDrawWisp(g, x, y, d, MZ_GCOL[k], mode, fl, now / 1000 + k);
+    const seat = M.gh[k] >= 0 ? v.seats[M.gh[k]] : null;
+    if (seat || isMe) {   // 玩家控制的幽靈：頭上寫名字（自己的加白圈）
+      const [cx, cy] = mzPx(x, y);
+      if (isMe) { g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 1.5; g.setLineDash([3, 3]); g.beginPath(); g.arc(cx, cy, 12, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); }
+      g.font = 'bold 10px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.8)'; g.fillStyle = isMe ? '#fff' : MZ_GCOL[k];
+      const nm = isMe ? '你' : seat.name; g.strokeText(nm, cx, cy - 13); g.fillText(nm, cx, cy - 13); g.textAlign = 'left';
+    }
+  }
+  // 豆豆
+  let px, py, pd;
+  if (M.role === 'pac') { [px, py] = mzPos(M.pac); pd = M.pac.d; } else { px = M.rPac.x; py = M.rPac.y; pd = M.rPac.d; }
+  const dying = M.role === 'pac' && M.dead > 0;
+  mzDrawBean(g, px, py, pd, (Math.sin(M.anim * 18) + 1) / 2, dying ? Math.max(0, M.dead / 1.4) : 1);
+  if (M.role === 'pac' && v.mz && !v.mz.solo) { const [cx, cy] = mzPx(px, py); g.font = 'bold 10px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.8)'; g.fillStyle = '#fff'; g.strokeText('你', cx, cy - 14); g.fillText('你', cx, cy - 14); g.textAlign = 'left'; }
+  M.pops = M.pops.filter(p => p.until > now);
+  for (const p of M.pops) { const [cx, cy] = mzPx(p.x, p.y); g.font = 'bold 12px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillStyle = '#7ae8ff'; g.fillText(p.t, cx, cy - 4); g.textAlign = 'left'; }
+  // 分數列
+  g.fillStyle = '#121a2a'; g.fillRect(0, 0, W, MZ_HUD);
+  g.font = 'bold 14px "Microsoft JhengHei"'; g.fillStyle = '#ffe08a'; g.textBaseline = 'middle';
+  g.fillText(`分數 ${M.sc}`, 8, MZ_HUD / 2);
+  g.textAlign = 'center';
+  if (M.solo) g.fillText(`第 ${M.lvl} 關`, W / 2, MZ_HUD / 2);
+  else { const rem = Math.max(0, Math.ceil(M.lim - Math.max(0, t))); g.fillStyle = rem <= 30 ? '#ff7a6a' : '#ffe08a'; g.fillText(`剩 ${Math.floor(rem / 60)}:${String(rem % 60).padStart(2, '0')}`, W / 2, MZ_HUD / 2); }
+  g.textAlign = 'left';
+  for (let i = 0; i < Math.max(0, M.lv); i++) mzDrawBean(g, (W - 18 - i * 20) / MZ_T - .5, -1.25, 3, .3, .6);
+  g.textBaseline = 'alphabetic';
+  // 倒數／準備
+  let msg = null;
+  if (t < 0) msg = String(Math.ceil(-t));
+  else if (M.role === 'pac' ? M.clear > 0 : false) msg = '過關！';
+  else if (M.role === 'pac' ? (M.fz > .5 && M.dead <= 0) : M.fzShow > .5) msg = '準備！';
+  else if (t < .8) msg = '開始！';
+  if (M.over) msg = '結束';
+  if (msg) {
+    g.font = 'bold 30px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 5; g.strokeStyle = 'rgba(0,0,0,.85)'; g.fillStyle = '#ffe08a';
+    const [cx, cy] = mzPx(10, 11); g.strokeText(msg, cx, cy + 10); g.fillText(msg, cx, cy + 10); g.textAlign = 'left';
+  }
+}
+function buildMaze(box, v, mk, gd) {
+  const playing = v.phase === 'playing', z = v.mz;
+  if (playing && z && (!S.mz || S.mz.key !== z.seed + ':' + z.t0)) mzStart(v);
+  if (!playing) mzStop();
+  const M = S.mz;
+  if (M && z) {   // 幽靈玩家中途離開：那隻改由電腦控制（豆豆那台從牠最後的位置接手）
+    z.gh.forEach((c, k) => {
+      if (c >= 0 || M.gh[k] < 0) return;
+      M.gh[k] = -1;
+      if (M.role === 'pac') { const h = M.hm[k], e = mzEnt(Math.round(h.x), Math.round(h.y), -1); e.eyes = h.mode === 2; e.fr = h.mode === 1; e.rel = 0; if (mzCell(e.tx, e.ty) === '#') { e.tx = MZ_GHOST0[k][0]; e.ty = MZ_GHOST0[k][1]; } M.ghosts[k] = e; }
+    });
+  }
+  const pacName = v.seats[v.pac]?.name || '?', solo1 = v.seats.length <= 1;
+  let status;
+  if (playing && M) status = M.role === 'pac' ? (M.solo ? '單人挑戰：方向鍵／WASD 移動，吃光豆子進下一關' : '你是豆豆：方向鍵／WASD 移動，吃光所有豆子就贏！') : M.role === 'ghost' ? `你是幽靈（${MZ_GNAME[M.myK]}）：方向鍵／WASD 移動，抓住豆豆！` : '觀戰中';
+  else if (playing) status = '觀戰中';
+  else status = v.seats.length < v.min ? `等待玩家入座（1～${v.max} 人）` : solo1 ? '1 人＝單人挑戰（分數進排行榜）；全員按「準備」就開始' : `${v.seats.length} 人對抗：${pacName} 當豆豆，其他人當幽靈；全員按「準備」就開始`;
+  box.appendChild(mk('div', 'table-status' + (playing && M && M.role !== 'spec' ? ' mine' : ''), status));
+  const r = v.result;
+  if (r && !playing && !r.aborted) {
+    box.appendChild(mk('div', 'table-result', r.text));
+    if (!r.solo && r.ranking) {
+      const rk = mk('div', 'dodge-rank');
+      r.ranking.forEach(x => rk.appendChild(mk('div', null, `${x.role === 'pac' ? '豆豆' : '幽靈'}　${x.name}　${x.role === 'pac' ? `${x.score} 分` : `抓到 ${x.score} 次`}${x.left ? '（中途離開）' : ''}`)));
+      box.appendChild(rk);
+    }
+  } else if (r?.aborted && !playing) box.appendChild(mk('div', 'table-result', r.text));
+  if (!playing) boardBlock(box, v, mk, sc => `${sc} 分（單人）`);
+  if (playing && z && !z.solo) {   // 遊戲中：座位卡片改成一行（讓迷宮放得下；名字也畫在迷宮裡）
+    const roles = [`豆豆：${pacName}`, ...z.gh.map((c, k) => (c >= 0 ? `${MZ_GNAME[k]}：${v.seats[c]?.name || '?'}` : null)).filter(Boolean)];
+    box.appendChild(mk('div', 'table-tag', roles.join('　') + (z.gh.some(c => c < 0) ? '　（其他幽靈由電腦控制）' : '')));
+  }
+  const row = mk('div', 'table-seats');
+  if (!playing) v.seats.forEach((s, i) => {
+    const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (s.left ? ' out' : ''));
+    const k = playing && z ? z.gh.indexOf(i) : -1;
+    if (k >= 0) seat.style.borderColor = MZ_GCOL[k]; else if (i === v.pac && !solo1) seat.style.borderColor = '#7ad048';
+    seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : '')));
+    const role = solo1 && !playing ? '' : i === v.pac ? '豆豆' : k >= 0 ? `幽靈・${MZ_GNAME[k]}` : '幽靈';
+    seat.appendChild(mk('div', 'table-tag', playing ? role : `${role ? role + ' · ' : ''}${s.ready ? '已準備' : '未準備'}`));
+    if (!playing && !solo1 && v.role === 'seat' && v.me === 0 && i !== v.pac) {   // 桌主：指定誰當豆豆
+      const b = mk('button', 'ff-btn small', '改由他當豆豆'); b.onclick = () => S.net?.tbl?.({ a: 'mpac', v: i }); seat.appendChild(b);
+    }
+    row.appendChild(seat);
+  });
+  if (!playing) { for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位')); box.appendChild(row); }
+  if (!playing && !solo1) box.appendChild(mk('div', 'table-tag', v.me === 0 && v.role === 'seat' ? '你是桌主：可以指定誰當豆豆（改了大家要重新準備）' : `由桌主 ${v.seats[0]?.name || ''} 指定誰當豆豆`));
+  if (playing) {
+    const wrap = mk('div', 'mz-wrap'), cv = document.createElement('canvas');
+    cv.id = 'mzCanvas'; cv.width = MZ_W * MZ_T; cv.height = MZ_HUD + MZ_H * MZ_T; cv.className = 'mz-canvas';
+    wrap.appendChild(cv); box.appendChild(wrap);
   }
   const btns = mk('div', 'table-btns');
   if (v.role === 'seat' && !playing) {
@@ -8688,6 +9193,7 @@ addEventListener('keydown', e => {
     if (k === 'escape') { e.preventDefault(); if (!$('rulesBox').classList.contains('hidden')) rulesShow(false); else leaveTable(); }   // 規則視窗開著：Esc 先關；離開確認開著：Esc＝取消規則
     else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
     else if (S.ar && arKey(e)) { /* 街機方塊：方向鍵／X／Z／空白鍵／C／Shift */ }
+    else if (S.mz && mzKey(e)) { /* 豆豆迷宮：方向鍵／WASD */ }
     else if (S.ty) typingKey(e);   // 英文打字競賽：英文字母
     else if (S.tableView?.game === 'blokus' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') bkKey(e);
     else if (S.tableView?.game === 'trigon' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') tgKey(e);   // 三角方塊拼圖：R 旋轉 60 度、F 翻面   // 方塊拼圖：R 旋轉、F 翻面
@@ -9200,6 +9706,8 @@ async function boot() {
     onTsc: onNetTsc,           // 英文打字競賽：其他玩家的分數
     onTtb: onNetTtb,           // 街機方塊：別台的盤面快照
     onTgb: onNetTgb,           // 街機方塊（對戰模式）：被送垃圾行
+    onTms: onNetTms,           // 豆豆迷宮：豆豆的快照
+    onTmp: onNetTmp,           // 豆豆迷宮：幽靈玩家的位置
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）

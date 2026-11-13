@@ -1731,6 +1731,7 @@ TABLES_BY_TERRAIN = {
               dict(id="t12", game="trigon", cell=[56, 46], w=3, h=2),    # (1,2) 三角方塊拼圖（2026-11-13，使用者要求）
               dict(id="t10", game="mage", cell=[64, 32], w=3, h=2),      # (2,0) 見習驅魔師（2026-11-12，使用者要求）
               dict(id="t5", game="dodge", cell=[64, 39], w=3, h=2),      # (2,1) 躲彈幕只有一桌（2026-11-08，使用者要求）
+              dict(id="t14", game="maze", cell=[64, 46], w=3, h=2),      # (2,2) 豆豆迷宮（2026-11-13，使用者要求）
               dict(id="t9", game="zhtyping", cell=[72, 32], w=3, h=2),   # (3,0) 中文打字競賽（2026-11-11，使用者要求）
               dict(id="t7", game="typing", cell=[72, 39], w=3, h=2),     # (3,1) 英文打字競賽（2026-11-10，使用者要求）
               # 街機方塊（俄羅斯方塊類，2026-11-13，使用者要求）：場地上方一排 4 台，造型一樣、配色不同，間距約一個人（1 格）。
@@ -1878,6 +1879,25 @@ def table_dodge():
     for x, y, c in ((8, 10, "#ff5a5a"), (14, 18, "#ffb347"), (20, 9, "#ff5a5a"), (27, 15, "#7ae8d0"), (33, 21, "#ff5a5a"), (38, 11, "#ffb347"), (12, 22, "#7ae8d0"), (30, 8, "#ffb347")):
         cv.ellipse(x, y, 1.6, 1.6, hx(c))
     cv.rect(23, 17, 25, 19, hx("#f4f0e4")); cv.set(24, 16, hx("#f4f0e4"))   # 中間一個小小的「玩家」
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    cv.outline()
+    return cv
+
+def table_maze():
+    """豆豆迷宮：深青色桌面（有桌腳），桌上一塊螢幕，裡面是青綠色迷宮線、一排豆子、能量豆、綠色的豆豆（頭上有小芽）和兩隻水滴形小幽靈。"""
+    cv = Canvas(48, 32)
+    wood, screen = hx("#2f4a4a"), hx("#06101c")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
+    cv.rect(3, 7, 44, 24, screen)
+    wall = hx("#2fc8b0")
+    cv.hline(5, 42, 8, wall); cv.hline(5, 42, 23, wall); cv.vline(5, 8, 23, wall); cv.vline(42, 8, 23, wall)   # 迷宮外框
+    cv.rect(9, 11, 15, 12, wall); cv.rect(32, 11, 38, 12, wall); cv.rect(13, 19, 34, 20, wall); cv.rect(23, 8, 24, 13, wall)
+    for x in range(8, 41, 3): cv.set(x, 16, hx("#ffe0a0"))     # 一排豆子
+    for y in (10, 13): cv.set(7, y, hx("#ffe0a0")); cv.set(40, y, hx("#ffe0a0"))
+    cv.ellipse(8, 21, 1.4, 1.4, hx("#ffd04a"))                  # 能量豆
+    cv.ellipse(28, 16, 2.2, 2.2, hx("#7ad048")); cv.set(27, 15, hx("#ffffff")); cv.set(29, 13, hx("#4a9a30"))   # 豆豆（綠色圓豆＋小芽）
+    for gx, gc in ((17, "#ff6a6a"), (36, "#5aa8ff")):           # 兩隻小幽靈（水滴形）
+        cv.ellipse(gx, 16, 2, 1.8, hx(gc)); cv.set(gx + 2, 17, hx(gc)); cv.set(gx + 3, 17, hx(gc)); cv.set(gx - 1, 16, hx("#ffffff")); cv.set(gx + 1, 16, hx("#ffffff"))
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
@@ -3444,6 +3464,7 @@ def main():
     save(table_intel(), "table_intel.png", "games")
     save(table_zhtyping(), "table_zhtyping.png", "games")
     save(table_mage(), "table_mage.png", "games")
+    save(table_maze(), "table_maze.png", "games")
     save(table_blokus(), "table_blokus.png", "games")
     save(table_trigon(), "table_trigon.png", "games")
     for k, col in enumerate(ARCADE_COLORS):
