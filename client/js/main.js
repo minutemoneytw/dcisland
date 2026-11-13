@@ -8070,7 +8070,9 @@ const WEATHERS = {   // id → 名稱／色罩（rgba 三元組＋最濃不透�
   fog:     { name: '霧',   tint: [230, 237, 244], alpha: .95, near: .05, mid: .4, far: .75, core: .1, vis: .8, depth: true, part: { kind: 'fog', n: 24, vx: 12, r: 120 } },
   // 沙暴（2026-11-13 使用者定：跟霧一樣改玩家中心的徑向漸層——黃沙色、越遠越看不清；濃度比霧低很多，是沙塵感不是白牆）
   sand:    { name: '沙暴', tint: [224, 196, 128], alpha: .78, near: .02, mid: .14, far: .42, core: .1, vis: .85, depth: true, part: { kind: 'sand', n: 70, vy: 26, vx: -215, len: 9 } },
-  ember:   { name: '落灰', tint: [255, 118, 42],  alpha: .09, part: { kind: 'ember',   n: 60,  vy: -34, vx: 16, r: 1.8 } },
+  // 落灰（2026-11-13 使用者定「再明顯一點」：原 tint .09＋1.8px 小方點在暗紅地形上幾乎看不到）：
+  // 橘紅色罩加深、顆數加多、粒子改成亮橘火點＋柔光暈
+  ember:   { name: '落灰', tint: [255, 96, 30],   alpha: .16, part: { kind: 'ember',  n: 80,  vy: -34, vx: 16, r: 2.2 } },
   leaf:    { name: '落葉', part: { kind: 'leaf', n: 24, vy: 42, vx: -34, sway: 42, r: 2.6 } },
   firefly: { name: '螢光', tint: [30, 36, 70],    alpha: .08, part: { kind: 'firefly', n: 26,  vy: -12, vx: 8, r: 1.4 } },
 };
@@ -8191,9 +8193,15 @@ function drawWeather() {
       gr.addColorStop(1, 'rgba(236,242,248,0)');
       ctx.fillStyle = gr;
       ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
-    } else if (d.kind === 'ember') {
-      ctx.fillStyle = `rgba(255,${140 + 60 * Math.sin(p.ph) | 0},70,${.5 + .3 * Math.sin(p.ph * 2)})`;
-      ctx.fillRect(p.x, p.y, d.r, d.r);
+    } else if (d.kind === 'ember') {   // 落灰：亮橘火點＋柔光暈（原本 1.8px 實心小方點，太暗看不出來；2026-11-13 使用者定再明顯一點）
+      const tw = Math.sin(p.ph * 2) * .5 + .5;   // 明滅 0→1
+      const rr = d.r * 3.2;
+      const gr = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr);
+      gr.addColorStop(0, `rgba(255,${170 + 55 * tw | 0},80,${(.25 + .55 * tw).toFixed(3)})`);
+      gr.addColorStop(.4, `rgba(255,120,40,${(.28 * tw + .06).toFixed(3)})`);
+      gr.addColorStop(1, 'rgba(255,100,30,0)');
+      ctx.fillStyle = gr;
+      ctx.beginPath(); ctx.arc(p.x, p.y, rr, 0, Math.PI * 2); ctx.fill();
     } else if (d.kind === 'firefly') {
       const a = .3 + .45 * (Math.sin(p.ph * 2.2) * .5 + .5);
       ctx.fillStyle = `rgba(190,255,190,${a.toFixed(3)})`;
