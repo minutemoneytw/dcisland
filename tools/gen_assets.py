@@ -2389,7 +2389,7 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/deer_sheet.png", frames=4, rows=4, fw=64, fh=96, what="鹿的 4 方向（下／左／右／上）× 4 幀走路（草島）"),
     dict(sheet="external/img2pixel/cat_sheet.png", frames=3, rows=3, fw=32, fh=32, what="貓的 3 方向（上／下／左）× 3 幀走路（和平島；白貓原色，靠 tint 可換色）"),
     dict(sheet="external/img2pixel/dog_sheet.png", frames=3, rows=3, fw=32, fh=32, what="狗的 3 方向（上／下／左）× 3 幀走路（和平島；白狗原色，靠 tint 可換色）"),
-    dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64, what="野豬的 4 方向（上／左／下／右）× 3 幀走路（森林島）"),
+    dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64, what="野豬的 4 方向（上／右／下／左）× 3 幀走路（森林島）"),
     dict(sheet="external/img2pixel/bear_sheet.png", frames=4, rows=4, fw=64, fh=64, what="白熊的 4 方向（下／右／上／左）× 4 幀走路（雪島；原圖三色只取白熊那一區）"),
     dict(sheet="external/img2pixel/bat_sheet.png", frames=4, fw=32, fh=32, what="蝙蝠的正面拍翅 4 幀（夜光島；單列，左右靠鏡像）"),
     dict(sheet="external/img2pixel/imp_sheet.png", frames=4, rows=4, fw=64, fh=64, what="小惡魔的 4 方向（下／上／左／右）× 4 幀走路（熔岩島）"),
@@ -2570,7 +2570,7 @@ MOB_MANIFEST = dict(
         # 野豬（森林島）：反擊型野怪，最低階的主動威脅（Lv25）
         dict(id="boar", name="野豬", lv=25, speed=30, flee=85, retaliate=True, noBounce=True,
              anim=dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64,
-                       rowDir=["up", "left", "down", "right"], fps=6, scale=0.8),   # 格內實際內容側視 55×30／正面 21×47，畫面側視約 44×24（2026-11-13 使用者定「比羊大隻」——羊約 30×26；原 0.55 側視只有 30×16.5 反而比羊小）
+                       rowDir=["up", "right", "down", "left"], fps=6, scale=0.8),   # 2026-11-14 修正左右（第 2 列面向右、第 4 列面向左，原本寫反）；格內實際內容側視 55×30／正面 21×47，畫面側視約 44×24（2026-11-13 使用者定「比羊大隻」——羊約 30×26；原 0.55 側視只有 30×16.5 反而比羊小）
              line="「野豬」磨了磨獠牙，從鼻子裡哼出一團白氣。"),
         # 白熊（雪島）：反擊型、血厚慢速
         dict(id="bear_snow", name="白熊", lv=35, speed=26, flee=90, retaliate=True, noBounce=True,

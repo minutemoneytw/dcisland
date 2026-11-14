@@ -836,9 +836,9 @@
     "fh": 64,
     "rowDir": [
      "up",
-     "left",
+     "right",
      "down",
-     "right"
+     "left"
     ],
     "fps": 6,
     "scale": 0.8
