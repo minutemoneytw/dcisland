@@ -5438,12 +5438,15 @@ function buildDodge(box, v, mk, gd) {
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
-// ---- 空氣曲棍球（t15／t16，2026-11-13，使用者要求）：2～8 人分藍紅兩隊（入座順序輪流：座位 0、2、4、6 藍隊在左，1、3、5、7 紅隊在右），人數要偶數 ----
+// ---- 空氣曲棍球（t15／t16，2026-11-13，使用者要求）：2～4 人分藍紅兩隊（入座順序輪流：座位 0、2 藍隊在左，1、3 紅隊在右；2026-11-14 使用者要求最多 2v2，原本 2～8 人），人數要偶數 ----
 // 用滑鼠（或 WASD／方向鍵）移動自己的握把，只能在自己的半場；把圓盤打進對方球門得 1 分，先得 7 分或 3 分鐘到時分數高的贏。
 // **物理在桌主（座位 0）那台**：圓盤的移動、反彈、碰撞、進球、結束都在那台算，約 12 次／秒送快照 hs（伺服器轉成 ths）；
 // 每個人約 12 次／秒送自己握把的位置 hp（伺服器轉成 thp）。桌主用收到的位置算碰撞，別人打到圓盤的判定會晚一點點（網路延遲）。
 const HK_W = 640, HK_H = 320, HK_PR = 18, HK_BR = 11, HK_GOAL = 120, HK_SEND_MS = 80;   // 場地、握把半徑、圓盤半徑、球門寬、回報間隔
-const HK_MAX_PAD = 900, HK_MAX_PUCK = 950, HK_KEY_SPD = 420;                           // 握把最快速度、圓盤最快速度、鍵盤移動速度（px／秒）
+const HK_MAX_PAD = 1700, HK_MAX_PUCK = 600, HK_KEY_SPD = 600, HK_STEP_PX = 10;          // 握把最快速度、圓盤最快速度、鍵盤移動速度（px／秒）、桌主算碰撞時握把每小段最多移動幾 px
+// 圓盤最快速度 950→600（2026-11-14 使用者要求降低圓盤速度；握把變快後快甩的擊球太容易直接打到最高速）
+// 手感調整（2026-11-14 使用者說「手感有點差、增加靈敏度」）：握把最快速度 900→1700（快甩滑鼠時握把不再落在滑鼠後面）、鍵盤 420→600、別人的握把追蹤 18→28；
+// 握把變快後一個畫格會移動很遠，所以桌主算碰撞時把這一格內握把的移動切成小段（每段不超過 HK_STEP_PX），避免高速握把穿過圓盤
 const HK_TEAM_COL = ['#3b78e8', '#e04848'], HK_TEAM_NAME = ['藍隊', '紅隊'];
 const HK_KEYS = { arrowup: 'u', w: 'u', arrowdown: 'd', s: 'd', arrowleft: 'l', a: 'l', arrowright: 'r', d: 'r' };
 function hkHome(i, n) {   // 第 i 位的開球位置：同隊依序排成一直排（4 人以上排兩直排）
@@ -5512,6 +5515,7 @@ function hkFrame() {
   S.hkRaf = requestAnimationFrame(hkFrame);
   const now = performance.now(), dt = Math.max(0, Math.min(.05, (now - H.last) / 1000)); H.last = now;
   const t = hkNow(H);
+  H.pads.forEach(p => { p.x0 = p.x; p.y0 = p.y; });   // 這一格開始時的位置（桌主切小段算碰撞用）
   if (H.me >= 0 && t >= 0 && !H.over) {
     hkMoveMine(H, dt);
     // 自己的握把位置（桌主的夾在下面的 hs 裡送：hp 與 hs 共用同一個限流）
@@ -5519,10 +5523,16 @@ function hkFrame() {
   }
   H.pads.forEach((p, i) => {   // 別人的握把：往收到的位置平滑移動（速度用兩次回報的差估計，桌主算碰撞用）
     if (i === H.me) return;
-    const a = 1 - Math.exp(-dt * 18); p.x += (p.tx - p.x) * a; p.y += (p.ty - p.y) * a;
+    const a = 1 - Math.exp(-dt * 28); p.x += (p.tx - p.x) * a; p.y += (p.ty - p.y) * a;
   });
   if (H.host && t >= 0 && !H.over) {
-    for (let k = 0; k < 4; k++) hkPhysics(H, dt / 4);
+    const mv = Math.max(...H.pads.map(p => Math.hypot(p.x - p.x0, p.y - p.y0))), n = Math.max(4, Math.min(24, Math.ceil(mv / HK_STEP_PX)));   // 這一格握把最多移動 mv px → 切成 n 小段
+    const fin = H.pads.map(p => [p.x, p.y]);
+    for (let k = 1; k <= n; k++) {
+      H.pads.forEach((p, i) => { p.x = p.x0 + (fin[i][0] - p.x0) * k / n; p.y = p.y0 + (fin[i][1] - p.y0) * k / n; });   // 握把走到這一小段的位置
+      hkPhysics(H, dt / n);
+    }
+    H.pads.forEach((p, i) => { p.x = fin[i][0]; p.y = fin[i][1]; });
     if (now - H.hsAt >= HK_SEND_MS) { H.hsAt = now; const P = H.puck; const me = H.pads[0]; S.net?.tbl?.({ a: 'hs', x: Math.round(P.x), y: Math.round(P.y), vx: Math.round(P.vx), vy: Math.round(P.vy), sa: H.sa, sb: H.sb, f: Math.round(Math.max(0, H.f) * 1000), px: Math.round(me.x), py: Math.round(me.y) }); }
     if (H.sa >= H.goals || H.sb >= H.goals || t >= H.lim) { H.over = true; S.net?.tbl?.({ a: 'hend', sa: H.sa, sb: H.sb }); }
     H.view.x = H.puck.x; H.view.y = H.puck.y;
@@ -6442,7 +6452,7 @@ function buildMage(box, v, mk, gd) {
     const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && s.dead ? ' out' : ''));
     seat.style.borderColor = playing ? DG_COLORS[i % 8] : '';
     seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : '')));
-    seat.appendChild(mk('div', 'table-tag', playing ? (s.dead ? `倒下 · 擊殺 ${s.kills}` : '♥'.repeat(Math.max(0, s.hp)) + '♡'.repeat(Math.max(0, MG_HP - s.hp)) + ` · 擊殺 ${s.kills}`) : (s.ready ? '已準備' : '未準備')));
+    seat.appendChild(mk('div', 'table-tag', playing ? (s.dead ? `倒下 · 畫對 ${s.syms}` : '♥'.repeat(Math.max(0, s.hp)) + '♡'.repeat(Math.max(0, MG_HP - s.hp)) + ` · 畫對 ${s.syms}`) : (s.ready ? '已準備' : '未準備')));
     row.appendChild(seat);
   });
   if (!playing) for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
@@ -7392,13 +7402,17 @@ const AR_KICK_I = {
   '23': [[0, 0], [2, 0], [-1, 0], [2, 1], [-1, -2]], '32': [[0, 0], [-2, 0], [1, 0], [-2, -1], [1, 2]], '30': [[0, 0], [1, 0], [-2, 0], [1, -2], [-2, 1]], '03': [[0, 0], [-1, 0], [2, 0], [-1, 2], [2, -1]],
 };
 const AR_LINE_PTS = [0, 100, 300, 500, 800];   // 一次消 1～4 行 × 等級
+// 連擊（combo／REN，2026-11-14 使用者要求）：看「連續幾塊方塊落下都有消行」（不是幾秒內），一塊沒消到就歸零。
+// 單人加分：第 N 次連續消行額外 50 × (N−1) × 等級；對戰額外送垃圾行（連擊數 1～2＝0、3～4＝1、5～6＝2、7～8＝3、9～11＝4、12 以上＝5，每個對手各吃一份，加在一次消行本身送的行數上）。
+// 伺服器照同一張表算（兩份伺服器的 arComboBonus／ar_combo_bonus 要一致）
+const arComboBonus = c => (c >= 12 ? 5 : c >= 9 ? 4 : c >= 7 ? 3 : c >= 5 ? 2 : c >= 3 ? 1 : 0);
 const AR_DAS = 150, AR_ARR = 40, AR_LOCK = 500, AR_LOCK_RESETS = 15, AR_SNAP_MS = 250;
 const AR_KEYS = { arrowleft: 'L', arrowright: 'R', arrowdown: 'D', arrowup: 'CW', x: 'CW', z: 'CCW', ' ': 'HD', c: 'HOLD', shift: 'HOLD' };
 const arFall = lv => Math.max(30, 1000 * Math.pow(0.8 - (lv - 1) * 0.007, lv - 1));   // 每格落下的毫秒（等級越高越快）
 function arRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 function arNew(seed, t0, off, key) {
   const A = { key, t0, off, rng: arRng(seed), bag: [], queue: [], board: Array.from({ length: AR_H }, () => new Array(AR_W).fill(0)),
-    cur: null, hold: 0, held: false, sc: 0, ln: 0, lv: 1, dead: false, fallAcc: 0, lockT: 0, resets: 0, keys: {}, das: {}, gq: 0,
+    cur: null, hold: 0, held: false, sc: 0, ln: 0, lv: 1, combo: 0, dead: false, fallAcc: 0, lockT: 0, resets: 0, keys: {}, das: {}, gq: 0,
     last: performance.now(), snapAt: 0, snapStr: '', flash: null, started: false };
   for (let i = 0; i < 5; i++) A.queue.push(arDraw(A));
   return A;
@@ -7452,11 +7466,12 @@ function arLock(A) {
   for (let y = 0; y < AR_H; y++) if (A.board[y].every(c => c)) full.push(y);
   if (full.length) {
     for (const y of full) { A.board.splice(y, 1); A.board.unshift(new Array(AR_W).fill(0)); }
-    A.sc += AR_LINE_PTS[full.length] * A.lv; A.ln += full.length; A.lv = Math.min(20, 1 + Math.floor(A.ln / 10));
-    A.flash = { n: full.length, until: performance.now() + 900 };
+    A.combo++;   // 連擊：連續幾塊都有消行
+    A.sc += AR_LINE_PTS[full.length] * A.lv + 50 * (A.combo - 1) * A.lv; A.ln += full.length; A.lv = Math.min(20, 1 + Math.floor(A.ln / 10));
+    A.flash = { n: full.length, combo: A.combo, until: performance.now() + 900 };
     const lk = S.tableView?.link;
-    if (full.length >= 2 && lk?.phase === 'playing' && lk.mode === 'battle') S.net?.tbl?.({ a: 'clr', n: full.length });   // 對戰模式：讓伺服器送對手垃圾行
-  }
+    if (lk?.phase === 'playing' && lk.mode === 'battle') S.net?.tbl?.({ a: 'clr', n: full.length, combo: A.combo });   // 對戰模式：讓伺服器依消行數＋連擊算要送對手幾行垃圾（消 1 行本身不送，但連擊夠高會送）
+  } else A.combo = 0;
   if (A.gq > 0) {   // 收到的垃圾行在方塊放好時才推上來（同一批的缺口在同一欄）
     const n = Math.min(A.gq, AR_H), hole = Math.floor(Math.random() * AR_W);
     A.gq = 0;
@@ -7585,7 +7600,7 @@ function arDrawMain() {   // 自己的盤面：左邊暫存、中間盤面（含
   };
   if (A.dead) msg('GAME OVER', `${A.sc} 分 · ${A.ln} 行`, '#ff7a6a');
   else if (wait > 0) msg(String(Math.ceil(wait / 1000)), '準備……');
-  else if (A.flash && performance.now() < A.flash.until) { g.fillStyle = '#fff6c0'; g.font = 'bold 20px "Microsoft JhengHei"'; g.fillText(['', '', '雙消！', '三消！', '四行消除！'][A.flash.n] || '', L + BW / 2, 44); }
+  else if (A.flash && performance.now() < A.flash.until) { g.fillStyle = '#fff6c0'; g.font = 'bold 20px "Microsoft JhengHei"'; g.fillText(['', '', '雙消！', '三消！', '四行消除！'][A.flash.n] || '', L + BW / 2, 44); if (A.flash.combo >= 2) { g.fillStyle = '#ffb04a'; g.font = 'bold 16px "Microsoft JhengHei"'; g.fillText(`${A.flash.combo} 連擊！`, L + BW / 2, 66); } }
   if (A.hit && performance.now() < A.hit.until) { g.fillStyle = '#ff8a7a'; g.font = 'bold 15px "Microsoft JhengHei"'; g.fillText(`${arCabName(A.hit.from)} 送來 ${A.hit.n} 行！`, L + BW / 2, 10 + BH - 12); }
   g.textAlign = 'left';
 }
@@ -7660,7 +7675,7 @@ function buildArcade(box, v, mk, gd) {
       const q = mk('button', 'ff-btn small', '退出聯機'); q.onclick = () => S.net?.tbl?.({ a: 'lquit' }); bs.appendChild(q);
     }
     room.appendChild(bs);
-    room.appendChild(mk('div', 'table-tag', lk.mode === 'battle' ? '對戰模式：一次消 2／3／4 行，其他對手最下面多 1／2／4 行垃圾；最後還活著的人最有利。' : '一般模式：大家拿到一樣的方塊順序，各自玩到出局，全員出局後依分數排名。'));
+    room.appendChild(mk('div', 'table-tag', lk.mode === 'battle' ? '對戰模式：一次消 2／3／4 行，其他對手最下面多 1／2／4 行垃圾，連擊夠高再多送；最後還活著的人最有利。' : '一般模式：大家拿到一樣的方塊順序，各自玩到出局，全員出局後依分數排名。'));
     box.appendChild(room);
   }
   if (me && me.st === 'idle') {   // 選模式

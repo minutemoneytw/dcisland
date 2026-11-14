@@ -675,7 +675,7 @@ def floor_to_list(floor):
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 8)}           # 遊戲 → (開局最少人數, 入座上限)
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -1892,10 +1892,10 @@ IT_KIND_CODE = {"s": "seal", "p": "pub", "d": "direct"}
 IT_KIND_CYCLE = "sspsd"   # 牌組依序循環分配投遞方式：密函 60%、公開 20%、直達 20%
 IT_CNAME = {"Y": "黃", "B": "藍", "K": "黑"}   # 2026-11-11 使用者要求移除灰（廢紙）
 IT_ROLE = {"sand": "沙都", "water": "水都", "mage": "咒術師"}
-# 牌組 75 張：印記 → 各行動的張數（雙色牌同時算兩種顏色；沒有灰）。2026-11-11 使用者要求重配：黃藍雙色減少、黃黑／藍黑增加；
+# 牌組（現在 77 張，2026-11-13 起沒有黃藍雙色牌）：印記 → 各行動的張數（雙色牌同時算兩種顏色；沒有灰）。2026-11-11 使用者要求重配：黃藍雙色減少、黃黑／藍黑增加；
 # 焚信 −4、洗白 +2、搜身 −2、攔截 +2、阻擋 +2，新增補給 D 4 張、竊取 R 3 張（顏色由助手分配）。含黃 35、含藍 35、含黑 33（與 worker 的 IT_DECK 一致）
 # （2026-11-11 再改：洗白 +2，加在純黃、純藍各 1 張，共 77 張；含黃 36、含藍 36、含黑 33；押送改名鎖定）
-IT_DECK = {"Y": "P2S2F2X1H1W2C3I1T1B1N1V1D1", "B": "P2S2F2X1H1W2C3I1T1B1N1V1D1", "K": "P1S1F1H1W1C1I1B1V1D1R1", "YB": "P1S1I1B1V1D1", "YK": "P1S1F2H1C2I1T1B1R1", "BK": "P1S1F2W1C2I1T1B1R1"}
+IT_DECK = {"Y": "P2S2F2X1H1W2C3I1T1B1N1V1D1", "B": "P2S2F2X1H1W2C3I1T1B1N1V1D1", "K": "P1S1F1H1W1C1I1B1V1D1R1", "YK": "P2S2F2H1C2I2T1B1R1", "BK": "P1S1F2W1C2I1T1B2R1V1D1"}   # 2026-11-13 使用者要求：取消黃藍雙色牌，那 6 張平均分給黃黑（加 P／S／I）與藍黑（加 B／V／D）各 3 張，各行動總張數不變；現在含黃 33、含藍 33、含黑 39
 IT_PICK_MS = 30000   # 選角時限（限時模式；逾時沒選的自動選第一張；不限時模式等大家選完）
 # 角色卡（2026-11-11 使用者提供規格，完整文字見 docs/intel-characters.md）：桌主在開局前開「角色卡」才會用。每人開局拿 1 張身分＋2 張角色、選 1 張。
 # type：public 選完就翻開／hidden 選完仍覆蓋（只有本人與觀戰者看得到）。第 0 階段只做「選角＋咒術師身分的勝利條件＋宣告勝利結算」，技能第 1 階段起才實作
@@ -3923,7 +3923,12 @@ def un_set_mode(t, cid, mode):
 AR_CABS = 4
 AR_COUNTDOWN_MS = 3000          # 聯機開局倒數
 AR_SOLO_COUNTDOWN_MS = 1500     # 單人開局倒數
-AR_GARBAGE = {2: 1, 3: 2, 4: 4}  # 對戰模式：一次消幾行 → 送每個對手幾行垃圾（使用者定；消 1 行不送）
+AR_GARBAGE = {2: 1, 3: 2, 4: 4}  # 對戰模式：一次消幾行 → 送每個對手幾行垃圾（使用者定；消 1 行本身不送）
+
+
+def ar_combo_bonus(c):
+    """連擊額外送的垃圾行（2026-11-14 使用者要求）：連擊數 1～2＝0、3～4＝1、5～6＝2、7～8＝3、9～11＝4、12 以上＝5；與 main.js 的 arComboBonus 同一張表。"""
+    return 5 if c >= 12 else 4 if c >= 9 else 3 if c >= 7 else 2 if c >= 5 else 1 if c >= 3 else 0
 AR_XP, AR_XP_MIN = 4, 10        # 一局消了至少 AR_XP_MIN 行的人 +AR_XP（助手先訂的數值）
 AR_SCORE_MAX = 99999999
 
@@ -4084,7 +4089,9 @@ def ar_msg(t, cid, msg, now):
         n = msg.get("n")
         if not (_int_in(n, 1, 4) and s["st"] == "link" and g and g["phase"] == "playing" and g["mode"] == "battle" and not s["dead"] and now >= g["t0"]):
             return False, []
-        k = AR_GARBAGE.get(n, 0)
+        combo = msg.get("combo")
+        combo = combo if _int_in(combo, 0, 1000) else 0   # 舊版客戶端沒帶 combo＝0
+        k = AR_GARBAGE.get(n, 0) + ar_combo_bonus(combo)
         out = []
         if k:
             for c in g["mem"]:
@@ -4295,7 +4302,7 @@ def mz_over(t, cid, msg):
     win = msg.get("win") is True
     mz_finish(t, "pac" if win else "ghost", "豆子全部吃光" if win else ("時間到" if msg.get("tu") is True else "豆豆的命用完了"), ct)
 
-# ---- 空氣曲棍球（第十五、十六桌 t15／t16，2026-11-13，使用者要求）：2～8 人分藍紅兩隊（座位 0、2、4、6 藍隊，1、3、5、7 紅隊），人數要偶數 ----
+# ---- 空氣曲棍球（第十五、十六桌 t15／t16，2026-11-13，使用者要求）：2～4 人分藍紅兩隊（座位 0、2 藍隊，1、3 紅隊；2026-11-14 使用者要求最多 2v2，原本 2～8 人），人數要偶數 ----
 # 先得 HK_GOALS 分、或 HK_LIM_MS 到時分數高的隊伍贏（同分平手），不進排行榜；有人離開＝這一局結束（一般桌子的規則）。
 # 物理在桌主（座位 0）的客戶端跑：桌主送圓盤快照 hs → ths，每個人送自己握把的位置 hp → thp，桌主判斷結束送 hend。
 # 與 worker/src/index.js 的 hk* 同一套，改規則兩邊一起改。

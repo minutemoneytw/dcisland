@@ -485,7 +485,7 @@ async function exchangeToken(request, env) {
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
 const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 8] };           // 遊戲 → [開局最少人數, 入座上限]
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 4] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -1216,7 +1216,7 @@ const isTy = t => t.game === "typing" || t.game === "zhtyping";
 const tyUnit = t => (t.game === "zhtyping" ? "詞" : "單字");
 // 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 // 記在這座島的 storage（"boards"），每次結算後更新，table 畫面帶 board 給客戶端顯示。與 tools/dev_server.py 的 BOARDS 同一套
-const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage", "arcade", "maze"]), BOARD_N = 3, BOARDS_REV = 1;   // 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
+const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage", "arcade", "maze"]), BOARD_N = 3;   // 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
 // 躲彈幕 2026-11-12 起改記「分數」（存活秒數＋道具分），舊的秒數紀錄放在 "dodge" 不再使用，分數另記在 "dodge2"，避免單位混在一起
 const boardKey = game => (game === "dodge" ? "dodge2" : game);
 function boardMerge(list, entries) {
@@ -1294,8 +1294,9 @@ const IT_ROLE = { sand: "沙都", water: "水都", mage: "咒術師" };
 // 牌組 75 張：印記 → 各行動的張數（雙色牌同時算兩種顏色；沒有灰）。2026-11-11 使用者要求重配：黃藍雙色減少、黃黑／藍黑增加；
 // 焚信 −4、洗白 +2、搜身 −2、攔截 +2、阻擋 +2，新增補給 D 4 張、竊取 R 3 張（顏色由助手分配）。含黃 35、含藍 35、含黑 33
 // （2026-11-11 再改：洗白 +2，加在純黃、純藍各 1 張，共 77 張；含黃 36、含藍 36、含黑 33）
+// （2026-11-13 使用者要求：取消黃藍雙色牌，那 6 張平均分給黃黑與藍黑各 3 張——黃黑加 P／S／I、藍黑加 B／V／D，各行動的總張數不變；現在含黃 33、含藍 33、含黑 39）
 // 各行動：截閱 8、調包 8、鎖定（原押送）9、焚信 2、搜身 4、洗白 6、識破 11、攔截 6、轉移 4、阻擋 6、無人倖免 2、查驗 4、補給 4、竊取 3
-const IT_DECK = { Y: "P2S2F2X1H1W2C3I1T1B1N1V1D1", B: "P2S2F2X1H1W2C3I1T1B1N1V1D1", K: "P1S1F1H1W1C1I1B1V1D1R1", YB: "P1S1I1B1V1D1", YK: "P1S1F2H1C2I1T1B1R1", BK: "P1S1F2W1C2I1T1B1R1" };
+const IT_DECK = { Y: "P2S2F2X1H1W2C3I1T1B1N1V1D1", B: "P2S2F2X1H1W2C3I1T1B1N1V1D1", K: "P1S1F1H1W1C1I1B1V1D1R1", YK: "P2S2F2H1C2I2T1B1R1", BK: "P1S1F2W1C2I1T1B2R1V1D1" };
 const IT_PICK_MS = 30000;   // 選角時限（限時模式；逾時沒選的自動選第一張；不限時模式等大家選完）
 // 角色卡（2026-11-11 使用者提供規格，完整文字見 docs/intel-characters.md）：桌主在開局前開「角色卡」才會用。每人開局拿 1 張身分＋2 張角色、選 1 張。
 // type：public 選完就翻開／hidden 選完仍覆蓋（只有本人與觀戰者看得到）。第 0 階段只做「選角＋咒術師身分的勝利條件＋宣告勝利結算」，技能第 1 階段起才實作
@@ -2583,7 +2584,9 @@ function unSetMode(t, cid, mode) {
 const AR_CABS = 4;
 const AR_COUNTDOWN_MS = 3000;        // 聯機開局倒數
 const AR_SOLO_COUNTDOWN_MS = 1500;   // 單人開局倒數
-const AR_GARBAGE = { 2: 1, 3: 2, 4: 4 };   // 對戰模式：一次消幾行 → 送每個對手幾行垃圾（使用者定；消 1 行不送）
+const AR_GARBAGE = { 2: 1, 3: 2, 4: 4 };   // 對戰模式：一次消幾行 → 送每個對手幾行垃圾（使用者定；消 1 行本身不送）
+// 連擊額外送的垃圾行（2026-11-14 使用者要求）：連擊數 1～2＝0、3～4＝1、5～6＝2、7～8＝3、9～11＝4、12 以上＝5；與 main.js 的 arComboBonus 同一張表
+const arComboBonus = c => (c >= 12 ? 5 : c >= 9 ? 4 : c >= 7 ? 3 : c >= 5 ? 2 : c >= 3 ? 1 : 0);
 const AR_XP = 4, AR_XP_MIN = 10;     // 一局消了至少 AR_XP_MIN 行的人 +AR_XP（助手先訂的數值）
 const AR_SCORE_MAX = 99999999;
 const AR_MSGS = new Set(["solo", "link", "lmode", "ljoin", "lno", "lquit", "lstart", "over"]);
@@ -2707,7 +2710,8 @@ function arMsg(t, cid, msg, now) {
   if (a === "clr") {   // 一次消了 n 行：對戰模式送其他還活著的成員垃圾行
     const n = msg.n;
     if (!(arInt(n, 1, 4) && s.st === "link" && g && g.phase === "playing" && g.mode === "battle" && !s.dead && now >= g.t0)) return [false, []];
-    const k = AR_GARBAGE[n] || 0, out = [];
+    const combo = arInt(msg.combo, 0, 1000) ? msg.combo : 0;   // 舊版客戶端沒帶 combo＝0
+    const k = (AR_GARBAGE[n] || 0) + arComboBonus(combo), out = [];
     if (k) for (const c of g.mem) { const m = arSeat(t, c)[1]; if (m && c !== s.cab && !m.dead && m.cid != null) out.push([m.cid, { t: "tgb", n: k, from: s.cab }]); }
     return [false, out];
   }
@@ -2848,7 +2852,7 @@ function mzOver(t, cid, msg) {
   const win = msg.win === true;
   mzFinish(t, win ? "pac" : "ghost", win ? "豆子全部吃光" : msg.tu === true ? "時間到" : "豆豆的命用完了", ct);
 }
-// ---- 空氣曲棍球（第十五、十六桌 t15／t16，2026-11-13，使用者要求）：2～8 人分藍紅兩隊（座位 0、2、4、6 藍隊，1、3、5、7 紅隊），人數要偶數 ----
+// ---- 空氣曲棍球（第十五、十六桌 t15／t16，2026-11-13，使用者要求）：2～4 人分藍紅兩隊（座位 0、2 藍隊，1、3 紅隊；2026-11-14 使用者要求最多 2v2，原本 2～8 人），人數要偶數 ----
 // 先得 HK_GOALS 分、或 HK_LIM_MS 到時分數高的隊伍贏（同分平手），不進排行榜；有人離開＝這一局結束（一般桌子的規則）。
 // 物理在桌主（座位 0）的客戶端跑：桌主送圓盤快照 hs → ths，每個人送自己握把的位置 hp → thp，桌主判斷結束送 hend。
 // 與 tools/dev_server.py 的 hk_* 同一套，改規則兩邊一起改。
@@ -3439,15 +3443,9 @@ export class Island {
     await this.tableStats(t, resBefore);
     await this.tableBoard(t, resBefore);
   }
-  // 排行榜（2026-11-13，使用者要求）：BOARDS_REV 改了就在這座島第一次用到排行榜時清空一次（上線前清掉目前的最高分）；要再清一次就把 BOARDS_REV 加 1
+  // 排行榜：每座島一份，記在 storage 的 boards。2026-11-14 使用者定：今後上線都不清空排行榜（曾有過 BOARDS_REV 一次性清空機制，尚未上線就拿掉了）
   async getBoards() {
-    if (!this.boards) {
-      if ((await this.state.storage.get("boardsRev")) !== BOARDS_REV) {
-        this.boards = {};
-        await this.state.storage.put("boards", {});
-        await this.state.storage.put("boardsRev", BOARDS_REV);
-      } else this.boards = (await this.state.storage.get("boards")) || {};
-    }
+    if (!this.boards) this.boards = (await this.state.storage.get("boards")) || {};
     return this.boards;
   }
   // 暱稱改了：排行榜裡有這個 uid 的項目改成新的顯示名稱（有變動才存檔、通知正在看這桌的人）

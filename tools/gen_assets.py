@@ -1427,7 +1427,9 @@ TERRAINS = [
 
 # 室內釣魚池（像室內的地形才用）：地形 → [池]。cell＝水面左上角格、w／h＝水面幾格；外圍一圈是池邊（岸，可以走）
 POOLS_BY_TERRAIN = {
-    "peace": [dict(cell=[26, 33], w=8, h=6)],   # 2026-11-09 地圖放大成 108×72、島心移到 (53.5,35.5)：座標比原本 (16,25) 加 (10,8)   # 2026-11-09 使用者要求：和平島找一小塊做室內釣魚場（左側，遠離中央的遊戲桌）
+    # 2026-11-14 使用者要求：水池搬到房間左上角（原本在左側中間 [26,33]）；同日一度加過池邊裝飾，使用者又要求拿掉
+    # （2026-11-09 使用者要求和平島找一小塊做室內釣魚場，遠離中央的遊戲桌；水面 8×6、外圍一圈池邊 → 佔 x 25～34、y 17～24）
+    "peace": [dict(cell=[26, 18], w=8, h=6)],
 }
 
 # 室內地形的方形房間範圍 [x0,y0,x1,y1]（含邊界，格）：2026-11-09 使用者要求和平島縮小到「剛好包含中央到釣魚池再多一點」，且仍是室內（方形、沒有水）。
@@ -1468,7 +1470,11 @@ PROPS_BY_TERRAIN = {
               dict(id="snack", kind="food", name="點心吧", img="snack_bar.png", cell=[80, 15], w=4, h=2.5),
               # 餐飲區的隔板與地毯（2026-11-13，使用者要求）：kind＝deco（擋路、不能互動、沒有名稱）／rug（畫在地板層、不擋路、可以走上去）
               dict(id="dine_wall", kind="deco", img="dine_partition.png", cell=[75, 14.5], w=1, h=5.5),   # 西側一道矮隔板，從北牆伸到 y＝20（南邊開口當入口）
-              dict(id="dine_rug", kind="rug", img="dine_rug.png", cell=[76, 16], w=9, h=5)],                # 地毯鋪滿隔板右邊到東牆
+              dict(id="dine_rug", kind="rug", img="dine_rug.png", cell=[76, 16], w=9, h=5),                # 地毯鋪滿隔板右邊到東牆
+              # 夾娃娃機與扭蛋機（2026-11-14，使用者要求）：俄羅斯方塊機台右側、靠北牆；底邊要跟俄羅斯方塊機台對齊（y＋h＝17.5，所以夾娃娃機比較高、y 從 14 開始）。先只做外觀框架（kind=deco：擋路、沒有名稱、不能互動），
+              # 獎勵怎麼處理還沒決定，之後要開放時把 kind 改成新的互動種類（客戶端 propUse／useProp）
+              dict(id="claw", kind="deco", img="claw_machine.png", cell=[61, 14], w=3, h=3.5),
+              dict(id="gacha", kind="deco", img="gacha_machine.png", cell=[65, 14.5], w=2, h=3)],
 }
 
 def drink_bar():
@@ -1801,6 +1807,57 @@ def arcade_cabinet(col):
     cv.outline()
     return cv
 
+def claw_machine():
+    """夾娃娃機（48×56，畫 scale 2＝3×3.5 格）：粉紅外殼與發光招牌、玻璃櫃裡堆著各色玩偶、頂端軌道垂下一支爪子，
+    下方操作台（搖桿＋大按鈕）、投幣口與右下角的取物口。目前只是外觀（不能互動）。"""
+    cv = Canvas(48, 56)
+    c = hx("#e8648c"); dark, lite = shade(c, .62), shade(c, 1.3)
+    cv.rect(1, 0, 46, 55, c)                                           # 外殼
+    cv.rect(1, 0, 3, 55, dark); cv.rect(44, 0, 46, 55, dark)           # 側板
+    cv.rect(4, 1, 43, 8, hx("#fff0b0")); cv.hline(4, 43, 1, hx("#fffbe0")); cv.hline(4, 43, 8, hx("#e8c060"))   # 招牌（發光）
+    for k, bc in enumerate(["#e04848", "#f0c020", "#3cb45a", "#3b78e8", "#9a5ad8", "#e04848", "#f0c020"]):
+        cv.ellipse(8 + k * 5.2, 5, 1.8, 1.8, hx(bc))                   # 招牌上一排彩球
+    cv.rect(4, 9, 43, 10, dark)                                        # 招牌下緣
+    cv.rect(4, 11, 43, 38, hx("#1a1a22"))                              # 玻璃框
+    cv.rect(6, 12, 41, 37, hx("#bfe3f0"))                              # 玻璃（淺藍）
+    cv.rect(6, 12, 41, 14, hx("#dff3f9")); cv.vline(8, 14, 36, hx("#e8f7fb")); cv.vline(9, 18, 30, hx("#e8f7fb"))   # 反光
+    cv.hline(6, 41, 13, hx("#7a808c")); cv.rect(22, 11, 25, 14, hx("#5a606c"))   # 頂端軌道與滑車
+    cv.vline(23, 14, 20, hx("#5a606c")); cv.vline(24, 14, 20, hx("#5a606c"))      # 吊線
+    cv.rect(21, 21, 26, 22, hx("#8a909c"))                                        # 爪座
+    for x0, x1 in ((19, 21), (26, 28)): cv.vline(x0, 22, 27, hx("#8a909c")); cv.set(x1, 27, hx("#8a909c"))   # 兩側爪子
+    cv.set(20, 28, hx("#8a909c")); cv.set(27, 28, hx("#8a909c"))
+    for cx, cy, r, bc in ((10, 33, 3.2, "#f0c020"), (16, 34, 3, "#3b78e8"), (22, 33, 3.4, "#e84848"), (29, 34, 3, "#3cb45a"),
+                          (35, 33, 3.2, "#9a5ad8"), (13, 29, 2.6, "#ff9ad0"), (32, 29, 2.6, "#40c8e0"), (38, 35, 2.6, "#f0c020"), (7, 35, 2.4, "#e84848")):
+        b = hx(bc); cv.ellipse(cx, cy, r, r, b); cv.set(int(cx) - 1, int(cy) - 1, shade(b, 1.4))   # 玩偶（圓滾滾的一團）
+        cv.set(int(cx) - 1, int(cy), hx("#1a1a22")); cv.set(int(cx) + 1, int(cy), hx("#1a1a22"))   # 眼睛
+    cv.rect(4, 39, 43, 44, lite); cv.hline(4, 43, 39, shade(c, 1.5)); cv.hline(4, 43, 44, dark)   # 操作台（斜面）
+    cv.rect(11, 41, 12, 44, hx("#2a2a30")); cv.rect(9, 39, 14, 41, hx("#3b78e8")); cv.set(10, 39, hx("#9ac0ff"))   # 搖桿
+    cv.ellipse(30, 42, 3, 2, hx("#e83a3a")); cv.set(29, 41, hx("#ff9a9a"))                                         # 大按鈕
+    cv.rect(35, 40, 40, 43, hx("#2a2a30")); cv.rect(36, 41, 39, 42, hx("#e8a030"))                                 # 投幣口
+    cv.rect(4, 45, 43, 54, shade(c, .85))                              # 下半身
+    cv.rect(26, 46, 41, 53, hx("#1a1a22")); cv.rect(27, 47, 40, 52, hx("#0c0c12")); cv.hline(26, 41, 46, hx("#5a606c"))   # 取物口
+    cv.rect(1, 54, 46, 55, dark)
+    cv.outline()
+    return cv
+
+def gacha_machine():
+    """扭蛋機（32×48，畫 scale 2＝2×3 格）：上方透明圓罩裡裝滿彩色扭蛋、紅色機身中間一個黃色轉鈕，下方出蛋口。目前只是外觀（不能互動）。"""
+    cv = Canvas(32, 48)
+    cv.rect(4, 36, 27, 46, hx("#5a606c")); cv.rect(4, 36, 27, 37, hx("#7a808c"))     # 底座
+    cv.ellipse(15.5, 13, 13, 13, hx("#bfe3f0")); cv.ellipse(15.5, 13, 11, 11, hx("#d4eef7"))   # 圓罩（外圈＋內層）
+    for cx, cy, bc in ((9, 17, "#e84848"), (15, 19, "#f0c020"), (21, 17, "#3b78e8"), (12, 12, "#3cb45a"), (19, 12, "#ff9ad0"),
+                       (8, 11, "#9a5ad8"), (23, 11, "#e84848"), (15, 6, "#40c8e0"), (11, 7, "#f0c020"), (20, 7, "#3cb45a")):
+        b = hx(bc); cv.ellipse(cx, cy, 3, 3, b); cv.hline(int(cx) - 2, int(cx) + 2, int(cy), shade(b, .78)); cv.set(int(cx) - 1, int(cy) - 2, shade(b, 1.5))   # 扭蛋（上下殼的接縫＋高光）
+    cv.set(8, 6, hx("#ffffff")); cv.set(9, 5, hx("#ffffff")); cv.set(10, 4, hx("#ffffff"))   # 圓罩反光
+    red = hx("#d83a3a")
+    cv.rect(5, 24, 26, 35, red); cv.rect(5, 24, 6, 35, shade(red, .7)); cv.rect(25, 24, 26, 35, shade(red, .7)); cv.hline(5, 26, 24, shade(red, 1.35))   # 機身
+    cv.rect(4, 22, 27, 24, shade(red, .85))                                          # 圓罩底環
+    cv.ellipse(15.5, 29, 4.5, 4.5, hx("#f0c020")); cv.rect(14, 26, 17, 32, hx("#d8a010")); cv.rect(15, 26, 16, 32, hx("#f8dc60"))   # 轉鈕（黃）
+    cv.rect(9, 33, 22, 35, shade(red, .55)); cv.rect(11, 33, 20, 34, hx("#14141a"))   # 出蛋口
+    cv.rect(6, 37, 25, 38, hx("#3a3e48"))
+    cv.outline()
+    return cv
+
 def table_gomoku():
     cv = Canvas(48, 32)
     wood, board = hx("#8a5a34"), hx("#d8a860")
@@ -1995,6 +2052,38 @@ MATERIAL_ICONS.update(
     brick=(_mat_brick, "#c4684a"), paper=(_mat_paper, "#f0ead8"), iron_ingot=(_mat_bar, "#6a7480"), leather=(_mat_leather, "#9a6a40"),
 )
 
+def _mat_bone(c):
+    cv = Canvas(16, 16)
+    for i in range(9): cv.rect(3 + i, 11 - i, 4 + i, 12 - i, c)
+    for x, y in ((2, 11), (4, 13), (11, 2), (13, 4)): cv.ellipse(x + 1, y + 1, 1.6, 1.6, c)
+    cv.set(6, 9, shade(c, 1.3)); cv.outline(); return cv
+def _mat_horn(c):
+    cv = Canvas(16, 16)
+    for i in range(10): cv.rect(4 + i // 2, 12 - i, 8 + i // 2 - i // 3, 12 - i, c)
+    cv.rect(3, 12, 9, 13, shade(c, .75)); cv.vline(6, 5, 11, shade(c, 1.25)); cv.outline(); return cv
+def _mat_wing(c):
+    cv = Canvas(16, 16)
+    for i in range(4): cv.ellipse(4 + i * 3, 9 + (i % 2) * 2, 2.6, 4.5 - i * .3, c)
+    cv.hline(2, 14, 5, shade(c, .6)); cv.set(4, 6, shade(c, 1.3)); cv.outline(); return cv
+def _mat_ear(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 9, 3, 6, c); cv.ellipse(8, 10, 1.4, 3.6, shade(c, 1.25)); cv.set(7, 5, shade(c, 1.4)); cv.outline(); return cv
+def _mat_meat(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 9, 6, 4.5, c); cv.ellipse(6, 8, 2, 1.4, shade(c, 1.3)); cv.set(10, 10, shade(c, .7)); cv.set(11, 8, hx("#6a8a3a")); cv.outline(); return cv
+def _mat_core(c):
+    cv = Canvas(16, 16); cv.ellipse(8, 8, 5.5, 5.5, shade(c, .7)); cv.ellipse(8, 8, 4, 4, c); cv.ellipse(7, 7, 1.6, 1.6, shade(c, 1.5))
+    cv.hline(2, 4, 8, shade(c, .7)); cv.hline(12, 14, 8, shade(c, .7)); cv.outline(); return cv
+def _mat_bundle(c):
+    cv = Canvas(16, 16); cv.rect(4, 4, 11, 12, c); cv.rect(4, 4, 11, 5, shade(c, 1.25)); cv.rect(4, 8, 11, 8, shade(c, .6)); cv.rect(7, 3, 8, 13, shade(c, .7)); cv.outline(); return cv
+
+MATERIAL_ICONS.update(
+    goblin_ear=(_mat_ear, "#6ab04a"), imp_horn=(_mat_horn, "#a8a0d8"), rotten_flesh=(_mat_meat, "#8a9a5a"), bone=(_mat_bone, "#ece4cc"),
+    antler=(_mat_horn, "#b88a5a"), tusk=(_mat_fang, "#e8dcc0"), hide=(_mat_leather, "#7a5a3a"), bear_claw=(_mat_fang, "#d8d0c4"),
+    bat_wing=(_mat_wing, "#6a5a8a"), demon_horn=(_mat_horn, "#c83a3a"), golem_core=(_mat_core, "#7ad0e8"),
+    thick_leather=(_mat_leather, "#6a4a2a"), bone_beam=(_mat_bar, "#d8cfb0"), bat_silk=(_mat_cloth, "#7a5a9a"), demon_steel=(_mat_bar, "#8a2a3a"),
+    golem_engine=(_mat_gear, "#58a8c8"), compost=(_mat_bundle, "#6a5a3a"), polished_tusk=(_mat_fang, "#fff4dc"), polished_antler=(_mat_horn, "#d8b078"),
+    imp_charm=(_mat_bundle, "#9a6ad8"), claw_charm=(_mat_bundle, "#c8b090"),
+)
+
 def flower_pot():
     cv = Canvas(16, 24); pot = hx("#c4684a")
     cv.rect(4, 16, 11, 21, pot); cv.rect(4, 16, 11, 17, shade(pot, 1.2)); cv.rect(5, 19, 10, 21, shade(pot, .85))
@@ -2068,6 +2157,142 @@ def egg_nest():   # 鳥巢擺飾：樹皮編的窩裡有兩顆蛋
     cv.set(12, 6, hx("#e8c070")); cv.set(13, 5, hx("#e8c070"))   # 一根羽毛
     cv.outline(); return cv
 
+def park_bench():   # 長椅：公園那種木長椅，鐵腳
+    w = hx("#b8864e"); iron = hx("#4a4e58"); cv = Canvas(16, 16)
+    cv.rect(1, 3, 14, 4, w); cv.rect(1, 6, 14, 7, w); cv.hline(1, 14, 3, shade(w, 1.25)); cv.hline(1, 14, 6, shade(w, 1.25))   # 椅背兩條板
+    cv.rect(1, 4, 2, 11, iron); cv.rect(13, 4, 14, 11, iron)                                                                   # 椅背立柱（兼扶手）
+    cv.rect(0, 9, 15, 11, w); cv.hline(0, 15, 9, shade(w, 1.3)); cv.hline(0, 15, 11, shade(w, .7))                             # 椅面
+    cv.rect(2, 12, 3, 14, iron); cv.rect(12, 12, 13, 14, iron)                                                                 # 椅腳
+    cv.outline(); return cv
+
+def beanbag():   # 懶骨頭：圓滾滾、頂端凹下去的坐墊
+    c = hx("#e8648c"); cv = Canvas(16, 14)
+    cv.ellipse(8, 8, 7, 5, c); cv.ellipse(8, 5.5, 4.5, 2.4, shade(c, .8))   # 本體與頂端的凹陷
+    cv.ellipse(5, 8, 1.6, 1.2, shade(c, 1.3)); cv.set(11, 10, shade(c, .75)); cv.hline(4, 12, 12, shade(c, .7))
+    cv.outline(); return cv
+
+def wardrobe():   # 衣櫃：深色木頭雙開門，門上兩個把手
+    w = hx("#7a5230"); cv = Canvas(16, 24)
+    cv.rect(2, 1, 13, 22, w); cv.rect(2, 1, 13, 2, shade(w, 1.3)); cv.rect(1, 0, 14, 1, shade(w, 1.15))   # 櫃身與頂板
+    cv.rect(3, 3, 7, 20, shade(w, 1.1)); cv.rect(8, 3, 12, 20, shade(w, 1.1)); cv.vline(7, 3, 20, shade(w, .6))   # 兩扇門
+    for x0 in (3, 8): cv.rect(x0 + 1, 5, x0 + 3, 9, shade(w, .92)); cv.rect(x0 + 1, 12, x0 + 3, 18, shade(w, .92))   # 門板的凹格
+    cv.set(6, 11, hx("#e8c070")); cv.set(8, 11, hx("#e8c070"))   # 把手
+    cv.rect(3, 22, 4, 23, shade(w, .6)); cv.rect(11, 22, 12, 23, shade(w, .6))   # 櫃腳
+    cv.outline(); return cv
+
+def coffee_table():   # 茶几：矮矮的圓木桌，上面一杯茶和一本書
+    w = hx("#c89a5a"); cv = Canvas(16, 14)
+    cv.ellipse(8, 6, 7, 3.5, shade(w, 1.1)); cv.ellipse(8, 5.5, 5.5, 2.4, shade(w, 1.25))   # 桌面
+    cv.rect(7, 9, 8, 12, shade(w, .8)); cv.rect(4, 12, 11, 12, shade(w, .65))                 # 桌腳與底座
+    cv.rect(4, 3, 7, 5, hx("#6a8ac8")); cv.hline(4, 7, 3, hx("#9ab8f0"))                      # 一本書
+    cv.rect(10, 2, 12, 5, hx("#f4f0e4")); cv.hline(10, 12, 2, hx("#8a5a34")); cv.set(13, 3, hx("#e8e4d8"))   # 茶杯
+    cv.outline(); return cv
+
+def piano():   # 鋼琴：黑色直立式鋼琴，前面一排黑白琴鍵
+    cv = Canvas(16, 18); k = hx("#22222a")
+    cv.rect(1, 1, 14, 11, k); cv.rect(1, 1, 14, 2, shade(k, 1.8)); cv.rect(3, 4, 12, 8, shade(k, 1.25)); cv.rect(5, 4, 10, 7, hx("#f0e6c8")); cv.hline(6, 9, 5, hx("#6a6a72")); cv.hline(6, 9, 6, hx("#6a6a72"))   # 琴身與譜架（上面一張樂譜）
+    cv.rect(0, 12, 15, 13, shade(k, 1.4))                                                                                     # 琴鍵蓋
+    cv.rect(1, 13, 14, 14, hx("#f4f0e4"))
+    for x in (2, 4, 7, 9, 11): cv.rect(x, 13, x, 14, k)                                                                       # 黑鍵
+    cv.rect(2, 15, 3, 17, shade(k, .8)); cv.rect(12, 15, 13, 17, shade(k, .8))                                                # 琴腳
+    cv.outline(); return cv
+
+def fireplace():   # 壁爐：磚砌的壁爐，爐膛裡燒著火，上面一塊木頭爐台
+    b = hx("#b4583e"); cv = Canvas(16, 22)
+    cv.rect(1, 2, 14, 21, b)
+    for y in range(3, 21, 3):
+        cv.hline(1, 14, y, shade(b, .7))
+        for x in range(2 + (y // 3 % 2) * 3, 14, 6): cv.vline(x, y - 2 if y > 3 else y, y, shade(b, .7))
+    cv.rect(0, 0, 15, 2, hx("#8a5a34")); cv.hline(0, 15, 0, hx("#b07a44"))   # 爐台
+    cv.rect(4, 9, 11, 21, hx("#1c1214"))                                       # 爐膛
+    cv.ellipse(7.5, 18, 3.5, 2.6, hx("#e8801a")); cv.ellipse(7.5, 17, 2.2, 3.2, hx("#f8c030")); cv.set(7, 15, hx("#fff0a0")); cv.set(8, 14, hx("#f8c030"))   # 火
+    cv.rect(4, 20, 11, 21, hx("#5a4a3a"))                                      # 柴
+    cv.outline(); return cv
+
+def floor_mirror():   # 落地鏡：木框的長鏡子，斜斜的反光
+    w = hx("#8a5a34"); cv = Canvas(16, 24)
+    cv.rect(3, 1, 12, 20, w); cv.rect(4, 2, 11, 19, hx("#bfe3f0"))
+    for i in range(5): cv.set(5 + i, 6 - i + 8, hx("#ffffff")); cv.set(6 + i, 6 - i + 8, hx("#e8f7fb"))   # 斜向反光
+    cv.hline(4, 11, 2, hx("#dff3f9")); cv.rect(7, 20, 8, 21, shade(w, .8)); cv.rect(4, 22, 11, 22, shade(w, .65))   # 支架與底座
+    cv.outline(); return cv
+
+def folding_screen():   # 屏風：木框紙面的三折屏風，畫著遠山與月亮
+    w = hx("#8a5a34"); paper = hx("#f0e6c8"); cv = Canvas(16, 24)
+    cv.rect(1, 2, 14, 21, w)
+    for x0 in (2, 6, 10):
+        cv.rect(x0, 3, x0 + 3, 20, paper); cv.hline(x0, x0 + 3, 3, shade(paper, 1.08))
+    cv.ellipse(11.5, 7, 1.6, 1.6, hx("#e8c070"))                                                  # 月亮
+    for x, y in ((3, 16), (4, 15), (5, 14), (6, 14), (7, 15), (8, 16), (9, 15), (10, 14), (11, 15), (12, 16)): cv.rect(x, y, x, 19, hx("#6a8a7a") if x < 7 else hx("#5a7a6a"))   # 遠山
+    cv.rect(1, 21, 14, 22, shade(w, .6)); cv.outline(); return cv
+
+def antler_rack():   # 鹿角掛架：木板底座，頂上一對分岔的鹿角
+    a = hx("#d8b078"); w = hx("#8a5a34"); cv = Canvas(16, 24)
+    cv.rect(7, 12, 8, 20, w); cv.rect(4, 20, 11, 22, shade(w, .7)); cv.rect(5, 9, 10, 12, shade(w, 1.15)); cv.hline(5, 10, 9, shade(w, 1.35))   # 立柱、底座、頭骨板
+    for sx, d in ((6, -1), (9, 1)):   # 左右兩支鹿角：主幹往外上方、分出三叉
+        for i in range(7): cv.set(sx + d * (i // 2), 8 - i, a)
+        for ox, oy in ((1, 5), (2, 3), (3, 1)): cv.set(sx + d * ox, 8 - oy, a); cv.set(sx + d * (ox + 1), 8 - oy - 1, a)
+    cv.set(6, 6, shade(a, 1.3)); cv.outline(); return cv
+
+def hide_rug():   # 獸皮地毯：攤開的獸皮，四肢往外撐
+    c = hx("#7a5a3a"); cv = Canvas(16, 13)
+    cv.ellipse(8, 6.5, 5.5, 4, c); cv.ellipse(3, 3, 2, 1.6, c); cv.ellipse(13, 3, 2, 1.6, c); cv.ellipse(3, 10, 2, 1.6, c); cv.ellipse(13, 10, 2, 1.6, c)
+    cv.ellipse(8, 6.5, 3.4, 2.4, shade(c, 1.18)); cv.set(7, 5, shade(c, 1.4)); cv.set(10, 8, shade(c, .75)); cv.set(5, 8, shade(c, .8))
+    cv.outline(); return cv
+
+def bone_bench():   # 骨梁長椅：粗骨梁當椅身與腳，皮革坐墊
+    b = hx("#d8cfb0"); lt = hx("#6a4a2a"); cv = Canvas(16, 15)
+    cv.rect(1, 6, 14, 8, b); cv.hline(1, 14, 6, shade(b, 1.2)); cv.hline(1, 14, 8, shade(b, .75))   # 骨梁椅身
+    cv.rect(2, 4, 13, 5, shade(lt, 1.1)); cv.hline(2, 13, 4, shade(lt, 1.35))                          # 皮革坐墊
+    for x in (0, 14): cv.ellipse(x + .5, 7, 1.6, 1.8, b)                                               # 梁端的骨節
+    for x in (3, 11): cv.rect(x, 9, x + 1, 13, shade(b, .85)); cv.rect(x - 1, 13, x + 2, 13, shade(b, .6))   # 兩隻骨腳
+    cv.outline(); return cv
+
+def demon_candelabra():   # 魔鋼燭台：暗紅魔鋼的三叉燭台，上面飄著硫磺色的火
+    m = hx("#8a2a3a"); f = hx("#e8e03a"); cv = Canvas(16, 24)
+    cv.rect(7, 12, 8, 20, m); cv.rect(4, 20, 11, 22, shade(m, .75)); cv.rect(6, 19, 9, 20, shade(m, 1.2))   # 柱身與底座
+    cv.rect(3, 11, 12, 11, m); cv.vline(3, 8, 11, m); cv.vline(12, 8, 11, m); cv.vline(7, 8, 11, m); cv.vline(8, 8, 11, m)   # 三叉
+    for x in (3, 7, 12):   # 燭與火
+        cv.rect(x, 6, x + (1 if x == 7 else 0), 8, hx("#f0ead8"))
+        cv.ellipse(x + (.5 if x == 7 else 0), 3.5, 1.4, 2.4, f); cv.set(x, 2, hx("#ff9a40")); cv.set(x, 4, hx("#ffffff"))
+    cv.outline(); return cv
+
+def bat_screen():   # 蝠翼綢屏風：三折的紫色蝠翼綢，下緣一圈木框
+    p = hx("#7a5a9a"); w = hx("#8a5a34"); cv = Canvas(16, 24)
+    cv.rect(1, 3, 14, 21, shade(w, .8))
+    for k, x0 in enumerate((2, 6, 10)):
+        c = p if k % 2 == 0 else shade(p, .85); cv.rect(x0, 4, x0 + 3, 20, c); cv.hline(x0, x0 + 3, 4, shade(c, 1.25))
+        cv.set(x0 + 1, 9, hx("#2a1a3a")); cv.set(x0 + 2, 10, hx("#2a1a3a")); cv.set(x0, 11, hx("#2a1a3a")); cv.set(x0 + 3, 11, hx("#2a1a3a")); cv.hline(x0, x0 + 3, 12, hx("#3a2a4a"))   # 蝠翼圖樣
+    cv.rect(1, 21, 14, 22, shade(w, .6)); cv.outline(); return cv
+
+def golem_gadget():   # 魔像機關擺飾：玻璃罩裡一個發藍光的魔像核心，兩側嵌著齒輪
+    cv = Canvas(16, 24); g = hx("#58a8c8")
+    cv.rect(3, 19, 12, 22, hx("#6a7480")); cv.rect(3, 19, 12, 19, hx("#9aa4b0"))   # 底座
+    cv.rect(4, 6, 11, 18, hx("#cfe8f0")); cv.hline(4, 11, 6, hx("#ffffff")); cv.rect(3, 4, 12, 5, hx("#55525e"))   # 玻璃罩
+    cv.ellipse(7.5, 12, 3.4, 3.4, shade(g, .7)); cv.ellipse(7.5, 12, 2.4, 2.4, hx("#7ad0e8")); cv.set(6, 11, hx("#ffffff"))   # 發光核心
+    for x, y in ((5, 8), (10, 16)):   # 小齒輪
+        cv.ellipse(x, y, 1.6, 1.6, hx("#a8b0b8")); cv.set(x, y, hx("#55525e"))
+    cv.outline(); return cv
+
+def charm_curtain():   # 護符門簾：橫桿上垂下一排串飾——紫色護符、熊爪、布條
+    cv = Canvas(16, 24)
+    cv.rect(1, 3, 14, 4, hx("#8a5a34")); cv.hline(1, 14, 3, hx("#b07a44")); cv.rect(0, 2, 0, 5, hx("#6a4424")); cv.rect(15, 2, 15, 5, hx("#6a4424"))   # 橫桿
+    for k, x in enumerate((3, 6, 9, 12)):
+        cv.vline(x, 5, 9 + (k % 2) * 3, hx("#c9b27a"))   # 繩
+        y = 10 + (k % 2) * 3
+        if k % 2 == 0:
+            cv.rect(x - 1, y, x + 1, y + 4, hx("#9a6ad8")); cv.set(x, y + 1, hx("#fff0b0")); cv.set(x - 1, y + 4, shade(hx("#9a6ad8"), .7)); cv.set(x + 1, y + 4, shade(hx("#9a6ad8"), .7))   # 護符
+        else:
+            for i in range(5): cv.set(x - (i // 3), y + i, hx("#d8d0c4")); cv.set(x - (i // 3) + 1, y + i, hx("#c8b090"))   # 熊爪
+    for x in (4, 8, 11): cv.rect(x, 15, x, 21, hx("#d878a0")); cv.set(x, 21, shade(hx("#d878a0"), .7))   # 垂下的布條
+    cv.outline(); return cv
+
+def compost_bed():   # 花圃：木框裡一壟深色堆肥土，長出花
+    cv = Canvas(16, 16); w = hx("#8a5a34"); soil = hx("#4a3a2a")
+    cv.rect(1, 9, 14, 14, w); cv.hline(1, 14, 9, shade(w, 1.25)); cv.rect(2, 10, 13, 12, soil); cv.hline(2, 13, 10, shade(soil, .75))
+    for x in (4, 8, 12): cv.vline(x, 6, 9, hx("#4d9e46"))
+    for cx, cy, c in ((4, 5, "#f08ab8"), (8, 3, "#f2d14a"), (12, 5, "#e8e4f0")): cv.ellipse(cx, cy, 1.9, 1.9, hx(c)); cv.set(cx, cy, hx("#f2a030"))
+    cv.set(5, 11, shade(soil, 1.4)); cv.set(10, 11, shade(soil, 1.4)); cv.outline(); return cv
+
 def dragon_shield():   # 龍鱗盾牌擺飾（立在鐵架上）
     r = hx("#a8404a"); cv = Canvas(16, 24)
     cv.rect(7, 18, 8, 21, hx("#6a7480")); cv.rect(4, 21, 11, 22, hx("#55525e"))
@@ -2097,6 +2322,15 @@ FURN_MANIFEST = dict(
         dict(id="bed",   name="床",    w=1, h=1, solid=True,  sprite="bed.png", use="sleep", quiltRow=13),
         dict(id="shelf", name="書架",  w=1, h=1, solid=True,  sprite="shelf.png"),
         dict(id="sign",  name="看板",  w=1, h=1, solid=True,  sprite="sign.png", text=True),
+        # 2026-11-14：新增的預設家具（不用合成）
+        dict(id="park_bench",      name="長椅",   w=1, h=1, solid=True, sprite="park_bench.png", use="sit"),
+        dict(id="beanbag",         name="懶骨頭", w=1, h=1, solid=True, sprite="beanbag.png", use="sit"),
+        dict(id="wardrobe",        name="衣櫃",   w=1, h=1, solid=True, sprite="wardrobe.png"),
+        dict(id="coffee_table",    name="茶几",   w=1, h=1, solid=True, sprite="coffee_table.png"),
+        dict(id="piano",           name="鋼琴",   w=1, h=1, solid=True, sprite="piano.png"),
+        dict(id="fireplace",       name="壁爐",   w=1, h=1, solid=True, sprite="fireplace.png"),
+        dict(id="floor_mirror",    name="落地鏡", w=1, h=1, solid=True, sprite="floor_mirror.png"),
+        dict(id="folding_screen",  name="屏風",   w=1, h=1, solid=True, sprite="folding_screen.png"),
         # 以下是「合成家具」：craft=True＝要在合成面板做出來才解鎖（解鎖後無限使用），配方在 client/assets/craft/craft.json
         dict(id="stool",       name="木凳",   w=1, h=1, solid=True,  sprite="stool.png", use="sit", craft=True),
         dict(id="glow_lamp",   name="螢光燈", w=1, h=1, solid=True,  sprite="glow_lamp.png", craft=True),
@@ -2117,6 +2351,15 @@ FURN_MANIFEST = dict(
         dict(id="egg_nest",       name="鳥巢擺飾", w=1, h=1, solid=True, sprite="egg_nest.png", craft=True),
         dict(id="dragon_shield",  name="龍鱗盾牌", w=1, h=1, solid=True, sprite="dragon_shield.png", craft=True),
         dict(id="dragon_trophy",  name="龍牙獎盃", w=1, h=1, solid=True, sprite="dragon_trophy.png", craft=True),
+        # 2026-11-14：用新怪物（哥布林、小鬼、骷髏、鹿、野豬、白熊、蝙蝠、小惡魔、魔像、殭屍）的掉落合成的家具
+        dict(id="antler_rack",      name="鹿角掛架",   w=1, h=1, solid=True,  sprite="antler_rack.png", craft=True),
+        dict(id="hide_rug",         name="獸皮地毯",   w=1, h=1, solid=False, sprite="hide_rug.png", craft=True),
+        dict(id="bone_bench",       name="骨梁長椅",   w=1, h=1, solid=True,  sprite="bone_bench.png", use="sit", craft=True),
+        dict(id="demon_candelabra", name="魔鋼燭台",   w=1, h=1, solid=True,  sprite="demon_candelabra.png", craft=True),
+        dict(id="bat_screen",       name="蝠翼綢屏風", w=1, h=1, solid=True,  sprite="bat_screen.png", craft=True),
+        dict(id="golem_gadget",     name="魔像機關擺飾", w=1, h=1, solid=True, sprite="golem_gadget.png", craft=True),
+        dict(id="charm_curtain",    name="護符門簾",   w=1, h=1, solid=True,  sprite="charm_curtain.png", craft=True),
+        dict(id="compost_bed",      name="花圃",       w=1, h=1, solid=True,  sprite="compost_bed.png", craft=True),
     ],
 )
 
@@ -3239,7 +3482,7 @@ def main():
                     td["walls"] = dict(n="wall.png", w="wall_w.png", e="wall_e.png", h=WALL_H)   # 東北西三面牆（南面不畫）
         if t["id"] in PROPS_BY_TERRAIN:   # 固定小物件（餐飲區等）：圖放在地形資料夾
             td["props"] = PROPS_BY_TERRAIN[t["id"]]
-            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
+            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub); save(claw_machine(), "claw_machine.png", sub); save(gacha_machine(), "gacha_machine.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
         if t.get("campfire") is False:
             td["campfire"] = False
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉
@@ -3256,7 +3499,11 @@ def main():
                    ("flower_pot", flower_pot()), ("desk", desk()), ("ice_sculpture", ice_sculpture()), ("moon_lamp", moon_lamp()),
                    ("iron_chair", iron_chair()), ("lava_lamp", lava_lamp()), ("leather_chair", leather_chair()), ("pearl_statue", pearl_statue()),
                    ("rabbit_rug", rabbit_rug()), ("jelly_lamp", jelly_lamp()), ("slime_sofa", slime_sofa()), ("egg_nest", egg_nest()),
-                   ("dragon_shield", dragon_shield()), ("dragon_trophy", dragon_trophy())]:
+                   ("dragon_shield", dragon_shield()), ("dragon_trophy", dragon_trophy()),
+                   ("park_bench", park_bench()), ("beanbag", beanbag()), ("wardrobe", wardrobe()), ("coffee_table", coffee_table()),
+                   ("piano", piano()), ("fireplace", fireplace()), ("floor_mirror", floor_mirror()), ("folding_screen", folding_screen()),
+                   ("antler_rack", antler_rack()), ("hide_rug", hide_rug()), ("bone_bench", bone_bench()), ("demon_candelabra", demon_candelabra()),
+                   ("bat_screen", bat_screen()), ("golem_gadget", golem_gadget()), ("charm_curtain", charm_curtain()), ("compost_bed", compost_bed())]:
         save(cv, fn + ".png", "furniture")
     write_json(os.path.join(ASSETS, "furniture", "furniture.json"), FURN_MANIFEST)
     print("  furniture/furniture.json")
