@@ -259,7 +259,7 @@ body {
 .settings-item:hover { background: rgba(200, 170, 79, .18); color: #ffe9a8; }
 
 /* ---------- 武器列（左上角，橫向只有圖示；選到的那格才顯示名稱，滾輪切換）---------- */
-#weaponBar { position: absolute; left: 10px; top: 52px; z-index: 12; display: flex; flex-direction: row; gap: 4px; user-select: none; }
+#weaponBar { position: absolute; left: 10px; top: 77px;   /* 2026-11-14：頂部列變高（約 67px、畫面從 75px 起），原本 52px 會蓋到頂部列 */ z-index: 12; display: flex; flex-direction: row; gap: 4px; user-select: none; }
 #weaponBar .wrow { position: relative; width: 34px; height: 34px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: rgba(22, 25, 34, .62); border: 1px solid #3a3f4e; cursor: pointer; }
 #weaponBar .wrow canvas { width: 24px; height: 24px; image-rendering: pixelated; opacity: .6; }
 #weaponBar .wrow .wic { font-size: 16px; line-height: 24px; opacity: .6; }
@@ -522,7 +522,7 @@ body {
 .ar-cab.you { opacity: 1; box-shadow: 0 0 8px rgba(255, 224, 138, .45); }
 .table-ranking { margin: 6px auto; max-width: 360px; text-align: center; }
 /* 增減益圖示（左上角武器列下方）：綠框＝增益、紅框＝減益，右下角剩幾秒；滑鼠移上去只顯示名稱（title） */
-#buffBar { position: absolute; left: 10px; top: 112px; z-index: 12; display: flex; flex-wrap: wrap; gap: 4px; max-width: 260px; user-select: none; }
+#buffBar { position: absolute; left: 10px; top: 137px;   /* 武器列下方（武器列 top＋60；2026-11-14 隨頂部列變高一起下移，原本 112px） */ z-index: 12; display: flex; flex-wrap: wrap; gap: 4px; max-width: 260px; user-select: none; }
 #buffBar .buff { position: relative; width: 28px; height: 28px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: rgba(22, 25, 34, .72); border: 1px solid #5aa860; cursor: default; }
 #buffBar .buff.bad { border-color: #d05050; }
 #buffBar .bi { font-size: 16px; line-height: 1; }
