@@ -4117,10 +4117,11 @@ function closeSkillInfo() { S.skillOpen = false; $('skillBox').classList.add('hi
 function buildPlayerList() {
   const body = $('listBody');
   const rs = [...S.remotes.values()];
-  const sig = rs.map(r => r.id + '|' + r.name + '|' + !!r.dead).join(',');
+  const sig = S.terrain + '#' + rs.map(r => r.id + '|' + r.name + '|' + !!r.dead).join(',');   // 地形也算進去：換島後就算名單剛好一樣也要重畫標題
   if (sig === S.listSig && body.children.length === rs.length) return;   // 名單沒變就不重建，免得點擊到一半元素被換掉
   S.listSig = sig; body.innerHTML = '';
-  $('listHint').textContent = rs.length ? '點選玩家名字，傳送到他身邊' : '這座島上目前沒有其他玩家';
+  const tn = S.terrains[S.terrain]?.name || '';
+  $('listHint').textContent = rs.length ? `${tn}：點選玩家名字，傳送到他身邊` : `${tn}目前沒有其他玩家`;
   for (const r of rs) {
     const o = document.createElement('div'); o.className = 'opt name' + (r.dead ? ' dead' : '');
     o.textContent = (r.name || '玩家') + (r.dead ? '（墓碑）' : '');
@@ -10017,6 +10018,7 @@ async function switchTerrain(id) {
     await ensureTerrain(id);      // 先載好圖，再切地形
     S.terrain = id; try { localStorage.setItem('dcisland.m0.terrain', id); } catch { /* 存不了不影響換地形 */ }
     S.remotes.clear();                          // 換了地形，原地形的人都看不到了
+    if (S.listOpen) { S.listSig = null; buildPlayerList(); }   // 線上列表開著：馬上清掉舊島的人，新島的人到了由計時器補上
     if (netOn()) { S.netFurn = []; S.netFloor = []; }   // 等伺服器送該地形的擺設與地板
     genWorld(id); loadLayout();
     spawnNPCs();                                // 這張地圖自己的 NPC（上一張地圖的留在原地）
