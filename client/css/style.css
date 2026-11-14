@@ -27,7 +27,7 @@ body {
 
 /* ---------- 頂部列 ---------- */
 #topbar {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: flex-start; gap: 14px;
   background: var(--panel);
   border: 1px solid var(--gold-dim);
   border-bottom: 2px solid var(--gold-dim);
@@ -40,13 +40,17 @@ body {
 }
 .tb-sub { font-size: 11px; color: var(--text-dim); letter-spacing: 2px; }
 .tb-time { font-size: 12px; letter-spacing: 1px; color: var(--text-dim); }   /* 遊戲時間（季節各自一色，顏色由 main.js 的 updateClock 設定） */
-.tb-right { display: flex; gap: 8px; }
+.tb-right { display: flex; gap: 8px; margin-left: auto; }
 
-/* 地形 chips */
-.tb-center { display: flex; gap: 4px; }
+/* 圖鑑／角色：兩顆按鈕上下疊（同 chips 的兩列配置） */
+.tb-stack { display: flex; flex-flow: column; gap: 4px; }
+.tb-stack .ff-btn { padding: 3px 14px; }
+
+/* 地形 chips：直向成對排列（兩個一欄、欄內照 TERRAIN_IDS 順序，沙灘島排在草島下方） */
+.tb-center { display: flex; flex-flow: column wrap; align-content: flex-start; gap: 4px 8px; height: 49px; }
 .chip {
-  font-size: 12px; letter-spacing: 2px;
-  padding: 4px 10px; cursor: pointer;
+  font-size: 12px; letter-spacing: 2px; white-space: nowrap;
+  padding: 2px 16px; cursor: pointer;
   border: 1px solid #3a3f4e; background: var(--panel-2);
   color: var(--text-dim); user-select: none;
 }
