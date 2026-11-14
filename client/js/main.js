@@ -3066,9 +3066,9 @@ function sitReal(p) {
 }
 function charFrame(p) {
   const F = S.avatar.frames, st = F.states;
-  if (p.pose === 'sit' && !p.fish) {   // LPC 的 sit 動作（2026-11-15）：所有圖層都有 sit 圖才用（sitReal），3 幀慢慢輪播
+  if (p.pose === 'sit' && !p.fish) {   // LPC 的 sit 動作（2026-11-15）：所有圖層都有 sit 圖才用（sitReal），固定第 3 幀（雙腳踩地）
     const sl = sitReal(p);
-    if (sl) return { fi: sl[Math.floor((S.t + (p.animPhase ||= Math.random() * 4)) * 1.2) % sl.length], mirror: false };
+    if (sl) return { fi: sl[2], mirror: false };   // 固定第 3 幀＝雙腳都踩在地上的坐姿（使用者 2026-11-15：不要一直動、要兩腳放地上那個；第 1、2 幀是盤腿／換腿的動作）
   }
   if (p.pose && !(p.pose === 'sit' && p.fish)) {
     const d = p.pose === 'sit' ? d8Of(p) : 'down';   // 坐姿面向椅子的朝向（朝下用 sit 幀；其他方向用該方向的待機幀）
