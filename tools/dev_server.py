@@ -1182,7 +1182,7 @@ def bk_leave(t, i, now):
     elif all(d["done"] for d in g["sd"]):
         bk_finish(t)
 
-# ---- 列島建國（第十七桌 t17；2026-11-14，使用者要求）：3～4 人、引擎構築＋共同目標＋事件牌；規格見 docs/kingdom-spec.md ----
+# ---- 列島建國（第十七桌 t17；2026-11-14，使用者要求）：2～4 人（2026-11-15 開放 2 人）、引擎構築＋共同目標＋事件牌；規格見 docs/kingdom-spec.md ----
 # 牌庫資料在 client/assets/kingdom/cards.json（tools/kingdom_cards.py 產生）。每回合做一件「主要動作」（拿資源 kt／保留 kr／建造 kb／過 kp），
 # 另有不佔回合的「交易 kx」「封鎖 kk」。伺服器權威：資源、牌堆、市場、事件、目標全在這裡算；其他人手上保留的牌只告訴張數。
 KG_TURN_MS, KG_IDLE_MAX, KG_XP, KG_WIN_VP = 90000, 2, 10, 25

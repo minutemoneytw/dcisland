@@ -843,7 +843,7 @@ function bkLeave(t, i, now) {   // 遊戲進行中有人離開：棋子留在棋
   if (i === t.turn) bkAdvance(t, i, now);
   else if (g.sd.every(d => d.done)) bkFinish(t);
 }
-// ---- 列島建國（第十七桌 t17；2026-11-14，使用者要求）：3～4 人、引擎構築＋共同目標＋事件牌；規格見 docs/kingdom-spec.md ----
+// ---- 列島建國（第十七桌 t17；2026-11-14，使用者要求）：2～4 人（2026-11-15 開放 2 人）、引擎構築＋共同目標＋事件牌；規格見 docs/kingdom-spec.md ----
 // 規則與 tools/dev_server.py 的 kg_* 是同一套（逐行對照）；牌庫資料在 client/assets/kingdom/cards.json（tools/kingdom_cards.py 產生），由 Island.kgLoad 從 assets 讀進 KG。
 // 每回合做一件「主要動作」（拿資源 kt／保留 kr／建造 kb／跳過 kp），另有不佔回合的「交易 kx」「封鎖 kk」。伺服器權威：其他人手上保留的牌只告訴張數。
 const KG_TURN_MS = 90000, KG_IDLE_MAX = 2, KG_XP = 10, KG_WIN_VP = 25, KG_RES = "WSFI";
