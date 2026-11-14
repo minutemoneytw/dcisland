@@ -137,19 +137,129 @@ function inRoom(x, y, id = S.terrain) {
   const td = S.terrains[id], b = td?.layout === 'room' && td.roomBox;
   return !b || (x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]);
 }
+// ---- 島形（2026-11-14 使用者定：除和平島外，7 座戶外島的形狀彼此明顯不同、大小與現狀差不多）----
+// 全部都表示成「d 值」（<.7 陸地、.7~1.1 岸邊、其餘水，門檻與舊橢圓同一套）的形狀函式，可再疊一層「挖洞」
+// （bites：橢圓咬痕，洞內是水、洞緣留岸邊）。genWorld 會先掃一次（不含雜訊）數陸格，把形狀等比縮放到
+// 與舊橢圓的陸地面積相近（π·43.5·29.25·.7 ≈ 2800 格），所以每座島大小都差不多。決定論：形狀是寫死的
+// 常數，同一地形每個人、每次生成都一模一樣。
+//   ellipse：基準橢圓（rx/ry/rot 可旋轉）半徑式，可加諧波 f(θ)=1+Σa·cos(kθ+φ) 或葉瓣項
+//            leaf:{n,depth,pow,sharp}：f −= depth·(1−min(1,|cos(n/2·θ)|^pow·sharp))——sharp 飽和讓峰變平頂（方齒）、
+//            谷是清楚的齒隙（pow 越大齒隙越寬）；pow 1＋sharp 2.2＝十齒齒輪
+//   poly   ：多邊形輪廓（pts＝[角度deg, 半徑倍率]，射線與邊求交得 R(θ)）——楓葉、骷髏這種諧波畫不出的輪廓
+//   blobs  ：兩個橢圓取聯集（d 取最小）——葫蘆
+const MAPLE_PTS = [   // 楓葉輪廓（角度deg遞增、0＝右／90＝下，尾段跨 360 回到第一點）：橫放、尖端朝東——
+// 三大瓣（東尖＋南北兩瓣）＋基部兩小瓣、深而窄的葉谷、基部圓窄。直立（尖端朝上）在面積 2800 格下尖端會被地圖上下緣切掉，橫放才放得進 108×72 的地圖
+  [0, .9], [11, .8], [19, .45], [27, .78], [48, .85], [68, .6], [76, .42], [84, .55], [112, .6], [138, .48], [178, .48],
+  [222, .48], [248, .6], [276, .55], [284, .42], [292, .6], [312, .85], [333, .78], [341, .45], [349, .8],
+];
+const SKULL_PTS = [   // 骷髏頭輪廓（角度deg遞增，形狀與搜尋假設一致——角度不遞增會讓跨 360 的段對不上、輪廓冒出尖刺）：圓顱、太陽穴微凹、顴骨外凸、下顎收窄、下巴圓平；頭頂略收（面積歸一化會把島放大，頭頂全徑會貼到地圖上緣）
+  [14, .925], [38, .885], [58, .805], [78, .775], [90, .765], [102, .775], [122, .805], [142, .885], [168, .925],
+  [192, .885], [213, .955], [242, .955], [270, .93], [298, .955], [327, .955], [348, .885],
+];
+const SHAPE_BY_TERRAIN = {
+  grass:   { kind: 'poly', R: 42, pts: MAPLE_PTS },                                                                                 // 草島：楓葉（尖瓣深谷，北端一片尖端朝上）
+  beach:   { kind: 'ellipse', rx: 40, ry: 28, rot: -.4, bites: [{ bx: 30, by: -24, brx: 18, bry: 12, brot: 0 }] },   // 沙灘島：新月（咬口中心貼著島緣外側，咬痕才切得穿到海、開口朝東北；離出生／NPC 區遠）
+  snow:    { kind: 'ellipse', rx: 40, ry: 30, rot: 0, bites: [{ bx: 31, by: 0, brx: 19, bry: 7, brot: -.08 }] },                    // 雪島：東側切穿的狹長深灣（峽灣；島貼著地圖上下緣，灣開在東邊才切得穿到海）
+  night:   { kind: 'poly', R: 38.7, pts: SKULL_PTS,                                                                                // 夜光島：骷髏頭輪廓
+             bites: [   // 眼窩兩個（水）、鼻孔（水）、下緣三道牙縫缺口
+               { bx: -8, by: -6, brx: 5, bry: 6, brot: 0 }, { bx: 8, by: -6, brx: 5, bry: 6, brot: 0 },
+               { bx: 0, by: 8, brx: 2, bry: 3, brot: 0 },
+               { bx: -11, by: 23, brx: 2.4, bry: 4, brot: 0 }, { bx: 0, by: 24, brx: 2.4, bry: 4, brot: 0 }, { bx: 11, by: 23, brx: 2.4, bry: 4, brot: 0 },
+             ] },
+  forest:  { kind: 'blobs', a: { dx: -13, dy: 9, rx: 26, ry: 22, rot: .3 }, b: { dx: 15, dy: -11, rx: 17, ry: 14, rot: -.2 } },     // 森林島：葫蘆（兩坨相連、腰身明顯）
+  volcano: { kind: 'ellipse', rx: 35.7, ry: 35.7, rot: 0, harm: [[6, .17, 1.571], [3, .08, 1.0], [12, .05, 0]] },                   // 熔岩島：六道尖角的星形
+  machine: { kind: 'ellipse', rx: 35, ry: 35, rot: 0, leaf: { n: 8, depth: .3, pow: 1, sharp: 2.6 } },                              // 機械島：八齒齒輪（平頂方齒、看得見的齒隙）
+};
+const SHAPE_DEFAULT = { kind: 'ellipse', rx: 43.5, ry: 29.25, rot: 0, harm: [] };   // 沒登記形狀的地形：原本的橢圓
+const ISLAND_LAND_TARGET = Math.PI * 43.5 * 29.25 * .7;   // 舊橢圓的陸地面積（格數）：每座島都縮放到這個大小附近
+
 function genWorld(id) {
   const rng = mulberry32(hashStr(id));
-  const cx = COLS / 2 - .5, cy = ROWS / 2 - .5, rx = 43.5, ry = 29.25;   // 放大 5 倍級（2026-11-07 再放大約 24% 面積：原本 26／17.5；2026-11-09 半徑再 ×1.5：原本 29／19.5）
+  const cx = COLS / 2 - .5, cy = ROWS / 2 - .5;   // 島心（出生點周圍永遠是陸地：d 在島心＝0）；半徑歷史：26／17.5 →（2026-11-07）29／19.5 →（2026-11-09）43.5／29.25，2026-11-14 起只當面積基準（ISLAND_LAND_TARGET）
   const types = new Uint8Array(COLS * ROWS);
   const room = S.terrains[id]?.layout === 'room';   // 和平島：像室內——整張地圖都是地板，沒有水（2026-11-08 使用者要求移除最外圈的水；地圖邊界本來就走不出去）
   // 室內釣魚池（terrain.json 的 pools；2026-11-09）：池內是水（types 0，可以拋竿），外圍一圈是池邊（types 1，可以走）
   const inPool = (x, y, m) => (S.terrains[id]?.pools || []).some(p => x >= p.cell[0] - m && x < p.cell[0] + p.w + m && y >= p.cell[1] - m && y < p.cell[1] + p.h + m);
+  // 該地形形狀的「原始 d 值」（不含雜訊、不含縮放）：橢圓 d=Σ(x/半軸)²；其餘先換成「沿該角度的邊界半徑 R(θ)」再 d=(rr/R)²
+  const sh = SHAPE_BY_TERRAIN[id] || SHAPE_DEFAULT;
+  const ellD = (e, px, py) => {   // 橢圓的 d 值（中心 e.dx/e.dy、半軸 e.rx/e.ry、旋轉 e.rot）
+    const c = Math.cos(e.rot || 0), s = Math.sin(e.rot || 0);
+    const ax = px - (e.dx ?? cx), ay = py - (e.dy ?? cy);
+    const u = ax * c + ay * s, v = -ax * s + ay * c;
+    return (u / e.rx) ** 2 + (v / e.ry) ** 2;
+  };
+  const harms = sh.harm || [];
+  const harmF = th => {   // 諧波＋葉瓣項（齒輪用葉瓣：|cos| 乘 sharp 飽和 → 平頂方齒＋清楚的齒隙；pow 越大齒隙越寬）
+    let f = 1;
+    for (const [k, a, p] of harms) f += a * Math.cos(k * th + p);
+    if (sh.leaf) { const L = sh.leaf; const c = Math.abs(Math.cos(L.n / 2 * th)) ** (L.pow ?? 1); f -= L.depth * (1 - Math.min(1, c * (L.sharp || 1))); }
+    return f;
+  };
+  const ellRawD = (x, y) => {   // 基準橢圓（× 諧波／葉瓣）的原始 d：半徑式 R(θ)=e(θ)·f(θ)
+    const th = Math.atan2(y - cy, x - cx) - (sh.rot || 0), rr = Math.hypot(x - cx, y - cy);
+    const R = 1 / Math.sqrt((Math.cos(th) / sh.rx) ** 2 + (Math.sin(th) / sh.ry) ** 2) * harmF(th);
+    return (rr / R) ** 2;
+  };
+  let rawD;
+  let poly = null;   // poly 形：多邊形輪廓（頂點 [角度deg, 半徑倍率]、角度遞增、對島心星狀）——楓葉、骷髏這種諧波畫不出的輪廓
+  if (sh.kind === 'poly') {
+    const vs = sh.pts.map(([a, r]) => { const t = a * Math.PI / 180; return { x: r * sh.R * Math.cos(t), y: r * sh.R * Math.sin(t), a: (a % 360 + 360) % 360 }; });
+    const nv = vs.length;
+    poly = (px, py, s) => {   // 點 (px,py) 是否在「以島心為基準、等比縮放 s 倍的多邊形」內——PNPOLY 射線投射法，非凸輪廓也正確
+      let c = false;
+      for (let i = 0, j = nv - 1; i < nv; j = i++) {
+        const x1 = cx + vs[j].x * s, y1 = cy + vs[j].y * s, x2 = cx + vs[i].x * s, y2 = cy + vs[i].y * s;
+        if ((y1 > py) !== (y2 > py) && px < (x2 - x1) * (py - y1) / (y2 - y1) + x1) c = !c;
+      }
+      return c;
+    };
+  } else if (sh.kind === 'blobs') {   // 兩個橢圓的聯集：d 取最小（各自有自己的岸邊圈）
+    const A = { ...sh.a, dx: cx + sh.a.dx, dy: cy + sh.a.dy }, B = { ...sh.b, dx: cx + sh.b.dx, dy: cy + sh.b.dy };
+    rawD = (x, y) => Math.min(ellD(A, x, y), ellD(B, x, y));
+  } else {   // ellipse（含 SHAPE_DEFAULT）
+    rawD = ellRawD;
+  }
+  // poly 的每格「邊界縮放比 ρ」：該格恰好多邊形邊界上的縮放倍率（對島心星狀 ⇒ 內外對 s 單調，二分搜尋）。
+  // d = ρ²/mul：等 d 曲線＝多邊形的等比放大，與橢圓版 d=(rr/R)² 同義，岸邊帶自然沿輪廓走。
+  // 舊版「射線與頂點夾角那段求 R」在非凸輪廓（深葉谷）會取錯邊——只取無限線交點、沒驗證落在線段上，
+  // 部分角度算出幽靈半徑，陸地被撐到貼地圖邊。改用 PNPOLY 內外判定就沒有這問題。
+  let rho = null;
+  if (poly) {
+    rho = new Float32Array(COLS * ROWS);
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      if (poly(x, y, 4)) {   // 縮放 4 倍早已蓋過全圖；還在裡面才需要真的找邊界（在外面 ⇒ ρ 記 4，d 夠大＝水）
+        let lo = 0, hi = 4;
+        while (hi - lo > .002) { const m = (lo + hi) / 2; if (poly(x, y, m)) hi = m; else lo = m; }
+        rho[y * COLS + x] = hi;
+      } else rho[y * COLS + x] = 4;
+    }
+  }
+  // 最終 d 值：原始 d 除以 mul（等比縮放，mul＝縮放比的平方）。挖洞層的分帶要在「縮放後」判（ds 也除以 mul），
+  // 洞內是水（1.25）、洞緣留一圈岸邊（1.02）——固定值不再被縮放吃掉，灣才不會隨縮放變成淺灘
+  const biteEls = (sh.bites || []).map(b => ({ rx: b.brx, ry: b.bry, rot: b.brot, dx: cx + b.bx, dy: cy + b.by }));
+  let mul = 1;
+  const dist = (x, y) => {
+    let d = poly ? rho[y * COLS + x] * rho[y * COLS + x] / mul : rawD(x, y) / mul;
+    for (const b of biteEls) {
+      const ds = ellD(b, x, y) / mul;
+      if (ds < 1.15) d = Math.max(d, ds < .95 ? 1.25 : 1.02);
+    }
+    return d;
+  };
+  // 歸一化把陸格數校到與舊橢圓相近（π·43.5·29.25·.7 ≈ 2800 格）。poly 的 rho 已預算、dist 很便宜，
+  // 與其他形狀一樣迭代 3 次收斂（有 bites 的 poly：咬痕吃掉的陸格也要靠縮放補回，不能只算多邊形本身）
+  for (let it = 0; it < 3; it++) {
+    let land = 0;
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) if (dist(x, y) < .7) land++;
+    if (!land) break;
+    mul *= ISLAND_LAND_TARGET / land;
+  }
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
     if (room) {   // 和平島：方形房間 roomBox 內是地板（池另算）；房間外填 0（走不進去，但不畫也不能釣魚，見 inRoom）
       types[y * COLS + x] = !inRoom(x, y) ? 0 : inPool(x, y, 0) ? 0 : inPool(x, y, 1) ? 1 : 2;
       continue;
     }
-    let d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2;
+    let d = dist(x, y);
     d += (rng() - .5) * .22;
     types[y * COLS + x] = d < .7 ? 2 : d < 1.1 ? 1 : 0;
   }
