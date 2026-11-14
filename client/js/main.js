@@ -1600,7 +1600,7 @@ Object.assign(JOB_SKILLS, {
               } },
   wings:    { name: '翅膀', cd: 45, dur: 15, desc: '15 秒內所有治療量 +1',
               run() { S.fx.wings = S.t + this.dur; fxBurst('wings'); return true; } },
-  ninjutsu: { name: '忍術', cd: 20, cast: 1.5, r: 80, dmg: 6, desc: '結印 1.5 秒（可移動、不能攻擊），結完對身邊 80px 內的敵人各造成 6 傷害',
+  ninjutsu: { name: '火遁', cd: 20, cast: 1.5, r: 80, reach: 165, dmg: 6, desc: '結印 1.5 秒（可移動、不能攻擊），結完朝最近的敵人（島主優先）噴出火球，命中處 80px 內的敵人各造成 6 傷害；範圍內沒有敵人就不發動',
               run() { S.fx.seal = { t0: S.t, until: S.t + this.cast }; return true; } },
   highjump: { name: '高跳', cd: 15, dmg: 5, range: 200, desc: '跳到滑鼠方向 200px 內的敵人身上造成 5 傷害，再跳回原位',
               usable() { return pickCastTarget(S.players[0], this, castAim()) ? null : '範圍內沒有敵人'; },
@@ -1725,11 +1725,25 @@ function stepSkills() {
   if (F.seal && S.t >= F.seal.until) {
     F.seal = null;
     const sk = JOB_SKILLS.ninjutsu;
-    S.floaters.push({ fxk: 'boom', x: me.x, y: me.y, r: sk.r, life: .6 });
-    S.net?.skillEvent?.('ninjutsu');
+    // 火遁（2026-11-14 使用者要求：由「身邊爆炸」改成「對敵人及周圍造成傷害」）：挑最近的敵人（島主優先；距離不超過 reach，也在伺服器 170px 驗證範圍內），
+    // 火球落在牠身上，落點 r 範圍內的敵人各吃 dmg；範圍內沒有敵人就不發動（不扣冷卻以外的東西，冷卻照算）。島主／魚人的傷害走技能路徑由伺服器驗證距離。
+    let tg = null, tb = Infinity;
     for (const a of S.mobs) {
       if (a.dead || a.fly) continue;
-      if (Math.hypot(a.x - me.x, a.y - me.y) - hitRadius(mobDef(a.id)) > sk.r) continue;
+      const d = Math.hypot(a.x - me.x, a.y - me.y), od = mobDef(a.id);
+      if (d > sk.reach || d - hitRadius(od) > sk.reach) continue;
+      const sc = d - (od.owner ? 1e6 : 0);
+      if (sc < tb) { tb = sc; tg = a; }
+    }
+    if (!tg) { toast('火遁：附近沒有敵人', 1200); return; }
+    const ty = tg.y - 14 * (mobDef(tg.id).big || 1);
+    S.floaters.push({ fxk: 'firebomb', x1: me.x, y1: me.y - 30, x: tg.x, y: tg.y, ty, r: sk.r, life: .7 });
+    S.net?.skillEvent?.(`ninjutsu:${Math.round(tg.x)}:${Math.round(tg.y)}`);
+    for (const a of S.mobs) {
+      if (a.dead || a.fly) continue;
+      const od = mobDef(a.id);
+      if (Math.hypot(a.x - tg.x, a.y - tg.y) - hitRadius(od) > sk.r) continue;
+      if ((od.owner || od.lurker) && Math.hypot(a.x - me.x, a.y - me.y) > sk.reach + 5) continue;   // 伺服器權威的目標要在驗證範圍內
       hitMob(me, a, false, { dmg: sk.dmg, sk: 'ninjutsu' });
     }
   }
@@ -1756,7 +1770,10 @@ function onSkillEvent(kind, r) {
     S.fx[kind] = S.t + JOB_SKILLS[kind].dur;
     toast(`${r.name} 的${JOB_SKILLS[kind].name}罩住了你`, 1800);
   } else if (kind === 'highjump') S.floaters.push({ fxk: 'jumpboom', x: r.x, y: r.y, life: .5 });
-  else if (kind === 'ninjutsu') S.floaters.push({ fxk: 'boom', x: r.x, y: r.y, r: JOB_SKILLS.ninjutsu.r, life: .6 });
+  else if (kind === 'ninjutsu' || kind.startsWith('ninjutsu:')) {   // 火遁：ninjutsu:落點x:落點y（舊版沒帶座標就在施放者身上爆）
+    const [, tx, ty] = kind.split(':'), X = tx != null ? +tx : r.x, Y = ty != null ? +ty : r.y;
+    S.floaters.push({ fxk: 'firebomb', x1: r.x, y1: r.y - 30, x: X, y: Y, ty: Y - 14, r: JOB_SKILLS.ninjutsu.r, life: .7 });
+  }
   else if (kind === 'blink') { S.floaters.push({ fxk: 'smoke', x: r.x, y: r.y, life: .45 }); r.snapNext = true; }
   else if (kind.startsWith('care:') || kind.startsWith('careheal:')) {   // 賢者的關心：care:賢者id:對象id（對象換人／解除）｜careheal:對象id:1
     const heal = kind.startsWith('careheal:');
@@ -1915,7 +1932,7 @@ function drawSkillIcon(c, id) {
     case 'care': bg('#34202a'); { const h = (x, y, s, c) => { g.fillStyle = c; g.beginPath(); g.moveTo(x, y + s * .9); g.bezierCurveTo(x - s * 1.4, y - s * .1, x - s * .6, y - s * 1.1, x, y - s * .35); g.bezierCurveTo(x + s * .6, y - s * 1.1, x + s * 1.4, y - s * .1, x, y + s * .9); g.fill(); };
       h(20, 22, 13, '#ff82aa'); h(20, 21, 7, '#ffd0e0'); } break;
     case 'wings': bg('#2a3440'); g.fillStyle = '#f4f4ff'; for (const s of [-1, 1]) { g.beginPath(); g.moveTo(20, 22); g.quadraticCurveTo(20 + s * 18, 2, 20 + s * 18, 14); g.quadraticCurveTo(20 + s * 14, 20, 20 + s * 16, 28); g.quadraticCurveTo(20 + s * 8, 26, 20, 22); g.fill(); } break;
-    case 'ninjutsu': bg('#241c36'); g.strokeStyle = '#e8d0ff'; g.lineWidth = 2.5; g.strokeRect(9, 9, 22, 22); g.beginPath(); g.moveTo(9, 20); g.lineTo(31, 20); g.moveTo(20, 9); g.lineTo(20, 31); g.stroke(); g.fillStyle = '#c83a3a'; g.beginPath(); g.arc(20, 20, 5, 0, P * 2); g.fill(); break;
+    case 'ninjutsu': bg('#2a1620'); g.fillStyle = '#e8481e'; g.beginPath(); g.moveTo(20, 6); g.quadraticCurveTo(32, 18, 28, 28); g.quadraticCurveTo(24, 35, 20, 34); g.quadraticCurveTo(12, 34, 11, 26); g.quadraticCurveTo(11, 18, 20, 6); g.fill(); g.fillStyle = '#ffb03a'; g.beginPath(); g.moveTo(20, 16); g.quadraticCurveTo(26, 24, 24, 29); g.quadraticCurveTo(21, 33, 18, 31); g.quadraticCurveTo(14, 28, 16, 23); g.quadraticCurveTo(18, 20, 20, 16); g.fill(); break;
     case 'highjump': bg('#1c2440'); g.strokeStyle = 'rgba(170,200,255,.8)'; g.lineWidth = 2; g.setLineDash([3, 3]);
       g.beginPath(); g.moveTo(6, 34); g.quadraticCurveTo(20, -6, 34, 30); g.stroke(); g.setLineDash([]);
       g.fillStyle = '#c9d2d9'; g.beginPath(); g.moveTo(34, 36); g.lineTo(29, 26); g.lineTo(37, 26); g.closePath(); g.fill(); g.fillStyle = '#3a4a8a'; g.fillRect(31, 14, 3, 13); break;
@@ -3332,21 +3349,25 @@ function drawPersonFx(p, fx, backView, phase) {
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
     }
   }
-  if (has('seal')) {   // 忍術結印：頭旁依序浮出三個手印符號（自創）
+  if (has('seal')) {   // 忍術結印：頭旁依序浮出三個梵文種子字（見 SEAL_BIJA）
     const own = p === S.players[0] && S.fx.seal, q = own ? Math.min(.999, (t - S.fx.seal.t0) / JOB_SKILLS.ninjutsu.cast) : (t * .67) % 1;
     const k = Math.floor(q * 3);
     for (let i = 0; i <= k; i++) drawSealGlyph(dir * 22, -44 + (i - k) * 3, i, i === k ? (q * 3) % 1 : 1);
   }
 }
-function drawSealGlyph(x, y, kind, a) {   // 三款自創手印符號：方印、交叉、三角
-  ctx.save(); ctx.translate(x, y); ctx.globalAlpha = Math.min(1, a * 2);
-  ctx.fillStyle = 'rgba(30,20,50,.7)'; ctx.fillRect(-7, -7, 14, 14);
-  ctx.strokeStyle = '#e8d0ff'; ctx.lineWidth = 1.5; ctx.strokeRect(-7, -7, 14, 14);
-  ctx.strokeStyle = '#ff8a8a'; ctx.beginPath();
-  if (kind === 0) { ctx.rect(-3, -3, 6, 6); }
-  else if (kind === 1) { ctx.moveTo(-4, -4); ctx.lineTo(4, 4); ctx.moveTo(4, -4); ctx.lineTo(-4, 4); }
-  else { ctx.moveTo(0, -5); ctx.lineTo(5, 4); ctx.lineTo(-5, 4); ctx.closePath(); }
-  ctx.stroke(); ctx.restore();
+const SEAL_BIJA = ['ॐ', 'ह्रीं', 'हूँ'];   // 忍術結印的三個梵文種子字（唵、赫利、吽；2026-11-14 使用者要求改用梵文，原本是自創的方／叉／三角）；圖檔 assets/skills/seal_glyphs.png 由 gen_assets.py 的 SEAL_GLYPHS 產生，缺圖才退回系統字型
+function drawSealGlyph(x, y, kind, a) {   // 結印時頭旁依序浮出的梵文種子字
+  ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.globalAlpha = Math.min(1, a * 2);
+  ctx.fillStyle = 'rgba(30,20,50,.75)'; ctx.fillRect(-11, -11, 22, 22);
+  ctx.strokeStyle = '#e8d0ff'; ctx.lineWidth = 1.5; ctx.strokeRect(-11, -11, 22, 22);
+  const im = S.sealImg;
+  if (im) ctx.drawImage(im, kind * 18, 0, 18, 18, -9, -10, 18, 18);
+  else {
+    ctx.font = 'bold 15px "Nirmala UI","Noto Sans Devanagari","Kohinoor Devanagari","Mangal",sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#ffb0b0';
+    ctx.fillText(SEAL_BIJA[kind] || SEAL_BIJA[0], 0, 1, 20);
+  }
+  ctx.restore();
 }
 function drawMagicCircle(x, y, left) {   // 黑魔法師的魔法陣：慢慢自轉的紫色雙圈＋星形＋符文點；最後 2 秒閃爍
   const R = JOB_SKILLS.circle.r, rot = S.t * .5, al = left < 2 ? .4 + .4 * Math.abs(Math.sin(S.t * 8)) : .8;
@@ -3481,7 +3502,7 @@ function drawNoulithIdle(p, wid, part) {   // part：'back'＝畫在人物後面
 }
 // 瞬間特效（S.floaters 裡帶 fxk 的；ctx 在世界座標、外層已 save/restore）
 function drawFxFloater(f) {
-  const L = { jumpboom: .5, arrow: .2, song: .7, poisonpop: .6, heart: .6, sheal: .5, smoke: .5, after: .6, boom: .6, kshield: .6, wshield: .6, pop: .6, shout: .5, crack: .8, fog: .8, drain: .4, funnels: .45, carego: .7, healgo: .65 }[f.fxk] || .5;
+  const L = { jumpboom: .5, arrow: .2, song: .7, poisonpop: .6, heart: .6, sheal: .5, smoke: .5, after: .6, boom: .6, firebomb: .7, kshield: .6, wshield: .6, pop: .6, shout: .5, crack: .8, fog: .8, drain: .4, funnels: .45, carego: .7, healgo: .65 }[f.fxk] || .5;
   const q = Math.min(1, Math.max(0, 1 - f.life / L)), al = 1 - q;
   switch (f.fxk) {
     case 'jumpboom': {   // 高跳落地：藍白色衝擊圈＋往外噴的碎片
@@ -3707,6 +3728,27 @@ function drawFxFloater(f) {
       const F = S.avatar.frames, fi = (F.states[`${f.d8}_idle`] || F.states.down_idle)[0], cs = F.scale || 2;
       ctx.globalAlpha = .4 * al; ctx.filter = 'brightness(1.6) saturate(.3)';
       ctx.drawImage(charSprite(myLook(), fi), f.x - F.w * cs / 2, f.y - (F.h - (F.footDy || 0)) * cs, F.w * cs, F.h * cs);
+      break;
+    }
+    case 'firebomb': {   // 火遁：前 30% 火球飛向落點，之後橘紅色火焰爆開（範圍圈＋往上竄的火舌）
+      if (q < .3) {
+        const k = q / .3, x = f.x1 + (f.x - f.x1) * k, y = f.y1 + (f.ty - f.y1) * k;
+        const gr = ctx.createRadialGradient(x, y, 0, x, y, 12);
+        gr.addColorStop(0, 'rgba(255,250,200,.95)'); gr.addColorStop(.5, 'rgba(255,140,40,.85)'); gr.addColorStop(1, 'rgba(220,40,20,0)');
+        ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      const e = (q - .3) / .7, ea = 1 - e;
+      ctx.save(); ctx.translate(f.x, f.y); ctx.scale(1, .5);
+      ctx.fillStyle = `rgba(255,120,30,${.25 * ea})`; ctx.beginPath(); ctx.arc(0, 0, f.r * (.5 + .5 * Math.min(1, e * 2.5)), 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = `rgba(255,170,60,${ea})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, f.r * (.5 + .5 * Math.min(1, e * 2.5)), 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      for (let i = 0; i < 12; i++) {
+        const an = i * Math.PI * 2 / 12 + i * .7, rr = f.r * .75 * Math.min(1, e * 2) * (.4 + (i % 3) * .3), h = 8 + e * 26 + (i % 4) * 4;
+        const x = f.x + Math.cos(an) * rr, y = f.y + Math.sin(an) * rr * .5 - e * 14;
+        ctx.fillStyle = i % 2 ? `rgba(255,200,70,${.8 * ea})` : `rgba(240,70,30,${.8 * ea})`;
+        ctx.beginPath(); ctx.moveTo(x - 5, y); ctx.quadraticCurveTo(x - 4, y - h * .6, x, y - h); ctx.quadraticCurveTo(x + 4, y - h * .6, x + 5, y); ctx.closePath(); ctx.fill();
+      }
       break;
     }
     case 'boom': {   // 忍術：範圍圈＋紫紅色煙爆
@@ -10557,6 +10599,7 @@ async function boot() {
   ]);
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
   Object.assign(S, { furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB });
+  S.sealImg = await optImg('assets/skills/seal_glyphs.png');   // 忍術結印的梵文字（3 格 18×18）；缺圖就畫文字
   loadJobs(jobsDB);
   initCraft(craftDB);
   S.gamesDB = gamesDB;

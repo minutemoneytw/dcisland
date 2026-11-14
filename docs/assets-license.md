@@ -57,3 +57,5 @@
 2. 非商用授權素材僅用於社群娛樂用途；未來若涉及商業化，需重新檢視或重製。
 3. 成員申請的家具/造型需重繪至 16px 基準、統一調色盤，以本 repo 的 manifest 格式上架。
 4. 使用者自製（img2pixel）素材導入流程見 `client/assets/external/img2pixel/README.md`（`tools/import_external.py` → `gen_assets.py` 的 `EXTERNAL_BUNDLES`／`MOB_MANIFEST` 登記 → 在本文件補記錄）。
+
+- 2026-11-14 忍術結印的梵文種子字（`client/assets/skills/seal_glyphs.png`）：ॐ／ह्रीं／हूँ 三個字，把系統字型在 16px 的外觀手動描成像素點陣（`gen_assets.py` 的 `SEAL_GLYPHS`），沒有嵌入或散布任何字型檔；梵文字本身是公有領域的文字。
