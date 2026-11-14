@@ -1548,8 +1548,7 @@ PROPS_BY_TERRAIN = {
               # 圍觀休息區（2026-11-14，使用者要求）：房間左上角。大螢幕＝水池水面（8×6）的 2 倍寬、1.5 倍高＝16×9 格（512×288 px，16:9），畫面由客戶端即時畫（kind＝screen，沒有圖）；
               # 前面鋪一塊休息區地毯。沒有在玩的人可以走到螢幕旁按 F 選轉播哪一桌（所有人共用），也能去餐飲區喝飲料
               dict(id="screen", kind="screen", name="大螢幕", cell=[27, 14], w=16, h=9),   # y＝14：原本上緣貼齊北牆上緣（y＝13），使用者要求再往下 1 格
-              dict(id="pool_rug", kind="rug", img="pool_rug.png", cell=[25, 23], w=20, h=4),    # 水池周圍的地毯（x 25～44、y 23～26，水面那一排是透明的洞）
-              dict(id="lounge_rug", kind="rug", img="lounge_rug.png", cell=[25, 27], w=20, h=8)],   # 休息區地毯（水池南邊）
+              dict(id="lounge_rug", kind="rug", img="lounge_rug.png", cell=[25, 23], w=20, h=12)],   # 休息區地毯（x 25～44、y 23～34）：水池周圍與觀眾席合成一整塊，水面那排是透明的洞
 }
 
 def drink_bar():
@@ -1610,39 +1609,30 @@ def dine_rug():
             cv.set(x, y, gold)
     return cv
 
-def pool_rug():
-    """水池周圍的地毯（320×64，畫 scale 2＝20×4 格）：深青綠底、米色細框；水面那一排（x 32～287、y 16～31）是透明的洞，讓水露出來，洞周圍另有一圈細框。"""
-    W, H = 320, 64
-    cv = Canvas(W, H)
-    base, deep, line = hx("#2f6a64"), hx("#1f4a46"), hx("#d8cfa8")
-    cv.rect(0, 0, W - 1, H - 1, deep)
-    cv.rect(2, 2, W - 3, H - 3, base)
-    cv.rect(1, 1, W - 2, 1, line); cv.rect(1, H - 2, W - 2, H - 2, line); cv.rect(1, 1, 1, H - 2, line); cv.rect(W - 2, 1, W - 2, H - 2, line)   # 外細框
-    hx0, hy0, hx1, hy1 = 32, 16, 287, 31
-    cv.rect(hx0 - 3, hy0 - 3, hx1 + 3, hy1 + 3, line)                       # 水面周圍的細框（外圈）
-    cv.rect(hx0 - 2, hy0 - 2, hx1 + 2, hy1 + 2, deep)
-    for y in range(hy0, hy1 + 1):                                           # 挖洞：水面那一排透明
-        for x in range(hx0, hx1 + 1):
-            cv.set(x, y, (0, 0, 0, 0))
-    for x in range(10, W - 10, 14):                                         # 花紋：上下兩排小點
-        cv.set(x, 8, shade(base, 1.3)); cv.set(x, H - 9, shade(base, 1.3))
-    return cv
-
 def lounge_rug():
-    """圍觀休息區地毯（320×128，畫 scale 2＝20×8 格）：深藍底、銀灰雙線邊框，中間一排排小星點（電影院那種）。"""
-    W, H = 320, 128
+    """圍觀休息區地毯（320×192，畫 scale 2＝20×12 格；2026-11-15 水池旁的地毯與休息區地毯合成一整塊）：深藍底、銀灰雙線外框、星點花紋；
+    最上面一排（y 16～31，x 32～287）是透明的洞，讓水池的水面露出來，洞周圍另有一圈細框。"""
+    W, H = 320, 192
     cv = Canvas(W, H)
     base, deep, line = hx("#2a3a68"), hx("#1c2748"), hx("#b8c4e8")
     cv.rect(0, 0, W - 1, H - 1, deep)
     cv.rect(3, 3, W - 4, H - 4, base)
     cv.rect(1, 1, W - 2, 1, line); cv.rect(1, H - 2, W - 2, H - 2, line); cv.rect(1, 1, 1, H - 2, line); cv.rect(W - 2, 1, W - 2, H - 2, line)
     cv.rect(5, 5, W - 6, 5, line); cv.rect(5, H - 6, W - 6, H - 6, line); cv.rect(5, 5, 5, H - 6, line); cv.rect(W - 6, 5, W - 6, H - 6, line)
+    hx0, hy0, hx1, hy1 = 32, 16, 287, 31
     star = shade(base, 1.35)
-    for k, y in enumerate(range(16, H - 12, 12)):
-        for x in range(14 + (k % 2) * 8, W - 12, 16):
+    for k2, y in enumerate(range(16, H - 12, 12)):
+        for x in range(14 + (k2 % 2) * 8, W - 12, 16):
+            if hx0 - 8 <= x <= hx1 + 8 and hy0 - 8 <= y <= hy1 + 8:
+                continue   # 水池那圈不畫星點
             cv.set(x, y, line)
             for d in (1, 2):
                 cv.set(x - d, y, star); cv.set(x + d, y, star); cv.set(x, y - d, star); cv.set(x, y + d, star)
+    cv.rect(hx0 - 3, hy0 - 3, hx1 + 3, hy1 + 3, line)       # 水面周圍的細框（外圈）
+    cv.rect(hx0 - 2, hy0 - 2, hx1 + 2, hy1 + 2, deep)
+    for y in range(hy0, hy1 + 1):                             # 挖洞：水面那一排透明
+        for x in range(hx0, hx1 + 1):
+            cv.set(x, y, (0, 0, 0, 0))
     return cv
 
 def snack_bar():
@@ -3769,7 +3759,7 @@ def main():
                     td["walls"] = dict(n="wall.png", w="wall_w.png", e="wall_e.png", h=WALL_H)   # 東北西三面牆（南面不畫）
         if t["id"] in PROPS_BY_TERRAIN:   # 固定小物件（餐飲區等）：圖放在地形資料夾
             td["props"] = PROPS_BY_TERRAIN[t["id"]]
-            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub); save(lounge_rug(), "lounge_rug.png", sub); save(pool_rug(), "pool_rug.png", sub); save(claw_machine(), "claw_machine.png", sub); save(gacha_machine(), "gacha_machine.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
+            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub); save(lounge_rug(), "lounge_rug.png", sub); save(claw_machine(), "claw_machine.png", sub); save(gacha_machine(), "gacha_machine.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
         if t.get("campfire") is False:
             td["campfire"] = False
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉

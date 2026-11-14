@@ -314,26 +314,15 @@
    "h": 9
   },
   {
-   "id": "pool_rug",
-   "kind": "rug",
-   "img": "pool_rug.png",
-   "cell": [
-    25,
-    23
-   ],
-   "w": 20,
-   "h": 4
-  },
-  {
    "id": "lounge_rug",
    "kind": "rug",
    "img": "lounge_rug.png",
    "cell": [
     25,
-    27
+    23
    ],
    "w": 20,
-   "h": 8
+   "h": 12
   }
  ],
  "campfire": false

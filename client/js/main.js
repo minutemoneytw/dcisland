@@ -2003,7 +2003,11 @@ function updateStatBars() {
     if (pct !== statUI.xpPct) { $('statXp').querySelector('i').style.width = pct + '%'; statUI.xpPct = pct; }
   }
 }
-function updateSkillBar() {   // 每幀：換職業就重建三格；更新冷卻扇形與秒數（只在值變了才改 DOM）
+function updateSkillBar() {
+  if (S.skillOpen) {   // 技能說明視窗開著：換職業或升級就刷新內容
+    const key = `${S.me.job}|${levelOf(S.players[0])}`;
+    if (key !== S.skillInfoKey) { S.skillInfoKey = key; openSkillInfo(); }
+  }   // 每幀：換職業就重建三格；更新冷卻扇形與秒數（只在值變了才改 DOM）
   if (skillUI.job !== S.me.job) { skillUI.job = S.me.job; buildSkillBar(); }
   const me = S.players[0], busy = me.dead || S.t < (me.petUntil ?? 0) || S.mode !== 'walk';
   for (const u of skillUI.slots) {
@@ -4176,6 +4180,7 @@ function skillInfoData() {
 }
 function openSkillInfo() {
   if (!JOBS[S.me.job]) return;
+  S.skillInfoKey = `${S.me.job}|${levelOf(S.players[0])}`;
   const d = skillInfoData(), body = $('skillBody'); body.innerHTML = '';
   $('skillTitle').textContent = d.title;
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
