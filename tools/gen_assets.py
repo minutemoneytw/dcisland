@@ -1438,25 +1438,31 @@ ROOM_BOX = {"peace": [23, 16, 84, 55]}
 
 # 和平島的遊戲桌：地形 → [桌]。id＝桌 id（兩份伺服器的 TABLE_DEFS 要一致）、game＝client/assets/games/games.json 的遊戲 id、
 # cell＝左上角格、w／h＝占幾格（圖 48×32 以 scale 2 畫＝3×2 格）。桌子是島上固定物件，不是可擺設的家具
+# 桌子格子（2026-11-14，使用者要求）：第 (x, y) 格（x 往右、y 往下）的左上角格＝TBL_X0 + TBL_DX × x、TBL_Y0 + TBL_DY × y。
+# 間距縮成原本的 2/3（原本 DX＝8、DY＝7 → 16/3、14/3；只動這 9 張格子桌，空氣曲棍球、俄羅斯方塊機台、夾娃娃機等不動），
+# 原本的第 3 欄移到第 4 欄、第 2 欄移到第 3 欄，第 2 欄空著（之後放新遊戲）；格子座標有小數（取到小數 2 位，客戶端本來就吃小數）。
+TBL_X0, TBL_Y0, TBL_DX, TBL_DY = 48, 32, 16 / 3, 14 / 3
+
+def tbl_cell(x, y):
+    return [round(TBL_X0 + TBL_DX * x, 2), round(TBL_Y0 + TBL_DY * y, 2)]
+
 TABLES_BY_TERRAIN = {
-    # 2026-11-09 使用者要求：五子棋、抽鬼牌改回各一桌（t3／t4 拿掉，兩份伺服器的 TABLE_DEFS 一起改），
-    # 四桌排成 2×2、圍著島中央（44, 28），左右相距 8 格、上下相距 7 格（中間留空給重生點）
-    # （2026-11-09 地圖放大成 108×72，島心移到 (54,36)，桌子座標整體加 (10,8)）
-    # 2026-11-13 使用者重排：桌子排成格子，第 (x, y) 格（x 往右、y 往下）＝cell [48 + 8x, 32 + 7y]，五子棋 (0,0) 為基準
-    "peace": [dict(id="t2", game="gomoku", cell=[48, 32], w=3, h=2),     # (0,0)
-              dict(id="t6", game="uno", cell=[48, 39], w=3, h=2),        # (0,1) UNO（2026-11-08，使用者要求）
-              dict(id="t1", game="oldmaid", cell=[48, 46], w=3, h=2),    # (0,2)
-              dict(id="t8", game="intel", cell=[56, 32], w=3, h=2),      # (1,0) 秘藥情報戰（2026-11-10，使用者要求）
-              dict(id="t11", game="blokus", cell=[56, 39], w=3, h=2),    # (1,1) Blokus（2026-11-13，使用者要求）
-              dict(id="t12", game="trigon", cell=[56, 46], w=3, h=2),    # (1,2) Blokus Trigon（2026-11-13，使用者要求）
-              dict(id="t10", game="mage", cell=[64, 32], w=3, h=2),      # (2,0) 見習驅魔師（2026-11-12，使用者要求）
-              dict(id="t5", game="dodge", cell=[64, 39], w=3, h=2),      # (2,1) 躲彈幕只有一桌（2026-11-08，使用者要求）
-              dict(id="t14", game="maze", cell=[64, 46], w=3, h=2),      # (2,2) 豆豆迷宮（2026-11-13，使用者要求）
+    # 2026-11-09 使用者要求：五子棋、抽鬼牌改回各一桌（t3／t4 拿掉，兩份伺服器的 TABLE_DEFS 一起改）；2026-11-09 地圖放大成 108×72，島心移到 (54,36)
+    # 2026-11-13 使用者重排：桌子排成格子，五子棋 (0,0) 為基準；2026-11-14 間距縮成 2/3、欄位往右挪（見上）
+    "peace": [dict(id="t2", game="gomoku", cell=tbl_cell(0, 0), w=3, h=2),     # (0,0)
+              dict(id="t6", game="uno", cell=tbl_cell(0, 1), w=3, h=2),        # (0,1) UNO（2026-11-08，使用者要求）
+              dict(id="t1", game="oldmaid", cell=tbl_cell(0, 2), w=3, h=2),    # (0,2)
+              dict(id="t8", game="intel", cell=tbl_cell(1, 0), w=3, h=2),      # (1,0) 秘藥情報戰（2026-11-10，使用者要求）
+              dict(id="t11", game="blokus", cell=tbl_cell(1, 1), w=3, h=2),    # (1,1) Blokus（2026-11-13，使用者要求）
+              dict(id="t12", game="trigon", cell=tbl_cell(1, 2), w=3, h=2),    # (1,2) Blokus Trigon（2026-11-13，使用者要求）
+              dict(id="t10", game="mage", cell=tbl_cell(3, 0), w=3, h=2),      # (3,0) 見習驅魔師（2026-11-12，使用者要求；原本在第 2 欄）
+              dict(id="t5", game="dodge", cell=tbl_cell(3, 1), w=3, h=2),      # (3,1) 躲彈幕只有一桌（2026-11-08，使用者要求）
+              dict(id="t14", game="maze", cell=tbl_cell(3, 2), w=3, h=2),      # (3,2) 豆豆迷宮（2026-11-13，使用者要求）
               # 空氣曲棍球兩桌（2026-11-13，使用者要求）：俄羅斯方塊機台底下，4×2.5 格的長桌，相距 2 格
               dict(id="t15", game="hockey", cell=[48, 21], w=4, h=2.5),
               dict(id="t16", game="hockey", cell=[54, 21], w=4, h=2.5),
-              dict(id="t9", game="zhtyping", cell=[72, 32], w=3, h=2),   # (3,0) 中文打字競賽（2026-11-11，使用者要求）
-              dict(id="t7", game="typing", cell=[72, 39], w=3, h=2),     # (3,1) 英文打字競賽（2026-11-10，使用者要求）
+              dict(id="t9", game="zhtyping", cell=tbl_cell(4, 0), w=3, h=2),   # (4,0) 中文打字競賽（2026-11-11，使用者要求；原本在第 3 欄）
+              dict(id="t7", game="typing", cell=tbl_cell(4, 1), w=3, h=2),     # (4,1) 英文打字競賽（2026-11-10，使用者要求）
               # 俄羅斯方塊（2026-11-13，使用者要求）：場地上方一排 4 台，造型一樣、配色不同，間距約一個人（1 格）。
               # 4 台共用同一張邏輯桌 t13（伺服器的 TABLE_DEFS 只有 t13），cab＝第幾台（0～3），img＝這台的圖（配色）
               *[dict(id="t13", game="arcade", cab=k, img=f"arcade_{k}.png", cell=[48 + k * 3, 14.5], w=2, h=3) for k in range(4)]],   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
