@@ -146,6 +146,20 @@ body {
 /* ---------- 嚮導的操作說明 ---------- */
 #helpBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 460px; max-height: 500px; display: flex; flex-direction: column; z-index: 31; }
 #helpBox.hidden { display: none !important; }
+#skillBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 480px; max-height: 540px; display: flex; flex-direction: column; z-index: 31; }
+#skillBox.hidden { display: none !important; }
+#skillBody { overflow-y: auto; flex: 1 1 auto; min-height: 0; padding-right: 4px; }
+#skillBox .help-sec { font-size: 12px; letter-spacing: 2px; color: var(--gold); margin: 12px 0 4px; }
+#skillBox ul { list-style: none; }
+#skillBox li { font-size: 12px; line-height: 1.7; color: var(--text); padding-left: 12px; position: relative; }
+#skillBox li::before { content: "·"; position: absolute; left: 2px; color: var(--gold-dim); }
+.sk-item { border-left: 2px solid var(--gold-dim); padding: 2px 0 4px 8px; margin: 6px 0; }
+.sk-head { display: flex; align-items: baseline; gap: 8px; }
+.sk-key { display: inline-block; min-width: 18px; text-align: center; border: 1px solid var(--gold-dim); color: var(--gold); font-size: 11px; padding: 0 3px; }
+.sk-name { font-size: 14px; color: var(--gold); }
+.sk-cd { font-size: 11px; color: var(--text-dim); margin-left: auto; }
+.sk-desc { font-size: 12px; line-height: 1.6; color: var(--text); margin-top: 2px; }
+.sk-num { font-size: 12px; color: #ffe08a; margin-top: 2px; }
 #helpBody { overflow-y: auto; flex: 1 1 auto; min-height: 0; padding-right: 4px; }
 #helpBox .help-sec { font-size: 12px; letter-spacing: 2px; color: var(--gold); margin: 10px 0 4px; }
 #helpBox ul { list-style: none; }

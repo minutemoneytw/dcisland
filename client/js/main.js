@@ -3081,7 +3081,7 @@ function spawnNPCs() {
   const defs = S.npcDB?.terrains[S.terrain] || [], out = [];
   const cx = COLS / 2 - .5, cy = ROWS / 2 - .5;
   for (const d of defs) {
-    let pos = null;
+    let pos = d.pos ? [d.pos[0] * CELL + CELL / 2, d.pos[1] * CELL + CELL / 2] : null;   // pos＝指定的格子座標（和平島的嚮導）
     for (let t = 0; t < 80 && !pos; t++) {   // 在島中央附近找沒有家具、彼此不太近的陸地格
       const gx = Math.floor(cx + (Math.random() * 2 - 1) * 7), gy = Math.floor(cy + (Math.random() * 2 - 1) * 5);
       if (S.world.types[gy * COLS + gx] !== 2 || S.occ.has(key(gx, gy))) continue;
@@ -3093,6 +3093,7 @@ function spawnNPCs() {
     const p = makePlayer(d.name, { look: d.look, npc: true });
     p.x = pos[0]; p.y = pos[1]; p.home = { x: pos[0], y: pos[1] };
     p.roam = d.guide ? 96 : 192;              // 嚮導只在原地附近晃，好找
+    p.fixed = !!d.fixed;                      // fixed：站著不動（2026-11-14 和平島的嚮導）
     p.lines = d.lines; p.guide = !!d.guide; p.idle = Math.random() * 2;
     out.push(p);
   }
@@ -3264,6 +3265,7 @@ function stepPlayer(p, dt) {
 }
 
 function stepNPC(p, dt) {
+  if (p.fixed) { p.moving = false; p.frame = 0; if (p.idle > 0) p.idle -= dt; return; }   // 固定不動的 NPC（說話時仍會轉向玩家，見 talkTo）
   if (p.idle > 0) { p.idle -= dt; p.moving = false; p.frame = 0; return; }
   if (!p.target || Math.hypot(p.target.x - p.x, p.target.y - p.y) < 4) {
     // 換目標
@@ -4043,6 +4045,72 @@ function openHelp() {
   S.helpOpen = true; $('helpBox').classList.remove('hidden');
 }
 function closeHelp() { S.helpOpen = false; $('helpBox').classList.add('hidden'); }
+
+// ---------------- 職業技能說明視窗（P 開關；2026-11-14 使用者要求）----------------
+// 內容全部由目前職業動態算出：1／2 鍵技能、R 職能技能（說明＋冷卻）、職能特性、以及「現在這個等級」的各種傷害數值。公式與 hitMob／splashHit 一致。
+const ROLE_SKILL_TEXT = {
+  provoke:   n => `把島主的仇恨拉到自己身上（龍衝仍直接倒地）。要在島主 ${OWNER_PROVOKE_RANGE}px 內才能用。`,
+  groupHeal: n => `補周遭所有人（含自己）${n.healAoE} 血（翅膀期間 +1）。`,
+  vuln:      n => `島主 ${ROLE_DEBUFF.dur} 秒內受到的傷害每擊 +1，所有人打都算。要在島主 ${OWNER_PROVOKE_RANGE}px 內才能用。`,
+  weak:      n => `島主 ${ROLE_DEBUFF.dur} 秒內對所有人造成的傷害 −30%。要在島主 ${OWNER_PROVOKE_RANGE}px 內才能用。`,
+};
+function skillInfoData() {
+  const jd = JOBS[S.me.job], me = S.players[0], lv = levelOf(me), bonus = lvAtkBonus(lv);
+  const wd = S.avatar?.weapons.find(w => w.id === jd?.weapon), rg = wd?.ranged || null, plus = jd?.dmgPlus || 0;
+  const sec = [];
+  // 1) 技能
+  const sk = [];
+  jobSkillIds().forEach((id, i) => {
+    const d = JOB_SKILLS[id]; if (!d) return;
+    let nums = '';
+    if (id === 'ninjutsu') nums = `火球傷害固定 ${d.dmg}（不吃等級與職能加成）`;
+    else if (id === 'highjump') nums = `落地傷害固定 ${d.dmg}`;
+    else if (id === 'poison') nums = `每跳固定 ${d.dmg}，共 ${Math.round(d.dur / d.every) + 0} 下，總計 ${d.dmg * Math.round(d.dur / d.every)}`;
+    else if (id === 'sheal') nums = `補 ${d.amt} 血（翅膀期間 ${d.amt + 1}）`;
+    else if (id === 'care') nums = `每造成 2 次傷害，對方回 1 血；拯救期間每次傷害回 ${d.amt + JOB_SKILLS.save.plus} 血`;
+    sk.push({ key: String(i + 1), name: d.name, cd: d.cd, desc: d.desc, nums });
+  });
+  const rs = ROLE_SKILLS[jd?.role];
+  if (rs) sk.push({ key: 'R', name: rs.name, cd: rs.total(), desc: ROLE_SKILL_TEXT[rs.id]?.({ healAoE: jd.healAoE || 2, wings: false }) || '', nums: '', role: true });
+  sec.push({ title: '技能', skills: sk });
+  // 2) 職能特性
+  const role = ROLES[jd?.role];
+  sec.push({ title: `作為${role?.name || ''}的特性`, lines: [`血量上限 ${hpCap(me)}（職能 ${role?.hpMax}＋等級加成 ${lv - 1}）`, (role?.desc.replace(/；R＝.*$/, '').replace(/^血量上限 \d+、/, '') || '')].filter(Boolean) });
+  // 3) 目前傷害
+  const L = [`目前等級 Lv ${lv}：等級攻擊加成每 3 級 +1，現在 +${bonus}${rg?.lvMul > 1 ? `（${wd.name}每擊吃 ×${rg.lvMul}，等於 +${bonus * rg.lvMul}）` : ''}`];
+  if (rg) {
+    const dmg = (rg.dmg || 2) + plus + bonus * (rg.lvMul || 1), cyc = (rg.cast || 0) + (rg.cast ? (rg.gap ?? ATK_CD) : ATK_CD);
+    L.push(`${wd.name}一般攻擊：每發 ${dmg}（遠程不會暴擊）${rg.cast ? `，詠唱 ${rg.cast} 秒、射程 ${rg.range}px，必須站定` : `，不用詠唱可邊走邊打、射程 ${rg.range}px`}`);
+    L.push(`持續輸出約 ${(dmg / cyc).toFixed(1)}／秒（單一目標）`);
+    if (rg.splash) L.push(`濺射：命中點周圍 ${rg.splash}px 的野生動物各吃 ${Math.max(1, Math.round(dmg * .6))}（60%）`);
+  } else {
+    const dmg = 1 + plus + bonus, crit = 2 + plus + bonus;
+    L.push(`${wd?.name || '武器'}一般攻擊：每下 ${dmg}，暴擊（機率 18%）${crit}`);
+    L.push(`持續輸出約 ${(dmg / ATK_CD).toFixed(1)}／秒（單一目標，不計暴擊）`);
+  }
+  if (plus) L.push(`上面的數字已包含輸出職能的每擊 +${plus}`);
+  sec.push({ title: `現在的傷害數值`, lines: L });
+  return { title: `${jd?.name || ''}　技能說明`, sec };
+}
+function openSkillInfo() {
+  if (!JOBS[S.me.job]) return;
+  const d = skillInfoData(), body = $('skillBody'); body.innerHTML = '';
+  $('skillTitle').textContent = d.title;
+  const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  for (const s of d.sec) {
+    body.appendChild(mk('div', 'help-sec', s.title));
+    if (s.skills) for (const k of s.skills) {
+      const box = mk('div', 'sk-item'), head = mk('div', 'sk-head');
+      head.appendChild(mk('span', 'sk-key', k.key)); head.appendChild(mk('span', 'sk-name', k.name)); head.appendChild(mk('span', 'sk-cd', `冷卻 ${k.cd} 秒${k.role ? '・職能技能' : ''}`));
+      box.appendChild(head); box.appendChild(mk('div', 'sk-desc', k.desc));
+      if (k.nums) box.appendChild(mk('div', 'sk-num', k.nums));
+      body.appendChild(box);
+    }
+    if (s.lines) { const ul = mk('ul'); for (const l of s.lines) ul.appendChild(mk('li', null, l)); body.appendChild(ul); }
+  }
+  S.skillOpen = true; $('skillBox').classList.remove('hidden');
+}
+function closeSkillInfo() { S.skillOpen = false; $('skillBox').classList.add('hidden'); }
 
 // ---- 線上列表（L）：列出同地形的線上玩家，點名字傳送到他的位置（伺服器只告知同地形的人，所以只列得到同一座地形的）----
 function buildPlayerList() {
@@ -10323,7 +10391,7 @@ function cycleWeapon(step) {
   setWeapon(ws[(i + step + ws.length) % ws.length].id);
 }
 let wheelAcc = 0, wheelAt = 0;
-const wheelBlocked = () => S.mode !== 'walk' || S.helpOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.colorOpen || S.glamOpen || S.signOpen || S.confirmOpen;
+const wheelBlocked = () => S.mode !== 'walk' || S.helpOpen || S.skillOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.colorOpen || S.glamOpen || S.signOpen || S.confirmOpen;
 document.addEventListener('wheel', e => {
   const t = e.target;
   if (t !== canvas && !t.closest?.('#weaponBar')) return;   // 只有在遊戲畫面或武器列上滾才切換（面板、視窗要照常捲動）
@@ -10400,6 +10468,7 @@ addEventListener('keydown', e => {
   if (S.titleOpen) { if (k === 'escape') closeTitles(); return; }                          // 稱號一覽開著：Esc 關閉（仍可走路）
   if (S.colorOpen) { if (k === 'escape') closeColor(false); return; }                      // 選色視窗開著：Esc 取消
   if (S.glamOpen) { if (k === 'escape') closeGlams(); return; }                            // 外觀一覽開著：Esc 關閉（仍可走路）
+  if (S.skillOpen) { if (k === 'escape' || k === 'p') closeSkillInfo(); return; }                // 職業技能說明開著：Esc / P 關閉（仍可走路）
   if (S.helpOpen) { if (k === 'escape' || k === 'enter') closeHelp(); return; }       // 操作說明開著：Esc / Enter 關閉，其他鍵不處理
   if (S.confirmOpen) { if (k === 'escape') closeConfirm(); return; }   // 「要保存嗎？」開著時：Esc＝繼續編輯，其他鍵不處理
   if (k === 'escape' && !$('avatarPanel').classList.contains('hidden')) { closeAvatar(); return; }   // 造型面板開著：Esc 先關面板（不會同時離開裝飾模式）；其他鍵照常
@@ -10409,6 +10478,7 @@ addEventListener('keydown', e => {
   }
   if (k === 'escape' && S.mode === 'decor') requestExitDecor();     // Esc 也能離開裝飾模式
   if (k === 'l' && !e.repeat && S.mode === 'walk' && !S.confirmOpen) openList();
+  if (k === 'p' && !e.repeat && S.mode === 'walk' && !S.confirmOpen) openSkillInfo();   // P：職業技能說明
   if (k === 'f' && !e.repeat) doAttack(true);
   if (k === 'r' && !e.repeat) roleSkill()?.run();   // R：職能技能（坦克＝挑釁、補師＝群療、近戰輸出＝破綻、遠程輸出＝降傷）
   if ((k === '1' || k === '2') && !e.repeat) tryJobSkill(+k - 1);   // 1／2：職業技能
@@ -10535,7 +10605,7 @@ function clickAttack(wx, wy) {
 }
 // 長按 F 或左鍵：冷卻一到就自動再揮（每幀呼叫；第一下由按下事件負責，之後這裡接手）
 function autoAttack() {
-  if (S.mode !== 'walk' || S.helpOpen || S.listOpen || S.signOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
+  if (S.mode !== 'walk' || S.helpOpen || S.skillOpen || S.listOpen || S.signOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
   if (isRod() || S.players[0].fish) return;   // 釣竿不連擊：長按不會一直拋竿／收竿
   quiet = true;
   try {
@@ -10546,7 +10616,7 @@ function autoAttack() {
   } finally { quiet = false; }
 }
 canvas.addEventListener('mousedown', e => {
-  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.tableOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.skillOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.tableOpen) return;
   if (S.mode === 'decor' && S.decorTab === 'floor' && (e.button === 0 || e.button === 2)) {   // 地板模式：長按左鍵鋪、長按右鍵拆
     if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
     const r = canvas.getBoundingClientRect();
@@ -10573,7 +10643,7 @@ canvas.addEventListener('mousedown', e => {
 });
 canvas.addEventListener('contextmenu', e => {
   e.preventDefault();
-  if (S.confirmOpen || S.helpOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.tableOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.skillOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.tableOpen) return;
   if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身；點遊戲桌就入座／觀戰（2026-11-12 使用者要求）
     const r = canvas.getBoundingClientRect(), wx = e.clientX - r.left + S.cam.x, wy = e.clientY - r.top + S.cam.y;
     const f = furnAtPoint(wx, wy), tb = tableAtPoint(wx, wy), pr = propAtPoint(wx, wy);
@@ -10604,6 +10674,7 @@ $('cfSave').onclick = () => exitDecor(true);
 $('cfDiscard').onclick = () => exitDecor(false);
 $('cfKeep').onclick = closeConfirm;
 $('helpClose').onclick = closeHelp;
+$('skillClose').onclick = closeSkillInfo;
 $('signSave').onclick = saveSign;
 $('signCancel').onclick = closeSign;
 $('furnClear').onclick = () => {
