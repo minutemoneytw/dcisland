@@ -44,6 +44,7 @@ client/assets/
   fish/fish.json              各島的魚：稀有度、尺寸、脫鉤率
   craft/craft.json            合成：素材、掉落來源、配方（手寫）
   games/games.json            和平島遊戲桌：名稱、人數、規則說明（手寫）
+  kingdom/cards.json          列島建國牌庫：建築、人物、奇觀、事件、共同目標（由 tools/kingdom_cards.py 產生）
 ```
 
 - 目前 8 地形：草島、沙灘、雪島、夜光島、森林島、熔岩島、機械島、和平島（室內房間：遊戲桌、餐飲區，沒有敵對單位）

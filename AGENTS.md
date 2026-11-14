@@ -29,6 +29,7 @@ Discord Activity 小遊戲：2D 點陣島，**同一個語音頻道＝同一座�
 ```bash
 python tools/dev_server.py            # 本機：靜態檔 + /api/token + /ws，http://localhost:8787（不需 Node）
 python tools/gen_assets.py            # 重新產生 client/assets 下的 PNG（placeholder 素材）
+python tools/kingdom_cards.py         # 重新產生列島建國牌庫 client/assets/kingdom/cards.json；tools/kingdom_sim.py 是平衡模擬器
 python tools/import_external.py <zip／資料夾／sheet.png／.gif> <輸出.png>   # 外部素材（逐幀 zip／資料夾、現成 sheet 自動切格、GIF 逐幀）→ 水平 sheet，放進 client/assets/external/img2pixel/
 cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Durable Object；需 Node ≥22）
 ```
@@ -81,5 +82,6 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 | `makeSpr`／`drawSpr`、`anim`、人物分層 sheet、`avatar.json` 的 `frames`、**裝備／外觀／換色（`dye`、`glam`、`wardrobe`）** | 美術：多幀動畫與人物分層 |
 | 天氣（色罩／粒子、`WEATHER_SLOT_MIN` 時刻槽、`weatherSlot` 接遊戲時間、之後 `spawnIf`／植物生長） | 天氣（純客戶端畫面） |
 | **小地圖（`drawMinimap`、`MINI_COLORS`、畫在主畫布右上角、DOM 面板天然蓋過它）** | 小地圖 |
+| 遊戲時間（`gameTime`、四季、日夜明暗、`isNight`） | 遊戲時間 |
 | 本機 Python／Node 環境、Discord CSP、`dev_server.py` 的 HTTP 設定、主迴圈 `dt`／`S.t` | 環境與部署地雷 |
 | 已被取代的舊做法（舊人物分層、髮型模組縮放） | 歷史紀錄（已過時） |

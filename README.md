@@ -23,7 +23,7 @@ HUD 是 FFXIV 風格（僅風格參考，**不使用任何 SE／FFXIV 的素材�
 
 ## 目前有什麼
 
-- **8 座島**（頂部切換，每個人各自在哪座島，只看得到同島的人）：
+- **8 座島**（頂部切換，每個人各自在哪座島，只看得到同島的人；除和平島外 7 座島形狀各不相同）：
 
   | 島 | 島主 | 野外動物 |
   |---|---|---|
@@ -34,19 +34,19 @@ HUD 是 FFXIV 風格（僅風格參考，**不使用任何 SE／FFXIV 的素材�
   | 森林島 | — | 波波羊、圓喙鳥、咕咕雞、史萊姆、哥布林、野豬 |
   | 熔岩島 | 蓋老師 | 大肚蛙、圓喙鳥、史萊姆、飛龍、小惡魔 |
   | 機械島 | 壓力山大 | 跳跳兔、史萊姆、殭屍、魔像、小鬼 |
-  | 和平島 | — | 貓、狗（室內房間，**沒有任何敵對單位**；有遊戲桌、餐飲區與室內釣魚池） |
+  | 和平島 | — | 無（室內房間，**沒有任何敵對單位**；有遊戲桌、餐飲區與室內釣魚池） |
 
-  飛龍、哥布林、小鬼、殭屍、骷髏、野豬、白熊、小惡魔、魔像是**反擊型野怪**（被打會反擊；骷髏場上少於 10 隻會全體追殺），其餘被打只會逃。新怪依等級定素質（各島等級帶每島差 10 級）。野外動物是各自畫面的模擬，刻意不同步。
-- **8 個職業**：騎士／戰士（坦克）、白魔法師／賢者（補師）、忍者／龍騎士（近戰輸出）、吟遊詩人／黑魔法師（遠程輸出）。每個職業有固定的 LPC 裝備、唯一的職業武器、`1`／`2` 兩個職業技能與 `R` 職能技能。
+  飛龍、哥布林、小鬼、殭屍、骷髏、野豬、白熊、小惡魔、魔像是**反擊型野怪**（被打會反擊；骷髏場上少於 10 隻會全體追殺），其餘被打只會逃。部分怪是**夜行怪**：只在遊戲時間 19:00～04:00 出現、天亮退場，而且會主動追打比自己等級低的人。新怪依等級定素質（各島等級帶每島差 10 級）。野外動物是各自畫面的模擬，刻意不同步。
+- **7 個職業**：騎士／戰士（坦克）、白魔法師／賢者（補師）、忍者／龍騎士（近戰輸出）、吟遊詩人（遠程輸出）；黑魔法師暫時隱藏（存檔裡是黑魔法師的人會變騎士）。每個職業有固定的 LPC 裝備、唯一的職業武器、`1`／`2` 兩個職業技能與 `R` 職能技能。
 - **腳色等級**：打怪、採集、釣魚、玩小遊戲得 XP；升級加血量上限、每 3 級加攻擊。登入 Discord 的人等級跟著帳號（伺服器記帳），訪客只存在這台裝置。
 - **島主戰**：四隻島主各有不同攻擊樣式，由伺服器權威同步，會打死人；島主也會升級。見下方[島主](#島主)。
 - **釣魚與圖鑑**：每座島 30 種魚（含和平島），有稀有度與大尺寸；極低機率釣上會追殺人的「深海魚人」（和平島釣不到）。
 - **合成**：採集素材解鎖進素材圖鑑（不消耗），組合 2～3 種猜配方，可合成素材與家具。
-- **稱號**：圖鑑收集、大尺寸、參與擊倒島主等條件解鎖，顯示在名字上方。
+- **稱號**：圖鑑收集、大尺寸、參與擊倒島主、小遊戲戰績等條件解鎖，分戰鬥／釣魚／遊戲三類，顯示在名字上方。
 - **裝飾**：擺家具、鋪地板（可鋪在水上）、寫看板，所有人都能編輯（清空要管理員）；可坐椅子、睡床。
-- **和平島遊戲桌**：列島建國（3～4 人引擎構築：蓋建築拿折扣、招募人物、蓋奇觀，有事件牌與共同目標，約 40～60 分鐘）、抽鬼牌、五子棋（含復盤）、躲彈幕（1～8 人）、UNO（傳統／無限制兩種玩法）、英文打字競賽（1～8 人、限時 30 秒）、見習驅魔師（1～4 人合作，用滑鼠畫符號消除幽靈、打 Boss）、Blokus（2～4 人輪流放方塊、每手限時 45 秒；2 人局用 Blokus Duo 規則）、Blokus Trigon（六邊形三角格版）、中文打字競賽（同英打規則，用輸入法打繁體中文詞、台灣用語詞庫）、秘藥情報戰（3～8 人的隱藏身分諜報戰，原創規則，有限時／不限時兩種模式，行動牌含攔截、轉移、阻擋、洗白、無人倖免等；可開啟「角色卡」模式，18 個角色，技能已全數啟用，見 docs/intel-characters.md）、俄羅斯方塊（場地上方 4 台街機，單人／聯機一般／聯機對戰）、豆豆迷宮（吃豆迷宮類，1～5 人）、空氣曲棍球（兩桌，2～8 人、人數要偶數）。牌局由伺服器權威（豆豆迷宮、空氣曲棍球由其中一位玩家的畫面計算）；打字競賽、躲彈幕、見習驅魔師、俄羅斯方塊、豆豆迷宮有排行榜（前三名）。
+- **和平島遊戲桌**：列島建國（3～4 人引擎構築：蓋建築拿折扣、招募人物、蓋奇觀，有事件牌與共同目標，約 40～60 分鐘）、抽鬼牌、五子棋（含復盤）、躲彈幕（1～8 人）、UNO（傳統／無限制兩種玩法）、英文打字競賽（1～8 人、限時 30 秒）、見習驅魔師（1～4 人合作，用滑鼠畫符號消除幽靈、打 Boss）、Blokus（2～4 人輪流放方塊、每手限時 45 秒；2 人局用 Blokus Duo 規則）、Blokus Trigon（六邊形三角格版）、中文打字競賽（同英打規則，用輸入法打繁體中文詞、台灣用語詞庫）、秘藥情報戰（3～8 人的隱藏身分諜報戰，原創規則，有限時／不限時兩種模式，行動牌含攔截、轉移、阻擋、洗白、無人倖免等；可開啟「角色卡」模式，18 個角色，技能已全數啟用，見 docs/intel-characters.md）、俄羅斯方塊（場地上方 4 台街機，單人／聯機一般／聯機對戰，有連擊）、豆豆迷宮（吃豆迷宮類，1～5 人）、空氣曲棍球（兩桌，1v1 或 2v2）。牌局由伺服器權威（豆豆迷宮、空氣曲棍球由其中一位玩家的畫面計算）；打字競賽、躲彈幕、見習驅魔師、俄羅斯方塊、豆豆迷宮有排行榜（前三名）。
 - **和平島餐飲區**：自助飲料機與點心吧，走近按 `F` 或點它就吃喝，隨機得到增益或減益（**遊戲內刻意不說明效果**，使用者定）。
-- **其他**：營火（範圍內回血，每 3 分鐘換位置）、NPC 與嚮導、玩家列表傳送、空手出拳（純特效）、天氣（八種，純畫面、不同步）、右上角小地圖、暱稱設定（跟著 Discord 帳號）。
+- **其他**：營火（範圍內回血，每 3 分鐘換位置）、NPC 與嚮導、玩家列表傳送、空手出拳（純特效）、遊戲時間（現實 24 分鐘＝遊戲一天，四季與日夜明暗、時鐘）、天氣（八種，純畫面、不同步）、右上角小地圖、暱稱設定（跟著 Discord 帳號）。
 
 ## 里程碑
 
@@ -74,6 +74,7 @@ worker/              正式環境伺服器（Cloudflare Worker）
   wrangler.toml      部署設定（[assets] 指向 ../client、DO 綁定）
 tools/
   dev_server.py      本機伺服器（純 Python 標準庫，不需 Node）；行為與 Worker 版保持一致
+  kingdom_cards.py   列島建國的牌庫產生器（輸出 assets/kingdom/cards.json）；kingdom_sim.py 是它的平衡模擬器
   gen_assets.py      素材的唯一來源（改素材先改這裡再重跑；內容感知寫檔，沒變的檔不會重寫）
   import_external.py 外部素材（逐幀 zip／資料夾、現成 sheet PNG、GIF）→ 拼成水平 sheet
   dev_config.example.json  本機憑證範本
@@ -140,15 +141,15 @@ git push              # 推到 main → GitHub Actions 自動部署（約 1 分�
 | 地形 | `client/assets/terrain/<id>/` 加資料夾＋`terrain.json`（產生器的 `TERRAINS`），並在 `main.js` 的 `TERRAIN_IDS` 登記 |
 | 家具 | `furniture.json` 加條目＋圖（產生器的 `FURN_MANIFEST`）；`use: "sit"／"sleep"` 可坐／睡，`text: true` 可寫字 |
 | 地板 | `floors.json` 加條目＋16×16 無縫磚（`FLOOR_MANIFEST`）；多格地板加 `w`／`h`，邊長最多 4 |
-| 動物／怪物（mobs） | 外部素材（逐幀、現成 sheet PNG 或 GIF）先用 `import_external.py` 拼成 sheet 放進 `client/assets/external/img2pixel/`，再在 `gen_assets.py` 的 `EXTERNAL_BUNDLES` 登記、`MOB_MANIFEST` 加條目、`MOBS_BY_TERRAIN` 指定島與權重。常用欄位：`anim`（含方向網格 `rows`／`rowDir`、`scale`）、`tint`（一張圖做多色系）、`fixed`（每島固定幾隻）、`swim`、`noBounce`、`retaliate`＋`ownerFrac`（反擊型，數值＝島主的 1/N）。**新怪一律給 `lv`**（血量、攻擊力、經驗值照等級算）。**先量大小**：人物畫面上約 46px 高，野外小動物約 20～30px。完整規範見 [`docs/notes.md`](docs/notes.md)「野外動物」與 `client/assets/external/img2pixel/README.md` |
+| 動物／怪物（mobs） | 外部素材（逐幀、現成 sheet PNG 或 GIF）先用 `import_external.py` 拼成 sheet 放進 `client/assets/external/img2pixel/`，再在 `gen_assets.py` 的 `EXTERNAL_BUNDLES` 登記、`MOB_MANIFEST` 加條目、`MOBS_BY_TERRAIN` 指定島與權重。常用欄位：`anim`（含方向網格 `rows`／`rowDir`、`scale`）、`tint`（一張圖做多色系）、`fixed`（每島固定幾隻）、`swim`、`noBounce`、`retaliate`＋`ownerFrac`（反擊型，數值＝島主的 1/N）、`aggro`（主動怪的視野半徑）、`night`（夜行怪）。**新怪一律給 `lv`**（血量、攻擊力、經驗值照等級算）。**先量大小**：人物畫面上約 46px 高，野外小動物約 20～30px。完整規範見 [`docs/notes.md`](docs/notes.md)「野外動物」與 `client/assets/external/img2pixel/README.md` |
 | 人物造型／服裝／武器 | **只用 LPC 素材**（Universal-LPC-Spritesheet-Character-Generator），每個部位一張 832×1344 的 LPC 通用格式 sheet，由 `gen_assets.py` 產生 `avatar.json`（`tops`／`bottoms`／`hats`、`dye` 可換色、`glam` 可當外觀、`unlock` 解鎖條件）。做法見 [`docs/notes.md`](docs/notes.md)「美術：多幀動畫與人物分層」 |
-| 職業 | `client/assets/jobs/jobs.json`（手寫）：`role`、職業武器、`gear`、`skills`；技能效果在 `main.js` 的 `JOB_SKILLS`；**兩份伺服器的 `JOB_ROLE` 也要加** |
+| 職業 | `client/assets/jobs/jobs.json`（手寫）：`role`、職業武器、`gear`、`skills`；技能效果在 `main.js` 的 `JOB_SKILLS`；**兩份伺服器的 `JOB_ROLE` 也要加**。暫時隱藏＝加 `hidden: true`＋`replaceWith`（不列在選單，舊存檔轉成那個職業） |
 | NPC／嚮導／操作說明 | `client/assets/npcs/npcs.json`（手寫；`terrains.<地圖>` 各地圖的 NPC，`help` 是說明視窗） |
 | 魚 | `gen_assets.py` 的 `FISH_TABLE` 加一列再重跑；稀有度權重、脫鉤率、大尺寸門檻在 `fish_manifest()`。加新島的魚要一併補該島的兩個釣魚稱號 |
 | 稱號 | `client/assets/titles/titles.json`（手寫）：`id`、`name`、`desc`、`cond`（`owner`／`dex`／`big`／`titles`）；新的條件類型才要改 `main.js` 的 `titleProgress` |
 | 合成素材／配方／合成家具 | `client/assets/craft/craft.json`（手寫）：`materials`、`sources`（掉落）、`recipes`；圖示在 `gen_assets.py` 的 `MATERIAL_ICONS`，合成家具在 `FURN_MANIFEST` 標 `craft=True` |
 | 可破壞物件／採集工具 | `client/assets/tools/tools.json`（手寫；key＝地形點綴物的圖檔名） |
-| 遊戲桌 | `client/assets/games/games.json`（手寫）＋`gen_assets.py` 的 `TABLES_BY_TERRAIN` 與桌子圖＋兩份伺服器實作該遊戲的狀態機並登記 `TABLE_DEFS` |
+| 遊戲桌 | `client/assets/games/games.json`（手寫）＋`gen_assets.py` 的 `TABLES_BY_TERRAIN` 與桌子圖＋兩份伺服器實作該遊戲的狀態機並登記 `TABLE_DEFS`。列島建國的牌庫另在 `tools/kingdom_cards.py`（改完重跑） |
 | 島主招式設定 | `client/assets/skills/skills.json`（手寫；key＝攻擊樣式）：`name`、`bar`（視窗上方的倒數條）、`say`（放招前要不要講台詞，兩份伺服器也讀） |
 | 島主 | 見下方「新增其他島的島主」 |
 | 動畫 | 任何單張圖都能換成等寬水平 sheet：在該 manifest 條目加 `anim`（`sheet`／`frames`／`fps`／`keyBg`／`stagger`）；地形磚／點綴物寫在 `terrain.json` 的 `anims` |
