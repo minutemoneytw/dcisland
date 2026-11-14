@@ -548,7 +548,7 @@ def kidol_main_hex(cid):
 # 列＝動作組：0-3 施法(7)、4-7 突刺(8)、8-11 走路(9)、12-15 揮砍(6)、16-19 射擊(13)、20 受擊(6)；
 #   每組四列的順序＝上/左/下/右。遊戲只用「走路」組（列 8-11）：待機＝該列第 0 幀、走路＝第 1,3,5,7 幀、斜角沿用同側。
 # 素體＝LPC 的 body＋head＋eyes 三層疊成（source 在 external/img2pixel/lpc/）。
-LPC_COLS, LPC_ROWS = 13, 25   # 21 列＝LPC 原本的動作；第 21～24 列放半揮（LPC 新動作 halfslash，原本在擴充版的第 50 列，這裡接在後面）
+LPC_COLS, LPC_ROWS = 13, 29   # 21 列＝LPC 原本的動作；第 21～24 列放半揮（LPC 新動作 halfslash，原本在擴充版的第 50 列，這裡接在後面）；第 25～28 列放坐姿 sit（2026-11-15，原本在擴充版的第 30～33 列）
 LPC_WALK_BASE = 8
 LPC_DIR = {"down": 2, "down_right": 3, "right": 3, "up_right": 3, "up": 0, "up_left": 1, "left": 1, "down_left": 1}
 LPC_WALK_COLS = [1, 3, 5, 7]
@@ -562,6 +562,7 @@ LPC_ATTACKS = {
     "spellcast": (0, [0, 1, 2, 3, 4, 5, 6]),            # 施法：法杖／咒杖／魔導書（詠唱中依讀條進度播）
     "shoot": (16, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),   # 射擊：豎琴弓
     "halfslash": (21, [0, 1, 2, 3, 4, 5]),              # 半揮：由上往下劈（騎士；2026-11-09 使用者要「從上往下」）
+    "sit": (25, [0, 1, 2]),                             # 坐姿：LPC 擴充版的 sit（2026-11-15，使用者要求；3 個不同幀 × 四向）；每個圖層要有 act/<名稱>_sit.png 才畫得出來
 }
 LPC_DIR4 = ["up", "left", "down", "right"]
 CHAR_IDLE_OF4 = {"up": CHAR_DIRS.index("up") * 8, "left": CHAR_DIRS.index("left") * 8,
@@ -3569,6 +3570,134 @@ def fish_manifest():
         out["terrains"].setdefault(t, []).append(dict(id=fid, name=name, rarity=rar, size=list(size), big=big, sprite=f"{fid}.png"))
     return out
 
+# ---- 家具的 4 個朝向（2026-11-15，使用者要求）：0＝正面（原本那張圖，朝下）、1＝朝左、2＝背面（朝上）、3＝朝右 ----
+# 分級處理：沒有方向性的家具（植栽、燈、桌、地毯、看板…）4 個朝向共用同一張圖（不產生額外圖檔、manifest 沒有 dirs）；
+# 有方向性的（約 23 件）：座椅類（椅子、沙發、長椅）與床各自照實際形狀畫「側面剖面」與「背面」（FURN_SEATS／furn_bed_variants）；
+# 其餘箱型家具（櫃子、電視、鋼琴、壁爐…）背面＝抹平細節的整塊板、側面＝只有「深度」那麼窄的一塊板（FURN_THIN 是扁平的更窄）。右＝左的鏡像。
+# 之後想要精緻版，在 furn_variants 對該 id 另外處理即可（檔名 {id}_l／_b／_r.png）。
+FURN_SYM = {"table", "plant", "rug", "lamp", "coffee_table", "flower_pot", "glow_lamp", "moon_lamp", "lava_lamp", "jelly_lamp", "stool", "beanbag",
+            "ice_sculpture", "pearl_statue", "rabbit_rug", "hide_rug", "egg_nest", "demon_candelabra", "golem_gadget", "compost_bed", "sign"}
+FURN_OUTLINE = (40, 32, 30, 255)
+furn_h = {}   # 家具 id → 正面圖高度（產生 manifest 的 seat 欄位用）
+
+def _furn_mix(a, b, t):
+    return (round(a[0] + (b[0] - a[0]) * t), round(a[1] + (b[1] - a[1]) * t), round(a[2] + (b[2] - a[2]) * t), 255)
+
+def _furn_mirror(cv):
+    out = Canvas(cv.w, cv.h)
+    for y in range(cv.h):
+        for x in range(cv.w):
+            out.set(cv.w - 1 - x, y, cv.get(x, y))
+    return out
+
+def furn_flat(cv):
+    """把細節抹平：非輪廓的顏色往主色靠 75%、整體略暗，上緣兩列提亮（箱型家具的背面／側面都是一整塊板）。"""
+    cnt = {}
+    for y in range(cv.h):
+        for x in range(cv.w):
+            c = cv.get(x, y)
+            if c[3] and c != FURN_OUTLINE:
+                cnt[c[:3]] = cnt.get(c[:3], 0) + 1
+    if not cnt:
+        return cv
+    dom = max(cnt, key=cnt.get)
+    out = Canvas(cv.w, cv.h)
+    top = {x: next((y for y in range(cv.h) if cv.get(x, y)[3]), None) for x in range(cv.w)}
+    for y in range(cv.h):
+        for x in range(cv.w):
+            c = cv.get(x, y)
+            if not c[3]:
+                continue
+            if c == FURN_OUTLINE:
+                out.set(x, y, c)
+                continue
+            n = shade(_furn_mix(c, dom + (255,), 0.75), 0.88)
+            if top[x] is not None and y <= top[x] + 2:
+                n = shade(n, 1.15)
+            out.set(x, y, n)
+    return out
+
+def furn_squeeze(cv, nw):
+    """水平壓成 nw 格寬並置中（箱型家具的側面：只剩「深度」那麼寬）。"""
+    out = Canvas(cv.w, cv.h)
+    ox = (cv.w - nw) // 2
+    for y in range(cv.h):
+        for x in range(nw):
+            c = cv.get(min(cv.w - 1, int(x * cv.w / nw)), y)
+            if c[3]:
+                out.set(ox + x, y, c)
+    for y in range(cv.h):   # 背向的那一側加深一欄
+        c = out.get(ox + nw - 1, y)
+        if c[3] and c != FURN_OUTLINE:
+            out.set(ox + nw - 1, y, shade(c, 0.8))
+    return out
+
+# 座椅類（椅子、沙發、長椅）：依各自的配色與列範圍畫「側面剖面」與「背面」。
+# 參數：W／H 畫布、bt 椅背頂、st 座面頂、sb 座面底（含底座）、lb 椅腳底、cb／cs／cl 椅背／座面／椅腳色、arm 扶手色（沙發有）
+FURN_SEATS = {
+    "sofa":          dict(W=16, H=15, bt=4, st=7, sb=12, lb=13, cb=shade(hx("#c9544f"), 0.95), cs=hx("#c9544f"), cl=hx("#4a3630"), arm=shade(hx("#c9544f"), 0.72)),
+    "chair":         dict(W=16, H=14, bt=3, st=6, sb=8, lb=12, cb=hx("#b8865a"), cs=shade(hx("#b8865a"), 1.1), cl=shade(hx("#b8865a"), 0.85)),
+    "iron_chair":    dict(W=16, H=14, bt=3, st=6, sb=8, lb=12, cb=hx("#6a7480"), cs=shade(hx("#6a7480"), 1.2), cl=shade(hx("#6a7480"), 0.85)),
+    "leather_chair": dict(W=16, H=14, bt=3, st=6, sb=8, lb=12, cb=shade(hx("#9a6a40"), 1.1), cs=shade(hx("#9a6a40"), 1.25), cl=hx("#5a3e24")),
+    "slime_sofa":    dict(W=16, H=15, bt=3, st=7, sb=12, lb=13, cb=shade(hx("#6ad08a"), 0.9), cs=hx("#6ad08a"), cl=shade(hx("#8a5a34"), 0.6), arm=hx("#8a5a34")),
+    "park_bench":    dict(W=16, H=16, bt=3, st=9, sb=11, lb=14, cb=hx("#b8864e"), cs=hx("#b8864e"), cl=hx("#4a4e58")),
+    "bone_bench":    dict(W=16, H=15, bt=4, st=6, sb=8, lb=13, cb=shade(hx("#6a4a2a"), 1.1), cs=hx("#d8cfb0"), cl=shade(hx("#d8cfb0"), 0.85)),
+}
+
+def furn_seat_variants(W, H, bt, st, sb, lb, cb, cs, cl, arm=None):
+    # 朝左（側面剖面）：右邊是椅背的細條、座面往左伸出、前後各一隻椅腳；有扶手的（沙發）扶手板擋在座面前面
+    side = Canvas(W, H)
+    side.rect(3, sb + 1, 4, lb, cl); side.rect(11, sb + 1, 12, lb, shade(cl, 0.85))
+    side.rect(2, st, 12, sb, cs); side.hline(2, 12, st, shade(cs, 1.2)); side.vline(2, st, sb, shade(cs, 0.82))
+    side.rect(10, bt, 12, sb, cb); side.vline(10, bt, st - 1, shade(cb, 1.15)); side.vline(12, bt, sb, shade(cb, 0.8))
+    if arm:
+        side.rect(3, st - 2, 11, sb, arm); side.hline(3, 11, st - 2, shade(arm, 1.25)); side.vline(3, st - 2, sb, shade(arm, 0.85))
+    side.outline()
+    # 背面：椅背的背板蓋住座面，只露出兩側的扶手與椅腳
+    back = Canvas(W, H)
+    back.rect(3, sb + 1, 4, lb, cl); back.rect(11, sb + 1, 12, lb, cl)
+    back.rect(2, bt, 13, sb, shade(cb, 0.88)); back.hline(2, 13, bt, shade(cb, 1.12)); back.hline(2, 13, sb, shade(cb, 0.7))
+    if arm:
+        back.rect(2, st - 1, 3, sb, shade(arm, 0.9)); back.rect(12, st - 1, 13, sb, shade(arm, 0.9))
+    for x in range(4, 12, 3):   # 椅背背板的接縫
+        back.vline(x, bt + 1, st - 1, shade(cb, 0.78))
+    back.outline()
+    return {1: side, 2: back, 3: _furn_mirror(side)}
+
+def furn_bed_variants():
+    # 床（16×24，正面是從床尾看：枕頭在遠端上方、棉被在前面；quiltRow＝13）。朝左／右＝從側面看長邊：床頭板在一端、床尾板矮一點、中間枕頭與棉被；背面＝從床頭看：床頭板的背板擋住床墊
+    wood, wd = hx("#a57c4e"), shade(hx("#a57c4e"), 0.8)
+    cf = hx("#4a6ab0"); leg = hx("#4a3630")
+    side = Canvas(16, 24)
+    side.rect(2, 20, 3, 23, leg); side.rect(12, 20, 13, 23, leg)
+    side.rect(1, 17, 14, 19, wood); side.hline(1, 14, 17, shade(wood, 1.15)); side.hline(1, 14, 19, wd)      # 側面床框
+    side.rect(1, 9, 3, 19, wood); side.vline(1, 9, 19, shade(wood, 1.15)); side.vline(3, 9, 19, wd)         # 床頭板（高）
+    side.rect(13, 13, 14, 19, wood); side.vline(14, 13, 19, wd)                                              # 床尾板（矮）
+    side.rect(4, 13, 12, 16, hx("#f2ede0"))                                                                   # 床單
+    side.ellipse(6, 13, 2.6, 1.6, hx("#ffffff"))                                                              # 枕頭
+    side.rect(8, 12, 12, 16, cf); side.hline(8, 12, 12, shade(cf, 1.15)); side.hline(8, 12, 16, shade(cf, 0.8))   # 棉被
+    side.outline()
+    back = Canvas(16, 24)
+    back.rect(2, 22, 3, 23, leg); back.rect(12, 22, 13, 23, leg)
+    back.rect(2, 5, 13, 7, cf); back.hline(2, 13, 5, shade(cf, 1.15))                                        # 遠端露出一截棉被
+    back.rect(1, 8, 14, 21, shade(wood, 0.9)); back.hline(1, 14, 8, shade(wood, 1.2)); back.hline(1, 14, 21, wd)   # 床頭板背板（整片）
+    for x in (5, 8, 11):
+        back.vline(x, 10, 19, wd)
+    back.outline()
+    return {1: side, 2: back, 3: _furn_mirror(side)}
+
+# 其餘有方向性的家具＝箱型：背面是一整塊板，側面是「深度」那麼窄的一塊板；扁平的（屏風、鏡子、窗簾、掛飾）側面更窄
+FURN_THIN = {"folding_screen": 4, "floor_mirror": 5, "charm_curtain": 4, "dragon_shield": 4, "dragon_trophy": 6, "antler_rack": 5, "bat_screen": 4}
+
+def furn_variants(fid, cv):
+    if fid in FURN_SEATS:
+        return furn_seat_variants(**FURN_SEATS[fid])
+    if fid == "bed":
+        return furn_bed_variants()
+    flat = furn_flat(cv)
+    side = furn_squeeze(flat, FURN_THIN.get(fid, 8))
+    return {1: side, 2: flat, 3: _furn_mirror(side)}
+
 def main():
     print("== 外部素材（img2pixel）登記檢查 ==")
     check_external()
@@ -3643,6 +3772,16 @@ def main():
                    ("antler_rack", antler_rack()), ("hide_rug", hide_rug()), ("bone_bench", bone_bench()), ("demon_candelabra", demon_candelabra()),
                    ("bat_screen", bat_screen()), ("golem_gadget", golem_gadget()), ("charm_curtain", charm_curtain()), ("compost_bed", compost_bed())]:
         save(cv, fn + ".png", "furniture")
+        furn_h[fn] = cv.h
+        if fn not in FURN_SYM:   # 有方向性的家具：朝左／背面／朝右（簡化版，見 furn_variants）
+            for d, v in furn_variants(fn, cv).items():
+                save(v, f"{fn}_{ {1: 'l', 2: 'b', 3: 'r'}[d] }.png", "furniture")
+    for it in FURN_MANIFEST["items"]:
+        if it.get("use") == "sit":   # 坐姿（2026-11-15）：front＝椅面前緣那一列（人從這列以下裁掉、家具這一截重畫在人身上）、back＝背面時椅背頂那一列、drop＝人往下沉幾 px
+            sp = FURN_SEATS.get(it["id"])
+            it["seat"] = dict(front=sp["st"] + 1, back=sp["bt"], drop=max(2, 22 - (sp["H"] - sp["st"]) * 2)) if sp else dict(front=furn_h[it["id"]] // 2, back=furn_h[it["id"]] // 2, drop=4)
+        if it["id"] not in FURN_SYM:
+            it["dirs"] = [f"{it['id']}_l.png", f"{it['id']}_b.png", f"{it['id']}_r.png"]   # 朝向 1／2／3 的圖（沒有 dirs＝4 個朝向共用 sprite）
     write_json(os.path.join(ASSETS, "furniture", "furniture.json"), FURN_MANIFEST)
     print("  furniture/furniture.json")
     print("== 和平島遊戲桌 ==")

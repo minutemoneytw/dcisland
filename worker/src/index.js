@@ -171,7 +171,19 @@ function applyFurnOp(items, defs, op, ground) {
       if (!d) continue;
       if (x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h) return false;
     }
-    items.push({ type: String(op.type), cell: [x, y] });
+    const it = { type: String(op.type), cell: [x, y] };
+    if (Number.isInteger(op.dir) && op.dir >= 1 && op.dir <= 3) it.dir = op.dir;   // 朝向 1 左／2 背／3 右（沒有＝0 正面；2026-11-15）
+    items.push(it);
+    return true;
+  }
+  if (op.t === "rotate") {   // 旋轉已擺好的家具：dir 0～3（0＝正面，存成沒有 dir 欄位）；點到家具任一格都算
+    if (!validCell || !Number.isInteger(op.dir) || op.dir < 0 || op.dir > 3) return false;
+    const it = items.find(o => {
+      const d = defs.get(o.type) || { w: 1, h: 1 };
+      return cell[0] >= o.cell[0] && cell[0] < o.cell[0] + d.w && cell[1] >= o.cell[1] && cell[1] < o.cell[1] + d.h;
+    });
+    if (!it || (it.dir || 0) === op.dir) return false;
+    if (op.dir) it.dir = op.dir; else delete it.dir;
     return true;
   }
   if (op.t === "remove") {

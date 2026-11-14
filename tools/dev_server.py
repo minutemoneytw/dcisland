@@ -5392,8 +5392,27 @@ class Room:
                 w, h = defs.get(it["type"], (1, 1))
                 if x < it["cell"][0] + w and it["cell"][0] < x + d[0] and y < it["cell"][1] + h and it["cell"][1] < y + d[1]:
                     return False
-            items.append({"type": str(msg["type"]), "cell": [x, y]})
+            it = {"type": str(msg["type"]), "cell": [x, y]}
+            dr = msg.get("dir")
+            if isinstance(dr, int) and not isinstance(dr, bool) and 1 <= dr <= 3:
+                it["dir"] = dr   # 朝向 1 左／2 背／3 右（沒有＝0 正面；2026-11-15）
+            items.append(it)
             return True
+        if t == "rotate":   # 旋轉已擺好的家具：dir 0～3（0＝正面，存成沒有 dir 欄位）；點到家具任一格都算
+            dr = msg.get("dir")
+            if not valid or not isinstance(dr, int) or isinstance(dr, bool) or not 0 <= dr <= 3:
+                return False
+            for it in items:
+                w, h = defs.get(it["type"], (1, 1))
+                if it["cell"][0] <= cell[0] < it["cell"][0] + w and it["cell"][1] <= cell[1] < it["cell"][1] + h:
+                    if it.get("dir", 0) == dr:
+                        return False
+                    if dr:
+                        it["dir"] = dr
+                    else:
+                        it.pop("dir", None)
+                    return True
+            return False
         if t == "remove":
             if not valid:
                 return False

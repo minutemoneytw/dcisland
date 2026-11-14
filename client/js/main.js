@@ -1536,6 +1536,7 @@ function myFx() {   // 給 state 的持續型效果清單（id 要符合伺服�
   return out;
 }
 S.myFx = myFx;
+
 // 職業技能：jobs.json 的 skills 依序對應 1、2 鍵。name／desc 顯示在技能列與造型面板；cd＝冷卻秒數；
 // run(me) 回 true＝放出去了（才開始冷卻）；usable() 回 null＝可以放、字串＝不能放的原因（圖示變暗）
 Object.assign(JOB_SKILLS, {
@@ -2981,11 +2982,17 @@ function charSprite(look, fi) {
   layers.push([hat, hatHex]);
   if (wpn && !over && wpn.lpc.fg) layers.push([{ sheet: wpn.lpc.fg }]);   // 一般格武器的前層（最上面）
   const fbEnt = ent !== (F.map?.[fi]) ? null : (ent?.[2] != null ? F.map[ent[2]] : null);   // 正在畫攻擊動作時，這一幀的退回格（給缺動作的單一圖層用）
+  cv.layerMiss = false;   // 有圖層缺這一格（坐姿：該層沒有 LPC sit 圖）→ 呼叫端改用「沉進椅子」的舊畫法
   for (const [it, hex] of layers) {
     const img = it && S.charImgs[it.sheet];
     let lx = sx, ly = sy;
     // 攻擊動作：素體有動作、但這一層（例如之後加的服裝只有走路列）沒有這一格 → 這層改畫自己的退回格，避免衣服整件消失
-    if (fbEnt && img && !sheetCellHas(img, sx, sy, F.w, F.h)) { lx = fbEnt[0] * F.w; ly = fbEnt[1] * F.h; }
+    if (fbEnt && img && !sheetCellHas(img, sx, sy, F.w, F.h)) {
+      lx = fbEnt[0] * F.w; ly = fbEnt[1] * F.h;
+      // 坐姿：這層在這個方向本來就沒東西（臉、眼睛朝上時是空的）不算缺——只有四個方向的 sit 幀都沒有圖才算沒有 sit
+      const sr = F.attacks?.sit?.row;
+      if (sr == null || cr < sr || cr >= sr + 4 || ![0, 1, 2, 3].some(k => sheetCellHas(img, 0, (sr + k) * F.h, F.w, F.h))) cv.layerMiss = true;   // 四個方向的第 1 幀任何一個有東西就算有 sit（臉、眼睛朝上、貓耳後層朝下是空的）
+    }
     if (!img || lx + F.w > img.width || ly + F.h > img.height) continue;   // 缺圖／這張 sheet 沒有這一格：這層略過
     let src;
     if (it.tint) src = duotoneSheet(img, it.tint(it.hx));   // 雙色染色（貓耳：毛→髮色、耳內→粉肉色）
@@ -3041,9 +3048,26 @@ function rodFrameNow(p) {
   if (f.ph === 'bite') return [8, 9][Math.floor(S.t * 10) % 2];
   return 12;   // reel：竿子往後拉住（第 12 格）＋整個人輕微抖動（drawPerson 的 rodJit），跟原本的拉竿一樣；不播 10～12 來回甩（2026-11-09 使用者要求）
 }
+// 這個人現在的造型有沒有完整的 LPC sit 圖（素體、臉、眼、髮、服裝、帽子每一層都有）：有就回 sit 幀清單，沒有回 null（改用沉進椅子的舊畫法）
+function sitReal(p) {
+  const st = S.avatar.frames.states, sl = st[`sit_${d8Of(p)}`];
+  if (!sl) return null;
+  const im = playerSpriteDiv(p, sl[0]);
+  return im && !im.layerMiss ? sl : null;
+}
 function charFrame(p) {
   const F = S.avatar.frames, st = F.states;
-  if (p.pose && !(p.pose === 'sit' && p.fish)) return { fi: (st.sit || st.down_idle)[0], mirror: false };   // 坐著釣魚時照常播釣魚動作的幀（「坐姿」本來就只是站姿待機幀、人被椅子擋住下半身）
+  if (p.pose === 'sit' && !p.fish) {   // LPC 的 sit 動作（2026-11-15）：所有圖層都有 sit 圖才用（sitReal），3 幀慢慢輪播
+    const sl = sitReal(p);
+    if (sl) return { fi: sl[Math.floor((S.t + (p.animPhase ||= Math.random() * 4)) * 1.2) % sl.length], mirror: false };
+  }
+  if (p.pose && !(p.pose === 'sit' && p.fish)) {
+    const d = p.pose === 'sit' ? d8Of(p) : 'down';   // 坐姿面向椅子的朝向（朝下用 sit 幀；其他方向用該方向的待機幀）
+    if (d === 'down' || d.startsWith('down')) return { fi: (st.sit || st.down_idle)[0], mirror: false };
+    let l = st[`${d}_idle`], m = false;
+    if (!l && CHAR_MIRROR[d]) { l = st[`${CHAR_MIRROR[d]}_idle`]; m = !!l; }
+    return l ? { fi: l[0], mirror: m } : { fi: (st.sit || st.down_idle)[0], mirror: false };
+  }   // 坐著釣魚時照常播釣魚動作的幀（「坐姿」本來就只是站姿待機幀、人被椅子擋住下半身）
   const mode = p.moving ? 'walk' : 'idle', d = d8Of(p);
   const rk = rodFrameNow(p), rl = rk != null && st[`rod_${d}`];
   if (rl) return { fi: rl[rk], mirror: false };
@@ -3107,7 +3131,8 @@ function playerSpriteDiv(p, fi) {
   if (p.npc) return charSprite(p.look || myLook(), fi);
   const me = p === S.players[0], look = p.look || myLook();
   let wd = me ? (p.tool ? null : lpcWeaponFor(S.me.weapon, look.wlook)) : lpcWeaponFor(p.weapon, look.wlook);
-  if (wd?.lpc.fishOnly && !p.fish) wd = null;   // LPC 釣竿只在釣魚時畫（四方向的拋竿／持竿／收線動作），平常照舊背著小圖
+  if (wd?.lpc.fishOnly && !p.fish) wd = null;
+  if (p.pose === 'sit' && !p.fish) wd = null;   // 坐著不拿武器（LPC 武器圖層沒有 sit 幀，會害整個造型退回舊畫法）   // LPC 釣竿只在釣魚時畫（四方向的拋竿／持竿／收線動作），平常照舊背著小圖
   return charSprite(wd ? { ...look, wpn: wd.id } : look, fi);
 }
 // 拿著的武器有沒有 LPC 圖層：有就回該武器條目（武器外觀有 LPC 圖就用外觀的，外觀沒有 LPC 圖就退回舊的小圖畫法）
@@ -3188,6 +3213,7 @@ function stepPlayer(p, dt) {
     if (!seatItem(p) || wantsMove) standUp(p);
     else {
       p.moving = false; p.frame = 0; p.z = 0; p.vz = 0;
+      if (p.pose === 'sit') seatFace(p, seatItem(p).dir || 0);   // 椅子被轉了方向：人跟著轉
       if (p.fish) {   // 坐著釣魚（2026-11-14 使用者要求）：等魚／上鉤／拉竿照常推進；換掉釣竿、進裝飾模式、被石化就收竿
         if (S.mode !== 'walk' || S.t < (p.petUntil ?? 0) || (p === S.players[0] && !isRod())) stopFishing(p);
         stepFishing(p);
@@ -3810,7 +3836,29 @@ function drawFxFloater(f) {
   }
 }
 
+// 找 p 坐／躺的那件家具：本機玩家有 p.seat（含格子）；遠端玩家只有 seatType，用腳下位置反推格子（坐＝家具底邊 −2、躺＝底邊）
+function seatItemOf(p) {
+  if (p.seat?.cell) return seatItem(p);
+  const def = p.seatType && furnitureDef(p.seatType); if (!def) return null;
+  const cx = Math.floor(p.x / CELL), cy = Math.floor((p.y + 2) / CELL) - def.h;
+  return S.furnItems.find(o => o.type === p.seatType && furnCovers(o, [cx, cy])) || null;
+}
+// 坐姿（2026-11-15，使用者要求改善）：LPC 素材沒有坐姿幀，所以讓人「陷進椅子」——往下沉 seat.drop px，從椅面前緣（背面時是椅背頂）那一列以下的部分裁掉，
+// 再把家具那一截重畫在人身上，看起來就是坐在椅子裡（腿被椅面擋住）。seat 參數在 furniture.json（gen_assets.py 的 FURN_SEATS 算出來）
 function drawPerson(p, wi, nameColor) {
+  const it = p.pose === 'sit' ? seatItemOf(p) : null, def = it && furnitureDef(it.type), im = it && furnImg(it.type, it.dir);
+  if (!it || !def?.seat || !im || sitReal(p)) { p.seatDrop = 0; drawPersonBase(p, wi, nameColor); return; }   // 沒有座位資料，或有真的 LPC sit 幀就直接畫
+  p.seatDrop = def.seat.drop;
+  const from = (it.dir || 0) === 2 ? def.seat.back : def.seat.front, rows = im.height - from;
+  const sc = S.furn.scale || 2, bottom = (it.cell[1] + def.h) * CELL, cutY = bottom - rows * sc;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(p.x - 80, p.y - 320, 160, cutY - (p.y - 320)); ctx.clip();   // 只畫裁切線以上
+  ctx.translate(0, def.seat.drop);
+  drawPersonBase(p, wi, nameColor);
+  ctx.restore();
+  ctx.drawImage(im.img, 0, from, im.fw, rows, it.cell[0] * CELL, bottom - rows * sc, im.width * sc, rows * sc);   // 前景：椅面前緣（或椅背）蓋在人身上
+}
+function drawPersonBase(p, wi, nameColor) {
   const pose = p.pose === 'sit' || p.pose === 'sleep' ? p.pose : null;
   const race = (p === S.players[0] ? S.me.race : p.look?.race) || 'human';
   const ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);   // 吃喝的效果（巨大化／縮小／透明／暈眩／中毒）
@@ -3864,7 +3912,7 @@ function drawPerson(p, wi, nameColor) {
     if (ghost) ctx.globalAlpha = 1;
     if (ffx?.length) drawFoodOverhead(p, ffx, nameY);   // 暈眩的星星、中毒的泡泡
     if (fish) drawLineAndBobber(p, wi, fish, rodTip);
-    if (pose) nameY = p.y - 46;
+    if (pose) nameY = p.y - 46 - (p.seatDrop || 0);   // 坐姿整個人下沉時名牌不跟著下沉
   }
   // 名牌（FFXIV 感：白字黑邊）
   ctx.font = '10px "Microsoft JhengHei"';
@@ -3974,15 +4022,37 @@ function drawGazeEye(x, y, r, pul) {
 // 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）
 function drawSleeper(p) {
   const F = S.avatar.frames, s = F.scale || 2, img = playerSpriteDiv(p, (F.states.down_idle || [0])[0]);   // 用正面待機的第 1 幀切出頭與肩膀
+  const it = seatItemOf(p), sdir = it?.dir || 0;
+  // 體型：依種族倍率（拉拉肥 0.5／巨人 1.5…）與吃喝的巨大化／縮小縮放，床放不下太大的所以上限 1.2；側面的床再縮 0.85（頭枕在窄窄的枕頭上）
+  const race = (p === S.players[0] ? S.me.race : p.look?.race) || 'human', ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);
+  const rs = Math.min(1.2, ((S.avatar.races?.find(r => r.id === race)?.scale) || 1) * foodScaleOf(ffx));
+  if (sdir === 2) { drawZzz(p); return; }   // 背面（從床頭看）：人在床頭板後面，只留 Zzz
+  if (sdir === 1 || sdir === 3) {   // 側面的床（2026-11-15）：人側躺在床上——把「頭到腰」那段轉 90 度，頭枕在枕頭上，其餘由棉被蓋住
+    const def = furnitureDef(it.type), bed = furnImg(it.type, sdir), left = sdir === 1;
+    const x0 = it.cell[0] * CELL, bottom = (it.cell[1] + def.h) * CELL, pillowX = x0 + (left ? 6 : 9) * 2, pillowY = bottom - (bed.height - 13) * 2;
+    const sx = Math.round(F.w * .30), sw = Math.round(F.w * .42), sy = Math.round(F.h * .27), sh = Math.round(F.h * .42);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x0 + 3, pillowY - 40, 26, 80); ctx.clip();
+    ctx.translate(pillowX + (left ? -3 : 3), pillowY + 1); ctx.rotate(left ? -Math.PI / 2 : Math.PI / 2);
+    const kk = rs * .85;
+    ctx.drawImage(img, sx, sy, sw, sh, -sw * s * kk / 2, 0, sw * s * kk, sh * s * kk);
+    ctx.restore();
+    const qx = left ? 7 : 2;   // 棉被那一塊（床圖座標 x 7..13／鏡像 2..8、y 11..18）蓋回去
+    ctx.drawImage(bed.img, qx, 11, 7, 8, x0 + qx * 2, bottom - (bed.height - 11) * 2, 14, 16);
+    drawZzz(p);
+    return;
+  }
   // 頭與肩膀那塊：由底圖實測——人佔幀內 x 22..40、y 20..63（高 44），頭約在上 30%
   const sw = Math.round(F.w * .30), sh = Math.round(F.h * .21), sx = Math.round(F.w * .36), sy = Math.round(F.h * .30);
-  ctx.drawImage(img, sx, sy, sw, sh, p.x - sw * s / 2, p.y - 33, sw * s, sh * s);   // 頭的水平中心對準枕頭（單人床中央）
+  ctx.drawImage(img, sx, sy, sw, sh, p.x - sw * s * rs / 2, p.y - 33 + sh * s * (1 - rs) / 2, sw * s * rs, sh * s * rs);   // 頭的水平中心對準枕頭（單人床中央）；依種族縮放
   const def = furnitureDef(p.seatType || 'bed'), bed = S.furnImgs[p.seatType || 'bed'];
-  if (bed && def?.quiltRow) {   // 被子：從床的「同一幀」切出被子那幾列蓋回去（床有動畫時才對得上）
+  if (bed && def?.quiltRow && !seatItem(p)?.dir) {   // （床轉了方向就不套正面圖的被子）被子：從床的「同一幀」切出被子那幾列蓋回去（床有動畫時才對得上）
     const rows = bed.height - def.quiltRow, fi = sprFrame(bed, p.seat ? cellPhase(p.seat.cell[0], p.seat.cell[1]) : 0);
     ctx.drawImage(bed.img, fi * bed.fw, def.quiltRow, bed.fw, rows, p.x - bed.width, p.y - rows * 2, bed.width * 2, rows * 2);
   }
-  // Zzz 飄字
+  drawZzz(p);
+}
+function drawZzz(p) {   // Zzz 飄字
   const ph = (S.t * 1.2) % 1;
   ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
   ctx.fillStyle = `rgba(190,215,255,${1 - ph})`; ctx.strokeStyle = `rgba(8,10,14,${.8 * (1 - ph)})`; ctx.lineWidth = 3;
@@ -3993,9 +4063,13 @@ function drawSleeper(p) {
 function seatItem(p) {      // 現在坐/睡的那件家具（家具被拿走或換地形就找不到）
   return p.seat && S.furnItems.find(it => it.type === p.seat.type && it.cell[0] === p.seat.cell[0] && it.cell[1] === p.seat.cell[1]);
 }
+// 家具朝向（2026-11-15，使用者要求）：dir 0 正面（朝下，原本那張圖）、1 朝左、2 背面（朝上）、3 朝右；項目上沒有 dir＝0。
+// 有方向性的家具 manifest 有 dirs（朝向 1／2／3 的圖，gen_assets.py 的 furn_variants 產生），沒有 dirs＝4 個朝向共用同一張圖
+const FURN_DIR_NAME = ['朝下', '朝左', '朝上', '朝右'];
+const furnImg = (type, dir) => (dir && S.furnImgs[`${type}@${dir}`]) || S.furnImgs[type];
 function furnAtPoint(wx, wy) {   // 世界座標點到哪件家具（依繪製範圍，後放的在上面）
   for (let i = S.furnItems.length - 1; i >= 0; i--) {
-    const it = S.furnItems[i], def = furnitureDef(it.type), img = S.furnImgs[it.type];
+    const it = S.furnItems[i], def = furnitureDef(it.type), img = furnImg(it.type, it.dir);
     if (!def || !img) continue;
     const sc = S.furn.scale || 2, x0 = it.cell[0] * CELL, y1 = (it.cell[1] + def.h) * CELL;
     if (wx >= x0 && wx <= x0 + Math.max(def.w * CELL, img.width * sc) && wy >= y1 - img.height * sc && wy <= y1) return it;
@@ -4274,8 +4348,15 @@ function usePose(it) {
   const sx = cx, sy = (it.cell[1] + def.h) * CELL - (def.use === 'sit' ? 2 : 0);
   for (const r of S.remotes.values()) if (r.pose && Math.abs(r.x - sx) < 10 && Math.abs(r.y - sy) < 10) { say('這裡有人了'); return; }
   p.pose = def.use; p.seat = { type: it.type, cell: [it.cell[0], it.cell[1]] }; p.seatType = it.type; p.face = 'down'; p.d8 = 'down';
+  if (def.use === 'sit') seatFace(p, it.dir || 0);
   p.x = sx; p.y = sy; p.z = 0; p.vz = 0; p.moving = false; p.frame = 0; p.swing = 0; p.tool = null;
   say(def.use === 'sit' ? '坐下了（移動、F 或再點一次起身）' : '晚安～（移動、F 或再點一次起身）', 1800);
+}
+// 坐的時候面向椅子的朝向（朝向 0 下／1 左／2 上／3 右）；face／d8／dir 會隨 state 同步給別人，所以不用新欄位
+function seatFace(p, dir) {
+  p.face = dir === 2 ? 'up' : dir === 0 ? 'down' : 'side';
+  p.d8 = ['down', 'left', 'up', 'right'][dir];
+  if (dir === 1) p.dir = -1; else if (dir === 3) p.dir = 1;
 }
 function standUp(p) {
   if (!p.pose) return;
@@ -9600,7 +9681,7 @@ function draw() {
     });
   }
   S.furnItems.forEach((it, idx) => {
-    const def = furnitureDef(it.type), img = S.furnImgs[it.type]; if (!img) return;
+    const def = furnitureDef(it.type), img = furnImg(it.type, it.dir); if (!img) return;
     if (offView(it.cell[0] * CELL, (it.cell[1] + def.h) * CELL, Math.max(def.w * CELL, img.width * SC), img.height * SC, def.text ? 90 : 4)) return;
     list.push({
       y: (it.cell[1] + def.h) * CELL - 1,
@@ -9836,7 +9917,7 @@ function draw() {
   }
   // 裝飾模式 ghost
   if (S.mode === 'decor' && S.decorTab === 'furn' && S.mouseCell && S.sel && S.furnImgs[S.sel]) {
-    const def = furnitureDef(S.sel), img = S.furnImgs[S.sel];
+    const def = furnitureDef(S.sel), img = furnImg(S.sel, S.rot || 0);
     const [mx, my] = S.mouseCell, w = def.w * CELL, h = def.h * CELL;
     const valid = canPlace(S.sel, mx, my);
     ctx.fillStyle = valid ? 'rgba(90,220,120,.28)' : 'rgba(220,80,80,.3)';
@@ -10130,7 +10211,7 @@ function onNetFurn(items) {
 // 裝飾模式的變動先記成「操作清單」S.draft（{t:'place',type,cell} / {t:'remove',cell} / {t:'clear'}），
 // 畫面上立刻看得到，但要按「完成」（或離開時選保存）才會真的送給伺服器；「取消變動」就全部丟掉。
 // 同島的人在你保存之前看不到。保存時伺服器會逐一驗證（被別人搶先占用的會被跳過），清空只有管理員能做。
-const cloneFurn = list => list.map(it => it.text ? { type: it.type, cell: [it.cell[0], it.cell[1]], text: it.text } : { type: it.type, cell: [it.cell[0], it.cell[1]] });
+const cloneFurn = list => list.map(it => { const o = { type: it.type, cell: [it.cell[0], it.cell[1]] }; if (it.text) o.text = it.text; if (it.dir) o.dir = it.dir; return o; });
 const furnCovers = (it, cell) => {
   const d = furnitureDef(it.type) || { w: 1, h: 1 };
   return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
@@ -10149,7 +10230,26 @@ function canPlaceIn(list, typeId, x, y, floor = S.floorMap) {
 function applyFurnOpTo(list, op, floor = S.floorMap) {
   if (op.t === 'clear') list.length = 0;
   else if (op.t === 'remove') { const i = list.findIndex(it => furnCovers(it, op.cell)); if (i >= 0) list.splice(i, 1); }
-  else if (op.t === 'place' && canPlaceIn(list, op.type, op.cell[0], op.cell[1], floor)) list.push({ type: op.type, cell: [op.cell[0], op.cell[1]] });
+  else if (op.t === 'place' && canPlaceIn(list, op.type, op.cell[0], op.cell[1], floor)) {
+    const o = { type: op.type, cell: [op.cell[0], op.cell[1]] }; if (op.dir) o.dir = op.dir; list.push(o);
+  } else if (op.t === 'rotate') {   // 旋轉已擺好的家具（點到它的任一格）；dir 0＝正面（不存欄位）
+    const it = list.find(o => furnCovers(o, op.cell));
+    if (it) { if (op.dir) it.dir = op.dir; else delete it.dir; }
+  }
+}
+// 裝飾模式按 R：游標指著已擺好的家具就轉那一件（記成草稿，按「完成」才保存）；沒指著就轉「下一件要放的」預覽方向
+function decorRotate() {
+  if (S.mode !== 'decor' || S.decorTab !== 'furn') return;
+  const it = S.mouseCell && S.furnItems.find(o => furnCovers(o, S.mouseCell));
+  if (it) {
+    const nd = ((it.dir || 0) + 1) % 4;
+    if (S.draft.length >= 300) { toast('未保存的變動太多了，請先按「完成」保存'); return; }
+    stageOp({ t: 'rotate', cell: [it.cell[0], it.cell[1]], dir: nd });
+    toast(`${furnitureDef(it.type)?.name || '家具'}：${FURN_DIR_NAME[nd]}`, 900);
+  } else {
+    S.rot = ((S.rot || 0) + 1) % 4;
+    toast(`下一件要放的方向：${FURN_DIR_NAME[S.rot]}`, 900);
+  }
 }
 function stageOp(op) {
   S.draft.push(op);
@@ -10167,7 +10267,7 @@ function updateDecorUI() {
   $('furnClear').title = canClear() ? '' : '需要管理員權限';
 }
 function enterDecor() {
-  S.mode = 'decor'; S.draft = []; S.baseFurn = cloneFurn(S.furnItems); S.baseFloor = new Map(S.floorMap); S.paint = null;
+  S.mode = 'decor'; S.rot = 0; S.draft = []; S.baseFurn = cloneFurn(S.furnItems); S.baseFloor = new Map(S.floorMap); S.paint = null;
   $('btnDecor').classList.add('active'); $('furnPanel').classList.remove('hidden');
   if (S.sel && !furnAvailable(furnitureDef(S.sel) || {})) S.sel = null;   // 合成家具還沒解鎖就不能預選
   S.sel = S.sel || S.furn.items.find(it => S.furnImgs[it.id] && !it.legacy && furnAvailable(it))?.id || null;   // 缺圖／legacy 的種類不列出、也不預選
@@ -10277,7 +10377,7 @@ function buildFurnPanel() {
   const floorTab = S.decorTab === 'floor';
   $('tabFurn').classList.toggle('active', !floorTab); $('tabFloor').classList.toggle('active', floorTab);
   $('furnHint').textContent = floorTab ? '長按左鍵鋪設／長按右鍵拆除 · 按「完成」才會保存 · E／Esc 離開'
-                                       : '左鍵放置／右鍵移除 · 按「完成」才會保存 · E／Esc 離開';
+                                       : '左鍵放置／右鍵移除 · R 旋轉（指著已擺的家具轉那一件）· 按「完成」才會保存 · E／Esc 離開';
   $('furnClear').classList.toggle('hidden', floorTab);        // 清空只針對擺設，地板用長按右鍵拆
   const box = $('furnList'); box.innerHTML = '';
   if (floorTab) {
@@ -10309,7 +10409,7 @@ function buildFurnPanel() {
     g.drawImage(img.img, 0, 0, img.fw, img.fh, (44 - w * s2) / 2, 40 - h * s2, w * s2, h * s2);   // 面板縮圖：第 1 幀
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = it.name;
     div.appendChild(cv); div.appendChild(nm);
-    div.onclick = () => { S.sel = it.id; buildFurnPanel(); };
+    div.onclick = () => { S.sel = it.id; S.rot = 0; buildFurnPanel(); };   // 每次選取家具都從正面開始（朝向 0）
     box.appendChild(div);
   }
 }
@@ -10656,8 +10756,6 @@ function setJob(id) {
   toast(`轉職「${JOBS[id].name}」（${JOBS[id].roleName}）`, 2600);
 }
 
-
-
 // ---------------- 輸入 ----------------
 const keys = {};
 const MOVE_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
@@ -10711,7 +10809,7 @@ addEventListener('keydown', e => {
   if (k === 'l' && !e.repeat && S.mode === 'walk' && !S.confirmOpen) openList();
   if (k === 'p' && !e.repeat && S.mode === 'walk' && !S.confirmOpen) openSkillInfo();   // P：職業技能說明
   if (k === 'f' && !e.repeat) doAttack(true);
-  if (k === 'r' && !e.repeat) roleSkill()?.run();   // R：職能技能（坦克＝挑釁、補師＝群療、近戰輸出＝破綻、遠程輸出＝降傷）
+  if (k === 'r' && !e.repeat) { if (S.mode === 'decor') decorRotate(); else roleSkill()?.run(); }   // 裝飾模式：R＝旋轉家具   // R：職能技能（坦克＝挑釁、補師＝群療、近戰輸出＝破綻、遠程輸出＝降傷）
   if ((k === '1' || k === '2') && !e.repeat) tryJobSkill(+k - 1);   // 1／2：職業技能
   if (k === 'shift' && !e.repeat) toggleSprint();   // Shift：切換疾走／步行（與右下角虛擬按鍵同一個開關）
 });
@@ -10869,7 +10967,7 @@ canvas.addEventListener('mousedown', e => {
   const [x, y] = S.mouseCell;
   if (S.draft.length >= 300) { toast('未保存的變動太多了，請先按「完成」保存'); return; }
   if (S.furnItems.length >= MAX_FURN) { toast(`這個地形的擺設已達上限（${MAX_FURN} 件）`); return; }
-  if (canPlace(S.sel, x, y)) { stageOp({ t: 'place', type: S.sel, cell: [x, y] }); toast('放置'); }
+  if (canPlace(S.sel, x, y)) { stageOp(S.rot ? { t: 'place', type: S.sel, cell: [x, y], dir: S.rot } : { t: 'place', type: S.sel, cell: [x, y] }); toast('放置'); }
   else toast('這裡放不下（水上要先鋪地板／已占用）');
 });
 canvas.addEventListener('contextmenu', e => {
@@ -11085,6 +11183,7 @@ async function boot() {
     optImg('assets/external/img2pixel/fireball_sheet.png').then(im => { if (im) S.fireballSpr = makeSpr(im, { frames: 8, fw: 64, fh: 64, fps: 12 }); }),   // 飛龍火球 8 幀（LPC 系素材；缺圖就只是不畫）
     optImg('assets/external/img2pixel/fireball_burst.png').then(im => { if (im) S.burstSpr = makeSpr(im, { frames: 12, fw: 32, fh: 32 }); }),   // 火球命中爆炸 12 幀（LPC explosions 2，CC0）
     ...S.furn.items.map(async it => S.furnImgs[it.id] = await loadSpr(`assets/furniture/${it.sprite}`, it.anim)),
+    ...S.furn.items.flatMap(it => (it.dirs || []).map(async (f, k) => { const im = await loadSpr(`assets/furniture/${f}`, it.anim).catch(() => null); if (im) S.furnImgs[`${it.id}@${k + 1}`] = im; })),   // 朝向 1／2／3 的圖；缺圖就退回正面那張
     // 人物分層 sheet：軀幹（膚色）是必要的（缺了畫不出人），頭髮／衣服／褲子／帽子缺圖就略過那一層
     ...S.avatar.skins.flatMap(s => {   // 素體 sheet：男版＋女版（性別切換用）
       const files = [s.sheet, (s.sheet || '').replace('char_body_', 'char_body_female_')];

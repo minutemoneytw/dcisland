@@ -9,7 +9,17 @@
    "h": 1,
    "solid": true,
    "sprite": "sofa.png",
-   "use": "sit"
+   "use": "sit",
+   "seat": {
+    "front": 8,
+    "back": 4,
+    "drop": 6
+   },
+   "dirs": [
+    "sofa_l.png",
+    "sofa_b.png",
+    "sofa_r.png"
+   ]
   },
   {
    "id": "table",
@@ -26,7 +36,17 @@
    "h": 1,
    "solid": true,
    "sprite": "chair.png",
-   "use": "sit"
+   "use": "sit",
+   "seat": {
+    "front": 7,
+    "back": 3,
+    "drop": 6
+   },
+   "dirs": [
+    "chair_l.png",
+    "chair_b.png",
+    "chair_r.png"
+   ]
   },
   {
    "id": "plant",
@@ -59,7 +79,12 @@
    "w": 1,
    "h": 1,
    "solid": true,
-   "sprite": "tv.png"
+   "sprite": "tv.png",
+   "dirs": [
+    "tv_l.png",
+    "tv_b.png",
+    "tv_r.png"
+   ]
   },
   {
    "id": "bed",
@@ -69,7 +94,12 @@
    "solid": true,
    "sprite": "bed.png",
    "use": "sleep",
-   "quiltRow": 13
+   "quiltRow": 13,
+   "dirs": [
+    "bed_l.png",
+    "bed_b.png",
+    "bed_r.png"
+   ]
   },
   {
    "id": "shelf",
@@ -77,7 +107,12 @@
    "w": 1,
    "h": 1,
    "solid": true,
-   "sprite": "shelf.png"
+   "sprite": "shelf.png",
+   "dirs": [
+    "shelf_l.png",
+    "shelf_b.png",
+    "shelf_r.png"
+   ]
   },
   {
    "id": "sign",
@@ -95,7 +130,17 @@
    "h": 1,
    "solid": true,
    "sprite": "park_bench.png",
-   "use": "sit"
+   "use": "sit",
+   "seat": {
+    "front": 10,
+    "back": 3,
+    "drop": 8
+   },
+   "dirs": [
+    "park_bench_l.png",
+    "park_bench_b.png",
+    "park_bench_r.png"
+   ]
   },
   {
    "id": "beanbag",
@@ -104,7 +149,12 @@
    "h": 1,
    "solid": true,
    "sprite": "beanbag.png",
-   "use": "sit"
+   "use": "sit",
+   "seat": {
+    "front": 7,
+    "back": 7,
+    "drop": 4
+   }
   },
   {
    "id": "wardrobe",
@@ -112,7 +162,12 @@
    "w": 1,
    "h": 1,
    "solid": true,
-   "sprite": "wardrobe.png"
+   "sprite": "wardrobe.png",
+   "dirs": [
+    "wardrobe_l.png",
+    "wardrobe_b.png",
+    "wardrobe_r.png"
+   ]
   },
   {
    "id": "coffee_table",
@@ -128,7 +183,12 @@
    "w": 1,
    "h": 1,
    "solid": true,
-   "sprite": "piano.png"
+   "sprite": "piano.png",
+   "dirs": [
+    "piano_l.png",
+    "piano_b.png",
+    "piano_r.png"
+   ]
   },
   {
    "id": "fireplace",
@@ -136,7 +196,12 @@
    "w": 1,
    "h": 1,
    "solid": true,
-   "sprite": "fireplace.png"
+   "sprite": "fireplace.png",
+   "dirs": [
+    "fireplace_l.png",
+    "fireplace_b.png",
+    "fireplace_r.png"
+   ]
   },
   {
    "id": "floor_mirror",
@@ -144,7 +209,12 @@
    "w": 1,
    "h": 1,
    "solid": true,
-   "sprite": "floor_mirror.png"
+   "sprite": "floor_mirror.png",
+   "dirs": [
+    "floor_mirror_l.png",
+    "floor_mirror_b.png",
+    "floor_mirror_r.png"
+   ]
   },
   {
    "id": "folding_screen",
@@ -152,7 +222,12 @@
    "w": 1,
    "h": 1,
    "solid": true,
-   "sprite": "folding_screen.png"
+   "sprite": "folding_screen.png",
+   "dirs": [
+    "folding_screen_l.png",
+    "folding_screen_b.png",
+    "folding_screen_r.png"
+   ]
   },
   {
    "id": "stool",
@@ -162,7 +237,12 @@
    "solid": true,
    "sprite": "stool.png",
    "use": "sit",
-   "craft": true
+   "craft": true,
+   "seat": {
+    "front": 7,
+    "back": 7,
+    "drop": 4
+   }
   },
   {
    "id": "glow_lamp",
@@ -180,7 +260,12 @@
    "h": 1,
    "solid": true,
    "sprite": "fish_tank.png",
-   "craft": true
+   "craft": true,
+   "dirs": [
+    "fish_tank_l.png",
+    "fish_tank_b.png",
+    "fish_tank_r.png"
+   ]
   },
   {
    "id": "steel_shelf",
@@ -189,7 +274,12 @@
    "h": 1,
    "solid": true,
    "sprite": "steel_shelf.png",
-   "craft": true
+   "craft": true,
+   "dirs": [
+    "steel_shelf_l.png",
+    "steel_shelf_b.png",
+    "steel_shelf_r.png"
+   ]
   },
   {
    "id": "flower_pot",
@@ -207,7 +297,12 @@
    "h": 1,
    "solid": true,
    "sprite": "desk.png",
-   "craft": true
+   "craft": true,
+   "dirs": [
+    "desk_l.png",
+    "desk_b.png",
+    "desk_r.png"
+   ]
   },
   {
    "id": "ice_sculpture",
@@ -235,7 +330,17 @@
    "solid": true,
    "sprite": "iron_chair.png",
    "use": "sit",
-   "craft": true
+   "craft": true,
+   "seat": {
+    "front": 7,
+    "back": 3,
+    "drop": 6
+   },
+   "dirs": [
+    "iron_chair_l.png",
+    "iron_chair_b.png",
+    "iron_chair_r.png"
+   ]
   },
   {
    "id": "lava_lamp",
@@ -254,7 +359,17 @@
    "solid": true,
    "sprite": "leather_chair.png",
    "use": "sit",
-   "craft": true
+   "craft": true,
+   "seat": {
+    "front": 7,
+    "back": 3,
+    "drop": 6
+   },
+   "dirs": [
+    "leather_chair_l.png",
+    "leather_chair_b.png",
+    "leather_chair_r.png"
+   ]
   },
   {
    "id": "pearl_statue",
@@ -291,7 +406,17 @@
    "solid": true,
    "sprite": "slime_sofa.png",
    "use": "sit",
-   "craft": true
+   "craft": true,
+   "seat": {
+    "front": 8,
+    "back": 3,
+    "drop": 6
+   },
+   "dirs": [
+    "slime_sofa_l.png",
+    "slime_sofa_b.png",
+    "slime_sofa_r.png"
+   ]
   },
   {
    "id": "egg_nest",
@@ -309,7 +434,12 @@
    "h": 1,
    "solid": true,
    "sprite": "dragon_shield.png",
-   "craft": true
+   "craft": true,
+   "dirs": [
+    "dragon_shield_l.png",
+    "dragon_shield_b.png",
+    "dragon_shield_r.png"
+   ]
   },
   {
    "id": "dragon_trophy",
@@ -318,7 +448,12 @@
    "h": 1,
    "solid": true,
    "sprite": "dragon_trophy.png",
-   "craft": true
+   "craft": true,
+   "dirs": [
+    "dragon_trophy_l.png",
+    "dragon_trophy_b.png",
+    "dragon_trophy_r.png"
+   ]
   },
   {
    "id": "antler_rack",
@@ -327,7 +462,12 @@
    "h": 1,
    "solid": true,
    "sprite": "antler_rack.png",
-   "craft": true
+   "craft": true,
+   "dirs": [
+    "antler_rack_l.png",
+    "antler_rack_b.png",
+    "antler_rack_r.png"
+   ]
   },
   {
    "id": "hide_rug",
@@ -346,7 +486,17 @@
    "solid": true,
    "sprite": "bone_bench.png",
    "use": "sit",
-   "craft": true
+   "craft": true,
+   "seat": {
+    "front": 7,
+    "back": 4,
+    "drop": 4
+   },
+   "dirs": [
+    "bone_bench_l.png",
+    "bone_bench_b.png",
+    "bone_bench_r.png"
+   ]
   },
   {
    "id": "demon_candelabra",
@@ -364,7 +514,12 @@
    "h": 1,
    "solid": true,
    "sprite": "bat_screen.png",
-   "craft": true
+   "craft": true,
+   "dirs": [
+    "bat_screen_l.png",
+    "bat_screen_b.png",
+    "bat_screen_r.png"
+   ]
   },
   {
    "id": "golem_gadget",
@@ -382,7 +537,12 @@
    "h": 1,
    "solid": true,
    "sprite": "charm_curtain.png",
-   "craft": true
+   "craft": true,
+   "dirs": [
+    "charm_curtain_l.png",
+    "charm_curtain_b.png",
+    "charm_curtain_r.png"
+   ]
   },
   {
    "id": "compost_bed",
