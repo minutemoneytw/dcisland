@@ -3728,7 +3728,7 @@ def main():
             dict(id="waraxe", name="戰斧", type="axe", sprite="weapon_waraxe.png", carry="back", scale=2,
                  lpc=dict(bg="char_weapon_waraxe_bg.png", fg="char_weapon_waraxe_fg.png",   # LPC 戰斧（waraxe）：走路一般格、揮砍 192 超大格
                           over=dict(slash=dict(size=192, bg="char_weapon_waraxe_slash_bg.png", fg="char_weapon_waraxe_slash_fg.png")))),
-            dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", scale=2, ranged=dict(range=320, cast=1.2, dmg=2),   # LPC 環頭杖（loop）；LPC 的杖只有突刺，攻擊／詠唱都播突刺
+            dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", scale=2, ranged=dict(range=400, cast=1.0, dmg=4, gap=0.2, slide=0.4, lvMul=4, splash=60),   # LPC 環頭杖（loop）；LPC 的杖只有突刺，攻擊／詠唱都播突刺
                  lpc=dict(bg="char_weapon_loop_bg.png", fg="char_weapon_loop_fg.png",
                           over=dict(thrust=dict(size=192, bg="char_weapon_loop_thrust_bg.png", fg="char_weapon_loop_thrust_fg.png")))),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
             dict(id="tome", name="賢具", type="tome", sprite="weapon_tome.png", carry="waist", scale=2, ranged=dict(range=320, cast=0, dmg=1, shot="funnels")),   # 賢具＝浮游炮（FF14 nouliths）：不用詠唱，攻擊時四座賢具飛出、各朝目標射一道光束（main.js 的 fxk 'funnels'）；不用詠唱的 dmg 1（使用者定的平衡，同豎琴弓）

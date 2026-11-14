@@ -745,7 +745,7 @@ function splashHit(p, a, rg) {
     if (b === a || b.dead || b.fly) continue;
     const bd = mobDef(b.id);
     if (bd.owner || bd.lurker || Math.hypot(b.x - a.x, b.y - a.y) - hitRadius(bd) > rg.splash) continue;
-    hitMob(p, b, true, { dmg });
+    hitMob(p, b, true, { dmg, splash: true });
   }
 }
 function cancelCast(p, why) { if (!p.cast) return; p.cast = null; if (why) toast(why, 1500); }
@@ -790,7 +790,7 @@ function hitMob(p, a, ranged, force) {
       a.startle = 1; a.startleT = 3; a.target = null; a.idle = 0;
     }
     // 補師：揮擊命中動物就吸回自己一點血（血量走既有 state 封包同步）；翅膀期間 +1
-    const heal = force?.dot ? 0 : (jd?.healHit ? jd.healHit + (p === S.players[0] && fxOn('wings') ? 1 : 0) : 0) + (p === S.players[0] && fxOn('vamp') ? 1 : 0);   // 戰士吸血：命中回 1；毒箭的持續傷害不算「命中」
+    const heal = force?.dot || force?.splash ? 0 : (jd?.healHit ? jd.healHit + (p === S.players[0] && fxOn('wings') ? 1 : 0) : 0) + (p === S.players[0] && fxOn('vamp') ? 1 : 0);   // 戰士吸血：命中回 1；毒箭的持續傷害不算「命中」
     const care = p === S.players[0] ? S.fx.care : null;   // 賢者關心：永久有效（改關別人／轉職才解除），每造成一次傷害就累積補血量
     if (care) {
       care.acc = (care.acc || 0) + JOB_SKILLS.care.amt + (fxOn('save') ? JOB_SKILLS.save.plus : 0);   // 拯救期間：累積速度變 5 倍（0.5→2.5／下）

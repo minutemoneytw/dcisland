@@ -4737,9 +4737,13 @@
    "sprite": "weapon_staff.png",
    "scale": 2,
    "ranged": {
-    "range": 320,
-    "cast": 1.2,
-    "dmg": 2
+    "range": 400,
+    "cast": 1.0,
+    "dmg": 4,
+    "gap": 0.2,
+    "slide": 0.4,
+    "lvMul": 4,
+    "splash": 60
    },
    "lpc": {
     "bg": "char_weapon_loop_bg.png",
