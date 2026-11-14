@@ -17,7 +17,10 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
 }
-#app { position: relative; width: 928px; }
+#app { position: relative; width: 928px;
+  /* 遊戲畫面（canvas）的上緣＝頂部列高度（約 67px）＋canvas 的 margin-top 8px。**頂部列改高時只要改這一個數字**：
+     左上的武器列、增減益列，以及角色／外觀／換色面板都是照它排的（2026-11-14，使用者要求集中成變數） */
+  --stage-top: 75px; }
 #game {
   display: block; margin-top: 8px;
   image-rendering: pixelated;
@@ -106,7 +109,7 @@ body {
 .fitem canvas { image-rendering: pixelated; }
 .fitem .nm { font-size: 11px; color: var(--text-dim); letter-spacing: 1px; margin-top: 3px; }
 
-#avatarPanel { right: 10px; top: 60px; width: 264px; z-index: 30; }   /* z-index 30：蓋過右下角的疾走鈕（15，2026-11-09 使用者要求）；外觀一覽／選色視窗（32／33）仍在它上面。264：裝備名稱欄放得下五個字（例如「龍騎士鎧甲」） */
+#avatarPanel { right: 10px; top: calc(var(--stage-top) + 10px); width: 264px; z-index: 30; }   /* z-index 30：蓋過右下角的疾走鈕（15，2026-11-09 使用者要求）；外觀一覽／選色視窗（32／33）仍在它上面。264：裝備名稱欄放得下五個字（例如「龍騎士鎧甲」） */
 .grp { margin-bottom: 10px; }
 .grp > label { display: block; font-size: 11px; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 5px; }
 #lvRow { display: flex; align-items: center; gap: 8px; font: bold 12px "Microsoft JhengHei", "PingFang TC", sans-serif; color: var(--gold); }
@@ -161,13 +164,13 @@ body {
 .gear-name { flex: 1; min-width: 0; font-size: 12px; line-height: 24px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gear-name.glam { color: #f0dc9a; }
 .gear-row .ff-btn { flex: 0 0 auto; }
-#glamBox { left: 10px; top: 60px; transform: none; width: 300px;   /* 放左邊：中間的角色要看得到換上去的樣子 */ max-height: 440px; display: flex; flex-direction: column; z-index: 32; }
+#glamBox { left: 10px; top: calc(var(--stage-top) + 10px); transform: none; width: 300px;   /* 放左邊：中間的角色要看得到換上去的樣子 */ max-height: 440px; display: flex; flex-direction: column; z-index: 32; }
 #glamBox.hidden { display: none !important; }
 #glamList { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin: 2px 0 8px; }
 .dye-btn { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
 .dye-btn:disabled { opacity: .35; cursor: default; }
 .dye-sw { width: 10px; height: 10px; border: 1px solid rgba(0,0,0,.6); display: inline-block; }
-#colorBox { left: 10px; top: 60px; transform: none; width: 220px;   /* 放左邊：同上 */ z-index: 33; }
+#colorBox { left: 10px; top: calc(var(--stage-top) + 10px); transform: none; width: 220px;   /* 放左邊：同上 */ z-index: 33; }
 #colorBox.hidden { display: none !important; }
 #colorSV, #colorHue { display: block; width: 200px; margin: 0 auto 6px; cursor: crosshair; touch-action: none; }
 .color-hexrow { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
@@ -259,7 +262,7 @@ body {
 .settings-item:hover { background: rgba(200, 170, 79, .18); color: #ffe9a8; }
 
 /* ---------- 武器列（左上角，橫向只有圖示；選到的那格才顯示名稱，滾輪切換）---------- */
-#weaponBar { position: absolute; left: 10px; top: 77px;   /* 2026-11-14：頂部列變高（約 67px、畫面從 75px 起），原本 52px 會蓋到頂部列 */ z-index: 12; display: flex; flex-direction: row; gap: 4px; user-select: none; }
+#weaponBar { position: absolute; left: 10px; top: calc(var(--stage-top) + 2px);   /* 貼在畫面上緣下 2px（2026-11-14 頂部列變高後原本寫死的 52px 會蓋到頂部列，改成跟 --stage-top） */ z-index: 12; display: flex; flex-direction: row; gap: 4px; user-select: none; }
 #weaponBar .wrow { position: relative; width: 34px; height: 34px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: rgba(22, 25, 34, .62); border: 1px solid #3a3f4e; cursor: pointer; }
 #weaponBar .wrow canvas { width: 24px; height: 24px; image-rendering: pixelated; opacity: .6; }
 #weaponBar .wrow .wic { font-size: 16px; line-height: 24px; opacity: .6; }
@@ -522,7 +525,7 @@ body {
 .ar-cab.you { opacity: 1; box-shadow: 0 0 8px rgba(255, 224, 138, .45); }
 .table-ranking { margin: 6px auto; max-width: 360px; text-align: center; }
 /* 增減益圖示（左上角武器列下方）：綠框＝增益、紅框＝減益，右下角剩幾秒；滑鼠移上去只顯示名稱（title） */
-#buffBar { position: absolute; left: 10px; top: 137px;   /* 武器列下方（武器列 top＋60；2026-11-14 隨頂部列變高一起下移，原本 112px） */ z-index: 12; display: flex; flex-wrap: wrap; gap: 4px; max-width: 260px; user-select: none; }
+#buffBar { position: absolute; left: 10px; top: calc(var(--stage-top) + 62px);   /* 武器列正下方（武器列 top＋60） */ z-index: 12; display: flex; flex-wrap: wrap; gap: 4px; max-width: 260px; user-select: none; }
 #buffBar .buff { position: relative; width: 28px; height: 28px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: rgba(22, 25, 34, .72); border: 1px solid #5aa860; cursor: default; }
 #buffBar .buff.bad { border-color: #d05050; }
 #buffBar .bi { font-size: 16px; line-height: 1; }
