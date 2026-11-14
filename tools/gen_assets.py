@@ -2785,7 +2785,7 @@ MOBS_BY_TERRAIN = {
     "forest":  [("sheep", 2), ("bird", 2), ("chicken", 2), ("slime_forest", 1), ("goblin_forest", 2), ("boar", 2)],
     "volcano": [("frog", 1), ("bird", 1), ("slime_volcano", 1), ("dragon_volcano", 1), ("imp_volcano", 2)],
     "machine": [("bunny_machine", 2), ("slime_machine", 1), ("zombie_machine", 2), ("golem_machine", 1), ("imp_machine", 2)],   # 機械島原本沒有野生動物；2026-11-08 使用者指定加跳跳兔（灰）與史萊姆（灰）
-    "peace":   [("cat", 1), ("dog", 1), ("cat_black", 1), ("cat_calico", 1), ("cat_orange", 1), ("dog_black", 1), ("dog_spotted", 1), ("dog_yellow", 1)],   # 和平島（2026-11-12）：只有被動的貓狗（都 fixed＝只生固定那幾隻）；2026-11-13 使用者定加花色（各色 2 隻、白色數量不變）；和平島不得放敵對怪
+    "peace":   [],   # 和平島（2026-11-14 使用者定）：貓狗收掉，目前不放任何動物；和平島不得放敵對怪（貓狗過去放過：2026-11-12 被動貓狗、2026-11-13 加花色，怪種定義與花色 sheet 都留在 manifest 裡，之後要放回來隨時可以）
 }
 
 # ---------------- 地板（裝飾模式的地板層，16×16 無縫磚，畫在地面與家具之間）----------------
