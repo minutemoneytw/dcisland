@@ -16,7 +16,7 @@
     "gear": { "hat": "horned", "top": "drg_plate", "bottom": "drg_legs", "shoe": "drg_boots" }, "skills": ["highjump", "backjump"] },
   { "id": "bard", "atkAnim": "shoot", "name": "吟遊詩人", "role": "ranged", "weapon": "harpbow",
     "gear": { "hat": "cavalier", "top": "brd_vest", "bottom": "brd_pants", "shoe": "brd_boots" }, "skills": ["song", "poison"] },
-  { "id": "blackmage", "hidden": true, "replaceWith": "knight", "atkAnim": "thrust", "name": "黑魔法師", "role": "ranged", "weapon": "scepter",
+  { "id": "blackmage", "atkAnim": "thrust", "name": "黑魔法師", "role": "ranged", "weapon": "scepter",
     "gear": { "hat": "wizard", "top": "blm_robe", "bottom": "pants", "shoe": "shoes" }, "skills": ["circle", "triple"] }
  ]
 }
