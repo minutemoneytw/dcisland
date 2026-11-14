@@ -62,6 +62,7 @@ const D_RANGE = 100;         // 玩家打島主的攻擊距離（客戶端以武
 const D_DRIFT_TOLER = 600;   // 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 const D_STAFF_RANGE = 440;   // 法杖（遠距詠唱）打島主的最大距離：客戶端射程 320 + 判定圈 58 + 緩衝；只有 state.weapon＝staff 的連線才適用
 const D_CD_MS = 300;         // 同一條連線兩次打島主的最短間隔
+const skillLvMul = lv => 1 + Math.floor((Math.max(1, Math.floor(lv)) - 1) / 3) / 2;   // 職業技能的等級倍率（2026-11-15 使用者要求：技能也要吃等級加成）：每 3 級 +50%，與 client 的 skillMul、dev_server 的 skill_lv_mul 同式
 const D_HIT_SANITY = 1e6;   // 一般攻擊打島主／深海魚人的傷害：2026-11-14 使用者要求取消攻擊上限（信任客戶端，等級／職業／武器加成怎麼算都收），這個只擋 Infinity／亂填的天文數字，不是玩法上限
 const D_PROVOKE_CD_MS = 15000;   // 挑釁冷卻（每條連線；與 dev_server.py 的 D_PROVOKE_CD 一致）
 const D_DEBUFF_MS = 10000;        // 破綻／降傷的持續時間（與 client 的 ROLE_DEBUFF.dur 一致）
@@ -4644,7 +4645,7 @@ export class Island {
     const book = this.skillHits.get(ws) || {}, key = msg.sk + ":" + kind;
     if (now - (book[key] || 0) < sk.cdMs) return false;
     book[key] = now; this.skillHits.set(ws, book);
-    return { dmg: sk.dmg, range: sk.range };
+    return { dmg: Math.max(1, Math.round(sk.dmg * skillLvMul(this.playerLvlOf(att)))), range: sk.range };   // 技能傷害由伺服器算：基礎值 × 攻擊者等級倍率（訪客一律 Lv 1）
   }
   // 打到島主：扣血；若在閒置且冷卻過了 → 開始反擊（樣式照 OWNER_TERRAINS）。攻擊者所在地形決定打的是哪座島的島主
   async dragonHit(ws, att, msg) {

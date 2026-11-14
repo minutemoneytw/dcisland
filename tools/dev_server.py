@@ -480,6 +480,10 @@ D_RANGE = 100            # 玩家打島主的攻擊距離（客戶端以武器�
 D_DRIFT_TOLER = 600      # 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 D_CD = 0.3               # 同一條連線兩次打島主的最短間隔（秒）
 DEATH_CREDIT_MIN = 25.0  # 同一條連線的「倒地記帳」（餵島主 XP／魚人升級）最短間隔（秒；與 worker 的 DEATH_CREDIT_MIN_MS 一致）：復活要 30 秒，正常玩法不會更密；擋住反覆切 state.dead 灌島主等級
+def skill_lv_mul(lv):
+    """職業技能的等級倍率（2026-11-15 使用者要求）：每 3 級 +50%，與 Worker 的 skillLvMul、client 的 skillMul 同式。"""
+    return 1 + (max(1, int(lv)) - 1) // 3 / 2
+
 D_HIT_SANITY = 10 ** 6   # 一般攻擊打島主／魚人的傷害：2026-11-14 使用者要求取消攻擊上限（與 worker 一致，只擋亂填的天文數字）
 D_PROVOKE_CD = 15.0      # 挑釁冷卻（每條連線，秒；與 worker/src/index.js 的 D_PROVOKE_CD_MS 一致）
 D_PROVOKE_RANGE = 240    # 挑釁範圍（比攻擊距離寬：把島主拉過來的是「聲東擊西」，不需要貼臉）
@@ -5902,7 +5906,7 @@ class Room:
         if now - book.get(key, 0.0) < sk["cd_ms"]:
             return False
         book[key] = now
-        return {"dmg": sk["dmg"], "range": sk["range"]}
+        return {"dmg": max(1, round(sk["dmg"] * skill_lv_mul(player_lvl_of(self.clients.get(cid))))), "range": sk["range"]}   # 技能傷害由伺服器算：基礎值 × 攻擊者等級倍率
 
     def dragon_debuff(self, cid, msg):
         """破綻／降傷（R 鍵，近戰／遠程輸出）：驗證職能、距離、冷卻後記在島主狀態；回 (地形, 廣播訊息) 或 None。"""

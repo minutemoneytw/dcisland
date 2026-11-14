@@ -791,14 +791,15 @@ function hitMob(p, a, ranged, force) {
       a.startle = 1; a.startleT = 3; a.target = null; a.idle = 0;
     }
     // 補師：揮擊命中動物就吸回自己一點血（血量走既有 state 封包同步）；翅膀期間 +1
-    const heal = force?.dot || force?.splash ? 0 : (jd?.healHit ? jd.healHit + (p === S.players[0] && fxOn('wings') ? 1 : 0) : 0) + (p === S.players[0] && fxOn('vamp') ? 1 : 0);   // 戰士吸血：命中回 1；毒箭的持續傷害不算「命中」
+    const heal = force?.dot || force?.splash ? 0 : (jd?.healHit ? jd.healHit + (p === S.players[0] && fxOn('wings') ? 1 : 0) : 0) + (p === S.players[0] && fxOn('vamp') ? skillVal(1, p) : 0);   // 戰士吸血：命中回 1；毒箭的持續傷害不算「命中」
     const care = p === S.players[0] ? S.fx.care : null;   // 賢者關心：永久有效（改關別人／轉職才解除），每造成一次傷害就累積補血量
     if (care) {
-      care.acc = (care.acc || 0) + JOB_SKILLS.care.amt + (fxOn('save') ? JOB_SKILLS.save.plus : 0);   // 拯救期間：累積速度變 5 倍（0.5→2.5／下）
-      while (care.acc >= 1) {                             // 補血量是 0.5／下的零頭：累積湊滿 1 才補，畫面與血量都保持整數
-        care.acc -= 1;
-        if (care.self) healMe(1);
-        else S.net?.skillEvent?.(`careheal:${care.id}:1`);
+      care.acc = (care.acc || 0) + (JOB_SKILLS.care.amt + (fxOn('save') ? JOB_SKILLS.save.plus : 0)) * skillMul(levelOf(p));   // 拯救期間：累積速度變 5 倍（0.5→2.5／下）；再乘等級倍率
+      const n = Math.floor(care.acc);                     // 補血量是 0.5／下的零頭：累積湊滿整數才補，畫面與血量都保持整數（一次送出湊到的整數）
+      if (n >= 1) {
+        care.acc -= n;
+        if (care.self) healMe(n);
+        else S.net?.skillEvent?.(`careheal:${care.id}:${n}`);
       }
     }
     if (heal) {
@@ -998,7 +999,11 @@ function lvInfo(xp) {                     // XP 換等級：lv＝目前等級、
   while (lv < 2000 && rest >= xpNeed(lv)) { rest -= xpNeed(lv); lv++; }   // 上限 2000 級：與兩份伺服器一致，也防亂改的存檔讓迴圈跑不完
   return { lv, cur: rest, need: xpNeed(lv) };
 }
-const lvAtkBonus = lv => Math.floor((lv - 1) / 3);   // 攻擊加成：每 3 級 +1
+const lvAtkBonus = lv => Math.floor((lv - 1) / 3);
+// 職業技能的等級倍率（2026-11-15 使用者要求：技能也要吃等級加成，不然升等後沒人要放技能）：每 3 級 +50%（Lv 1＝1 倍、Lv 28＝5.5 倍）。
+// 傷害技能（火遁／高跳／毒箭）與治療技能（單補／群療／吸血／關心）都乘這個倍率；伺服器算的技能傷害同式（Worker skillLvMul、dev_server skill_lv_mul）
+const skillMul = lv => 1 + lvAtkBonus(lv) / 2;
+const skillVal = (base, p = S.players[0]) => Math.max(1, Math.round(base * skillMul(levelOf(p))));   // 攻擊加成：每 3 級 +1
 const levelOf = p => p === S.players[0] ? lvInfo(S.profile.xp).lv : (p.lvl ?? 1);   // 自己看本機資料；別人等 state 廣播 lvl（同步那步），沒有就當 Lv 1
 // ---- 島主／深海魚人的等級（第 3 步；與 worker/src/index.js、tools/dev_server.py 的 helper 同式，三邊一起改）----
 // 連線時等級由伺服器事件帶出（事件欄位 lvl／max）；單機「本地模擬」才在記憶體累積（session 內有效、不存存檔）
@@ -1488,7 +1493,7 @@ function onNetHeal(healerId) {
   const me = S.players[0];
   if (me.dead) return;
   const src = S.remotes.get(healerId);
-  const ao = src && jobOf(src)?.healAoE && jobOf(src).healAoE + (src.fx?.includes('wings') ? 1 : 0);   // 翅膀：治療量 +1
+  const ao0 = src && jobOf(src)?.healAoE && jobOf(src).healAoE + (src.fx?.includes('wings') ? 1 : 0), ao = ao0 && skillVal(ao0, src);   // 翅膀：治療量 +1；再乘放的人的等級倍率（群療；打倒動物補周遭那段是被動、不吃倍率，在 hitMob）
   if (!ao) return;
   if (Math.hypot(me.x - src.x, me.y - src.y) <= HEAL_RADIUS) {
     me.hp = Math.min(hpCap(me), (me.hp ?? hpCap(me)) + ao);
@@ -1548,9 +1553,9 @@ Object.assign(JOB_SKILLS, {
               run() { S.fx.vamp = S.t + this.dur; fxBurst('vamp'); return true; } },
   wshield:  { name: '群盾', cd: 40, dur: 8, desc: `周圍 ${SHIELD_RADIUS}px 內所有人（含自己）8 秒內受到的傷害 −30%`, mul: .7,
               run() { S.fx.wshield = S.t + this.dur; S.net?.skillEvent?.('wshield'); fxBurst('wshield'); return true; } },
-  sheal:    { name: '單補', cd: 12, amt: 4, range: 320, desc: '瞬發恢復滑鼠方向上最近的一位玩家 4 血（射程 320px；附近沒有別人就補自己；翅膀期間 +1）',
+  sheal:    { name: '單補', cd: 12, amt: 4, range: 320, desc: '瞬發恢復滑鼠方向上最近的一位玩家血量（基礎 4，隨等級成長；射程 320px；附近沒有別人就補自己；翅膀期間 +1）',
               run(me) {
-                const t = pickHealTarget(me, this.range), amt = this.amt + (fxOn('wings') ? 1 : 0);
+                const t = pickHealTarget(me, this.range), amt = skillVal(this.amt + (fxOn('wings') ? 1 : 0));   // 隨等級成長（翅膀的 +1 也一起乘）
                 S.floaters.push({ fxk: 'sheal', x1: me.x, y1: me.y - 40, x2: t.x, y2: t.y - 24, life: .5 });
                 if (t === me) healMe(amt);
                 else S.net?.skillEvent?.('sheal:' + t.id);   // 對方收到後自己補（血量由各人自己算，與群療同一原則）
@@ -1558,7 +1563,7 @@ Object.assign(JOB_SKILLS, {
               } },
   song:     { name: '唱歌', cd: 40, dur: 15, r: 300, crit: .25, desc: '周圍 300px 內所有人（含自己）15 秒內爆擊率 +25%（遠程攻擊平常不會爆擊，唱歌期間也會）',
               run(me) { S.fx.song = S.t + this.dur; S.net?.skillEvent?.('song'); S.floaters.push({ fxk: 'song', x: me.x, y: me.y, r: this.r, life: .7 }); return true; } },
-  poison:   { name: '毒箭', cd: 12, dur: 30, every: 3, dmg: 1, range: 320, desc: '對滑鼠方向的敵人射一支毒箭：射中當下先受到 1 傷害，之後 30 秒內每 3 秒 1 傷害（共 10 下）',
+  poison:   { name: '毒箭', cd: 12, dur: 30, every: 3, dmg: 1, range: 320, desc: '對滑鼠方向的敵人射一支毒箭：射中當下先受到傷害，之後 30 秒內每 3 秒一次（共 10 下；每下基礎 1，隨等級成長）',
               usable() { return pickCastTarget(S.players[0], this, castAim()) ? null : '射程內沒有目標'; },
               run(me) {
                 const a = pickCastTarget(me, this, castAim());
@@ -1570,7 +1575,7 @@ Object.assign(JOB_SKILLS, {
                 S.floaters.push({ fxk: 'poisonpop', x: a.x, y: a.y - 20 * big, big, life: .6 });
                 if (a.poison) { a.poison.until = S.t + this.dur; return true; }
                 a.poison = { until: S.t + this.dur, next: S.t + this.every };
-                hitMob(me, a, true, { dmg: this.dmg, sk: 'poison', dot: true });
+                hitMob(me, a, true, { dmg: skillVal(this.dmg), sk: 'poison', dot: true });
                 return true;
               } },
   care:     { name: '關心', cd: 20, amt: .5, range: 320, desc: '指定滑鼠方向最近的一位玩家（附近沒人就是自己）：永久有效，賢者每造成 2 次傷害，對方回 1 血；再施放會改關新的對象',
@@ -1602,10 +1607,10 @@ Object.assign(JOB_SKILLS, {
               } },
   wings:    { name: '翅膀', cd: 45, dur: 15, desc: '15 秒內所有治療量 +1',
               run() { S.fx.wings = S.t + this.dur; fxBurst('wings'); return true; } },
-  ninjutsu: { name: '火遁', cd: 20, cast: 1.5, r: 80, reach: 165, dmg: 6, desc: '結印 1.5 秒（可移動、不能攻擊），結完朝最近的敵人（島主優先）噴出火球，命中處 80px 內的敵人各造成 6 傷害；附近沒有敵人時不能施放（不會結印、不進冷卻）',
+  ninjutsu: { name: '火遁', cd: 20, cast: 1.5, r: 80, reach: 165, dmg: 6, desc: '結印 1.5 秒（可移動、不能攻擊），結完朝最近的敵人（島主優先）噴出火球，命中處 80px 內的敵人各造成傷害（基礎 6，隨等級成長）；附近沒有敵人時不能施放（不會結印、不進冷卻）',
               usable() { return ninjutsuTarget(S.players[0]) ? null : '附近沒有敵人'; },
               run(me) { if (!ninjutsuTarget(me)) { toast('火遁：附近沒有敵人', 1200); return false; } S.fx.seal = { t0: S.t, until: S.t + this.cast }; return true; } },   // 先確認有目標才結印（沒有就不開始、不進冷卻）
-  highjump: { name: '高跳', cd: 15, dmg: 5, range: 200, desc: '跳到滑鼠方向 200px 內的敵人身上造成 5 傷害，再跳回原位',
+  highjump: { name: '高跳', cd: 15, dmg: 5, range: 200, desc: '跳到滑鼠方向 200px 內的敵人身上造成傷害（基礎 5，隨等級成長），再跳回原位',
               usable() { return pickCastTarget(S.players[0], this, castAim()) ? null : '範圍內沒有敵人'; },
               run(me) {
                 const a = pickCastTarget(me, this, castAim());
@@ -1615,7 +1620,7 @@ Object.assign(JOB_SKILLS, {
                 const home = { x: me.x, y: me.y };
                 startLeap(me, tx, ty, .42, 120, () => {
                   S.floaters.push({ fxk: 'jumpboom', x: a.x, y: a.y, life: .5 });
-                  if (S.mobs.includes(a) && !a.dead) hitMob(me, a, false, { dmg: this.dmg, sk: 'jump' });
+                  if (S.mobs.includes(a) && !a.dead) hitMob(me, a, false, { dmg: skillVal(this.dmg), sk: 'jump' });
                   S.net?.skillEvent?.('highjump');
                   startLeap(me, home.x, home.y, .38, 60);   // 跳回原位
                 });
@@ -1753,7 +1758,7 @@ function stepSkills() {
       const od = mobDef(a.id);
       if (Math.hypot(a.x - tg.x, a.y - tg.y) - hitRadius(od) > sk.r) continue;
       if ((od.owner || od.lurker) && Math.hypot(a.x - me.x, a.y - me.y) > sk.reach + 5) continue;   // 伺服器權威的目標要在驗證範圍內
-      hitMob(me, a, false, { dmg: sk.dmg, sk: 'ninjutsu' });
+      hitMob(me, a, false, { dmg: skillVal(sk.dmg), sk: 'ninjutsu' });
     }
   }
   if (F.triple && (F.triple.n <= 0 || S.t >= F.triple.until)) F.triple = null;
@@ -1761,7 +1766,7 @@ function stepSkills() {
     const po = a.poison;
     if (!po) continue;
     if (a.dead || S.t >= po.until || me.dead || S.me.job !== 'bard') { a.poison = null; continue; }
-    if (S.t >= po.next) { po.next += JOB_SKILLS.poison.every; hitMob(me, a, true, { dmg: JOB_SKILLS.poison.dmg, sk: 'poison', dot: true }); }
+    if (S.t >= po.next) { po.next += JOB_SKILLS.poison.every; hitMob(me, a, true, { dmg: skillVal(JOB_SKILLS.poison.dmg), sk: 'poison', dot: true }); }
   }
   if (F.circle && S.t >= F.circle.until) F.circle = null;
 }
@@ -1789,7 +1794,7 @@ function onSkillEvent(kind, r) {
     if (heal) {
       const [tid, a] = kind.slice(9).split(':');
       if (tid !== String(S.net?.id)) return;
-      if (fxOn('cared')) healMe(Math.max(1, Math.min(JOB_SKILLS.care.amt + JOB_SKILLS.save.plus, Math.round(+a) || JOB_SKILLS.care.amt)));   // 回血量由賢者帶（補 1，拯救期間累積較快），夾在合理範圍
+      if (fxOn('cared')) healMe(Math.max(1, Math.min(80, Math.round(+a) || 1)));   // 回血量由賢者帶（隨賢者等級成長，湊到整數才送），夾在合理範圍
     } else {
       const [sid, tid] = kind.slice(5).split(':');
       if (tid === String(S.net?.id)) { S.fx.cared = Infinity; S.fx.caredBy = sid; S.floaters.push({ fxk: 'heart', x1: r.x, y1: r.y - 40, x2: me.x, y2: me.y - 30, life: .6 }); toast(`${r.name} 關心了你（永久）`, 1600); }
@@ -1799,7 +1804,7 @@ function onSkillEvent(kind, r) {
   else if (kind.startsWith('sheal:')) {   // 單補：目標是我就補自己（翅膀看放的人 state 的 fx），其他人只畫特效
     const tid = kind.slice(6), t = tid === String(S.net?.id) ? me : [...S.remotes.values()].find(q => String(q.id) === tid);   // 連線編號可能是數字
     if (t) S.floaters.push({ fxk: 'sheal', x1: r.x, y1: r.y - 40, x2: t.x, y2: t.y - 24, life: .5 });
-    if (t === me) { healMe(JOB_SKILLS.sheal.amt + (r.fx?.includes('wings') ? 1 : 0)); toast(`${r.name} 幫你補血`, 1400); }
+    if (t === me) { healMe(skillVal(JOB_SKILLS.sheal.amt + (r.fx?.includes('wings') ? 1 : 0), r)); toast(`${r.name} 幫你補血`, 1400); }   // 補多少看放的人的等級（r.lvl 隨 state 同步）
   }
   else if (kind === 'vuln' || kind === 'weak' || kind === 'provoke') S.floaters.push({ fxk: 'shout', x: r.x, y: r.y, kind, life: .5 });
 }
@@ -1870,7 +1875,7 @@ function tryGroupHeal() {
   if (S.t < groupHealCd) { toast(`群療還要 ${Math.ceil(groupHealCd - S.t)} 秒`, 1200); return; }
   groupHealCd = S.t + GROUP_HEAL_CD;
   S.net?.heal?.();   // 同島的人（不含自己：對方畫面自補，走 onNetHeal）
-  const amt = (JOBS[S.me.job].healAoE || 2) + (fxOn('wings') ? 1 : 0);   // 翅膀：治療量 +1
+  const amt = skillVal((JOBS[S.me.job].healAoE || 2) + (fxOn('wings') ? 1 : 0));   // 翅膀：治療量 +1；再乘等級倍率
   if ((me.tool || S.me.weapon) === 'tome') {
     // 賢者（賢具）：四座賢具變藍、分散到東南西北的最大範圍撐起一圈淡光再飛回（取代綠圈；本地演出）
     const slots = noulithSlots(me.x, me.y, S.t, noulithSeed(me));
@@ -4125,7 +4130,7 @@ function closeHelp() { S.helpOpen = false; $('helpBox').classList.add('hidden');
 // 內容全部由目前職業動態算出：1／2 鍵技能、R 職能技能（說明＋冷卻）、職能特性、以及「現在這個等級」的各種傷害數值。公式與 hitMob／splashHit 一致。
 const ROLE_SKILL_TEXT = {
   provoke:   n => `把島主的仇恨拉到自己身上（龍衝仍直接倒地）。要在島主 ${OWNER_PROVOKE_RANGE}px 內才能用。`,
-  groupHeal: n => `補周遭所有人（含自己）${n.healAoE} 血（翅膀期間 +1）。`,
+  groupHeal: n => `補周遭所有人（含自己）${skillVal(n.healAoE)} 血（翅膀期間 ${skillVal(n.healAoE + 1)}；隨等級成長，每 3 級 +50%）。`,
   vuln:      n => `島主 ${ROLE_DEBUFF.dur} 秒內受到的傷害每擊 +1，所有人打都算。要在島主 ${OWNER_PROVOKE_RANGE}px 內才能用。`,
   weak:      n => `島主 ${ROLE_DEBUFF.dur} 秒內對所有人造成的傷害 −30%。要在島主 ${OWNER_PROVOKE_RANGE}px 內才能用。`,
 };
@@ -4138,11 +4143,13 @@ function skillInfoData() {
   jobSkillIds().forEach((id, i) => {
     const d = JOB_SKILLS[id]; if (!d) return;
     let nums = '';
-    if (id === 'ninjutsu') nums = `火球傷害固定 ${d.dmg}（不吃等級與職能加成）`;
-    else if (id === 'highjump') nums = `落地傷害固定 ${d.dmg}`;
-    else if (id === 'poison') nums = `每跳固定 ${d.dmg}，共 ${Math.round(d.dur / d.every) + 0} 下，總計 ${d.dmg * Math.round(d.dur / d.every)}`;
-    else if (id === 'sheal') nums = `補 ${d.amt} 血（翅膀期間 ${d.amt + 1}）`;
-    else if (id === 'care') nums = `每造成 2 次傷害，對方回 1 血；拯救期間每次傷害回 ${d.amt + JOB_SKILLS.save.plus} 血`;
+    const mul = skillMul(lv), sv = b => skillVal(b), tail = `（基礎 %B，技能每 3 級 +50%，現在 ×${mul}）`;
+    if (id === 'ninjutsu') nums = `火球傷害 ${sv(d.dmg)}` + tail.replace('%B', d.dmg);
+    else if (id === 'highjump') nums = `落地傷害 ${sv(d.dmg)}` + tail.replace('%B', d.dmg);
+    else if (id === 'poison') nums = `每跳 ${sv(d.dmg)}，共 ${Math.round(d.dur / d.every)} 下，總計 ${sv(d.dmg) * Math.round(d.dur / d.every)}` + tail.replace('%B', d.dmg);
+    else if (id === 'sheal') nums = `補 ${sv(d.amt)} 血（翅膀期間 ${sv(d.amt + 1)}）` + tail.replace('%B', d.amt);
+    else if (id === 'care') nums = `賢者每造成一次傷害，對方回 ${(d.amt * mul).toFixed(1)} 血；拯救期間回 ${((d.amt + JOB_SKILLS.save.plus) * mul).toFixed(1)} 血` + tail.replace('%B', d.amt);
+    else if (id === 'vamp') nums = `命中回 ${sv(1)} 血` + tail.replace('%B', 1);
     sk.push({ key: String(i + 1), name: d.name, cd: d.cd, desc: d.desc, nums });
   });
   const rs = ROLE_SKILLS[jd?.role];
@@ -7360,7 +7367,7 @@ function mgFrame() {
   S.mgRaf = requestAnimationFrame(mgFrame);
   const t = mgNow(), mySeat = v.role === 'seat' ? v.seats[v.me] : null;
   mgGenC(M.g, Math.max(0, t) + 12);
-  if (v.mg && v.mg.dmg > M.lastDmg) { M.lastDmg = v.mg.dmg; M.shake = performance.now() + 350; mgSay('−1', '#ff7a7a', 320, 118); }
+  if (v.mg && v.mg.dmg > M.lastDmg) { M.lastDmg = v.mg.dmg; M.shake = performance.now() + 350; mgSay('−1', '#ffe08a', 320, 118); }   // M.shake 現在只當「Boss 變紅」的計時（2026-11-15 使用者要求：取消畫面晃動、紅色只留 Boss，不然像玩家受傷）
   if (mySeat) { if (M.lastHp != null && mySeat.hp < M.lastHp) M.hitFlash = .4; M.lastHp = mySeat.hp; }
   M.hitFlash = Math.max(0, M.hitFlash - .016);
   if (t >= 0 && performance.now() - M.lastSync > 1000) { M.lastSync = performance.now(); S.net?.tbl?.({ a: 'sync' }); }   // 讓伺服器結算沒被消除的幽靈
@@ -7377,8 +7384,7 @@ function mgGhostsNow(t, m) {   // 目前在場上的幽靈（還沒被消除、�
 function mgDraw(t, mySeat) {
   const cv = $('mgCanvas'); if (!cv) return;
   const g = cv.getContext('2d'), M = S.mg, v = S.tableView, m = v.mg, now = performance.now();
-  const shaking = M.shake > now, sh = shaking ? (M.shake - now) / 350 * 7 : 0;
-  g.save(); if (shaking) g.translate((Math.random() - .5) * 2 * sh, (Math.random() - .5) * 2 * sh);   // 打中 Boss：畫面震動
+  g.save();   // （打中 Boss 不再晃動畫面）
   g.fillStyle = '#0b0a1a'; g.fillRect(-10, -10, 660, 420);
   const grad = g.createRadialGradient(MG_CX, MG_CY, 10, MG_CX, MG_CY, 300); grad.addColorStop(0, 'rgba(120,90,220,.28)'); grad.addColorStop(1, 'rgba(10,10,26,0)'); g.fillStyle = grad; g.fillRect(0, 0, 640, 400);
   g.strokeStyle = 'rgba(160,130,255,.25)'; g.lineWidth = 1; g.beginPath(); g.arc(MG_CX, MG_CY, MG_R_HIT, 0, 6.2832); g.stroke();
@@ -7401,7 +7407,7 @@ function mgDraw(t, mySeat) {
   // Boss
   if (t >= MG_BOSS_START && m) {
     const bx = MG_CX, by = 78, hpFrac = Math.max(0, (m.boss - m.dmg) / m.boss), enter = Math.min(1, (t - MG_BOSS_START) / 1.5), wob = Math.sin(t * 2) * 4;
-    const hurt = M.shake > now; g.globalAlpha = enter; g.fillStyle = hurt ? '#ff4a4a' : '#7a2a8a'; g.beginPath(); g.arc(bx + (hurt ? (Math.random() - .5) * 6 : 0), by + wob, 38, Math.PI, 0); g.lineTo(bx + 38, by + wob + 34);
+    const hurt = M.shake > now; g.globalAlpha = enter; g.fillStyle = hurt ? '#ff4a4a' : '#7a2a8a'; g.beginPath(); g.arc(bx, by + wob, 38, Math.PI, 0); g.lineTo(bx + 38, by + wob + 34);
     for (let k = 4; k >= -4; k--) g.lineTo(bx + k * 9.5, by + wob + 34 + (k % 2 ? 0 : 8)); g.lineTo(bx - 38, by + wob + 34); g.closePath(); g.fill();
     g.fillStyle = '#ffe08a'; g.beginPath(); g.arc(bx - 13, by + wob - 2, 6, 0, 6.2832); g.arc(bx + 13, by + wob - 2, 6, 0, 6.2832); g.fill();
     g.fillStyle = '#2a0a30'; g.beginPath(); g.arc(bx - 13, by + wob - 1, 2.5, 0, 6.2832); g.arc(bx + 13, by + wob - 1, 2.5, 0, 6.2832); g.fill();
@@ -7429,7 +7435,6 @@ function mgDraw(t, mySeat) {
   for (const f of M.fx) { const a = Math.max(0, 1 - (performance.now() - f.at) / 700); if (a <= 0) continue; g.globalAlpha = a; g.fillStyle = f.col; g.font = 'bold 16px "Microsoft JhengHei"'; g.fillText(f.text, f.x, f.y - (1 - a) * 24); g.globalAlpha = 1; }
   M.fx = M.fx.filter(f => performance.now() - f.at < 700);
   if (M.hitFlash > 0) { g.fillStyle = `rgba(255,60,60,${M.hitFlash})`; g.fillRect(0, 0, 640, 400); }
-  if (M.shake > now) { g.fillStyle = `rgba(255,40,40,${(M.shake - now) / 350 * .22})`; g.fillRect(0, 0, 640, 400); }   // 打中 Boss：畫面泛紅
   g.restore();
   if (t < 0) { g.fillStyle = 'rgba(8,10,20,.55)'; g.fillRect(0, 0, 640, 400); g.fillStyle = '#ffe08a'; g.font = 'bold 56px "Microsoft JhengHei"'; g.fillText(String(Math.ceil(-t)), MG_CX, MG_CY + 18); }
   if (mySeat?.dead && v.role === 'seat') { g.fillStyle = 'rgba(8,10,20,.5)'; g.fillRect(0, MG_CY - 28, 640, 56); g.fillStyle = '#ffb347'; g.font = 'bold 22px "Microsoft JhengHei"'; g.fillText('你倒下了（隊友還在戰鬥）', MG_CX, MG_CY + 8); }
