@@ -1600,8 +1600,9 @@ Object.assign(JOB_SKILLS, {
               } },
   wings:    { name: '翅膀', cd: 45, dur: 15, desc: '15 秒內所有治療量 +1',
               run() { S.fx.wings = S.t + this.dur; fxBurst('wings'); return true; } },
-  ninjutsu: { name: '火遁', cd: 20, cast: 1.5, r: 80, reach: 165, dmg: 6, desc: '結印 1.5 秒（可移動、不能攻擊），結完朝最近的敵人（島主優先）噴出火球，命中處 80px 內的敵人各造成 6 傷害；範圍內沒有敵人就不發動',
-              run() { S.fx.seal = { t0: S.t, until: S.t + this.cast }; return true; } },
+  ninjutsu: { name: '火遁', cd: 20, cast: 1.5, r: 80, reach: 165, dmg: 6, desc: '結印 1.5 秒（可移動、不能攻擊），結完朝最近的敵人（島主優先）噴出火球，命中處 80px 內的敵人各造成 6 傷害；附近沒有敵人時不能施放（不會結印、不進冷卻）',
+              usable() { return ninjutsuTarget(S.players[0]) ? null : '附近沒有敵人'; },
+              run(me) { if (!ninjutsuTarget(me)) { toast('火遁：附近沒有敵人', 1200); return false; } S.fx.seal = { t0: S.t, until: S.t + this.cast }; return true; } },   // 先確認有目標才結印（沒有就不開始、不進冷卻）
   highjump: { name: '高跳', cd: 15, dmg: 5, range: 200, desc: '跳到滑鼠方向 200px 內的敵人身上造成 5 傷害，再跳回原位',
               usable() { return pickCastTarget(S.players[0], this, castAim()) ? null : '範圍內沒有敵人'; },
               run(me) {
@@ -1717,6 +1718,19 @@ function blinkMe(me, dist) {
   S.net?.skillEvent?.('blink');
   return true;
 }
+// 火遁的目標：最近的敵人（島主優先；距離不超過 reach，也在伺服器 170px 驗證範圍內）
+function ninjutsuTarget(me) {
+  const sk = JOB_SKILLS.ninjutsu;
+  let tg = null, tb = Infinity;
+  for (const a of S.mobs) {
+    if (a.dead || a.fly) continue;
+    const d = Math.hypot(a.x - me.x, a.y - me.y), od = mobDef(a.id);
+    if (d > sk.reach || d - hitRadius(od) > sk.reach) continue;
+    const sc = d - (od.owner ? 1e6 : 0);
+    if (sc < tb) { tb = sc; tg = a; }
+  }
+  return tg;
+}
 // 每幀：忍術結印完成、三重／法陣過期
 function stepSkills() {
   const F = S.fx, me = S.players[0];
@@ -1727,15 +1741,8 @@ function stepSkills() {
     const sk = JOB_SKILLS.ninjutsu;
     // 火遁（2026-11-14 使用者要求：由「身邊爆炸」改成「對敵人及周圍造成傷害」）：挑最近的敵人（島主優先；距離不超過 reach，也在伺服器 170px 驗證範圍內），
     // 火球落在牠身上，落點 r 範圍內的敵人各吃 dmg；範圍內沒有敵人就不發動（不扣冷卻以外的東西，冷卻照算）。島主／魚人的傷害走技能路徑由伺服器驗證距離。
-    let tg = null, tb = Infinity;
-    for (const a of S.mobs) {
-      if (a.dead || a.fly) continue;
-      const d = Math.hypot(a.x - me.x, a.y - me.y), od = mobDef(a.id);
-      if (d > sk.reach || d - hitRadius(od) > sk.reach) continue;
-      const sc = d - (od.owner ? 1e6 : 0);
-      if (sc < tb) { tb = sc; tg = a; }
-    }
-    if (!tg) { toast('火遁：附近沒有敵人', 1200); return; }
+    const tg = ninjutsuTarget(me);
+    if (!tg) { toast('火遁：目標不見了', 1200); return; }   // 結印期間目標跑遠或被打倒：落空
     const ty = tg.y - 14 * (mobDef(tg.id).big || 1);
     S.floaters.push({ fxk: 'firebomb', x1: me.x, y1: me.y - 30, x: tg.x, y: tg.y, ty, r: sk.r, life: .7 });
     S.net?.skillEvent?.(`ninjutsu:${Math.round(tg.x)}:${Math.round(tg.y)}`);
@@ -3358,8 +3365,6 @@ function drawPersonFx(p, fx, backView, phase) {
 const SEAL_BIJA = ['ॐ', 'ह्रीं', 'हूँ'];   // 忍術結印的三個梵文種子字（唵、赫利、吽；2026-11-14 使用者要求改用梵文，原本是自創的方／叉／三角）；圖檔 assets/skills/seal_glyphs.png 由 gen_assets.py 的 SEAL_GLYPHS 產生，缺圖才退回系統字型
 function drawSealGlyph(x, y, kind, a) {   // 結印時頭旁依序浮出的梵文種子字
   ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.globalAlpha = Math.min(1, a * 2);
-  ctx.fillStyle = 'rgba(30,20,50,.75)'; ctx.fillRect(-11, -11, 22, 22);
-  ctx.strokeStyle = '#e8d0ff'; ctx.lineWidth = 1.5; ctx.strokeRect(-11, -11, 22, 22);
   const im = S.sealImg;
   if (im) ctx.drawImage(im, kind * 18, 0, 18, 18, -9, -10, 18, 18);
   else {
