@@ -121,7 +121,7 @@ NAME_MAX = 24
 # 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號（Worker 存 Registry 的 gstats:<uid>，這裡只存記憶體 GSTATS）。各遊戲結算時在 result["gs"]
 # （依「結算後留下的座位」順序，與 result["xp"] 同；None＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器照著記進 GSTATS 並把整份送給本人；
 # result["gs"] 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）。與 worker 的 gsMk／tableStats 同一套
-GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom"}
+GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo"}
 GS_CAP, GS_KEYS_MAX = 1000000, 24
 GSTATS = {}
 
@@ -674,8 +674,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey", "t17": "kingdom"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4), "kingdom": (3, 4)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey", "t17": "kingdom", "t18": "bigtwo"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4), "kingdom": (3, 4), "bigtwo": (2, 4)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -765,6 +765,9 @@ def tbl_leave(t, cid):
             return
         if t["phase"] == "playing" and t["game"] == "trigon":   # Blokus Trigon：離開不中斷，棋子留在棋盤上、之後跳過
             tg_leave(t, i, int(time.time() * 1000))
+            return
+        if t["phase"] == "playing" and t["game"] == "bigtwo":   # 大老二：離開者手牌作廢，其餘人繼續（剩不到 2 人就結束）
+            bt_leave(t, i, int(time.time() * 1000))
             return
         if t["phase"] == "playing" and t["game"] == "kingdom":   # 列島建國：離開者視同棄權，其餘人繼續（剩不到 2 人就結束）
             kg_leave(t, i, int(time.time() * 1000))
@@ -1672,6 +1675,206 @@ def kg_view(t, cid, v):
     if playing:
         for k, s in enumerate(t["seats"]):
             v["seats"][k]["left"] = bool(s.get("left"))
+
+# ---- 大老二（第十八桌 t18；2026-11-14，使用者要求）：2～4 人、單局、先出完手牌者獲勝（規則與 worker/src/index.js 的 bt* 同一套，逐行對照）----
+# 牌：花色 S♠ H♥ D♦ C♣（大小 ♠ > ♥ > ♦ > ♣），點數 3 最小…K、A，2 最大（'S1'＝A、'S2'＝2，同 UNO／抽鬼牌的牌面編碼）。
+# 牌型只有 單張／對子／五張（順子 < 同花 < 葫蘆 < 鐵支帶一張 < 同花順）；順子只能 3～A 之間連續（2 不能入順，不繞圈：A2345、JQKA2 都不算）。
+# 同一輪要出同樣張數的牌且比上一手大；可以隨時 pass（不鎖定自己），其他人都 pass 後最後出牌的人重新領出（任何牌型）。
+# 開局：持有最小牌的人先出且這一手必須含那張（4 人＝梅花 3）；3 人每人 17 張（剩 1 張不用），2／4 人每人 13 張。
+BT_TURN_MS, BT_IDLE_MAX, BT_XP = 45000, 2, 5
+BT_SUIT = {"C": 0, "D": 1, "H": 2, "S": 3}
+BT_SYM = {"S": "♠", "H": "♥", "D": "♦", "C": "♣"}
+BT_RK = {1: "A", 11: "J", 12: "Q", 13: "K"}
+
+def bt_val(c):
+    r = int(c[1:])
+    return 14 if r == 1 else 15 if r == 2 else r
+
+def bt_key(c):
+    return (bt_val(c), BT_SUIT[c[0]])
+
+def bt_combo(cs):
+    """牌型 → (張數, 五張牌型階級 0～5, 比大小的 (點數, 花色))；不成牌型回 None。"""
+    n = len(cs)
+    if n not in (1, 2, 5) or len(set(cs)) != n:
+        return None
+    ks = sorted(bt_key(c) for c in cs)
+    if n == 1:
+        return (1, 0, ks[0])
+    if n == 2:
+        return (2, 0, ks[1]) if ks[0][0] == ks[1][0] else None
+    vals = [k[0] for k in ks]
+    cnt = {}
+    for v in vals:
+        cnt[v] = cnt.get(v, 0) + 1
+    flush = len({k[1] for k in ks}) == 1
+    straight = len(cnt) == 5 and vals[4] - vals[0] == 4 and vals[4] <= 14
+    shape = sorted(cnt.values())
+    if straight and flush:
+        return (5, 5, ks[4])
+    if shape == [1, 4]:
+        return (5, 4, (next(v for v, c in cnt.items() if c == 4), 0))
+    if shape == [2, 3]:
+        return (5, 3, (next(v for v, c in cnt.items() if c == 3), 0))
+    if flush:
+        return (5, 2, ks[4])
+    if straight:
+        return (5, 1, ks[4])
+    return None
+
+def bt_beats(new, last):
+    return new[0] == last[0] and (new[1], new[2]) > (last[1], last[2])
+
+def bt_active(t):
+    return [k for k, s in enumerate(t["seats"]) if not s.get("left") and not s.get("forfeit")]
+
+def bt_set_turn(t, i, now):
+    t["turn"], t["g"]["deadline"] = i, now + BT_TURN_MS
+
+def bt_start(t):
+    now = int(time.time() * 1000)
+    n = len(t["seats"])
+    deck = [f"{s}{r}" for s in "SHDC" for r in range(1, 14)]
+    random.shuffle(deck)
+    per = 17 if n == 3 else 13
+    for k, s in enumerate(t["seats"]):
+        s["hand"] = sorted(deck[k * per:(k + 1) * per], key=bt_key)
+        s["out"], s["ready"], s["left"], s["forfeit"], s["idle"] = False, False, False, False, 0
+    start = min((c for s in t["seats"] for c in s["hand"]), key=bt_key)
+    first = next(k for k, s in enumerate(t["seats"]) if start in s["hand"])
+    t["g"] = {"last": None, "passes": 0, "first": True, "start": start, "deadline": 0}
+    t["result"], t["phase"] = None, "playing"
+    bt_set_turn(t, first, now)
+    tbl_log(t, f"牌局開始！每人 {per} 張，由 {t['seats'][first]['name']} 先出（要含最小的牌）")
+
+def bt_label(cs):
+    return " ".join(BT_SYM[c[0]] + str(BT_RK.get(int(c[1:]), int(c[1:]))) for c in sorted(cs, key=bt_key))
+
+def bt_settle(t):
+    """其他人都 pass 了：這一手結束（最後出牌的人還在場就是他重新領出；不在了就由下一位活著的人領出）。"""
+    g = t["g"]
+    if not g["last"]:
+        return
+    act = bt_active(t)
+    need = len(act) - (1 if g["last"]["seat"] in act else 0)
+    if g["passes"] >= need:
+        g["last"], g["passes"] = None, 0
+
+def bt_advance(t, i, now):
+    bt_settle(t)
+    n = len(t["seats"])
+    act = bt_active(t)
+    for k in range(1, n + 1):
+        j = (i + k) % n
+        if j in act:
+            bt_set_turn(t, j, now)
+            return
+
+def bt_finish(t, winner, xp):
+    stay = [s for s in t["seats"] if not s.get("left")]
+    win = t["seats"][winner]
+    players = [{"name": s["name"], "n": len(s["hand"]), "left": bool(s.get("left")), "forfeit": bool(s.get("forfeit"))} for s in t["seats"]]
+    t["result"] = {"winner": winner, "name": win["name"], "text": f"{win['name']} 出完手牌，獲勝！", "rid": random.getrandbits(32),
+                   "xp": [BT_XP if xp and not s.get("forfeit") else 0 for s in stay], "players": players,
+                   "gs": [gs_mk({"w": 1} if s is win else {}) if xp and not s.get("forfeit") else None for s in stay]}
+    tbl_log(t, t["result"]["text"])
+    t["seats"] = stay
+    tbl_reset_seats(t)
+    t["g"] = None
+
+def bt_check_last(t):
+    """剩不到 2 位玩家：剩的那位獲勝（無 XP，擋「開了就等別人離開」的刷分）；一個人都不剩就清桌。"""
+    act = bt_active(t)
+    if t["phase"] != "playing" or len(act) > 1:
+        return False
+    if act:
+        bt_finish(t, act[0], False)
+    else:
+        t["seats"] = []
+        tbl_reset_seats(t)
+        t["g"] = None
+    return True
+
+def bt_play(t, cid, cs, now, keep_idle=False):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "bigtwo" or role != "seat" or t["phase"] != "playing" or not g or i != t["turn"]:
+        return False
+    return bt_do_play(t, i, cs, now, keep_idle)
+
+def bt_do_play(t, i, cs, now, keep_idle=False):
+    g, s = t["g"], t["seats"][i]
+    if not isinstance(cs, list) or not 1 <= len(cs) <= 5 or not all(isinstance(c, str) for c in cs) or any(c not in s["hand"] for c in cs):
+        return False
+    cb = bt_combo(cs)
+    if not cb or (g["last"] and not bt_beats(cb, g["last"]["cb"])) or (g["first"] and g["start"] not in cs):
+        return False
+    for c in cs:
+        s["hand"].remove(c)
+    g["last"], g["passes"], g["first"] = {"seat": i, "cs": sorted(cs, key=bt_key), "cb": cb}, 0, False
+    if not keep_idle:
+        s["idle"] = 0
+    tbl_log(t, f"{s['name']} 出 {bt_label(cs)}")
+    if not s["hand"]:
+        bt_finish(t, i, True)
+        return True
+    bt_advance(t, i, now)
+    return True
+
+def bt_pass(t, cid, now, keep_idle=False):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "bigtwo" or role != "seat" or t["phase"] != "playing" or not g or i != t["turn"] or not g["last"]:
+        return False
+    g["passes"] += 1
+    if not keep_idle:
+        t["seats"][i]["idle"] = 0
+    tbl_log(t, f"{t['seats'][i]['name']} pass")
+    bt_advance(t, i, now)
+    return True
+
+def bt_timeout(t, now):
+    """回合限時到了：能 pass 就 pass，要領出就出最小的一張（開局那手就出開局牌）；連續超時 BT_IDLE_MAX 次視為棄權（手牌作廢、其餘人繼續）。"""
+    g = t.get("g")
+    if t["game"] != "bigtwo" or t["phase"] != "playing" or not g or now < g["deadline"] - 300:
+        return
+    i = t["turn"]
+    s = t["seats"][i]
+    s["idle"] += 1
+    if s["idle"] >= BT_IDLE_MAX:
+        s["forfeit"], s["hand"] = True, []
+        tbl_log(t, f"{s['name']} 連續超時，視為棄權")
+        if not bt_check_last(t):
+            bt_advance(t, i, now)
+        return
+    tbl_log(t, f"{s['name']} 超時")
+    if g["last"]:
+        bt_pass(t, s["cid"], now, True)
+    else:
+        bt_do_play(t, i, [g["start"] if g["first"] else s["hand"][0]], now, True)
+
+def bt_leave(t, i, now):
+    """遊戲進行中有人離開：手牌作廢、其餘人繼續；剩不到 2 人時那位獲勝（無 XP）。"""
+    s = t["seats"][i]
+    s["left"], s["cid"], s["hand"] = True, None, []
+    tbl_log(t, f"{s['name']} 離開了")
+    if bt_check_last(t):
+        return
+    if i == t["turn"]:
+        bt_advance(t, i, now)
+
+def bt_view(t, cid, v):
+    g = t["g"]
+    playing = t["phase"] == "playing"
+    role, i = tbl_find(t, cid)
+    if not (g and playing):
+        return
+    v["bt"] = {"last": {"seat": g["last"]["seat"], "cs": list(g["last"]["cs"])} if g["last"] else None, "passes": g["passes"], "first": g["first"], "start": g["start"],
+               "deadline": g["deadline"], "sn": int(time.time() * 1000)}
+    for k, s in enumerate(t["seats"]):
+        v["seats"][k]["left"] = bool(s.get("left"))
+        v["seats"][k]["fo"] = bool(s.get("forfeit"))
+    v["canPass"] = role == "seat" and i == t["turn"] and bool(g["last"])
 
 # ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：2～4 人、正六邊形的三角格棋盤（邊長 9，共 486 格）、每人 22 塊（1～6 個三角形，共 110 格）----
 # 規則與座標系說明見 worker/src/index.js 的 tg*（同一套）：三角形 (x, y)、(x + y) 偶數＝朝上；頂點是格點 (i, j)；方向轉換用軸座標 ((i − j) / 2, j)。
@@ -4882,7 +5085,7 @@ def hk_end(t, cid, msg):
         return
     hk_finish(t, sa, sb, "" if sa >= HK_GOALS or sb >= HK_GOALS else "時間到")
 
-GAME_START = {"kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+GAME_START = {"bigtwo": bt_start, "kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
@@ -4982,6 +5185,8 @@ def tbl_view(t, cid):
             for k, s in enumerate(t["seats"]):
                 v["seats"][k]["left"] = bool(s.get("left"))
                 v["seats"][k]["rem"] = tg_rem(g, k)
+    elif g and t["game"] == "bigtwo":   # 大老二：桌面上最後一手、連續 pass 數、期限；手牌走共通的 hand／hands（觀戰者看得到每個人的牌）
+        bt_view(t, cid, v)
     elif g and t["game"] == "kingdom":   # 列島建國：整個盤面公開（市場、資源、各人的王國），只有自己保留的牌看得到內容
         kg_view(t, cid, v)
     elif g and t["game"] == "blokus":   # Blokus：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
@@ -5017,9 +5222,9 @@ def tbl_view(t, cid):
                 v["canPass"] = mine and g["drawn"]
     if t["game"] == "arcade":   # 俄羅斯方塊：每台機台的狀態、聯機狀況；phase 依「我自己是不是正在玩」
         return ar_view(t, cid, v)
-    if role == "spec" and playing and t["game"] in ("oldmaid", "uno"):   # 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
+    if role == "spec" and playing and t["game"] in ("oldmaid", "uno", "bigtwo"):   # 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
         v["hands"] = [list(s["hand"]) for s in t["seats"]]
-    if role == "seat" and playing and t["game"] in ("oldmaid", "uno"):
+    if role == "seat" and playing and t["game"] in ("oldmaid", "uno", "bigtwo"):
         v["hand"] = list(t["seats"][i]["hand"])   # 照伺服器順序（不排序）：對方抽的第 k 張牌背＝這裡從左數第 k 張
     return v
 
@@ -6364,11 +6569,16 @@ class Room:
                         un_say(t, cid)
                     elif a == "catch":
                         un_catch(t, cid)
+                    elif a in ("bplay", "bpass"):   # 大老二：出牌 {cs: [牌]}／pass
+                        if not (bt_play(t, cid, msg.get("cs"), now_ms) if a == "bplay" else bt_pass(t, cid, now_ms)):
+                            return out, None, None
                     elif a in ("kt", "kr", "kb", "kx", "kk", "kp"):   # 列島建國：拿資源／保留／建造／交易／封鎖／跳過
                         if not kg_act(t, cid, msg, now_ms):
                             return out, None, None
                     elif a == "timeout":   # UNO／Blokus：回合限時到了（伺服器核對時鐘）
-                        if t["game"] == "kingdom":
+                        if t["game"] == "bigtwo":
+                            bt_timeout(t, now_ms)
+                        elif t["game"] == "kingdom":
                             kg_timeout(t, now_ms)
                         elif t["game"] == "blokus":
                             bk_timeout(t, now_ms)

@@ -322,6 +322,13 @@ body {
 .tcard.back.pick { cursor: pointer; outline: 2px solid #ffe08a; }
 .tcard.back.pick:hover { transform: translateY(-4px); }
 .table-hand { text-align: center; margin: 10px 0; }
+.bt-hand { gap: 4px; }
+.bt-hand .tcard { width: 38px; height: 54px; font-size: 15px; cursor: pointer; transition: transform .08s; }
+.bt-hand .tcard:hover { transform: translateY(-4px); }
+.bt-hand .tcard.bt-sel { transform: translateY(-14px); outline: 2px solid #ffe08a; box-shadow: 0 0 8px rgba(255, 224, 138, .7); }
+.bt-spec { gap: 2px; }
+.bt-spec .tcard { width: 22px; height: 32px; font-size: 10px; }
+.bt-mid { text-align: center; margin: 8px 0; min-height: 80px; }
 .table-btns { display: flex; gap: 10px; justify-content: center; margin: 12px 0; }
 .table-log { max-height: 120px; overflow-y: auto; font-size: 12px; color: var(--text-dim); border-top: 1px solid rgba(255, 255, 255, .08); padding-top: 6px; margin-top: 8px; }
 .table-head-btns { display: flex; gap: 8px; }

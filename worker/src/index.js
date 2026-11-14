@@ -484,8 +484,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey", t17: "kingdom" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 4], kingdom: [3, 4] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey", t17: "kingdom", t18: "bigtwo" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 4], kingdom: [3, 4], bigtwo: [2, 4] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -499,7 +499,7 @@ const GM_XP_MIN_MOVES = 10;
 // 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號存在 Registry 的 gstats:<uid> = {遊戲 id: {鍵: 數字}}；各遊戲結算時在 result.gs
 // （依「結算後留下的座位」順序，與 result.xp 同；null＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器（tableStats）照著寫進 Registry，
 // 再把整份 gstats 送給本人；result.gs 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）；其餘鍵見 docs/notes.md「小遊戲戰績與稱號」。與 tools/dev_server.py 的 gs_mk 同一套
-const GS_GAMES = new Set(["oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom"]), GS_KEY_RE = /^[a-z0-9_]{1,12}$/, GS_CAP = 1000000, GS_KEYS_MAX = 24;
+const GS_GAMES = new Set(["oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo"]), GS_KEY_RE = /^[a-z0-9_]{1,12}$/, GS_CAP = 1000000, GS_KEYS_MAX = 24;
 const gsMk = (add, mx, mn) => ({ add: { p: 1, ...(add || {}) }, max: mx || {}, min: mn || {} });
 const OM_SYM = { S: "♠", H: "♥", D: "♦", C: "♣" };
 const omRank = c => (c === "JK" ? null : Number(c.slice(1)));
@@ -553,6 +553,7 @@ function tblLeave(t, cid) {
     const name = t.seats[i].name;
     if (t.game === "arcade") { arLeave(t, i); return; }   // 俄羅斯方塊：單人局作廢、聯機照當時分數排名，不中斷其他人
     if (t.phase === "playing" && t.game === "trigon") { tgLeave(t, i, Date.now()); return; }   // Blokus Trigon：離開不中斷，棋子留在棋盤上、之後跳過
+    if (t.phase === "playing" && t.game === "bigtwo") { btLeave(t, i, Date.now()); return; }   // 大老二：離開者手牌作廢，其餘人繼續（剩不到 2 人就結束）
     if (t.phase === "playing" && t.game === "kingdom") { kgLeave(t, i, Date.now()); return; }   // 列島建國：離開者視同棄權，其餘人繼續（剩不到 2 人就結束）
     if (t.phase === "playing" && t.game === "blokus") { bkLeave(t, i, Date.now()); return; }   // Blokus：離開不中斷，棋子留在棋盤上、之後跳過
     if (t.phase === "playing" && t.game === "mage") { mgLeave(t, i, Date.now()); return; }   // 見習驅魔師：離開不中斷，視同倒下，到場上沒有活人為止
@@ -1186,6 +1187,139 @@ function kgView(t, cid, v) {
     obj: g.obj.map(o => ({ id: o.id, name: o.name, text: o.text, by: o.by })), sd, hand: role === "seat" && i < g.sd.length ? [...g.sd[i].hand] : [], deadline: playing ? g.deadline : 0, sn: Date.now() };
   if (playing) t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; });
 }
+// ---- 大老二（第十八桌 t18；2026-11-14，使用者要求）：2～4 人、單局、先出完手牌者獲勝（規則與 tools/dev_server.py 的 bt_* 是同一套，逐行對照）----
+// 牌：花色 S♠ H♥ D♦ C♣（大小 ♠ > ♥ > ♦ > ♣），點數 3 最小…K、A，2 最大（'S1'＝A、'S2'＝2，同 UNO／抽鬼牌的牌面編碼）。
+// 牌型只有 單張／對子／五張（順子 < 同花 < 葫蘆 < 鐵支帶一張 < 同花順）；順子只能 3～A 之間連續（2 不能入順，不繞圈）。
+// 同一輪要出同樣張數的牌且比上一手大；可以隨時 pass（不鎖定自己），其他人都 pass 後最後出牌的人重新領出。
+// 開局：持有最小牌的人先出且這一手必須含那張（4 人＝梅花 3）；3 人每人 17 張，2／4 人每人 13 張。
+const BT_TURN_MS = 45000, BT_IDLE_MAX = 2, BT_XP = 5;
+const BT_SUIT = { C: 0, D: 1, H: 2, S: 3 }, BT_SYM = { S: "♠", H: "♥", D: "♦", C: "♣" }, BT_RK = { 1: "A", 11: "J", 12: "Q", 13: "K" };
+const btVal = c => { const r = Number(c.slice(1)); return r === 1 ? 14 : r === 2 ? 15 : r; };
+const btKey = c => [btVal(c), BT_SUIT[c[0]]];
+const btCmpKey = (a, b) => a[0] - b[0] || a[1] - b[1];
+const btCmpCard = (a, b) => btCmpKey(btKey(a), btKey(b));
+function btCombo(cs) {   // 牌型 → [張數, 五張牌型階級 0～5, [點數, 花色]]；不成牌型回 null
+  const n = cs.length;
+  if (![1, 2, 5].includes(n) || new Set(cs).size !== n) return null;
+  const ks = cs.map(btKey).sort(btCmpKey);
+  if (n === 1) return [1, 0, ks[0]];
+  if (n === 2) return ks[0][0] === ks[1][0] ? [2, 0, ks[1]] : null;
+  const vals = ks.map(k => k[0]), cnt = {};
+  for (const v of vals) cnt[v] = (cnt[v] || 0) + 1;
+  const flush = new Set(ks.map(k => k[1])).size === 1;
+  const straight = Object.keys(cnt).length === 5 && vals[4] - vals[0] === 4 && vals[4] <= 14;
+  const shape = Object.values(cnt).sort((a, b) => a - b).join(",");
+  const of = c => Number(Object.keys(cnt).find(v => cnt[v] === c));
+  if (straight && flush) return [5, 5, ks[4]];
+  if (shape === "1,4") return [5, 4, [of(4), 0]];
+  if (shape === "2,3") return [5, 3, [of(3), 0]];
+  if (flush) return [5, 2, ks[4]];
+  if (straight) return [5, 1, ks[4]];
+  return null;
+}
+const btBeats = (nw, last) => nw[0] === last[0] && (nw[1] - last[1] || btCmpKey(nw[2], last[2])) > 0;
+const btActive = t => { const out = []; t.seats.forEach((s, k) => { if (!s.left && !s.forfeit) out.push(k); }); return out; };
+function btSetTurn(t, i, now) { t.turn = i; t.g.deadline = now + BT_TURN_MS; }
+function btStart(t) {
+  const now = Date.now(), n = t.seats.length;
+  const deck = [];
+  for (const s of "SHDC") for (let r = 1; r <= 13; r++) deck.push(`${s}${r}`);
+  shuffle(deck);
+  const per = n === 3 ? 17 : 13;
+  t.seats.forEach((s, k) => { s.hand = deck.slice(k * per, (k + 1) * per).sort(btCmpCard); s.out = false; s.ready = false; s.left = false; s.forfeit = false; s.idle = 0; });
+  let start = null, first = 0;
+  t.seats.forEach((s, k) => { for (const c of s.hand) if (start === null || btCmpCard(c, start) < 0) { start = c; first = k; } });
+  t.g = { last: null, passes: 0, first: true, start, deadline: 0 };
+  t.result = null; t.phase = "playing";
+  btSetTurn(t, first, now);
+  tblLog(t, `牌局開始！每人 ${per} 張，由 ${t.seats[first].name} 先出（要含最小的牌）`);
+}
+const btLabel = cs => [...cs].sort(btCmpCard).map(c => BT_SYM[c[0]] + (BT_RK[Number(c.slice(1))] || Number(c.slice(1)))).join(" ");
+function btSettle(t) {   // 其他人都 pass 了：這一手結束（最後出牌的人還在場就是他重新領出；不在了就由下一位活著的人領出）
+  const g = t.g;
+  if (!g.last) return;
+  const act = btActive(t), need = act.length - (act.includes(g.last.seat) ? 1 : 0);
+  if (g.passes >= need) { g.last = null; g.passes = 0; }
+}
+function btAdvance(t, i, now) {
+  btSettle(t);
+  const n = t.seats.length, act = btActive(t);
+  for (let k = 1; k <= n; k++) { const j = (i + k) % n; if (act.includes(j)) { btSetTurn(t, j, now); return; } }
+}
+function btFinish(t, winner, xp) {
+  const stay = t.seats.filter(s => !s.left), win = t.seats[winner];
+  const players = t.seats.map(s => ({ name: s.name, n: s.hand.length, left: !!s.left, forfeit: !!s.forfeit }));
+  t.result = { winner, name: win.name, text: `${win.name} 出完手牌，獲勝！`, rid: Math.floor(Math.random() * 4294967296),
+               xp: stay.map(s => (xp && !s.forfeit ? BT_XP : 0)), players, gs: stay.map(s => (xp && !s.forfeit ? gsMk(s === win ? { w: 1 } : {}) : null)) };
+  tblLog(t, t.result.text);
+  t.seats = stay;
+  tblResetSeats(t);
+  t.g = null;
+}
+function btCheckLast(t) {   // 剩不到 2 位玩家：剩的那位獲勝（無 XP）；一個人都不剩就清桌
+  const act = btActive(t);
+  if (t.phase !== "playing" || act.length > 1) return false;
+  if (act.length) btFinish(t, act[0], false);
+  else { t.seats = []; tblResetSeats(t); t.g = null; }
+  return true;
+}
+function btPlay(t, cid, cs, now, keepIdle) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "bigtwo" || role !== "seat" || t.phase !== "playing" || !g || i !== t.turn) return false;
+  return btDoPlay(t, i, cs, now, keepIdle);
+}
+function btDoPlay(t, i, cs, now, keepIdle) {
+  const g = t.g, s = t.seats[i];
+  if (!Array.isArray(cs) || cs.length < 1 || cs.length > 5 || !cs.every(c => typeof c === "string" && s.hand.includes(c))) return false;
+  const cb = btCombo(cs);
+  if (!cb || (g.last && !btBeats(cb, g.last.cb)) || (g.first && !cs.includes(g.start))) return false;
+  for (const c of cs) s.hand.splice(s.hand.indexOf(c), 1);
+  g.last = { seat: i, cs: [...cs].sort(btCmpCard), cb }; g.passes = 0; g.first = false;
+  if (!keepIdle) s.idle = 0;
+  tblLog(t, `${s.name} 出 ${btLabel(cs)}`);
+  if (!s.hand.length) { btFinish(t, i, true); return true; }
+  btAdvance(t, i, now);
+  return true;
+}
+function btPass(t, cid, now, keepIdle) {
+  const [role, i] = tblFind(t, cid), g = t.g;
+  if (t.game !== "bigtwo" || role !== "seat" || t.phase !== "playing" || !g || i !== t.turn || !g.last) return false;
+  g.passes++;
+  if (!keepIdle) t.seats[i].idle = 0;
+  tblLog(t, `${t.seats[i].name} pass`);
+  btAdvance(t, i, now);
+  return true;
+}
+function btTimeout(t, now) {   // 回合限時到了：能 pass 就 pass，要領出就出最小的一張（開局那手就出開局牌）；連續超時 BT_IDLE_MAX 次視為棄權
+  const g = t.g;
+  if (t.game !== "bigtwo" || t.phase !== "playing" || !g || now < g.deadline - 300) return;
+  const i = t.turn, s = t.seats[i];
+  s.idle++;
+  if (s.idle >= BT_IDLE_MAX) {
+    s.forfeit = true; s.hand = [];
+    tblLog(t, `${s.name} 連續超時，視為棄權`);
+    if (!btCheckLast(t)) btAdvance(t, i, now);
+    return;
+  }
+  tblLog(t, `${s.name} 超時`);
+  if (g.last) btPass(t, s.cid, now, true);
+  else btDoPlay(t, i, [g.first ? g.start : s.hand[0]], now, true);
+}
+function btLeave(t, i, now) {   // 遊戲進行中有人離開：手牌作廢、其餘人繼續；剩不到 2 人時那位獲勝（無 XP）
+  const s = t.seats[i];
+  s.left = true; s.cid = null; s.hand = [];
+  tblLog(t, `${s.name} 離開了`);
+  if (btCheckLast(t)) return;
+  if (i === t.turn) btAdvance(t, i, now);
+}
+function btView(t, cid, v) {
+  const g = t.g, playing = t.phase === "playing", [role, i] = tblFind(t, cid);
+  if (!(g && playing)) return;
+  v.bt = { last: g.last ? { seat: g.last.seat, cs: [...g.last.cs] } : null, passes: g.passes, first: g.first, start: g.start, deadline: g.deadline, sn: Date.now() };
+  t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].fo = !!s.forfeit; });
+  v.canPass = role === "seat" && i === t.turn && !!g.last;
+}
+const BT_MSGS = new Set(["bplay", "bpass"]);
 // ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：2～4 人、正六邊形的三角格棋盤（邊長 9，共 486 格）、每人 22 塊（1～6 個三角形，共 110 格）----
 // 規則同Blokus：第一塊要蓋住自己的角落（這裡是「棋盤六個頂點之一」：塊上有一格以那個頂點為角）；之後每塊要「點對點」接到自己的舊方塊（共用至少一個頂點），且不能「邊對邊」（共用一條邊）；
 // 放不下的人自動跳過、全員放不下就結束；計分＝−剩下的格數，全部放完 +15、最後一塊是單格再 +5；每手限時 TG_TURN_MS，連續超時 TG_IDLE_MAX 次視為棄權；沒有排行榜。與 tools/dev_server.py 的 tg_* 同一套。
@@ -3265,7 +3399,7 @@ function hkEnd(t, cid, msg) {   // 桌主那台回報結束（有一隊到 HK_GO
   if (!Number.isInteger(msg.sa) || !Number.isInteger(msg.sb) || msg.sa < 0 || msg.sb < 0 || msg.sa > 99 || msg.sb > 99) return;
   hkFinish(t, msg.sa, msg.sb, msg.sa >= HK_GOALS || msg.sb >= HK_GOALS ? "" : "時間到");
 }
-const GAME_START = { kingdom: kgStart, arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+const GAME_START = { bigtwo: btStart, kingdom: kgStart, arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 function tblView(t, cid) {
   const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
@@ -3335,6 +3469,8 @@ function tblView(t, cid) {
     const g = t.g;
     v.tg = { board: g.board.join(""), col: [...g.col], corner: [...g.corner], used: g.sd.map(d => [...d.used]), done: g.sd.map(d => d.done), last: g.last, moves: g.moves, deadline: playing ? g.deadline : 0, sn: Date.now() };
     if (playing) t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].rem = tgRem(g, k); });
+  } else if (t.g && t.game === "bigtwo") {   // 大老二：桌面上最後一手、連續 pass 數、期限；手牌走共通的 hand／hands（觀戰者看得到每個人的牌）
+    btView(t, cid, v);
   } else if (t.g && t.game === "kingdom") {   // 列島建國：整個盤面公開（市場、資源、各人的王國），只有自己保留的牌看得到內容
     kgView(t, cid, v);
   } else if (t.g && t.game === "blokus") {   // Blokus：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
@@ -3359,8 +3495,8 @@ function tblView(t, cid) {
       } else { v.canDraw = mine && !g.drawn; v.canPass = mine && g.drawn; }
     }
   }
-  if (role === "spec" && playing && (t.game === "oldmaid" || t.game === "uno")) v.hands = t.seats.map(s => [...s.hand]);   // 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
-  if (role === "seat" && playing && (t.game === "oldmaid" || t.game === "uno")) {
+  if (role === "spec" && playing && (t.game === "oldmaid" || t.game === "uno" || t.game === "bigtwo")) v.hands = t.seats.map(s => [...s.hand]);   // 觀戰者看得到每個人的手牌（使用者要求，2026-11-08），順序＝對手看到的牌背順序
+  if (role === "seat" && playing && (t.game === "oldmaid" || t.game === "uno" || t.game === "bigtwo")) {
     v.hand = [...t.seats[i].hand];   // 照伺服器順序（不排序）：對方抽的第 k 張牌背＝這裡從左數第 k 張
   }
   return v;
@@ -3980,6 +4116,7 @@ export class Island {
     }
     else if (t.game === "hockey" && HK_MSGS.has(a)) hkEnd(t, att.id, msg);   // 空氣曲棍球：桌主那台回報結束
     else if (t.game === "maze" && MZ_MSGS.has(a)) { if (a === "mpac") mzSetPac(t, att.id, msg.v); else mzOver(t, att.id, msg); }   // 豆豆迷宮：桌主指定豆豆／豆豆那台回報結束
+    else if (t.game === "bigtwo" && BT_MSGS.has(a)) { if (!(a === "bplay" ? btPlay(t, att.id, msg.cs, now) : btPass(t, att.id, now))) return; }   // 大老二：出牌 {cs: [牌]}／pass
     else if (t.game === "kingdom" && KG_MSGS.has(a)) { if (!kgAct(t, att.id, msg, now)) return; }   // 列島建國：拿資源／保留／建造／交易／封鎖／跳過
     else if (t.game === "intel" && IT_MSGS.has(a)) itMsg(t, att.id, msg, now);   // 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
     else if (a === "ready") tblReady(t, att.id, msg.v);
@@ -3992,7 +4129,7 @@ export class Island {
     else if (a === "pass") unPass(t, att.id, now);
     else if (a === "uno") unSay(t, att.id);
     else if (a === "catch") unCatch(t, att.id);
-    else if (a === "timeout") { if (t.game === "kingdom") kgTimeout(t, now); else if (t.game === "blokus") bkTimeout(t, now); else if (t.game === "trigon") tgTimeout(t, now); else unTimeout(t, now); }   // UNO／Blokus：回合限時到了（伺服器核對時鐘）
+    else if (a === "timeout") { if (t.game === "bigtwo") btTimeout(t, now); else if (t.game === "kingdom") kgTimeout(t, now); else if (t.game === "blokus") bkTimeout(t, now); else if (t.game === "trigon") tgTimeout(t, now); else unTimeout(t, now); }   // UNO／Blokus：回合限時到了（伺服器核對時鐘）
     else if (a === "place") { if (t.game === "trigon") tgPlace(t, att.id, msg.p, msg.c, now); else bkPlace(t, att.id, msg.p, msg.c, now); }   // Blokus：放方塊 {p 第幾塊, c 佔用的格子座標}
     else if (a === "mode") unSetMode(t, att.id, msg.v);   // UNO：桌主在開局前選玩法（classic／wild）
     else if (a === "hit") dgHit(t, att.id, now);   // 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）

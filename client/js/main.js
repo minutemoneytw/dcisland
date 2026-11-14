@@ -4694,7 +4694,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); hkStop(); unStopTimer(); bkStopTimer(); kgStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); hkStop(); unStopTimer(); bkStopTimer(); kgStopTimer(); btStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
   rulesShow(false); leaveAsk(false);
   $('tableBox').classList.add('hidden');
 }
@@ -4816,6 +4816,7 @@ function buildTable() {
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
   if (tb?.game === 'arcade') { buildArcade(box, v, mk, gd); return; }   // 俄羅斯方塊有自己的畫面（盤面＋聯機）
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
+  if (tb?.game === 'bigtwo') { buildBigTwo(box, v, mk, gd); return; }   // 大老二有自己的畫面（桌面最後一手＋手牌選牌）
   if (tb?.game === 'kingdom') { buildKingdom(box, v, mk, gd); return; }   // 列島建國有自己的畫面（市場、事件、目標、各人的王國）
   if (tb?.game === 'trigon') { buildTrigon(box, v, mk, gd); return; }   // Blokus Trigon有自己的畫面（三角格棋盤＋方塊托盤）
   if (tb?.game === 'blokus') { buildBlokus(box, v, mk, gd); return; }   // Blokus有自己的畫面（棋盤＋方塊托盤）
@@ -5487,6 +5488,138 @@ function buildKingdom(box, v, mk, gd) {
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
   const log = mk('div', 'table-log kg-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules && !playing) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 大老二（第十八桌 t18；2026-11-14，使用者要求）：2～4 人、單局。規則在伺服器（worker 的 bt*、dev_server 的 bt_*）；這裡只負責畫面與「預估」：
+// btCombo／btBeats 與伺服器同一套，只用來決定「出牌」鈕能不能按，最後以伺服器判定為準。
+// 協定（tbl）：bplay {cs: [牌]} 出牌／bpass pass；逾時送 timeout。牌面編碼同 UNO／抽鬼牌（'S1'＝A、'S2'＝2），大小 3 < … < K < A < 2，花色 ♣ < ♦ < ♥ < ♠。
+const BT_SUIT = { C: 0, D: 1, H: 2, S: 3 };
+const btVal = c => { const r = Number(c.slice(1)); return r === 1 ? 14 : r === 2 ? 15 : r; };
+const btKey = c => [btVal(c), BT_SUIT[c[0]]];
+const btCmpKey = (a, b) => a[0] - b[0] || a[1] - b[1];
+const btCmpCard = (a, b) => btCmpKey(btKey(a), btKey(b));
+function btCombo(cs) {   // → [張數, 五張牌型階級 0～5, [點數, 花色]]；不成牌型回 null
+  const n = cs.length;
+  if (![1, 2, 5].includes(n) || new Set(cs).size !== n) return null;
+  const ks = cs.map(btKey).sort(btCmpKey);
+  if (n === 1) return [1, 0, ks[0]];
+  if (n === 2) return ks[0][0] === ks[1][0] ? [2, 0, ks[1]] : null;
+  const vals = ks.map(k => k[0]), cnt = {};
+  for (const v of vals) cnt[v] = (cnt[v] || 0) + 1;
+  const flush = new Set(ks.map(k => k[1])).size === 1;
+  const straight = Object.keys(cnt).length === 5 && vals[4] - vals[0] === 4 && vals[4] <= 14;
+  const shape = Object.values(cnt).sort((a, b) => a - b).join(',');
+  const of = c => Number(Object.keys(cnt).find(v => cnt[v] === c));
+  if (straight && flush) return [5, 5, ks[4]];
+  if (shape === '1,4') return [5, 4, [of(4), 0]];
+  if (shape === '2,3') return [5, 3, [of(3), 0]];
+  if (flush) return [5, 2, ks[4]];
+  if (straight) return [5, 1, ks[4]];
+  return null;
+}
+const btBeats = (nw, last) => nw[0] === last[0] && (nw[1] - last[1] || btCmpKey(nw[2], last[2])) > 0;
+const BT_COMBO_NAME = { 1: '單張', 2: '對子' }, BT_FIVE_NAME = ['', '順子', '同花', '葫蘆', '鐵支', '同花順'];
+const btComboName = cb => (cb ? (cb[0] === 5 ? BT_FIVE_NAME[cb[1]] : BT_COMBO_NAME[cb[0]]) : '');
+function btStopTimer() { if (S.btTimer) { clearInterval(S.btTimer); S.btTimer = 0; } }
+function btStartTimer(v) {
+  btStopTimer();
+  S.btOff = v.bt.sn - Date.now();   // 伺服器時間 − 本機時間
+  S.btTimer = setInterval(() => {
+    const cur = S.tableView;
+    if (!S.tableOpen || !cur || cur.game !== 'bigtwo' || cur.phase !== 'playing') { btStopTimer(); return; }
+    const left = (cur.bt.deadline - (Date.now() + S.btOff)) / 1000, el = $('btTimer');
+    if (el) { el.textContent = left > 0 ? `${Math.ceil(left)} 秒` : '時間到'; el.classList.toggle('urgent', left <= 10); }
+    if (left <= 0 && cur.role === 'seat' && Date.now() - (S.btTimeoutAt || 0) > 1000) { S.btTimeoutAt = Date.now(); S.net?.tbl?.({ a: 'timeout' }); }
+  }, 250);
+}
+function buildBigTwo(box, v, mk, gd) {
+  const playing = v.phase === 'playing', seat = v.role === 'seat', myTurn = playing && seat && v.turn === v.me, g = v.bt;
+  if (!playing) btStopTimer();
+  const o = (S.bt ||= { sel: [], turn: -1 });
+  if (!playing || !seat || !myTurn || o.turn !== v.turn || (g && o.last !== (g.last ? g.last.cs.join() : ''))) o.sel = [];   // 換人、換上一手、不是自己的回合：選取歸零
+  o.sel = o.sel.filter(c => (v.hand || []).includes(c));
+  o.turn = v.turn; o.last = g?.last ? g.last.cs.join() : '';
+  let status;
+  if (playing) status = !seat ? `觀戰中 · 輪到 ${v.seats[v.turn]?.name}` : myTurn ? (g.last ? `輪到你：壓過 ${v.seats[g.last.seat]?.name} 的${btComboName(btCombo(g.last.cs))}，或 pass` : g.first ? `輪到你：第一手要含 ${SUIT_SYM[g.start[0]]}${g.start.slice(1) === '1' ? 'A' : g.start.slice(1)}` : '輪到你：領出任何牌型') : `輪到 ${v.seats[v.turn]?.name}`;
+  else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始（每回合限時 45 秒）';
+  const st = mk('div', 'table-status' + (myTurn ? ' mine' : ''), status);
+  if (playing) { const tm = mk('span', 'bk-timer'); tm.id = 'btTimer'; st.appendChild(tm); }
+  box.appendChild(st);
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  // 座位
+  const row = mk('div', 'table-seats');
+  v.seats.forEach((s, i) => {
+    const e = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && v.turn === i ? ' turn' : '') + (s.left || s.fo ? ' out' : ''));
+    e.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : s.fo ? '（棄權）' : '')));
+    e.appendChild(mk('div', 'table-tag', playing ? (s.left || s.fo ? '' : `${s.n} 張${s.n <= 3 ? ' ⚠' : ''}${v.turn === i ? ' · 出牌中' : ''}`) : (s.ready ? '已準備' : '未準備')));
+    if (playing && v.hands && !s.left && !s.fo) {   // 觀戰：每個人的牌都翻開
+      const cs = mk('div', 'table-cards bt-spec');
+      for (const c of v.hands[i] || []) cs.appendChild(cardEl(c));
+      e.appendChild(cs);
+    }
+    row.appendChild(e);
+  });
+  if (!playing) for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  // 桌面：最後一手
+  if (playing) {
+    const mid = mk('div', 'bt-mid');
+    if (g.last) {
+      mid.appendChild(mk('div', 'table-tag', `${v.seats[g.last.seat]?.name || ''} 出了${btComboName(btCombo(g.last.cs))}${g.passes ? `（已 ${g.passes} 人 pass）` : ''}`));
+      const cs = mk('div', 'table-cards big');
+      for (const c of g.last.cs) cs.appendChild(cardEl(c));
+      mid.appendChild(cs);
+    } else mid.appendChild(mk('div', 'table-tag', g.first ? `開局：持有最小牌的人先出，這一手要含 ${SUIT_SYM[g.start[0]]}${g.start.slice(1) === '1' ? 'A' : g.start.slice(1)}` : '新的一手：誰出都行（單張、對子、五張牌型）'));
+    box.appendChild(mid);
+    btStartTimer(v);
+  }
+  // 我的手牌：點一下選起來（再點取消）
+  if (seat && playing) {
+    const hand = mk('div', 'table-hand'), cs = mk('div', 'table-cards big bt-hand');
+    for (const c of v.hand || []) {
+      const el = cardEl(c), on = o.sel.includes(c);
+      el.classList.add('bt-card'); if (on) el.classList.add('bt-sel');
+      el.onclick = () => { o.sel = on ? o.sel.filter(x => x !== c) : [...o.sel, c]; buildTable(); };
+      cs.appendChild(el);
+    }
+    hand.appendChild(cs); box.appendChild(hand);
+  }
+  // 操作按鈕
+  const btns = mk('div', 'table-btns');
+  if (seat && playing) {
+    const cb = o.sel.length ? btCombo(o.sel) : null;
+    let why = '';
+    if (!myTurn) why = '還沒輪到你';
+    else if (!o.sel.length) why = '先點選要出的牌';
+    else if (!cb) why = '不是合法牌型（單張、對子、五張：順子／同花／葫蘆／鐵支／同花順）';
+    else if (g.first && !o.sel.includes(g.start)) why = '第一手要含開局牌';
+    else if (g.last && !btBeats(cb, btCombo(g.last.cs))) why = g.last.cs.length === o.sel.length ? '要比桌面上那手大' : `要出 ${g.last.cs.length} 張`;
+    const play = mk('button', 'ff-btn', cb ? `出牌（${btComboName(cb)}）` : '出牌');
+    play.disabled = !!why; play.title = why;
+    play.onclick = () => { S.net?.tbl?.({ a: 'bplay', cs: o.sel }); o.sel = []; };
+    btns.appendChild(play);
+    const pass = mk('button', 'ff-btn', 'pass'); pass.disabled = !v.canPass; pass.title = v.canPass ? '' : myTurn ? '領出時不能 pass' : '還沒輪到你';
+    pass.onclick = () => S.net?.tbl?.({ a: 'bpass' });
+    btns.appendChild(pass);
+    if (o.sel.length) { const clr = mk('button', 'ff-btn small', '取消選取'); clr.onclick = () => { o.sel = []; buildTable(); }; btns.appendChild(clr); }
+  } else if (seat) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const sb = mk('button', 'ff-btn small', '改為觀戰'); sb.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(sb);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  box.appendChild(btns);
+  // 上一局：每人剩幾張
+  if (!playing && v.result?.players) {
+    const sc = mk('div', 'bk-score');
+    v.result.players.forEach((p, k) => sc.appendChild(mk('div', 'bk-score-line' + (v.result.winner === k ? ' win' : ''), `${p.name}${p.left ? '（離開）' : p.forfeit ? '（棄權）' : ''}　${v.result.winner === k ? '出完了' : p.left || p.forfeit ? '' : `剩 ${p.n} 張`}`)));
+    box.appendChild(sc);
+  }
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
   if (gd?.rules && !playing) box.appendChild(mk('div', 'table-rules', gd.rules));

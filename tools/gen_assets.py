@@ -1514,6 +1514,7 @@ TABLES_BY_TERRAIN = {
               dict(id="t8", game="intel", cell=tbl_cell(1, 0), w=3, h=2),      # (1,0) 秘藥情報戰（2026-11-10，使用者要求）
               dict(id="t11", game="blokus", cell=tbl_cell(1, 1), w=3, h=2),    # (1,1) Blokus（2026-11-13，使用者要求）
               dict(id="t12", game="trigon", cell=tbl_cell(1, 2), w=3, h=2),    # (1,2) Blokus Trigon（2026-11-13，使用者要求）
+              dict(id="t18", game="bigtwo", cell=tbl_cell(2, 1), w=3, h=2),   # (2,1) 大老二（2026-11-14，使用者要求：放在牌類桌子附近；在列島建國下面、秘藥情報戰／Blokus 旁邊）
               dict(id="t17", game="kingdom", cell=tbl_cell(2, 0), w=3, h=2),   # (2,0) 列島建國（2026-11-14，使用者要求；一度放 (2,1)，同日改到 (2,0)）
               dict(id="t10", game="mage", cell=tbl_cell(3, 0), w=3, h=2),      # (3,0) 見習驅魔師（2026-11-12，使用者要求；原本在第 2 欄）
               dict(id="t5", game="dodge", cell=tbl_cell(3, 1), w=3, h=2),      # (3,1) 躲彈幕只有一桌（2026-11-08，使用者要求）
@@ -1774,6 +1775,24 @@ def table_mage():
     cv.rect(37, 16, 41, 21, hx("#6ab8ff")); cv.rect(37, 16, 41, 16, hx("#d8f0ff"))
     cv.rect(39, 17, 39, 20, hx("#ffffff")); cv.rect(38, 18, 40, 18, hx("#ffffff"))
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))                                 # 桌腳
+    cv.outline()
+    return cv
+
+def table_bigtwo():
+    """大老二：深綠色氈面木桌（有桌腳），桌面中央一疊牌，四周各扇形攤著幾張牌（紅黑點數）。"""
+    cv = Canvas(48, 32)
+    wood = hx("#5a3820")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
+    cv.rect(2, 6, 45, 25, hx("#1f6a45"))                                  # 氈面
+    cv.rect(3, 7, 44, 24, hx("#27805a"))
+    def card(x, y, red):
+        cv.rect(x, y, x + 4, y + 6, hx("#f4efe0")); cv.hline(x, x + 4, y, hx("#ffffff")); cv.hline(x, x + 4, y + 6, hx("#bdb59f"))
+        cv.rect(x + 1, y + 2, x + 3, y + 4, hx("#c83a3a" if red else "#22222a"))
+    for k in range(4): card(21 + k, 13 - (k % 2), k % 2 == 0)          # 中央一疊
+    for k in range(5): card(8 + k * 3, 8 - (1 if k in (0, 4) else 0), k % 2 == 0)       # 上方扇形
+    for k in range(5): card(8 + k * 3, 19 + (1 if k in (0, 4) else 0), k % 2 == 1)      # 下方扇形
+    card(30, 14, True); card(34, 15, False)                              # 打出去的一手（對子）
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
 
@@ -3617,6 +3636,7 @@ def main():
     save(table_hockey(), "table_hockey.png", "games")
     save(table_blokus(), "table_blokus.png", "games")
     save(table_kingdom(), "table_kingdom.png", "games")
+    save(table_bigtwo(), "table_bigtwo.png", "games")
     save(table_trigon(), "table_trigon.png", "games")
     for k, col in enumerate(ARCADE_COLORS):
         save(arcade_cabinet(col), f"arcade_{k}.png", "games")

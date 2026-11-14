@@ -78,7 +78,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 | `mobs.json`、動物游泳、**新增怪物規範（方向網格／調色 tint／fixed／footDy／noBounce）**、**反擊型野怪（`retaliate`）／道德性怪物**、動物重生、捕捉/牧養規劃、釣上來的敵對怪物（lurker） | 野外動物 |
 | 裝飾模式、地板、看板、坐下/睡覺、家具碰撞 | 裝飾、家具、地板、看板 |
 | 採集工具、釣魚與圖鑑、稱號（含擊倒島主紀錄）、NPC、操作說明、**合成（素材圖鑑／配方筆記／合成家具）** | 玩法：採集、釣魚、合成、稱號、NPC |
-| **地圖尺寸（`COLS`／`ROWS`）、和平島、遊戲桌（抽鬼牌／五子棋／躲彈幕／UNO／英文打字競賽／中文打字競賽／秘藥情報戰／見習驅魔師／Blokus／Blokus Trigon／俄羅斯方塊（t13，4 台機台共用一張桌）／豆豆迷宮（t14，豆豆那台是權威）／空氣曲棍球（t15／t16，桌主那台算物理）／列島建國（t17，3～4 人引擎構築，牌庫在 `kingdom/cards.json`，規格 `docs/kingdom-spec.md`）；**餐飲區（`props`、吃喝的增減益 `FOOD_FX`、`#buffBar`）**；`tbl`／`table`／`tblinfo` 訊息、`TABLE_DEFS`、`games.json`）** | 和平島與遊戲桌 |
+| **地圖尺寸（`COLS`／`ROWS`）、和平島、遊戲桌（抽鬼牌／五子棋／躲彈幕／UNO／英文打字競賽／中文打字競賽／秘藥情報戰／見習驅魔師／Blokus／Blokus Trigon／俄羅斯方塊（t13，4 台機台共用一張桌）／豆豆迷宮（t14，豆豆那台是權威）／空氣曲棍球（t15／t16，桌主那台算物理）／列島建國（t17，3～4 人引擎構築，牌庫在 `kingdom/cards.json`，規格 `docs/kingdom-spec.md`）／大老二（t18，2～4 人單局）；**餐飲區（`props`、吃喝的增減益 `FOOD_FX`、`#buffBar`）**；`tbl`／`table`／`tblinfo` 訊息、`TABLE_DEFS`、`games.json`）** | 和平島與遊戲桌 |
 | `makeSpr`／`drawSpr`、`anim`、人物分層 sheet、`avatar.json` 的 `frames`、**裝備／外觀／換色（`dye`、`glam`、`wardrobe`）** | 美術：多幀動畫與人物分層 |
 | 天氣（色罩／粒子、`WEATHER_SLOT_MIN` 時刻槽、`weatherSlot` 接遊戲時間、之後 `spawnIf`／植物生長） | 天氣（純客戶端畫面） |
 | **小地圖（`drawMinimap`、`MINI_COLORS`、畫在主畫布右上角、DOM 面板天然蓋過它）** | 小地圖 |
