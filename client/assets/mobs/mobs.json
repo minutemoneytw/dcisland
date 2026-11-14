@@ -350,10 +350,14 @@
     "fps": 5,
     "scale": 1.0
    },
+   "night": true,
+   "aggro": 150,
+   "lv": 7,
    "line": "「哥布林」敲了敲手裡的長矛，警惕地看著你。",
    "footDy": 3,
-   "hp": 16,
-   "atk": 1
+   "hp": 14,
+   "atk": 1,
+   "xp": 2
   },
   {
    "id": "goblin_forest",
@@ -469,10 +473,14 @@
     "fps": 5,
     "scale": 1.0
    },
+   "night": true,
+   "aggro": 150,
+   "lv": 45,
    "line": "「殭屍」拖著沉重的腳步，發出低沉的呻吟。",
    "footDy": 3,
-   "hp": 40,
-   "atk": 1
+   "hp": 90,
+   "atk": 6,
+   "xp": 12
   },
   {
    "id": "zombie_snow",
@@ -501,10 +509,14 @@
     "scale": 1.0
    },
    "tint": "#dfe9ff",
+   "night": true,
+   "aggro": 150,
+   "lv": 35,
    "line": "「殭屍」拖著沉重的腳步，發出低沉的呻吟。",
    "footDy": 3,
-   "hp": 40,
-   "atk": 1
+   "hp": 70,
+   "atk": 5,
+   "xp": 9
   },
   {
    "id": "zombie_machine",
@@ -542,6 +554,9 @@
    "id": "skeleton_night",
    "name": "骷髏",
    "fixed": 6,
+   "night": true,
+   "aggro": 150,
+   "lv": 45,
    "speed": 30,
    "flee": 110,
    "retaliate": true,
@@ -566,8 +581,9 @@
    },
    "line": "「骷髏」喀啦喀啦地轉過頭來，空洞的眼窩盯著你。",
    "footDy": 4,
-   "hp": 16,
-   "atk": 1
+   "hp": 90,
+   "atk": 6,
+   "xp": 12
   },
   {
    "id": "deer",
@@ -824,6 +840,8 @@
    "id": "boar",
    "name": "野豬",
    "lv": 25,
+   "night": true,
+   "aggro": 170,
    "speed": 30,
    "flee": 85,
    "retaliate": true,
@@ -882,6 +900,9 @@
    "id": "bat_night",
    "name": "蝙蝠",
    "lv": 45,
+   "night": true,
+   "aggro": 200,
+   "retaliate": true,
    "swim": true,
    "speed": 55,
    "flee": 90,
@@ -903,12 +924,15 @@
    },
    "line": "「蝙蝠」倒掛著晃了兩下，忽然撲稜稜地飛起來。",
    "hp": 90,
+   "atk": 6,
    "xp": 12
   },
   {
    "id": "imp_volcano",
    "name": "小惡魔",
    "lv": 55,
+   "night": true,
+   "aggro": 170,
    "speed": 40,
    "flee": 85,
    "retaliate": true,
@@ -938,6 +962,8 @@
    "id": "golem_machine",
    "name": "魔像",
    "lv": 65,
+   "night": true,
+   "aggro": 170,
    "big": 2,
    "speed": 20,
    "flee": 80,
@@ -1075,9 +1101,13 @@
    },
    "tint": "#d8c090",
    "tintBase": "#8b1030",
+   "night": true,
+   "aggro": 250,
+   "lv": 15,
    "line": "「飛龍」拍了拍翅膀，掀起一陣風。",
-   "hp": 20,
-   "atk": 1
+   "hp": 30,
+   "atk": 2,
+   "xp": 4
   },
   {
    "id": "fishman",

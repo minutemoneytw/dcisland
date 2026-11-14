@@ -2498,13 +2498,19 @@ MOB_MANIFEST = dict(
         # 基底身體合成（9 幀 × 4 方向，同殭屍／骷髏做法）；原自製素材改名「小鬼」搬到雪島／機械島（下面）。
         # 反擊型野怪（跟飛龍同一套：被打不逃、追咬；2026-11-09 使用者定），
         # 血量／攻擊力／經驗值＝該地形島主的 1/12（ownerFrac，最低 1）；下面的 post-pass 依 OWNER_BY_TERRAIN 算
+        # 2026-11-14 使用者定：草島的哥布林＝夜行怪＋主動攻擊（night＋aggro＋lv=7，白天看不到、入夜才成群出來）。
+        #   給了 lv 後素質改走 lv post-pass：hp 2×7＝14、atk 1+7÷8＝1（不變）、xp 1+7÷4＝2（不變）；森林島維持白天反擊型（ownerFrac=12）。
         # 素材來源 OpenGameArt「LPC folk」（CC-BY-SA 3.0；哥布林頭 by bluecarrot16／Redshrike／William.Thompsonj）；
         # 畫面約 46×52（scale 1：頭是放大版，略高於人物 46px）
         *[dict(id=gid, name="哥布林", fixed=6, speed=34, flee=85, retaliate=True, ownerFrac=12, noBounce=True,
                anim=dict(sheet="external/img2pixel/goblin_folk_sheet.png", frames=9, rows=4, row0=0, fw=64, fh=64,
                          rowDir=["up", "left", "down", "right"], fps=5, scale=1.0),
+               **_tk,
                line="「哥布林」敲了敲手裡的長矛，警惕地看著你。")
-          for gid in ["goblin_grass", "goblin_forest"]],
+          for gid, _tk in [
+              ("goblin_grass",  dict(night=True, aggro=150, lv=7)),   # 草島（等級帶 1~10）：夜行＋主動攻擊
+              ("goblin_forest", dict()),                              # 森林島：白天反擊型照舊
+          ]],
         # 小鬼（原「哥布林」自製素材，2026-11-11 使用者定改名搬家）：雪島（白化 tint）、機械島（灰 tint）；設定照舊
         *[dict(id=iid, name="小鬼", fixed=6, speed=34, flee=85, retaliate=True, ownerFrac=12, noBounce=True,
                anim=dict(sheet="external/img2pixel/goblin_sheet.png", frames=8, rows=2, row0=0, fw=32, fh=32,
@@ -2513,23 +2519,28 @@ MOB_MANIFEST = dict(
                line="「小鬼」吱吱叫著，揮舞手裡的長矛。")
           for iid, tint in [("imp_snow", "#dfe9ff"), ("imp_machine", "#9aa4b0")]],
         # 殭屍（LPC；反擊型）：夜光島（原色）、雪島（白）、機械島（灰）；走路 4 方向 × 9 幀；數量走隨機池（不固定）
-        # 反擊型但三個比例各給各的（使用者定）：血量 1/5（ownerFrac=5）、攻擊力 1/10（atkFrac=10）、經驗值 1/8（xpFrac=8），都最低 1
+        # 2026-11-14 使用者定：夜光島／雪島的殭屍＝夜行怪＋主動攻擊（night＋aggro＋lv，lv 依該島等級帶）；
+        #   給了 lv 之後素質改由下面的 lv post-pass 算（hp 2×lv／atk 1+lv÷8／xp 1+lv÷4），舊的 ownerFrac/atkFrac/xpFrac 只剩沒 lv 的 zombie_machine 在用。
         # noBounce：不套用「走動時上下彈」（LPC 本身有走路動畫，再彈會腳離地＝看起來浮起來；2026-11-09 使用者回報）
         # 素材來源 OpenGameArt「LPC zombie」（CC-BY-SA 3.0，BenCreating）；畫面約 47px 高（scale 1：人物約 46px，成人體型）
         *[dict(id=zid, name="殭屍", speed=20, flee=100, retaliate=True, ownerFrac=5, atkFrac=10, xpFrac=8, noBounce=True,
                anim=dict(sheet="external/img2pixel/zombie_sheet.png", frames=9, rows=4, row0=0, fw=64, fh=64,
                          rowDir=["up", "left", "down", "right"], fps=5, scale=1.0),
-               **({"tint": tint} if tint else {}),
+               **({"tint": tint} if tint else {}), **_tk,
                line="「殭屍」拖著沉重的腳步，發出低沉的呻吟。")
-          for zid, tint in [("zombie_night", None), ("zombie_snow", "#dfe9ff"), ("zombie_machine", "#9aa4b0")]],
+          for zid, tint, _tk in [
+              ("zombie_night",   None,      dict(night=True, aggro=150, lv=45)),   # 夜光島（等級帶 41~50）：夜行＋主動攻擊
+              ("zombie_snow",    "#dfe9ff", dict(night=True, aggro=150, lv=35)),   # 雪島（31~40）：夜行＋主動攻擊
+              ("zombie_machine", "#9aa4b0", dict()),                               # 機械島：白天反擊型照舊
+          ]],
         # 骷髏（LPC；反擊型）：夜光島固定 6 隻（fixed；使用者定 2026-11-10）；走路 4 方向 × 9 幀；不套走動彈跳（有真走路動畫）
         # swarm:10（使用者定 2026-11-11）：場上存活骷髏低於 10 隻＝全部自動群攻本地玩家（不用被打、距離不限），
         # 回補到 10 隻以上（擊倒的約 30 秒重生）就脫離；實作在 main.js 的 retaliateStep
-        # 反擊型比例 1/12（跟哥布林一樣，使用者定）：血／攻擊／經驗都＝島主（笨蛋蛇女）的 1/12、最低 1（產生器 post-pass 算 hp／atk，
-        # main.js 的 mobKillXp 算 XP）→ hp 16（200÷12）、atk 1（爪擊 2÷12 落最低值）、擊倒 XP 2（25÷12 無條件捨去）
+        # 2026-11-14 使用者定：骷髏改為夜行怪＋主動攻擊（night＋aggro＋lv=45）；給了 lv 後素質改走 lv post-pass
+        # （hp 2×45＝90、atk 1+45÷8＝6、xp 1+45÷4＝12），舊的 ownerFrac=12 不再生效（夜晚的夜光島就是整群不死系的巢窟）。
         # 素材來源 OpenGameArt「LPC skeleton」（CC-BY-SA 3.0；rhimlock 補上刺擊、動畫本體 by wulax／Johannes Sjölund，
         # 改建自 Redshrike 的 LPC 基底）；畫面約 47px 高（scale 1：人物約 46px）
-        dict(id="skeleton_night", name="骷髏", fixed=6, speed=30, flee=110, retaliate=True, ownerFrac=12, noBounce=True, swarm=10,
+        dict(id="skeleton_night", name="骷髏", fixed=6, night=True, aggro=150, lv=45, speed=30, flee=110, retaliate=True, ownerFrac=12, noBounce=True, swarm=10,
              anim=dict(sheet="external/img2pixel/skeleton_sheet.png", frames=9, rows=4, row0=0, fw=64, fh=64,
                        rowDir=["up", "left", "down", "right"], fps=5, scale=1.0),
              line="「骷髏」喀啦喀啦地轉過頭來，空洞的眼窩盯著你。"),
@@ -2567,8 +2578,8 @@ MOB_MANIFEST = dict(
               ("dog_spotted", "花狗", 3, 40, "dog_spotted_sheet.png", None,      None,   "「花狗」歪著頭看你，耳朵抖了抖。"),
               ("dog_yellow",  "黃狗", 3, 40, "dog_sheet.png",         "#c8924a", None,   "「黃狗」把下巴擱在你的膝蓋上。"),
           ]],
-        # 野豬（森林島）：反擊型野怪，最低階的主動威脅（Lv25）
-        dict(id="boar", name="野豬", lv=25, speed=30, flee=85, retaliate=True, noBounce=True,
+        # 野豬（森林島）：夜行＋主動攻擊（2026-11-14 使用者定：夜晚出現的一律主動）——白天看不到，入夜才出來拱人
+        dict(id="boar", name="野豬", lv=25, night=True, aggro=170, speed=30, flee=85, retaliate=True, noBounce=True,
              anim=dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64,
                        rowDir=["up", "left", "down", "right"], fps=6, scale=0.8),   # 格內實際內容側視 55×30／正面 21×47，畫面側視約 44×24（2026-11-13 使用者定「比羊大隻」——羊約 30×26；原 0.55 側視只有 30×16.5 反而比羊小）
              line="「野豬」磨了磨獠牙，從鼻子裡哼出一團白氣。"),
@@ -2577,22 +2588,24 @@ MOB_MANIFEST = dict(
              anim=dict(sheet="external/img2pixel/bear_sheet.png", frames=4, rows=4, fw=64, fh=64,
                        rowDir=["down", "right", "up", "left"], fps=5, scale=0.6),
              line="「白熊」直起身子吼了一聲，腳邊的雪屑簌簌落下。"),
-        # 蝙蝠（夜光島）：被動、會飛（swim＝能過海）；飛行不套 footDy、影子另調（同飛龍的作法）
-        dict(id="bat_night", name="蝙蝠", lv=45, swim=True, speed=55, flee=90, noBounce=True, footDy=0,
+        # 蝙蝠（夜光島）：夜行怪＋主動攻擊（2026-11-14 使用者定）——原本是被動小動物，改成入夜成群撲人的飛怪
+        # （night＋aggro＋retaliate＝被打不逃、會主動鎖定；會飛 swim＝能過海）；飛行不套 footDy、影子另調（同飛龍的作法）
+        dict(id="bat_night", name="蝙蝠", lv=45, night=True, aggro=200, retaliate=True, swim=True, speed=55, flee=90, noBounce=True, footDy=0,
              anim=dict(sheet="external/img2pixel/bat_sheet.png", frames=4, fw=32, fh=32, fps=9, scale=0.85),
              shadow=dict(rx=9, ry=3, dx=0, dy=-2),
              line="「蝙蝠」倒掛著晃了兩下，忽然撲稜稜地飛起來。"),
-        # 小惡魔（熔岩島）：反擊型（補熔岩島沒有人形反擊怪的洞）
-        dict(id="imp_volcano", name="小惡魔", lv=55, speed=40, flee=85, retaliate=True, noBounce=True,
+        # 小惡魔（熔岩島）：夜行怪＋主動攻擊（2026-11-14 使用者定）——入夜才現身的下位惡魔，會主動撲向玩家
+        dict(id="imp_volcano", name="小惡魔", lv=55, night=True, aggro=170, speed=40, flee=85, retaliate=True, noBounce=True,
              anim=dict(sheet="external/img2pixel/imp_sheet.png", frames=4, rows=4, fw=64, fh=64,
                        rowDir=["down", "up", "left", "right"], fps=7, scale=0.6),
              line="「小惡魔」朝你彈了個火苗，咯咯咯地笑。"),
-        # 魔像（機械島）：反擊型、慢但硬（big=2＝判定圈 46，比一般野生小動物大一號）
-        dict(id="golem_machine", name="魔像", lv=65, big=2, speed=20, flee=80, retaliate=True, noBounce=True,
+        # 魔像（機械島）：夜行怪＋主動攻擊（2026-11-14 使用者定）——白天休眠、入夜啟動的守衛；慢但硬（big=2＝判定圈 46，比一般野生小動物大一號）
+        dict(id="golem_machine", name="魔像", lv=65, night=True, aggro=170, big=2, speed=20, flee=80, retaliate=True, noBounce=True,
              anim=dict(sheet="external/img2pixel/golem_sheet.png", frames=7, rows=3, fw=64, fh=64,
                        rowDir=["down", "right", "left"], fps=6, scale=0.7),
              line="「魔像」緩緩轉過頭，關節發出石磨般的聲音。"),
         # 飛龍：夜光島（黑）、熔岩島（原色紅）、沙灘島（沙）。四列都是飛行視角＝上飛／朝右／下飛／朝左（方向網格）；
+        # 2026-11-14 使用者定：沙灘島的飛龍＝夜行怪＋主動攻擊（night＋aggro＝射程 250＋lv=15）；夜光島／熔岩島的飛龍維持白天反擊型（ownerFrac=10）。
         # swim＝會飛所以能過海；big=5＝判定圈 34+6*(5-1)=58（大隻）；shadow 依體型放大、貼在正下方
         # retaliate＝會反擊的野怪：被打不逃、鎖定攻擊者；血量／攻擊力由下面的 post-pass 依該地形島主 1/10 算
         # atkStyle="fireball"＝遠距攻擊（2026-11-10 使用者定）：進射程（main.js 的 FIREBALL_RANGE）就站定吐火球，不貼身咬（哥布林／殭屍沒設＝照舊抓咬）
@@ -2604,9 +2617,9 @@ MOB_MANIFEST = dict(
                **_tk,
                line="「飛龍」拍了拍翅膀，掀起一陣風。")
           for did, _tk in [
-              ("dragon_night",   dict(tint="#1a1a1a", tintBase="#8b1030", tintMode="off")),   # 夜光島：黑（位移法保留明暗，不然會整隻全黑）
-              ("dragon_volcano", dict()),                                                    # 熔岩島：原色紅（不調色）
-              ("dragon_beach",   dict(tint="#d8c090", tintBase="#8b1030")),                   # 沙灘島：沙色
+              ("dragon_night",   dict(tint="#1a1a1a", tintBase="#8b1030", tintMode="off")),         # 夜光島：黑（位移法保留明暗，不然會整隻全黑）
+              ("dragon_volcano", dict()),                                                          # 熔岩島：原色紅（不調色）
+              ("dragon_beach",   dict(tint="#d8c090", tintBase="#8b1030", night=True, aggro=250, lv=15)),   # 沙灘島：沙色；夜行＋主動（lv 15 → hp30／atk2／xp4）
           ]],
         # 釣上來的敵對怪物（lurker=True）：不在任何地形的 mobs 裡自然出現，只會在釣魚時以 fish.json 的 lurkerChance 機率被釣上來；
         # 落在浮標旁的陸地、直接追殺釣到牠的人（與島主同一套仇恨／爪擊），30 秒沒人打就原地消失，被打倒也消失（不重生、沒有獎勵）

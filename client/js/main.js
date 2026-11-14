@@ -365,30 +365,34 @@ function animFrame(a, an) {
   return sprFrame(an, a.animPhase, a.fly ? an.dashFps : an.fps);
 }
 
+function spawnWild(id) {   // 找一塊陸地空格生一隻野外動物（生不下就放棄）；夜行怪入夜時也用這支（spawnNightMobs）
+  const cx = COLS / 2 - .5, cy = ROWS / 2 - .5;
+  for (let tries = 0; tries < 40; tries++) {
+    const x = Math.floor(Math.random() * COLS), y = Math.floor(Math.random() * ROWS);
+    if (S.world.types[y * COLS + x] !== 2) continue;
+    if (Math.abs(x - cx) < 2 && Math.abs(y - cy) < 2) continue;
+    if (S.occ.get(key(x, y)) !== undefined) continue;
+    S.mobs.push({ id, x: x * CELL + CELL / 2, y: y * CELL + CELL / 2, dir: 1, target: null, idle: Math.random() * 2, startle: 0, z: 0, bounce: 0,
+                     hp: mobDef(id).hp, maxHp: mobDef(id).hp, dead: false, dieT: 0 });
+    return true;
+  }
+  return false;
+}
+
 function spawnMobs() {
   S.mobs = [];
   S.respawn = [];   // 換島（或重生成世界）時重生佇列清空：新的島自己生一批，別島擊倒的不會跟過來（2026-11-09 修正：會在和平島冒出怪）
   const td = S.terrains[S.terrain];
   if (!S.mobsDB || !td.mobs?.length) return;
   const cx = COLS / 2 - .5, cy = ROWS / 2 - .5;
-  const spawnWild = (id) => {   // 找一塊陸地空格生一隻野外動物（生不下就放棄）
-    for (let tries = 0; tries < 40; tries++) {
-      const x = Math.floor(Math.random() * COLS), y = Math.floor(Math.random() * ROWS);
-      if (S.world.types[y * COLS + x] !== 2) continue;
-      if (Math.abs(x - cx) < 2 && Math.abs(y - cy) < 2) continue;
-      if (S.occ.get(key(x, y)) !== undefined) continue;
-      S.mobs.push({ id, x: x * CELL + CELL / 2, y: y * CELL + CELL / 2, dir: 1, target: null, idle: Math.random() * 2, startle: 0, z: 0, bounce: 0,
-                       hp: mobDef(id).hp, maxHp: mobDef(id).hp, dead: false, dieT: 0 });
-      return true;
-    }
-    return false;
-  };
+  // 夜行怪（mobs.json 的 night，2026-11-14）：白天的島不生成，入夜後由主迴圈的 stepNightMobs 補上；天亮全數退場
+  const allowNight = isNight();
   // mobs.json 標 fixed: N 的種類（例如新怪）：在該島固定生 N 隻（保證一定看得到），不參與下面的隨機池
   const AREA = S.terrains[S.terrain]?.layout === 'room' ? 1 : ISLAND_AREA;
-  for (const a of td.mobs) { const n = Math.round((mobDef(a.id)?.fixed || 0) * AREA); for (let i = 0; i < n; i++) spawnWild(a.id); }
+  for (const a of td.mobs) { const d = mobDef(a.id); if (d?.night && !allowNight) continue; const n = Math.round((d?.fixed || 0) * AREA); for (let i = 0; i < n; i++) spawnWild(a.id); }
   // 其他種類照舊：從權重池隨機抽 6 隻
   const pool = [];
-  for (const a of td.mobs) if (!mobDef(a.id)?.fixed) for (let i = 0; i < a.weight; i++) pool.push(a.id);
+  for (const a of td.mobs) { const d = mobDef(a.id); if (!d?.fixed && !(d?.night && !allowNight)) for (let i = 0; i < a.weight; i++) pool.push(a.id); }
   for (let n = 0; n < Math.round(6 * AREA) && pool.length; n++) spawnWild(pool[Math.floor(Math.random() * pool.length)]);
   // 島主：terrain.json 的 owner 指定的動物，每座地形固定一隻（不會被嚇跑、被打倒會重生；攻擊方式照 mobs.json 的 atk）
   // 連線時島主由伺服器同步（進場快照與事件），只在單機時本地生成
@@ -407,6 +411,7 @@ function spawnMobs() {
 function respawnMob(id) {
   const def = mobDef(id);
   if (!def || !(S.terrains[S.terrain]?.mobs || []).some(m => m.id === id)) return;   // 這座島本來就沒有這種動物（例如和平島）：不生
+  if (def.night && !isNight()) return;   // 夜行怪：天亮後擊倒的不重生（夜間倒在夜間、天亮前還在 30 秒內就會爬起來）
   for (let tries = 0; tries < 60; tries++) {
     const x = Math.floor(Math.random() * COLS), y = Math.floor(Math.random() * ROWS);
     if (S.world.types[y * COLS + x] !== 2) continue;
@@ -415,6 +420,39 @@ function respawnMob(id) {
                      hp: def.hp, maxHp: def.hp, dead: false, dieT: 0 });
     toast(`${def.name} 回來了！`, 1600);
     return;
+  }
+}
+
+// ---- 夜行怪（mobs.json 的 night，2026-11-14 使用者定）----
+// 入夜（19:00）出現、天亮（04:00）退場；只在「人已經在島上、日夜切換」時靠這裡進退場，
+// 換島時由 spawnMobs 自己判斷（白天進島不生夜行怪）。判斷完全靠 gameTime 現算、純客戶端（野外動物本來就不同步）。
+function spawnNightMobs() {   // 入夜：夜行怪進場（fixed 補到數量＋從夜行怪的權重池再抽 3 隻）；回傳生了幾隻
+  const td = S.terrains[S.terrain];
+  if (!S.mobsDB || !td?.mobs?.length) return 0;
+  const AREA = td.layout === 'room' ? 1 : ISLAND_AREA;
+  let n = 0;
+  for (const m of td.mobs) {   // fixed 的夜行怪（例如骷髏 6 隻）補到數量
+    const d = mobDef(m.id);
+    if (!d?.night) continue;
+    const want = Math.round((d.fixed || 0) * AREA);
+    const alive = S.mobs.reduce((s, a) => s + (a.id === m.id && !a.dead ? 1 : 0), 0);
+    for (let i = alive; i < want; i++) if (spawnWild(m.id)) n++;
+  }
+  const pool = [];   // 非 fixed 的夜行怪照權重抽（每個人自己抽，位置不同沒關係）
+  for (const m of td.mobs) { const d = mobDef(m.id); if (d?.night && !d.fixed) for (let i = 0; i < m.weight; i++) pool.push(m.id); }
+  for (let i = 0; i < Math.round(3 * AREA) && pool.length; i++) if (spawnWild(pool[Math.floor(Math.random() * pool.length)])) n++;
+  return n;
+}
+function stepNightMobs() {   // 每幀檢查日夜有沒有翻（便宜：只在變化時做事）
+  const night = isNight();
+  if (S.lastNight === undefined) { S.lastNight = night; return; }   // 第一次（進島／開場）只記狀態，不做事
+  if (night === S.lastNight) return;
+  S.lastNight = night;
+  if (night) { if (spawnNightMobs()) toast('夜幕降臨，兇暴的怪物出現了！', 2600); }
+  else {
+    const before = S.mobs.length;
+    S.mobs = S.mobs.filter(a => !mobDef(a.id)?.night);   // 天亮：夜行怪全數退場（含剛被打倒還沒清掉的屍體）
+    if (S.mobs.length < before) toast('天亮了，夜行的怪物退回了黑暗。', 2600);
   }
 }
 
@@ -2495,6 +2533,15 @@ const RETAL_PACK_R = 200;   // 群起半徑：一隻被打，這範圍內的同�
 // 鎖定「發射當下」的目標位置直線飛行（不追蹤，衝刺側移可以躲開）；傷害＝def.atk（照回爪擊同强度），命中才扣血（受害者自判，走 playerDamage：坦克減半照算）。
 const FIREBALL_RANGE = 250, FIREBALL_CD = 2.5, FIREBALL_SPEED = 260, FIREBALL_SCALE = .65, FIREBALL_HIT_R = 16;   // 射程／間隔／飛行速度／顯示倍率（素材單幀 64px）／命中半徑
 function retaliateStep(a, dt, def) {
+  // 主動攻擊怪（aggro＝視野半徑，2026-11-14 使用者定：夜晚出現的怪都是這型）：視野內看到本地玩家就主動鎖定追擊，
+  // 機制完全沿用反擊型那套（追殺 150、貼圈每 1.5 秒抓一下、30 秒放棄），差別只在「不用被打就開咬」。
+  // 等級壓制（筆記既定的主動怪規則）：主動怪不會攻擊等級比牠高的角色——玩家等級比較高就直接無視（被高等玩家打照樣反擊，不受此限）。
+  if (def.aggro && !a.aggroT) {
+    const me0 = S.players[0];
+    if (!me0.dead && !me0.npc && levelOf(me0) <= (def.lv ?? 1) && Math.hypot(me0.x - a.x, me0.y - a.y) < def.aggro) {
+      a.aggroT = me0; a.lastHitAt = S.t;
+    }
+  }
   // 群攻（swarm：使用者定 2026-11-11，目前骷髏）：場上同種存活數低於門檻＝全體自動追殺本地玩家
   //（不用被打、距離不限；有個人仇恨的照個人仇恨追）。回補到門檻以上（擊倒的約 30 秒重生）就脫離：
   // 群攻期間不刷新 lastHitAt，脫離後只有「真的被打過還在 30 秒內」的繼續追，其餘立即回漫遊
@@ -2504,6 +2551,8 @@ function retaliateStep(a, dt, def) {
     if (!me.dead && !me.npc && !a.aggroT) a.aggroT = me;   // 沒有個人仇恨才補群攻目標
   }
   const t = a.aggroT;
+  // 主動怪的仇恨保鮮：目標還在視野內就一直鎖著（30 秒倒數要「離開視野」才開始跑）；被甩掉＝跑步甩得掉、躲遠 30 秒後放棄
+  if (t && !t.dead && def.aggro && Math.hypot(t.x - a.x, t.y - a.y) <= def.aggro) a.lastHitAt = S.t;
   if (!t || t.dead || (!swarm && S.t - (a.lastHitAt ?? -1e9) > RETAL_DROPOUT)) { a.aggroT = null; return false; }   // 沒仇恨：照一般漫遊
   const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy);
   const rng = 30 + 6 * ((def.big || 1) - 1);   // 貼著判定圈抓：與 hitRadius 同式；火球怪用 FIREBALL_RANGE
@@ -8287,6 +8336,10 @@ function gameTime() {   // 現在是遊戲裡的哪一年／哪一季第幾天�
            day: inYear % TIME_DAYS_PER_SEASON + 1, hour: Math.floor(hh), min: Math.floor((hh % 1) * 60) };
 }
 
+// 現在是不是夜晚（2026-11-14 使用者定：19:00~04:00）——夜行怪（mobs.json 的 night）只在這個時段出現，天亮全數退場。
+// 跟畫面全暗的時段一致（nightDark(h)===1 的範圍）；清晨 4-6、黃昏 17-19 的漸變時段不算夜晚。
+const isNight = () => { const h = gameTime().hour; return h >= 19 || h < 4; };
+
 // 決定論：天氣＝雜湊(地形, 時刻槽) 對該地形的天氣表加權抽籤——每個人自己算、算出來都一樣，不用同步、玩家也影響不了。
 // 之後的交互作用（掛點）：特殊怪照天氣條件出現（mobs.json 的 spawnIf）、植物生長受天氣影響（動工前先查採集重生是本機還是伺服器）。
 const WEATHER_SLOT_MIN = 8;      // 一個時刻槽幾分鐘：槽內天氣不變、槽與槽之間用 WEATHER_TRANS_SEC 淡入淡出
@@ -10306,6 +10359,7 @@ async function boot() {
       updateSkillBar();
       updateStatBars();
       updateClock();     // 左上角的遊戲時間（時鐘、日期、季節）
+      stepNightMobs();   // 夜行怪的入夜出現／天亮退場（日夜切換時才做事）
       updateWeaponBar();
       drawSprintBtn();
       draw();
