@@ -726,6 +726,7 @@ function startCast(p, rg, wx, wy) {
     else if (rg.shot === 'funnels') S.floaters.push({ fxk: 'funnels', x2: a.x, y2: ty, slots: noulithSlots(p.x, p.y, S.t, noulithSeed(p)).map(s => [s.x, s.y]), life: .45 });   // 賢具普攻：本體待機不動，四座依序從陣位射光束
     else S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: ty, life: .22 });
     hitMob(p, a, true);
+    splashHit(p, a, rg);
     return;
   }
   p.cast = { t0: S.t, dur: rg.cast * castMul(p), a };   // 黑魔法師站在魔法陣內：詠唱 −50%
@@ -735,6 +736,18 @@ function startCast(p, rg, wx, wy) {
 const CAST_SLIDE = 0.3;   // 滑步窗口（秒）：詠唱剩下這麼久時移動／跳躍不再中斷；武器的 ranged.slide 可覆蓋；窗口最多占詠唱的一半（魔法陣內詠唱減半時不會整段都能動）
 const castSlideLen = c => Math.min(rangedDef()?.slide ?? CAST_SLIDE, c.dur * .5);
 const inCastSlide = c => S.t - c.t0 >= c.dur - castSlideLen(c);
+// 咒杖濺射（ranged.splash＝半徑 px）：主目標周圍的其他野生動物吃 60% 傷害（島主／釣上來的怪物由伺服器算血，不濺射）
+function splashHit(p, a, rg) {
+  if (!rg.splash) return;
+  const dmg = Math.max(1, Math.round(((rg.dmg || 2) + (jobOf(p)?.dmgPlus || 0) + lvAtkBonus(levelOf(p)) * (rg.lvMul || 1)) * .6));
+  S.floaters.push({ aoe: 'circle', x: a.x, y: a.y, r: rg.splash, life: .35 });
+  for (const b of S.mobs.slice()) {
+    if (b === a || b.dead || b.fly) continue;
+    const bd = mobDef(b.id);
+    if (bd.owner || bd.lurker || Math.hypot(b.x - a.x, b.y - a.y) - hitRadius(bd) > rg.splash) continue;
+    hitMob(p, b, true, { dmg });
+  }
+}
 function cancelCast(p, why) { if (!p.cast) return; p.cast = null; if (why) toast(why, 1500); }
 function stepCast(p) {   // 每幀（只有本機玩家）：檢查中斷條件、讀條完就出傷害
   const c = p.cast, rg = rangedDef();
@@ -750,6 +763,7 @@ function stepCast(p) {   // 每幀（只有本機玩家）：檢查中斷條件�
   S.net?.notifyAttack?.();   // 讓同島的人看到你出手
   S.floaters.push({ orb: true, x1: p.x + p.dir * 4, y1: p.y - 52, x2: a.x, y2: a.y - 24 * (mobDef(a.id).big || 1) * .6, life: .22 });
   hitMob(p, a, true);
+  splashHit(p, a, rg);
 }
 
 // 命中一隻動物（近戰揮擊、法杖／咒杖詠唱完、職業技能共用）：ranged＝遠距詠唱（傷害固定取武器的 dmg、不暴擊）；
@@ -761,10 +775,10 @@ function hitMob(p, a, ranged, force) {
     const crit = !force && Math.random() < critP;
     let dmg = force ? force.dmg : ranged ? (rangedDef()?.dmg || 2) + (crit ? 1 : 0) : (crit ? 2 : 1);
     const jd = jobOf(p);
-    if (jd?.dmgPlus && !force) dmg += jd.dmgPlus;   // 輸出：每擊 +1（打島主也算；伺服器的上限是 HIT_MAX_BASE＝6）
-    if (!force) dmg += lvAtkBonus(levelOf(p));      // 等級攻擊加成：每 3 級 +1（兩份伺服器的夾值同式放寬）
+    if (jd?.dmgPlus && !force) dmg += jd.dmgPlus;   // 輸出：每擊 +1（打島主也算；已無傷害上限）
+    if (!force) dmg += lvAtkBonus(levelOf(p)) * (ranged ? (rangedDef()?.lvMul || 1) : 1);   // 等級攻擊加成：每 3 級 +1（兩份伺服器的夾值同式放寬）；詠唱武器的 ranged.lvMul 讓每擊吃更多（咒杖 2：一擊的間隔是普攻的兩倍以上，不然等級成長追不上；打島主時送伺服器的值仍夾在 sendDmg 上限）
     const od = mobDef(a.id);
-    const sendDmg = force ? force.dmg : Math.min(HIT_MAX_BASE + lvAtkBonus(levelOf(p)), dmg);   // 送給伺服器的值（上限 4＋攻擊者等級加成＝兩份伺服器的 dlHitMax；破綻的 +1 由伺服器自己加）
+    const sendDmg = force ? force.dmg : dmg;   // 送給伺服器的值（上限 4＋攻擊者等級加成＝兩份伺服器的 dlHitMax；破綻的 +1 由伺服器自己加）
     if (od.owner && S.t < (a.vulnUntil ?? 0)) dmg += 1;      // 破綻：每擊 +1（單機在這裡扣、連線只是飄字）
     if ((od.owner || od.lurker) && p === S.players[0]) S.ownerHitAt[a.id] = S.t;   // 稱號「參與擊倒」＋擊倒獎勵（訪客）用：30 秒內打過牠
     if (od.owner && a.proxy) {   // 島主連線時由伺服器權威：送意圖（座標＋傷害＋我們看到的龍位置），本地不扣血（血量等伺服器廣播）
@@ -983,7 +997,6 @@ function lvInfo(xp) {                     // XP 換等級：lv＝目前等級、
   while (lv < 2000 && rest >= xpNeed(lv)) { rest -= xpNeed(lv); lv++; }   // 上限 2000 級：與兩份伺服器一致，也防亂改的存檔讓迴圈跑不完
   return { lv, cur: rest, need: xpNeed(lv) };
 }
-const HIT_MAX_BASE = 6;   // 打島主／魚人的單擊上限基底（與兩份伺服器的 D_HIT_MAX 一致；實際上限＝這個＋lvAtkBonus）
 const lvAtkBonus = lv => Math.floor((lv - 1) / 3);   // 攻擊加成：每 3 級 +1
 const levelOf = p => p === S.players[0] ? lvInfo(S.profile.xp).lv : (p.lvl ?? 1);   // 自己看本機資料；別人等 state 廣播 lvl（同步那步），沒有就當 Lv 1
 // ---- 島主／深海魚人的等級（第 3 步；與 worker/src/index.js、tools/dev_server.py 的 helper 同式，三邊一起改）----

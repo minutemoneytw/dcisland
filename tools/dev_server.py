@@ -331,8 +331,8 @@ def lurk_kill_xp(lv):
 
 
 def dl_hit_max(lvl):
-    """一般攻擊打島主／魚人的夾值隨攻擊者等級放寬：每 3 級 +1（與 client 的 lvAtkBonus 同式）。"""
-    return D_HIT_MAX + (max(1, int(lvl)) - 1) // 3
+    """一般攻擊打島主／魚人不再有玩法上限（2026-11-14），只剩防亂填的天文數字夾值。"""
+    return D_HIT_SANITY
 
 
 def dragon_hp_msg(d):
@@ -480,7 +480,7 @@ D_RANGE = 100            # 玩家打島主的攻擊距離（客戶端以武器�
 D_DRIFT_TOLER = 600      # 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 D_CD = 0.3               # 同一條連線兩次打島主的最短間隔（秒）
 DEATH_CREDIT_MIN = 25.0  # 同一條連線的「倒地記帳」（餵島主 XP／魚人升級）最短間隔（秒；與 worker 的 DEATH_CREDIT_MIN_MS 一致）：復活要 30 秒，正常玩法不會更密；擋住反覆切 state.dead 灌島主等級
-D_HIT_MAX = 6            # 一般攻擊打島主／深海魚人的傷害上限（與 worker 的 D_HIT_MAX 一致；2026-11-05 由 2 放寬到 4，2026-11-07 再放寬到 6：黑魔法師咒杖 4＋輸出 1＝5，留 1 的餘裕）。夾值隨攻擊者等級放寬（每 3 級 +1，見 dl_hit_max）
+D_HIT_SANITY = 10 ** 6   # 一般攻擊打島主／魚人的傷害：2026-11-14 使用者要求取消攻擊上限（與 worker 一致，只擋亂填的天文數字）
 D_PROVOKE_CD = 15.0      # 挑釁冷卻（每條連線，秒；與 worker/src/index.js 的 D_PROVOKE_CD_MS 一致）
 D_PROVOKE_RANGE = 240    # 挑釁範圍（比攻擊距離寬：把島主拉過來的是「聲東擊西」，不需要貼臉）
 D_WALK = 34              # 閒晃散步速度 px/s（與 client 的 OWNER_WALK_SPEED 一致）

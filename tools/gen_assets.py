@@ -3742,7 +3742,7 @@ def main():
                                     thrust=dict(size=192, bg="char_weapon_dragonspear_thrust_bg.png", fg="char_weapon_dragonspear_thrust_fg.png")))),
             dict(id="daggers", name="短劍", type="daggers", sprite="weapon_daggers.png", carry="waist",   # 2026-11-09 換 LPC 短劍（dagger，單手；LPC 沒有雙持），名稱由「雙劍」改「短劍」
                  lpc=dict(bg="char_weapon_dagger_bg.png", fg="char_weapon_dagger_fg.png")),
-            dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=320, cast=1.0, dmg=4, gap=0),
+            dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=400, cast=0.8, dmg=6, gap=0, slide=0.4, lvMul=3, splash=70),
                  lpc=dict(bg="char_weapon_s_bg.png", fg="char_weapon_s_fg.png",   # LPC S 形杖（s）；只有突刺
                           over=dict(thrust=dict(size=192, bg="char_weapon_s_thrust_bg.png", fg="char_weapon_s_thrust_fg.png")))),   # gap：詠唱放完到下一次能開始的間隔（秒）；沒寫＝ATK_CD（0.45）。咒杖 gap=0＝連續施放，間隔就是詠唱時間
             dict(id="rod", name="釣竿", type="rod", sprite="weapon_rod.png", carry="back", fishing=True,   # fishing：拿著時左鍵／F 是釣魚，不能攻擊

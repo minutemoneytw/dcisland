@@ -4829,10 +4829,13 @@
    "type": "scepter",
    "sprite": "weapon_scepter.png",
    "ranged": {
-    "range": 320,
-    "cast": 1.0,
-    "dmg": 4,
-    "gap": 0
+    "range": 400,
+    "cast": 0.8,
+    "dmg": 6,
+    "gap": 0,
+    "slide": 0.4,
+    "lvMul": 3,
+    "splash": 70
    },
    "lpc": {
     "bg": "char_weapon_s_bg.png",

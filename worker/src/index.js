@@ -62,7 +62,7 @@ const D_RANGE = 100;         // 玩家打島主的攻擊距離（客戶端以武
 const D_DRIFT_TOLER = 600;   // 客戶端宣稱的龍位置與伺服器的最大容差（漏接一個路點事件的落後量）
 const D_STAFF_RANGE = 440;   // 法杖（遠距詠唱）打島主的最大距離：客戶端射程 320 + 判定圈 58 + 緩衝；只有 state.weapon＝staff 的連線才適用
 const D_CD_MS = 300;         // 同一條連線兩次打島主的最短間隔
-const D_HIT_MAX = 6;         // 一般攻擊打島主／深海魚人的傷害上限（客戶端算好送來；2026-11-05 由 2 放寬到 4，2026-11-07 再放寬到 6，使用者定：信任客戶端；最高＝黑魔法師咒杖 4＋輸出 1＝5，留 1 的餘裕）。夾值隨攻擊者等級放寬（每 3 級 +1，見 dlHitMax）
+const D_HIT_SANITY = 1e6;   // 一般攻擊打島主／深海魚人的傷害：2026-11-14 使用者要求取消攻擊上限（信任客戶端，等級／職業／武器加成怎麼算都收），這個只擋 Infinity／亂填的天文數字，不是玩法上限
 const D_PROVOKE_CD_MS = 15000;   // 挑釁冷卻（每條連線；與 dev_server.py 的 D_PROVOKE_CD 一致）
 const D_DEBUFF_MS = 10000;        // 破綻／降傷的持續時間（與 client 的 ROLE_DEBUFF.dur 一致）
 const D_DEBUFF_CD_MS = 30000;     // 破綻／降傷冷卻（每條連線、每種各算）
@@ -363,7 +363,7 @@ const lurkerMaxHp = L => L_HP + L_HP_UP * ((L.lvl || 1) - 1);
 const ownerKillXp = lv => 20 + 5 * lv;
 const lurkKillXp = lv => 4 + 2 * lv;
 // 一般攻擊打島主／魚人的夾值隨攻擊者等級放寬：每 3 級 +1（與 client 的 lvAtkBonus 同式）
-const dlHitMax = lvl => D_HIT_MAX + Math.floor((Math.max(1, Math.floor(lvl)) - 1) / 3);
+const dlHitMax = lvl => D_HIT_SANITY;   // 不再隨等級夾值（保留函式名讓兩處呼叫不用動）
 // 島主 hp 廣播：把等級與血量上限一起帶出（升級時客戶端靠這則跟上）
 const dragonHpMsg = d => ({ t: "dragon", ev: "hp", hp: d.hp, lvl: dlLv(d.xp), max: dragonMaxHp(d) });
 
