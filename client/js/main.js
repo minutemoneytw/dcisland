@@ -3064,6 +3064,15 @@ function sitReal(p) {
   const im = playerSpriteDiv(p, sl[0]);
   return im && !im.layerMiss ? sl : null;
 }
+// 坐著釣魚（2026-11-15，使用者要求：下半身坐姿、上半身釣魚姿勢）：釣竿那一層沒有 sit 幀，所以把人畫兩次——腰線以下用「不帶釣竿」的 LPC sit 幀、
+// 腰線以上用釣魚的站姿幀（帶釣竿）往下挪 SIT_FISH_DY。回 { sl, img }（sit 幀清單與那一幀的圖），造型缺 sit 圖層就回 null（退回舊畫法）
+const SIT_FISH_DY = 7, SIT_FISH_WAIST = 22;   // 單位：底圖像素（腰線＝腳底往上 22；上半身下挪 7，大約是 sit 幀軀幹比站姿低的量）
+function sitFishBody(p) {
+  if (p.pose !== 'sit' || !p.fish || p.npc) return null;
+  const sl = S.avatar.frames.states[`sit_${d8Of(p)}`]; if (!sl) return null;
+  const look = p.look || myLook(), img = charSprite(look, sl[2]);
+  return img && !img.layerMiss ? { sl, img } : null;
+}
 function charFrame(p) {
   const F = S.avatar.frames, st = F.states;
   if (p.pose === 'sit' && !p.fish) {   // LPC 的 sit 動作（2026-11-15）：所有圖層都有 sit 圖才用（sitReal），固定第 3 幀（雙腳踩地）
@@ -3856,9 +3865,10 @@ function seatItemOf(p) {
 // 再把家具那一截重畫在人身上，看起來就是坐在椅子裡（腿被椅面擋住）。seat 參數在 furniture.json（gen_assets.py 的 FURN_SEATS 算出來）
 function drawPerson(p, wi, nameColor) {
   const it = p.pose === 'sit' ? seatItemOf(p) : null, def = it && furnitureDef(it.type), im = it && furnImg(it.type, it.dir);
-  if (!it || !def?.seat || !im || sitReal(p)) {   // 沒有座位資料，或有真的 LPC sit 幀就直接畫
+  const sitOk = !!(it && (sitReal(p) || sitFishBody(p)));
+  if (!it || !def?.seat || !im || sitOk) {   // 沒有座位資料，或有真的 LPC sit 幀就直接畫
     p.seatDrop = 0; drawPersonBase(p, wi, nameColor);
-    if (it && def?.seat && im && (it.dir || 0) === 2 && sitReal(p)) {   // 椅子朝上（背對畫面）：椅背在人前面，把椅背那一截重畫在人身上（不然人整個壓在椅背上，只剩一團頭髮）
+    if (it && def?.seat && im && (it.dir || 0) === 2 && sitOk) {   // 椅子朝上（背對畫面）：椅背在人前面，把椅背那一截重畫在人身上（不然人整個壓在椅背上，只剩一團頭髮）
       const rows = im.height - def.seat.back, sc = S.furn.scale || 2, bottom = (it.cell[1] + def.h) * CELL;
       ctx.drawImage(im.img, 0, def.seat.back, im.fw, rows, it.cell[0] * CELL, bottom - rows * sc, im.width * sc, rows * sc);
     }
@@ -3913,6 +3923,16 @@ function drawPersonBase(p, wi, nameColor) {
     const cs = (F.scale || 2) * raceScale;   // 錨點＝腳底中央；放大＝frames.scale × 種族倍率
     const pad = img.pad || 0;   // 超大格（LPC 武器揮砍）：畫布四周多出 pad，人物仍以腳底中央對齊
     // footDy：LPC 的腳底在格子第 60～62 列，不往下挪的話腳和影子之間有空隙（看起來像飄在空中）
+    const hyb = sitFishBody(p);
+    if (hyb) {   // 坐著釣魚：下半身＝sit 幀（不帶竿），上半身＝釣魚幀往下挪
+      const wy = -SIT_FISH_WAIST * cs, dy = SIT_FISH_DY * cs, x0 = (-F.w / 2 - pad) * cs, y0 = (-F.h - pad + (F.footDy || 0)) * cs;
+      ctx.save(); ctx.beginPath(); ctx.rect(-300, wy, 600, 300); ctx.clip();
+      ctx.drawImage(hyb.img, (-F.w / 2) * cs, (-F.h + (F.footDy || 0)) * cs, hyb.img.width * cs, hyb.img.height * cs);
+      ctx.restore();
+      ctx.save(); ctx.beginPath(); ctx.rect(-300, -400, 600, 400 + wy); ctx.clip();
+      ctx.drawImage(img, x0, y0 + dy, img.width * cs, img.height * cs);
+      ctx.restore();
+    } else
     ctx.drawImage(img, (-F.w / 2 - pad) * cs, (-F.h - pad + (F.footDy || 0)) * cs, img.width * cs, img.height * cs);
     ctx.restore();
     if (carry && backView) drawCarry(true);
@@ -3921,6 +3941,7 @@ function drawPersonBase(p, wi, nameColor) {
     if (p.dir < 0) ctx.scale(-1, 1);                          // 揮擊、拋竿朝面向那側（要翻轉）
     if (wi && !pose && !fish && p.swing > 0 && swingV !== 'up' && swingV !== 'down') drawWeaponSwing(wi, p.swing, p.dir < 0 ? -1 : 1);
     const rodTip = fish ? lpcRodTip(p, cf, cs, img.pad || 0) : null;   // LPC 釣竿：竿尖的世界座標（畫在人物圖層裡，不畫舊小圖）
+    if (rodTip && hyb) rodTip.y += SIT_FISH_DY * cs;   // 坐著釣魚：上半身下挪了，竿尖跟著下挪
     if (fish && !rodTip) drawRodCast(wi, rodAngle(fish));
     if (wi && !pose && !fish && p.cast) drawStaffRaise(wi, Math.min(1, (S.t - p.cast.t0) / p.cast.dur));
     ctx.restore();
