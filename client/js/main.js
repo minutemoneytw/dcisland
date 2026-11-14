@@ -4581,7 +4581,7 @@ function openTable(tb) {
   if (!gameDef(tb.game)) return;
   for (const k of Object.keys(keys)) keys[k] = false;   // 放開所有按住的鍵（畫面蓋住後收不到 keyup，不然回來還在跑）
   S.mouseHeld = false;
-  S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null; S.bk = null; S.tg = null; S.gamePlayed = false; S.tableLocalLog = [];
+  S.tableOpen = true; S.tableId = tb.id; S.tableView = null; S.gmStep = null; S.bk = null; S.tg = null; S.kg = null; S.gamePlayed = false; S.tableLocalLog = [];
   const inf = S.tblInfo?.[tb.id];
   S.tableCab = tb.cab ?? -1; S.ar = null; S.arOpp = {};   // 俄羅斯方塊：4 台共用一張桌，坐哪一台由 cab 決定
   if (tb.game === 'arcade' ? !inf?.cabs?.[tb.cab] : (!inf || (!inf.play && inf.n < inf.max))) S.tableChoice = true;   // 還有位子（街機：這台空著）：先讓玩家選「入座」或「觀戰」（沒滿人也可以選觀戰）
@@ -4590,7 +4590,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); hkStop(); unStopTimer(); bkStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); hkStop(); unStopTimer(); bkStopTimer(); kgStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
   rulesShow(false); leaveAsk(false);
   $('tableBox').classList.add('hidden');
 }
@@ -4712,6 +4712,7 @@ function buildTable() {
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
   if (tb?.game === 'arcade') { buildArcade(box, v, mk, gd); return; }   // 俄羅斯方塊有自己的畫面（盤面＋聯機）
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
+  if (tb?.game === 'kingdom') { buildKingdom(box, v, mk, gd); return; }   // 列島建國有自己的畫面（市場、事件、目標、各人的王國）
   if (tb?.game === 'trigon') { buildTrigon(box, v, mk, gd); return; }   // Blokus Trigon有自己的畫面（三角格棋盤＋方塊托盤）
   if (tb?.game === 'blokus') { buildBlokus(box, v, mk, gd); return; }   // Blokus有自己的畫面（棋盤＋方塊托盤）
   if (tb?.game === 'mage') { buildMage(box, v, mk, gd); return; }   // 見習驅魔師有自己的畫面（畫符號的場地）
@@ -5095,6 +5096,296 @@ function buildBlokus(box, v, mk, gd) {
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+// ---- 列島建國（第十七桌 t17；2026-11-14，使用者要求）：引擎構築＋共同目標＋事件牌。規則在伺服器（worker 的 kg*、dev_server 的 kg_*）；規格見 docs/kingdom-spec.md。
+// 這裡只負責畫面與「預估」：卡面用文字＋顏色（沒有圖）；成本預估 kgcCost 與伺服器的 kgCost 同一套算法，只用來決定按鈕能不能按、超過上限時要丟哪些，最後以伺服器判定為準。
+// 協定（tbl）：kt {r, drop?} 拿資源／kr {tier, i（-1＝牌堆頂）, drop?} 保留／kb {s: m 市場 h 手上 p 人物 w 奇觀, tier?, i, drop?} 建造／kx {give, get} 交易／kk {tier, i, pay} 封鎖／kp 跳過；逾時送 timeout。階的欄位不能叫 t（net.tbl 送出是 {t:'tbl', ...m}，會被蓋掉）。
+const KG_WIN_VP = 25;   // 勝利分數（要和兩份伺服器的 KG_WIN_VP 一致）
+const KG_RN = { W: '木', S: '石', F: '魚', I: '鐵', G: '金' };
+const KG_RC = { W: '#a9743f', S: '#8d939b', F: '#4aa8d8', I: '#c0603a', G: '#e8c030' };
+function kgLoadData() {   // 牌庫（assets/kingdom/cards.json）：第一次打開這桌時讀，讀完重畫
+  if (S.kgData || S.kgLoading) return;
+  S.kgLoading = true;
+  loadJSON('assets/kingdom/cards.json').then(d => {
+    const cards = {};
+    for (const k of ['buildings', 'people', 'wonders']) for (const c of d[k]) cards[c.id] = c;
+    S.kgData = { cards, events: Object.fromEntries(d.events.map(e => [e.id, e])) };
+    S.kgLoading = false; if (S.tableOpen && S.tableView?.game === 'kingdom') buildTable();
+  }).catch(() => { S.kgLoading = false; });
+}
+const kgCardOf = cid => S.kgData?.cards[cid];
+function kgStopTimer() { if (S.kgTimer) { clearInterval(S.kgTimer); S.kgTimer = 0; } }
+function kgStartTimer(v) {
+  kgStopTimer();
+  S.kgOff = v.kg.sn - Date.now();   // 伺服器時間 − 本機時間
+  S.kgTimer = setInterval(() => {
+    const cur = S.tableView;
+    if (!S.tableOpen || !cur || cur.game !== 'kingdom' || cur.phase !== 'playing') { kgStopTimer(); return; }
+    const left = (cur.kg.deadline - (Date.now() + S.kgOff)) / 1000, el = $('kgTimer');
+    if (el) { el.textContent = left > 0 ? `${Math.ceil(left)} 秒` : '時間到'; el.classList.toggle('urgent', left <= 15); }
+    if (left <= 0 && cur.role === 'seat' && Date.now() - (S.kgTimeoutAt || 0) > 1000) { S.kgTimeoutAt = Date.now(); S.net?.tbl?.({ a: 'timeout' }); }
+  }, 250);
+}
+const kgcProd = sd => { const c = { W: 0, S: 0, F: 0, I: 0 }; for (const id of sd.bld) c[kgCardOf(id).gives]++; return c; };
+const kgcHas = (sd, ab) => sd.ppl.some(p => kgCardOf(p).ab === ab);
+const kgcTotal = sd => sd.res.W + sd.res.S + sd.res.F + sd.res.I + sd.gold;
+const kgcLimit = sd => 10 + (kgcHas(sd, 'limit') ? 2 : 0);
+function kgcShave(need) { let r = null; for (const k of Object.keys(need)) if (r === null || need[k] > need[r]) r = k; if (r && need[r] > 0) need[r]--; }
+// 預估：kind＝b／p／w 的牌，扣掉折扣與事件後要付的資源，以及付得起付不起
+function kgcCost(v, cid) {
+  const sd = v.kg.sd[v.me], card = kgCardOf(cid), kind = cid[0], need = { ...card.cost };
+  if (kind !== 'p') { const prod = kgcProd(sd); for (const r of Object.keys(need)) need[r] = Math.max(0, need[r] - prod[r]); }
+  if (kind === 'b' && card.tier === 1 && kgcHas(sd, 't1disc')) kgcShave(need);
+  if (v.kg.ev === 'rush') kgcShave(need);
+  let deficit = 0; const paid = {};
+  for (const [r, n] of Object.entries(need)) { paid[r] = Math.min(n, sd.res[r]); deficit += n - paid[r]; }
+  return { need, paid, deficit, can: deficit <= sd.gold };
+}
+// 這張牌現在能不能建（回 null＝可以，否則回原因）
+function kgcWhyNot(v, cid, src) {
+  const g = v.kg, sd = g.sd[v.me], card = kgCardOf(cid), kind = cid[0];
+  if (v.phase !== 'playing' || v.role !== 'seat' || v.turn !== v.me) return '還沒輪到你';
+  if (src === 'm' && g.sd.some(s => s.block === cid) && !kgcHas(sd, 'unblock')) return '被封鎖了';
+  if (kind === 'b' && g.ev === 'storm' && 'F' in card.cost) return '風暴：這輪不能蓋含魚獲成本的建築';
+  if (kind === 'p' && sd.bld.length < card.need) return `要先有 ${card.need} 棟建築（你有 ${sd.bld.length} 棟）`;
+  if (kind === 'w') { const prod = kgcProd(sd); const miss = Object.entries(card.req).filter(([r, n]) => prod[r] < n); if (miss.length) return '前置不足：' + miss.map(([r, n]) => `${KG_RN[r]}產出 ${n} 棟（你有 ${prod[r]}）`).join('、'); }
+  const c = kgcCost(v, cid);
+  if (!c.can) return `資源不足（還差 ${c.deficit - sd.gold} 個）`;
+  return null;
+}
+// 動作做完後的資源（預估）：{ res, gold }；用來判斷有沒有超過上限
+function kgcAfter(v, act) {
+  const sd = v.kg.sd[v.me], res = { ...sd.res }; let gold = sd.gold;
+  if (act.a === 'kt') {
+    if (act.r.length === 2 && act.r[0] === act.r[1]) res[act.r[0]] += Math.min(2 + (v.kg.ev === 'harvest' ? 1 : 0) + (kgcHas(sd, 'pair') ? 1 : 0), v.kg.sup[act.r[0]]);
+    else for (const r of act.r) res[r] += 1;
+  }
+  else if (act.a === 'kr') gold += Math.min(1 + (v.kg.ev === 'muse' ? 1 : 0) + (kgcHas(sd, 'gold2') ? 1 : 0), v.kg.gold);
+  else if (act.a === 'kb') {
+    const cid = act.cid, c = kgcCost(v, cid), card = kgCardOf(cid);
+    for (const [r, n] of Object.entries(c.paid)) res[r] -= n;
+    gold -= c.deficit;
+    if (cid[0] === 'b' && card.fx?.k === 'gain') res[card.fx.res] += Math.min(card.fx.n, v.kg.sup[card.fx.res] + (c.paid[card.fx.res] || 0));
+    if (cid[0] === 'p' && v.kg.ev === 'festival' && v.kg.gold + c.deficit > 0) gold += 1;
+  }
+  return { res, gold };
+}
+// 送出主要動作；超過資源上限就先開「要丟哪些」的選擇
+function kgSend(v, act) {
+  const o = S.kg, { res, gold } = kgcAfter(v, act), sd = v.kg.sd[v.me], over = res.W + res.S + res.F + res.I + gold - kgcLimit(sd);
+  const msg = { ...act }; delete msg.cid;
+  if (over > 0) { o.pend = { msg, over, res, gold, drop: {} }; buildTable(); return; }
+  S.net?.tbl?.(msg); o.sel = null; o.take = []; o.pend = null;
+}
+function kgEvText(id) { const e = S.kgData?.events[id]; return e ? `${e.name}：${e.text}` : ''; }
+function kgFxText(c) {
+  if (!c.fx) return '';
+  if (c.fx.k === 'gain') return `建造時拿 ${KG_RN[c.fx.res]}×${c.fx.n}`;
+  return c.fx.of === 'people' ? '每位人物 +1 分' : c.fx.of === 'wonder' ? '每座奇觀 +1 分' : '每 2 棟一階建築 +1 分';
+}
+function kgChips(map, mk) {   // 資源小方塊：{ W: 2, S: 1 } → 「木2 石1」
+  const box = mk('span', 'kg-chips');
+  for (const r of ['W', 'S', 'F', 'I', 'G']) if (map[r] > 0) { const c = mk('span', 'kg-chip', `${KG_RN[r]}${map[r]}`); c.style.background = KG_RC[r]; box.appendChild(c); }
+  return box;
+}
+// 卡面（建築／人物／奇觀）。src＝來源（m 市場、h 手上、p 人物、w 奇觀），用來決定能不能點、有沒有選取
+function kgCardEl(v, cid, src, t, i, mk) {
+  const o = S.kg, card = kgCardOf(cid), kind = cid[0], blocked = src === 'm' && v.kg.sd.some(s => s.block === cid);
+  const sel = o.sel && o.sel.cid === cid && o.sel.s === src;
+  const why = v.role === 'seat' && v.phase === 'playing' ? kgcWhyNot(v, cid, src) : '不是你的回合';
+  const el = mk('div', `kg-card k${kind}${kind === 'b' ? ' t' + card.tier : ''}${sel ? ' sel' : ''}${blocked ? ' blocked' : ''}${why === null ? ' afford' : ''}`);
+  if (kind === 'b') el.style.borderLeftColor = KG_RC[card.gives];
+  const top = mk('div', 'kg-ct');
+  if (kind === 'b') { const g = mk('span', 'kg-gv', KG_RN[card.gives]); g.style.background = KG_RC[card.gives]; g.title = `永久折扣：${KG_RN[card.gives]}`; top.appendChild(g); }
+  top.appendChild(mk('span', 'kg-cn', card.name));
+  if (card.vp) top.appendChild(mk('span', 'kg-vp', String(card.vp)));
+  el.appendChild(top);
+  el.appendChild(kgChips(card.cost, mk));
+  if (kind === 'p') el.appendChild(mk('div', 'kg-fx', `需 ${card.need} 棟建築 · ${card.text}`));
+  else if (kind === 'w') el.appendChild(mk('div', 'kg-fx', '前置：' + Object.entries(card.req).map(([r, n]) => `${KG_RN[r]}產出≥${n}`).join(' ')));
+  else if (card.fx) el.appendChild(mk('div', 'kg-fx', kgFxText(card)));
+  if (blocked) el.appendChild(mk('div', 'kg-lock', '🔒 封鎖中'));
+  el.title = why === null ? '可以建造' : why;
+  if (v.role === 'seat' && v.phase === 'playing') el.onclick = () => { o.sel = sel ? null : { s: src, t, i, cid }; o.take = []; buildTable(); };
+  return el;
+}
+function buildKingdom(box, v, mk, gd) {
+  kgLoadData();
+  const playing = v.phase === 'playing', seat = v.role === 'seat', myTurn = playing && seat && v.turn === v.me, g = v.kg;
+  if (!playing) kgStopTimer();
+  const o = (S.kg ||= { sel: null, take: [], pend: null, give: 'W', get: 'S' });
+  if (!playing || !seat) { o.sel = null; o.take = []; o.pend = null; }
+  let status;
+  if (playing) status = !seat ? `觀戰中 · 輪到 ${v.seats[v.turn]?.name}` : myTurn ? '輪到你：拿資源、保留一張牌，或建造／招募' : `輪到 ${v.seats[v.turn]?.name}`;
+  else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始（每回合限時 90 秒）';
+  const st = mk('div', 'table-status' + (myTurn ? ' mine' : ''), status);
+  if (playing) { const tm = mk('span', 'bk-timer'); tm.id = 'kgTimer'; st.appendChild(tm); }
+  box.appendChild(st);
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  if (!S.kgData) { box.appendChild(mk('div', 'table-status', '載入牌庫中…')); }
+  else if (g) {
+    // 事件（左）＋共同目標（右）併成一列，省高度
+    const top = mk('div', 'kg-top');
+    if (playing) {
+      const ev = mk('div', 'kg-events');
+      ev.appendChild(mk('div', 'kg-ev now', `第 ${g.round} 輪　${kgEvText(g.ev)}`));
+      ev.appendChild(mk('div', 'kg-ev next', `下一輪　${kgEvText(g.next)}`));
+      if (g.endr !== null) ev.appendChild(mk('div', 'kg-ev end', `有人到 ${KG_WIN_VP} 分，這一輪結束後比分`));
+      top.appendChild(ev);
+    }
+    const obj = mk('div', 'kg-objs');
+    for (const ob of g.obj) {
+      const e = mk('div', 'kg-obj' + (ob.by !== null ? ' done' : ''));
+      e.appendChild(mk('b', null, ob.name)); e.appendChild(mk('span', null, ob.text));
+      e.appendChild(mk('div', 'kg-obj-by', ob.by !== null ? `✔ ${v.seats[ob.by]?.name || ''} +3 分` : '先達成 +3 分'));
+      obj.appendChild(e);
+    }
+    top.appendChild(obj);
+    box.appendChild(top);
+    // 市場（左：三階建築＋一排奇觀）＋人物（右）
+    const main = mk('div', 'kg-main'), left = mk('div', 'kg-market'), right = mk('div', 'kg-side');
+    for (const tier of [3, 2, 1]) {
+      const row = mk('div', 'kg-row');
+      const dk = mk('div', 'kg-deck', `${['', 'Ⅰ', 'Ⅱ', 'Ⅲ'][tier]} 階
+剩 ${g.deck[tier]}`);
+      if (myTurn && g.deck[tier] > 0 && g.sd[v.me].nhand < 3 + (kgcHas(g.sd[v.me], 'limit') ? 1 : 0)) { dk.classList.add('pick'); dk.title = '保留牌堆頂（看不到內容，拿 1 枚金幣）'; dk.onclick = () => kgSend(v, { a: 'kr', tier, i: -1 }); }
+      row.appendChild(dk);
+      g.mkt[tier].forEach((cid, i) => row.appendChild(cid ? kgCardEl(v, cid, 'm', tier, i, mk) : mk('div', 'kg-card empty')));
+      left.appendChild(row);
+    }
+    const wrow = mk('div', 'kg-row');
+    const wl = mk('div', 'kg-deck', '奇觀'); wl.title = '每座只有一人能蓋'; wrow.appendChild(wl);
+    g.wond.forEach((cid, i) => wrow.appendChild(cid ? kgCardEl(v, cid, 'w', 0, i, mk) : mk('div', 'kg-card empty')));
+    left.appendChild(wrow);
+    right.appendChild(mk('div', 'table-label', `人物（剩 ${g.pdeck} 張）`));
+    g.pmkt.forEach((cid, i) => right.appendChild(cid ? kgCardEl(v, cid, 'p', 0, i, mk) : mk('div', 'kg-card empty')));
+    main.appendChild(left); main.appendChild(right); box.appendChild(main);
+    // 庫存列：點資源挑要拿的（3 張不同，或同一種點兩次＝拿 2 張）
+    const sup = mk('div', 'kg-supply');
+    sup.appendChild(mk('span', 'table-label', '庫存（點選要拿的資源）：'));
+    for (const r of ['W', 'S', 'F', 'I']) {
+      const b = mk('button', 'kg-res' + (o.take.filter(x => x === r).length ? ' on' : ''), `${KG_RN[r]} ${g.sup[r]}${o.take.filter(x => x === r).length ? ` ×${o.take.filter(x => x === r).length}` : ''}`);
+      b.style.borderColor = KG_RC[r]; b.disabled = !myTurn || g.sup[r] <= 0;
+      b.onclick = () => {
+        const n = o.take.filter(x => x === r).length;
+        if (n >= 1 && o.take.length === 1 && g.sup[r] >= 4 && g.ev !== 'drought') o.take = [r, r];   // 第二次點同一種＝拿 2 張同種
+        else if (n >= 1) o.take = o.take.filter(x => x !== r);
+        else if (o.take.length === 2 && o.take[0] === o.take[1]) o.take = [r];
+        else if (o.take.length < 3) o.take = [...o.take, r];
+        o.sel = null; buildTable();
+      };
+      sup.appendChild(b);
+    }
+    sup.appendChild(mk('span', 'table-label', `　金幣 ${g.gold}（保留時才拿得到）`));
+    box.appendChild(sup);
+    // 動作列（我的回合）
+    if (myTurn) {
+      const act = mk('div', 'kg-actions'), sd = g.sd[v.me];
+      const avail = ['W', 'S', 'F', 'I'].filter(r => g.sup[r] > 0), need = Math.min(3, avail.length);
+      const pair = o.take.length === 2 && o.take[0] === o.take[1];
+      const takeOk = o.take.length > 0 && (pair || (new Set(o.take).size === o.take.length && o.take.length === need));
+      if (o.take.length) {
+        const b = mk('button', 'ff-btn', pair ? `拿 2 張 ${KG_RN[o.take[0]]}` : `拿 ${o.take.map(r => KG_RN[r]).join('、')}`);
+        b.disabled = !takeOk; b.onclick = () => kgSend(v, { a: 'kt', r: o.take });
+        act.appendChild(b);
+        if (!takeOk) act.appendChild(mk('span', 'table-tag', `要拿 ${need} 種不同的，或同一種點兩次（庫存 ≥4）`));
+      }
+      if (o.sel) {
+        const cid = o.sel.cid, card = kgCardOf(cid), why = kgcWhyNot(v, cid, o.sel.s), c = kgcCost(v, cid);
+        act.appendChild(mk('b', 'kg-selname', card.name));
+        act.appendChild(mk('span', 'table-tag', '實付：'));
+        act.appendChild(Object.values(c.need).some(n => n > 0) ? kgChips(c.need, mk) : mk('span', 'table-tag', '免費'));
+        if (c.deficit) act.appendChild(mk('span', 'table-tag', `（用 ${c.deficit} 枚金幣補）`));
+        const bb = mk('button', 'ff-btn', cid[0] === 'p' ? '招募' : '建造'); bb.disabled = why !== null; bb.title = why || '';
+        const sl = o.sel; bb.onclick = () => kgSend(v, { a: 'kb', s: sl.s, tier: sl.t, i: sl.i, cid });   // 先把選取存起來：kgSend 送出後會清掉 o.sel
+        act.appendChild(bb);
+        if (why) act.appendChild(mk('span', 'table-tag', why));
+        if (o.sel.s === 'm') {
+          const rb = mk('button', 'ff-btn small', '保留'), blocked = g.sd.some(s => s.block === cid);
+          rb.disabled = blocked || sd.nhand >= 3 + (kgcHas(sd, 'limit') ? 1 : 0); rb.title = '收進手上（最多 3 張），拿 1 枚金幣';
+          rb.onclick = () => kgSend(v, { a: 'kr', tier: sl.t, i: sl.i });
+          const kb = mk('button', 'ff-btn small', g.ev === 'marketday' ? '封鎖（免費）' : '封鎖（付 1 資源）');
+          const pay = ['W', 'S', 'F', 'I'].sort((a, b) => sd.res[b] - sd.res[a])[0];
+          kb.disabled = blocked || sd.blk || (g.ev !== 'marketday' && sd.res[pay] < 1); kb.title = '到你下個回合開始前，別人不能買也不能保留這張牌（你自己也不能買）';
+          kb.onclick = () => { S.net?.tbl?.({ a: 'kk', tier: sl.t, i: sl.i, pay }); o.sel = null; buildTable(); };
+          act.appendChild(rb); act.appendChild(kb);
+        }
+      }
+      // 銀行交易（每回合一次，不佔回合）
+      const rate = g.ev === 'tradewind' || kgcHas(sd, 'trade') ? 2 : 3, tr = mk('span', 'kg-trade');
+      tr.appendChild(mk('span', 'table-tag', `交易（${rate}:1）`));
+      const mkSel = (key) => { const s = document.createElement('select'); for (const r of ['W', 'S', 'F', 'I']) { const op = document.createElement('option'); op.value = r; op.textContent = KG_RN[r]; if (o[key] === r) op.selected = true; s.appendChild(op); } s.onchange = () => { o[key] = s.value; }; return s; };
+      tr.appendChild(mkSel('give')); tr.appendChild(mk('span', 'table-tag', '→')); tr.appendChild(mkSel('get'));
+      const tb = mk('button', 'ff-btn small', '交易'); tb.disabled = sd.traded || g.ev === 'notrade'; tb.title = g.ev === 'notrade' ? '封港：這輪不能交易' : sd.traded ? '這回合已交易過' : '';
+      tb.onclick = () => S.net?.tbl?.({ a: 'kx', give: o.give, get: o.get }); tr.appendChild(tb);
+      act.appendChild(tr);
+      const pb = mk('button', 'ff-btn small', '跳過'); pb.onclick = () => S.net?.tbl?.({ a: 'kp' }); act.appendChild(pb);
+      box.appendChild(act);
+      // 超過上限：選要丟哪些
+      if (o.pend) {
+        const p = o.pend, pd = mk('div', 'kg-drop'), dropped = Object.values(p.drop).reduce((a, b) => a + b, 0);
+        pd.appendChild(mk('div', 'table-status mine', `手上會超過上限，請選 ${p.over} 張丟掉（已選 ${dropped}）`));
+        const row = mk('div', 'kg-supply');
+        for (const r of ['W', 'S', 'F', 'I', 'G']) {
+          const have = (r === 'G' ? p.gold : p.res[r]) - (p.drop[r] || 0);
+          if ((r === 'G' ? p.gold : p.res[r]) <= 0) continue;
+          const b = mk('button', 'kg-res', `${KG_RN[r]} ${have}${p.drop[r] ? `（丟 ${p.drop[r]}）` : ''}`); b.style.borderColor = KG_RC[r];
+          b.onclick = () => { if (dropped < p.over && have > 0) p.drop[r] = (p.drop[r] || 0) + 1; buildTable(); };
+          b.oncontextmenu = e => { e.preventDefault(); if (p.drop[r]) { p.drop[r]--; if (!p.drop[r]) delete p.drop[r]; } buildTable(); };
+          row.appendChild(b);
+        }
+        pd.appendChild(row);
+        const bs = mk('div', 'table-btns'), ok = mk('button', 'ff-btn', '確定'), no = mk('button', 'ff-btn small', '取消'), rs = mk('button', 'ff-btn small', '重選');
+        ok.disabled = dropped !== p.over; ok.onclick = () => { S.net?.tbl?.({ ...p.msg, drop: p.drop }); o.sel = null; o.take = []; o.pend = null; buildTable(); };
+        no.onclick = () => { o.pend = null; buildTable(); }; rs.onclick = () => { p.drop = {}; buildTable(); };
+        bs.appendChild(ok); bs.appendChild(rs); bs.appendChild(no); pd.appendChild(bs); box.appendChild(pd);
+      }
+    }
+    // 各人的王國
+    const boards = mk('div', 'kg-boards');
+    v.seats.forEach((s, k) => {
+      const sd = g.sd[k], you = s.you, e = mk('div', 'kg-board' + (you ? ' you' : '') + (playing && v.turn === k ? ' turn' : '') + (sd.done ? ' out' : ''));
+      const nm = mk('div', 'kg-bn', `${s.name}${you ? '（你）' : ''}${s.left ? '（已離開）' : sd.forfeit ? '（棄權）' : ''}`);
+      nm.appendChild(mk('span', 'kg-bvp', `${sd.vp} 分`)); e.appendChild(nm);
+      const rr = mk('div', 'kg-brow'); rr.appendChild(mk('span', 'table-tag', '資源：')); rr.appendChild(kgChips({ ...sd.res, G: sd.gold }, mk));
+      if (!kgcTotal(sd)) rr.appendChild(mk('span', 'table-tag', '（空）')); e.appendChild(rr);
+      const pr = kgcProd(sd), dr = mk('div', 'kg-brow'); dr.appendChild(mk('span', 'table-tag', '折扣：')); dr.appendChild(kgChips(pr, mk)); if (!Object.values(pr).some(n => n)) dr.appendChild(mk('span', 'table-tag', '（無）')); e.appendChild(dr);
+      const list = (ids, label) => { if (!ids.length) return; const d = mk('div', 'kg-brow'); d.appendChild(mk('span', 'table-tag', label)); for (const id of ids) { const c = kgCardOf(id), t = mk('span', 'kg-mini', c.name + (c.vp ? ` ${c.vp}` : '')); if (id[0] === 'b') t.style.borderLeftColor = KG_RC[c.gives]; t.title = id[0] === 'p' ? c.text : (c.fx ? kgFxText(c) : ''); d.appendChild(t); } e.appendChild(d); };
+      list(sd.bld, `建築 ${sd.bld.length}：`); list(sd.ppl, '人物：'); list(sd.won, '奇觀：');
+      if (sd.nhand && !you) e.appendChild(mk('div', 'table-tag', `保留 ${sd.nhand} 張`));
+      if (sd.block) e.appendChild(mk('div', 'table-tag', `🔒 封鎖了「${kgCardOf(sd.block)?.name || ''}」`));
+      if (you && g.hand.length) {
+        const d = mk('div', 'kg-hand'); d.appendChild(mk('div', 'table-label', '你保留的牌（點選可建造）'));
+        g.hand.forEach((cid, i) => d.appendChild(kgCardEl(v, cid, 'h', 0, i, mk)));
+        e.appendChild(d);
+      }
+      boards.appendChild(e);
+    });
+    box.appendChild(boards);
+    if (playing) kgStartTimer(v);
+  }
+  // 上一局的成績
+  if (!playing && v.result?.players) {
+    const sc = mk('div', 'bk-score');
+    [...v.result.players].map((p, k) => ({ p, k })).sort((a, b) => b.p.vp - a.p.vp).forEach(({ p, k }) => {
+      sc.appendChild(mk('div', 'bk-score-line' + (v.result.winners.includes(k) ? ' win' : ''), `${p.name}${p.left ? '（離開）' : p.forfeit ? '（棄權）' : ''}　${p.vp} 分　建築 ${p.bld}・人物 ${p.ppl}・奇觀 ${p.won}`));
+    });
+    box.appendChild(sc);
+  }
+  const btns = mk('div', 'table-btns');
+  if (seat && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const sb = mk('button', 'ff-btn small', '改為觀戰'); sb.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(sb);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log kg-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules && !playing) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：正六邊形的三角格棋盤（邊長 9，486 格）＋我的方塊托盤（22 塊，1～6 個三角形）。
 // 操作同Blokus：點選方塊 → 旋轉 60 度（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。座標系與規則同 worker 的 tg*（三角形 (x, y)，(x + y) 偶數＝朝上；頂點 (i, j)，i + j 偶數）。

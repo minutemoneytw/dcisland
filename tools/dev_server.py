@@ -121,7 +121,7 @@ NAME_MAX = 24
 # 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號（Worker 存 Registry 的 gstats:<uid>，這裡只存記憶體 GSTATS）。各遊戲結算時在 result["gs"]
 # （依「結算後留下的座位」順序，與 result["xp"] 同；None＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器照著記進 GSTATS 並把整份送給本人；
 # result["gs"] 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）。與 worker 的 gsMk／tableStats 同一套
-GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey"}
+GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom"}
 GS_CAP, GS_KEYS_MAX = 1000000, 24
 GSTATS = {}
 
@@ -674,8 +674,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey", "t17": "kingdom"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4), "kingdom": (3, 4)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -765,6 +765,9 @@ def tbl_leave(t, cid):
             return
         if t["phase"] == "playing" and t["game"] == "trigon":   # Blokus Trigon：離開不中斷，棋子留在棋盤上、之後跳過
             tg_leave(t, i, int(time.time() * 1000))
+            return
+        if t["phase"] == "playing" and t["game"] == "kingdom":   # 列島建國：離開者視同棄權，其餘人繼續（剩不到 2 人就結束）
+            kg_leave(t, i, int(time.time() * 1000))
             return
         if t["phase"] == "playing" and t["game"] == "blokus":   # Blokus：離開不中斷，棋子留在棋盤上、之後跳過
             bk_leave(t, i, int(time.time() * 1000))
@@ -1171,6 +1174,504 @@ def bk_leave(t, i, now):
         bk_advance(t, i, now)
     elif all(d["done"] for d in g["sd"]):
         bk_finish(t)
+
+# ---- 列島建國（第十七桌 t17；2026-11-14，使用者要求）：3～4 人、引擎構築＋共同目標＋事件牌；規格見 docs/kingdom-spec.md ----
+# 牌庫資料在 client/assets/kingdom/cards.json（tools/kingdom_cards.py 產生）。每回合做一件「主要動作」（拿資源 kt／保留 kr／建造 kb／過 kp），
+# 另有不佔回合的「交易 kx」「封鎖 kk」。伺服器權威：資源、牌堆、市場、事件、目標全在這裡算；其他人手上保留的牌只告訴張數。
+KG_TURN_MS, KG_IDLE_MAX, KG_XP, KG_WIN_VP = 90000, 2, 10, 25
+KG_RES = "WSFI"
+KG_SUP = {3: 5, 4: 7}   # 每種資源的庫存（依人數）
+_KG_DATA = None
+
+def kg_data():
+    global _KG_DATA
+    if _KG_DATA is None:
+        with open(os.path.join(CLIENT, "assets", "kingdom", "cards.json"), encoding="utf-8") as f:
+            d = json.load(f)
+        cards = {}
+        for key in ("buildings", "people", "wonders"):
+            for c in d[key]:
+                cards[c["id"]] = c
+        _KG_DATA = {"cards": cards, "raw": d}
+    return _KG_DATA
+
+def kg_card(cid):
+    return kg_data()["cards"][cid]
+
+def kg_is_res(x):
+    return type(x) is str and len(x) == 1 and x in KG_RES
+
+def kg_new_sd():
+    return {"res": {r: 0 for r in KG_RES}, "gold": 0, "bld": [], "ppl": [], "won": [], "hand": [], "block": None, "traded": False, "blk_used": False,
+            "idle": 0, "done": False, "forfeit": False, "bonus": 0, "firstbld": False}
+
+def kg_prod(sd):
+    c = {r: 0 for r in KG_RES}
+    for cid in sd["bld"]:
+        c[kg_card(cid)["gives"]] += 1
+    return c
+
+def kg_has(sd, ab):
+    return any(kg_card(p)["ab"] == ab for p in sd["ppl"])
+
+def kg_event(g, off=0):
+    r = g["round"] - 1 + off
+    return g["evdeck"][r] if r < len(g["evdeck"]) else "calm"
+
+def kg_total(sd):
+    return sum(sd["res"].values()) + sd["gold"]
+
+def kg_limit(sd):
+    return 10 + (2 if kg_has(sd, "limit") else 0)
+
+def kg_hand_limit(sd):
+    return 3 + (1 if kg_has(sd, "limit") else 0)
+
+def kg_vp(g, k):
+    sd = g["sd"][k]
+    v = sd["bonus"] + sum(kg_card(c)["vp"] for c in sd["bld"] + sd["ppl"] + sd["won"])
+    for cid in sd["bld"]:
+        fx = kg_card(cid)["fx"]
+        if fx and fx["k"] == "vp_per":
+            cnt = len(sd["ppl"]) if fx["of"] == "people" else len(sd["won"]) if fx["of"] == "wonder" else sum(1 for b in sd["bld"] if kg_card(b)["tier"] == 1)
+            v += fx["vp"] * (cnt // fx["per"])
+    return v
+
+def kg_shave(need):
+    """成本少 1 個資源：扣在剩餘缺口最大的那一種。"""
+    r = max(need, key=lambda x: need[x]) if need else None
+    if r and need[r] > 0:
+        need[r] -= 1
+
+def kg_cost(g, k, card, kind):
+    """扣掉折扣與事件後還要付的資源（kind：b 建築／p 人物／w 奇觀）。人物沒有折扣。"""
+    sd = g["sd"][k]
+    need = dict(card["cost"])
+    if kind in ("b", "w"):
+        prod = kg_prod(sd)
+        for r in need:
+            need[r] = max(0, need[r] - prod[r])
+    if kind == "b" and card["tier"] == 1 and kg_has(sd, "t1disc"):
+        kg_shave(need)
+    if kg_event(g) == "rush":
+        kg_shave(need)
+    return need
+
+def kg_pay(sd, need):
+    """能付得起就回 (要付的資源, 要付的金幣)，否則 None（缺的用金幣補）。"""
+    paid, deficit = {}, 0
+    for r, n in need.items():
+        have = sd["res"][r]
+        paid[r] = min(n, have)
+        deficit += n - paid[r]
+    return (paid, deficit) if deficit <= sd["gold"] else None
+
+def kg_blocked(g, cid):
+    return any(s["block"] == cid for s in g["sd"])
+
+def kg_refill(g):
+    for tier in (1, 2, 3):
+        for k in range(4):
+            if g["mkt"][tier][k] is None and g["decks"][tier]:
+                g["mkt"][tier][k] = g["decks"][tier].pop()
+    for k in range(3):
+        if g["pmkt"][k] is None and g["ppl"]:
+            g["pmkt"][k] = g["ppl"].pop()
+
+def kg_settle(g, sd, res, gold, drop):
+    """動作做完後的資源（res／gold）超過上限時，要由 drop 指定丟掉哪些（剛好丟到上限）；通過就寫回座位並把丟掉的還給庫存。不通過什麼都不改。"""
+    over = sum(res.values()) + gold - kg_limit(sd)
+    dr = {}
+    if over > 0:
+        if type(drop) is not dict:
+            return False
+        tot = 0
+        for key, n in drop.items():
+            if type(n) is not int or n < 0:
+                return False
+            if key == "G":
+                if n > gold:
+                    return False
+            elif kg_is_res(key):
+                if n > res[key]:
+                    return False
+            else:
+                return False
+            tot += n
+            dr[key] = n
+        if tot != over:
+            return False
+    for key, n in dr.items():
+        if key == "G":
+            gold -= n
+            g["gold"] += n
+        else:
+            res[key] -= n
+            g["sup"][key] += n
+    sd["res"], sd["gold"] = res, gold
+    return True
+
+def kg_take(t, i, msg):
+    g = t["g"]; sd = g["sd"][i]; ev = kg_event(g)
+    rs = msg.get("r")
+    if type(rs) is not list or not 1 <= len(rs) <= 3 or not all(kg_is_res(x) for x in rs):
+        return False
+    avail = [r for r in KG_RES if g["sup"][r] > 0]
+    gain = {}
+    if len(rs) == 2 and rs[0] == rs[1]:   # 同種：庫存要 ≥4；豐收／人物各多拿 1；乾旱不能拿
+        x = rs[0]
+        if ev == "drought" or g["sup"][x] < 4:
+            return False
+        gain[x] = min(2 + (1 if ev == "harvest" else 0) + (1 if kg_has(sd, "pair") else 0), g["sup"][x])
+    else:   # 不同種：拿 min(3, 庫存還有的種類數) 種
+        if len(set(rs)) != len(rs) or len(rs) != min(3, len(avail)) or any(g["sup"][x] <= 0 for x in rs):
+            return False
+        for x in rs:
+            gain[x] = 1
+    res = dict(sd["res"])
+    for x, n in gain.items():
+        res[x] += n
+    if not kg_settle(g, sd, res, sd["gold"], msg.get("drop")):
+        return False
+    for x, n in gain.items():
+        g["sup"][x] -= n
+    tbl_log(t, f"{t['seats'][i]['name']} 拿了 " + "、".join(f"{x}×{n}" if n > 1 else x for x, n in gain.items()))
+    return True
+
+def kg_reserve(t, i, msg):
+    g = t["g"]; sd = g["sd"][i]
+    tier, idx = msg.get("tier"), msg.get("i")   # 欄位不能叫 t：net.tbl 送出時是 {t: "tbl", ...m}，會把訊息類型蓋掉
+    if tier not in (1, 2, 3) or type(tier) is not int or type(idx) is not int or not -1 <= idx <= 3 or len(sd["hand"]) >= kg_hand_limit(sd):
+        return False
+    if idx == -1:   # 從牌堆頂保留（別人看不到是什麼）
+        if not g["decks"][tier]:
+            return False
+        cid = g["decks"][tier][-1]
+    else:
+        cid = g["mkt"][tier][idx]
+        if cid is None or kg_blocked(g, cid):
+            return False
+    n = min(1 + (1 if kg_event(g) == "muse" else 0) + (1 if kg_has(sd, "gold2") else 0), g["gold"])
+    if not kg_settle(g, sd, dict(sd["res"]), sd["gold"] + n, msg.get("drop")):
+        return False
+    g["gold"] -= n
+    if idx == -1:
+        g["decks"][tier].pop()
+    else:
+        g["mkt"][tier][idx] = None
+    sd["hand"].append(cid)
+    kg_refill(g)
+    tbl_log(t, f"{t['seats'][i]['name']} 保留了一張{'牌堆頂的' if idx == -1 else ''}{tier} 階牌")
+    return True
+
+def kg_build(t, i, msg):
+    g = t["g"]; sd = g["sd"][i]; ev = kg_event(g)
+    s, idx, tier = msg.get("s"), msg.get("i"), msg.get("tier")
+    if type(idx) is not int or s not in ("m", "h", "p", "w"):
+        return False
+    if s == "m":
+        if tier not in (1, 2, 3) or type(tier) is not int or not 0 <= idx <= 3 or g["mkt"][tier][idx] is None:
+            return False
+        cid = g["mkt"][tier][idx]
+        if kg_blocked(g, cid) and not kg_has(sd, "unblock"):
+            return False
+    elif s == "h":
+        if not 0 <= idx < len(sd["hand"]):
+            return False
+        cid = sd["hand"][idx]
+    elif s == "p":
+        if not 0 <= idx < 3 or g["pmkt"][idx] is None:
+            return False
+        cid = g["pmkt"][idx]
+    else:
+        if not 0 <= idx < len(g["wond"]) or g["wond"][idx] is None:
+            return False
+        cid = g["wond"][idx]
+    card = kg_card(cid)
+    kind = cid[0]   # b／p／w
+    if kind == "b" and ev == "storm" and "F" in card["cost"]:
+        return False
+    if kind == "p" and len(sd["bld"]) < card["need"]:
+        return False
+    if kind == "w":
+        prod = kg_prod(sd)
+        if any(prod[r] < n for r, n in card["req"].items()):
+            return False
+    plan = kg_pay(sd, kg_cost(g, i, card, kind))
+    if not plan:
+        return False
+    paid, deficit = plan
+    res = dict(sd["res"])
+    for r, n in paid.items():
+        res[r] -= n
+    gold = sd["gold"] - deficit
+    extra = 0
+    fx = card.get("fx") if kind == "b" else None
+    gain = {}
+    if fx and fx["k"] == "gain":
+        gain[fx["res"]] = min(fx["n"], g["sup"][fx["res"]] + paid.get(fx["res"], 0))
+        res[fx["res"]] += gain[fx["res"]]
+    if kind == "p" and ev == "festival" and g["gold"] + deficit > 0:
+        extra = 1
+        gold += 1
+    if not kg_settle(g, sd, res, gold, msg.get("drop")):
+        return False
+    for r, n in paid.items():
+        g["sup"][r] += n
+    g["gold"] += deficit - extra
+    for r, n in gain.items():
+        g["sup"][r] -= n
+    # 取走牌
+    if s == "m":
+        g["mkt"][tier][idx] = None
+        for o in g["sd"]:
+            if o["block"] == cid:
+                o["block"] = None
+    elif s == "h":
+        sd["hand"].pop(idx)
+    elif s == "p":
+        g["pmkt"][idx] = None
+    else:
+        g["wond"][idx] = None
+    kg_refill(g)
+    sd[{"b": "bld", "p": "ppl", "w": "won"}[kind]].append(cid)
+    if kind == "b" and ev == "bounty" and not sd["firstbld"]:
+        sd["firstbld"] = True
+        sd["bonus"] += 1
+    tbl_log(t, f"{t['seats'][i]['name']} {'招募了' if kind == 'p' else '建成了'}{card['name']}")
+    kg_check_obj(t, i)
+    return True
+
+def kg_obj_ok(g, k, key):
+    sd = g["sd"][k]; prod = kg_prod(sd); tiers = [kg_card(c)["tier"] for c in sd["bld"]]
+    return {"types3x2": sum(1 for r in KG_RES if prod[r] >= 2) >= 3, "build9": len(sd["bld"]) >= 9, "people3": len(sd["ppl"]) >= 3,
+            "wonder1": len(sd["won"]) >= 1, "t3x2": tiers.count(3) >= 2, "t1x6": tiers.count(1) >= 6, "prod5": max(prod.values()) >= 5,
+            "all4x7": all(prod[r] >= 1 for r in KG_RES) and len(sd["bld"]) >= 7, "t2t3x2": tiers.count(2) >= 2 and tiers.count(3) >= 2,
+            "p2w1": len(sd["ppl"]) >= 2 and len(sd["won"]) >= 1}.get(key, False)
+
+def kg_check_obj(t, i):
+    g = t["g"]
+    for o in g["obj"]:
+        if o["by"] is None and kg_obj_ok(g, i, o["k"]):
+            o["by"] = i
+            g["sd"][i]["bonus"] += 3
+            tbl_log(t, f"{t['seats'][i]['name']} 達成共同目標「{o['name']}」+3 分")
+
+def kg_trade(t, i, msg):
+    g = t["g"]; sd = g["sd"][i]; ev = kg_event(g)
+    give, get = msg.get("give"), msg.get("get")
+    if not kg_is_res(give) or not kg_is_res(get) or give == get or sd["traded"] or ev == "notrade":
+        return False
+    rate = 2 if (ev == "tradewind" or kg_has(sd, "trade")) else 3
+    if sd["res"][give] < rate or g["sup"][get] < 1:
+        return False
+    sd["res"][give] -= rate
+    sd["res"][get] += 1
+    g["sup"][give] += rate
+    g["sup"][get] -= 1
+    sd["traded"] = True
+    tbl_log(t, f"{t['seats'][i]['name']} 用 {give}×{rate} 換了 1 個 {get}")
+    return True
+
+def kg_block(t, i, msg):
+    g = t["g"]; sd = g["sd"][i]
+    tier, idx, pay = msg.get("tier"), msg.get("i"), msg.get("pay")
+    if tier not in (1, 2, 3) or type(tier) is not int or type(idx) is not int or not 0 <= idx <= 3 or sd["blk_used"]:
+        return False
+    cid = g["mkt"][tier][idx]
+    if cid is None or kg_blocked(g, cid):
+        return False
+    free = kg_event(g) == "marketday"
+    if not free:
+        if not kg_is_res(pay) or sd["res"][pay] < 1:
+            return False
+        sd["res"][pay] -= 1
+        g["sup"][pay] += 1
+    sd["block"] = cid
+    sd["blk_used"] = True
+    tbl_log(t, f"{t['seats'][i]['name']} 封鎖了一張 {tier} 階牌")
+    return True
+
+def kg_start(t):
+    d, n, now = kg_data(), len(t["seats"]), int(time.time() * 1000)
+    raw = d["raw"]
+    decks = {tier: [c["id"] for c in raw["buildings"] if c["tier"] == tier] for tier in (1, 2, 3)}
+    for tier in decks:
+        random.shuffle(decks[tier])
+    people = [c["id"] for c in raw["people"]]
+    random.shuffle(people)
+    wonders = [c["id"] for c in raw["wonders"]]
+    random.shuffle(wonders)
+    evdeck = list(raw["eventDeck"])
+    random.shuffle(evdeck)
+    objs = random.sample(raw["objectives"], 3)
+    start = random.randrange(n)
+    g = {"sup": {r: KG_SUP[n] for r in KG_RES}, "gold": 5, "decks": decks, "mkt": {1: [None] * 4, 2: [None] * 4, 3: [None] * 4}, "ppl": people, "pmkt": [None] * 3,
+         "wond": wonders[:4], "evdeck": evdeck, "round": 1, "endr": None, "passes": 0, "start": start, "deadline": now + KG_TURN_MS,
+         "obj": [{"id": o["id"], "name": o["name"], "text": o["text"], "k": o["k"], "by": None} for o in objs], "sd": [kg_new_sd() for _ in range(n)]}
+    kg_refill(g)
+    t["g"], t["result"], t["phase"], t["turn"] = g, None, "playing", start
+    for s in t["seats"]:
+        s["ready"], s["left"] = False, False
+    tbl_log(t, f"列島建國開始！{n} 人參加，{t['seats'][start]['name']} 先手")
+
+def kg_round_end(t):
+    """一輪結束（輪回先手）：結算事件的輪末效果；有人到 25 分的那一輪結束就結束遊戲。"""
+    g, ev = t["g"], kg_event(t["g"])
+    live = [k for k, s in enumerate(g["sd"]) if not s["done"]]
+    def drop_one(sd):
+        r = max(KG_RES, key=lambda x: sd["res"][x])
+        if sd["res"][r] > 0:
+            sd["res"][r] -= 1
+            g["sup"][r] += 1
+        elif sd["gold"] > 0:
+            sd["gold"] -= 1
+            g["gold"] += 1
+    if ev == "tax":
+        for k in live:
+            while kg_total(g["sd"][k]) > 7:
+                drop_one(g["sd"][k])
+        tbl_log(t, "稅收：資源超過 7 張的人丟到 7 張")
+    elif ev == "pirates" and live:
+        top = max(kg_total(g["sd"][k]) for k in live)
+        if top > 0:
+            for k in live:
+                if kg_total(g["sd"][k]) == top:
+                    for _ in range(2):
+                        drop_one(g["sd"][k])
+            tbl_log(t, "海盜來襲：資源最多的人丟了 2 張")
+    for s in g["sd"]:
+        s["firstbld"] = False
+    if g["endr"] is not None:
+        kg_finish(t)
+        return
+    g["round"] += 1
+
+def kg_advance(t, frm, now):
+    g, n = t["g"], len(t["seats"])
+    if sum(1 for s in g["sd"] if not s["done"]) < 2 or g["passes"] >= sum(1 for s in g["sd"] if not s["done"]):
+        kg_finish(t)
+        return
+    for k in range(1, n + 1):
+        j = (frm + k) % n
+        sd = g["sd"][j]
+        if sd["done"]:
+            continue
+        if (j - g["start"]) % n <= (frm - g["start"]) % n:   # 輪回先手＝一輪結束
+            kg_round_end(t)
+            if t["phase"] != "playing":
+                return
+        t["turn"], g["deadline"] = j, now + KG_TURN_MS
+        sd["block"], sd["traded"], sd["blk_used"] = None, False, False
+        return
+    kg_finish(t)
+
+def kg_end_turn(t, i, now):
+    g = t["g"]
+    g["sd"][i]["idle"] = 0
+    if kg_vp(g, i) >= KG_WIN_VP and g["endr"] is None:
+        g["endr"] = g["round"]
+        tbl_log(t, f"{t['seats'][i]['name']} 達到 {KG_WIN_VP} 分！這一輪結束後比分")
+    kg_advance(t, i, now)
+
+def kg_act(t, cid, msg, now):
+    """回 True＝動作成立（狀態有變）。主要動作（拿／保留／建造／過）做完換下一位；交易與封鎖不換人。"""
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    if t["game"] != "kingdom" or role != "seat" or t["phase"] != "playing" or i != t["turn"] or not g or g["sd"][i]["done"]:
+        return False
+    a = msg.get("a")
+    if a == "kx":
+        return kg_trade(t, i, msg)
+    if a == "kk":
+        return kg_block(t, i, msg)
+    if a == "kp":
+        g["passes"] += 1
+        tbl_log(t, f"{t['seats'][i]['name']} 跳過")
+    elif a == "kt" and kg_take(t, i, msg) or a == "kr" and kg_reserve(t, i, msg) or a == "kb" and kg_build(t, i, msg):
+        g["passes"] = 0
+    else:
+        return False
+    kg_end_turn(t, i, now)
+    return True
+
+def kg_timeout(t, now):
+    """回合限時到了：自動拿資源（拿不了就跳過）；連續超時 KG_IDLE_MAX 次視為棄權。"""
+    g = t.get("g")
+    if t["game"] != "kingdom" or t["phase"] != "playing" or not g or now < g["deadline"] - 300:
+        return
+    i = t["turn"]
+    sd = g["sd"][i]
+    sd["idle"] += 1
+    if sd["idle"] >= KG_IDLE_MAX:
+        sd["done"], sd["forfeit"] = True, True
+        tbl_log(t, f"{t['seats'][i]['name']} 連續超時，視為棄權")
+        kg_advance(t, i, now)
+        return
+    tbl_log(t, f"{t['seats'][i]['name']} 超時")
+    avail = [r for r in KG_RES if g["sup"][r] > 0]
+    random.shuffle(avail)
+    idle = sd["idle"]
+    if not kg_take(t, i, {"a": "kt", "r": avail[:min(3, len(avail))]}):
+        g["passes"] += 1
+    else:
+        g["passes"] = 0
+    sd["idle"] = idle   # 超時自動動作不重置連續超時計數
+    kg_end_turn_keep_idle(t, i, now)
+
+def kg_end_turn_keep_idle(t, i, now):
+    g = t["g"]
+    idle = g["sd"][i]["idle"]
+    kg_end_turn(t, i, now)
+    g["sd"][i]["idle"] = idle
+
+def kg_leave(t, i, now):
+    """進行中有人離開：離開者視同棄權，其餘人繼續；剩不到 2 人就結束。"""
+    s, g = t["seats"][i], t["g"]
+    if s.get("left"):
+        return
+    s["left"], s["cid"] = True, None
+    g["sd"][i]["done"] = True
+    tbl_log(t, f"{s['name']} 離開了")
+    if sum(1 for d in g["sd"] if not d["done"]) < 2:
+        kg_finish(t)
+    elif i == t["turn"]:
+        kg_advance(t, i, now)
+
+def kg_finish(t):
+    g = t["g"]
+    n = len(t["seats"])
+    players = [{"name": s["name"], "vp": kg_vp(g, k), "bld": len(g["sd"][k]["bld"]), "ppl": len(g["sd"][k]["ppl"]), "won": len(g["sd"][k]["won"]),
+                "res": kg_total(g["sd"][k]), "left": bool(s.get("left")), "forfeit": bool(g["sd"][k]["forfeit"])} for k, s in enumerate(t["seats"])]
+    elig = [k for k in range(n) if not players[k]["left"] and not players[k]["forfeit"]]
+    key = lambda k: (players[k]["vp"], -players[k]["bld"], players[k]["res"])
+    winners = [k for k in elig if key(k) == max(key(x) for x in elig)] if elig else []
+    stay = [(k, s) for k, s in enumerate(t["seats"]) if not s.get("left")]
+    xp = [KG_XP if len(elig) >= 2 and not players[k]["forfeit"] else 0 for k, s in stay]
+    gs = [gs_mk({**({"w": 1} if k in winners else {}), **({"wond": 1} if players[k]["won"] else {})}, {"vp": players[k]["vp"]})
+          if len(elig) >= 2 and not players[k]["forfeit"] else None for k, s in stay]
+    names = "、".join(players[k]["name"] for k in winners)
+    text = (f"{names} 同分平手（{players[winners[0]]['vp']} 分）" if len(winners) > 1 else f"{names} 獲勝！（{players[winners[0]]['vp']} 分）") if winners else "沒有人達成勝利條件"
+    t["seats"] = [s for _k, s in stay]
+    t["result"] = {"text": text, "rid": random.getrandbits(32), "xp": xp, "players": players, "winners": winners, "draw": len(winners) > 1, "gs": gs}
+    tbl_log(t, text)
+    tbl_reset_seats(t)
+    t["g"] = g   # 最後的盤面留著給大家看，到下一局開始才清掉
+
+def kg_view(t, cid, v):
+    g = t["g"]
+    role, i = tbl_find(t, cid)
+    playing = t["phase"] == "playing"
+    sd = [{"res": dict(s["res"]), "gold": s["gold"], "bld": list(s["bld"]), "ppl": list(s["ppl"]), "won": list(s["won"]), "nhand": len(s["hand"]), "block": s["block"],
+           "traded": s["traded"], "blk": s["blk_used"], "bonus": s["bonus"], "vp": kg_vp(g, k), "done": s["done"], "forfeit": s["forfeit"], "idle": s["idle"]}
+          for k, s in enumerate(g["sd"])]
+    v["kg"] = {"sup": dict(g["sup"]), "gold": g["gold"], "mkt": {str(k): list(x) for k, x in g["mkt"].items()}, "deck": {str(k): len(x) for k, x in g["decks"].items()},
+               "pmkt": list(g["pmkt"]), "pdeck": len(g["ppl"]), "wond": list(g["wond"]), "ev": kg_event(g), "next": kg_event(g, 1), "round": g["round"], "endr": g["endr"],
+               "start": g["start"], "obj": [{"id": o["id"], "name": o["name"], "text": o["text"], "by": o["by"]} for o in g["obj"]], "sd": sd,
+               "hand": list(g["sd"][i]["hand"]) if role == "seat" and i < len(g["sd"]) else [], "deadline": g["deadline"] if playing else 0, "sn": int(time.time() * 1000)}
+    if playing:
+        for k, s in enumerate(t["seats"]):
+            v["seats"][k]["left"] = bool(s.get("left"))
 
 # ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：2～4 人、正六邊形的三角格棋盤（邊長 9，共 486 格）、每人 22 塊（1～6 個三角形，共 110 格）----
 # 規則與座標系說明見 worker/src/index.js 的 tg*（同一套）：三角形 (x, y)、(x + y) 偶數＝朝上；頂點是格點 (i, j)；方向轉換用軸座標 ((i − j) / 2, j)。
@@ -4381,7 +4882,7 @@ def hk_end(t, cid, msg):
         return
     hk_finish(t, sa, sb, "" if sa >= HK_GOALS or sb >= HK_GOALS else "時間到")
 
-GAME_START = {"arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+GAME_START = {"kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
@@ -4481,6 +4982,8 @@ def tbl_view(t, cid):
             for k, s in enumerate(t["seats"]):
                 v["seats"][k]["left"] = bool(s.get("left"))
                 v["seats"][k]["rem"] = tg_rem(g, k)
+    elif g and t["game"] == "kingdom":   # 列島建國：整個盤面公開（市場、資源、各人的王國），只有自己保留的牌看得到內容
+        kg_view(t, cid, v)
     elif g and t["game"] == "blokus":   # Blokus：棋盤（400 個字元：0 空／1～4 顏色）、各座位顏色、每人用掉的方塊、最後一手、期限（sn＝伺服器現在時間，客戶端對時用）；全部公開
         v["bk"] = {"size": bk_size(g), "start": [list(bk_start_of(g, k)) for k in range(len(g["col"]))], "board": "".join(str(c) for c in g["board"]), "col": list(g["col"]), "used": [list(d["used"]) for d in g["sd"]], "done": [d["done"] for d in g["sd"]],
                    "last": g["last"], "moves": g["moves"], "deadline": g["deadline"] if playing else 0, "sn": int(time.time() * 1000)}
@@ -5861,8 +6364,13 @@ class Room:
                         un_say(t, cid)
                     elif a == "catch":
                         un_catch(t, cid)
+                    elif a in ("kt", "kr", "kb", "kx", "kk", "kp"):   # 列島建國：拿資源／保留／建造／交易／封鎖／跳過
+                        if not kg_act(t, cid, msg, now_ms):
+                            return out, None, None
                     elif a == "timeout":   # UNO／Blokus：回合限時到了（伺服器核對時鐘）
-                        if t["game"] == "blokus":
+                        if t["game"] == "kingdom":
+                            kg_timeout(t, now_ms)
+                        elif t["game"] == "blokus":
                             bk_timeout(t, now_ms)
                         elif t["game"] == "trigon":
                             tg_timeout(t, now_ms)

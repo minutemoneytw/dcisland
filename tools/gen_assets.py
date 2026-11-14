@@ -1440,7 +1440,7 @@ ROOM_BOX = {"peace": [23, 16, 84, 55]}
 # cell＝左上角格、w／h＝占幾格（圖 48×32 以 scale 2 畫＝3×2 格）。桌子是島上固定物件，不是可擺設的家具
 # 桌子格子（2026-11-14，使用者要求）：第 (x, y) 格（x 往右、y 往下）的左上角格＝TBL_X0 + TBL_DX × x、TBL_Y0 + TBL_DY × y。
 # 間距縮成原本的 2/3（原本 DX＝8、DY＝7 → 16/3、14/3；只動這 9 張格子桌，空氣曲棍球、俄羅斯方塊機台、夾娃娃機等不動），
-# 原本的第 3 欄移到第 4 欄、第 2 欄移到第 3 欄，第 2 欄空著（之後放新遊戲）；格子座標有小數（取到小數 2 位，客戶端本來就吃小數）。
+# 原本的第 3 欄移到第 4 欄、第 2 欄移到第 3 欄，第 2 欄只留列島建國（2.0）；格子座標有小數（取到小數 2 位，客戶端本來就吃小數）。
 TBL_X0, TBL_Y0, TBL_DX, TBL_DY = 48, 32, 16 / 3, 14 / 3
 
 def tbl_cell(x, y):
@@ -1455,6 +1455,7 @@ TABLES_BY_TERRAIN = {
               dict(id="t8", game="intel", cell=tbl_cell(1, 0), w=3, h=2),      # (1,0) 秘藥情報戰（2026-11-10，使用者要求）
               dict(id="t11", game="blokus", cell=tbl_cell(1, 1), w=3, h=2),    # (1,1) Blokus（2026-11-13，使用者要求）
               dict(id="t12", game="trigon", cell=tbl_cell(1, 2), w=3, h=2),    # (1,2) Blokus Trigon（2026-11-13，使用者要求）
+              dict(id="t17", game="kingdom", cell=tbl_cell(2, 0), w=3, h=2),   # (2,0) 列島建國（2026-11-14，使用者要求；一度放 (2,1)，同日改到 (2,0)）
               dict(id="t10", game="mage", cell=tbl_cell(3, 0), w=3, h=2),      # (3,0) 見習驅魔師（2026-11-12，使用者要求；原本在第 2 欄）
               dict(id="t5", game="dodge", cell=tbl_cell(3, 1), w=3, h=2),      # (3,1) 躲彈幕只有一桌（2026-11-08，使用者要求）
               dict(id="t14", game="maze", cell=tbl_cell(3, 2), w=3, h=2),      # (3,2) 豆豆迷宮（2026-11-13，使用者要求）
@@ -1714,6 +1715,24 @@ def table_mage():
     cv.rect(37, 16, 41, 21, hx("#6ab8ff")); cv.rect(37, 16, 41, 16, hx("#d8f0ff"))
     cv.rect(39, 17, 39, 20, hx("#ffffff")); cv.rect(38, 18, 40, 18, hx("#ffffff"))
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))                                 # 桌腳
+    cv.outline()
+    return cv
+
+def table_kingdom():
+    """列島建國：木桌（有桌腳），桌面是一片海藍底，中間一座小島（綠地上有小城堡），旁邊散著幾張卡牌和資源方塊（木／石／魚／鐵四色）。"""
+    cv = Canvas(48, 32)
+    wood = hx("#7a5230")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
+    cv.rect(2, 6, 45, 25, hx("#2c6aa8"))                                   # 海
+    cv.ellipse(24, 15, 9, 6, hx("#5aa84a")); cv.ellipse(24, 14, 7, 4.5, hx("#6cc058"))   # 島
+    cv.rect(20, 11, 27, 16, hx("#c8c0b0")); cv.rect(20, 11, 27, 11, hx("#e8e0d0"))       # 城牆
+    for x in (20, 23, 26): cv.rect(x, 9, x + 1, 11, hx("#d8d0c0"))                       # 城垛
+    cv.rect(23, 13, 24, 16, hx("#5a3a20"))                                               # 城門
+    for k, (x, y, c) in enumerate(((4, 8, "#f4ecd0"), (8, 10, "#f0d890"), (36, 18, "#f4ecd0"), (40, 16, "#e8c870"))):   # 卡牌
+        cv.rect(x, y, x + 4, y + 6, hx(c)); cv.rect(x, y, x + 4, y, shade(hx(c), 1.15)); cv.rect(x, y + 6, x + 4, y + 6, shade(hx(c), .7)); cv.set(x + 2, y + 3, hx("#a8743f"))
+    for x, y, c in ((6, 20, "#a9743f"), (9, 21, "#8d939b"), (12, 20, "#4aa8d8"), (39, 9, "#c0603a"), (42, 10, "#a9743f"), (36, 8, "#8d939b")):   # 資源方塊
+        cv.rect(x, y, x + 2, y + 2, hx(c)); cv.hline(x, x + 2, y, shade(hx(c), 1.4)); cv.hline(x, x + 2, y + 2, shade(hx(c), .65))
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
 
@@ -3525,6 +3544,7 @@ def main():
     save(table_maze(), "table_maze.png", "games")
     save(table_hockey(), "table_hockey.png", "games")
     save(table_blokus(), "table_blokus.png", "games")
+    save(table_kingdom(), "table_kingdom.png", "games")
     save(table_trigon(), "table_trigon.png", "games")
     for k, col in enumerate(ARCADE_COLORS):
         save(arcade_cabinet(col), f"arcade_{k}.png", "games")

@@ -530,3 +530,61 @@ body {
 #buffBar .buff.bad { border-color: #d05050; }
 #buffBar .bi { font-size: 16px; line-height: 1; }
 #buffBar .bt { position: absolute; right: 1px; bottom: -1px; font-size: 10px; font-weight: bold; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+
+/* ---------- 列島建國（第十七桌 t17；2026-11-14）：卡面用文字＋顏色 ---------- */
+.kg-top { display: flex; gap: 6px; margin: 4px 0; align-items: stretch; }   /* 事件（左）＋共同目標（右）併一列，省高度（2026-11-14 使用者嫌畫面太高） */
+.kg-events { display: flex; flex-direction: column; gap: 3px; flex: 0 0 270px; }
+.kg-ev { flex: 1; font-size: 11px; line-height: 1.35; padding: 3px 6px; border: 1px solid rgba(255, 255, 255, .15); background: rgba(255, 255, 255, .04); color: var(--text); }
+.kg-ev.now { border-color: var(--gold-dim); color: #ffe08a; }
+.kg-ev.next { color: var(--text-dim); }
+.kg-ev.end { flex: none; border-color: #ff8a6a; color: #ff9a7a; }
+.kg-objs { display: flex; gap: 6px; flex: 1; min-width: 0; }
+.kg-obj { flex: 1; min-width: 0; font-size: 11px; line-height: 1.3; padding: 3px 6px; border: 1px solid var(--gold-dim); background: rgba(232, 192, 48, .06); color: var(--text); }
+.kg-obj b { display: block; color: var(--gold); }
+.kg-obj.done { opacity: .5; border-style: dashed; }
+.kg-obj-by { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.kg-main { display: flex; gap: 8px; margin: 4px 0; align-items: flex-start; }
+.kg-market { flex: 1 1 auto; min-width: 0; }
+.kg-side { flex: 0 0 200px; display: flex; flex-direction: column; gap: 3px; }
+.kg-row { display: flex; gap: 4px; margin-bottom: 3px; align-items: stretch; }
+.kg-deck { flex: 0 0 34px; display: flex; align-items: center; justify-content: center; text-align: center; white-space: pre-line; font-size: 11px; line-height: 1.3; color: var(--text-dim); background: repeating-linear-gradient(45deg, #2a3350, #2a3350 4px, #333d60 4px, #333d60 8px); border: 1px solid #4a5478; border-radius: 3px; }
+.kg-deck.pick { cursor: pointer; outline: 2px solid #ffe08a; color: #ffe08a; }
+.kg-deck.pick:hover { transform: translateY(-2px); }
+.kg-card { position: relative; flex: 1 1 0; min-width: 0; min-height: 54px; padding: 3px 4px; box-sizing: border-box; font-size: 11px; line-height: 1.3; color: var(--text); background: rgba(246, 242, 230, .08); border: 1px solid rgba(255, 255, 255, .2); border-left: 4px solid #666; border-radius: 3px; cursor: pointer; }
+.kg-card.empty { background: transparent; border-style: dashed; cursor: default; opacity: .35; }
+.kg-side .kg-card { flex: none; min-height: 0; }
+.kg-card.kp { border-left-color: #c8a0f0; }
+.kg-card.kw { border-left-color: #ffd070; background: rgba(255, 208, 112, .1); }
+.kg-card.t3 { background: rgba(255, 224, 138, .1); }
+.kg-card.afford { border-color: #6adf8a; box-shadow: 0 0 5px rgba(106, 223, 138, .45); }
+.kg-card.sel { outline: 2px solid #ffe08a; transform: translateY(-2px); }
+.kg-card.blocked { opacity: .55; }
+.kg-ct { display: flex; align-items: center; gap: 4px; }
+.kg-cn { flex: 1; font-weight: bold; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kg-gv { display: inline-block; width: 16px; height: 16px; line-height: 16px; text-align: center; font-size: 10px; color: #111; font-weight: bold; border-radius: 3px; }
+.kg-vp { display: inline-block; min-width: 16px; height: 16px; line-height: 16px; text-align: center; font-size: 11px; font-weight: bold; color: #1a1612; background: #ffd070; border-radius: 8px; }
+.kg-chips { display: inline-flex; flex-wrap: wrap; gap: 2px; margin-top: 2px; }
+.kg-chip { padding: 0 4px; font-size: 11px; line-height: 16px; font-weight: bold; color: #111; border-radius: 3px; }
+.kg-fx { font-size: 10px; line-height: 1.25; color: #cfe0ff; margin-top: 2px; }
+.kg-lock { position: absolute; right: 3px; bottom: 2px; font-size: 10px; color: #ffb0a0; }
+.kg-supply { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+.kg-res { font-size: 12px; padding: 2px 9px; color: var(--text); background: rgba(255, 255, 255, .06); border: 2px solid #666; border-radius: 4px; cursor: pointer; }
+.kg-res.on { background: rgba(255, 224, 138, .25); }
+.kg-res:disabled { opacity: .4; cursor: default; }
+.kg-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0; padding: 4px 8px; border: 1px solid var(--gold-dim); background: rgba(255, 224, 138, .06); }
+.kg-selname { color: #ffe08a; font-size: 13px; }
+.kg-trade select { margin: 0 4px; background: #1a1d28; color: var(--text); border: 1px solid #555; }
+.kg-drop { margin: 6px 0; padding: 6px 8px; border: 1px solid #ff9a7a; background: rgba(255, 138, 106, .08); }
+.kg-boards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 6px; margin: 6px 0; }
+.kg-board { padding: 4px 6px; border: 1px solid var(--gold-dim); background: rgba(255, 255, 255, .03); }
+.kg-board.you { border-color: var(--gold); }
+.kg-board.turn { border-color: #ffe08a; box-shadow: 0 0 8px rgba(255, 224, 138, .5); }
+.kg-board.out { opacity: .55; }
+.kg-bn { font-size: 13px; color: var(--text); display: flex; justify-content: space-between; margin-bottom: 1px; }
+.kg-bvp { color: #ffd070; font-weight: bold; }
+.kg-brow { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; margin-top: 2px; }
+.kg-mini { font-size: 11px; padding: 0 5px; border: 1px solid rgba(255, 255, 255, .2); border-left: 3px solid #c8a0f0; background: rgba(255, 255, 255, .05); color: var(--text); }
+.kg-hand { margin-top: 4px; display: flex; flex-direction: column; gap: 3px; }
+.kg-log { max-height: 56px; }
+.kg-hand .kg-card { flex: none; }
+@media (max-width: 760px) { .kg-main { flex-direction: column; } .kg-side { flex: none; width: 100%; } .kg-top, .kg-objs { flex-direction: column; } .kg-events { flex: none; } }
