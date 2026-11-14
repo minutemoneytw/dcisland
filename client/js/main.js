@@ -6,6 +6,17 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
+// 把遊戲畫面（canvas）的實際上緣寫進 CSS 變數 --stage-top（2026-11-14 使用者要求自動讀取）：左上的武器列／增減益／角色、外觀、換色面板都照它排（見 style.css 的 #app）。
+// 頂部列（#topbar）怎麼改高改矮、字型載入後換行，都會自動跟著；style.css 裡寫的 75px 只是第一幀的預設值
+function syncStageTop() {
+  const app = canvas.offsetParent;   // #app（position: relative）
+  if (!app) return;
+  app.style.setProperty('--stage-top', canvas.offsetTop + 'px');
+}
+syncStageTop();
+window.addEventListener('resize', syncStageTop);
+if (window.ResizeObserver) { const tb = document.getElementById('topbar'); if (tb) new ResizeObserver(syncStageTop).observe(tb, { box: 'border-box' }); }   // border-box：連內距、邊框改變也算（預設只看內容區）
+
 // ---------------- 工具 ----------------
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -605,8 +616,8 @@ function doAttack(auto, wx, wy) {   // wx,wy：滑鼠點的世界座標（F 鍵�
   if (S.t < (p.petUntil ?? 0)) { if (!quiet) say('被石化了，動彈不得', 1200); return; }   // 石化：不能揮擊／採集／互動（長按時不重複提示）
   if (p.fish) { if (!quiet) fishAction(); S._hits = 1; return; }   // 釣魚中：F／點擊＝收竿或拉竿，不做別的事
   if (p.pose) {   // 坐著/睡著不能揮擊；按 F（不是長按的自動重複）就起身
-    if (auto && !quiet) { standUp(p); S.holdSkipF = true; }
-    return;
+    if (auto && !quiet) { standUp(p); S.holdSkipF = true; return; }
+    if (!(p.pose === 'sit' && isRod() && !auto)) return;   // 例外（2026-11-14 使用者要求）：坐在椅子上、拿著釣竿、用滑鼠點水面＝可以拋竿（躺床不行；F 仍是起身）
   }
   if (auto) {   // F 鍵：前方有可破壞物件就自動用對應工具
     // 島主在揮擊範圍內就優先打牠：採集／座位／NPC 都讓位（島主常駐重生點，旁邊一堆家具，按 F 不該變成坐下）
@@ -952,10 +963,13 @@ const JOBS = {};          // boot() 由 jobs.json 填
 const JOB_SKILLS = {};    // 職業技能（1／2 鍵），見下方「職業技能」
 let JOB_LEGACY = {};      // 舊存檔／舊客戶端的職業 id（tank／healer／dps）→ 新職業 id
 const DEFAULT_JOB = 'ninja';
-const jobIdOf = id => JOBS[id] ? id : (JOBS[JOB_LEGACY[id]] ? JOB_LEGACY[id] : null);
+const jobIdOf = id => (JOBS[id] && !JOBS[id].hidden) ? id : (JOBS[JOB_LEGACY[id]] ? JOB_LEGACY[id] : null);   // 隱藏的職業（jobs.json 的 hidden）也照 legacy 轉成 replaceWith 指定的職業
 function loadJobs(db) {
-  JOB_LEGACY = db?.legacy || {};
-  for (const j of db?.jobs || []) if (ROLES[j.role]) JOBS[j.id] = { ...ROLES[j.role], ...j, roleName: ROLES[j.role].name, color: ROLES[j.role].color };
+  JOB_LEGACY = { ...(db?.legacy || {}) };
+  for (const j of db?.jobs || []) if (ROLES[j.role]) {
+    JOBS[j.id] = { ...ROLES[j.role], ...j, roleName: ROLES[j.role].name, color: ROLES[j.role].color };
+    if (j.hidden) JOB_LEGACY[j.id] = j.replaceWith || DEFAULT_JOB;   // 暫時隱藏（2026-11-14）：不列在職業選單；存檔裡或別人封包裡是這個職業的，一律當成 replaceWith（沒寫＝預設職業）
+  }
 }
 const ALWAYS_WEAPONS = ['hands', 'rod'];   // 所有職業都能用的武器（空手、釣竿）；其餘只有職業武器
 const weaponAllowed = (job, id) => ALWAYS_WEAPONS.includes(id) || JOBS[job]?.weapon === id;
@@ -2991,7 +3005,7 @@ function rodFrameNow(p) {
 }
 function charFrame(p) {
   const F = S.avatar.frames, st = F.states;
-  if (p.pose) return { fi: (st.sit || st.down_idle)[0], mirror: false };
+  if (p.pose && !(p.pose === 'sit' && p.fish)) return { fi: (st.sit || st.down_idle)[0], mirror: false };   // 坐著釣魚時照常播釣魚動作的幀（「坐姿」本來就只是站姿待機幀、人被椅子擋住下半身）
   const mode = p.moving ? 'walk' : 'idle', d = d8Of(p);
   const rk = rodFrameNow(p), rl = rk != null && st[`rod_${d}`];
   if (rl) return { fi: rl[rk], mirror: false };
@@ -3133,7 +3147,14 @@ function stepPlayer(p, dt) {
   if (p.pose) {   // 坐/睡：不動；按移動鍵或跳躍就起身（也會一路走出去），家具被拿走也會起身
     const wantsMove = keys['a'] || keys['arrowleft'] || keys['d'] || keys['arrowright'] || keys['w'] || keys['arrowup'] || keys['s'] || keys['arrowdown'] || keys[' '];
     if (!seatItem(p) || wantsMove) standUp(p);
-    else { p.moving = false; p.frame = 0; p.z = 0; p.vz = 0; return; }
+    else {
+      p.moving = false; p.frame = 0; p.z = 0; p.vz = 0;
+      if (p.fish) {   // 坐著釣魚（2026-11-14 使用者要求）：等魚／上鉤／拉竿照常推進；換掉釣竿、進裝飾模式、被石化就收竿
+        if (S.mode !== 'walk' || S.t < (p.petUntil ?? 0) || (p === S.players[0] && !isRod())) stopFishing(p);
+        stepFishing(p);
+      }
+      return;
+    }
   }
   if (stepLeap(p)) return;   // 龍騎士的高跳／後跳中
   if (p.knock) {   // 被鋼鐵擊飛：0.25 秒內往外推（撞到水邊／家具就停），期間不能自己走
@@ -3750,7 +3771,7 @@ function drawPerson(p, wi, nameColor) {
     p.rodJit = p.fish?.ph === 'reel' && rodFrameNow(p) != null ? Math.round(Math.sin(S.t * 30)) : 0;   // 拉竿：竿子往後拉住、整個人左右抖 1px（原本拉竿時竿尖抖動的感覺）
     ctx.save(); ctx.translate(p.x + p.rodJit, p.y - p.z);
     // 武器（背在背上／掛在腰間；揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
-    const fish = wi && !pose && p.fish ? p.fish : null;
+    const fish = wi && (!pose || (pose === 'sit' && p.fish)) && p.fish ? p.fish : null;
     const carry = wi && !pose && !fish && !(p.swing > 0) && !p.cast;   // 不拿在手上（詠唱中高舉法杖）
     const backView = d8Of(p).startsWith('up');                // 背面（往上、斜上）：背著的武器疊在身體上面，其餘方向被身體擋住
     // 掛著的武器畫在左右翻轉之外：固定在同一側，人物轉向時不會跟著換邊
@@ -9626,6 +9647,7 @@ function buildAvatarPanel() {
   // 職業：jobs.json（職能＝圓點顏色；滑鼠停留顯示職能說明）
   const jb = $('jobOpts'); jb.innerHTML = '';
   for (const id of Object.keys(JOBS)) {
+    if (JOBS[id].hidden) continue;   // 暫時隱藏的職業不列
     const jd = JOBS[id], o = document.createElement('div');
     o.className = 'opt name' + (S.me.job === id ? ' sel' : '');
     o.textContent = jd.name; o.title = `${jd.roleName}：${jd.desc}`;
@@ -10005,7 +10027,7 @@ function clickAttack(wx, wy) {
     const n = npcAt(wx, wy);
     if (n) { talkTo(n); return; }                // 點 NPC：跟他說話（不是攻擊）
   }
-  if (S.players[0].pose) return;                 // 坐著/睡著不能揮擊
+  if (S.players[0].pose && !(S.players[0].pose === 'sit' && isRod())) return;   // 坐著/睡著不能揮擊（例外：坐椅子拿釣竿可以點水面拋竿）
   if (S.players[0].dead) {                       // 死亡（墓碑）：不能攻擊，長按時不重複提示
     if (!quiet) toast('你在墓碑裡動不了', 1400);
     return;

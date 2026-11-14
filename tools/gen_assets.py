@@ -2389,11 +2389,11 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/deer_sheet.png", frames=4, rows=4, fw=64, fh=96, what="鹿的 4 方向（下／左／右／上）× 4 幀走路（草島）"),
     dict(sheet="external/img2pixel/cat_sheet.png", frames=3, rows=3, fw=32, fh=32, what="貓的 3 方向（上／下／左）× 3 幀走路（和平島；白貓原色，靠 tint 可換色）"),
     dict(sheet="external/img2pixel/dog_sheet.png", frames=3, rows=3, fw=32, fh=32, what="狗的 3 方向（上／下／左）× 3 幀走路（和平島；白狗原色，靠 tint 可換色）"),
-    dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64, what="野豬的 4 方向（上／左／下／右）× 3 幀走路（森林島）"),
+    dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64, what="野豬的 4 方向（上／右／下／左）× 3 幀走路（森林島）"),
     dict(sheet="external/img2pixel/bear_sheet.png", frames=4, rows=4, fw=64, fh=64, what="白熊的 4 方向（下／右／上／左）× 4 幀走路（雪島；原圖三色只取白熊那一區）"),
     dict(sheet="external/img2pixel/bat_sheet.png", frames=4, fw=32, fh=32, what="蝙蝠的正面拍翅 4 幀（夜光島；單列，左右靠鏡像）"),
-    dict(sheet="external/img2pixel/imp_sheet.png", frames=4, rows=4, fw=64, fh=64, what="小惡魔的 4 方向（下／上／左／右）× 4 幀走路（熔岩島）"),
-    dict(sheet="external/img2pixel/golem_sheet.png", frames=7, rows=3, fw=64, fh=64, what="魔像的 3 方向（下／右／左）× 7 幀走路（機械島；沒有背面，朝上用正面鏡像）"),
+    dict(sheet="external/img2pixel/imp_sheet.png", frames=4, rows=4, fw=64, fh=64, what="小惡魔的 4 方向（下／上／右／左）× 4 幀走路（熔岩島）"),
+    dict(sheet="external/img2pixel/golem_sheet.png", frames=7, rows=3, fw=64, fh=64, what="魔像的 3 方向（下／左／右）× 7 幀走路（機械島；沒有背面，朝上用正面鏡像）"),
     dict(sheet="external/img2pixel/campfire_sheet.png", frames=8, fw=32, fh=32, what="營火 8 幀（世界物件，不是動物：main.js 直接載入，不經 manifest）"),
     dict(sheet="external/img2pixel/fireball_sheet.png", frames=8, fw=64, fh=64, what="飛龍火球的 8 幀（特效投射物，不是動物：main.js 直接載入，不經 manifest）"),
     dict(sheet="external/img2pixel/fireball_burst.png", frames=12, fw=32, fh=32, what="火球命中爆炸的 12 幀（特效，不是動物：main.js 直接載入，不經 manifest）"),
@@ -2581,7 +2581,7 @@ MOB_MANIFEST = dict(
         # 野豬（森林島）：夜行＋主動攻擊（2026-11-14 使用者定：夜晚出現的一律主動）——白天看不到，入夜才出來拱人
         dict(id="boar", name="野豬", lv=25, night=True, aggro=170, speed=30, flee=85, retaliate=True, noBounce=True,
              anim=dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64,
-                       rowDir=["up", "left", "down", "right"], fps=6, scale=0.8),   # 格內實際內容側視 55×30／正面 21×47，畫面側視約 44×24（2026-11-13 使用者定「比羊大隻」——羊約 30×26；原 0.55 側視只有 30×16.5 反而比羊小）
+                       rowDir=["up", "right", "down", "left"], fps=6, scale=0.8),   # 2026-11-14 修正左右（第 2 列面向右、第 4 列面向左，原本寫反）；格內實際內容側視 55×30／正面 21×47，畫面側視約 44×24（2026-11-13 使用者定「比羊大隻」——羊約 30×26；原 0.55 側視只有 30×16.5 反而比羊小）
              line="「野豬」磨了磨獠牙，從鼻子裡哼出一團白氣。"),
         # 白熊（雪島）：反擊型、血厚慢速
         dict(id="bear_snow", name="白熊", lv=35, speed=26, flee=90, retaliate=True, noBounce=True,
@@ -2597,12 +2597,12 @@ MOB_MANIFEST = dict(
         # 小惡魔（熔岩島）：夜行怪＋主動攻擊（2026-11-14 使用者定）——入夜才現身的下位惡魔，會主動撲向玩家
         dict(id="imp_volcano", name="小惡魔", lv=55, night=True, aggro=170, speed=40, flee=85, retaliate=True, noBounce=True,
              anim=dict(sheet="external/img2pixel/imp_sheet.png", frames=4, rows=4, fw=64, fh=64,
-                       rowDir=["down", "up", "left", "right"], fps=7, scale=0.6),
+                       rowDir=["down", "up", "right", "left"], fps=7, scale=0.6)   # 2026-11-14 修正左右（第 3 列面向右、第 4 列面向左，原本寫反）,
              line="「小惡魔」朝你彈了個火苗，咯咯咯地笑。"),
         # 魔像（機械島）：夜行怪＋主動攻擊（2026-11-14 使用者定）——白天休眠、入夜啟動的守衛；慢但硬（big=2＝判定圈 46，比一般野生小動物大一號）
         dict(id="golem_machine", name="魔像", lv=65, night=True, aggro=170, big=2, speed=20, flee=80, retaliate=True, noBounce=True,
              anim=dict(sheet="external/img2pixel/golem_sheet.png", frames=7, rows=3, fw=64, fh=64,
-                       rowDir=["down", "right", "left"], fps=6, scale=0.7),
+                       rowDir=["down", "left", "right"], fps=6, scale=0.7)   # 2026-11-14 修正左右（第 2 列面向左、第 3 列面向右，原本寫反）,
              line="「魔像」緩緩轉過頭，關節發出石磨般的聲音。"),
         # 飛龍：夜光島（黑）、熔岩島（原色紅）、沙灘島（沙）。四列都是飛行視角＝上飛／朝右／下飛／朝左（方向網格）；
         # 2026-11-14 使用者定：沙灘島的飛龍＝夜行怪＋主動攻擊（night＋aggro＝射程 250＋lv=15）；夜光島／熔岩島的飛龍維持白天反擊型（ownerFrac=10）。

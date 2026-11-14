@@ -854,9 +854,9 @@
     "fh": 64,
     "rowDir": [
      "up",
-     "left",
+     "right",
      "down",
-     "right"
+     "left"
     ],
     "fps": 6,
     "scale": 0.8
@@ -946,8 +946,8 @@
     "rowDir": [
      "down",
      "up",
-     "left",
-     "right"
+     "right",
+     "left"
     ],
     "fps": 7,
     "scale": 0.6
@@ -977,8 +977,8 @@
     "fh": 64,
     "rowDir": [
      "down",
-     "right",
-     "left"
+     "left",
+     "right"
     ],
     "fps": 6,
     "scale": 0.7
