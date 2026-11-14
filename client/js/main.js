@@ -706,7 +706,8 @@ function pickCastTarget(p, rg, aim) {
 }
 function startCast(p, rg, wx, wy) {
   if (p.cast || S.t - p.lastAtk < ATK_CD) return;
-  if (rg.cast && (p.moving || p.z > 0)) { say('站定才能詠唱'); return; }   // 詠唱時不能移動（移動會中斷）；不用詠唱的弓可以邊走邊射
+  const tr0 = S.fx.triple, free = !!(tr0 && tr0.n > 0 && S.t < tr0.until);   // 三重生效中：這一擊不用詠唱，可以邊走邊丟
+  if (rg.cast && !free && (p.moving || p.z > 0)) { say('站定才能詠唱'); return; }   // 詠唱時不能移動（移動會中斷）；不用詠唱的弓、三重的攻擊可以邊走邊射
   const aim = castAim(wx, wy);
   let a = null;
   const under = aim ? mobUnder(aim[0], aim[1]) : null;   // 游標點在動物身上：就打牠（超出射程不改選別的）
@@ -716,7 +717,7 @@ function startCast(p, rg, wx, wy) {
   } else a = pickCastTarget(p, rg, aim);
   if (!a) { say('射程內沒有目標'); return; }
   const tr = S.fx.triple, instant = !rg.cast;   // cast 0（豎琴弓）＝不用詠唱，直接射
-  if (instant || (tr && tr.n > 0 && S.t < tr.until)) {   // 三重：這一擊不用詠唱
+  if (instant || free) {   // 三重：這一擊不用詠唱
     if (!instant) tr.n--;
     p.lastAtk = S.t; p.swing = 0; p.tool = null; S._hits = 1; p.atkT0 = S.t;
     aimAt(p, a.x, a.y);
@@ -1640,7 +1641,7 @@ Object.assign(JOB_SKILLS, {
               run(me) { return blinkMe(me, this.dist); } },
   circle:   { name: '魔法陣', cd: 40, dur: 15, r: 72, desc: '腳下放一個慢慢自轉的魔法陣（15 秒），站在陣內詠唱時間 −50%',
               run(me) { S.fx.circle = { x: me.x, y: me.y, until: S.t + this.dur, t0: S.t }; return true; } },
-  triple:   { name: '三重', cd: 30, dur: 15, n: 3, desc: '接下來 3 次攻擊不用詠唱（15 秒內有效）',
+  triple:   { name: '三重', cd: 30, dur: 15, n: 3, desc: '接下來 3 次攻擊不用詠唱，可以邊走邊丟（15 秒內有效）',
               run() { S.fx.triple = { n: this.n, until: S.t + this.dur }; fxBurst('triple'); return true; } },
 });
 const jobSkillIds = () => JOBS[S.me.job]?.skills || [];
