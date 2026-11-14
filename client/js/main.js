@@ -3856,7 +3856,14 @@ function seatItemOf(p) {
 // 再把家具那一截重畫在人身上，看起來就是坐在椅子裡（腿被椅面擋住）。seat 參數在 furniture.json（gen_assets.py 的 FURN_SEATS 算出來）
 function drawPerson(p, wi, nameColor) {
   const it = p.pose === 'sit' ? seatItemOf(p) : null, def = it && furnitureDef(it.type), im = it && furnImg(it.type, it.dir);
-  if (!it || !def?.seat || !im || sitReal(p)) { p.seatDrop = 0; drawPersonBase(p, wi, nameColor); return; }   // 沒有座位資料，或有真的 LPC sit 幀就直接畫
+  if (!it || !def?.seat || !im || sitReal(p)) {   // 沒有座位資料，或有真的 LPC sit 幀就直接畫
+    p.seatDrop = 0; drawPersonBase(p, wi, nameColor);
+    if (it && def?.seat && im && (it.dir || 0) === 2 && sitReal(p)) {   // 椅子朝上（背對畫面）：椅背在人前面，把椅背那一截重畫在人身上（不然人整個壓在椅背上，只剩一團頭髮）
+      const rows = im.height - def.seat.back, sc = S.furn.scale || 2, bottom = (it.cell[1] + def.h) * CELL;
+      ctx.drawImage(im.img, 0, def.seat.back, im.fw, rows, it.cell[0] * CELL, bottom - rows * sc, im.width * sc, rows * sc);
+    }
+    return;
+  }
   p.seatDrop = def.seat.drop;
   const from = (it.dir || 0) === 2 ? def.seat.back : def.seat.front, rows = im.height - from;
   const sc = S.furn.scale || 2, bottom = (it.cell[1] + def.h) * CELL, cutY = bottom - rows * sc;
