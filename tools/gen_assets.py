@@ -2585,12 +2585,12 @@ MOB_MANIFEST = dict(
         # 小惡魔（熔岩島）：反擊型（補熔岩島沒有人形反擊怪的洞）
         dict(id="imp_volcano", name="小惡魔", lv=55, speed=40, flee=85, retaliate=True, noBounce=True,
              anim=dict(sheet="external/img2pixel/imp_sheet.png", frames=4, rows=4, fw=64, fh=64,
-                       rowDir=["down", "up", "right", "left"], fps=7, scale=0.6)   # 2026-11-14 修正左右（第 3 列面向右、第 4 列面向左，原本寫反）,
+                       rowDir=["down", "up", "right", "left"], fps=7, scale=0.6),   # 2026-11-14 修正左右（第 3 列面向右、第 4 列面向左，原本寫反）
              line="「小惡魔」朝你彈了個火苗，咯咯咯地笑。"),
         # 魔像（機械島）：反擊型、慢但硬（big=2＝判定圈 46，比一般野生小動物大一號）
         dict(id="golem_machine", name="魔像", lv=65, big=2, speed=20, flee=80, retaliate=True, noBounce=True,
              anim=dict(sheet="external/img2pixel/golem_sheet.png", frames=7, rows=3, fw=64, fh=64,
-                       rowDir=["down", "left", "right"], fps=6, scale=0.7)   # 2026-11-14 修正左右（第 2 列面向左、第 3 列面向右，原本寫反）,
+                       rowDir=["down", "left", "right"], fps=6, scale=0.7),   # 2026-11-14 修正左右（第 2 列面向左、第 3 列面向右，原本寫反）
              line="「魔像」緩緩轉過頭，關節發出石磨般的聲音。"),
         # 飛龍：夜光島（黑）、熔岩島（原色紅）、沙灘島（沙）。四列都是飛行視角＝上飛／朝右／下飛／朝左（方向網格）；
         # swim＝會飛所以能過海；big=5＝判定圈 34+6*(5-1)=58（大隻）；shadow 依體型放大、貼在正下方
