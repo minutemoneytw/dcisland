@@ -1512,9 +1512,9 @@ TABLES_BY_TERRAIN = {
               dict(id="t6", game="uno", cell=tbl_cell(0, 1), w=3, h=2),        # (0,1) UNO（2026-11-08，使用者要求）
               dict(id="t1", game="oldmaid", cell=tbl_cell(0, 2), w=3, h=2),    # (0,2)
               dict(id="t8", game="intel", cell=tbl_cell(1, 0), w=3, h=2),      # (1,0) 秘藥情報戰（2026-11-10，使用者要求）
-              dict(id="t11", game="blokus", cell=tbl_cell(1, 1), w=3, h=2),    # (1,1) Blokus（2026-11-13，使用者要求）
-              dict(id="t12", game="trigon", cell=tbl_cell(1, 2), w=3, h=2),    # (1,2) Blokus Trigon（2026-11-13，使用者要求）
-              dict(id="t18", game="bigtwo", cell=tbl_cell(2, 1), w=3, h=2),   # (2,1) 大老二（2026-11-14，使用者要求：放在牌類桌子附近；在列島建國下面、秘藥情報戰／Blokus 旁邊）
+              dict(id="t11", game="blokus", cell=tbl_cell(2, 1), w=3, h=2),    # (2,1) Blokus（2026-11-13，使用者要求；2026-11-14 由 (1,1) 移到 (2,1)）
+              dict(id="t12", game="trigon", cell=tbl_cell(2, 2), w=3, h=2),    # (2,2) Blokus Trigon（2026-11-13，使用者要求；2026-11-14 由 (1,2) 移到 (2,2)）
+              dict(id="t18", game="bigtwo", cell=tbl_cell(1, 1), w=3, h=2),   # (1,1) 大老二（2026-11-14，使用者要求：放在牌類桌子附近；Blokus 與 Trigon 讓出 (1,1)、(1,2) 後改放這裡）
               dict(id="t17", game="kingdom", cell=tbl_cell(2, 0), w=3, h=2),   # (2,0) 列島建國（2026-11-14，使用者要求；一度放 (2,1)，同日改到 (2,0)）
               dict(id="t10", game="mage", cell=tbl_cell(3, 0), w=3, h=2),      # (3,0) 見習驅魔師（2026-11-12，使用者要求；原本在第 2 欄）
               dict(id="t5", game="dodge", cell=tbl_cell(3, 1), w=3, h=2),      # (3,1) 躲彈幕只有一桌（2026-11-08，使用者要求）
