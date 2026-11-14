@@ -7661,9 +7661,9 @@ function typingZhCheck(e) {
   }
   typingRender();
 }
-function typingSendProgress(v) {   // 有人在觀戰才送打字進度（約每 250ms 最多一次、有變化才送）；沒人觀戰就一個訊息都不送
+function typingSendProgress(v) {   // 送打字進度（約每 250ms 最多一次、有變化才送）；伺服器只轉給觀戰者與大螢幕，沒人看就丟掉
   const T = S.ty;
-  if (v.role !== 'seat' || !(v.specs > 0)) { T.pKey = ''; return; }
+  if (v.role !== 'seat') { T.pKey = ''; return; }   // （2026-11-15：不再看 v.specs——大螢幕不算觀戰者，原本只有大螢幕在看時玩家不會送進度）
   const e = T.errPos >= 0 ? 1 : 0, key = `${T.idx}|${T.pos}|${e}`;
   if (key === T.pKey || performance.now() - (T.pAt || 0) < TY_PROG_GAP_MS) return;
   T.pKey = key; T.pAt = performance.now();
