@@ -8144,6 +8144,24 @@ function drawCampfireGlow(c) {
 }
 
 // ---------------- 天氣（2026-11-12；純客戶端畫面，零同步） ----------------
+// ---- 遊戲時間（決定論、零同步；2026-11-13 使用者定）----
+// 用 Date.now() 換算：現實 24 分鐘＝遊戲一天（1 遊戲小時＝現實 1 分鐘）、一季 7 天、一年 4 季；所有人算出來都一樣、
+// 重開分頁也不會跳（與天氣的決定論同一套哲學）。時間只影響畫面（色調、日夜明暗、時鐘）與天氣抽籤，不動同步與伺服器。
+const TIME_DAY_MS = 24 * 60e3;               // 一個遊戲日＝現實 24 分鐘
+const TIME_DAYS_PER_SEASON = 7;              // 一季 7 個遊戲日（一年＝28 日）
+const SEASONS = [['spring', '春'], ['summer', '夏'], ['autumn', '秋'], ['winter', '冬']];
+const TIME_EPOCH_MS = Date.UTC(2026, 0, 1);  // 「第 1 年第 1 天（春・第 1 天）」的起點＝現實 2026-01-01 00:00 UTC
+function gameTime() {   // 現在是遊戲裡的哪一年／哪一季第幾天／幾點（無狀態，每次都從 Date.now() 現算）
+  const t = Date.now() - TIME_EPOCH_MS, perYear = TIME_DAYS_PER_SEASON * 4;
+  const days = Math.floor(t / TIME_DAY_MS);
+  const inYear = ((days % perYear) + perYear) % perYear;
+  const si = Math.floor(inYear / TIME_DAYS_PER_SEASON);
+  const frac = ((t % TIME_DAY_MS) + TIME_DAY_MS) % TIME_DAY_MS / TIME_DAY_MS;   // 一天內進度 0..1（0＝00:00）
+  const hh = frac * 24;
+  return { year: Math.floor(days / perYear) + 1, si, season: SEASONS[si][0], seasonName: SEASONS[si][1],
+           day: inYear % TIME_DAYS_PER_SEASON + 1, hour: Math.floor(hh), min: Math.floor((hh % 1) * 60) };
+}
+
 // 決定論：天氣＝雜湊(地形, 時刻槽) 對該地形的天氣表加權抽籤——每個人自己算、算出來都一樣，不用同步、玩家也影響不了。
 // 之後的交互作用（掛點）：特殊怪照天氣條件出現（mobs.json 的 spawnIf）、植物生長受天氣影響（動工前先查採集重生是本機還是伺服器）。
 const WEATHER_SLOT_MIN = 8;      // 一個時刻槽幾分鐘：槽內天氣不變、槽與槽之間用 WEATHER_TRANS_SEC 淡入淡出
@@ -8171,14 +8189,15 @@ const WEATHERS = {   // id → 名稱／色罩（rgba 三元組＋最濃不透�
   firefly: { name: '螢光', tint: [30, 36, 70],    alpha: .08, part: { kind: 'firefly', n: 26,  vy: -12, vx: 8, r: 1.4 } },
 };
 // 各地形的天氣表（id＝權重）。和平島是室內房間：不做天氣（永遠晴）
+// 草原／沙灘／森林／機械島各自多列一條 ['snow', …]：非冬天被季節倍率乘成 0（永遠抽不到），冬天才下雪（四季感）
 const TERRAIN_WEATHER = {
-  grass:   [['clear', 6], ['rain', 2], ['leaf', 1], ['fog', 1]],
-  beach:   [['clear', 6], ['rain', 2], ['sand', 1], ['fog', 1]],
-  forest:  [['clear', 5], ['rain', 2], ['leaf', 2], ['fog', 1]],
+  grass:   [['clear', 6], ['rain', 2], ['leaf', 1], ['fog', 1], ['snow', 3]],
+  beach:   [['clear', 6], ['rain', 2], ['sand', 1], ['fog', 1], ['snow', 2]],
+  forest:  [['clear', 5], ['rain', 2], ['leaf', 2], ['fog', 1], ['snow', 3]],
   snow:    [['clear', 5], ['snow', 3], ['fog', 1]],
   night:   [['clear', 5], ['rain', 1], ['fog', 2], ['firefly', 2]],
   volcano: [['clear', 5], ['ember', 3], ['fog', 2]],
-  machine: [['clear', 6], ['rain', 2], ['fog', 2]],
+  machine: [['clear', 6], ['rain', 2], ['fog', 2], ['snow', 2]],
   peace:   [['clear', 1]],
 };
 function weatherHash(s) {   // FNV-1a：純整數運算，各瀏覽器結果一致（決定論的關鍵）
@@ -8186,24 +8205,41 @@ function weatherHash(s) {   // FNV-1a：純整數運算，各瀏覽器結果一�
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
   return h >>> 0;
 }
-function weatherSlot() { return Math.floor(Date.now() / 60000 / WEATHER_SLOT_MIN); }   // 時刻槽：現在用現實時鐘，之後接遊戲時間時只改這裡
-function weatherPick(T, slot) {   // 同一（地形, 槽）永遠同一種天氣
+// 時刻槽＝遊戲時間的 8 小時一格（＝現實 8 分鐘，一天 3 槽）。起點對齊遊戲日，所以槽界線與日／季界線重合：換季只在槽界線發生
+function weatherSlot() { return Math.floor((Date.now() - TIME_EPOCH_MS) / 60000 / WEATHER_SLOT_MIN); }
+// 季節加權：同一（地形, 槽）在四季抽出的天氣不同——冬天下雪、夏天炎熱／落灰、秋天落葉、春天多雨與螢火
+// （倍率＝乘在原表權重上；0＝該季節永遠抽不到。乘成小數沒關係，各瀏覽器浮點運算結果一致，維持決定論）
+const SEASON_WX = {
+  clear:   { spring: 1.1, summer: 1.2, autumn: 1.0, winter: .6 },
+  rain:    { spring: 1.6, summer: .7,  autumn: 1.3, winter: .5 },
+  snow:    { spring: 0,   summer: 0,   autumn: 0,   winter: 1 },
+  fog:     { spring: 1.2, summer: .5,  autumn: 1.7, winter: 1.1 },
+  sand:    { spring: .7,  summer: 1.6, autumn: 1.0, winter: .4 },
+  ember:   { spring: .4,  summer: 2,   autumn: .7,  winter: .3 },
+  leaf:    { spring: .3,  summer: 0,   autumn: 4,   winter: .1 },
+  firefly: { spring: 2.2, summer: 2.6, autumn: .7,  winter: 0 },
+};
+const seasonMul = (id, season) => SEASON_WX[id] ? (SEASON_WX[id][season] ?? 1) : 1;
+function weatherPick(T, slot, season) {   // 同一（地形, 槽, 季節）永遠同一種天氣
   const tab = TERRAIN_WEATHER[T] || TERRAIN_WEATHER.grass;
-  let r = weatherHash(T + ':' + slot) % tab.reduce((s, w) => s + w[1], 0);
-  for (const [id, w] of tab) { if ((r -= w) < 0) return id; }
-  return tab[0][0];
+  const wts = tab.map(([id, w]) => [id, w * seasonMul(id, season)]);
+  const sum = wts.reduce((s, w) => s + w[1], 0);
+  if (sum <= 0) return tab[0][0];   // 保險：全部被乘成 0 就退回晴（正常不會發生，clear 的倍率不為 0）
+  let r = weatherHash(T + ':' + slot + ':' + season) % sum;
+  for (const [id, w] of wts) { if ((r -= w) < 0) return id; }
+  return wts[0][0];
 }
 function weatherBlend() {   // 槽內經過率 0→1：色罩與粒子數在槽剛開始的 WEATHER_TRANS_SEC 內從上一個天氣過來
   return Math.min(1, (S.t - S.weather.t0) / WEATHER_TRANS_SEC);
 }
 function stepWeather(dt) {   // 換槽／換地形時切天氣；粒子池在 drawWeather 維護（每幀順手補齊）；dt 留給 drawWeather 的粒子步進
   S.weatherDt = dt;
-  const T = S.terrain, slot = weatherSlot();
+  const T = S.terrain, slot = weatherSlot(), season = gameTime().season;
   if (!S.weather || S.weather.T !== T)   // 進新地形：從「晴」淡入當前天氣
-    S.weather = { T, slot, prev: 'clear', cur: weatherPick(T, slot), t0: S.t, parts: [] };
-  else if (S.weather.slot !== slot) {
+    S.weather = { T, slot, prev: 'clear', cur: weatherPick(T, slot, season), t0: S.t, parts: [] };
+  else if (S.weather.slot !== slot) {   // 換槽（含換季，時格對齊遊戲日／季界線）
     S.weather.prev = S.weather.cur;
-    S.weather.cur = weatherPick(T, slot);
+    S.weather.cur = weatherPick(T, slot, season);
     S.weather.slot = slot; S.weather.t0 = S.t;
   }
 }
@@ -8329,6 +8365,44 @@ function drawWeather() {
     }
     ctx.restore();
   }
+}
+// 季節色調與日夜明暗（2026-11-13 使用者定；螢幕空間，蓋在世界與名牌上、天氣之下）：
+// 季節＝淡淡的氛圍色罩（春夏秋冬各一色），日夜＝遊戲時刻的明暗（深夜最暗，黎明 4-6 點、黃昏 17-19 點過渡，
+// 過渡到一半時疊一層暖橙＝朝霞／晚霞）。和平島是室內房間：照明固定，兩者都不套。
+const SEASON_TINT = {   // [r, g, b, alpha]
+  spring: [120, 190, 130, .05],
+  summer: [255, 205, 110, .06],
+  autumn: [235, 150, 70, .07],
+  winter: [150, 190, 235, .08],
+};
+const NIGHT_ALPHA = .42;   // 深夜最濃的暗度（0＝不變暗；調太高會看不清路）
+function nightDark(h) {    // 幾點 → 暗度 0（白天）～1（深夜）；清晨 4-6、黃昏 17-19 線性過渡
+  if (h < 4) return 1;
+  if (h < 6) return (6 - h) / 2;
+  if (h < 17) return 0;
+  if (h < 19) return (h - 17) / 2;
+  return 1;
+}
+function drawTimeTint() {
+  if (S.terrain === 'peace') return;   // 室內：不套季節色調與日夜明暗
+  const g = gameTime(), st = SEASON_TINT[g.season];
+  if (st) { ctx.fillStyle = `rgba(${st[0]},${st[1]},${st[2]},${st[3]})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+  const dk = nightDark(g.hour + g.min / 60);
+  if (dk > 0) { ctx.fillStyle = `rgba(12,18,48,${(dk * NIGHT_ALPHA).toFixed(3)})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+  const warm = 1 - Math.abs(dk - .5) * 2;   // 暗度到一半（黎明／黃昏）時最濃的暖橙
+  if (warm > 0) { ctx.fillStyle = `rgba(255,140,70,${(warm * .1).toFixed(3)})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+}
+// 左上角的遊戲時鐘（每次 loop 更新；文字沒變就不動 DOM）：顯示「年 季・第幾天 時:分」，季節各自一色
+const SEASON_COLOR = { spring: '#8fd18f', summer: '#f0c46a', autumn: '#e79a63', winter: '#9fc4f0' };
+let lastClockText = '';
+function updateClock() {
+  const g = gameTime();
+  const txt = `${g.seasonName}・第${g.day}天 ${String(g.hour).padStart(2, '0')}:${String(g.min).padStart(2, '0')}`;
+  if (txt === lastClockText) return;
+  lastClockText = txt;
+  const el = $('gameClock'); if (!el) return;
+  el.textContent = txt;
+  el.style.color = SEASON_COLOR[g.season] || '';
 }
 // ---------------- 小地圖（2026-11-13，使用者要求；樣式仿使用者提供的範例圖：羊皮紙地圖＋青銅雕花圓框＋指北針＋天氣＋座標） ----------------
 // 直接畫在主畫布右上角（畫布座標，跟著遊戲一起縮放，不會跑到畫面外；2026-11-13 使用者回饋：原本的獨立 DOM canvas 會落在畫布外）。
@@ -8922,6 +8996,7 @@ function draw() {
     ctx.restore();
   }
   ctx.restore();
+  drawTimeTint();   // 季節色調與日夜明暗（螢幕空間，蓋在世界與名牌上、天氣之下）
   drawWeather();   // 天氣色罩與粒子（螢幕空間，蓋在世界與名牌上、島主倒數條之下）
   drawFoodScreen();   // 吃喝的效果：致盲的黑幕、神清氣爽的星點（螢幕空間）
   drawMinimap();   // 小地圖（螢幕空間右上角；圖鑑／角色等 DOM 面板天然蓋在畫布上層）
@@ -10105,6 +10180,7 @@ async function boot() {
       stepSkills();
       updateSkillBar();
       updateStatBars();
+      updateClock();     // 左上角的遊戲時間（時鐘、日期、季節）
       updateWeaponBar();
       drawSprintBtn();
       draw();

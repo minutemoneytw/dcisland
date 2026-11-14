@@ -39,6 +39,7 @@ body {
   text-shadow: 0 1px 0 #000;
 }
 .tb-sub { font-size: 11px; color: var(--text-dim); letter-spacing: 2px; }
+.tb-time { font-size: 12px; letter-spacing: 1px; color: var(--text-dim); }   /* 遊戲時間（季節各自一色，顏色由 main.js 的 updateClock 設定） */
 .tb-right { display: flex; gap: 8px; }
 
 /* 地形 chips */
