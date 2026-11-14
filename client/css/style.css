@@ -18,8 +18,8 @@ body {
   overflow-x: hidden;
 }
 #app { position: relative; width: 928px;
-  /* 遊戲畫面（canvas）的上緣＝頂部列高度（約 67px）＋canvas 的 margin-top 8px。**頂部列改高時只要改這一個數字**：
-     左上的武器列、增減益列，以及角色／外觀／換色面板都是照它排的（2026-11-14，使用者要求集中成變數） */
+  /* 遊戲畫面（canvas）的上緣＝頂部列高度（約 67px）＋canvas 的 margin-top 8px。左上的武器列、增減益列，以及角色／外觀／換色面板都照它排。
+     **實際數值由 main.js 的 syncStageTop() 量 canvas 上緣自動寫進來**（載入、視窗大小改變、頂部列大小改變時），這裡的 75px 只是第一幀的預設值，不用手動維護（2026-11-14） */
   --stage-top: 75px; }
 #game {
   display: block; margin-top: 8px;

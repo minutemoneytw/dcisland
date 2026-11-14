@@ -6,6 +6,17 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
+// 把遊戲畫面（canvas）的實際上緣寫進 CSS 變數 --stage-top（2026-11-14 使用者要求自動讀取）：左上的武器列／增減益／角色、外觀、換色面板都照它排（見 style.css 的 #app）。
+// 頂部列（#topbar）怎麼改高改矮、字型載入後換行，都會自動跟著；style.css 裡寫的 75px 只是第一幀的預設值
+function syncStageTop() {
+  const app = canvas.offsetParent;   // #app（position: relative）
+  if (!app) return;
+  app.style.setProperty('--stage-top', canvas.offsetTop + 'px');
+}
+syncStageTop();
+window.addEventListener('resize', syncStageTop);
+if (window.ResizeObserver) { const tb = document.getElementById('topbar'); if (tb) new ResizeObserver(syncStageTop).observe(tb, { box: 'border-box' }); }   // border-box：連內距、邊框改變也算（預設只看內容區）
+
 // ---------------- 工具 ----------------
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
