@@ -5628,7 +5628,8 @@ function buildKingdom(box, v, mk, gd) {
       const pr = kgcProd(sd), dr = mk('div', 'kg-brow'); dr.appendChild(mk('span', 'table-tag', '折扣：')); dr.appendChild(kgChips(pr, mk)); if (!Object.values(pr).some(n => n)) dr.appendChild(mk('span', 'table-tag', '（無）')); e.appendChild(dr);
       const list = (ids, label) => { if (!ids.length) return; const d = mk('div', 'kg-brow'); d.appendChild(mk('span', 'table-tag', label)); for (const id of ids) { const c = kgCardOf(id), t = mk('span', 'kg-mini', c.name + (c.vp ? ` ${c.vp}` : '')); if (id[0] === 'b') t.style.borderLeftColor = KG_RC[c.gives]; t.title = id[0] === 'p' ? c.text : (c.fx ? kgFxText(c) : ''); d.appendChild(t); } e.appendChild(d); };
       list(sd.bld, `建築 ${sd.bld.length}：`); list(sd.ppl, '人物：'); list(sd.won, '奇觀：');
-      if (sd.nhand && !you) e.appendChild(mk('div', 'table-tag', `保留 ${sd.nhand} 張`));
+      if (g.hands?.[k]?.length) list(g.hands[k], `保留 ${g.hands[k].length} 張：`);   // 觀戰者（含大螢幕）看得到每個人保留的牌
+      else if (sd.nhand && !you) e.appendChild(mk('div', 'table-tag', `保留 ${sd.nhand} 張`));
       if (sd.block) e.appendChild(mk('div', 'table-tag', `🔒 封鎖了「${kgCardOf(sd.block)?.name || ''}」`));
       if (you && g.hand.length) {
         const d = mk('div', 'kg-hand'); d.appendChild(mk('div', 'table-label', '你保留的牌（點選可建造）'));
@@ -5810,6 +5811,71 @@ function onNetScrTb(msg) {   // 俄羅斯方塊的盤面快照（每台約 4 次
   (S.scrTb ||= {})[msg.cab] = { b: msg.b, sc: msg.sc, ln: msg.ln };
   S.scrDirty = true;
 }
+function onNetScrTp(msg) {   // 打字競賽的進度（大螢幕轉播中才會收到）：i＝座位、n＝第幾個字（＝分數）、p＝已打對幾個字母、e＝剛打錯
+  const T = (S.scrTy ||= { key: '', prog: {} });
+  T.prog[msg.i] = { n: msg.n, p: msg.p, e: msg.e, at: performance.now() };
+  S.scrDirty = true;
+}
+// 大螢幕：列島建國——市場（三階建築各 4 張）、人物、奇觀、資源庫存；右側座位欄另外畫各人的資源與保留的牌
+function scrKingdom(g, v, MX, MY, MW) {
+  kgLoadData();
+  const K = v.kg, ev = S.kgData?.events;
+  g.textAlign = 'left'; g.fillStyle = '#e8ecf8'; g.font = `bold 13px ${SCR_FONT}`;
+  g.fillText(`第 ${K.round} 輪　${ev?.[K.ev]?.name || ''}`, MX, MY + 13);
+  g.fillStyle = '#9fb0d8'; g.font = `11px ${SCR_FONT}`; g.fillText(`下一輪：${ev?.[K.next]?.name || ''}`, MX + 150, MY + 13);
+  // 庫存
+  let x = MX; g.font = `bold 11px ${SCR_FONT}`;
+  for (const r of ['W', 'S', 'F', 'I', 'G']) {
+    const n = r === 'G' ? K.gold : K.sup[r], txt = `${KG_RN[r]} ${n}`, w = 46;
+    g.fillStyle = KG_RC[r]; g.fillRect(x, MY + 20, w, 15); g.fillStyle = '#10141f'; g.textAlign = 'center'; g.fillText(txt, x + w / 2, MY + 32); x += w + 4;
+  }
+  // 一格小牌：左邊細條＝建築產出的資源色、名字、右上分數；被封鎖的名字泛紅
+  const cell = (cx, cy, cw, id) => {
+    g.fillStyle = id ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.04)'; g.fillRect(cx, cy, cw, 19);
+    if (!id) return;
+    const c = kgCardOf(id); if (!c) return;
+    if (c.gives) { g.fillStyle = KG_RC[c.gives]; g.fillRect(cx, cy, 3, 19); }
+    g.fillStyle = K.sd.some(d => d.block === id) ? '#ff9a8a' : '#e8ecf8'; g.font = `11px ${SCR_FONT}`; g.textAlign = 'left'; g.fillText(c.name, cx + 6, cy + 14, cw - (c.vp ? 22 : 8));
+    if (c.vp) { g.fillStyle = '#ffe08a'; g.textAlign = 'right'; g.font = `bold 11px ${SCR_FONT}`; g.fillText(String(c.vp), cx + cw - 3, cy + 14); }
+  };
+  const CW = 78, GAP = 3; let y = MY + 40;
+  for (const tier of [3, 2, 1]) {
+    g.fillStyle = '#7f8cb0'; g.font = `10px ${SCR_FONT}`; g.textAlign = 'left'; g.fillText(['', '一', '二', '三'][tier], MX, y + 13);
+    (K.mkt[tier] || []).forEach((id, q) => cell(MX + 12 + q * (CW + GAP), y, CW, id));
+    y += 22;
+  }
+  g.fillStyle = '#7f8cb0'; g.font = `10px ${SCR_FONT}`; g.textAlign = 'left'; g.fillText('人', MX, y + 13);
+  (K.pmkt || []).forEach((id, q) => cell(MX + 12 + q * (CW + GAP), y, CW, id));
+  y += 22; g.fillStyle = '#7f8cb0'; g.textAlign = 'left'; g.fillText('奇', MX, y + 13);
+  (K.wond || []).forEach((id, q) => cell(MX + 12 + q * (CW + GAP), y, CW, id));
+  y += 34;
+  (K.obj || []).forEach((o, q) => {
+    g.fillStyle = o.by != null ? '#7fe08a' : '#9fb0d8'; g.font = `10px ${SCR_FONT}`; g.textAlign = 'left';
+    g.fillText(`目標：${o.name}${o.by != null ? `（${v.seats[o.by]?.name || ''} +3）` : ''}`, MX, y + q * 12, MW);
+  });
+}
+// 大螢幕：打字競賽——每位玩家的分數與正在打的單字（綠＝已打對、紅＝剛打錯）；單字由 seed 算出來，進度來自 sttp
+function scrTyping(g, v, MX, MY, MW) {
+  const key = `${v.ty.seed}|${v.ty.t0}|${v.game}`, T = (S.scrTy ||= { key: '', prog: {} });
+  if (T.key !== key) { T.key = key; T.prog = {}; T.word = typingWords(v.ty.seed, v.game); T.off = v.ty.sn - Date.now(); }
+  const t = (Date.now() + T.off - v.ty.t0) / 1000, left = v.ty.dur - t;
+  g.textAlign = 'left'; g.fillStyle = '#e8ecf8'; g.font = `bold 13px ${SCR_FONT}`;
+  g.fillText(t < 0 ? `開始倒數 ${Math.ceil(-t)}` : left > 0 ? `剩 ${left.toFixed(1)} 秒` : '時間到！等待結算…', MX, MY + 14);
+  const rowH = Math.min(44, (196 - 24) / Math.max(1, v.seats.length));
+  v.seats.forEach((s, k) => {
+    const y = MY + 24 + k * rowH, pr = T.prog[k], n = Math.max(s.score || 0, pr?.n || 0), p = pr && pr.n === n ? pr.p : 0;
+    g.fillStyle = 'rgba(255,255,255,.06)'; g.fillRect(MX, y, MW, rowH - 4);
+    g.fillStyle = s.left ? '#6f7ea8' : '#e8ecf8'; g.font = `bold 12px ${SCR_FONT}`; g.textAlign = 'left'; g.fillText((s.name || '').slice(0, 6), MX + 6, y + 16, 64);
+    g.fillStyle = '#ffe08a'; g.textAlign = 'right'; g.fillText(`${n} 分`, MX + MW - 6, y + 16);
+    if (s.left || t < 0 || left <= 0) return;
+    const w = T.word(n); g.font = `bold 15px ui-monospace, Consolas, ${SCR_FONT}`; g.textAlign = 'left';
+    let cx = MX + 6;
+    [...w].forEach((c, q) => {
+      g.fillStyle = q < p ? '#7fe08a' : q === p && pr && pr.n === n && pr.e ? '#ff6a6a' : '#9fb0d8';
+      g.fillText(c, cx, y + 35); cx += g.measureText(c).width + 1;
+    });
+  });
+}
 // 俄羅斯方塊（4 台機台一字排開；所有機台一樣大，聯機同場的加金框並標示模式）
 function scrArcade(g, v) {
   const seatOf = cab => v.seats.find(s => s.cab === cab), mem = v.link && v.link.phase === 'playing' ? v.link.mem : [];
@@ -5899,7 +5965,7 @@ function scrSeatTag(v, s, k) {
   if (gm === 'gomoku') return v.black == null ? '' : (k === v.black ? '黑棋' : '白棋');
   if (gm === 'dodge') return s.out ? '淘汰' : `${s.lives ?? ''} 命`;
   if (gm === 'mage') return s.dead ? '倒下' : `HP ${s.hp ?? ''}`;
-  if (gm === 'typing' || gm === 'zhtyping') return `${s.score ?? 0} 分`;
+  if (gm === 'typing' || gm === 'zhtyping') return `${Math.max(s.score ?? 0, S.scrTy?.prog?.[k]?.n ?? 0)} 分`;
   if (gm === 'maze') return `${s.sc ?? 0} 分`;
   if (gm === 'intel') return s.out ? '出局' : '';
   return '';
@@ -5926,10 +5992,17 @@ function scrRender() {
   // 右側：座位
   const SX = 340, SW = 148;
   v.seats.forEach((s, k) => {
-    const y = 34 + k * 30;
-    g.fillStyle = playing && v.turn === k ? 'rgba(255,224,138,.22)' : 'rgba(255,255,255,.06)'; g.fillRect(SX, y, SW, 26);
+    const RH = v.game === 'kingdom' && v.kg ? 52 : 30, y = 34 + k * RH;
+    g.fillStyle = playing && v.turn === k ? 'rgba(255,224,138,.22)' : 'rgba(255,255,255,.06)'; g.fillRect(SX, y, SW, RH - 4);
     g.fillStyle = '#e8ecf8'; g.font = `bold 12px ${SCR_FONT}`; g.textAlign = 'left'; g.fillText((s.name || '').slice(0, 6), SX + 6, y + 17, 70);
     g.fillStyle = '#9fb0d8'; g.font = `12px ${SCR_FONT}`; g.textAlign = 'right'; g.fillText(scrSeatTag(v, s, k), SX + SW - 6, y + 17);
+    if (v.game === 'kingdom' && v.kg && playing) {   // 列島建國：第二行資源（含金幣），第三行保留的牌
+      const sd = v.kg.sd[k]; let cx = SX + 6; g.font = `bold 10px ${SCR_FONT}`; g.textAlign = 'left';
+      for (const r of ['W', 'S', 'F', 'I', 'G']) { const n = r === 'G' ? sd.gold : sd.res[r]; g.fillStyle = n ? KG_RC[r] : '#4a5578'; g.fillText(`${KG_RN[r]}${n}`, cx, y + 31); cx += 27; }
+      g.fillStyle = '#9fb0d8'; g.font = `10px ${SCR_FONT}`;
+      const hd = (v.kg.hands?.[k] || []).map(id => kgCardOf(id)?.name || '').join('、');
+      g.fillText(hd ? `留：${hd}` : sd.nhand ? `留 ${sd.nhand} 張` : '', SX + 6, y + 44, SW - 10);
+    }
   });
   // 左側：主畫面（316×196）
   const MX = 8, MY = 32, MW = 322, MH = 196;
@@ -5952,22 +6025,9 @@ function scrRender() {
       if (v.bt.last) v.bt.last.cs.forEach((c, q) => scrMiniCard(g, MX + 110 + q * 26, base, c, null));
       drew = true;
     } else if (sc.game === 'oldmaid' && playing) { scrHands(g, v, MX, MY, MW, 44, null); drew = true; }
-    else if (sc.game === 'kingdom' && v.kg) {
-      kgLoadData();
-      g.fillStyle = '#e8ecf8'; g.font = `bold 14px ${SCR_FONT}`; g.textAlign = 'left';
-      g.fillText(`第 ${v.kg.round} 輪　事件：${S.kgData?.events[v.kg.ev]?.name || ''}`, MX, MY + 16);
-      v.seats.forEach((s, k) => {
-        const sd = v.kg.sd[k], y = MY + 30 + k * 30;
-        g.fillStyle = '#cfd6e8'; g.font = `12px ${SCR_FONT}`; g.fillText((s.name || '').slice(0, 5), MX, y + 14, 48);
-        g.fillStyle = 'rgba(255,255,255,.1)'; g.fillRect(MX + 54, y + 2, 180, 14);
-        g.fillStyle = '#e8c030'; g.fillRect(MX + 54, y + 2, Math.min(180, 180 * sd.vp / KG_WIN_VP), 14);
-        g.fillStyle = '#fff'; g.fillText(`${sd.vp}`, MX + 240, y + 14);
-        g.fillStyle = '#9fb0d8'; g.fillText(`建${sd.bld.length} 人${sd.ppl.length} 奇${sd.won.length}`, MX + 262, y + 14);
-      });
-      (v.kg.obj || []).forEach((o, q) => { g.fillStyle = o.by != null ? '#7fe08a' : '#9fb0d8'; g.font = `11px ${SCR_FONT}`; g.fillText(`目標：${o.name}${o.by != null ? `（${v.seats[o.by]?.name || ''} +3）` : ''}`, MX, MY + 30 + v.seats.length * 30 + 14 + q * 16, MW); });
-      drew = true;
-    }
-  } catch (e) { drew = false; }
+    else if (sc.game === 'kingdom' && v.kg) { scrKingdom(g, v, MX, MY, MW); drew = true; }
+    else if ((sc.game === 'typing' || sc.game === 'zhtyping') && playing && v.ty) { scrTyping(g, v, MX, MY, MW); drew = true; }
+    } catch (e) { drew = false; }
   if (!drew) {   // 沒有專屬畫面的遊戲（即時遊戲、秘藥情報戰…）或還沒開始：大字狀態
     g.fillStyle = '#9fb0d8'; g.textAlign = 'center'; g.font = `bold 20px ${SCR_FONT}`;
     g.fillText(playing ? '對戰進行中' : v.result ? '本局結束' : '等待玩家入座、準備', MX + MW / 2, MY + MH / 2);
@@ -6010,7 +6070,7 @@ function buildScrPick() {
 }
 // 島上的螢幕物件：外框＋離屏 canvas 的內容（沒收到過畫面時先畫成關閉的樣子）
 function drawScreenProp(pr, r) {
-  if (!S.scrCv || S.scrDirty) { S.scrDirty = false; scrRender(); }
+  if (!S.scrCv || S.scrDirty || (S.scr && S.scr.v?.ty && S.scr.v.phase === 'playing')) { S.scrDirty = false; scrRender(); }   // 打字競賽進行中：每幀重畫（倒數的秒數會動）
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#12141c'; ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.fillStyle = '#2a2e3c'; ctx.fillRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
@@ -11325,7 +11385,7 @@ async function boot() {
     onThp: onNetThp,           // 空氣曲棍球：別人的握把位置
     onThs: onNetThs,           // 空氣曲棍球：桌主的圓盤快照
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
-    onScr: onNetScr, onScrList: onNetScrList, onScrTb: onNetScrTb, onScrCd: onNetScrCd,   // 和平島大螢幕
+    onScr: onNetScr, onScrList: onNetScrList, onScrTb: onNetScrTb, onScrTp: onNetScrTp, onScrCd: onNetScrCd,   // 和平島大螢幕
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）
     onNick: nick => { S.nick = nick || ''; applyMyName(); },

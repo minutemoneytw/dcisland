@@ -1675,7 +1675,7 @@ def kg_view(t, cid, v):
     v["kg"] = {"sup": dict(g["sup"]), "gold": g["gold"], "mkt": {str(k): list(x) for k, x in g["mkt"].items()}, "deck": {str(k): len(x) for k, x in g["decks"].items()},
                "pmkt": list(g["pmkt"]), "pdeck": len(g["ppl"]), "wond": list(g["wond"]), "ev": kg_event(g), "next": kg_event(g, 1), "round": g["round"], "endr": g["endr"],
                "start": g["start"], "obj": [{"id": o["id"], "name": o["name"], "text": o["text"], "by": o["by"]} for o in g["obj"]], "sd": sd,
-               "hand": list(g["sd"][i]["hand"]) if role == "seat" and i < len(g["sd"]) else [], "deadline": g["deadline"] if playing else 0, "sn": int(time.time() * 1000)}
+               "hand": list(g["sd"][i]["hand"]) if role == "seat" and i < len(g["sd"]) else [], "hands": [list(s["hand"]) for s in g["sd"]] if role != "seat" else None, "deadline": g["deadline"] if playing else 0, "sn": int(time.time() * 1000)}
     if playing:
         for k, s in enumerate(t["seats"]):
             v["seats"][k]["left"] = bool(s.get("left"))
@@ -6474,6 +6474,14 @@ class Room:
             return {"t": "scr", "id": None}
         return {"t": "scr", "id": tid, "game": t["game"], "v": tbl_view(t, SCR_CID)}
 
+    def _scr_fwd(self, terr, t, msg, out):
+        """螢幕正在轉播這桌：把這則訊息送給同地形、走近螢幕（scr_watch）而且不在牌桌裡的人（打字競賽的進度用）。"""
+        if self.screen.get(terr) != t["id"]:
+            return
+        for cid2, c in self.clients.items():
+            if c.get("terrain") == terr and not c.get("table") and c.get("scr_watch"):
+                out.append((cid2, msg))
+
     def _scr_resolve(self, terr):
         tid = self.screen.get(terr)
         if not tid:
@@ -6644,6 +6652,7 @@ class Room:
                         for m in t["specs"]:
                             if m["cid"] is not None:
                                 out.append((m["cid"], {"t": "tpg", "i": i, "n": n, "p": p, "e": 1 if msg.get("e") == 1 else 0}))
+                        self._scr_fwd(terr, t, {"t": "sttp", "i": i, "n": n, "p": p, "e": 1 if msg.get("e") == 1 else 0}, out)   # 大螢幕也要看到打字進度
                     return out, None, None
                 if a == "word":   # 英文打字競賽：分數回報，轉發 tsc 給同桌其他人（不通知整個畫面、不廣播 tblinfo）
                     n = msg.get("n")
@@ -6652,6 +6661,7 @@ class Room:
                         for m in t["seats"] + t["specs"]:
                             if m["cid"] is not None and m["cid"] != cid:
                                 out.append((m["cid"], {"t": "tsc", "i": i, "n": n}))
+                        self._scr_fwd(terr, t, {"t": "sttp", "i": i, "n": n, "p": 0, "e": 0}, out)   # 大螢幕：打完一個字（中文打字沒有逐字進度，靠這個更新分數）
                     return out, None, None
                 if t["game"] == "arcade" and a in ("tb", "clr"):   # 俄羅斯方塊：盤面快照／垃圾行，只轉發（不通知整個畫面、不廣播 tblinfo）
                     out = ar_msg(t, cid, msg, now_ms)[1]

@@ -125,6 +125,7 @@ export function connectNet(S, opts = {}) {
       case 'ths': if (opts.onThs) opts.onThs(msg); break;      // 空氣曲棍球：桌主的圓盤快照（x／y／vx／vy、sa／sb 比分、f 開球前凍結毫秒）
       case 'scr': if (opts.onScr) opts.onScr(msg); break;   // 和平島大螢幕：目前轉播的桌與畫面（id＝null＝關閉）
       case 'scrcd': if (opts.onScrCd) opts.onScrCd(msg); break;   // 大螢幕切台冷卻中：left＝還要幾毫秒
+      case 'sttp': if (opts.onScrTp) opts.onScrTp(msg); break;   // 大螢幕轉播打字競賽：某位玩家的打字進度（i＝座位、n＝第幾個字、p、e）
       case 'sttb': if (opts.onScrTb) opts.onScrTb(msg); break;   // 大螢幕轉播俄羅斯方塊：某台機台的盤面快照（cab、b＝200 個數字、sc、ln）
       case 'scrlist': if (opts.onScrList) opts.onScrList(msg); break;   // 大螢幕：可轉播的桌清單
       case 'tblinfo': if (opts.onTblInfo) opts.onTblInfo(msg.info); break;   // 和平島各桌的人數／狀態

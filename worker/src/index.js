@@ -1198,6 +1198,7 @@ function kgView(t, cid, v) {
   for (const k of [1, 2, 3]) { mkt[k] = [...g.mkt[k]]; deck[k] = g.decks[k].length; }
   v.kg = { sup: { ...g.sup }, gold: g.gold, mkt, deck, pmkt: [...g.pmkt], pdeck: g.ppl.length, wond: [...g.wond], ev: kgEvent(g), next: kgEvent(g, 1), round: g.round, endr: g.endr, start: g.start,
     obj: g.obj.map(o => ({ id: o.id, name: o.name, text: o.text, by: o.by })), sd, hand: role === "seat" && i < g.sd.length ? [...g.sd[i].hand] : [], deadline: playing ? g.deadline : 0, sn: Date.now() };
+  if (role !== "seat") v.kg.hands = g.sd.map(s => [...s.hand]);   // 觀戰者（含大螢幕）看得到每個人保留的牌（使用者要求，2026-11-15）
   if (playing) t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; });
 }
 // ---- 大老二（第十八桌 t18；2026-11-14，使用者要求）：2～4 人、單局、先出完手牌者獲勝（規則與 tools/dev_server.py 的 bt_* 是同一套，逐行對照）----
@@ -3967,6 +3968,15 @@ export class Island {
       }
     }
   }
+  // 螢幕正在轉播這桌：把訊息送給同地形、走近螢幕而且不在牌桌裡的人（打字競賽的進度 sttp 用）
+  scrFwd(terr, t, m) {
+    if (this.screen.get(terr) !== t.id) return;
+    const data = JSON.stringify(m);
+    for (const ws of this.state.getWebSockets()) {
+      const a = ws.deserializeAttachment() || {};
+      if (a.terrain === terr && !a.table && a.scrWatch) { try { ws.send(data); } catch { /* 對方已斷線 */ } }
+    }
+  }
   scrMsg(terr) {
     const tid = this.screen.get(terr), t = tid ? this.tables.get(tid) : null;
     return t ? { t: "scr", id: tid, game: t.game, v: tblView(t, SCR_CID) } : { t: "scr", id: null };
@@ -4184,6 +4194,7 @@ export class Island {
         if (m.cid == null) continue;
         for (const w of this.state.getWebSockets()) if ((w.deserializeAttachment() || {}).id === m.cid) { try { w.send(data); } catch { /* 對方已斷線 */ } }
       }
+      this.scrFwd(terr, t, { t: "sttp", i, n, p, e: msg.e === 1 ? 1 : 0 });   // 大螢幕也要看到打字進度
       return;
     }
     if (a === "word") {   // 英文打字競賽：分數回報，轉發 tsc 給同桌其他人（不通知整個畫面、不廣播 tblinfo；storage 每 TY_SAVE_MS 才寫一次）
@@ -4193,6 +4204,7 @@ export class Island {
         if (m.cid == null || m.cid === att.id) continue;
         for (const w of this.state.getWebSockets()) if ((w.deserializeAttachment() || {}).id === m.cid) { try { w.send(data); } catch { /* 對方已斷線 */ } }
       }
+      this.scrFwd(terr, t, { t: "sttp", i, n: msg.n, p: 0, e: 0 });   // 大螢幕：打完一個字（中文打字沒有逐字進度，靠這個更新分數）
       if (now - (t.g.saved || 0) >= TY_SAVE_MS) { t.g.saved = now; await this.saveTable(t); }
       return;
     }

@@ -73,7 +73,7 @@
 
 ## 8. 實作與協定
 
-- **規則引擎**：`tools/dev_server.py` 的 `kg_*` 與 `worker/src/index.js` 的 `kg*`（逐項對照）；伺服器權威，`kgView` 給整個公開盤面，只有自己保留的牌看得到內容，牌堆只給張數。牌庫 `cards.json` 由 Worker 的 `Island.kgLoad` 從 assets 讀、dev_server 直接讀檔。
+- **規則引擎**：`tools/dev_server.py` 的 `kg_*` 與 `worker/src/index.js` 的 `kg*`（逐項對照）；伺服器權威，`kgView` 給整個公開盤面，自己看得到自己保留的牌；**觀戰者（含大螢幕）看得到每個人保留的牌**（`v.kg.hands`，2026-11-15 使用者要求），牌堆只給張數。牌庫 `cards.json` 由 Worker 的 `Island.kgLoad` 從 assets 讀、dev_server 直接讀檔。
 - **協定**（客戶端 → 伺服器，都走 `tbl {a: …}`）：
   - `kt {r: [資源…], drop?}`：拿資源。`r` 為 3 種不同資源（庫存不足時拿剩下的種類）或 `[x, x]`。
   - `kr {tier, i: 0～3 或 -1（牌堆頂）, drop?}`：保留。
