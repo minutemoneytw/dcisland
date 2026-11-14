@@ -498,7 +498,7 @@ async function exchangeToken(request, env) {
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
 const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey", t17: "kingdom", t18: "bigtwo" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 4], kingdom: [3, 4], bigtwo: [2, 4] };           // 遊戲 → [開局最少人數, 入座上限]
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 4], kingdom: [2, 4], bigtwo: [2, 4] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -847,7 +847,7 @@ function bkLeave(t, i, now) {   // 遊戲進行中有人離開：棋子留在棋
 // 規則與 tools/dev_server.py 的 kg_* 是同一套（逐行對照）；牌庫資料在 client/assets/kingdom/cards.json（tools/kingdom_cards.py 產生），由 Island.kgLoad 從 assets 讀進 KG。
 // 每回合做一件「主要動作」（拿資源 kt／保留 kr／建造 kb／跳過 kp），另有不佔回合的「交易 kx」「封鎖 kk」。伺服器權威：其他人手上保留的牌只告訴張數。
 const KG_TURN_MS = 90000, KG_IDLE_MAX = 2, KG_XP = 10, KG_WIN_VP = 25, KG_RES = "WSFI";
-const KG_SUP = { 3: 5, 4: 7 };   // 每種資源的庫存（依人數）
+const KG_SUP = { 2: 4, 3: 5, 4: 7 };   // 每種資源的庫存（依人數）
 const KG_MSGS = new Set(["kt", "kr", "kb", "kx", "kk", "kp"]);
 let KG = null;   // { cards: id → 牌, raw: cards.json }；Island.kgLoad 載入（沒載入時 kg* 不能用）
 function kgSetData(raw) {
