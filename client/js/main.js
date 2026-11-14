@@ -925,10 +925,13 @@ const JOBS = {};          // boot() 由 jobs.json 填
 const JOB_SKILLS = {};    // 職業技能（1／2 鍵），見下方「職業技能」
 let JOB_LEGACY = {};      // 舊存檔／舊客戶端的職業 id（tank／healer／dps）→ 新職業 id
 const DEFAULT_JOB = 'ninja';
-const jobIdOf = id => JOBS[id] ? id : (JOBS[JOB_LEGACY[id]] ? JOB_LEGACY[id] : null);
+const jobIdOf = id => (JOBS[id] && !JOBS[id].hidden) ? id : (JOBS[JOB_LEGACY[id]] ? JOB_LEGACY[id] : null);   // 隱藏的職業（jobs.json 的 hidden）也照 legacy 轉成 replaceWith 指定的職業
 function loadJobs(db) {
-  JOB_LEGACY = db?.legacy || {};
-  for (const j of db?.jobs || []) if (ROLES[j.role]) JOBS[j.id] = { ...ROLES[j.role], ...j, roleName: ROLES[j.role].name, color: ROLES[j.role].color };
+  JOB_LEGACY = { ...(db?.legacy || {}) };
+  for (const j of db?.jobs || []) if (ROLES[j.role]) {
+    JOBS[j.id] = { ...ROLES[j.role], ...j, roleName: ROLES[j.role].name, color: ROLES[j.role].color };
+    if (j.hidden) JOB_LEGACY[j.id] = j.replaceWith || DEFAULT_JOB;   // 暫時隱藏（2026-11-14）：不列在職業選單；存檔裡或別人封包裡是這個職業的，一律當成 replaceWith（沒寫＝預設職業）
+  }
 }
 const ALWAYS_WEAPONS = ['hands', 'rod'];   // 所有職業都能用的武器（空手、釣竿）；其餘只有職業武器
 const weaponAllowed = (job, id) => ALWAYS_WEAPONS.includes(id) || JOBS[job]?.weapon === id;
@@ -9591,6 +9594,7 @@ function buildAvatarPanel() {
   // 職業：jobs.json（職能＝圓點顏色；滑鼠停留顯示職能說明）
   const jb = $('jobOpts'); jb.innerHTML = '';
   for (const id of Object.keys(JOBS)) {
+    if (JOBS[id].hidden) continue;   // 暫時隱藏的職業不列
     const jd = JOBS[id], o = document.createElement('div');
     o.className = 'opt name' + (S.me.job === id ? ' sel' : '');
     o.textContent = jd.name; o.title = `${jd.roleName}：${jd.desc}`;
