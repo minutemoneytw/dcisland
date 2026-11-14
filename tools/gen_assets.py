@@ -1488,7 +1488,8 @@ TERRAINS = [
 POOLS_BY_TERRAIN = {
     # 2026-11-14 使用者要求：水池搬到房間左上角（原本在左側中間 [26,33]）；同日一度加過池邊裝飾，使用者又要求拿掉
     # （2026-11-09 使用者要求和平島找一小塊做室內釣魚場，遠離中央的遊戲桌；水面 8×6、外圍一圈池邊 → 佔 x 25～34、y 17～24）
-    "peace": [dict(cell=[26, 18], w=8, h=6)],
+    # 2026-11-14 使用者要求：水池移到左下角（原本左上角，左上角改成圍觀休息區）：水面 x 26～33、y 48～53，外圍池邊 x 25～34、y 47～54
+    "peace": [dict(cell=[26, 48], w=8, h=6)],
 }
 
 # 室內地形的方形房間範圍 [x0,y0,x1,y1]（含邊界，格）：2026-11-09 使用者要求和平島縮小到「剛好包含中央到釣魚池再多一點」，且仍是室內（方形、沒有水）。
@@ -1541,7 +1542,11 @@ PROPS_BY_TERRAIN = {
               # 夾娃娃機與扭蛋機（2026-11-14，使用者要求）：俄羅斯方塊機台右側、靠北牆；底邊要跟俄羅斯方塊機台對齊（y＋h＝17.5，所以夾娃娃機比較高、y 從 14 開始）。先只做外觀框架（kind=deco：擋路、沒有名稱、不能互動），
               # 獎勵怎麼處理還沒決定，之後要開放時把 kind 改成新的互動種類（客戶端 propUse／useProp）
               dict(id="claw", kind="deco", img="claw_machine.png", cell=[61, 14], w=3, h=3.5),
-              dict(id="gacha", kind="deco", img="gacha_machine.png", cell=[65, 14.5], w=2, h=3)],
+              dict(id="gacha", kind="deco", img="gacha_machine.png", cell=[65, 14.5], w=2, h=3),
+              # 圍觀休息區（2026-11-14，使用者要求）：房間左上角。大螢幕＝水池水面（8×6）的 2 倍寬、1.5 倍高＝16×9 格（512×288 px，16:9），畫面由客戶端即時畫（kind＝screen，沒有圖）；
+              # 前面鋪一塊休息區地毯。沒有在玩的人可以走到螢幕旁按 F 選轉播哪一桌（所有人共用），也能去餐飲區喝飲料
+              dict(id="screen", kind="screen", name="大螢幕", cell=[27, 14], w=16, h=9),   # y＝14：原本上緣貼齊北牆上緣（y＝13），使用者要求再往下 1 格
+              dict(id="lounge_rug", kind="rug", img="lounge_rug.png", cell=[25, 23], w=20, h=8)],
 }
 
 def drink_bar():
@@ -1600,6 +1605,23 @@ def dine_rug():
             for d in range(3):
                 cv.set(x - d, y - 2 + d, dia); cv.set(x + d, y - 2 + d, dia); cv.set(x - d, y + 2 - d, dia); cv.set(x + d, y + 2 - d, dia)
             cv.set(x, y, gold)
+    return cv
+
+def lounge_rug():
+    """圍觀休息區地毯（320×128，畫 scale 2＝20×8 格）：深藍底、銀灰雙線邊框，中間一排排小星點（電影院那種）。"""
+    W, H = 320, 128
+    cv = Canvas(W, H)
+    base, deep, line = hx("#2a3a68"), hx("#1c2748"), hx("#b8c4e8")
+    cv.rect(0, 0, W - 1, H - 1, deep)
+    cv.rect(3, 3, W - 4, H - 4, base)
+    cv.rect(1, 1, W - 2, 1, line); cv.rect(1, H - 2, W - 2, H - 2, line); cv.rect(1, 1, 1, H - 2, line); cv.rect(W - 2, 1, W - 2, H - 2, line)
+    cv.rect(5, 5, W - 6, 5, line); cv.rect(5, H - 6, W - 6, H - 6, line); cv.rect(5, 5, 5, H - 6, line); cv.rect(W - 6, 5, W - 6, H - 6, line)
+    star = shade(base, 1.35)
+    for k, y in enumerate(range(16, H - 12, 12)):
+        for x in range(14 + (k % 2) * 8, W - 12, 16):
+            cv.set(x, y, line)
+            for d in (1, 2):
+                cv.set(x - d, y, star); cv.set(x + d, y, star); cv.set(x, y - d, star); cv.set(x, y + d, star)
     return cv
 
 def snack_bar():
@@ -3598,7 +3620,7 @@ def main():
                     td["walls"] = dict(n="wall.png", w="wall_w.png", e="wall_e.png", h=WALL_H)   # 東北西三面牆（南面不畫）
         if t["id"] in PROPS_BY_TERRAIN:   # 固定小物件（餐飲區等）：圖放在地形資料夾
             td["props"] = PROPS_BY_TERRAIN[t["id"]]
-            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub); save(claw_machine(), "claw_machine.png", sub); save(gacha_machine(), "gacha_machine.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
+            save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub); save(lounge_rug(), "lounge_rug.png", sub); save(claw_machine(), "claw_machine.png", sub); save(gacha_machine(), "gacha_machine.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
         if t.get("campfire") is False:
             td["campfire"] = False
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉

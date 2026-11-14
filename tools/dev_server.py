@@ -4810,7 +4810,7 @@ def ar_msg(t, cid, msg, now):
             return False, []
         s["sc"], s["ln"] = sc, ln
         data = {"t": "ttb", "cab": s["cab"], "b": b, "sc": sc, "ln": ln}
-        out = [(m["cid"], data) for m in t["specs"] if m["cid"] is not None]
+        out = [(None, data)] + [(m["cid"], data) for m in t["specs"] if m["cid"] is not None]   # 第一筆 None＝給大螢幕（Room._scr_expand 展開）
         if s["st"] == "link":
             for c in g["mem"]:
                 m = ar_seat(t, c)[1]
@@ -5087,9 +5087,12 @@ def hk_end(t, cid, msg):
 
 GAME_START = {"bigtwo": bt_start, "kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
+SCR_CID = "__screen__"   # 大螢幕轉播用的虛擬連線編號（tbl_view 把它當觀戰者）
+SCR_CD_MS = 5000          # 大螢幕手動切台的冷卻（全島共用；2026-11-14 使用者要求）
+
 def tbl_view(t, cid):
     """給某條連線看的版本：自己的手牌完整，別人只有張數。"""
-    role, i = tbl_find(t, cid)
+    role, i = ("spec", -1) if cid == SCR_CID else tbl_find(t, cid)   # SCR_CID＝大螢幕：當成觀戰者看（手牌全翻開）
     mn, mx = GAME_LIMITS[t["game"]]
     playing = t["phase"] == "playing"
     seats = [{"name": s["name"], "n": len(s["hand"]) if playing else 0, "ready": s["ready"], "out": s["out"] if playing else False,
@@ -5255,6 +5258,9 @@ class Room:
         self.lurk_hits = {}      # cid -> (地形, 上次打怪物的時刻 ms)
         self.lurk_seq = {}       # 地形 -> 怪物 tick 序號（只讓最新排程生效）
         self.tables = {}         # 桌 id -> 牌桌狀態（和平島的遊戲桌；只放記憶體）
+        self.screen = {}         # 地形 -> 大螢幕目前轉播的桌 id（None＝關閉；2026-11-14，所有人共用）
+        self.scr_last = {}       # 地形 -> 上一次送出的螢幕訊息（內容一樣就不重送）
+        self.scr_cd = {}         # 地形 -> 手動切台冷卻到什麼時候（毫秒；全島共用，自動換台不算）
         self.tlock = threading.Lock()   # 牌桌操作串行（table_op）
         self._xp_pending = []           # 對局結束待發的 XP：[(連線編號, XP)]（table_do 在鎖內收集、table_op 在鎖外發）
         self._gs_pending = []           # 對局結束待記的戰績：[(連線編號, 遊戲 id, 戰績增量)]
@@ -6420,9 +6426,79 @@ class Room:
             info[tid] = tbl_info(t) if t else {"game": game, "n": 0, "s": 0, "max": GAME_LIMITS[game][1], "play": False}
         return {"t": "tblinfo", "info": info}
 
+    # ---- 大螢幕（和平島左上角的圍觀休息區；2026-11-14，使用者要求）：全島共用一個頻道，轉播某一桌的畫面（用觀戰者的視角，手牌全翻開）----
+    # 轉播的桌子：進行中、或有人入座但還沒開始；一局結束後畫面停在結算，直到那桌沒人入座才自動換成別的進行中的桌（沒有就關閉）。
+    # 螢幕訊息 {t:'scr', id, game, v} 送給同地形、而且不在牌桌裡的連線（在牌桌裡的人是全螢幕遊戲畫面，看不到島上）。
+    def _scr_active(self, terr):
+        out = []
+        for tid, game in TABLE_DEFS.get(terr, {}).items():
+            t = self.tables.get(tid)
+            if t and (t["phase"] == "playing" or t["seats"]):
+                out.append(t)
+        return out
+
+    @staticmethod
+    def _scr_playing(t):
+        """這桌算不算「進行中」：俄羅斯方塊＝有任何一台正在玩（單人或聯機已開始）；其他＝牌局進行中。"""
+        if t["game"] == "arcade":
+            return any(ar_playing(t, s) for s in t["seats"])
+        return t["phase"] == "playing"
+
+    def _scr_msg(self, terr):
+        tid = self.screen.get(terr)
+        t = self.tables.get(tid) if tid else None
+        if not t:
+            return {"t": "scr", "id": None}
+        return {"t": "scr", "id": tid, "game": t["game"], "v": tbl_view(t, SCR_CID)}
+
+    def _scr_resolve(self, terr):
+        tid = self.screen.get(terr)
+        if not tid:
+            return
+        t = self.tables.get(tid)
+        if t and t["seats"]:
+            return
+        cands = [x for x in self._scr_active(terr) if self._scr_playing(x) and x["id"] != tid]
+        self.screen[terr] = random.choice(cands)["id"] if cands else None
+
+    def _scr_expand(self, terr, t, out):
+        """ar_msg 的盤面快照會附一筆 (None, data)＝「給大螢幕」：螢幕正在轉播這桌就送 sttb 給同地形不在牌桌裡的人，沒有就丟掉。"""
+        for k in range(len(out) - 1, -1, -1):
+            if out[k][0] is None:
+                data = out.pop(k)[1]
+                if self.screen.get(terr) == t["id"]:
+                    msg = {**data, "t": "sttb"}
+                    for cid2, c in self.clients.items():
+                        if c.get("terrain") == terr and not c.get("table") and c.get("scr_watch"):
+                            out.append((cid2, msg))
+
+    def _scr_after(self, tid, out):
+        """牌桌有變動：必要時自動換台，內容有變就送給該地形不在牌桌裡的人。"""
+        terr = next((k for k, d in TABLE_DEFS.items() if tid in d), None)
+        if not terr:
+            return
+        self._scr_resolve(terr)
+        if not self.screen.get(terr):   # 螢幕關閉時有人開局：自動開始播（已經在播的時候不會被別桌搶走）
+            t = self.tables.get(tid)
+            cands = [x for x in self._scr_active(terr) if self._scr_playing(x)]
+            if cands:
+                self.screen[terr] = tid if t in cands else cands[0]["id"]
+        self._scr_push(terr, out)
+
+    def _scr_push(self, terr, out, force=False):
+        msg = self._scr_msg(terr)
+        key = json.dumps(msg, sort_keys=True)
+        if not force and self.scr_last.get(terr) == key:
+            return
+        self.scr_last[terr] = key
+        for cid, c in self.clients.items():
+            if c.get("terrain") == terr and not c.get("table") and c.get("scr_watch"):   # 只推給「走近螢幕」的人（客戶端送 scr_watch）
+                out.append((cid, msg))
+
     def _table_notify_locked(self, t, out):
         for m in t["seats"] + t["specs"]:
             out.append((m["cid"], {"t": "table", "id": t["id"], "v": tbl_view(t, m["cid"])}))
+        self._scr_after(t["id"], out)
 
     def _table_collect_xp(self, t, before):
         """這個操作結束了一局：把各入座者的 XP 記進待發清單（鎖外發；中途離開的 aborted 結果沒有 xp）。"""
@@ -6446,8 +6522,12 @@ class Room:
         tbl_leave(t, cid)
         self._table_collect_xp(t, before)
         out.append((cid, {"t": "table", "id": tid, "v": None}))
+        terr = next((k for k, d in TABLE_DEFS.items() if tid in d), None)
+        if terr and c and c.get("scr_watch"):
+            out.append((cid, self._scr_msg(terr)))   # 離開牌桌的人（還在看螢幕的話）：補上現在大螢幕的畫面（在牌桌裡時沒有收）
         if not t["seats"] and not t["specs"]:
             self.tables.pop(tid, None)   # 沒人了：整桌重來
+            self._scr_after(tid, out)
         else:
             self._table_notify_locked(t, out)
 
@@ -6458,6 +6538,28 @@ class Room:
             if not c or not c.get("terrain"):
                 return [], None, None
             terr, a = c["terrain"], msg.get("a")
+            if a == "scr_watch":   # 大螢幕：走近螢幕＝開始收畫面，走遠＝停止（流量只花在真的在看的人身上）
+                c["scr_watch"] = bool(msg.get("on"))
+                if c["scr_watch"]:
+                    out.append((cid, self._scr_msg(terr)))
+                return out, None, None
+            if a == "scr_list":   # 大螢幕：目前可轉播的桌（進行中或有人入座）
+                lst = [{"id": x["id"], "game": x["game"], "n": len(x["seats"]), "max": GAME_LIMITS[x["game"]][1], "play": self._scr_playing(x),
+                        "names": [m["name"] for m in x["seats"]]} for x in self._scr_active(terr)]
+                lst.sort(key=lambda e: (not e["play"], e["id"]))
+                out.append((cid, {"t": "scrlist", "list": lst, "cur": self.screen.get(terr), "cd": max(0, self.scr_cd.get(terr, 0) - int(time.time() * 1000))}))
+                return out, None, None
+            if a == "scr_pick":   # 大螢幕：切到某一桌（所有人共用；搶著切也是樂趣）
+                tid = str(msg.get("id") or "")
+                now_ms = int(time.time() * 1000)
+                if now_ms < self.scr_cd.get(terr, 0):   # 冷卻中（全島共用 5 秒）
+                    out.append((cid, {"t": "scrcd", "left": self.scr_cd[terr] - now_ms}))
+                elif tid and any(x["id"] == tid for x in self._scr_active(terr)):
+                    if self.screen.get(terr) != tid:
+                        self.scr_cd[terr] = now_ms + SCR_CD_MS
+                    self.screen[terr] = tid
+                    self._scr_push(terr, out, True)
+                return out, None, None
             if a == "join":
                 tid = str(msg.get("id") or "")
                 game = TABLE_DEFS.get(terr, {}).get(tid)
@@ -6529,7 +6631,9 @@ class Room:
                                 out.append((m["cid"], {"t": "tsc", "i": i, "n": n}))
                     return out, None, None
                 if t["game"] == "arcade" and a in ("tb", "clr"):   # 俄羅斯方塊：盤面快照／垃圾行，只轉發（不通知整個畫面、不廣播 tblinfo）
-                    return ar_msg(t, cid, msg, now_ms)[1], None, None
+                    out = ar_msg(t, cid, msg, now_ms)[1]
+                    self._scr_expand(terr, t, out)
+                    return out, None, None
                 if a == "leave":
                     self._table_leave_locked(cid, out)
                 else:
@@ -6544,6 +6648,7 @@ class Room:
                     elif t["game"] == "arcade":   # 俄羅斯方塊：單人／聯機邀請／接受／拒絕／開始／結束
                         changed, extra = ar_msg(t, cid, msg, now_ms)
                         out.extend(extra)
+                        self._scr_expand(terr, t, out)
                         if not changed:
                             return out, None, None
                     elif a == "ready":
@@ -7029,6 +7134,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         ws_send(sock, json.dumps({"t": "enter", "terrain": v, "players": players, "furn": furn, "floor": floor, "decos": decos, "dragon": dragon, "lurker": lurker}))
                     if v in TABLE_DEFS:   # 和平島：給這位玩家各桌目前的人數／狀態
                         room.send_to(cid, room.table_info_msg(v))
+                        room.clients[cid]["scr_watch"] = False   # 換地形：重新走近螢幕時才會收到畫面（客戶端會送 scr_watch）
                     st = room.clients[cid]["state"]
                     room.broadcast({"t": "join", "id": cid, "name": st.get("name")}, skip=cid, terrain=v)
                     if st:

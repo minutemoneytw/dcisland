@@ -3211,7 +3211,7 @@ function arMsg(t, cid, msg, now) {
     const b = msg.b, sc = msg.sc, ln = msg.ln;
     if (!(arPlaying(t, s) && !s.dead && typeof b === "string" && b.length === 200 && /^[0-8]+$/.test(b) && arInt(sc, 0, AR_SCORE_MAX) && arInt(ln, 0, 100000))) return [false, []];
     s.sc = sc; s.ln = ln;
-    const data = { t: "ttb", cab: s.cab, b, sc, ln }, out = t.specs.filter(m => m.cid != null).map(m => [m.cid, data]);
+    const data = { t: "ttb", cab: s.cab, b, sc, ln }, out = [[null, data], ...t.specs.filter(m => m.cid != null).map(m => [m.cid, data])];   // 第一筆 null＝給大螢幕（Island.arSend 展開）
     if (s.st === "link") for (const c of g.mem) { const m = arSeat(t, c)[1]; if (m && c !== s.cab && m.cid != null) out.push([m.cid, data]); }
     return [false, out];
   }
@@ -3401,8 +3401,10 @@ function hkEnd(t, cid, msg) {   // 桌主那台回報結束（有一隊到 HK_GO
 }
 const GAME_START = { bigtwo: btStart, kingdom: kgStart, arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
+const SCR_CD_MS = 5000;   // 大螢幕手動切台的冷卻（全島共用；2026-11-14 使用者要求）
+const SCR_CID = "__screen__";   // 大螢幕轉播用的虛擬連線編號（tblView 把它當觀戰者：手牌全翻開）
 function tblView(t, cid) {
-  const [role, i] = tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
+  const [role, i] = cid === SCR_CID ? ["spec", -1] : tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
   const v = {
     id: t.id, game: t.game, phase: t.phase, min: mn, max: mx, role, me: role === "seat" ? i : -1, board: t.board || null,
     seats: t.seats.map((s, k) => ({ name: s.name, n: playing ? s.hand.length : 0, ready: s.ready, out: playing ? s.out : false, you: role === "seat" && k === i })),
@@ -3528,6 +3530,9 @@ export class Island {
     this.lastDeathCredit = new Map();   // ws → 上次倒地記帳的時間（DEATH_CREDIT_MIN_MS）
     this.tables = new Map();         // 桌 id → 牌桌狀態（和平島遊戲桌；懶載入 storage，每次變動都寫回）
     this.lastTbl = new Map();        // ws → 上次牌桌操作的時間（TBL_CD_MS）
+    this.screen = new Map();         // 地形 → 大螢幕目前轉播的桌 id（null／沒有＝關閉；2026-11-14，所有人共用；只放記憶體）
+    this.scrLast = new Map();        // 地形 → 上一次送出的螢幕訊息（內容一樣就不重送）
+    this.scrCd = new Map();          // 地形 → 手動切台冷卻到什麼時候（毫秒；全島共用，自動換台不算）
     this.lastTblPos = new Map();     // ws → 上次躲彈幕位置回報的時間（TBL_POS_CD_MS）
     this.lastTblTyp = new Map();     // ws → 上次英打進度回報的時間（TBL_TYP_CD_MS）
     this.lastGameXp = new Map();     // 帳號 id → 上次玩小遊戲得 XP 的時間（GAME_XP_CD_MS；只放記憶體，休眠後重置無妨）
@@ -3856,7 +3861,7 @@ export class Island {
     const old = att.terrain;
     // leave 帶 to＝去了哪個地形（讓留下的人顯示「XXX 移動到了OO區域」）；斷線的 leave 不帶
     if (old) this.broadcast({ t: "leave", id: att.id, to: v }, ws, old);
-    att.terrain = v;
+    att.terrain = v; att.scrWatch = false;   // 換地形：重新走近螢幕時才會收到大螢幕畫面（客戶端會送 scr_watch）
     ws.serializeAttachment(att);
 
     const players = {};
@@ -3875,7 +3880,7 @@ export class Island {
     }
     const lurker = this.lurkerSnapshot(v);   // 釣上來的怪物（沒有就是 null，客戶端據此清掉殘留的）
     ws.send(JSON.stringify({ t: "enter", terrain: v, players, furn: await this.getFurn(v), floor: floorToList(await this.getFloor(v)), decos, dragon, lurker }));
-    if (TABLE_DEFS[v]) ws.send(JSON.stringify(await this.tableInfoMsg(v)));   // 和平島：給這位玩家各桌目前的人數／狀態
+    if (TABLE_DEFS[v]) ws.send(JSON.stringify(await this.tableInfoMsg(v)));   // 和平島：給這位玩家各桌目前的人數／狀態（大螢幕的畫面等他走近螢幕再給）
     this.broadcast({ t: "join", id: att.id, name: att.state && att.state.name }, ws, v);
     if (att.state) this.broadcast({ t: "p", id: att.id, s: att.state }, ws, v);
   }
@@ -3924,6 +3929,60 @@ export class Island {
     }
   }
   tableNotify(t) { for (const m of [...t.seats, ...t.specs]) this.sendToId(m.cid, { t: "table", id: t.id, v: tblView(t, m.cid) }); }
+  // ---- 大螢幕（和平島左上角的圍觀休息區；2026-11-14，使用者要求；規則與 tools/dev_server.py 的 _scr_* 同一套）----
+  // 全島共用一個頻道，轉播某一桌（觀戰者視角）。可轉播的桌：進行中、或有人入座但還沒開始；一局結束後畫面停在結算，
+  // 直到那桌沒人入座才自動換成別的進行中的桌（沒有就關閉）。螢幕訊息 {t:'scr', id, game, v} 送給同地形、而且不在牌桌裡的連線。
+  scrActive(terr) {
+    const out = [];
+    for (const [tid, game] of Object.entries(TABLE_DEFS[terr] || {})) {
+      const t = this.tables.get(tid);
+      if (t && (t.phase === "playing" || t.seats.length)) out.push(t);
+    }
+    return out;
+  }
+  // 這桌算不算「進行中」：俄羅斯方塊＝有任何一台正在玩（單人或聯機已開始）；其他＝牌局進行中
+  scrPlaying(t) { return t.game === "arcade" ? t.seats.some(s => arPlaying(t, s)) : t.phase === "playing"; }
+  // 俄羅斯方塊的盤面快照轉播（arMsg 附一筆 [null, data]＝給大螢幕）：螢幕正在轉播這桌就送 sttb 給同地形不在牌桌裡的人
+  arSend(terr, t, out) {
+    for (const [cid, m] of out) {
+      if (cid !== null) { this.sendToId(cid, m); continue; }
+      if (this.screen.get(terr) !== t.id) continue;
+      const key = JSON.stringify({ ...m, t: "sttb" });
+      for (const ws of this.state.getWebSockets()) {
+        const a = ws.deserializeAttachment() || {};
+        if (a.terrain === terr && !a.table && a.scrWatch) { try { ws.send(key); } catch { /* 對方已斷線 */ } }
+      }
+    }
+  }
+  scrMsg(terr) {
+    const tid = this.screen.get(terr), t = tid ? this.tables.get(tid) : null;
+    return t ? { t: "scr", id: tid, game: t.game, v: tblView(t, SCR_CID) } : { t: "scr", id: null };
+  }
+  scrResolve(terr) {
+    const tid = this.screen.get(terr);
+    if (!tid) return;
+    const t = this.tables.get(tid);
+    if (t && t.seats.length) return;
+    const cands = this.scrActive(terr).filter(x => this.scrPlaying(x) && x.id !== tid);
+    this.screen.set(terr, cands.length ? cands[Math.floor(Math.random() * cands.length)].id : null);
+  }
+  scrPush(terr, force) {
+    const msg = this.scrMsg(terr), key = JSON.stringify(msg);
+    if (!force && this.scrLast.get(terr) === key) return;
+    this.scrLast.set(terr, key);
+    for (const ws of this.state.getWebSockets()) {
+      const a = ws.deserializeAttachment() || {};
+      if (a.terrain === terr && !a.table && a.scrWatch) { try { ws.send(key); } catch { /* 對方已斷線 */ } }   // 只推給「走近螢幕」的人（客戶端送 scr_watch）
+    }
+  }
+  scrAfter(terr) {
+    this.scrResolve(terr);
+    if (!this.screen.get(terr)) {   // 螢幕關閉時有人開局：自動開始播（已經在播的時候不會被別桌搶走）
+      const cands = this.scrActive(terr).filter(x => this.scrPlaying(x));
+      if (cands.length) this.screen.set(terr, cands[0].id);
+    }
+    this.scrPush(terr, false);
+  }
   async tableInfoMsg(terrain) {
     const info = {};
     for (const [tid, game] of Object.entries(TABLE_DEFS[terrain] || {})) {
@@ -3932,7 +3991,7 @@ export class Island {
     }
     return { t: "tblinfo", info };
   }
-  async tableBroadcastInfo(terrain) { this.broadcast(await this.tableInfoMsg(terrain), undefined, terrain); }
+  async tableBroadcastInfo(terrain) { this.broadcast(await this.tableInfoMsg(terrain), undefined, terrain); this.scrAfter(terrain); }
   // 離開牌桌（Esc、換地形、斷線）：牌局進行中就結束這一局
   async tableLeave(ws) {
     const att = ws.deserializeAttachment() || {};
@@ -3945,6 +4004,7 @@ export class Island {
     const resBefore = t.result;
     tblLeave(t, att.id);
     try { ws.send(JSON.stringify({ t: "table", id: tid, v: null })); } catch { /* 已斷線 */ }
+    if (att.scrWatch) for (const [terr, defs] of Object.entries(TABLE_DEFS)) if (defs[tid]) { try { ws.send(JSON.stringify(this.scrMsg(terr))); } catch { /* 已斷線 */ } }   // 離開牌桌的人（還在看螢幕的話）：補上現在大螢幕的畫面（在牌桌裡時沒有收）
     await this.saveTable(t);
     this.tableNotify(t);
     for (const [terr, defs] of Object.entries(TABLE_DEFS)) if (defs[tid]) await this.tableBroadcastInfo(terr);
@@ -4020,6 +4080,27 @@ export class Island {
     }
     const terr = att.terrain;
     if (!terr) return;
+    if (a === "scr_watch") {   // 大螢幕：走近螢幕＝開始收畫面，走遠＝停止（流量只花在真的在看的人身上）
+      const cur = ws.deserializeAttachment() || {};
+      cur.scrWatch = !!msg.on; ws.serializeAttachment(cur);
+      if (cur.scrWatch) ws.send(JSON.stringify(this.scrMsg(terr)));
+      return;
+    }
+    if (a === "scr_list") {   // 大螢幕：目前可轉播的桌（進行中或有人入座）
+      const list = this.scrActive(terr).map(x => ({ id: x.id, game: x.game, n: x.seats.length, max: GAME_LIMITS[x.game][1], play: this.scrPlaying(x), names: x.seats.map(m => m.name) }));
+      list.sort((p, q) => (p.play === q.play ? (p.id < q.id ? -1 : 1) : p.play ? -1 : 1));
+      ws.send(JSON.stringify({ t: "scrlist", list, cur: this.screen.get(terr) || null, cd: Math.max(0, (this.scrCd.get(terr) || 0) - now) }));
+      return;
+    }
+    if (a === "scr_pick") {   // 大螢幕：切到某一桌（所有人共用；搶著切也是樂趣）
+      const tid = String(msg.id || "");
+      if (now < (this.scrCd.get(terr) || 0)) ws.send(JSON.stringify({ t: "scrcd", left: this.scrCd.get(terr) - now }));   // 冷卻中（全島共用 5 秒）
+      else if (tid && this.scrActive(terr).some(x => x.id === tid)) {
+        if (this.screen.get(terr) !== tid) this.scrCd.set(terr, now + SCR_CD_MS);
+        this.screen.set(terr, tid); this.scrPush(terr, true);
+      }
+      return;
+    }
     if (a === "join") {
       const tid = String(msg.id || ""), game = (TABLE_DEFS[terr] || {})[tid];
       if (!game) return;
@@ -4042,7 +4123,7 @@ export class Island {
     const t = await this.getTable(tid);
     if (!t) return;
     if (t.game === "arcade" && (a === "tb" || a === "clr")) {   // 俄羅斯方塊：盤面快照／垃圾行，只轉發（不存檔、不通知整個畫面、不廣播 tblinfo；分數記在記憶體，下一次存檔時一起寫）
-      for (const [cid, m] of arMsg(t, att.id, msg, now)[1]) this.sendToId(cid, m);
+      this.arSend(terr, t, arMsg(t, att.id, msg, now)[1]);
       return;
     }
     if (t.game === "hockey" && (a === "hp" || a === "hs")) {   // 空氣曲棍球：握把位置／圓盤快照，只轉發（不存檔、不通知畫面）；時間上限過了才順便結算
@@ -4111,7 +4192,7 @@ export class Island {
     hkTick(t, now);   // 空氣曲棍球：超過時間上限還沒結算
     if (t.game === "arcade" && AR_MSGS.has(a)) {   // 俄羅斯方塊：單人／聯機邀請／接受／拒絕／開始／結束
       const [changed, extra] = arMsg(t, att.id, msg, now);
-      for (const [cid, m] of extra) this.sendToId(cid, m);
+      this.arSend(terr, t, extra);
       if (!changed) return;
     }
     else if (t.game === "hockey" && HK_MSGS.has(a)) hkEnd(t, att.id, msg);   // 空氣曲棍球：桌主那台回報結束

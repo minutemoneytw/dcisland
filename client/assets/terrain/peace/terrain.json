@@ -213,7 +213,7 @@
   {
    "cell": [
     26,
-    18
+    48
    ],
    "w": 8,
    "h": 6
@@ -301,6 +301,28 @@
    ],
    "w": 2,
    "h": 3
+  },
+  {
+   "id": "screen",
+   "kind": "screen",
+   "name": "大螢幕",
+   "cell": [
+    27,
+    14
+   ],
+   "w": 16,
+   "h": 9
+  },
+  {
+   "id": "lounge_rug",
+   "kind": "rug",
+   "img": "lounge_rug.png",
+   "cell": [
+    25,
+    23
+   ],
+   "w": 20,
+   "h": 8
   }
  ],
  "campfire": false

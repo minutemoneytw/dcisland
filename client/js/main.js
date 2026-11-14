@@ -5699,6 +5699,230 @@ function buildBigTwo(box, v, mk, gd) {
   box.appendChild(log);
   if (gd?.rules && !playing) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
+// ---- 大螢幕（和平島左上角的圍觀休息區；2026-11-14，使用者要求）：全島共用一個頻道，轉播某一桌的畫面 ----
+// 伺服器（worker 的 scr*、dev_server 的 _scr_*）推 {t:'scr', id, game, v}（v＝那桌「觀戰者視角」的 tbl view，手牌全翻開；id＝null＝螢幕關閉）給不在牌桌裡的人；
+// 這裡把它畫進一張離屏 canvas（S.scrCv，收到新畫面才重畫一次），島上的螢幕物件（terrain.json props 的 kind:'screen'）每幀只是 drawImage。
+// 走到螢幕旁按 F（或點它）→ scr_list 取得「進行中或有人入座」的桌 → 點選切換（scr_pick，所有人共用）。
+const SCR_W = 496, SCR_H = 272;
+const SCR_FONT = '"Microsoft JhengHei", sans-serif';
+function onNetScr(msg) {
+  if ((msg.id || null) !== (S.scr?.id || null)) S.scrTb = {};   // 換台：舊的盤面快照作廢
+  S.scr = msg.id ? msg : null;
+  scrRender();
+}
+function onNetScrTb(msg) {   // 俄羅斯方塊的盤面快照（每台約 4 次／秒）：存起來，下一次畫螢幕時一起重畫
+  (S.scrTb ||= {})[msg.cab] = { b: msg.b, sc: msg.sc, ln: msg.ln };
+  S.scrDirty = true;
+}
+// 俄羅斯方塊（4 台機台一字排開；所有機台一樣大，聯機同場的加金框並標示模式）
+function scrArcade(g, v) {
+  const seatOf = cab => v.seats.find(s => s.cab === cab), mem = v.link && v.link.phase === 'playing' ? v.link.mem : [];
+  const SLW = 118, GAP = 6, X0 = 3, Y0 = 30, SLH = 216, CELL = 9;
+  if (mem.length) {
+    g.fillStyle = '#ffe08a'; g.font = `bold 12px ${SCR_FONT}`; g.textAlign = 'center';
+    g.fillText(`聯機${v.link.mode === 'battle' ? '對戰' : '一般'}：${mem.length} 台同場`, SCR_W / 2, 21);
+  }
+  for (let cab = 0; cab < 4; cab++) {
+    const x = X0 + cab * (SLW + GAP), s = seatOf(cab), linked = mem.includes(cab), playing = !!(s && s.play), tb = playing || (s && s.dead) ? S.scrTb?.[cab] : null;
+    g.fillStyle = 'rgba(255,255,255,.05)'; g.fillRect(x, Y0, SLW, SLH);
+    g.strokeStyle = linked ? '#ffe08a' : playing ? '#5a78c8' : 'rgba(255,255,255,.15)'; g.lineWidth = linked ? 2 : 1; g.strokeRect(x + .5, Y0 + .5, SLW - 1, SLH - 1);
+    g.fillStyle = '#e8ecf8'; g.font = `bold 12px ${SCR_FONT}`; g.textAlign = 'left';
+    g.fillText(`${cab + 1} 號機${s ? '　' + (s.name || '').slice(0, 4) : ''}`, x + 6, Y0 + 15, SLW - 10);
+    const bx = x + (SLW - 10 * CELL) / 2, by = Y0 + 22;
+    g.fillStyle = '#0a0e1c'; g.fillRect(bx - 1, by - 1, 10 * CELL + 2, 20 * CELL + 2);
+    if (tb) {
+      for (let i = 0; i < 200; i++) {
+        const ch = tb.b.charCodeAt(i) - 48; if (ch <= 0) continue;
+        g.fillStyle = AR_COLORS[ch] || '#888'; g.fillRect(bx + (i % 10) * CELL, by + Math.floor(i / 10) * CELL, CELL - 1, CELL - 1);
+      }
+      if (s.dead) { g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(bx, by, 10 * CELL, 20 * CELL); }
+    }
+    const note = !s ? '空機台' : s.dead ? '出局' : playing ? '' : s.st === 'link' ? '聯機等待中' : s.st === 'solo' ? '準備中' : '待機';
+    if (note) { g.fillStyle = '#7f8cb0'; g.font = `13px ${SCR_FONT}`; g.textAlign = 'center'; g.fillText(note, bx + 5 * CELL, by + 10 * CELL); }
+    if (s) {
+      g.fillStyle = '#ffe08a'; g.font = `bold 12px ${SCR_FONT}`; g.textAlign = 'left';
+      g.fillText(`${(tb ? tb.sc : s.sc) || 0} 分`, x + 6, Y0 + SLH - 8); g.fillStyle = '#9fb0d8'; g.textAlign = 'right'; g.fillText(`${(tb ? tb.ln : s.ln) || 0} 行`, x + SLW - 6, Y0 + SLH - 8);
+    }
+  }
+}
+// 走近螢幕才訂閱畫面（scr_watch）：伺服器只推給在看的人。「近」＝螢幕邊緣 SCR_WATCH_DIST 以內（約等於螢幕在視窗裡）；進牌桌、換島、斷線都會取消。
+const SCR_WATCH_DIST = 520;
+function scrWatchTick() {
+  if (S.t < (S.scrWatchNext || 0)) return;
+  S.scrWatchNext = S.t + .5;
+  const pr = S.terrain === 'peace' ? propsHere().find(p => p.kind === 'screen') : null;
+  const want = !!pr && !S.tableOpen && !S.players[0].dead && propDist(pr, S.players[0].x, S.players[0].y) <= SCR_WATCH_DIST;
+  if (want !== !!S.scrWatching || (want && S.t > (S.scrBeat || 0))) {   // 狀態變了就通知；在看的時候每 10 秒補送一次（伺服器重啟也撐得住）
+    S.scrWatching = want; S.scrBeat = S.t + 10;
+    S.net?.tbl?.({ a: 'scr_watch', on: want });
+    if (!want && S.scr) { S.scr = null; scrRender(); }   // 走遠了：畫面不再更新，先清掉免得顯示過期內容
+  }
+}
+function onNetScrCd(msg) { toast(`大螢幕剛切換過，${Math.ceil(msg.left / 1000)} 秒後才能再切`, 1800); }
+function onNetScrList(msg) {
+  S.scrList = msg; S.scrCdAt = Date.now() + (msg.cd || 0);
+  if (S.scrPickOpen) buildScrPick();
+}
+function scrTmp(w, h) { const c = (S.scrTmp ||= document.createElement('canvas')); c.width = w; c.height = h; return c; }
+function scrMiniCard(g, x, y, c, kind) {   // 22×30 的小牌；kind＝'uno' 用 UNO 牌面，否則一般撲克牌；c＝null 畫牌背
+  const w = 22, h = 30;
+  if (kind === 'uno' && c) {
+    const wild = c === 'W' || c === 'F', v = wild ? c : c.slice(1);
+    g.fillStyle = wild ? '#22222c' : UN_FILL[c[0]]; g.fillRect(x, y, w, h);
+    g.strokeStyle = '#f6f2e6'; g.lineWidth = 1.5; g.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    g.fillStyle = '#fff'; g.font = `bold 13px ${SCR_FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText({ s: '⊘', r: '⇄', d: '+2', W: '★', F: '+4' }[v] || v, x + w / 2, y + h / 2 + 1);
+    g.textBaseline = 'alphabetic'; return;
+  }
+  g.fillStyle = c ? '#f6f2e6' : '#a83a38'; g.fillRect(x, y, w, h);
+  g.strokeStyle = '#1a1612'; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w - 1, h - 1);
+  if (!c) return;
+  g.textAlign = 'left'; g.fillStyle = c === 'JK' ? '#6a2a8a' : (c[0] === 'H' || c[0] === 'D') ? '#d83a3a' : '#1e1e24';
+  if (c === 'JK') { g.font = `bold 12px ${SCR_FONT}`; g.fillText('鬼', x + 5, y + 19); return; }
+  const r = Number(c.slice(1));
+  g.font = `bold 12px ${SCR_FONT}`; g.fillText(({ 1: 'A', 11: 'J', 12: 'Q', 13: 'K' })[r] || String(r), x + 2, y + 12);
+  g.font = `13px ${SCR_FONT}`; g.fillText(SUIT_SYM[c[0]], x + 2, y + 26);
+}
+// 每位玩家一列手牌（疊起來，放不下就縮小間距）：名字在左邊，牌在右邊
+function scrHands(g, v, x, y, w, rowH, kind) {
+  v.seats.forEach((s, k) => {
+    const cy = y + k * rowH, hand = (v.hands && v.hands[k]) || [];
+    g.fillStyle = v.turn === k && v.phase === 'playing' ? '#ffe08a' : '#cfd6e8'; g.font = `bold 12px ${SCR_FONT}`; g.textAlign = 'left';
+    g.fillText((s.name || '').slice(0, 6), x, cy + 20, 54);
+    const n = hand.length, step = n > 1 ? Math.min(24, (w - 60 - 22) / (n - 1)) : 0;
+    hand.forEach((c, q) => scrMiniCard(g, x + 58 + q * step, cy + 2, c, kind));
+  });
+}
+function scrSeatTag(v, s, k) {
+  if (v.phase !== 'playing') return s.ready ? '已準備' : '未準備';
+  const gm = v.game;
+  if (s.left) return '離開';
+  if (gm === 'oldmaid' || gm === 'uno' || gm === 'bigtwo') return s.fo ? '棄權' : `${s.n} 張`;
+  if (gm === 'kingdom') return `${v.kg?.sd?.[k]?.vp ?? 0} 分`;
+  if (gm === 'blokus' || gm === 'trigon') return s.rem != null ? `剩 ${s.rem}` : '';
+  if (gm === 'gomoku') return v.black == null ? '' : (k === v.black ? '黑棋' : '白棋');
+  if (gm === 'dodge') return s.out ? '淘汰' : `${s.lives ?? ''} 命`;
+  if (gm === 'mage') return s.dead ? '倒下' : `HP ${s.hp ?? ''}`;
+  if (gm === 'typing' || gm === 'zhtyping') return `${s.score ?? 0} 分`;
+  if (gm === 'maze') return `${s.sc ?? 0} 分`;
+  if (gm === 'intel') return s.out ? '出局' : '';
+  return '';
+}
+function scrRender() {
+  const cv = (S.scrCv ||= Object.assign(document.createElement('canvas'), { width: SCR_W, height: SCR_H })), g = cv.getContext('2d');
+  g.imageSmoothingEnabled = false; g.textBaseline = 'alphabetic';
+  g.fillStyle = '#0b1020'; g.fillRect(0, 0, SCR_W, SCR_H);
+  const sc = S.scr;
+  if (!sc) {   // 關閉：暗底＋掃描線，提示怎麼打開
+    g.fillStyle = 'rgba(120,150,220,.08)'; for (let y = 0; y < SCR_H; y += 4) g.fillRect(0, y, SCR_W, 1);
+    g.fillStyle = '#6f7ea8'; g.textAlign = 'center'; g.font = `bold 22px ${SCR_FONT}`; g.fillText('大螢幕', SCR_W / 2, 118);
+    g.font = `14px ${SCR_FONT}`; g.fillText('目前沒有轉播。有人入座遊戲桌之後，走到螢幕旁按 F 選擇', SCR_W / 2, 148);
+    return;
+  }
+  const v = { ...sc.v, game: sc.game }, gd = gameDef(sc.game), isAr = sc.game === 'arcade';
+  const playing = isAr ? v.seats.some(s => s.play) : v.phase === 'playing';
+  // 標題列
+  g.fillStyle = '#16224a'; g.fillRect(0, 0, SCR_W, 26);
+  g.fillStyle = '#ffe08a'; g.font = `bold 15px ${SCR_FONT}`; g.textAlign = 'left'; g.fillText(`${gd?.name || '遊戲'}　${v.id ? '' : ''}`, 10, 19);
+  g.textAlign = 'right'; g.fillStyle = playing ? '#7fe08a' : v.result ? '#ffb070' : '#9fb0d8'; g.font = `13px ${SCR_FONT}`;
+  g.fillText(playing ? '進行中' : v.result && !isAr ? '結算' : isAr ? '待機' : `等待開始 ${v.seats.length}/${v.max}`, SCR_W - 10, 18);
+  if (isAr) { scrArcade(g, v); return; }
+  // 右側：座位
+  const SX = 340, SW = 148;
+  v.seats.forEach((s, k) => {
+    const y = 34 + k * 30;
+    g.fillStyle = playing && v.turn === k ? 'rgba(255,224,138,.22)' : 'rgba(255,255,255,.06)'; g.fillRect(SX, y, SW, 26);
+    g.fillStyle = '#e8ecf8'; g.font = `bold 12px ${SCR_FONT}`; g.textAlign = 'left'; g.fillText((s.name || '').slice(0, 6), SX + 6, y + 17, 70);
+    g.fillStyle = '#9fb0d8'; g.font = `12px ${SCR_FONT}`; g.textAlign = 'right'; g.fillText(scrSeatTag(v, s, k), SX + SW - 6, y + 17);
+  });
+  // 左側：主畫面（316×196）
+  const MX = 8, MY = 32, MW = 322, MH = 196;
+  const fit = (src, w, h) => { const k = Math.min(MW / w, MH / h); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(src, MX + (MW - w * k) / 2, MY + (MH - h * k) / 2, w * k, h * k); g.imageSmoothingEnabled = false; };   // 縮小要平滑，不然 1px 的格線會被丟掉
+  let drew = false;
+  try {
+    if (sc.game === 'gomoku' && v.board) { const t = scrTmp(GM_MARGIN * 2 + GM_CELL * (GM_N - 1), GM_MARGIN * 2 + GM_CELL * (GM_N - 1)); gomokuDraw(t, v, null, null); fit(t, t.width, t.height); drew = true; }
+    else if (sc.game === 'blokus' && v.bk) { const n = bkN(v) * bkCellPx(v), t = scrTmp(n, n); bkDraw(t, v); fit(t, n, n); drew = true; }
+    else if (sc.game === 'trigon' && v.tg) { const t = scrTmp(TG_CW, TG_CH); tgDraw(t, v); fit(t, TG_CW, TG_CH); drew = true; }
+    else if (sc.game === 'uno' && v.un) {
+      scrHands(g, v, MX, MY, 250, 44, 'uno');
+      scrMiniCard(g, MX + 262, MY + 8, v.un.top, 'uno'); g.fillStyle = UN_FILL[v.un.color] || '#fff'; g.font = `bold 13px ${SCR_FONT}`; g.textAlign = 'left';
+      g.fillText(`${UN_CNAME[v.un.color] || ''}色`, MX + 262, MY + 56); g.fillStyle = '#9fb0d8'; g.fillText(v.un.dir > 0 ? '↻ 順時針' : '↺ 逆時針', MX + 262, MY + 74);
+      drew = true;
+    } else if (sc.game === 'bigtwo' && v.bt) {
+      scrHands(g, v, MX, MY, MW, 34, null);
+      const base = MY + v.seats.length * 34 + 12;
+      g.fillStyle = '#9fb0d8'; g.font = `12px ${SCR_FONT}`; g.textAlign = 'left';
+      g.fillText(v.bt.last ? `${v.seats[v.bt.last.seat]?.name || ''} 出了：` : '新的一手（誰出都行）', MX, base + 18);
+      if (v.bt.last) v.bt.last.cs.forEach((c, q) => scrMiniCard(g, MX + 110 + q * 26, base, c, null));
+      drew = true;
+    } else if (sc.game === 'oldmaid' && playing) { scrHands(g, v, MX, MY, MW, 44, null); drew = true; }
+    else if (sc.game === 'kingdom' && v.kg) {
+      kgLoadData();
+      g.fillStyle = '#e8ecf8'; g.font = `bold 14px ${SCR_FONT}`; g.textAlign = 'left';
+      g.fillText(`第 ${v.kg.round} 輪　事件：${S.kgData?.events[v.kg.ev]?.name || ''}`, MX, MY + 16);
+      v.seats.forEach((s, k) => {
+        const sd = v.kg.sd[k], y = MY + 30 + k * 30;
+        g.fillStyle = '#cfd6e8'; g.font = `12px ${SCR_FONT}`; g.fillText((s.name || '').slice(0, 5), MX, y + 14, 48);
+        g.fillStyle = 'rgba(255,255,255,.1)'; g.fillRect(MX + 54, y + 2, 180, 14);
+        g.fillStyle = '#e8c030'; g.fillRect(MX + 54, y + 2, Math.min(180, 180 * sd.vp / KG_WIN_VP), 14);
+        g.fillStyle = '#fff'; g.fillText(`${sd.vp}`, MX + 240, y + 14);
+        g.fillStyle = '#9fb0d8'; g.fillText(`建${sd.bld.length} 人${sd.ppl.length} 奇${sd.won.length}`, MX + 262, y + 14);
+      });
+      (v.kg.obj || []).forEach((o, q) => { g.fillStyle = o.by != null ? '#7fe08a' : '#9fb0d8'; g.font = `11px ${SCR_FONT}`; g.fillText(`目標：${o.name}${o.by != null ? `（${v.seats[o.by]?.name || ''} +3）` : ''}`, MX, MY + 30 + v.seats.length * 30 + 14 + q * 16, MW); });
+      drew = true;
+    }
+  } catch (e) { drew = false; }
+  if (!drew) {   // 沒有專屬畫面的遊戲（即時遊戲、秘藥情報戰…）或還沒開始：大字狀態
+    g.fillStyle = '#9fb0d8'; g.textAlign = 'center'; g.font = `bold 20px ${SCR_FONT}`;
+    g.fillText(playing ? '對戰進行中' : v.result ? '本局結束' : '等待玩家入座、準備', MX + MW / 2, MY + MH / 2);
+    g.font = `13px ${SCR_FONT}`; g.fillText(playing ? '（這個遊戲只顯示對戰名單與分數）' : '', MX + MW / 2, MY + MH / 2 + 24);
+  }
+  // 結算橫幅
+  if (!playing && v.result?.text) {
+    g.fillStyle = 'rgba(10,16,40,.88)'; g.fillRect(MX, MY + MH - 40, MW, 40);
+    g.strokeStyle = '#ffe08a'; g.lineWidth = 1.5; g.strokeRect(MX + .5, MY + MH - 39.5, MW - 1, 39);
+    g.fillStyle = '#ffe08a'; g.textAlign = 'center'; g.font = `bold 15px ${SCR_FONT}`; g.fillText(v.result.text, MX + MW / 2, MY + MH - 14, MW - 12);
+  }
+  // 最近兩行紀錄
+  g.textAlign = 'left'; g.fillStyle = '#7f8cb0'; g.font = `11px ${SCR_FONT}`;
+  (v.log || []).slice(-2).forEach((l, q) => g.fillText(l, 10, SCR_H - 18 + q * 14, SCR_W - 20));
+}
+// 轉播清單視窗
+function openScrPick() {
+  S.net?.tbl?.({ a: 'scr_list' });
+  S.scrPickOpen = true; $('scrBox').classList.remove('hidden');
+  buildScrPick();
+}
+function closeScrPick() { S.scrPickOpen = false; $('scrBox').classList.add('hidden'); }
+function buildScrPick() {
+  const body = $('scrBody'); body.innerHTML = '';
+  const lst = S.scrList?.list || [];
+  if (!S.scrList) { body.textContent = '讀取中…'; return; }
+  if (!lst.length) { const e = document.createElement('div'); e.className = 'ff-panel-hint'; e.textContent = '目前沒有進行中、或有人入座的遊戲。有人入座之後再來選。'; body.appendChild(e); return; }
+  for (const it of lst) {
+    const gd = gameDef(it.game), row = document.createElement('div');
+    row.className = 'opt scr-opt' + (S.scr && S.scr.id === it.id ? ' cur' : '');
+    const a = document.createElement('span'); a.className = 'scr-name'; a.textContent = `${gd?.name || it.game}${it.game === 'hockey' ? `（${it.id === 't15' ? '左' : '右'}桌）` : ''}`;
+    const b = document.createElement('span'); b.className = 'scr-st'; b.textContent = `${it.play ? '進行中' : '等待開始'}　${it.n}/${it.max}　${(it.names || []).join('、')}`;
+    row.appendChild(a); row.appendChild(b);
+    row.onclick = () => {
+      if (Date.now() < (S.scrCdAt || 0)) { toast(`大螢幕剛切換過，${Math.ceil((S.scrCdAt - Date.now()) / 1000)} 秒後才能再切`, 1800); return; }
+      S.net?.tbl?.({ a: 'scr_pick', id: it.id }); closeScrPick();
+    };
+    body.appendChild(row);
+  }
+}
+// 島上的螢幕物件：外框＋離屏 canvas 的內容（沒收到過畫面時先畫成關閉的樣子）
+function drawScreenProp(pr, r) {
+  if (!S.scrCv || S.scrDirty) { S.scrDirty = false; scrRender(); }
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#12141c'; ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.fillStyle = '#2a2e3c'; ctx.fillRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
+  const ix = r.x + (r.w - SCR_W) / 2, iy = r.y + 8;
+  ctx.drawImage(S.scrCv, ix, iy, SCR_W, SCR_H);
+  ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(ix, iy, SCR_W, 70);   // 玻璃反光
+  ctx.fillStyle = S.scr ? '#5ae07a' : '#c85a5a'; ctx.fillRect(r.x + r.w - 20, r.y + r.h - 7, 5, 3);   // 電源燈
+}
 // ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：正六邊形的三角格棋盤（邊長 9，486 格）＋我的方塊托盤（22 塊，1～6 個三角形）。
 // 操作同Blokus：點選方塊 → 旋轉 60 度（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。座標系與規則同 worker 的 tg*（三角形 (x, y)，(x + y) 偶數＝朝上；頂點 (i, j)，i + j 偶數）。
 // 滑鼠指到的是「最近的格點（頂點）」，方塊上最靠近中心的那個頂點對齊它——頂點之間的平移一定保持三角形的方向，所以不用管朝上朝下 ----
@@ -8472,7 +8696,7 @@ function arOppEl(v, cab, mk, cs) {
 const PROP_RANGE = 48;   // 離物件邊多近才能互動（px）
 const propsHere = () => S.terrains[S.terrain]?.props || [];
 const propRect = pr => ({ x: pr.cell[0] * CELL, y: pr.cell[1] * CELL, w: pr.w * CELL, h: pr.h * CELL });
-const propUse = pr => pr.kind === 'drink' || pr.kind === 'food';   // 能互動（吃喝）的物件；deco（隔板）只擋路、rug（地毯）畫在地板層
+const propUse = pr => pr.kind === 'drink' || pr.kind === 'food' || pr.kind === 'screen';   // 能互動（吃喝）的物件；deco（隔板）只擋路、rug（地毯）畫在地板層
 function propAtCell(x, y) {   // 這格被物件占著（擋路、不能擺家具；地毯不算）
   for (const pr of propsHere()) if (pr.kind !== 'rug' && x >= pr.cell[0] && x < pr.cell[0] + pr.w && y >= pr.cell[1] && y < pr.cell[1] + pr.h) return pr;
   return null;
@@ -8519,6 +8743,7 @@ function foodPick(kind) {
 function useProp(pr) {
   const p = S.players[0];
   if (p.dead) return;
+  if (pr.kind === 'screen') { openScrPick(); return; }   // 大螢幕：開轉播清單
   if (S.t < S.foodCdUntil) { toast(pr.kind === 'food' ? '還在吃…' : '還在喝…', 900); return; }
   S.foodCdUntil = S.t + FOOD_CD;
   const names = FOOD_NAMES[pr.kind] || FOOD_NAMES.drink, nm = names[Math.floor(Math.random() * names.length)];
@@ -8655,14 +8880,15 @@ function propDrawEntries(list) {
     list.push({
       y: r.y + r.h, draw: () => {
         ctx.imageSmoothingEnabled = false;
-        if (img) drawSpr(img, 0, r.x, r.y, r.w, r.h); else { ctx.fillStyle = '#8a5a34'; ctx.fillRect(r.x, r.y, r.w, r.h); }
+        if (pr.kind === 'screen') drawScreenProp(pr, r);
+        else if (img) drawSpr(img, 0, r.x, r.y, r.w, r.h); else { ctx.fillStyle = '#8a5a34'; ctx.fillRect(r.x, r.y, r.w, r.h); }
         if (!pr.name) return;   // 隔板之類：沒有名稱標籤
         const p = S.players[0], cx = r.x + r.w / 2;
         ctx.save(); ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)';
         ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.fillStyle = '#ffe08a';
         ctx.strokeText(pr.name || '', cx, r.y - 6); ctx.fillText(pr.name || '', cx, r.y - 6);
         if (!S.tableOpen && propNear(p) === pr) {
-          const t = pr.kind === 'food' ? '按 F 吃點心' : '按 F 喝飲料';
+          const t = pr.kind === 'screen' ? '按 F 選擇轉播的遊戲' : pr.kind === 'food' ? '按 F 吃點心' : '按 F 喝飲料';
           ctx.font = '11px "Microsoft JhengHei"'; ctx.fillStyle = '#fff6e0'; ctx.strokeText(t, cx, r.y - 20); ctx.fillText(t, cx, r.y - 20);
         }
         ctx.restore();
@@ -10018,6 +10244,7 @@ async function switchTerrain(id) {
     await ensureTerrain(id);      // 先載好圖，再切地形
     S.terrain = id; try { localStorage.setItem('dcisland.m0.terrain', id); } catch { /* 存不了不影響換地形 */ }
     S.remotes.clear();                          // 換了地形，原地形的人都看不到了
+    S.scr = null; S.scrList = null; S.scrWatching = false; closeScrPick(); scrRender();   // 大螢幕只在和平島；走近螢幕時才會送 scr_watch 收畫面
     if (S.listOpen) { S.listSig = null; buildPlayerList(); }   // 線上列表開著：馬上清掉舊島的人，新島的人到了由計時器補上
     if (netOn()) { S.netFurn = []; S.netFloor = []; }   // 等伺服器送該地形的擺設與地板
     genWorld(id); loadLayout();
@@ -10394,7 +10621,7 @@ function cycleWeapon(step) {
   setWeapon(ws[(i + step + ws.length) % ws.length].id);
 }
 let wheelAcc = 0, wheelAt = 0;
-const wheelBlocked = () => S.mode !== 'walk' || S.helpOpen || S.skillOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.colorOpen || S.glamOpen || S.signOpen || S.confirmOpen;
+const wheelBlocked = () => S.mode !== 'walk' || S.helpOpen || S.skillOpen || S.scrPickOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.colorOpen || S.glamOpen || S.signOpen || S.confirmOpen;
 document.addEventListener('wheel', e => {
   const t = e.target;
   if (t !== canvas && !t.closest?.('#weaponBar')) return;   // 只有在遊戲畫面或武器列上滾才切換（面板、視窗要照常捲動）
@@ -10471,6 +10698,7 @@ addEventListener('keydown', e => {
   if (S.titleOpen) { if (k === 'escape') closeTitles(); return; }                          // 稱號一覽開著：Esc 關閉（仍可走路）
   if (S.colorOpen) { if (k === 'escape') closeColor(false); return; }                      // 選色視窗開著：Esc 取消
   if (S.glamOpen) { if (k === 'escape') closeGlams(); return; }                            // 外觀一覽開著：Esc 關閉（仍可走路）
+  if (S.scrPickOpen) { if (k === 'escape') closeScrPick(); return; }                           // 大螢幕選台視窗開著：Esc 關閉（仍可走路）
   if (S.skillOpen) { if (k === 'escape' || k === 'p') closeSkillInfo(); return; }                // 職業技能說明開著：Esc / P 關閉（仍可走路）
   if (S.helpOpen) { if (k === 'escape' || k === 'enter') closeHelp(); return; }       // 操作說明開著：Esc / Enter 關閉，其他鍵不處理
   if (S.confirmOpen) { if (k === 'escape') closeConfirm(); return; }   // 「要保存嗎？」開著時：Esc＝繼續編輯，其他鍵不處理
@@ -10608,7 +10836,7 @@ function clickAttack(wx, wy) {
 }
 // 長按 F 或左鍵：冷卻一到就自動再揮（每幀呼叫；第一下由按下事件負責，之後這裡接手）
 function autoAttack() {
-  if (S.mode !== 'walk' || S.helpOpen || S.skillOpen || S.listOpen || S.signOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
+  if (S.mode !== 'walk' || S.helpOpen || S.skillOpen || S.scrPickOpen || S.listOpen || S.signOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.players[0].pose || S.t - S.players[0].lastAtk < ATK_CD) return;
   if (isRod() || S.players[0].fish) return;   // 釣竿不連擊：長按不會一直拋竿／收竿
   quiet = true;
   try {
@@ -10619,7 +10847,7 @@ function autoAttack() {
   } finally { quiet = false; }
 }
 canvas.addEventListener('mousedown', e => {
-  if (S.confirmOpen || S.helpOpen || S.skillOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.tableOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.skillOpen || S.scrPickOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.tableOpen) return;
   if (S.mode === 'decor' && S.decorTab === 'floor' && (e.button === 0 || e.button === 2)) {   // 地板模式：長按左鍵鋪、長按右鍵拆
     if (S.players[0].dead) { toast('你在墓碑裡動不了', 1400); return; }
     const r = canvas.getBoundingClientRect();
@@ -10646,7 +10874,7 @@ canvas.addEventListener('mousedown', e => {
 });
 canvas.addEventListener('contextmenu', e => {
   e.preventDefault();
-  if (S.confirmOpen || S.helpOpen || S.skillOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.tableOpen) return;
+  if (S.confirmOpen || S.helpOpen || S.skillOpen || S.scrPickOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.tableOpen) return;
   if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身；點遊戲桌就入座／觀戰（2026-11-12 使用者要求）
     const r = canvas.getBoundingClientRect(), wx = e.clientX - r.left + S.cam.x, wy = e.clientY - r.top + S.cam.y;
     const f = furnAtPoint(wx, wy), tb = tableAtPoint(wx, wy), pr = propAtPoint(wx, wy);
@@ -10678,6 +10906,7 @@ $('cfDiscard').onclick = () => exitDecor(false);
 $('cfKeep').onclick = closeConfirm;
 $('helpClose').onclick = closeHelp;
 $('skillClose').onclick = closeSkillInfo;
+$('scrClose').onclick = closeScrPick;
 $('signSave').onclick = saveSign;
 $('signCancel').onclick = closeSign;
 $('furnClear').onclick = () => {
@@ -10937,6 +11166,7 @@ async function boot() {
         if (f.life <= 0) S.floaters.splice(i, 1);
       }
       stepSkills();
+      scrWatchTick();
       updateSkillBar();
       updateStatBars();
       updateClock();     // 左上角的遊戲時間（時鐘、日期、季節）
@@ -10983,6 +11213,7 @@ async function boot() {
     onThp: onNetThp,           // 空氣曲棍球：別人的握把位置
     onThs: onNetThs,           // 空氣曲棍球：桌主的圓盤快照
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
+    onScr: onNetScr, onScrList: onNetScrList, onScrTb: onNetScrTb, onScrCd: onNetScrCd,   // 和平島大螢幕
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）
     onNick: nick => { S.nick = nick || ''; applyMyName(); },

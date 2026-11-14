@@ -146,6 +146,14 @@ body {
 /* ---------- 嚮導的操作說明 ---------- */
 #helpBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 460px; max-height: 500px; display: flex; flex-direction: column; z-index: 31; }
 #helpBox.hidden { display: none !important; }
+#scrBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 460px; max-height: 480px; display: flex; flex-direction: column; z-index: 31; }
+#scrBox.hidden { display: none !important; }
+#scrBody { overflow-y: auto; flex: 1 1 auto; min-height: 0; margin: 8px 0; }
+.scr-opt { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border: 1px solid var(--gold-dim); margin: 4px 0; cursor: pointer; }
+.scr-opt:hover { border-color: var(--gold); background: rgba(255, 224, 138, .08); }
+.scr-opt.cur { border-color: #7fe08a; }
+.scr-name { font-size: 14px; color: var(--gold); }
+.scr-st { font-size: 12px; color: var(--text-dim); }
 #skillBox { left: 50%; top: 50%; transform: translate(-50%, -50%); width: 480px; max-height: 540px; display: flex; flex-direction: column; z-index: 31; }
 #skillBox.hidden { display: none !important; }
 #skillBody { overflow-y: auto; flex: 1 1 auto; min-height: 0; padding-right: 4px; }
