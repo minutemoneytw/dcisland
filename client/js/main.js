@@ -5542,7 +5542,10 @@ function buildKingdom(box, v, mk, gd) {
       b.onclick = () => {
         const n = o.take.filter(x => x === r).length;
         if (n >= 1 && o.take.length === 1 && g.sup[r] >= 4 && g.ev !== 'drought') o.take = [r, r];   // 第二次點同一種＝拿 2 張同種
-        else if (n >= 1) o.take = o.take.filter(x => x !== r);
+        else if (n >= 1) {
+          if (o.take.length === 1) toast(g.ev === 'drought' ? '乾旱：這輪不能拿 2 張同種' : `${KG_RN[r]}庫存只剩 ${g.sup[r]}，要有 4 張以上才能拿 2 張同種（已取消選取）`, 2600);   // 點第二次沒變成 2 張時說明原因，不要默默取消
+          o.take = o.take.filter(x => x !== r);
+        }
         else if (o.take.length === 2 && o.take[0] === o.take[1]) o.take = [r];
         else if (o.take.length < 3) o.take = [...o.take, r];
         o.sel = null; buildTable();
