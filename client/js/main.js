@@ -7340,6 +7340,8 @@ const PB_LANE_X = 280, PB_LANE_Y = 452;                     // 發球道：球�
 const PB_FLIP = { L: 42, REST: 28 * Math.PI / 180, UP: -30 * Math.PI / 180, SPD: 24, TH: 4.5, pl: [84, 468], pr: [194, 468] };   // 擋板：長度、休息／舉起的角度（往下為正）、轉速（弧度／秒）、半厚、左右轉軸
 const PB_BUMPERS = [[105, 190, 16, '#f06060'], [187, 190, 16, '#f0c020'], [146, 250, 16, '#40c8e0'], [66, 292, 13, '#70d870'], [226, 292, 13, '#c080f0']];   // x、y、半徑、顏色（5 個，剛好用滿快照的閃光位元 f 0～31）
 const PB_POSTS = [[60, 150, 5], [238, 150, 5], [34, 235, 6], [250, 235, 6], [104, 335, 5], [188, 335, 5], [146, 150, 5]];   // 立柱：不得分，只擋球彈開
+// 隧道：球滾進入口（in：x、y、半徑）就消失，0.45 秒後從出口（out）以指定速度（vx、vy）射出，得 300×倍率
+const PB_TUNNELS = [{ in: [28, 300, 10], out: [205, 100], v: [-110, 170], col: '#f0a040' }, { in: [250, 300, 10], out: [98, 100], v: [110, 170], col: '#50d0a0' }];
 const PB_SLINGS = [[48, 345, 70, 396], [244, 345, 222, 396]];   // 彈弓：打到會被踢回去，得 50×倍率
 const PB_SEGS = (() => {   // 牆與導軌：[x1, y1, x2, y2]
   const s = [], cx = 151, cy = 151, R = 141;
@@ -7402,6 +7404,12 @@ function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
     return;
   }
   if (P.st !== 1) return;
+  if (P.tun) {   // 在隧道裡：球不見，時間到從出口射出
+    P.tun.t -= dt;
+    if (P.tun.t <= 0) { const tn = PB_TUNNELS[P.tun.i]; b.x = tn.out[0]; b.y = tn.out[1]; b.vx = tn.v[0]; b.vy = tn.v[1]; P.tun = null; P.tunCd = .6; }
+    return;
+  }
+  if (P.tunCd > 0) P.tunCd -= dt;
   b.vy += PB_G * dt; b.x += b.vx * dt; b.y += b.vy * dt;
   const sp = Math.hypot(b.vx, b.vy); if (sp > 1100) { b.vx *= 1100 / sp; b.vy *= 1100 / sp; }
   for (const s of PB_SEGS) pbHitSeg(b, s[0], s[1], s[2], s[3], .5, 1);
@@ -7415,6 +7423,10 @@ function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
     P.score += 100 * P.mult; P.hits++; if (P.hits % 8 === 0 && P.mult < 5) P.mult++;
     P.flash[i] = performance.now() + 140;
   });
+  if (!(P.tunCd > 0)) PB_TUNNELS.forEach((tn, i) => {
+    if (!P.tun && Math.hypot(b.x - tn.in[0], b.y - tn.in[1]) < tn.in[2]) { P.tun = { i, t: .45 }; P.score += 300 * P.mult; P.hits++; if (P.hits % 8 === 0 && P.mult < 5) P.mult++; P.tflash = [i, performance.now() + 300]; b.x = tn.out[0]; b.y = tn.out[1]; b.vx = b.vy = 0; }
+  });
+  if (P.tun) return;
   for (const [px, py, pr] of PB_POSTS) {   // 立柱
     const dx = b.x - px, dy = b.y - py, d = Math.hypot(dx, dy), rr = pr + PB_R;
     if (d >= rr || d < 1e-6) continue;
@@ -7503,6 +7515,14 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
     g.fillStyle = lit ? '#ffffff' : col; g.beginPath(); g.arc(bx, by, br, 0, Math.PI * 2); g.fill();
     g.strokeStyle = lit ? col : 'rgba(255,255,255,.55)'; g.lineWidth = 3; g.beginPath(); g.arc(bx, by, br - 4, 0, Math.PI * 2); g.stroke();
   });
+  PB_TUNNELS.forEach((tn, i) => {   // 隧道入口（黑洞＋彩色外圈）與出口（外圈＋箭頭）
+    const lit = P.tflash && P.tflash[0] === i && P.tflash[1] > now;
+    g.fillStyle = '#05060f'; g.beginPath(); g.arc(tn.in[0], tn.in[1], tn.in[2], 0, Math.PI * 2); g.fill();
+    g.strokeStyle = lit ? '#fff' : tn.col; g.lineWidth = 3; g.beginPath(); g.arc(tn.in[0], tn.in[1], tn.in[2] + 1, 0, Math.PI * 2); g.stroke();
+    g.strokeStyle = tn.col; g.lineWidth = 2; g.beginPath(); g.arc(tn.out[0], tn.out[1], 9, 0, Math.PI * 2); g.stroke();
+    const vl = Math.hypot(tn.v[0], tn.v[1]), ax = tn.v[0] / vl, ay = tn.v[1] / vl;
+    g.fillStyle = tn.col; g.beginPath(); g.moveTo(tn.out[0] + ax * 7, tn.out[1] + ay * 7); g.lineTo(tn.out[0] - ay * 4 - ax * 2, tn.out[1] + ax * 4 - ay * 2); g.lineTo(tn.out[0] + ay * 4 - ax * 2, tn.out[1] - ax * 4 - ay * 2); g.closePath(); g.fill();
+  });
   for (const [px, py, pr] of PB_POSTS) { g.fillStyle = '#8c94b8'; g.beginPath(); g.arc(px, py, pr, 0, Math.PI * 2); g.fill(); g.fillStyle = '#c8d0f0'; g.beginPath(); g.arc(px - 1.5, py - 1.5, pr * .45, 0, Math.PI * 2); g.fill(); }
   g.strokeStyle = '#f0a040'; g.lineWidth = 5; g.lineCap = 'round';
   for (const s of PB_SLINGS) { g.beginPath(); g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); g.stroke(); }
@@ -7518,7 +7538,7 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
     g.fillStyle = '#9a9aa8'; g.fillRect(PB_LANE_X - 3, PB_LANE_Y + PB_R + pull, 6, 22); g.fillStyle = '#d84a4a'; g.fillRect(PB_LANE_X - 6, PB_LANE_Y + PB_R + 20 + pull, 12, 4);
   }
   // 球
-  if (P.st !== 3 && t >= -1) {
+  if (P.st !== 3 && t >= -1 && !P.tun) {
     const b = P.ball, bg = g.createRadialGradient(b.x - 2, b.y - 2, 1, b.x, b.y, PB_R);
     bg.addColorStop(0, '#ffffff'); bg.addColorStop(1, '#a8aec0'); g.fillStyle = bg; g.beginPath(); g.arc(b.x, b.y, PB_R, 0, Math.PI * 2); g.fill();
   }
