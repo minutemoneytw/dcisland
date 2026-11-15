@@ -5529,6 +5529,17 @@ function buildKingdom(box, v, mk, gd) {
   if (playing) { const tm = mk('span', 'bk-timer'); tm.id = 'kgTimer'; st.appendChild(tm); }
   box.appendChild(st);
   if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  if (!playing) {   // 開局前：座位列（誰入座、誰準備好了），和其他遊戲一樣；開局後改看下面各人的王國
+    const row = mk('div', 'table-seats');
+    v.seats.forEach(s => {
+      const e = mk('div', 'table-seat' + (s.you ? ' you' : '') + (s.left ? ' out' : ''));
+      e.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '')));
+      e.appendChild(mk('div', 'table-tag', s.ready ? '已準備' : '未準備'));
+      row.appendChild(e);
+    });
+    for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+    box.appendChild(row);
+  }
   if (!S.kgData) { box.appendChild(mk('div', 'table-status', '載入牌庫中…')); }
   else if (g) {
     // 事件（左）＋共同目標（右）併成一列，省高度
