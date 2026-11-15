@@ -4496,10 +4496,12 @@ function stepFishing(p) {
 // 單機抽魚（與 Worker 的 rollFish、dev_server 的 roll_fish 同演算法）：先脫鉤判定，再依權重抽稀有度，
 // 從該地形同稀有度的魚裡平均抽一種；尺寸越大越難（範圍內取 r^1.6）
 function rollFish(terrain, bob) {
-  const db = S.fishDB, list = db?.terrains[terrain] || [];
+  const db = S.fishDB, fc = db?.foreignChance?.[terrain], home = terrain;   // 和平島等：極低機率改釣別座島的魚（圖鑑記在那座島；怪物判定仍看自己這座島）
+  if (fc && Math.random() < fc) { const others = Object.keys(db.terrains).filter(k => k !== terrain && db.terrains[k].length); if (others.length) terrain = others[Math.floor(Math.random() * others.length)]; }
+  const list = db?.terrains[terrain] || [];
   if (!list.length || Math.random() < db.escape) return { terrain, escaped: true };
   // 極低機率釣到敵對怪物（場上已經有一隻就照常釣魚）；與兩份伺服器的 fishCatch 同規則
-  if (db.lurker && !(db.noLurker || []).includes(terrain) && mobDef(db.lurker) && !S.mobs.some(v => v.lurker && !v.dead) && Math.random() < (db.lurkerChance || 0))   // noLurker：和平島不會釣到
+  if (db.lurker && !(db.noLurker || []).includes(home) && mobDef(db.lurker) && !S.mobs.some(v => v.lurker && !v.dead) && Math.random() < (db.lurkerChance || 0))   // noLurker：和平島不會釣到
     return { terrain, lurker: db.lurker, bx: bob?.x, by: bob?.y };
   const rars = Object.entries(db.rarity).filter(([k]) => list.some(f => f.rarity === k));
   let r = Math.random() * rars.reduce((s, [, v]) => s + v.weight, 0), rar = rars[rars.length - 1][0];

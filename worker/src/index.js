@@ -386,6 +386,8 @@ const dragonHpMsg = d => ({ t: "dragon", ev: "hp", hp: d.hp, lvl: dlLv(d.xp), ma
 const FISH_PHASES = ["wait", "bite", "reel"];
 const FISH_CD_MS = 2500;     // 同一條連線兩次釣魚結果的最短間隔（拋竿到上鉤最快 3 秒）
 function rollFish(db, terrain) {
+  const fc = (db.foreignChance || {})[terrain];   // 和平島等：極低機率改釣別座島的魚（圖鑑記在那座島，不擴充自己的）
+  if (fc && Math.random() < fc) { const others = Object.keys(db.terrains || {}).filter(k => k !== terrain && (db.terrains[k] || []).length); if (others.length) terrain = others[Math.floor(Math.random() * others.length)]; }
   const list = (db.terrains || {})[terrain] || [];
   if (!list.length || Math.random() < (db.escape || 0)) return { terrain, escaped: true };
   const rars = Object.entries(db.rarity || {}).filter(([k]) => list.some(f => f.rarity === k));

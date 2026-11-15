@@ -1,6 +1,10 @@
 {
  "_comment": "釣魚與魚類圖鑑。由 tools/gen_assets.py 的 FISH_TABLE 產生（改這裡要改產生器再重跑）。稀有度先依 weight 抽，再從該地形同稀有度的魚裡平均抽一種；尺寸在 size 範圍內、越大越難（兩份伺服器與單機模擬一致）。",
  "escape": 0.002,
+ "foreignChance": {
+  "peace": 0.01
+ },
+ "_foreignComment": "foreignChance＝{地形: 機率}：在這座島釣魚時，每次拉竿成功（沒脫鉤前）有這個機率改釣「別座島」的魚（隨機挑一座有魚的其他地形，再照該地形的稀有度權重抽）；結果的 terrain 是那座島，所以圖鑑記在那座島的頁面（不會擴充這座島自己的圖鑑）。和平島 1%。",
  "lurker": "fishman",
  "lurkerChance": 0.002,
  "noLurker": [

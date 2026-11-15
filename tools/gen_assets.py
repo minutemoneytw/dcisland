@@ -3695,12 +3695,15 @@ FISH_TABLE = [
     ("peace", "rainbow_koi", "彩虹錦鯉", R, (40, 90), lambda: fish("#f0f0e8", fin="#5ab8f0", L=12, H=6, band="#e85ab8", spots=((6, 7), (9, 6), (11, 8)), glow="#f8e84a")),
     ("peace", "golden_dice", "黃金骰子", R, (1, 2), lambda: dice("#f2c230", "#8a5a10", gold=True)),
 ]
+FISH_FOREIGN = {"peace": 0.01}   # 和平島釣魚：1% 釣到別座島的魚（2026-11-15，使用者要求「極低機率」）
 FISH_NO_LURKER = ["peace"]   # 不會釣到敵對怪物（lurker）的地形：和平島不能有任何敵對 NPC／怪物（使用者定）
 
 def fish_manifest():
     out = dict(
         _comment="釣魚與魚類圖鑑。由 tools/gen_assets.py 的 FISH_TABLE 產生（改這裡要改產生器再重跑）。稀有度先依 weight 抽，再從該地形同稀有度的魚裡平均抽一種；尺寸在 size 範圍內、越大越難（兩份伺服器與單機模擬一致）。",
         escape=0.002,
+        foreignChance=FISH_FOREIGN,
+        _foreignComment="foreignChance＝{地形: 機率}：在這座島釣魚時，每次拉竿成功（沒脫鉤前）有這個機率改釣「別座島」的魚（隨機挑一座有魚的其他地形，再照該地形的稀有度權重抽）；結果的 terrain 是那座島，所以圖鑑記在那座島的頁面（不會擴充這座島自己的圖鑑）。和平島 1%。",
         lurker="fishman", lurkerChance=0.002, noLurker=FISH_NO_LURKER,
         _lurkerComment="lurker＝釣上來的敵對怪物（mobs.json 的 id）；lurkerChance＝每次拉竿成功（沒脫鉤）時釣到牠的機率（約 500 竿一次）。同一地形已經有一隻還沒消失時照常釣魚。noLurker＝不會釣到牠的地形（和平島；兩份伺服器與單機都照這個判斷）。",
         _bigComment="big＝大尺寸門檻（cm，釣到 ≥ big 就算大尺寸；稱號用）。取尺寸範圍的 75% 處四捨五入，每次釣到該魚時約一到兩成機率是大尺寸（尺寸取 r^1.6）。",

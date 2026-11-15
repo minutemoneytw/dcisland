@@ -385,6 +385,11 @@ def fish_db():
 def roll_fish(terrain):
     """先脫鉤判定，再依權重抽稀有度，從該地形同稀有度的魚裡平均抽一種；尺寸越大越難（範圍內取 r^1.6）。"""
     db = fish_db()
+    fc = (db.get("foreignChance") or {}).get(terrain)   # 和平島等：極低機率改釣別座島的魚（圖鑑記在那座島，不擴充自己的）
+    if fc and random.random() < fc:
+        others = [k for k, v in db.get("terrains", {}).items() if k != terrain and v]
+        if others:
+            terrain = random.choice(others)
     lst = db.get("terrains", {}).get(terrain) or []
     if not lst or random.random() < db.get("escape", 0):
         return {"terrain": terrain, "escaped": True}
