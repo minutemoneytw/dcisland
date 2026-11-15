@@ -5882,6 +5882,45 @@ function scrKingdom(g, v, MX, MY, MW) {
     g.fillText(`目標：${o.name}${o.by != null ? `（${v.seats[o.by]?.name || ''} +3）` : ''}`, MX, y + q * 12, MW);
   });
 }
+// 大螢幕：秘藥情報戰——整個畫面寬度，一人一列：名字、陣營（螢幕是觀戰者，看得到）、角色卡、情報區的牌、手牌；上面是牌堆／輪到誰／傳遞中的密函
+function scrIntel(g, v, MX, MY, MW) {
+  const it = v.it, L = it.letter, nm = i => v.seats[i]?.name || '';
+  const sq = (x, y, c, w = 13, h = 15) => {   // 一張小牌：顏色（雙色左右各半）＋行動的第一個字；null＝牌背
+    if (!c) { g.fillStyle = '#3a4468'; g.fillRect(x, y, w, h); return; }
+    const cols = [...itCols(c)].map(k => IT_FILL[k]);
+    g.fillStyle = cols[0]; g.fillRect(x, y, cols.length > 1 ? w / 2 : w, h);
+    if (cols.length > 1) { g.fillStyle = cols[1]; g.fillRect(x + w / 2, y, w / 2, h); }
+    g.fillStyle = '#fff'; g.font = `bold 9px ${SCR_FONT}`; g.textAlign = 'center'; g.fillText((IT_ACT[itActOf(c)] || '?')[0], x + w / 2, y + 11);
+  };
+  g.textAlign = 'left'; g.fillStyle = '#e8ecf8'; g.font = `bold 12px ${SCR_FONT}`;
+  const turnName = it.step === 'turn' && v.turn >= 0 ? `輪到 ${nm(v.turn)}` : it.step === 'pick' ? '選角中' : '進行中';
+  g.fillText(turnName, MX, MY + 12);
+  g.fillStyle = '#9fb0d8'; g.font = `11px ${SCR_FONT}`; g.fillText(`牌堆 ${it.deck} · 棄牌 ${it.discard}`, MX + 110, MY + 12);
+  if (L) {
+    g.fillStyle = '#ffe08a'; g.fillText(`✉ ${IT_KIND[L.kind]}：${nm(L.from)} → 現在在 ${nm(L.at)}`, MX + 210, MY + 12, MW - 230);
+    sq(MX + MW - 16, MY + 1, L.card || null);
+  }
+  const n = v.seats.length, RH = Math.min(21, Math.floor((196 - 20) / Math.max(1, n)));
+  v.seats.forEach((s, i) => {
+    const y = MY + 20 + i * RH, out = s.out || s.left, turn = it.step === 'turn' && v.turn === i;
+    g.fillStyle = turn ? 'rgba(255,224,138,.22)' : 'rgba(255,255,255,.06)'; g.fillRect(MX, y, MW, RH - 2);
+    g.textAlign = 'left'; g.fillStyle = out ? '#6f7ea8' : '#e8ecf8'; g.font = `bold 11px ${SCR_FONT}`;
+    g.fillText((s.name || '').slice(0, 5), MX + 4, y + RH - 6, 58);
+    let x = MX + 66;
+    const rr = s.role && IT_ROLE[s.role];
+    if (rr) { g.fillStyle = rr[1]; g.fillRect(x, y + 2, 28, RH - 6); g.fillStyle = '#10141f'; g.font = `bold 10px ${SCR_FONT}`; g.textAlign = 'center'; g.fillText(rr[0], x + 14, y + RH - 7); }
+    x += 32;
+    const cd = it.chars && s.char ? itCharDef(s.char) : null;
+    g.textAlign = 'left'; g.fillStyle = '#c9a0f0'; g.font = `10px ${SCR_FONT}`; if (cd) g.fillText(cd.name, x, y + RH - 7, 44); x += 46;
+    let tag = s.out ? '出局' : s.left ? '離開' : L && L.at === i ? '✉ 手上' : '';
+    g.fillStyle = '#ffb070'; g.fillText(tag, x, y + RH - 7, 40); x += 42;
+    g.fillStyle = '#7f8cb0'; g.fillText('情報', x, y + RH - 7); x += 26;
+    (s.intel || []).forEach((c, q) => sq(x + q * 15, y + 2, c, 13, RH - 6));
+    x += 15 * 6 + 4;
+    g.fillStyle = '#7f8cb0'; g.textAlign = 'left'; g.font = `10px ${SCR_FONT}`; g.fillText('手牌', x, y + RH - 7); x += 26;
+    const hd = v.hands?.[i] || []; (hd.length ? hd : Array(s.n || 0).fill(null)).forEach((c, q) => sq(x + q * 15, y + 2, c, 13, RH - 6));
+  });
+}
 // 大螢幕：打字競賽——每位玩家的分數與正在打的單字（綠＝已打對、紅＝剛打錯）；單字由 seed 算出來，進度來自 sttp
 function scrTyping(g, v, MX, MY, MW) {
   const key = `${v.ty.seed}|${v.ty.t0}|${v.game}`, T = (S.scrTy ||= { key: '', prog: {} });
@@ -6018,8 +6057,8 @@ function scrRender() {
   g.fillText(playing ? '進行中' : v.result && !isAr ? '結算' : isAr ? '待機' : `等待開始 ${v.seats.length}/${v.max}`, SCR_W - 10, 18);
   if (isAr) { scrArcade(g, v); return; }
   // 右側：座位
-  const SX = 340, SW = 148;
-  v.seats.forEach((s, k) => {
+  const SX = 340, SW = 148, wideIntel = sc.game === 'intel' && playing && v.it;   // 秘藥情報戰進行中：整個畫面一人一列（scrIntel），不畫右側座位欄
+  if (!wideIntel) v.seats.forEach((s, k) => {
     const RH = v.game === 'kingdom' && v.kg ? 52 : 30, y = 34 + k * RH;
     g.fillStyle = playing && v.turn === k ? 'rgba(255,224,138,.22)' : 'rgba(255,255,255,.06)'; g.fillRect(SX, y, SW, RH - 4);
     g.fillStyle = '#e8ecf8'; g.font = `bold 12px ${SCR_FONT}`; g.textAlign = 'left'; g.fillText((s.name || '').slice(0, 6), SX + 6, y + 17, 70);
@@ -6054,6 +6093,7 @@ function scrRender() {
       drew = true;
     } else if (sc.game === 'oldmaid' && playing) { scrHands(g, v, MX, MY, MW, 44, null); drew = true; }
     else if (sc.game === 'kingdom' && v.kg) { scrKingdom(g, v, MX, MY, MW); drew = true; }
+    else if (wideIntel) { scrIntel(g, v, MX, MY, SCR_W - MX * 2); drew = true; }
     else if ((sc.game === 'typing' || sc.game === 'zhtyping') && playing && v.ty) { scrTyping(g, v, MX, MY, MW); drew = true; }
     } catch (e) { drew = false; }
   if (!drew) {   // 沒有專屬畫面的遊戲（即時遊戲、秘藥情報戰…）或還沒開始：大字狀態
