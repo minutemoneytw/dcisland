@@ -1528,6 +1528,7 @@ def kg_start(t):
         s["ready"], s["left"] = False, False
     tbl_log(t, f"列島建國開始！{n} 人參加，{t['seats'][start]['name']} 先手")
 
+KG_PEOPLE_REFRESH = 5   # 每幾輪換一次人物市場（2026-11-16 使用者要求；與 worker 的 KG_PEOPLE_REFRESH 同值）
 def kg_round_end(t):
     """一輪結束（輪回先手）：結算事件的輪末效果；有人到 25 分的那一輪結束就結束遊戲。"""
     g, ev = t["g"], kg_event(t["g"])
@@ -1558,6 +1559,14 @@ def kg_round_end(t):
     if g["endr"] is not None:
         kg_finish(t)
         return
+    if g["round"] % KG_PEOPLE_REFRESH == 0:   # 每 5 輪結束：人物市場整排換新（沒人要的人物不會卡一輩子；牌堆不夠就換得動的）
+        n = 0
+        for k in range(len(g["pmkt"])):
+            if g["pmkt"][k] is not None and g["ppl"]:
+                g["pmkt"][k] = g["ppl"].pop()
+                n += 1
+        if n:
+            tbl_log(t, f"第 {g['round']} 輪結束：人物市場換新了 {n} 張")
     g["round"] += 1
 
 def kg_advance(t, frm, now):

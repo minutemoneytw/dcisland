@@ -5552,6 +5552,7 @@ function buildKingdom(box, v, mk, gd) {
       ev.appendChild(mk('div', 'kg-ev next', `下一輪　${kgEvText(g.next)}`));
       const n = v.seats.length, ord = Array.from({ length: n }, (_, k) => (g.start + k) % n);   // 出牌順序：從先手開始依座位輪，每一輪都從先手開始
       ev.appendChild(mk('div', 'kg-ev', '順序　' + ord.map((k, j) => `${v.turn === k ? '▶' : ''}${j + 1}.${v.seats[k].name}${v.seats[k].you ? '（你）' : ''}`).join(' → ') + '（每輪從 1 開始）'));
+      ev.appendChild(mk('div', 'kg-ev', `人物市場：第 ${Math.ceil(g.round / 5) * 5} 輪結束時整排換新`));   // 與伺服器的 KG_PEOPLE_REFRESH（5）同步
       if (g.endr !== null) ev.appendChild(mk('div', 'kg-ev end', `有人到 ${KG_WIN_VP} 分，這一輪結束後比分`));
       top.appendChild(ev);
     }

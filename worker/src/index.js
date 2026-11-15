@@ -1096,6 +1096,7 @@ function kgStart(t) {
   tblLog(t, `列島建國開始！${n} 人參加，${t.seats[start].name} 先手`);
 }
 // 一輪結束（輪回先手）：結算事件的輪末效果；有人到 25 分的那一輪結束就結束遊戲
+const KG_PEOPLE_REFRESH = 5;   // 每幾輪換一次人物市場（2026-11-16 使用者要求；與 dev_server.py 的 KG_PEOPLE_REFRESH 同值）
 function kgRoundEnd(t) {
   const g = t.g, ev = kgEvent(g), live = g.sd.map((s, k) => (s.done ? -1 : k)).filter(k => k >= 0);
   const dropOne = sd => {
@@ -1116,6 +1117,11 @@ function kgRoundEnd(t) {
   }
   for (const s of g.sd) s.firstbld = false;
   if (g.endr !== null) { kgFinish(t); return; }
+  if (g.round % KG_PEOPLE_REFRESH === 0) {   // 每 5 輪結束：人物市場整排換新（沒人要的人物不會卡一輩子；牌堆不夠就換得動的）
+    let n = 0;
+    for (let k = 0; k < g.pmkt.length; k++) if (g.pmkt[k] !== null && g.ppl.length) { g.pmkt[k] = g.ppl.pop(); n++; }
+    if (n) tblLog(t, `第 ${g.round} 輪結束：人物市場換新了 ${n} 張`);
+  }
   g.round++;
 }
 function kgAdvance(t, from, now) {
