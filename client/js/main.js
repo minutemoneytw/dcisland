@@ -7338,7 +7338,9 @@ function mzDraw(M, t, v, cv = $('mzCanvas')) {
 const PB_W = 300, PB_H = 520, PB_R = 6, PB_G = 760, PB_DT = 1 / 240, PB_BALLS = 3, PB_SNAP_MS = 100;
 const PB_LANE_X = 280, PB_LANE_Y = 452;                     // 發球道：球停在這裡等拉桿
 const PB_FLIP = { L: 42, REST: 28 * Math.PI / 180, UP: -30 * Math.PI / 180, SPD: 24, TH: 4.5, pl: [84, 468], pr: [194, 468] };   // 擋板：長度、休息／舉起的角度（往下為正）、轉速（弧度／秒）、半厚、左右轉軸
-const PB_BUMPERS = [[110, 205, 17, '#f06060'], [192, 205, 17, '#f0c020'], [151, 270, 17, '#40c8e0']];   // x、y、半徑、顏色
+const PB_BUMPERS = [[105, 190, 16, '#f06060'], [187, 190, 16, '#f0c020'], [146, 250, 16, '#40c8e0'], [66, 292, 13, '#70d870'], [226, 292, 13, '#c080f0']];   // x、y、半徑、顏色（5 個，剛好用滿快照的閃光位元 f 0～31）
+const PB_POSTS = [[60, 150, 5], [238, 150, 5], [34, 235, 6], [250, 235, 6], [104, 335, 5], [188, 335, 5], [146, 150, 5]];   // 立柱：不得分，只擋球彈開
+const PB_SLINGS = [[48, 345, 70, 396], [244, 345, 222, 396]];   // 彈弓：打到會被踢回去，得 50×倍率
 const PB_SEGS = (() => {   // 牆與導軌：[x1, y1, x2, y2]
   const s = [], cx = 151, cy = 151, R = 141;
   for (let k = 0; k < 28; k++) { const a0 = Math.PI + k * Math.PI / 28, a1 = Math.PI + (k + 1) * Math.PI / 28; s.push([cx + R * Math.cos(a0), cy + R * Math.sin(a0), cx + R * Math.cos(a1), cy + R * Math.sin(a1)]); }   // 上方半圓
@@ -7353,7 +7355,7 @@ function pbMake(v) {
     key: z.seed + ':' + z.t0, t0: z.t0, off: z.sn - Date.now(), role: me ? 'seat' : 'spec', over: false,
     balls: PB_BALLS, score: 0, mult: 1, hits: 0, st: 0, power: 0, calm: 0, ballT: 0,
     ball: { x: PB_LANE_X, y: PB_LANE_Y, vx: 0, vy: 0 },
-    fl: { a: PB_FLIP.REST }, fr: { a: PB_FLIP.REST }, keys: { l: 0, r: 0, p: 0 }, flash: [0, 0, 0], fmask: 0,
+    fl: { a: PB_FLIP.REST }, fr: { a: PB_FLIP.REST }, keys: { l: 0, r: 0, p: 0 }, flash: [0, 0, 0, 0, 0], fmask: 0,
     snap: null, snapAt: 0, last: performance.now(), acc: 0,
   };
 }
@@ -7413,6 +7415,22 @@ function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
     P.score += 100 * P.mult; P.hits++; if (P.hits % 8 === 0 && P.mult < 5) P.mult++;
     P.flash[i] = performance.now() + 140;
   });
+  for (const [px, py, pr] of PB_POSTS) {   // 立柱
+    const dx = b.x - px, dy = b.y - py, d = Math.hypot(dx, dy), rr = pr + PB_R;
+    if (d >= rr || d < 1e-6) continue;
+    const nx = dx / d, ny = dy / d; b.x = px + nx * rr; b.y = py + ny * rr;
+    const vn = b.vx * nx + b.vy * ny; if (vn < 0) { b.vx -= 1.75 * vn * nx; b.vy -= 1.75 * vn * ny; }
+  }
+  for (const s of PB_SLINGS) {   // 彈弓：撞到被踢出去（沿法線加速）＋得分
+    const nb = { x: b.x, y: b.y, vx: b.vx, vy: b.vy };
+    if (pbHitSeg(b, s[0], s[1], s[2], s[3], .6, 2)) {
+      const dx = b.x - nb.x, dy = b.y - nb.y, d = Math.hypot(dx, dy) || 1;
+      let nx = (s[3] - s[1]), ny = -(s[2] - s[0]); const nl = Math.hypot(nx, ny); nx /= nl; ny /= nl;
+      if (nx * (b.x - s[0]) + ny * (b.y - s[1]) < 0) { nx = -nx; ny = -ny; }
+      if (b.vx * nx + b.vy * ny < 330) { b.vx += nx * 300; b.vy += ny * 300; P.score += 50 * P.mult; }
+      void d;
+    }
+  }
   for (const left of [true, false]) {   // 擋板：球相對擋板表面速度反彈，再加回表面速度（舉起的擋板把球打出去）
     const [x1, y1, x2, y2, f] = pbFlipperSeg(P, left), dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy;
     let t = ((b.x - x1) * dx + (b.y - y1) * dy) / L2; t = Math.max(0, Math.min(1, t));
@@ -7445,7 +7463,7 @@ function pbSnap(P, force) {   // 自己的局：快照給觀戰者與大螢幕�
 }
 function pbApplySnap(P, m) {   // 觀戰者／大螢幕：套用快照（球的位置平滑追過去）
   P.snap = m; P.score = m.sc; P.balls = m.b; P.st = m.st; P.keys.l = m.l; P.keys.r = m.r;
-  const now = performance.now(); for (let i = 0; i < 3; i++) if (m.f & (1 << i)) P.flash[i] = now + 140;
+  const now = performance.now(); for (let i = 0; i < PB_BUMPERS.length; i++) if (m.f & (1 << i)) P.flash[i] = now + 140;
   if (!P.snapSeen) { P.ball.x = m.x; P.ball.y = m.y; P.snapSeen = true; }
 }
 function pbAdvance(P, dt) {   // 每一幀：自己的局跑物理＋送快照；旁觀的局讓球和擋板追上最新快照
@@ -7485,6 +7503,9 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
     g.fillStyle = lit ? '#ffffff' : col; g.beginPath(); g.arc(bx, by, br, 0, Math.PI * 2); g.fill();
     g.strokeStyle = lit ? col : 'rgba(255,255,255,.55)'; g.lineWidth = 3; g.beginPath(); g.arc(bx, by, br - 4, 0, Math.PI * 2); g.stroke();
   });
+  for (const [px, py, pr] of PB_POSTS) { g.fillStyle = '#8c94b8'; g.beginPath(); g.arc(px, py, pr, 0, Math.PI * 2); g.fill(); g.fillStyle = '#c8d0f0'; g.beginPath(); g.arc(px - 1.5, py - 1.5, pr * .45, 0, Math.PI * 2); g.fill(); }
+  g.strokeStyle = '#f0a040'; g.lineWidth = 5; g.lineCap = 'round';
+  for (const s of PB_SLINGS) { g.beginPath(); g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); g.stroke(); }
   // 擋板
   for (const left of [true, false]) {
     const [x1, y1, x2, y2] = pbFlipperSeg(P, left);
