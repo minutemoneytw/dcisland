@@ -5063,7 +5063,7 @@ def pb_relay(t, cid, msg, scr=None):
     def num(v, lo, hi):
         return type(v) in (int, float) and not isinstance(v, bool) and math.isfinite(v) and lo <= v <= hi
     x, y, sc, b, st, l, r, f = (msg.get(k) for k in ("x", "y", "sc", "b", "st", "l", "r", "f"))
-    if not (num(x, -200, 1200) and num(y, -200, 1200) and _mz_int(sc, 0, PB_SCORE_MAX) and _mz_int(b, 0, 9) and _mz_int(st, 0, 3) and _mz_int(l, 0, 1) and _mz_int(r, 0, 1) and _mz_int(f, 0, 31)):
+    if not (num(x, -200, 1200) and num(y, -200, 1200) and _mz_int(sc, 0, PB_SCORE_MAX) and _mz_int(b, 0, 9) and _mz_int(st, 0, 3) and _mz_int(l, 0, 1) and _mz_int(r, 0, 1) and _mz_int(f, 0, 2 ** 46)):
         return []
     data = {"t": "tpb", "x": round(x, 1), "y": round(y, 1), "sc": sc, "b": b, "st": st, "l": l, "r": r, "f": f}
     t["seats"][i]["sc"] = sc

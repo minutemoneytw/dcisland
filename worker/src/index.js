@@ -3380,7 +3380,7 @@ function pbRelay(t, cid, msg, scr) {
   const [role, i] = tblFind(t, cid);
   if (t.game !== "pinball" || role !== "seat" || t.phase !== "playing" || !t.g) return [];
   const num = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
-  if (!(num(msg.x, -200, 1200) && num(msg.y, -200, 1200) && mzInt(msg.sc, 0, PB_SCORE_MAX) && mzInt(msg.b, 0, 9) && mzInt(msg.st, 0, 3) && mzInt(msg.l, 0, 1) && mzInt(msg.r, 0, 1) && mzInt(msg.f, 0, 31))) return [];
+  if (!(num(msg.x, -200, 1200) && num(msg.y, -200, 1200) && mzInt(msg.sc, 0, PB_SCORE_MAX) && mzInt(msg.b, 0, 9) && mzInt(msg.st, 0, 3) && mzInt(msg.l, 0, 1) && mzInt(msg.r, 0, 1) && mzInt(msg.f, 0, 2 ** 46))) return [];
   const data = { t: "tpb", x: Math.round(msg.x * 10) / 10, y: Math.round(msg.y * 10) / 10, sc: msg.sc, b: msg.b, st: msg.st, l: msg.l, r: msg.r, f: msg.f };
   t.seats[i].sc = msg.sc;
   if (scr) scr.push(data);
