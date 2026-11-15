@@ -8962,7 +8962,7 @@ function arFits(A, p) {
 }
 function arSpawn(A, k) {
   const p = { k, r: 0, x: k === 2 ? 4 : 3, y: 1 };
-  A.cur = p; A.lockT = 0; A.resets = 0; A.fallAcc = 0;
+  A.cur = p; A.lockT = 0; A.resets = 0; A.fallAcc = 0; A.lowY = p.y;
   if (!arFits(A, p)) arGameOver(A);
 }
 function arNext(A) { const k = A.queue.shift(); A.queue.push(arDraw(A)); arSpawn(A, k); }
@@ -9054,10 +9054,12 @@ function arStep(A) {
     A.lockT += dt;
     if (A.lockT >= AR_LOCK) arLock(A);
   } else {
+    A.lockT = 0;   // 沒踩在東西上：鎖定計時歸零（2026-11-15 使用者說有時瞬間判定落地、沒辦法 T 轉：原本滑進凹洞再落下時還帶著上一次踩地累積的時間，一落地就鎖了）
     A.fallAcc += dt;
     while (A.fallAcc >= fall && !arGrounded(A)) { A.fallAcc -= fall; A.cur.y++; if (A.keys.D) A.sc += 1; }
     if (arGrounded(A)) A.fallAcc = 0;
   }
+  if (A.cur && A.cur.y > A.lowY) { A.lowY = A.cur.y; A.resets = 0; }   // 掉到更低的一列：移動／轉向的重置次數重新算（標準的 move reset 鎖定）
   if (!A.dead) arSnap(A, false);
 }
 function arKey(e) {   // 遊戲畫面開著時的按鍵（回 true＝已處理）
