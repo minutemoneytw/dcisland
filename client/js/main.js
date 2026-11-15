@@ -5548,6 +5548,8 @@ function buildKingdom(box, v, mk, gd) {
       const ev = mk('div', 'kg-events');
       ev.appendChild(mk('div', 'kg-ev now', `第 ${g.round} 輪　${kgEvText(g.ev)}`));
       ev.appendChild(mk('div', 'kg-ev next', `下一輪　${kgEvText(g.next)}`));
+      const n = v.seats.length, ord = Array.from({ length: n }, (_, k) => (g.start + k) % n);   // 出牌順序：從先手開始依座位輪，每一輪都從先手開始
+      ev.appendChild(mk('div', 'kg-ev', '順序　' + ord.map((k, j) => `${v.turn === k ? '▶' : ''}${j + 1}.${v.seats[k].name}${v.seats[k].you ? '（你）' : ''}`).join(' → ') + '（每輪從 1 開始）'));
       if (g.endr !== null) ev.appendChild(mk('div', 'kg-ev end', `有人到 ${KG_WIN_VP} 分，這一輪結束後比分`));
       top.appendChild(ev);
     }
@@ -5666,7 +5668,7 @@ function buildKingdom(box, v, mk, gd) {
     const boards = mk('div', 'kg-boards');
     v.seats.forEach((s, k) => {
       const sd = g.sd[k], you = s.you, e = mk('div', 'kg-board' + (you ? ' you' : '') + (playing && v.turn === k ? ' turn' : '') + (sd.done ? ' out' : ''));
-      const nm = mk('div', 'kg-bn', `${s.name}${you ? '（你）' : ''}${s.left ? '（已離開）' : sd.forfeit ? '（棄權）' : ''}`);
+      const nm = mk('div', 'kg-bn', `${playing ? `${(k - g.start + v.seats.length) % v.seats.length + 1}. ` : ''}${s.name}${you ? '（你）' : ''}${playing && k === g.start ? '（先手）' : ''}${s.left ? '（已離開）' : sd.forfeit ? '（棄權）' : ''}`);
       nm.appendChild(mk('span', 'kg-bvp', `${sd.vp} 分`)); e.appendChild(nm);
       const rr = mk('div', 'kg-brow'); rr.appendChild(mk('span', 'table-tag', '資源：')); rr.appendChild(kgChips({ ...sd.res, G: sd.gold }, mk));
       if (!kgcTotal(sd)) rr.appendChild(mk('span', 'table-tag', '（空）')); e.appendChild(rr);
