@@ -3858,7 +3858,9 @@ function drawFxFloater(f) {
 function seatItemOf(p) {
   if (p.seat?.cell) return seatItem(p);
   const def = p.seatType && furnitureDef(p.seatType); if (!def) return null;
-  const cx = Math.floor(p.x / CELL), cy = Math.floor((p.y + 2) / CELL) - def.h;
+  // 別人的座標是平滑追過去的（永遠差一點點）：坐下的 y 剛好落在格線上（椅子 y＋h 格底邊 −2px），floor 會在「差一點」時算到上面那一格、找不到椅子，
+  // 整個人就沒有椅背遮擋／沉進椅子的處理（機率性穿模、跟自己看到的不一樣）→ 改四捨五入到最近的格線
+  const cx = Math.floor(p.x / CELL), cy = Math.round((p.y + (p.pose === 'sit' ? 2 : 0)) / CELL) - def.h;
   return S.furnItems.find(o => o.type === p.seatType && furnCovers(o, [cx, cy])) || null;
 }
 // 坐姿（2026-11-15，使用者要求改善）：LPC 素材沒有坐姿幀，所以讓人「陷進椅子」——往下沉 seat.drop px，從椅面前緣（背面時是椅背頂）那一列以下的部分裁掉，
