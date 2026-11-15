@@ -4538,7 +4538,8 @@ function showCatch(p, m) {
   grantExp(isNew ? 5 : 1, p.x, p.y - 80, 'fish');   // 釣到魚 +1 XP；圖鑑首捕 +5（登入者由伺服器記帳——牠自己抽的魚自己知道）
   if (S.fishImgs[m.id]) S.floaters.push({ x: p.x, y: p.y - 64, fishImg: S.fishImgs[m.id], life: 1.8 });
   const big = def.big != null && m.size >= def.big;
-  toast(`釣到了 ${def.name}！${m.size} cm（${rar?.name || ''}）${big ? ' · 大尺寸！' : ''}${isNew ? ' · 新發現！' : isRecord ? ' · 尺寸新紀錄！' : ''}`, 3400);
+  const foreign = m.terrain !== S.terrain ? S.terrains[m.terrain]?.name : null;   // 和平島偶爾釣到別座島的魚：提示來自哪座島（圖鑑記在那座島）
+  toast(`釣到了 ${def.name}！${m.size} cm（${rar?.name || ''}）${foreign ? ` · 來自${foreign}` : ''}${big ? ' · 大尺寸！' : ''}${isNew ? ' · 新發現！' : isRecord ? ' · 尺寸新紀錄！' : ''}`, 3400);
   if (S.dexOpen) buildDex();
   checkTitles(false);
 }
