@@ -121,7 +121,7 @@ NAME_MAX = 24
 # 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號（Worker 存 Registry 的 gstats:<uid>，這裡只存記憶體 GSTATS）。各遊戲結算時在 result["gs"]
 # （依「結算後留下的座位」順序，與 result["xp"] 同；None＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器照著記進 GSTATS 並把整份送給本人；
 # result["gs"] 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）。與 worker 的 gsMk／tableStats 同一套
-GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo"}
+GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo", "pinball"}
 GS_CAP, GS_KEYS_MAX = 1000000, 24
 GSTATS = {}
 
@@ -678,8 +678,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey", "t17": "kingdom", "t18": "bigtwo"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4), "kingdom": (2, 4), "bigtwo": (2, 4)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey", "t17": "kingdom", "t18": "bigtwo", "t19": "pinball"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4), "kingdom": (2, 4), "bigtwo": (2, 4), "pinball": (1, 1)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -2505,7 +2505,7 @@ def ty_unit(t):
 
 # 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 # 這裡記在記憶體（重啟就清掉），Worker 版記在島的 storage；table 畫面帶 board 給客戶端顯示。與 worker 的 boardMerge 同一套
-BOARD_GAMES = {"typing", "zhtyping", "dodge", "mage", "arcade", "maze"}   # 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
+BOARD_GAMES = {"typing", "zhtyping", "dodge", "mage", "arcade", "maze", "pinball"}   # 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
 BOARD_N = 3
 BOARDS = {}
 
@@ -5012,6 +5012,50 @@ def mz_over(t, cid, msg):
     win = msg.get("win") is True
     mz_finish(t, "pac" if win else "ghost", "豆子全部吃光" if win else ("時間到" if msg.get("tu") is True else "豆豆的命用完了"), ct)
 
+# ---- 彈珠台（第十九桌 t19，2026-11-15，使用者要求）：單人、3 顆球、分數進排行榜；物理全在客戶端跑（單人沒有對手要驗證），伺服器只開局、收結算分數（限幅）、
+# 把進行中的快照 pbs 轉給觀戰者與大螢幕（tpb／sttm）。有人離開＝這一局不算（一般桌子的規則）。與 worker/src/index.js 的 pb* 同一套，改規則兩邊一起改。
+PB_COUNTDOWN_MS, PB_XP, PB_XP_MIN, PB_SCORE_MAX = 1500, 4, 5000, 99999999
+
+def pb_start(t):
+    now = int(time.time() * 1000)
+    t["g"] = {"seed": random.getrandbits(31), "t0": now + PB_COUNTDOWN_MS}
+    t["result"], t["phase"] = None, "playing"
+    for s in t["seats"]:
+        s.update(ready=False, left=False, sc=0)
+    tbl_log(t, f"{t['seats'][0]['name']} 開始彈珠台")
+
+def pb_over(t, cid, msg):
+    """客戶端回報這局結束（帶最終分數）：記進結果與排行榜。"""
+    role, i = tbl_find(t, cid)
+    sc = msg.get("sc")
+    if t["game"] != "pinball" or role != "seat" or t["phase"] != "playing" or not t.get("g") or not _mz_int(sc, 0, PB_SCORE_MAX):
+        return
+    s = t["seats"][i]
+    s["sc"] = sc
+    t["result"] = {"solo": True, "text": f"遊戲結束！{s['name']} {sc} 分", "rid": random.getrandbits(32),
+                   "ranking": [{"name": s["name"], "uid": s.get("uid"), "score": sc, "left": False}],
+                   "xp": [PB_XP if sc >= PB_XP_MIN else 0], "gs": [gs_mk({}, {"best": sc})]}   # best＝最高分（取最大）
+    if sc > 0:
+        board_record(t, [(s["name"], sc, s.get("uid"))])
+    tbl_log(t, t["result"]["text"])
+    tbl_reset_seats(t)
+
+def pb_relay(t, cid, msg, scr=None):
+    """進行中的快照（球的位置、擋板、分數、剩球、狀態）：轉給觀戰者；scr 是 list 的話也放一份給大螢幕。回 [(cid, msg)]。"""
+    role, i = tbl_find(t, cid)
+    if t["game"] != "pinball" or role != "seat" or t["phase"] != "playing" or not t.get("g"):
+        return []
+    def num(v, lo, hi):
+        return type(v) in (int, float) and not isinstance(v, bool) and math.isfinite(v) and lo <= v <= hi
+    x, y, sc, b, st, l, r, f = (msg.get(k) for k in ("x", "y", "sc", "b", "st", "l", "r", "f"))
+    if not (num(x, -200, 1200) and num(y, -200, 1200) and _mz_int(sc, 0, PB_SCORE_MAX) and _mz_int(b, 0, 9) and _mz_int(st, 0, 3) and _mz_int(l, 0, 1) and _mz_int(r, 0, 1) and _mz_int(f, 0, 31)):
+        return []
+    data = {"t": "tpb", "x": round(x, 1), "y": round(y, 1), "sc": sc, "b": b, "st": st, "l": l, "r": r, "f": f}
+    t["seats"][i]["sc"] = sc
+    if scr is not None:
+        scr.append(data)
+    return [(m["cid"], data) for m in t["specs"] if m["cid"] is not None]
+
 # ---- 空氣曲棍球（第十五、十六桌 t15／t16，2026-11-13，使用者要求）：2～4 人分藍紅兩隊（座位 0、2 藍隊，1、3 紅隊；2026-11-14 使用者要求最多 2v2，原本 2～8 人），人數要偶數 ----
 # 先得 HK_GOALS 分、或 HK_LIM_MS 到時分數高的隊伍贏（同分平手），不進排行榜；有人離開＝這一局結束（一般桌子的規則）。
 # 物理在桌主（座位 0）的客戶端跑：桌主送圓盤快照 hs → ths，每個人送自己握把的位置 hp → thp，桌主判斷結束送 hend。
@@ -5091,7 +5135,7 @@ def hk_end(t, cid, msg):
         return
     hk_finish(t, sa, sb, "" if sa >= HK_GOALS or sb >= HK_GOALS else "時間到")
 
-GAME_START = {"bigtwo": bt_start, "kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+GAME_START = {"pinball": pb_start, "bigtwo": bt_start, "kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 SCR_CID = "__screen__"   # 大螢幕轉播用的虛擬連線編號（tbl_view 把它當觀戰者）
 SCR_CD_MS = 5000          # 大螢幕手動切台的冷卻（全島共用；2026-11-14 使用者要求）
@@ -5123,6 +5167,11 @@ def tbl_view(t, cid):
             seats[k].update(sc=s.get("sc", 0), lvl=s.get("lvl", 1), left=bool(s.get("left")))
         if g and playing:
             v["mz"] = {"seed": g["seed"], "t0": g["t0"], "sn": int(time.time() * 1000), "pac": g["pac"], "gh": list(g["gh"]), "solo": g["solo"], "lim": MZ_VS_MS}
+    elif t["game"] == "pinball":   # 彈珠台：分數／離開；進行中附上開始時間與伺服器時間（客戶端倒數用）
+        for k, s in enumerate(t["seats"]):
+            seats[k].update(sc=s.get("sc", 0), left=bool(s.get("left")))
+        if g and playing:
+            v["pb"] = {"seed": g["seed"], "t0": g["t0"], "sn": int(time.time() * 1000)}
     elif t["game"] == "mage":   # 見習驅魔師：血量／擊殺數／倒下／離開；進行中附上 seed、難度、人數、已擊殺的幽靈編號、Boss 血量與被打中的次數
         v["diff"] = t.get("diff", 0)
         for k, s in enumerate(t["seats"]):
@@ -6621,6 +6670,12 @@ class Room:
                     self._table_notify_locked(t, out)
                     self._table_collect_xp(t, before)
                     return out, self.table_info_msg(c.get("table_terr") or terr), c.get("table_terr") or terr
+                if t["game"] == "pinball" and a == "pbs":   # 彈珠台：進行中的快照，只轉發給觀戰者與大螢幕（不存檔、不通知畫面）
+                    scr = []
+                    out = pb_relay(t, cid, msg, scr)
+                    for d in scr:
+                        self._scr_fwd(terr, t, {**d, "w": "tpb", "t": "sttm"}, out)
+                    return out, None, None
                 if t["game"] == "maze" and a in ("ms", "mp"):   # 豆豆迷宮：豆豆的快照／幽靈玩家的位置，只轉發；對抗時間上限過了才順便結算
                     scr = []
                     out = mz_relay(t, cid, msg, scr)
@@ -6746,6 +6801,8 @@ class Room:
                         hk_end(t, cid, msg)
                     elif a == "mpac":   # 豆豆迷宮：桌主指定誰當豆豆
                         mz_set_pac(t, cid, msg.get("v"))
+                    elif a == "over" and t["game"] == "pinball":   # 彈珠台：客戶端回報結束（最終分數）
+                        pb_over(t, cid, msg)
                     elif a == "over" and t["game"] == "maze":   # 豆豆迷宮：豆豆那台回報結束
                         mz_over(t, cid, msg)
                     elif a == "mdiff":   # 見習驅魔師：桌主選難度
@@ -7141,7 +7198,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                     xp_grant(c, -loss, "petkill")
                 elif t == "tbl":   # 和平島遊戲桌（join／leave／ready／sit／draw）；牌局邏輯全在伺服器
                     now = time.time()
-                    if msg.get("a") in ("pos", "word", "tb", "ms", "mp", "hp", "hs"):   # 躲彈幕的位置回報、英文打字競賽的分數回報：自己的限流，不影響 hit／finish 等操作
+                    if msg.get("a") in ("pos", "word", "tb", "ms", "mp", "hp", "hs", "pbs"):   # 躲彈幕的位置回報、英文打字競賽的分數回報：自己的限流，不影響 hit／finish 等操作
                         if now - last_pos < TBL_POS_CD:
                             continue
                         last_pos = now

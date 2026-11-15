@@ -125,6 +125,7 @@ export function connectNet(S, opts = {}) {
       case 'ths': if (opts.onThs) opts.onThs(msg); break;      // 空氣曲棍球：桌主的圓盤快照（x／y／vx／vy、sa／sb 比分、f 開球前凍結毫秒）
       case 'scr': if (opts.onScr) opts.onScr(msg); break;   // 和平島大螢幕：目前轉播的桌與畫面（id＝null＝關閉）
       case 'scrcd': if (opts.onScrCd) opts.onScrCd(msg); break;   // 大螢幕切台冷卻中：left＝還要幾毫秒
+      case 'tpb': if (opts.onTpb) opts.onTpb(msg); break;   // 彈珠台（觀戰者才收到）：玩家那台的快照（x／y 球、sc 分數、b 剩球、st 狀態、l／r 擋板、f 彈跳器閃光）
       case 'sttm': if (opts.onScrMz) opts.onScrMz(msg); break;   // 大螢幕轉播豆豆迷宮：豆豆快照（w＝'tms'）或幽靈玩家位置（w＝'tmp'），其餘欄位同原訊息
       case 'sttp': if (opts.onScrTp) opts.onScrTp(msg); break;   // 大螢幕轉播打字競賽：某位玩家的打字進度（i＝座位、n＝第幾個字、p、e）
       case 'sttb': if (opts.onScrTb) opts.onScrTb(msg); break;   // 大螢幕轉播俄羅斯方塊：某台機台的盤面快照（cab、b＝200 個數字、sc、ln）

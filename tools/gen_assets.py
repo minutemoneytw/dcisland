@@ -1624,7 +1624,8 @@ TABLES_BY_TERRAIN = {
               dict(id="t7", game="typing", cell=tbl_cell(4, 1), w=3, h=2),     # (4,1) 英文打字競賽（2026-11-10，使用者要求）
               # 俄羅斯方塊（2026-11-13，使用者要求）：場地上方一排 4 台，造型一樣、配色不同，間距約一個人（1 格）。
               # 4 台共用同一張邏輯桌 t13（伺服器的 TABLE_DEFS 只有 t13），cab＝第幾台（0～3），img＝這台的圖（配色）
-              *[dict(id="t13", game="arcade", cab=k, img=f"arcade_{k}.png", cell=[48 + k * 3, 14.5], w=2, h=3) for k in range(4)]],   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
+              *[dict(id="t13", game="arcade", cab=k, img=f"arcade_{k}.png", cell=[48 + k * 3, 14.5], w=2, h=3) for k in range(4)],
+              dict(id="t19", game="pinball", cell=[45, 14.5], w=2, h=3)],   # 彈珠台（2026-11-15，使用者要求：俄羅斯方塊機台左邊）：同樣 2×3 格、靠北牆，跟機台隔 1 格；單人、分數進排行榜,   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
 }
 
 # 和平島的固定小物件（不是遊戲桌、不是可擺設的家具）：地形 → [物件]。kind＝互動種類（drink 喝飲料／food 吃點心，客戶端 useProp）、
@@ -2007,6 +2008,31 @@ def table_intel():
 
 # 街機外殼的配色（第 k 台）：主色、側板暗色
 ARCADE_COLORS = ["#d84a4a", "#3b78e8", "#3cb45a", "#9a5ad8"]
+
+def table_pinball():
+    """彈珠台（32×48，畫 scale 2＝2×3 格）：紫色機身、上方發光的背玻璃、斜放的球檯（三個圓形彈跳器、兩支擋板、一顆銀色小球）、右邊拉桿、下方投幣口。"""
+    cv = Canvas(32, 48)
+    body = hx("#6a3aa8"); dark = shade(body, .6); lite = shade(body, 1.35)
+    cv.rect(2, 0, 29, 47, body)
+    cv.rect(2, 0, 4, 47, dark); cv.rect(27, 0, 29, 47, dark)
+    cv.rect(5, 1, 26, 12, hx("#fff0b0")); cv.hline(5, 26, 1, hx("#fffbe0")); cv.hline(5, 26, 12, hx("#e8c060"))   # 背玻璃（發光）
+    for k, bc in enumerate(["#e04848", "#f0c020", "#3cb45a", "#3b78e8"]):   # 背玻璃上的彩色星星
+        x = 8 + k * 5; cv.rect(x, 4, x + 2, 6, hx(bc)); cv.set(x + 1, 3, hx(bc)); cv.set(x + 1, 7, hx(bc))
+    cv.rect(8, 9, 23, 10, hx("#c04040"))                         # 背玻璃下緣的紅條
+    cv.rect(5, 13, 26, 36, hx("#12102a"))                        # 球檯外框
+    cv.rect(6, 14, 25, 35, hx("#1d2a5c"))                        # 球檯面（深藍）
+    cv.hline(6, 25, 14, hx("#33448a"))
+    for bx, by, bc in ((11, 20, "#f06060"), (20, 20, "#f0c020"), (15, 26, "#40c8e0")):   # 三個圓形彈跳器
+        cv.ellipse(bx, by, 2.6, 2.6, hx(bc)); cv.set(bx - 1, by - 1, hx("#ffffff"))
+    cv.vline(23, 22, 34, hx("#8aa0e0")); cv.vline(8, 24, 31, hx("#8aa0e0"))   # 兩邊導軌
+    cv.set(9, 32, hx("#8aa0e0")); cv.set(10, 33, hx("#8aa0e0")); cv.set(22, 32, hx("#8aa0e0")); cv.set(21, 33, hx("#8aa0e0"))
+    cv.rect(11, 33, 14, 34, hx("#e8e8f0")); cv.rect(17, 33, 20, 34, hx("#e8e8f0"))   # 兩支擋板
+    cv.ellipse(16, 30, 1.2, 1.2, hx("#f4f4f8")); cv.set(15, 29, hx("#ffffff"))      # 銀色小球
+    cv.rect(24, 30, 25, 36, hx("#9a9aa8")); cv.rect(24, 36, 25, 37, hx("#d84a4a"))   # 右邊拉桿
+    cv.rect(5, 37, 26, 38, dark)
+    cv.rect(8, 40, 23, 46, shade(body, .8)); cv.rect(11, 42, 20, 44, hx("#1a1a22")); cv.hline(13, 18, 43, hx("#e8c060"))   # 下方投幣口
+    cv.outline()
+    return cv
 
 def arcade_cabinet(col):
     """俄羅斯方塊街機（32×48，畫 scale 2＝2×3 格）：老街機造型——上方發光招牌、黑框螢幕裡有掉落中的方塊、
@@ -3933,6 +3959,7 @@ def main():
     save(table_trigon(), "table_trigon.png", "games")
     for k, col in enumerate(ARCADE_COLORS):
         save(arcade_cabinet(col), f"arcade_{k}.png", "games")
+    save(table_pinball(), "table_pinball.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")

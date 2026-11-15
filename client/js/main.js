@@ -4890,7 +4890,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); hkStop(); unStopTimer(); bkStopTimer(); kgStopTimer(); btStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); pbStop(); hkStop(); unStopTimer(); bkStopTimer(); kgStopTimer(); btStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
   rulesShow(false); leaveAsk(false);
   $('tableBox').classList.add('hidden');
 }
@@ -5018,6 +5018,7 @@ function buildTable() {
   if (tb?.game === 'blokus') { buildBlokus(box, v, mk, gd); return; }   // Blokus有自己的畫面（棋盤＋方塊托盤）
   if (tb?.game === 'mage') { buildMage(box, v, mk, gd); return; }   // 見習驅魔師有自己的畫面（畫符號的場地）
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
+  if (tb?.game === 'pinball') { buildPinball(box, v, mk, gd); return; }   // 彈珠台有自己的畫面（球檯）
   if (tb?.game === 'maze') { buildMaze(box, v, mk, gd); return; }   // 豆豆迷宮有自己的畫面（迷宮）
   if (tb?.game === 'hockey') { buildHockey(box, v, mk, gd); return; }   // 空氣曲棍球有自己的畫面（球場）
   if (tb?.game === 'uno') { buildUno(box, v, mk, gd); return; }   // UNO 有自己的畫面（牌桌）
@@ -5839,11 +5840,13 @@ function onNetScrTb(msg) {   // 俄羅斯方塊的盤面快照（每台約 4 次
   (S.scrTb ||= {})[msg.cab] = { b: msg.b, sc: msg.sc, ln: msg.ln };
   S.scrDirty = true;
 }
-function onNetScrMz(m) {   // 大螢幕轉播豆豆迷宮：套到螢幕自己的那份狀態（螢幕沒開這桌就忽略）
+function onNetScrMz(m) {   // 大螢幕轉播豆豆迷宮／彈珠台：套到螢幕自己的那份狀態（螢幕沒開這桌就忽略）
+  if (m.w === 'tpb') { onNetScrPb(m); return; }
   const M = S.scrMz; if (!M) return;
   if (m.w === 'tms') mzApplyTms(M, m); else if (m.w === 'tmp') mzApplyTmp(M, m);
   S.scrDirty = true;
 }
+function onNetScrPb(m) { if (S.scrPb) { pbApplySnap(S.scrPb, m); S.scrDirty = true; } }
 // 大螢幕：豆豆迷宮——整張迷宮縮小畫在左邊（跟牌桌觀戰同一份 mzDraw，只吃快照），右邊座位欄是各人的分數
 function scrMaze(g, v, MX, MY, MW, MH) {
   const z = v.mz, key = z.seed + ':' + z.t0;
@@ -5856,6 +5859,18 @@ function scrMaze(g, v, MX, MY, MW, MH) {
   const k = Math.min(MW / cv.width, MH / cv.height);
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
   g.drawImage(cv, MX + (MW - cv.width * k) / 2, MY + (MH - cv.height * k) / 2, cv.width * k, cv.height * k);
+}
+// 大螢幕：彈珠台——整台縮小畫在左邊（同一個 pbDraw，只吃快照），右邊座位欄是分數
+function scrPinball(g, v, MX, MY, MW, MH) {
+  const key = v.pb.seed + ':' + v.pb.t0;
+  if (!S.scrPb || S.scrPb.key !== key) S.scrPb = pbMake({ ...v, role: 'spec' });
+  const P = S.scrPb, now = performance.now(), dt = Math.max(0, Math.min(.05, (now - P.last) / 1000)); P.last = now;
+  pbAdvance(P, dt);
+  const cv = (S.scrPbCv ||= Object.assign(document.createElement('canvas'), { width: PB_W, height: PB_H }));
+  pbDraw(P, cv, pbNow(P));
+  const k = Math.min(MW / PB_W, MH / PB_H);
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  g.drawImage(cv, MX + (MW - PB_W * k) / 2, MY + (MH - PB_H * k) / 2, PB_W * k, PB_H * k);
 }
 function onNetScrTp(msg) {   // 打字競賽的進度（大螢幕轉播中才會收到）：i＝座位、n＝第幾個字（＝分數）、p＝已打對幾個字母、e＝剛打錯
   const T = (S.scrTy ||= { key: '', prog: {} });
@@ -6052,6 +6067,7 @@ function scrSeatTag(v, s, k) {
   if (gm === 'mage') return s.dead ? '倒下' : `HP ${s.hp ?? ''}`;
   if (gm === 'typing' || gm === 'zhtyping') return `${Math.max(s.score ?? 0, S.scrTy?.prog?.[k]?.n ?? 0)} 分`;
   if (gm === 'maze') return `${s.sc ?? 0} 分`;
+  if (gm === 'pinball') return `${Math.max(s.sc ?? 0, S.scrPb?.score ?? 0)} 分`;
   if (gm === 'intel') return s.out ? '出局' : '';
   return '';
 }
@@ -6112,6 +6128,7 @@ function scrRender() {
     } else if (sc.game === 'oldmaid' && playing) { scrHands(g, v, MX, MY, MW, 44, null); drew = true; }
     else if (sc.game === 'kingdom' && v.kg) { scrKingdom(g, v, MX, MY, MW); drew = true; }
     else if (sc.game === 'maze' && playing && v.mz) { scrMaze(g, v, MX, MY, MW, MH); drew = true; }
+    else if (sc.game === 'pinball' && playing && v.pb) { scrPinball(g, v, MX, MY, MW, MH); drew = true; }
     else if (wideIntel) { scrIntel(g, v, MX, MY, SCR_W - MX * 2); drew = true; }
     else if ((sc.game === 'typing' || sc.game === 'zhtyping') && playing && v.ty) { scrTyping(g, v, MX, MY, MW); drew = true; }
     } catch (e) { drew = false; }
@@ -6157,7 +6174,7 @@ function buildScrPick() {
 }
 // 島上的螢幕物件：外框＋離屏 canvas 的內容（沒收到過畫面時先畫成關閉的樣子）
 function drawScreenProp(pr, r) {
-  if (!S.scrCv || S.scrDirty || (S.scr && (S.scr.v?.ty || S.scr.game === 'maze') && S.scr.v.phase === 'playing')) { S.scrDirty = false; scrRender(); }   // 打字競賽進行中：每幀重畫（倒數的秒數會動）
+  if (!S.scrCv || S.scrDirty || (S.scr && (S.scr.v?.ty || S.scr.game === 'maze' || S.scr.game === 'pinball') && S.scr.v.phase === 'playing')) { S.scrDirty = false; scrRender(); }   // 打字競賽進行中：每幀重畫（倒數的秒數會動）
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#12141c'; ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.fillStyle = '#2a2e3c'; ctx.fillRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
@@ -7315,6 +7332,231 @@ function mzDraw(M, t, v, cv = $('mzCanvas')) {
     const [cx, cy] = mzPx(10, 11); g.strokeText(msg, cx, cy + 10); g.fillText(msg, cx, cy + 10); g.textAlign = 'left';
   }
 }
+// ---- 彈珠台（第十九桌 t19，2026-11-15，使用者要求）：單人、3 顆球、分數進排行榜 ----
+// 物理全在客戶端跑（固定 240Hz 小步進：重力、牆／導軌的線段碰撞、圓形彈跳器、會動的擋板）；伺服器只開局、收最後分數（over）、把快照 pbs 轉給觀戰者與大螢幕。
+// 觀戰者與大螢幕只吃快照（球的位置、擋板有沒有按、分數、剩球、狀態、彈跳器閃光），畫面用同一個 pbDraw。
+const PB_W = 300, PB_H = 520, PB_R = 6, PB_G = 760, PB_DT = 1 / 240, PB_BALLS = 3, PB_SNAP_MS = 100;
+const PB_LANE_X = 280, PB_LANE_Y = 452;                     // 發球道：球停在這裡等拉桿
+const PB_FLIP = { L: 42, REST: 28 * Math.PI / 180, UP: -30 * Math.PI / 180, SPD: 24, TH: 4.5, pl: [84, 468], pr: [194, 468] };   // 擋板：長度、休息／舉起的角度（往下為正）、轉速（弧度／秒）、半厚、左右轉軸
+const PB_BUMPERS = [[110, 205, 17, '#f06060'], [192, 205, 17, '#f0c020'], [151, 270, 17, '#40c8e0']];   // x、y、半徑、顏色
+const PB_SEGS = (() => {   // 牆與導軌：[x1, y1, x2, y2]
+  const s = [], cx = 151, cy = 151, R = 141;
+  for (let k = 0; k < 28; k++) { const a0 = Math.PI + k * Math.PI / 28, a1 = Math.PI + (k + 1) * Math.PI / 28; s.push([cx + R * Math.cos(a0), cy + R * Math.sin(a0), cx + R * Math.cos(a1), cy + R * Math.sin(a1)]); }   // 上方半圓
+  s.push([10, 151, 10, 398], [292, 151, 292, 472], [268, 200, 268, 472], [268, 472, 292, 472]);   // 左牆、右牆、發球道的隔板與底
+  s.push([10, 398, 78, 460], [268, 398, 200, 460]);                                                // 下方兩側的導軌（把球送到擋板）
+  s.push([268, 200, 258, 214]);                                                                    // 隔板頂端斜一下，球出發球道比較順
+  return s;
+})();
+function pbMake(v) {
+  const z = v.pb, me = v.role === 'seat';
+  return {
+    key: z.seed + ':' + z.t0, t0: z.t0, off: z.sn - Date.now(), role: me ? 'seat' : 'spec', over: false,
+    balls: PB_BALLS, score: 0, mult: 1, hits: 0, st: 0, power: 0, calm: 0, ballT: 0,
+    ball: { x: PB_LANE_X, y: PB_LANE_Y, vx: 0, vy: 0 },
+    fl: { a: PB_FLIP.REST }, fr: { a: PB_FLIP.REST }, keys: { l: 0, r: 0, p: 0 }, flash: [0, 0, 0], fmask: 0,
+    snap: null, snapAt: 0, last: performance.now(), acc: 0,
+  };
+}
+function pbStart(v) {
+  pbStop(); S.pb = pbMake(v);
+  S.pbRaf = requestAnimationFrame(pbFrame);
+}
+function pbStop() { S.pb = null; if (S.pbRaf) { cancelAnimationFrame(S.pbRaf); S.pbRaf = 0; } }
+const pbNow = P => (Date.now() + P.off - P.t0) / 1000;   // 開局後的秒數（開局前是負的＝倒數）
+function pbKey(e, down) {   // 彈珠台的按鍵：左擋板 ← A Z／右擋板 → D ／ M／拉桿 空白 ↓ S（回 true＝已處理）
+  const P = S.pb, v = S.tableView; if (!P || !v || v.game !== 'pinball' || P.role !== 'seat') return false;
+  const k = e.key.toLowerCase(), l = ['arrowleft', 'a', 'z'].includes(k), r = ['arrowright', 'd', '/', 'm'].includes(k), p = [' ', 'arrowdown', 's'].includes(k);
+  if (!l && !r && !p) return false;
+  e.preventDefault();
+  if (l) P.keys.l = down ? 1 : 0; if (r) P.keys.r = down ? 1 : 0; if (p) P.keys.p = down ? 1 : 0;
+  return true;
+}
+function pbHitSeg(b, x1, y1, x2, y2, e, th) {   // 球撞線段（th＝線的半厚）：回 true＝撞到
+  const dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy;
+  let t = L2 ? ((b.x - x1) * dx + (b.y - y1) * dy) / L2 : 0; t = Math.max(0, Math.min(1, t));
+  const px = x1 + dx * t, py = y1 + dy * t; let nx = b.x - px, ny = b.y - py, d = Math.hypot(nx, ny);
+  const rr = PB_R + th; if (d >= rr) return false;
+  if (d < 1e-6) { nx = -dy; ny = dx; d = Math.hypot(nx, ny) || 1; }
+  nx /= d; ny /= d; b.x = px + nx * rr; b.y = py + ny * rr;
+  const vn = b.vx * nx + b.vy * ny;
+  if (vn < 0) { b.vx -= (1 + e) * vn * nx; b.vy -= (1 + e) * vn * ny; }
+  return true;
+}
+function pbFlipperSeg(P, left) {   // 擋板現在的線段 [x1, y1, x2, y2]（轉軸→尖端）與尖端的移動速度要用的角速度
+  const f = left ? P.fl : P.fr, pv = left ? PB_FLIP.pl : PB_FLIP.pr, s = left ? 1 : -1;
+  return [pv[0], pv[1], pv[0] + s * PB_FLIP.L * Math.cos(f.a), pv[1] + PB_FLIP.L * Math.sin(f.a), f];
+}
+function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
+  // 擋板
+  for (const left of [true, false]) {
+    const f = left ? P.fl : P.fr, want = (left ? P.keys.l : P.keys.r) ? PB_FLIP.UP : PB_FLIP.REST, old = f.a;
+    f.a += Math.max(-PB_FLIP.SPD * dt, Math.min(PB_FLIP.SPD * dt, want - f.a)); f.w = (f.a - old) / dt;
+  }
+  const b = P.ball;
+  if (P.st === 0) {   // 球在發球道等拉桿：按住蓄力、放開發射
+    b.x = PB_LANE_X; b.y = PB_LANE_Y; b.vx = b.vy = 0;
+    if (P.keys.p) P.power = Math.min(1, P.power + dt / .9);
+    else if (P.power > 0) { b.vy = -(620 + 520 * P.power); P.power = 0; P.st = 1; P.ballT = 0; }
+    return;
+  }
+  if (P.st !== 1) return;
+  b.vy += PB_G * dt; b.x += b.vx * dt; b.y += b.vy * dt;
+  const sp = Math.hypot(b.vx, b.vy); if (sp > 1100) { b.vx *= 1100 / sp; b.vy *= 1100 / sp; }
+  for (const s of PB_SEGS) pbHitSeg(b, s[0], s[1], s[2], s[3], .5, 1);
+  PB_BUMPERS.forEach(([bx, by, br], i) => {
+    const dx = b.x - bx, dy = b.y - by, d = Math.hypot(dx, dy), rr = br + PB_R;
+    if (d >= rr || d < 1e-6) return;
+    const nx = dx / d, ny = dy / d; b.x = bx + nx * rr; b.y = by + ny * rr;
+    const vn = b.vx * nx + b.vy * ny;
+    if (vn < 0) { b.vx -= 2 * vn * nx; b.vy -= 2 * vn * ny; }
+    b.vx += nx * 230; b.vy += ny * 230;   // 彈跳器的踢力
+    P.score += 100 * P.mult; P.hits++; if (P.hits % 8 === 0 && P.mult < 5) P.mult++;
+    P.flash[i] = performance.now() + 140;
+  });
+  for (const left of [true, false]) {   // 擋板：球相對擋板表面速度反彈，再加回表面速度（舉起的擋板把球打出去）
+    const [x1, y1, x2, y2, f] = pbFlipperSeg(P, left), dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy;
+    let t = ((b.x - x1) * dx + (b.y - y1) * dy) / L2; t = Math.max(0, Math.min(1, t));
+    const px = x1 + dx * t, py = y1 + dy * t; let nx = b.x - px, ny = b.y - py, d = Math.hypot(nx, ny), rr = PB_R + PB_FLIP.TH;
+    if (d >= rr) continue;
+    if (d < 1e-6) { nx = 0; ny = -1; d = 1; }
+    nx /= d; ny /= d; b.x = px + nx * rr; b.y = py + ny * rr;
+    const w = f.w || 0, rx = px - (left ? PB_FLIP.pl[0] : PB_FLIP.pr[0]), ry = py - (left ? PB_FLIP.pl[1] : PB_FLIP.pr[1]);
+    const vsx = left ? -w * ry : w * ry, vsy = left ? w * rx : -w * rx;   // 擋板表面在這一點的速度（角速度 × 半徑；右擋板是鏡像）
+    const rvx = b.vx - vsx, rvy = b.vy - vsy, vn = rvx * nx + rvy * ny;
+    if (vn < 0) { b.vx = rvx - 1.35 * vn * nx + vsx; b.vy = rvy - 1.35 * vn * ny + vsy; }
+  }
+  // 卡在發球道：球慢下來停在道內（拉桿沒蓄夠力）→ 回到等拉桿
+  if (b.x > 268 && b.y > 430 && Math.hypot(b.vx, b.vy) < 25) { P.st = 0; return; }
+  // 卡住：太久沒怎麼動就輕推一下
+  if (Math.hypot(b.vx, b.vy) < 12) { P.calm += dt; if (P.calm > 3) { b.vx += (Math.random() - .5) * 200; b.vy -= 160; P.calm = 0; } } else P.calm = 0;
+  P.ballT += dt;
+  if (b.y > PB_H + 20) {   // 掉進排水口：少一顆；還有球就換下一顆，沒有就結束
+    P.balls--; P.mult = 1; P.hits = 0;
+    if (P.balls <= 0) { P.st = 3; P.over = true; S.net?.tbl?.({ a: 'over', sc: P.score }); pbSnap(P, true); }
+    else { P.st = 0; P.power = 0; b.x = PB_LANE_X; b.y = PB_LANE_Y; b.vx = b.vy = 0; }
+  }
+}
+function pbSnap(P, force) {   // 自己的局：快照給觀戰者與大螢幕（約 10 次／秒）
+  const now = performance.now();
+  if (!force && now - P.snapAt < PB_SNAP_MS) return;
+  P.snapAt = now;
+  let f = 0; P.flash.forEach((u, i) => { if (u > now) f |= 1 << i; });
+  S.net?.tbl?.({ a: 'pbs', x: Math.round(P.ball.x * 10) / 10, y: Math.round(P.ball.y * 10) / 10, sc: Math.min(99999999, Math.round(P.score)), b: Math.max(0, Math.min(9, P.balls)), st: P.st, l: P.keys.l ? 1 : 0, r: P.keys.r ? 1 : 0, f });
+}
+function pbApplySnap(P, m) {   // 觀戰者／大螢幕：套用快照（球的位置平滑追過去）
+  P.snap = m; P.score = m.sc; P.balls = m.b; P.st = m.st; P.keys.l = m.l; P.keys.r = m.r;
+  const now = performance.now(); for (let i = 0; i < 3; i++) if (m.f & (1 << i)) P.flash[i] = now + 140;
+  if (!P.snapSeen) { P.ball.x = m.x; P.ball.y = m.y; P.snapSeen = true; }
+}
+function pbAdvance(P, dt) {   // 每一幀：自己的局跑物理＋送快照；旁觀的局讓球和擋板追上最新快照
+  if (P.role === 'seat') {
+    const t = pbNow(P);
+    if (t >= 0 && !P.over) { P.acc += dt; let n = 0; while (P.acc >= PB_DT && n++ < 20) { pbStep(P, PB_DT); P.acc -= PB_DT; } if (n >= 20) P.acc = 0; pbSnap(P, false); }
+    else P.acc = 0;
+  } else {
+    if (P.snap) { const a = 1 - Math.exp(-dt * 16); P.ball.x += (P.snap.x - P.ball.x) * a; P.ball.y += (P.snap.y - P.ball.y) * a; }
+    for (const left of [true, false]) {
+      const f = left ? P.fl : P.fr, want = (left ? P.keys.l : P.keys.r) ? PB_FLIP.UP : PB_FLIP.REST;
+      f.a += Math.max(-PB_FLIP.SPD * dt, Math.min(PB_FLIP.SPD * dt, want - f.a));
+    }
+  }
+}
+function pbFrame() {
+  const P = S.pb, v = S.tableView;
+  if (!P || !S.tableOpen || !v || v.game !== 'pinball') { S.pbRaf = 0; return; }
+  S.pbRaf = requestAnimationFrame(pbFrame);
+  const now = performance.now(), dt = Math.max(0, Math.min(.05, (now - P.last) / 1000)); P.last = now;
+  pbAdvance(P, dt);
+  pbDraw(P, $('pbCanvas'), pbNow(P));
+}
+function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 PB_W×PB_H 的 canvas
+  if (!cv) return;
+  const g = cv.getContext('2d'), now = performance.now();
+  g.fillStyle = '#0d1030'; g.fillRect(0, 0, PB_W, PB_H);
+  const gr = g.createLinearGradient(0, 0, 0, PB_H); gr.addColorStop(0, '#1d2a5c'); gr.addColorStop(1, '#141a3c');
+  g.fillStyle = gr; g.beginPath(); g.moveTo(10, PB_H); g.lineTo(10, 151);
+  for (let k = 0; k <= 28; k++) { const a = Math.PI + k * Math.PI / 28; g.lineTo(151 + 141 * Math.cos(a), 151 + 141 * Math.sin(a)); }
+  g.lineTo(292, PB_H); g.closePath(); g.fill();
+  g.strokeStyle = '#8aa0e0'; g.lineWidth = 3; g.lineCap = 'round';
+  for (const s of PB_SEGS) { g.beginPath(); g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); g.stroke(); }
+  // 彈跳器
+  PB_BUMPERS.forEach(([bx, by, br, col], i) => {
+    const lit = P.flash[i] > now;
+    g.fillStyle = lit ? '#ffffff' : col; g.beginPath(); g.arc(bx, by, br, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = lit ? col : 'rgba(255,255,255,.55)'; g.lineWidth = 3; g.beginPath(); g.arc(bx, by, br - 4, 0, Math.PI * 2); g.stroke();
+  });
+  // 擋板
+  for (const left of [true, false]) {
+    const [x1, y1, x2, y2] = pbFlipperSeg(P, left);
+    g.strokeStyle = '#f4f4f8'; g.lineWidth = PB_FLIP.TH * 2; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+    g.fillStyle = '#d84a4a'; g.beginPath(); g.arc(x1, y1, 5, 0, Math.PI * 2); g.fill();
+  }
+  // 拉桿（蓄力時往下縮）
+  if (P.st === 0 || P.power > 0) {
+    const pull = P.power * 20;
+    g.fillStyle = '#9a9aa8'; g.fillRect(PB_LANE_X - 3, PB_LANE_Y + PB_R + pull, 6, 22); g.fillStyle = '#d84a4a'; g.fillRect(PB_LANE_X - 6, PB_LANE_Y + PB_R + 20 + pull, 12, 4);
+  }
+  // 球
+  if (P.st !== 3 && t >= -1) {
+    const b = P.ball, bg = g.createRadialGradient(b.x - 2, b.y - 2, 1, b.x, b.y, PB_R);
+    bg.addColorStop(0, '#ffffff'); bg.addColorStop(1, '#a8aec0'); g.fillStyle = bg; g.beginPath(); g.arc(b.x, b.y, PB_R, 0, Math.PI * 2); g.fill();
+  }
+  // HUD
+  g.textBaseline = 'middle'; g.font = 'bold 18px "Microsoft JhengHei"'; g.fillStyle = '#ffe08a'; g.textAlign = 'left'; g.fillText(String(Math.round(P.score)), 16, 18);
+  g.font = 'bold 12px "Microsoft JhengHei"'; g.fillStyle = '#9fb0d8'; g.textAlign = 'right'; g.fillText(P.mult > 1 ? `×${P.mult}` : '', 286, 18);
+  for (let i = 0; i < PB_BALLS; i++) { g.fillStyle = i < P.balls ? '#e8ecf8' : 'rgba(255,255,255,.18)'; g.beginPath(); g.arc(150 + i * 14, 18, 4.5, 0, Math.PI * 2); g.fill(); }
+  g.textAlign = 'center';
+  let msg = null;
+  if (t < 0) msg = String(Math.ceil(-t));
+  else if (P.st === 3) msg = '遊戲結束';
+  else if (P.st === 0 && P.role === 'seat') msg = P.power > 0 ? '放開發射！' : '按住空白蓄力、放開發射';
+  if (msg) { g.font = 'bold 16px "Microsoft JhengHei"'; g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,.85)'; g.fillStyle = '#ffe08a'; g.strokeText(msg, 150, 330); g.fillText(msg, 150, 330); }
+  g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+}
+function buildPinball(box, v, mk, gd) {
+  const playing = v.phase === 'playing', z = v.pb;
+  if (playing && z && (!S.pb || S.pb.key !== z.seed + ':' + z.t0)) pbStart(v);
+  if (!playing) pbStop();
+  const P = S.pb;
+  let status;
+  if (playing && P) status = P.role === 'seat' ? '彈珠台：← ／ A ／ Z 左擋板，→ ／ D ／ M 右擋板，空白（按住蓄力、放開發射）' : '觀戰中';
+  else status = v.seats.length < v.min ? '等待玩家入座（單人）' : '按「準備」就開始（3 顆球，分數進排行榜）';
+  box.appendChild(mk('div', 'table-status' + (playing && P?.role === 'seat' ? ' mine' : ''), status));
+  const r = v.result;
+  if (r && !playing && !r.aborted) box.appendChild(mk('div', 'table-result', r.text));
+  else if (r?.aborted && !playing) box.appendChild(mk('div', 'table-result', r.text));
+  if (!playing) boardBlock(box, v, mk, sc => `${sc} 分`);
+  if (!playing) {
+    const row = mk('div', 'table-seats');
+    v.seats.forEach(s => {
+      const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (s.left ? ' out' : ''));
+      seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '')));
+      seat.appendChild(mk('div', 'table-tag', s.ready ? '已準備' : '未準備'));
+      row.appendChild(seat);
+    });
+    for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+    box.appendChild(row);
+  } else {
+    const wrap = mk('div', 'pb-wrap'), cv = document.createElement('canvas');
+    cv.id = 'pbCanvas'; cv.width = PB_W; cv.height = PB_H; cv.className = 'pb-canvas';
+    wrap.appendChild(cv); box.appendChild(wrap);
+  }
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
+function onNetTpb(m) { const P = S.pb; if (P && P.role === 'spec') pbApplySnap(P, m); }   // 觀戰者：玩家那台的快照
 function buildMaze(box, v, mk, gd) {
   const playing = v.phase === 'playing', z = v.mz;
   if (playing && z && (!S.mz || S.mz.key !== z.seed + ':' + z.t0)) mzStart(v);
@@ -10937,6 +11179,7 @@ addEventListener('keydown', e => {
     else if (S.dg && DG_KEYS[k]) { e.preventDefault(); S.dg.keys[DG_KEYS[k]] = true; }   // 躲彈幕：WASD／方向鍵移動
     else if (S.ar && arKey(e)) { /* 俄羅斯方塊：方向鍵／X／Z／空白鍵／C／Shift */ }
     else if (S.mz && mzKey(e)) { /* 豆豆迷宮：方向鍵／WASD */ }
+    else if (S.pb && pbKey(e, true)) { /* 彈珠台：← → 空白 */ }
     else if (S.hk && hkKey(e, true)) { /* 空氣曲棍球：方向鍵／WASD */ }
     else if (S.ty) typingKey(e);   // 英文打字競賽：英文字母
     else if (S.tableView?.game === 'blokus' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') bkKey(e);
@@ -10979,7 +11222,7 @@ addEventListener('keydown', e => {
   if ((k === '1' || k === '2') && !e.repeat) tryJobSkill(+k - 1);   // 1／2：職業技能
   if (k === 'shift' && !e.repeat) toggleSprint();   // Shift：切換疾走／步行（與右下角虛擬按鍵同一個開關）
 });
-addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; arKeyUp(e.key.toLowerCase()); if (S.hk) hkKey(e, false); if (e.key.toLowerCase() === 'f') S.holdSkipF = false; if (S.dg && DG_KEYS[e.key.toLowerCase()]) S.dg.keys[DG_KEYS[e.key.toLowerCase()]] = false; });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; arKeyUp(e.key.toLowerCase()); if (S.pb) pbKey(e, false); if (S.hk) hkKey(e, false); if (e.key.toLowerCase() === 'f') S.holdSkipF = false; if (S.dg && DG_KEYS[e.key.toLowerCase()]) S.dg.keys[DG_KEYS[e.key.toLowerCase()]] = false; });
 // ---------------- 疾走虛擬按鍵（畫面右下角）----------------
 // 圓形＋跑步像素小人；點擊或按 Shift 切換疾走／步行（2026-11-06 使用者要求：點擊後持續生效，再點擊或再按 Shift 切回步行）
 function toggleSprint() {
@@ -11478,7 +11721,7 @@ async function boot() {
     onThp: onNetThp,           // 空氣曲棍球：別人的握把位置
     onThs: onNetThs,           // 空氣曲棍球：桌主的圓盤快照
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
-    onScr: onNetScr, onScrList: onNetScrList, onScrTb: onNetScrTb, onScrTp: onNetScrTp, onScrMz: onNetScrMz, onScrCd: onNetScrCd,   // 和平島大螢幕
+    onScr: onNetScr, onScrList: onNetScrList, onScrTb: onNetScrTb, onScrTp: onNetScrTp, onScrMz: onNetScrMz, onTpb: onNetTpb, onScrCd: onNetScrCd,   // 和平島大螢幕
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）
     onNick: nick => { S.nick = nick || ''; applyMyName(); },
