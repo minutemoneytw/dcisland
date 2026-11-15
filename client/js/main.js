@@ -5419,7 +5419,7 @@ const kgCardOf = cid => S.kgData?.cards[cid];
 function kgStopTimer() { if (S.kgTimer) { clearInterval(S.kgTimer); S.kgTimer = 0; } }
 function kgStartTimer(v) {
   kgStopTimer();
-  S.kgOff = v.kg.sn - Date.now();   // 伺服器時間 − 本機時間
+  if (S.kgSn !== v.kg.sn) { S.kgSn = v.kg.sn; S.kgOff = v.kg.sn - Date.now(); }   // 伺服器時間 − 本機時間；只在收到新的伺服器畫面時校準（點牌、選資源也會重畫但沒有新畫面，那時 sn 是舊的，重算會讓倒數跳回舊值）
   S.kgTimer = setInterval(() => {
     const cur = S.tableView;
     if (!S.tableOpen || !cur || cur.game !== 'kingdom' || cur.phase !== 'playing') { kgStopTimer(); return; }
