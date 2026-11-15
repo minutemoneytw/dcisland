@@ -282,7 +282,7 @@ function genWorld(id) {
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
     if (types[y * COLS + x] !== 2) continue;
     if (Math.abs(x - cx) < 2.5 && Math.abs(y - cy) < 2) continue; // 出生區淨空
-    if (pool.length && rng() < .036) decos.push({ i: decos.length, sprite: pool[Math.floor(rng() * pool.length)], cell: [x, y], flip: rng() < .5 });
+    if (pool.length && rng() < (td.decoDensity ?? .036)) decos.push({ i: decos.length, sprite: pool[Math.floor(rng() * pool.length)], cell: [x, y], flip: rng() < .5 });   // 密度可依地形調（terrain.json 的 decoDensity；大裝飾調低）
   }
   S.world = { types, decos };
   S.drops = [];

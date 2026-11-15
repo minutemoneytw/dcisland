@@ -9,14 +9,34 @@
  "deco": [
   {
    "sprite": "tree.png",
-   "weight": 3
-  },
-  {
-   "sprite": "flower.png",
    "weight": 2
   },
   {
+   "sprite": "flower.png",
+   "weight": 1
+  },
+  {
    "sprite": "rock.png",
+   "weight": 1
+  },
+  {
+   "sprite": "mushroom.png",
+   "weight": 1
+  },
+  {
+   "sprite": "bush.png",
+   "weight": 1
+  },
+  {
+   "sprite": "tuft.png",
+   "weight": 4
+  },
+  {
+   "sprite": "reed.png",
+   "weight": 1
+  },
+  {
+   "sprite": "log.png",
    "weight": 1
   }
  ],
@@ -51,5 +71,6 @@
   }
  ],
  "uiColor": "#6aaa5a",
- "owner": "gold_dragon"
+ "owner": "gold_dragon",
+ "decoDensity": 0.022
 }

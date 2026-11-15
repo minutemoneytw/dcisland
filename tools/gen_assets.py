@@ -148,6 +148,62 @@ def write_json(path, obj):
         f.write(text)
     print(f"  {os.path.relpath(path, HERE)}")
 
+# ---------------- 外部素材包切片 ----------------
+# aamatniekss「Free Topdown Fantasy - Forest」（itch.io，2026-11-15 引入）：原始 PNG 放在
+# external/topdown_fantasy_forest/（授權與「不得單獨散布」的注意事項見該資料夾 README.md 與 docs/assets-license.md）。
+# 這裡用顯式 rect 切片（座標是逐格量測的），輸出照常走 save() 的內容感知寫檔。
+TPFF = "external/topdown_fantasy_forest/Decorations.png"   # 256×256 裝飾精靈圖集
+TPFF_T = "external/topdown_fantasy_forest/Tileset.png"     # 128×240 地表 tile（16px 網格 8×15、無 padding）
+TPFF_LIFT = .72   # 素材包是為它自家較深的草地畫的，整體色調偏深（2026-11-15 使用者回饋）：切片後 gamma 提升，0.72 大約把深綠抬到跟草島地表接近
+
+def lift(cv, g=None):
+    """gamma 提升（<1 變淺）：陰影／深色抬得多、亮部幾乎不動，深色描邊還保得住；alpha 不動。"""
+    g = TPFF_LIFT if g is None else g
+    for y in range(cv.h):
+        row = cv.buf[y]
+        for x in range(cv.w):
+            r, gg, b, a = row[x]
+            if a:
+                row[x] = (min(255, int(255 * (r / 255) ** g + .5)),
+                          min(255, int(255 * (gg / 255) ** g + .5)),
+                          min(255, int(255 * (b / 255) ** g + .5)), a)
+    return cv
+
+# 裝飾切片座標 (x, y, w, h)。這個包的裝飾大多有「帶草影／去影」兩版（成對、上下相鄰）：
+# 本專案的地表是純色 tile、不畫影子，所以一律取去影版（各組的第一個 rect 是帶影、註解標出去影版位置）。
+TPFF_RECTS = dict(
+    tree_small=(211, 163, 38, 70),   # 小樹（去影版；帶根部草的在 (163,163) 38x74，大樹 70x98 在 (11,143)，太寬留給森林島）
+    rock=(163, 133, 26, 22),         # 石頭堆（另有 (194,133) 27x23、(228,133) 22x21 兩種）
+    mushroom=(204, 40, 12, 12),      # 大紅蘑菇（去影版；帶影的在 (203,8) 13x14。另有中菇 (170,42) 12x12、三株叢 (235,41) 11x13）
+    bush=(15, 35, 31, 25),           # 灌木（去影版；帶影的在 (13,4) 35x27）
+    tuft=(40, 102, 14, 20),          # 草叢（去影版；另一種單葉的在 (8,102) 14x20）
+    reed=(100, 99, 24, 25),          # 蘆葦／香蒲（去影版；帶影的在 (100,67) 24x27）
+    log=(75, 32, 39, 30),            # 倒木（去影版；帶影的在 (75,0) 40x32）
+)
+
+def ext_load(rel):
+    """讀外部素材 PNG → (w, h, 逐列 RGBA 位元組)。素材是切片的依據，缺檔直接中止重跑（不能默默退回程式畫的圖）。"""
+    px = read_png_pixels(os.path.join(ASSETS, rel))
+    if px is None:
+        raise SystemExit(f"外部素材遺失或無法解碼：client/assets/{rel}（見 docs/assets-license.md）")
+    return px
+
+def ext_slice(rel, rect):
+    """從外部素材切一塊成 Canvas（rect＝原圖像素座標）；交給 save() 走內容感知寫檔。"""
+    w, h, buf = ext_load(rel)
+    x0, y0, rw, rh = rect
+    assert 0 <= x0 and 0 <= y0 and x0 + rw <= w and y0 + rh <= h, f"{rel} 的 rect {rect} 超出 {w}x{h}"
+    cv = Canvas(rw, rh)
+    for y in range(rh):
+        base = ((y0 + y) * w + x0) * 4
+        for x in range(rw):
+            cv.set(x, y, tuple(buf[base + x * 4: base + x * 4 + 4]))
+    return cv
+
+def tpff(key):
+    """切 topdown_fantasy_forest 的裝飾（TPFF_RECTS 的 key），並做色調調淺（見 lift()）。"""
+    return lift(ext_slice(TPFF, TPFF_RECTS[key]))
+
 # ---------------- 地形 tile ----------------
 INDOOR_REPEAT = 3   # 室內地板的方磚放大倍數：圖是 16n×16n，客戶端用 groundRepeat 分成 n×n 格各畫一塊（方磚邊長＝8n 像素）
 
@@ -1452,7 +1508,13 @@ TERRAINS = [
     dict(id="grass",   name="草島",
          ground=("#6aaa5a", "#5b9a4e"), edge=("#e0c184", "#cfae72"),
          water=("#3f7ec4", "#336aae"), leaf=("#3f8f4f", "#2f7a3f"), trunk="#6b4a32",
-         deco=[("tree.png", 3), ("flower.png", 2), ("rock.png", 1)], ui="#6aaa5a"),
+         # 2026-11-15 裝飾改用 aamatniekss 森林素材包切片（TPFF_RECTS）：tree/rock/mushroom 可採集（tools.json 既有 targets）、
+         # flower 維持程式畫（花瓣唯一來源，craft.json 的 sources.deco「flower.png」→petal）、
+         # bush/tuft/reed/log 是純觀賞（沒有 target → 不可破壞）。樹比原本大很多，decoDensity 降到 .022（main.js 的 genWorld 讀）。
+         # 2026-11-15 使用者回饋：素材色調偏深 → tpff() 做 gamma 調淺（TPFF_LIFT）；草叢加量（weight 4）。
+         deco=[("tree.png", 2), ("flower.png", 1), ("rock.png", 1), ("mushroom.png", 1),
+               ("bush.png", 1), ("tuft.png", 4), ("reed.png", 1), ("log.png", 1)],
+         decoDensity=.022, ui="#6aaa5a"),
     dict(id="beach",   name="沙灘島",
          ground=("#e6cf96", "#d8bd82"), edge=("#cbb27a", "#b89e68"),
          water=("#47a6d9", "#3a8ec2"), leaf=("#4fa06a", "#3f8455"), trunk="#7a5e42",
@@ -2535,6 +2597,12 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/fireball_burst.png", frames=12, fw=32, fh=32, what="火球命中爆炸的 12 幀（特效，不是動物：main.js 直接載入，不經 manifest）"),
 ]
 
+# 切片型素材包（不是等格 sheet，用顯式 rect 切：見本檔的 ext_slice／TPFF_RECTS）：健檢只對尺寸
+EXTERNAL_TILESETS = [
+    dict(file="external/topdown_fantasy_forest/Decorations.png", w=256, h=256, what="aamatniekss 森林素材包的裝飾圖集（草島 tree/rock/mushroom/bush/tuft/reed/log 切片來源）"),
+    dict(file="external/topdown_fantasy_forest/Tileset.png", w=128, h=240, what="aamatniekss 森林素材包的地表 tile（16px 網格 8×15；目前還沒接，之後換草島地表時用）"),
+]
+
 def check_external():
     """重跑開頭的健檢：sheet 存在、寬＝frames×fw、高至少涵蓋用到的列（row0+rows）；對不上只印警告（錯的 anim 設定不擋重跑，但要在輸出裡看得見）"""
     for e in EXTERNAL_BUNDLES:
@@ -2548,6 +2616,13 @@ def check_external():
             print(f"  ⚠ {e['sheet']}：實際 {w}x{h}，與登記（{e['frames']} 幀 × {rows} 列 × 每格 {e['fw']}x{e['fh']}）不符")
             continue
         print(f"  {e['sheet']}: {e['frames']} 幀 x {rows} 列 x {e['fw']}x{e['fh']} — {e['what']}")
+    for e in EXTERNAL_TILESETS:
+        px = read_png_pixels(os.path.join(ASSETS, e["file"]))
+        if px is None or px[0] != e["w"] or px[1] != e["h"]:
+            got = "不存在或無法解碼" if px is None else f"{px[0]}x{px[1]}"
+            print(f"  ⚠ {e['file']}：{got}，與登記（{e['w']}x{e['h']}）不符")
+            continue
+        print(f"  {e['file']}: {e['w']}x{e['h']} — {e['what']}")
 
 # 新怪物（使用者提供的 img2pixel 素材，方向網格）：anim 用 fw／fh 指定單格尺寸、row0／rows 用哪幾列、
 # rowDir＝每一列是哪個方向（順序＝列的順序），沒畫的方向由程式用對向那一列左右鏡像；tint／tintBase＝一張基準圖調成不同色系。
@@ -3738,6 +3813,16 @@ def main():
             save(volcanic(), "volcanic.png", sub)
         if t["id"] == "machine":
             save(gear(), "gear.png", sub)
+        if t["id"] == "grass":
+            # 草島裝飾＝aamatniekss 森林素材包切片（上面的 tree()/rock() 照畫但會被這裡蓋掉；
+            # 保留程式畫的 flower.png 當花瓣素材來源）。bush/tuft/reed/log 是純觀賞、沒有 tools.json target。
+            save(tpff("tree_small"), "tree.png", sub)
+            save(tpff("rock"), "rock.png", sub)
+            save(tpff("mushroom"), "mushroom.png", sub)
+            save(tpff("bush"), "bush.png", sub)
+            save(tpff("tuft"), "tuft.png", sub)
+            save(tpff("reed"), "reed.png", sub)
+            save(tpff("log"), "log.png", sub)
         td = dict(id=t["id"], name=t["name"], scale=2, tile=TILE,
                   ground="ground.png", edge="edge.png", water="water.png",
                   deco=[dict(sprite=s, weight=w) for s, w in t["deco"]],
@@ -3760,6 +3845,8 @@ def main():
         if t["id"] in PROPS_BY_TERRAIN:   # 固定小物件（餐飲區等）：圖放在地形資料夾
             td["props"] = PROPS_BY_TERRAIN[t["id"]]
             save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub); save(lounge_rug(), "lounge_rug.png", sub); save(claw_machine(), "claw_machine.png", sub); save(gacha_machine(), "gacha_machine.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）
+        if t.get("decoDensity") is not None:   # 裝飾密度（每個陸地格的生成機率，預設 .036）：大裝飾的島調低（main.js 的 genWorld 讀）
+            td["decoDensity"] = t["decoDensity"]
         if t.get("campfire") is False:
             td["campfire"] = False
         if t.get("anims"):   # 動畫：{ 檔名: anim }（地面/岸邊/水/點綴物都可以；格式見 README「內容擴充」）。寫在 TERRAINS 的該地形裡，重跑才不會被蓋掉
