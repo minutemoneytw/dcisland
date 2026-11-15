@@ -5675,7 +5675,7 @@ function buildKingdom(box, v, mk, gd) {
       const rr = mk('div', 'kg-brow'); rr.appendChild(mk('span', 'table-tag', '資源：')); rr.appendChild(kgChips({ ...sd.res, G: sd.gold }, mk));
       if (!kgcTotal(sd)) rr.appendChild(mk('span', 'table-tag', '（空）')); e.appendChild(rr);
       const pr = kgcProd(sd), dr = mk('div', 'kg-brow'); dr.appendChild(mk('span', 'table-tag', '折扣：')); dr.appendChild(kgChips(pr, mk)); if (!Object.values(pr).some(n => n)) dr.appendChild(mk('span', 'table-tag', '（無）')); e.appendChild(dr);
-      const list = (ids, label) => { if (!ids.length) return; const d = mk('div', 'kg-brow'); d.appendChild(mk('span', 'table-tag', label)); for (const id of ids) { const c = kgCardOf(id), t = mk('span', 'kg-mini', c.name + (c.vp ? ` ${c.vp}` : '')); if (id[0] === 'b') t.style.borderLeftColor = KG_RC[c.gives]; t.title = id[0] === 'p' ? c.text : (c.fx ? kgFxText(c) : ''); d.appendChild(t); } e.appendChild(d); };
+      const list = (ids, label) => { if (!ids.length) return; const d = mk('div', 'kg-brow'); d.appendChild(mk('span', 'table-tag', label)); for (const id of ids) { const c = kgCardOf(id), t = mk('span', 'kg-mini', c.name + (c.vp ? ` ${c.vp}` : '')); if (id[0] === 'b') t.style.borderLeftColor = KG_RC[c.gives]; t.title = id[0] === 'p' ? c.text : id[0] === 'b' ? `${['', 'Ⅰ', 'Ⅱ', 'Ⅲ'][c.tier]} 階建築${c.fx ? '：' + kgFxText(c) : ''}` : (c.fx ? kgFxText(c) : ''); d.appendChild(t); } e.appendChild(d); };
       list(sd.bld, `建築 ${sd.bld.length}：`); list(sd.ppl, '人物：'); list(sd.won, '奇觀：');
       if (g.hands?.[k]?.length) list(g.hands[k], `保留 ${g.hands[k].length} 張：`);   // 觀戰者（含大螢幕）看得到每個人保留的牌
       else if (sd.nhand && !you) e.appendChild(mk('div', 'table-tag', `保留 ${sd.nhand} 張`));
