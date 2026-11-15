@@ -4969,8 +4969,8 @@ def mz_snap(msg):
             return None
     return {"p": p[:3], "g": [x[:4] for x in g], "d": d, "pw": msg["pw"], "sc": msg["sc"], "lv": msg["lv"], "lvl": msg["lvl"], "rs": msg["rs"], "fz": msg["fz"], "bn": msg["bn"]}
 
-def mz_relay(t, cid, msg):
-    """快照／幽靈位置：回要轉發的 [(cid, msg)]（給同桌其他人與觀戰者）。"""
+def mz_relay(t, cid, msg, scr=None):
+    """快照／幽靈位置：回要轉發的 [(cid, msg)]（給同桌其他人與觀戰者）；scr 是 list 的話把這則資料也放進去（給大螢幕轉播，沒有其他人時也要）。"""
     role, i = tbl_find(t, cid)
     g = t.get("g")
     if t["game"] != "maze" or role != "seat" or t["phase"] != "playing" or not g:
@@ -4989,6 +4989,8 @@ def mz_relay(t, cid, msg):
         data = {"t": "tmp", "i": i, "k": g["gh"].index(i), "x": x, "y": y, "d": dd, "m": m}
     if data is None:
         return []
+    if scr is not None:
+        scr.append(data)
     return [(m["cid"], data) for m in t["seats"] + t["specs"] if m["cid"] is not None and m["cid"] != cid]
 
 def mz_over(t, cid, msg):
@@ -6620,7 +6622,10 @@ class Room:
                     self._table_collect_xp(t, before)
                     return out, self.table_info_msg(c.get("table_terr") or terr), c.get("table_terr") or terr
                 if t["game"] == "maze" and a in ("ms", "mp"):   # 豆豆迷宮：豆豆的快照／幽靈玩家的位置，只轉發；對抗時間上限過了才順便結算
-                    out = mz_relay(t, cid, msg)
+                    scr = []
+                    out = mz_relay(t, cid, msg, scr)
+                    for d in scr:   # 大螢幕正在轉播這桌：豆豆快照／幽靈位置也轉給走近螢幕的人（w＝原本的訊息種類 tms／tmp）
+                        self._scr_fwd(terr, t, {**d, "w": d["t"], "t": "sttm"}, out)
                     if not mz_tick(t, now_ms):
                         return out, None, None
                     self._table_notify_locked(t, out)

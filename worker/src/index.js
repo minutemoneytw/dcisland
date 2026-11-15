@@ -3332,7 +3332,7 @@ function mzSnap(msg) {
   return { p: p.slice(0, 3), g: g.map(x => x.slice(0, 4)), d, pw: msg.pw, sc: msg.sc, lv: msg.lv, lvl: msg.lvl, rs: msg.rs, fz: msg.fz, bn: msg.bn };
 }
 // 快照／幽靈位置：回要轉發的 [[cid, msg]…]（給同桌其他人與觀戰者）
-function mzRelay(t, cid, msg) {
+function mzRelay(t, cid, msg, scr) {   // scr 是陣列的話把這則資料也放進去（給大螢幕轉播，沒有其他人時也要）
   const [role, i] = tblFind(t, cid), g = t.g;
   if (t.game !== "maze" || role !== "seat" || t.phase !== "playing" || !g) return [];
   let data = null;
@@ -3345,6 +3345,7 @@ function mzRelay(t, cid, msg) {
     data = { t: "tmp", i, k: g.gh.indexOf(i), x: msg.x, y: msg.y, d: msg.d, m: msg.m };
   }
   if (!data) return [];
+  if (scr) scr.push(data);
   return [...t.seats, ...t.specs].filter(m => m.cid != null && m.cid !== cid).map(m => [m.cid, data]);
 }
 // 豆豆那台回報結束：單人＝命用完（帶 lvl）；對抗＝win（豆子吃光）或沒有（命用完／tu 時間到），ct＝各幽靈位置抓到幾次
@@ -4156,7 +4157,9 @@ export class Island {
       return;
     }
     if (t.game === "maze" && (a === "ms" || a === "mp")) {   // 豆豆迷宮：豆豆的快照／幽靈玩家的位置，只轉發（不存檔、不通知畫面）；對抗時間上限過了才順便結算
-      for (const [cid, m] of mzRelay(t, att.id, msg)) this.sendToId(cid, m);
+      const scrOut = [];
+      for (const [cid, m] of mzRelay(t, att.id, msg, scrOut)) this.sendToId(cid, m);
+      for (const d of scrOut) this.scrFwd(terr, t, { ...d, w: d.t, t: "sttm" });   // 大螢幕正在轉播這桌：豆豆快照／幽靈位置也轉給走近螢幕的人（w＝原本的訊息種類 tms／tmp）
       const resBefore = t.result;
       if (mzTick(t, now)) { await this.saveTable(t); this.tableNotify(t); await this.tableBroadcastInfo(terr); await this.tableXp(t, resBefore); }
       return;

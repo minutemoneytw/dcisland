@@ -5839,6 +5839,24 @@ function onNetScrTb(msg) {   // 俄羅斯方塊的盤面快照（每台約 4 次
   (S.scrTb ||= {})[msg.cab] = { b: msg.b, sc: msg.sc, ln: msg.ln };
   S.scrDirty = true;
 }
+function onNetScrMz(m) {   // 大螢幕轉播豆豆迷宮：套到螢幕自己的那份狀態（螢幕沒開這桌就忽略）
+  const M = S.scrMz; if (!M) return;
+  if (m.w === 'tms') mzApplyTms(M, m); else if (m.w === 'tmp') mzApplyTmp(M, m);
+  S.scrDirty = true;
+}
+// 大螢幕：豆豆迷宮——整張迷宮縮小畫在左邊（跟牌桌觀戰同一份 mzDraw，只吃快照），右邊座位欄是各人的分數
+function scrMaze(g, v, MX, MY, MW, MH) {
+  const z = v.mz, key = z.seed + ':' + z.t0;
+  if (!S.scrMz || S.scrMz.key !== key) S.scrMz = mzMake({ ...v, role: 'spec', me: -1 });
+  const M = S.scrMz, now = performance.now(), dt = Math.max(0, Math.min(.05, (now - M.last) / 1000)); M.last = now;
+  for (const r of [M.rPac, ...M.rG, ...M.rH]) mzRecStep(r, dt);
+  if (Math.hypot(M.rPac.tx - M.rPac.x, M.rPac.ty - M.rPac.y) > .02) M.anim += dt;
+  const cv = (S.scrMzCv ||= Object.assign(document.createElement('canvas'), { width: MZ_W * MZ_T, height: MZ_HUD + MZ_H * MZ_T }));
+  mzDraw(M, mzNow(M), v, cv);
+  const k = Math.min(MW / cv.width, MH / cv.height);
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  g.drawImage(cv, MX + (MW - cv.width * k) / 2, MY + (MH - cv.height * k) / 2, cv.width * k, cv.height * k);
+}
 function onNetScrTp(msg) {   // 打字競賽的進度（大螢幕轉播中才會收到）：i＝座位、n＝第幾個字（＝分數）、p＝已打對幾個字母、e＝剛打錯
   const T = (S.scrTy ||= { key: '', prog: {} });
   T.prog[msg.i] = { n: msg.n, p: msg.p, e: msg.e, at: performance.now() };
@@ -6093,6 +6111,7 @@ function scrRender() {
       drew = true;
     } else if (sc.game === 'oldmaid' && playing) { scrHands(g, v, MX, MY, MW, 44, null); drew = true; }
     else if (sc.game === 'kingdom' && v.kg) { scrKingdom(g, v, MX, MY, MW); drew = true; }
+    else if (sc.game === 'maze' && playing && v.mz) { scrMaze(g, v, MX, MY, MW, MH); drew = true; }
     else if (wideIntel) { scrIntel(g, v, MX, MY, SCR_W - MX * 2); drew = true; }
     else if ((sc.game === 'typing' || sc.game === 'zhtyping') && playing && v.ty) { scrTyping(g, v, MX, MY, MW); drew = true; }
     } catch (e) { drew = false; }
@@ -6138,7 +6157,7 @@ function buildScrPick() {
 }
 // 島上的螢幕物件：外框＋離屏 canvas 的內容（沒收到過畫面時先畫成關閉的樣子）
 function drawScreenProp(pr, r) {
-  if (!S.scrCv || S.scrDirty || (S.scr && S.scr.v?.ty && S.scr.v.phase === 'playing')) { S.scrDirty = false; scrRender(); }   // 打字競賽進行中：每幀重畫（倒數的秒數會動）
+  if (!S.scrCv || S.scrDirty || (S.scr && (S.scr.v?.ty || S.scr.game === 'maze') && S.scr.v.phase === 'playing')) { S.scrDirty = false; scrRender(); }   // 打字競賽進行中：每幀重畫（倒數的秒數會動）
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#12141c'; ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.fillStyle = '#2a2e3c'; ctx.fillRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
@@ -6981,10 +7000,10 @@ const mzRec = (x, y) => ({ x, y, tx: x, ty: y, d: -1, m: 0, has: false });
 function mzRecSet(r, x, y, d, m) { r.tx = x; r.ty = y; if (!r.has || Math.abs(x - r.x) > 3 || Math.abs(y - r.y) > 3) { r.x = x; r.y = y; } r.d = d; r.m = m; r.has = true; }
 function mzRecStep(r, dt) { const a = 1 - Math.exp(-dt * 14); r.x += (r.tx - r.x) * a; r.y += (r.ty - r.y) * a; }
 // 一局開始（伺服器給了 mz）：建立本機狀態。role＝pac（我是豆豆，權威）／ghost（我是幽靈玩家）／spec（觀戰或還沒輪到）
-function mzStart(v) {
+function mzMake(v) {   // 一局的本機狀態（玩家／觀戰者／大螢幕共用；大螢幕那份 v.role 是 spec，只吃快照）
   const z = v.mz, me = v.role === 'seat' ? v.me : -1;
   const role = me >= 0 && me === z.pac ? 'pac' : me >= 0 && z.gh.includes(me) ? 'ghost' : 'spec';
-  const M = S.mz = {
+  const M = {
     key: z.seed + ':' + z.t0, role, solo: z.solo, t0: z.t0, off: z.sn - Date.now(), lim: (z.lim || 240000) / 1000, gh: [...z.gh], myK: z.gh.indexOf(me),
     dots: new Uint8Array(MZ_DOTS.length).fill(1), left: MZ_DOTS.length, eaten: 0, sc: 0, lv: MZ_LIVES, lvl: 1, pw: 0, chain: 0, fz: 0, dead: 0, clear: 0,
     clock: 0, modeT: 0, phase: 0, rs: 0, ct: [0, 0, 0, 0], bonus: 0, bonusN: 0, extra: false, over: false, snapAt: 0, anim: 0, pops: [], last: performance.now(),
@@ -6994,6 +7013,10 @@ function mzStart(v) {
     mine: role === 'ghost' ? mzEnt(...MZ_GHOST0[z.gh.indexOf(me)], -1) : null, myMode: 0, reviveAt: -9, fzShow: 0,
   };
   M.ghosts.forEach((e, k) => { e.rel = mzRelDelay(M, k); });
+  return M;
+}
+function mzStart(v) {
+  S.mz = mzMake(v);
   if (!S.mzRaf) S.mzRaf = requestAnimationFrame(mzFrame);
 }
 function mzStop() { S.mz = null; if (S.mzRaf) { cancelAnimationFrame(S.mzRaf); S.mzRaf = 0; } }
@@ -7102,8 +7125,9 @@ function mzGhostStep(M, dt) {   // 我是幽靈玩家：自己移動、回報位
     S.net?.tbl?.({ a: 'mp', x: Math.round(x * 10), y: Math.round(y * 10), d: e.d, m: e.eyes ? 2 : 0 });
   }
 }
-function onNetTms(m) {   // 豆豆的快照（幽靈玩家與觀戰者才收到）
-  const M = S.mz; if (!M || M.role === 'pac') return;
+function onNetTms(m) { mzApplyTms(S.mz, m); }   // 豆豆的快照（幽靈玩家與觀戰者才收到）
+function mzApplyTms(M, m) {
+  if (!M || M.role === 'pac') return;
   M.sc = m.sc; M.lv = m.lv; M.lvl = m.lvl; M.pw = m.pw / 1000; M.bn = m.bn;
   mzDotsFromHex(m.d, M.dots);
   mzRecSet(M.rPac, m.p[0] / 10, m.p[1] / 10, m.p[2], 0);
@@ -7120,8 +7144,9 @@ function onNetTms(m) {   // 豆豆的快照（幽靈玩家與觀戰者才收到�
     M.myMode = mine[3];
   } else M.rs = m.rs;
 }
-function onNetTmp(m) {   // 幽靈玩家的位置（k＝第幾隻幽靈）
-  const M = S.mz; if (!M || m.k < 0 || m.k > 3) return;
+function onNetTmp(m) { mzApplyTmp(S.mz, m); }   // 幽靈玩家的位置（k＝第幾隻幽靈）
+function mzApplyTmp(M, m) {
+  if (!M || m.k < 0 || m.k > 3) return;
   if (M.role === 'pac') {
     const h = M.hm[m.k];
     h.x = m.x / 10; h.y = m.y / 10; h.d = m.d; h.rm = m.m; h.has = true;
@@ -7222,8 +7247,8 @@ function mzDrawWisp(g, x, y, d, col, mode, flash, t) {   // 小幽靈：圓頭�
   }
   g.restore();
 }
-function mzDraw(M, t, v) {
-  const cv = $('mzCanvas'); if (!cv) return;
+function mzDraw(M, t, v, cv = $('mzCanvas')) {
+  if (!cv) return;
   const g = cv.getContext('2d'), now = performance.now(), W = MZ_W * MZ_T;
   g.fillStyle = '#0a0e18'; g.fillRect(0, 0, cv.width, cv.height);
   g.drawImage(mzWallLayer(), 0, MZ_HUD);
@@ -11453,7 +11478,7 @@ async function boot() {
     onThp: onNetThp,           // 空氣曲棍球：別人的握把位置
     onThs: onNetThs,           // 空氣曲棍球：桌主的圓盤快照
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
-    onScr: onNetScr, onScrList: onNetScrList, onScrTb: onNetScrTb, onScrTp: onNetScrTp, onScrCd: onNetScrCd,   // 和平島大螢幕
+    onScr: onNetScr, onScrList: onNetScrList, onScrTb: onNetScrTb, onScrTp: onNetScrTp, onScrMz: onNetScrMz, onScrCd: onNetScrCd,   // 和平島大螢幕
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）
     onNick: nick => { S.nick = nick || ''; applyMyName(); },
