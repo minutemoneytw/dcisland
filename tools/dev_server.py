@@ -4688,21 +4688,24 @@ def ar_link_cancel(t, why):
     t["g"] = None
     tbl_log(t, why)
 
-def ar_check_end(t):
-    """聯機進行中：還在場上的成員全部出局（或都離開了）就結算。"""
+def ar_check_end(t, force=False):
+    """聯機進行中：還在場上的成員全部出局（或都離開了）就結算。
+    對戰模式（2026-11-16 使用者要求）：每人 5 條命（客戶端算），其中一人 5 條命用完（收到 over）就直接結束（force）；只剩 1 人（其他人都離開）也結束。排名：還活著的在前（依分數），出局的在後。"""
     g = t.get("g")
     if not g or g["phase"] != "playing":
         return
     mem = [ar_seat(t, c)[1] for c in g["mem"]]
-    if any(s is not None and not s["dead"] for s in mem):
+    battle = g["mode"] == "battle"
+    if not (force or (battle and len(g["mem"]) <= 1)) and any(s is not None and not s["dead"] for s in mem):
         return
-    rows = [{"name": s["name"], "uid": s.get("uid"), "score": s["sc"], "lines": s["ln"], "left": False, "cab": s["cab"]} for s in mem if s is not None]
+    rows = [{"name": s["name"], "uid": s.get("uid"), "score": s["sc"], "lines": s["ln"], "left": False, "cab": s["cab"], "dead": battle and bool(s["dead"])} for s in mem if s is not None]
     rows += [dict(x, left=True) for x in g["gone"]]
-    rows.sort(key=lambda r: -r["score"])
+    rows.sort(key=lambda r: ((1 if r.get("dead") else 0) if battle else 0, -r["score"]))
     xp = [AR_XP if (s["cab"] in g["mem"] and s["ln"] >= AR_XP_MIN) else 0 for s in t["seats"]]
     top = rows[0] if rows else None
     mode = "對戰" if g["mode"] == "battle" else "一般"
-    text = f"聯機（{mode}模式）結束！第一名 {top['name']}，{top['score']} 分" if top else "聯機結束"
+    dead_names = "、".join(r["name"] for r in rows if r.get("dead"))
+    text = f"聯機（{mode}模式）結束！{dead_names + ' 的命用完了，' if dead_names else ''}第一名 {top['name']}，{top['score']} 分" if top else "聯機結束"
     gs = [gs_mk({"lw": 1} if top and not top.get("left") and top.get("cab") == s["cab"] and len(rows) >= 2 else {}, {"lines": s["ln"]}) if s["cab"] in g["mem"] else None for s in t["seats"]]   # lw＝聯機獲勝（第一名且至少 2 人）、lines＝單局消行（取最大）；依 t["seats"] 順序（同 xp）
     t["result"] = {"link": True, "mode": g["mode"], "text": text, "rid": random.getrandbits(32), "ranking": rows, "xp": xp, "cabs": list(g["mem"]), "gs": gs}
     for s in t["seats"]:
@@ -4823,12 +4826,14 @@ def ar_msg(t, cid, msg, now):
                     out.append((m["cid"], {"t": "tgb", "n": k, "from": s["cab"]}))
         return False, out
     if a == "tb":   # 盤面快照：轉發給觀戰者與同一場聯機的其他成員（不通知整個畫面）
-        b, sc, ln = msg.get("b"), msg.get("sc"), msg.get("ln")
+        b, sc, ln, lv = msg.get("b"), msg.get("sc"), msg.get("ln"), msg.get("lv")   # lv＝對戰模式剩幾條命（選用，給對手與觀戰者看）
         if not (ar_playing(t, s) and not s["dead"] and type(b) is str and len(b) == 200 and all(ch in "012345678" for ch in b)
-                and _int_in(sc, 0, AR_SCORE_MAX) and _int_in(ln, 0, 100000)):
+                and _int_in(sc, 0, AR_SCORE_MAX) and _int_in(ln, 0, 100000) and (lv is None or _int_in(lv, 0, 9))):
             return False, []
         s["sc"], s["ln"] = sc, ln
         data = {"t": "ttb", "cab": s["cab"], "b": b, "sc": sc, "ln": ln}
+        if lv is not None:
+            data["lv"] = lv
         out = [(None, data)] + [(m["cid"], data) for m in t["specs"] if m["cid"] is not None]   # 第一筆 None＝給大螢幕（Room._scr_expand 展開）
         if s["st"] == "link":
             for c in g["mem"]:
@@ -4846,7 +4851,7 @@ def ar_msg(t, cid, msg, now):
         else:
             s["dead"] = True
             tbl_log(t, f"{s['name']} 出局了（{sc} 分）")
-            ar_check_end(t)
+            ar_check_end(t, bool(g) and g["mode"] == "battle")
         return True, []
     return False, []
 

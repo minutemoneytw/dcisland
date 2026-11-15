@@ -9063,8 +9063,9 @@ const AR_DAS = 150, AR_ARR = 40, AR_LOCK = 500, AR_LOCK_RESETS = 15, AR_SNAP_MS 
 const AR_KEYS = { arrowleft: 'L', arrowright: 'R', arrowdown: 'D', arrowup: 'CW', x: 'CW', z: 'CCW', ' ': 'HD', c: 'HOLD', shift: 'HOLD' };
 const arFall = lv => Math.max(30, 1000 * Math.pow(0.8 - (lv - 1) * 0.007, lv - 1));   // 每格落下的毫秒（等級越高越快）
 function arRng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-function arNew(seed, t0, off, key) {
-  const A = { key, t0, off, rng: arRng(seed), bag: [], queue: [], board: Array.from({ length: AR_H }, () => new Array(AR_W).fill(0)),
+const AR_LIVES = 5;   // 對戰模式每人幾條命（2026-11-16 使用者要求）：頂到就扣一命、清空盤面（含等著推上來的垃圾），5 條都用完才出局；其中一人出局，整場立刻結束（伺服器判）
+function arNew(seed, t0, off, key, battle) {
+  const A = { key, t0, off, battle: !!battle, lives: battle ? AR_LIVES : 1, lifeMsg: null, rng: arRng(seed), bag: [], queue: [], board: Array.from({ length: AR_H }, () => new Array(AR_W).fill(0)),
     cur: null, hold: 0, held: false, sc: 0, ln: 0, lv: 1, combo: 0, dead: false, fallAcc: 0, lockT: 0, resets: 0, keys: {}, das: {}, gq: 0,
     last: performance.now(), snapAt: 0, snapStr: '', flash: null, started: false };
   for (let i = 0; i < 5; i++) A.queue.push(arDraw(A));
@@ -9082,7 +9083,7 @@ function arFits(A, p) {
 function arSpawn(A, k) {
   const p = { k, r: 0, x: k === 2 ? 4 : 3, y: 1 };
   A.cur = p; A.lockT = 0; A.resets = 0; A.fallAcc = 0; A.lowY = p.y;
-  if (!arFits(A, p)) arGameOver(A);
+  if (!arFits(A, p) && !arGameOver(A)) arSpawn(A, k);   // 對戰模式還有命：清空盤面後重新生這一塊
 }
 function arNext(A) { const k = A.queue.shift(); A.queue.push(arDraw(A)); arSpawn(A, k); }
 function arGrounded(A) { const p = A.cur; return !arFits(A, { ...p, y: p.y + 1 }); }
@@ -9114,7 +9115,10 @@ function arHold(A) {
 function arLock(A) {
   const cells = arCells(A.cur);
   for (const [x, y] of cells) if (y >= 0) A.board[y][x] = A.cur.k;
-  if (cells.every(([, y]) => y < AR_H - AR_VIS)) { arGameOver(A); return; }   // 整塊停在畫面外：頂到了
+  if (cells.every(([, y]) => y < AR_H - AR_VIS)) {   // 整塊停在畫面外：頂到了（對戰模式還有命：這一塊作廢、清掉垃圾行、繼續）
+    if (A.lives > 1) for (const [x, y] of cells) if (y >= 0) A.board[y][x] = 0;
+    if (arGameOver(A)) return;
+  }
   const full = [];
   for (let y = 0; y < AR_H; y++) if (A.board[y].every(c => c)) full.push(y);
   if (full.length) {
@@ -9126,7 +9130,7 @@ function arLock(A) {
     if (lk?.phase === 'playing' && lk.mode === 'battle') S.net?.tbl?.({ a: 'clr', n: full.length, combo: A.combo });   // 對戰模式：讓伺服器依消行數＋連擊算要送對手幾行垃圾（消 1 行本身不送，但連擊夠高會送）
   } else A.combo = 0;
   if (A.gq > 0) {   // 收到的垃圾行在方塊放好時才推上來（同一批的缺口在同一欄）
-    const n = Math.min(A.gq, AR_H), hole = Math.floor(Math.random() * AR_W);
+    const n = Math.min(A.gq, AR_H);
     A.gq = 0;
     const over = A.board.slice(0, n).some(r => r.some(c => c));
     A.board.splice(0, n);
@@ -9139,11 +9143,22 @@ function arLock(A) {
   arNext(A);
   arSnap(A, true);
 }
-function arGameOver(A) {
-  if (A.dead) return;
-  A.dead = true; A.cur = null;
+function arGameOver(A) {   // 回 true＝真的結束了；false＝對戰模式扣一命、盤面清空，呼叫的人要接著生下一塊
+  if (A.dead) return true;
+  if (A.lives > 1) {
+    A.lives--; A.gq = 0; A.combo = 0; A.cur = null; A.lockT = 0; A.keys = {}; A.das = {};
+    // 只清垃圾行（含垃圾格的整行拿掉、上面的自己的方塊落下來），自己堆的方塊留著；如果拿掉後自己的方塊還堆在生成區（最上面 4 列），才整個盤面清空，不然下一塊一生出來又頂到、連扣好幾命
+    const rows = A.board.filter(r => !r.includes(8));
+    while (rows.length < AR_H) rows.unshift(new Array(AR_W).fill(0));
+    A.board = rows.slice(0, 4).some(r => r.some(c => c)) ? Array.from({ length: AR_H }, () => new Array(AR_W).fill(0)) : rows;
+    A.lifeMsg = { text: `失去一命！剩 ${A.lives} 命`, until: performance.now() + 1800 };
+    arSnap(A, true);
+    return false;
+  }
+  A.lives = 0; A.dead = true; A.cur = null;
   arSnap(A, true);
   S.net?.tbl?.({ a: 'over', sc: A.sc, ln: A.ln });
+  return true;
 }
 function arBoardStr(A) {   // 畫面上的 20 列（含正在落下的方塊），每格一個數字
   const b = A.board.slice(AR_H - AR_VIS).map(r => [...r]);
@@ -9156,7 +9171,7 @@ function arSnap(A, force) {   // 盤面快照給觀戰者與聯機對手看（�
   const s = arBoardStr(A);
   if (!force && s === A.snapStr) return;
   A.snapAt = now; A.snapStr = s;
-  S.net?.tbl?.({ a: 'tb', b: s, sc: A.sc, ln: A.ln });
+  S.net?.tbl?.({ a: 'tb', b: s, sc: A.sc, ln: A.ln, ...(A.battle ? { lv: A.lives } : {}) });
 }
 function arStep(A) {
   const now = performance.now(), dt = Math.min(100, now - A.last);
@@ -9198,7 +9213,7 @@ function arKey(e) {   // 遊戲畫面開著時的按鍵（回 true＝已處理�
   return true;
 }
 function arKeyUp(k) { const A = S.ar, act = AR_KEYS[k]; if (A && (act === 'L' || act === 'R' || act === 'D')) A.keys[act] = false; }
-function onNetTtb(m) { (S.arOpp ||= {})[m.cab] = { b: m.b, sc: m.sc, ln: m.ln }; }   // 別台的盤面快照（觀戰者、同一場聯機的對手才收到）
+function onNetTtb(m) { (S.arOpp ||= {})[m.cab] = { b: m.b, sc: m.sc, ln: m.ln, lv: m.lv }; }   // 別台的盤面快照（觀戰者、同一場聯機的對手才收到）
 function onNetTgb(m) {   // 對戰模式：被送垃圾行
   const A = S.ar; if (!A || A.dead) return;
   A.gq += m.n; A.hit = { n: m.n, from: m.from, until: performance.now() + 1200 };
@@ -9247,7 +9262,8 @@ function arDrawMain() {   // 自己的盤面：左邊暫存、中間盤面（含
   g.fillText('下一個', R, 28);
   A.queue.slice(0, 3).forEach((k, i) => arDrawMini(g, k, R, 38 + i * 50, i ? 14 : 18));
   const stat = [['分數', A.sc], ['行數', A.ln], ['等級', A.lv]];
-  stat.forEach(([lbl, n], i) => { g.fillStyle = '#8fa0c8'; g.font = '12px "Microsoft JhengHei"'; g.fillText(lbl, R, 210 + i * 46); g.fillStyle = '#ffe08a'; g.font = 'bold 18px "Microsoft JhengHei"'; g.fillText(String(n), R, 230 + i * 46); });
+  if (A.battle) stat.push(['命', '♥'.repeat(A.lives) + '♡'.repeat(AR_LIVES - A.lives)]);
+  stat.forEach(([lbl, n], i) => { g.fillStyle = '#8fa0c8'; g.font = '12px "Microsoft JhengHei"'; g.fillText(lbl, R, 210 + i * 46); g.fillStyle = lbl === '命' ? '#ff6a7a' : '#ffe08a'; g.font = lbl === '命' ? 'bold 14px "Microsoft JhengHei"' : 'bold 18px "Microsoft JhengHei"'; g.fillText(String(n), R, 230 + i * 46); });
   g.textAlign = 'center';
   const wait = A.t0 - (Date.now() + A.off);
   const msg = (txt, sub, col = '#ffe08a') => {
@@ -9258,6 +9274,7 @@ function arDrawMain() {   // 自己的盤面：左邊暫存、中間盤面（含
   if (A.dead) msg('GAME OVER', `${A.sc} 分 · ${A.ln} 行`, '#ff7a6a');
   else if (wait > 0) msg(String(Math.ceil(wait / 1000)), '準備……');
   else if (A.flash && performance.now() < A.flash.until) { g.fillStyle = '#fff6c0'; g.font = 'bold 20px "Microsoft JhengHei"'; g.fillText(['', '', '雙消！', '三消！', '四行消除！'][A.flash.n] || '', L + BW / 2, 44); if (A.flash.combo >= 2) { g.fillStyle = '#ffb04a'; g.font = 'bold 16px "Microsoft JhengHei"'; g.fillText(`${A.flash.combo} 連擊！`, L + BW / 2, 66); } }
+  if (A.lifeMsg && performance.now() < A.lifeMsg.until) { g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(L, 10 + BH / 2 - 22, BW, 44); g.fillStyle = '#ff7a8a'; g.font = 'bold 20px "Microsoft JhengHei"'; g.fillText(A.lifeMsg.text, L + BW / 2, 10 + BH / 2 + 7); }
   if (A.hit && performance.now() < A.hit.until) { g.fillStyle = '#ff8a7a'; g.font = 'bold 15px "Microsoft JhengHei"'; g.fillText(`${arCabName(A.hit.from)} 送來 ${A.hit.n} 行！`, L + BW / 2, 10 + BH - 12); }
   g.textAlign = 'left';
 }
@@ -9273,7 +9290,7 @@ function arDrawAll() {
   for (const cv of document.querySelectorAll('canvas.ar-oppcv')) {
     const cab = Number(cv.dataset.cab), snap = S.arOpp?.[cab], v = S.tableView, s = v?.seats.find(x => x.cab === cab);
     arDrawSmall(cv, snap, s?.dead);
-    const sc = document.getElementById('arOppSc' + cab); if (sc && snap) sc.textContent = `${snap.sc} 分 · ${snap.ln} 行`;
+    const sc = document.getElementById('arOppSc' + cab); if (sc && snap) sc.textContent = `${snap.sc} 分 · ${snap.ln} 行${snap.lv != null ? ' · ' + '♥'.repeat(snap.lv) : ''}`;
   }
 }
 function buildArcade(box, v, mk, gd) {
@@ -9281,7 +9298,7 @@ function buildArcade(box, v, mk, gd) {
   const off = (v.sn || Date.now()) - Date.now();
   // 新的一局：單人看自己的 tt、聯機看 link 的 seed（大家同一串方塊）
   const want = playing ? (me.st === 'solo' && v.tt ? { key: 's' + v.tt.seed + ':' + v.tt.t0, seed: v.tt.seed, t0: v.tt.t0 } : lk?.phase === 'playing' ? { key: 'l' + lk.seed + ':' + lk.t0, seed: lk.seed, t0: lk.t0 } : null) : null;
-  if (want && (!S.ar || S.ar.key !== want.key)) { S.ar = arNew(want.seed, want.t0, off, want.key); S.arOpp = {}; }
+  if (want && (!S.ar || S.ar.key !== want.key)) { S.ar = arNew(want.seed, want.t0, off, want.key, lk?.phase === 'playing' && lk.mode === 'battle' && me.st === 'link'); S.arOpp = {}; }
   if (!playing && S.ar && !S.ar.dead) S.ar = null;   // 被結束了（例如聯機取消）：本機這局作廢
   if (!S.arRaf) S.arRaf = requestAnimationFrame(arLoop);
   const hostName = lk ? v.seats.find(s => s.cab === lk.host)?.name || arCabName(lk.host) : '';
@@ -9332,7 +9349,7 @@ function buildArcade(box, v, mk, gd) {
       const q = mk('button', 'ff-btn small', '退出聯機'); q.onclick = () => S.net?.tbl?.({ a: 'lquit' }); bs.appendChild(q);
     }
     room.appendChild(bs);
-    room.appendChild(mk('div', 'table-tag', lk.mode === 'battle' ? '對戰模式：一次消 2／3／4 行，其他對手最下面多 1／2／4 行垃圾，連擊夠高再多送；最後還活著的人最有利。' : '一般模式：大家拿到一樣的方塊順序，各自玩到出局，全員出局後依分數排名。'));
+    room.appendChild(mk('div', 'table-tag', lk.mode === 'battle' ? '對戰模式：每人 5 條命（頂到就扣 1 命、清掉垃圾行）；一次消 2／3／4 行，其他對手最下面多 1／2／4 行垃圾，連擊夠高再多送。只要有人 5 條命用完，整場立刻結束，還活著的人贏。' : '一般模式：大家拿到一樣的方塊順序，各自玩到出局，全員出局後依分數排名。'));
     box.appendChild(room);
   }
   if (me && me.st === 'idle') {   // 選模式

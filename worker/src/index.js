@@ -3123,16 +3123,19 @@ function arLinkCancel(t, why) {
   t.g = null; tblLog(t, why);
 }
 // 聯機進行中：還在場上的成員全部出局（或都離開了）就結算
-function arCheckEnd(t) {
+// 對戰模式（2026-11-16 使用者要求）：每人 5 條命（客戶端算，頂到就扣一命、清空盤面），其中一人 5 條命用完（收到 over）就直接結束（force）；只剩 1 人（其他人都離開）也結束。
+// 排名：還活著的在前（依分數），出局的在後
+function arCheckEnd(t, force) {
   const g = t.g;
   if (!g || g.phase !== "playing") return;
-  const mem = g.mem.map(c => arSeat(t, c)[1]);
-  if (mem.some(s => s && !s.dead)) return;
-  const rows = [...mem.filter(Boolean).map(s => ({ name: s.name, uid: s.uid || null, score: s.sc, lines: s.ln, left: false, cab: s.cab })), ...g.gone.map(x => ({ ...x, left: true }))];
-  rows.sort((a, b) => b.score - a.score);
+  const mem = g.mem.map(c => arSeat(t, c)[1]), battle = g.mode === "battle";
+  if (!(force || (battle && g.mem.length <= 1)) && mem.some(s => s && !s.dead)) return;
+  const rows = [...mem.filter(Boolean).map(s => ({ name: s.name, uid: s.uid || null, score: s.sc, lines: s.ln, left: false, cab: s.cab, dead: battle && !!s.dead })), ...g.gone.map(x => ({ ...x, left: true }))];
+  rows.sort((a, b) => (battle ? (a.dead ? 1 : 0) - (b.dead ? 1 : 0) : 0) || b.score - a.score);
   const xp = t.seats.map(s => (g.mem.includes(s.cab) && s.ln >= AR_XP_MIN ? AR_XP : 0));
   const top = rows[0], mode = g.mode === "battle" ? "對戰" : "一般";
-  const text = top ? `聯機（${mode}模式）結束！第一名 ${top.name}，${top.score} 分` : "聯機結束";
+  const deadNames = rows.filter(r => r.dead).map(r => r.name).join("、");
+  const text = top ? `聯機（${mode}模式）結束！${deadNames ? `${deadNames} 的命用完了，` : ""}第一名 ${top.name}，${top.score} 分` : "聯機結束";
   const gs = t.seats.map(s => (g.mem.includes(s.cab) ? gsMk(top && !top.left && top.cab === s.cab && rows.length >= 2 ? { lw: 1 } : {}, { lines: s.ln }) : null));   // lw＝聯機獲勝（第一名且至少 2 人）、lines＝單局消行（取最大）；依 t.seats 順序（同 xp）
   t.result = { link: true, mode: g.mode, text, rid: Math.floor(Math.random() * 4294967296), ranking: rows, xp, cabs: [...g.mem], gs };
   for (const s of t.seats) if (s.st === "link") { s.st = "idle"; s.dead = false; }
@@ -3230,10 +3233,10 @@ function arMsg(t, cid, msg, now) {
     return [false, out];
   }
   if (a === "tb") {   // 盤面快照：轉發給觀戰者與同一場聯機的其他成員（不通知整個畫面）
-    const b = msg.b, sc = msg.sc, ln = msg.ln;
-    if (!(arPlaying(t, s) && !s.dead && typeof b === "string" && b.length === 200 && /^[0-8]+$/.test(b) && arInt(sc, 0, AR_SCORE_MAX) && arInt(ln, 0, 100000))) return [false, []];
+    const b = msg.b, sc = msg.sc, ln = msg.ln, lv = msg.lv;   // lv＝對戰模式剩幾條命（選用，給對手與觀戰者看）
+    if (!(arPlaying(t, s) && !s.dead && typeof b === "string" && b.length === 200 && /^[0-8]+$/.test(b) && arInt(sc, 0, AR_SCORE_MAX) && arInt(ln, 0, 100000) && (lv === undefined || arInt(lv, 0, 9)))) return [false, []];
     s.sc = sc; s.ln = ln;
-    const data = { t: "ttb", cab: s.cab, b, sc, ln }, out = [[null, data], ...t.specs.filter(m => m.cid != null).map(m => [m.cid, data])];   // 第一筆 null＝給大螢幕（Island.arSend 展開）
+    const data = { t: "ttb", cab: s.cab, b, sc, ln, ...(lv === undefined ? {} : { lv }) }, out = [[null, data], ...t.specs.filter(m => m.cid != null).map(m => [m.cid, data])];   // 第一筆 null＝給大螢幕（Island.arSend 展開）
     if (s.st === "link") for (const c of g.mem) { const m = arSeat(t, c)[1]; if (m && c !== s.cab && m.cid != null) out.push([m.cid, data]); }
     return [false, out];
   }
@@ -3242,7 +3245,7 @@ function arMsg(t, cid, msg, now) {
     if (!(arPlaying(t, s) && !s.dead && arInt(sc, 0, AR_SCORE_MAX) && arInt(ln, 0, 100000))) return [false, []];
     s.sc = sc; s.ln = ln;
     if (s.st === "solo") arSoloOver(t, i);
-    else { s.dead = true; tblLog(t, `${s.name} 出局了（${sc} 分）`); arCheckEnd(t); }
+    else { s.dead = true; tblLog(t, `${s.name} 出局了（${sc} 分）`); arCheckEnd(t, !!g && g.mode === "battle"); }
     return [true, []];
   }
   return [false, []];
