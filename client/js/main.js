@@ -4910,8 +4910,10 @@ function leaveTable() {
   const v = S.tableView;
   if (v && v.phase === 'playing' && v.role === 'seat') leaveAsk(true); else closeTable();
 }
-// 規則說明視窗：遊戲定義有 guide（分段規則）的遊戲才有按鈕；入座／觀戰／遊戲中都能開關，不影響牌局畫面
-function rulesGuide() { const tb = tablesHere().find(t => t.id === S.tableId); return tb && gameDef(tb.game)?.guide || null; }
+// 規則說明視窗：每個遊戲都有按鈕（有 guide 用分段規則，沒有就用 rules 拆句）；入座／觀戰／遊戲中都能開關，不影響牌局畫面
+// 沒有分段 guide 的遊戲：把簡短規則（rules）依句號拆成條列，一樣有「規則說明」按鈕
+const gdGuide = gd => gd?.guide || (gd?.rules ? { title: '規則說明', sections: [{ h: gd.name, li: gd.rules.split(/(?<=[。！？])/).map(x => x.trim()).filter(Boolean) }] } : null);
+function rulesGuide() { const tb = tablesHere().find(t => t.id === S.tableId); return tb && gdGuide(gameDef(tb.game)) || null; }
 // 規則說明／角色介紹共用同一個浮動視窗，由標題列的兩顆按鈕各自開關（tab＝'rules'｜'chars'）；角色介紹視窗高度固定，上一位／下一位按鈕位置不會跳
 function rulesShow(on, tab) {
   const g = on ? rulesGuide() : null, box = $('rulesBox');
@@ -4993,7 +4995,7 @@ function buildTable() {
   const box = $('tableBody'); box.innerHTML = '';
   const tb = tablesHere().find(t => t.id === S.tableId), gd = tb && gameDef(tb.game), v = S.tableView;
   $('tableTitle').textContent = gd ? gd.name : '遊戲桌';
-  $('tableRulesBtn').classList.toggle('hidden', !gd?.guide);
+  $('tableRulesBtn').classList.toggle('hidden', !gdGuide(gd));
   $('tableCharsBtn').classList.toggle('hidden', !gd?.characters);
   if (!(v && v.phase === 'playing' && v.role === 'seat')) leaveAsk(false);   // 牌局結束／被移出座位：確認視窗不留著
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
