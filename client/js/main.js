@@ -6161,7 +6161,7 @@ function buildScrPick() {
   if (!lst.length) { const e = document.createElement('div'); e.className = 'ff-panel-hint'; e.textContent = '目前沒有進行中、或有人入座的遊戲。有人入座之後再來選。'; body.appendChild(e); return; }
   for (const it of lst) {
     const gd = gameDef(it.game), row = document.createElement('div');
-    row.className = 'opt scr-opt' + (S.scr && S.scr.id === it.id ? ' cur' : '');
+    row.className = 'scr-opt' + (S.scr && S.scr.id === it.id ? ' cur' : '');
     const a = document.createElement('span'); a.className = 'scr-name'; a.textContent = `${gd?.name || it.game}${it.game === 'hockey' ? `（${it.id === 't15' ? '左' : '右'}桌）` : ''}`;
     const b = document.createElement('span'); b.className = 'scr-st'; b.textContent = `${it.play ? '進行中' : '等待開始'}　${it.n}/${it.max}　${(it.names || []).join('、')}`;
     row.appendChild(a); row.appendChild(b);

@@ -150,6 +150,8 @@ body {
 #scrBox.hidden { display: none !important; }
 #scrBody { overflow-y: auto; flex: 1 1 auto; min-height: 0; margin: 8px 0; }
 .scr-opt { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border: 1px solid var(--gold-dim); margin: 4px 0; cursor: pointer; }
+.scr-name { font-weight: bold; color: var(--gold); font-size: 14px; }
+.scr-st { color: var(--text-dim); font-size: 12px; }
 .scr-opt:hover { border-color: var(--gold); background: rgba(255, 224, 138, .08); }
 .scr-opt.cur { border-color: #7fe08a; }
 .scr-name { font-size: 14px; color: var(--gold); }
