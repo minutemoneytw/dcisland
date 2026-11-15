@@ -7380,11 +7380,13 @@ function mzDraw(M, t, v, cv = $('mzCanvas')) {
 const PB_W = 300, PB_H = 520, PB_R = 6, PB_G = 760, PB_DT = 1 / 240, PB_BALLS = 3, PB_SNAP_MS = 100;
 const PB_LANE_X = 280, PB_LANE_Y = 452;                     // 發球道：球停在這裡等拉桿
 const PB_FLIP = { L: 42, REST: 28 * Math.PI / 180, UP: -30 * Math.PI / 180, SPD: 24, TH: 4.5, pl: [84, 468], pr: [194, 468] };   // 擋板：長度、休息／舉起的角度（往下為正）、轉速（弧度／秒）、半厚、左右轉軸
-const PB_BUMPERS = [[105, 190, 16, '#f06060'], [187, 190, 16, '#f0c020'], [146, 250, 16, '#40c8e0'], [80, 262, 13, '#70d870'], [198, 262, 13, '#c080f0']];   // x、y、半徑、顏色（5 個，剛好用滿快照的閃光位元 f 0～31）
-const PB_POSTS = [[60, 150, 5], [238, 150, 5], [34, 235, 6], [250, 235, 6], [146, 322, 5], [146, 150, 5]];   // 立柱：不得分，只擋球彈開
+// 版面仿照使用者給的參考圖（2026-11-15）：頂上一顆綠彈跳器＋兩個箭頭出口、中間紅黃青紫、左高右低的兩個隧道洞、三角形彈弓
+const PB_BUMPERS = [[106, 191, 15, '#f06a6a'], [184, 191, 15, '#f2c230'], [145, 247, 15, '#46c8e0'], [195, 259, 12, '#bd8af2'], [142, 117, 13, '#6ee07a']];   // x、y、半徑、顏色（5 個，剛好用滿快照的閃光位元 f 0～31）
+const PB_POSTS = [[63, 153, 4], [146, 153, 4], [230, 153, 4]];   // 立柱：不得分，只擋球彈開
 // 隧道：球滾進入口（in：x、y、半徑）就消失，0.45 秒後從出口（out）以指定速度（vx、vy）射出，得 300×倍率
-const PB_TUNNELS = [{ in: [30, 236, 11], out: [205, 100], v: [-110, 170], col: '#f0a040' }, { in: [248, 236, 11], out: [98, 100], v: [110, 170], col: '#50d0a0' }];
-const PB_SLINGS = [[48, 345, 70, 396], [244, 345, 222, 396]];   // 彈弓：打到會被踢回去，得 50×倍率
+const PB_TUNNELS = [{ in: [30, 200, 11], out: [205, 100], v: [-110, 170], col: '#f0a040' }, { in: [248, 236, 11], out: [98, 100], v: [110, 170], col: '#50d0a0' }];
+const PB_TRIS = [[[58, 336], [96, 414], [58, 396]], [[220, 336], [182, 414], [220, 396]]];   // 三角形彈弓的三個頂點：第一點→第二點那條是朝場內的踢球邊，其他兩條只是實心牆
+const PB_SLINGS = PB_TRIS.map(t => [t[0][0], t[0][1], t[1][0], t[1][1]]);   // 彈弓：打到會被踢回去，得 50×倍率
 const PB_SEGS = (() => {   // 牆與導軌：[x1, y1, x2, y2]
   const s = [], cx = 151, cy = 151, R = 141;
   for (let k = 0; k < 28; k++) { const a0 = Math.PI + k * Math.PI / 28, a1 = Math.PI + (k + 1) * Math.PI / 28; s.push([cx + R * Math.cos(a0), cy + R * Math.sin(a0), cx + R * Math.cos(a1), cy + R * Math.sin(a1)]); }   // 上方半圓
@@ -7392,9 +7394,11 @@ const PB_SEGS = (() => {   // 牆與導軌：[x1, y1, x2, y2]
   s.push([10, 398, 78, 460], [268, 398, 200, 460]);                                                // 下方兩側的導軌（把球送到擋板）
   // 隧道的導軌（左右對稱）：一條斜的導軌（從場內往場邊斜上去）＋場邊上方的斜頂，隧道口在導軌上端與場邊之間。
   // 對側擋板打出去的球（反射角往斜上打向這一邊的場邊）擦著導軌滑進去、或沿著場邊往上滑也進得去；從上面掉下來的球被斜頂和導軌的斜面彈開
-  s.push([70, 330, 36, 248], [10, 214, 44, 226]);
+  s.push([70, 294, 36, 212], [10, 178, 44, 190]);                                                // 左隧道（比右邊高 36）
   s.push([208, 330, 242, 248], [268, 214, 234, 226]);
   s.push([268, 200, 258, 214]);                                                                    // 隔板頂端斜一下，球出發球道比較順
+  for (const t of PB_TRIS) s.push([t[1][0], t[1][1], t[2][0], t[2][1]], [t[2][0], t[2][1], t[0][0], t[0][1]]);   // 三角彈弓的另外兩條邊
+  s.push([100, 36, 102, 78], [138, 62, 138, 76], [166, 62, 166, 76], [195, 60, 199, 82]);          // 頂端的短導軌（把掉下來的球分到幾條路）
   return s;
 })();
 function pbMake(v) {
@@ -7553,25 +7557,26 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
   g.fillStyle = gr; g.beginPath(); g.moveTo(10, PB_H); g.lineTo(10, 151);
   for (let k = 0; k <= 28; k++) { const a = Math.PI + k * Math.PI / 28; g.lineTo(151 + 141 * Math.cos(a), 151 + 141 * Math.sin(a)); }
   g.lineTo(292, PB_H); g.closePath(); g.fill();
-  g.strokeStyle = '#8aa0e0'; g.lineWidth = 3; g.lineCap = 'round';
+  g.fillStyle = 'rgba(0,0,0,.28)'; g.fillRect(116, 94, 56, 46);   // 頂端綠彈跳器後面的暗框
+  g.strokeStyle = '#9db4f4'; g.lineWidth = 2.5; g.lineCap = 'round';
   for (const s of PB_SEGS) { g.beginPath(); g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); g.stroke(); }
-  // 彈跳器
+  // 彈跳器（淺色圓盤＋深一點的內圈，被打到變白）
   PB_BUMPERS.forEach(([bx, by, br, col], i) => {
     const lit = P.flash[i] > now;
     g.fillStyle = lit ? '#ffffff' : col; g.beginPath(); g.arc(bx, by, br, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = lit ? col : 'rgba(255,255,255,.55)'; g.lineWidth = 3; g.beginPath(); g.arc(bx, by, br - 4, 0, Math.PI * 2); g.stroke();
+    g.strokeStyle = lit ? col : 'rgba(255,255,255,.6)'; g.lineWidth = 2.5; g.beginPath(); g.arc(bx, by, br - 4, 0, Math.PI * 2); g.stroke();
   });
   PB_TUNNELS.forEach((tn, i) => {   // 隧道入口（黑洞＋彩色外圈）與出口（外圈＋箭頭）
     const lit = P.tflash && P.tflash[0] === i && P.tflash[1] > now;
     g.fillStyle = '#05060f'; g.beginPath(); g.arc(tn.in[0], tn.in[1], tn.in[2], 0, Math.PI * 2); g.fill();
     g.strokeStyle = lit ? '#fff' : tn.col; g.lineWidth = 3; g.beginPath(); g.arc(tn.in[0], tn.in[1], tn.in[2] + 1, 0, Math.PI * 2); g.stroke();
     g.strokeStyle = tn.col; g.lineWidth = 2; g.beginPath(); g.arc(tn.out[0], tn.out[1], 9, 0, Math.PI * 2); g.stroke();
-    const vl = Math.hypot(tn.v[0], tn.v[1]), ax = tn.v[0] / vl, ay = tn.v[1] / vl;
-    g.fillStyle = tn.col; g.beginPath(); g.moveTo(tn.out[0] + ax * 7, tn.out[1] + ay * 7); g.lineTo(tn.out[0] - ay * 4 - ax * 2, tn.out[1] + ax * 4 - ay * 2); g.lineTo(tn.out[0] + ay * 4 - ax * 2, tn.out[1] - ax * 4 - ay * 2); g.closePath(); g.fill();
+    const ax = tn.v[0] < 0 ? -1 : 1, ox = tn.out[0], oy = tn.out[1];   // 出口：圈裡一個朝左或朝右的小三角
+    g.fillStyle = tn.col; g.beginPath(); g.moveTo(ox + ax * 5, oy); g.lineTo(ox - ax * 3, oy - 4); g.lineTo(ox - ax * 3, oy + 4); g.closePath(); g.fill();
   });
   for (const [px, py, pr] of PB_POSTS) { g.fillStyle = '#8c94b8'; g.beginPath(); g.arc(px, py, pr, 0, Math.PI * 2); g.fill(); g.fillStyle = '#c8d0f0'; g.beginPath(); g.arc(px - 1.5, py - 1.5, pr * .45, 0, Math.PI * 2); g.fill(); }
-  g.strokeStyle = '#f0a040'; g.lineWidth = 5; g.lineCap = 'round';
-  for (const s of PB_SLINGS) { g.beginPath(); g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); g.stroke(); }
+  g.strokeStyle = '#f0a040'; g.lineWidth = 3; g.lineCap = 'round'; g.lineJoin = 'round';   // 三角形彈弓（橘色外框）
+  for (const t of PB_TRIS) { g.beginPath(); g.moveTo(t[0][0], t[0][1]); g.lineTo(t[1][0], t[1][1]); g.lineTo(t[2][0], t[2][1]); g.closePath(); g.stroke(); }
   // 擋板
   for (const left of [true, false]) {
     const [x1, y1, x2, y2] = pbFlipperSeg(P, left);
