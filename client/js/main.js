@@ -9130,8 +9130,10 @@ function arLock(A) {
     A.gq = 0;
     const over = A.board.slice(0, n).some(r => r.some(c => c));
     A.board.splice(0, n);
-    for (let i = 0; i < n; i++) { const r = new Array(AR_W).fill(8); r[hole] = 0; A.board.push(r); }
-    if (over) { arGameOver(A); return; }
+    let hole = A.gHole ?? -1;   // 每一行的缺口各自亂數，而且跟上一行不同欄（2026-11-16 使用者說同一批缺口都在同一欄，對面一根直條就一次消回好幾行）
+    for (let i = 0; i < n; i++) { let h; do h = Math.floor(Math.random() * AR_W); while (h === hole); hole = h; const r = new Array(AR_W).fill(8); r[hole] = 0; A.board.push(r); }
+    A.gHole = hole;
+    if (over && arGameOver(A)) return;
   }
   A.held = false;
   arNext(A);
