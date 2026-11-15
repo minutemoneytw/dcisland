@@ -1187,6 +1187,7 @@ def bk_leave(t, i, now):
 # 另有不佔回合的「交易 kx」「封鎖 kk」。伺服器權威：資源、牌堆、市場、事件、目標全在這裡算；其他人手上保留的牌只告訴張數。
 KG_TURN_MS, KG_IDLE_MAX, KG_XP, KG_WIN_VP = 90000, 2, 10, 25
 KG_RES = "WSFI"
+KG_RNAME = {"W": "木", "S": "石", "F": "魚", "I": "鐵"}   # 紀錄裡的資源名稱（不要顯示成 W／S／F／I）
 KG_SUP = {2: 4, 3: 5, 4: 7}   # 每種資源的庫存（依人數）
 _KG_DATA = None
 
@@ -1342,7 +1343,7 @@ def kg_take(t, i, msg):
         return False
     for x, n in gain.items():
         g["sup"][x] -= n
-    tbl_log(t, f"{t['seats'][i]['name']} 拿了 " + "、".join(f"{x}×{n}" if n > 1 else x for x, n in gain.items()))
+    tbl_log(t, f"{t['seats'][i]['name']} 拿了 " + "、".join(f"{KG_RNAME[x]}×{n}" if n > 1 else KG_RNAME[x] for x, n in gain.items()))
     return True
 
 def kg_reserve(t, i, msg):
@@ -1477,7 +1478,7 @@ def kg_trade(t, i, msg):
     g["sup"][give] += rate
     g["sup"][get] -= 1
     sd["traded"] = True
-    tbl_log(t, f"{t['seats'][i]['name']} 用 {give}×{rate} 換了 1 個 {get}")
+    tbl_log(t, f"{t['seats'][i]['name']} 用 {KG_RNAME[give]}×{rate} 換了 1 個 {KG_RNAME[get]}")
     return True
 
 def kg_block(t, i, msg):
