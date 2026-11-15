@@ -204,6 +204,37 @@ def tpff(key):
     """切 topdown_fantasy_forest 的裝飾（TPFF_RECTS 的 key），並做色調調淺（見 lift()）。"""
     return lift(ext_slice(TPFF, TPFF_RECTS[key]))
 
+# 地表 tile 切片座標 (x, y, w, h)。水是單色無縫 tile（已驗證右緣＝下一塊左緣）；帶浪花／石頭的水在 (0,11)、(2,11)。
+# （2026-11-15 使用者看過效果後定：草地與土圈用回原本程式畫的 dither 版本，只有水採用素材包 tile。）
+TPFF_TILE_RECTS = dict(
+    water=(16, 176, 16, 16),   # (1,11) 純水 #138d59（teal，跟原本的藍差很多）
+)
+
+def tpff_water_sheet():
+    """水 tile sheet（4 幀，64x16）：素材包的池塘只有 (1,11) 一塊純內部 tile（相鄰的 (0,11)／(2,11)／(1,12) 都含池邊的透明像素，直接平鋪會破洞），
+    所以以 (1,11) 純色為底，把 (0,11) 的 teal 波光像素蓋印到不同角落做成變化幀；第 1 幀保持純色。
+    配合 terrain.json 的 anims（frames=4＋stagger＋低 fps）：每格水域錯開取幀、波光慢慢換位。"""
+    base = ext_slice(TPFF_T, TPFF_TILE_RECTS["water"])
+    src = ext_slice(TPFF_T, (0, 176, 16, 16))   # (0,11)：帶波光的池水（取它左下角的波光像素）
+    marks = []
+    for y in range(16):
+        for x in range(16):
+            r, g, b, a = src.get(x, y)
+            if a and g > 90 and r < 60 and b > 60 and (r, g, b) != (0x13, 0x8d, 0x59):   # 只要 teal 波光（排除池邊的土色）
+                marks.append((x, y, (r, g, b, a)))
+    w = max(m[0] for m in marks) + 1; h = max(m[1] for m in marks) + 1
+    sheet = Canvas(64, 16)
+    for i in range(4):
+        bx = i * 16
+        for y in range(16):
+            for x in range(16):
+                sheet.set(bx + x, y, base.get(x, y))
+        if i:   # 第 1 幀純色，其餘把浪花蓋在不同角落
+            ox, oy = [(0, 0), (16 - w, 0), (16 - w, 16 - h)][i - 1]
+            for x, y, c in marks:
+                sheet.set(bx + ox + x, oy + y, c)
+    return lift(sheet)
+
 # ---------------- 地形 tile ----------------
 INDOOR_REPEAT = 3   # 室內地板的方磚放大倍數：圖是 16n×16n，客戶端用 groundRepeat 分成 n×n 格各畫一塊（方磚邊長＝8n 像素）
 
@@ -1514,7 +1545,9 @@ TERRAINS = [
          # 2026-11-15 使用者回饋：素材色調偏深 → tpff() 做 gamma 調淺（TPFF_LIFT）；草叢加量（weight 4）。
          deco=[("tree.png", 2), ("flower.png", 1), ("rock.png", 1), ("mushroom.png", 1),
                ("bush.png", 1), ("tuft.png", 4), ("reed.png", 1), ("log.png", 1)],
-         decoDensity=.022, ui="#6aaa5a"),
+         decoDensity=.022, ui="#6aaa5a",
+         # 水面 sheet：tpff_water_sheet() 的 4 幀波光，各格錯開取幀（stagger）、低 fps 讓波光慢慢換位（不會整片同步閃）
+         anims={"water.png": dict(frames=4, stagger=True, fps=1.5)}),
     dict(id="beach",   name="沙灘島",
          ground=("#e6cf96", "#d8bd82"), edge=("#cbb27a", "#b89e68"),
          water=("#47a6d9", "#3a8ec2"), leaf=("#4fa06a", "#3f8455"), trunk="#7a5e42",
@@ -3814,6 +3847,8 @@ def main():
         if t["id"] == "machine":
             save(gear(), "gear.png", sub)
         if t["id"] == "grass":
+            # 水面用素材包 tile（2026-11-15 使用者定：草地與土圈看過後用回原本的，只有水採用）。
+            save(tpff_water_sheet(), "water.png", sub)
             # 草島裝飾＝aamatniekss 森林素材包切片（上面的 tree()/rock() 照畫但會被這裡蓋掉；
             # 保留程式畫的 flower.png 當花瓣素材來源）。bush/tuft/reed/log 是純觀賞、沒有 tools.json target。
             save(tpff("tree_small"), "tree.png", sub)

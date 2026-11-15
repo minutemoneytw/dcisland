@@ -72,5 +72,12 @@
  ],
  "uiColor": "#6aaa5a",
  "owner": "gold_dragon",
- "decoDensity": 0.022
+ "decoDensity": 0.022,
+ "anims": {
+  "water.png": {
+   "frames": 4,
+   "stagger": true,
+   "fps": 1.5
+  }
+ }
 }
