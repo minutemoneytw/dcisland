@@ -6700,6 +6700,7 @@ function hkStartLocal(v) {
     pads: v.seats.map((_, i) => { const [x, y] = hkHome(i, n); return { x, y, tx: x, ty: y, vx: 0, vy: 0, at: 0 }; }),
     puck: { x: HK_W / 2, y: HK_H / 2, vx: 0, vy: 0 }, view: { x: HK_W / 2, y: HK_H / 2 }, snapAt: 0, snapPerf: 0,
     sa: 0, sb: 0, f: 0, mx: null, my: null, keys: {}, sendAt: 0, hsAt: 0, over: false, last: performance.now(), flash: null,
+    hit: false, hitT: 0, ackT: -1, pend: null, faceT: 0, vo: { x: 0, y: 0 }, snapT: null,
   };
   if (!S.hkRaf) S.hkRaf = requestAnimationFrame(hkFrame);
 }
@@ -6722,21 +6723,58 @@ function hkMoveMine(H, dt) {   // 自己的握把：跟著滑鼠（有最快速�
 }
 function hkFaceoff(H, toTeam) {   // 進球後：圓盤放在失分那隊的半場、停 1 秒
   H.puck = { x: toTeam === 0 ? HK_W / 2 - 70 : HK_W / 2 + 70, y: HK_H / 2, vx: 0, vy: 0 };
-  H.f = 1;
+  H.f = 1; H.faceT = hkNow(H) * 1000; H.vo.x = H.vo.y = 0;
+}
+// 擊球只算一次（2026-11-16，使用者說紅隊跟藍隊像在不同世界線：球過中線就大幅瞬移、穿過握把打不到）：原本非桌主的本機預測與桌主各自算同一次擊球
+// （握把位置、速度兩邊不一樣），結果對不上。現在**誰的握把打到圓盤就由那台回報結果**（hp 夾帶 h），桌主照用、不再算別人握把的碰撞。
+// 回報在路上的這段時間桌主那邊的圓盤會繼續往前，所以：收到回報後照時間戳往前推算（hkAdvance）；圓盤進了「有非桌主防守」的球門先等 HK_GOAL_WAIT 秒才記分，
+// 這段時間內收到防守方「其實有打到」的回報就取消。
+const HK_GOAL_WAIT = .25, HK_HIT_FWD = .25;   // 進球等待秒數、擊球回報最多往前推算幾秒
+function hkWalls(L) {   // 牆壁反彈（球門口不擋）
+  if (L.y < HK_BR) { L.y = HK_BR; L.vy = Math.abs(L.vy) * .9; }
+  if (L.y > HK_H - HK_BR) { L.y = HK_H - HK_BR; L.vy = -Math.abs(L.vy) * .9; }
+  const inGoal = Math.abs(L.y - HK_H / 2) < HK_GOAL / 2 - HK_BR * .3;
+  if (L.x < HK_BR && !inGoal) { L.x = HK_BR; L.vx = Math.abs(L.vx) * .9; }
+  if (L.x > HK_W - HK_BR && !inGoal) { L.x = HK_W - HK_BR; L.vx = -Math.abs(L.vx) * .9; }
+}
+function hkAdvance(L, sec) {   // 只照牆壁與摩擦往前推算 sec 秒（不算握把）
+  for (let left = Math.max(0, sec); left > 1e-4; left -= .016) {
+    const dt = Math.min(.016, left);
+    L.x += L.vx * dt; L.y += L.vy * dt;
+    const fr = Math.max(0, 1 - .25 * dt); L.vx *= fr; L.vy *= fr;
+    hkWalls(L);
+  }
+}
+function hkScore(H, team) {   // 桌主：team 那隊得分
+  if (team) H.sb++; else H.sa++;
+  H.flash = { team, until: performance.now() + 1200 }; H.pend = null;
+  hkFaceoff(H, 1 - team);
+}
+function hkApplyHit(H, i, h) {   // 桌主：採用座位 i 回報的擊球結果 h＝[x, y, vx, vy, 遊戲時間毫秒, 還貼著圓盤 1／0]
+  const nowMs = hkNow(H) * 1000;
+  if (H.over || h[4] <= H.faceT || h[4] <= H.ackT) return;   // 上一次進球之前的、比已採用的還舊的：不理
+  if (H.pend) { if (H.pend.team === i % 2) return; H.pend = null; }   // 等待記分中：只有防守方的回報能取消
+  else if (H.f > 0) return;
+  const P = H.puck, ox = P.x + H.vo.x, oy = P.y + H.vo.y;
+  P.x = h[0]; P.y = h[1]; P.vx = h[2]; P.vy = h[3];
+  if (!h[5]) hkAdvance(P, Math.min(HK_HIT_FWD, (nowMs - h[4]) / 1000));   // 握把已經離開圓盤：照時間戳補上回報在路上的時間（還貼著的話不推算，下一份回報很快就來）
+  H.vo.x = ox - P.x; H.vo.y = oy - P.y;   // 桌主畫面上的圓盤從原本的位置滑過去，不直接跳
+  H.ackT = h[4];
 }
 function hkPhysics(H, dt) {   // 桌主：圓盤
   const P = H.puck;
+  if (H.pend) { H.pend.left -= dt; if (H.pend.left <= 0) hkScore(H, H.pend.team); return; }   // 等防守方的擊球回報
   if (H.f > 0) { H.f -= dt; return; }
   P.x += P.vx * dt; P.y += P.vy * dt;
   const fr = Math.max(0, 1 - .25 * dt); P.vx *= fr; P.vy *= fr;
-  if (P.y < HK_BR) { P.y = HK_BR; P.vy = Math.abs(P.vy) * .9; }
-  if (P.y > HK_H - HK_BR) { P.y = HK_H - HK_BR; P.vy = -Math.abs(P.vy) * .9; }
-  const inGoal = Math.abs(P.y - HK_H / 2) < HK_GOAL / 2 - HK_BR * .3;
-  if (P.x < HK_BR && !inGoal) { P.x = HK_BR; P.vx = Math.abs(P.vx) * .9; }
-  if (P.x > HK_W - HK_BR && !inGoal) { P.x = HK_W - HK_BR; P.vx = -Math.abs(P.vx) * .9; }
-  if (P.x < -HK_BR) { H.sb++; H.flash = { team: 1, until: performance.now() + 1200 }; hkFaceoff(H, 0); return; }   // 紅隊得分
-  if (P.x > HK_W + HK_BR) { H.sa++; H.flash = { team: 0, until: performance.now() + 1200 }; hkFaceoff(H, 1); return; }   // 藍隊得分
-  H.pads.forEach((p, i) => {   // 握把撞圓盤：推出去、照相對速度反彈
+  hkWalls(P);
+  if (P.x < -HK_BR || P.x > HK_W + HK_BR) {   // 進球：左邊球門＝紅隊得分、右邊＝藍隊得分；防守方有非桌主的人就先等一下
+    const team = P.x < 0 ? 1 : 0, wait = team === 0 || H.n > 2;
+    if (wait) H.pend = { team, left: HK_GOAL_WAIT }; else hkScore(H, team);
+    return;
+  }
+  H.pads.forEach((p, i) => {   // 自己（桌主）的握把撞圓盤：推出去、照相對速度反彈；別人的握把由他們自己那台回報（hkApplyHit）
+    if (i !== H.me) return;
     const dx = P.x - p.x, dy = P.y - p.y, d = Math.hypot(dx, dy), md = HK_PR + HK_BR;
     if (d >= md || d < 1e-6) return;
     const nx = dx / d, ny = dy / d;
@@ -6744,7 +6782,7 @@ function hkPhysics(H, dt) {   // 桌主：圓盤
     const pvx = i === H.me ? p.vx : p.vx || 0, pvy = i === H.me ? p.vy : p.vy || 0;
     const rvx = P.vx - pvx, rvy = P.vy - pvy, vn = rvx * nx + rvy * ny;
     if (vn < 0) { P.vx -= 1.9 * vn * nx; P.vy -= 1.9 * vn * ny; }
-    P.vx += nx * 40; P.vy += ny * 40;
+    P.vx += nx * 40; P.vy += ny * 40; H.hsNow = true;
   });
   const sp = Math.hypot(P.vx, P.vy); if (sp > HK_MAX_PUCK) { P.vx *= HK_MAX_PUCK / sp; P.vy *= HK_MAX_PUCK / sp; }
 }
@@ -6755,11 +6793,7 @@ const HK_PRED_GRACE = .7;
 function hkPredict(H, L, dt) {
   L.x += L.vx * dt; L.y += L.vy * dt;
   const fr = Math.max(0, 1 - .25 * dt); L.vx *= fr; L.vy *= fr;
-  if (L.y < HK_BR) { L.y = HK_BR; L.vy = Math.abs(L.vy) * .9; }
-  if (L.y > HK_H - HK_BR) { L.y = HK_H - HK_BR; L.vy = -Math.abs(L.vy) * .9; }
-  const inGoal = Math.abs(L.y - HK_H / 2) < HK_GOAL / 2 - HK_BR * .3;
-  if (L.x < HK_BR && !inGoal) { L.x = HK_BR; L.vx = Math.abs(L.vx) * .9; }
-  if (L.x > HK_W - HK_BR && !inGoal) { L.x = HK_W - HK_BR; L.vx = -Math.abs(L.vx) * .9; }
+  hkWalls(L);
   const p = H.pads[H.me]; if (!p) return false;
   const dx = L.x - p.x, dy = L.y - p.y, d = Math.hypot(dx, dy), md = HK_PR + HK_BR;
   if (d >= md || d < 1e-6) return false;
@@ -6781,7 +6815,14 @@ function hkFrame() {
   if (H.me >= 0 && t >= 0 && !H.over) {
     hkMoveMine(H, dt);
     // 自己的握把位置（桌主的夾在下面的 hs 裡送：hp 與 hs 共用同一個限流）
-    if (!H.host && now - H.sendAt >= HK_SEND_MS) { H.sendAt = now; const p = H.pads[H.me]; S.net?.tbl?.({ a: 'hp', x: Math.round(p.x), y: Math.round(p.y) }); }
+    // 打到圓盤時夾帶「現在預測的圓盤」h（擊球回報），而且不等 80ms、過了伺服器的 60ms 限流就送
+    if (!H.host && now - H.sendAt >= (H.hit || H.rel ? 64 : HK_SEND_MS)) {
+      H.sendAt = now; const p = H.pads[H.me], m = { a: 'hp', x: Math.round(p.x), y: Math.round(p.y) }, L = H.pp;
+      // h 的第 6 個＝1 還貼著圓盤（推著走／壓在牆邊）、0 已經離開：貼著的時候圓盤被握把擋著，桌主不能自己往前推算；離開後的那一份才是自由飛行，桌主照時間戳往前推算
+      if ((H.hit || H.rel) && L) { H.hitT = Math.max(1, Math.round(t * 1000)); m.h = [Math.round(L.x), Math.round(L.y), Math.round(L.vx), Math.round(L.vy), H.hitT, H.hit ? 1 : 0]; H.pgrace = now + HK_PRED_GRACE * 1000; }
+      H.rel = H.hit; H.hit = false;
+      S.net?.tbl?.(m);
+    }
   }
   H.pads.forEach((p, i) => {   // 別人的握把：往收到的位置平滑移動（速度用兩次回報的差估計，桌主算碰撞用）
     if (i === H.me) return;
@@ -6795,13 +6836,15 @@ function hkFrame() {
       hkPhysics(H, dt / n);
     }
     H.pads.forEach((p, i) => { p.x = fin[i][0]; p.y = fin[i][1]; });
-    if (now - H.hsAt >= HK_SEND_MS) { H.hsAt = now; const P = H.puck; const me = H.pads[0]; S.net?.tbl?.({ a: 'hs', x: Math.round(P.x), y: Math.round(P.y), vx: Math.round(P.vx), vy: Math.round(P.vy), sa: H.sa, sb: H.sb, f: Math.round(Math.max(0, H.f) * 1000), px: Math.round(me.x), py: Math.round(me.y) }); }
+    if (now - H.hsAt >= (H.hsNow ? 64 : HK_SEND_MS)) { H.hsAt = now; H.hsNow = false; const P = H.puck;   // 桌主自己剛打到圓盤：不等 80ms，過了伺服器的 60ms 限流就送（別人早一點看到球被打回來）
+      const me = H.pads[0]; S.net?.tbl?.({ a: 'hs', x: Math.round(P.x), y: Math.round(P.y), vx: Math.round(P.vx), vy: Math.round(P.vy), sa: H.sa, sb: H.sb, f: Math.round(Math.max(0, H.f) * 1000), px: Math.round(me.x), py: Math.round(me.y), ts: Math.max(0, Math.round(t * 1000)), k: Math.max(0, H.ackT) }); }
     if (H.sa >= H.goals || H.sb >= H.goals || t >= H.lim) { H.over = true; S.net?.tbl?.({ a: 'hend', sa: H.sa, sb: H.sb }); }
-    H.view.x = H.puck.x; H.view.y = H.puck.y;
+    const da = Math.exp(-dt * 14); H.vo.x *= da; H.vo.y *= da;   // 採用別人的擊球回報時的位置修正，滑過去
+    H.view.x = H.puck.x + H.vo.x; H.view.y = H.puck.y + H.vo.y;
   } else if (!H.host) {   // 其他人：圓盤＝最後一次快照往前推算（碰到上下牆反彈），再平滑
-    const P = H.puck, age = Math.min(.25, (now - H.snapPerf) / 1000);
-    let x = P.x + (H.f > 0 ? 0 : P.vx * age), y = P.y + (H.f > 0 ? 0 : P.vy * age);
-    if (y < HK_BR) y = 2 * HK_BR - y; if (y > HK_H - HK_BR) y = 2 * (HK_H - HK_BR) - y;
+    const P = H.puck, age = H.snapT != null ? Math.max(0, Math.min(.3, t - H.snapT)) : Math.min(.25, (now - H.snapPerf) / 1000);   // 快照帶時間戳：照真正的延遲往前推算
+    const E = { x: P.x, y: P.y, vx: P.vx, vy: P.vy }; if (H.f <= 0) hkAdvance(E, age);   // 推算時照牆壁反彈與摩擦（原本只算上下牆，球會先穿過左右牆再被拉回來）
+    const x = E.x, y = E.y;
     const V = H.view, L = (H.pp ||= { x: V.x, y: V.y, vx: P.vx, vy: P.vy });
     if (H.me < 0 || H.f > 0 || H.snapReset || t < 0) { L.x = x; L.y = y; L.vx = P.vx; L.vy = P.vy; H.snapReset = false; }   // 觀戰者／開球凍結／剛進球：照快照
     else {
@@ -6809,11 +6852,12 @@ function hkFrame() {
       const fin = [H.pads[H.me].x, H.pads[H.me].y], me = H.pads[H.me]; let hit = false;
       for (let k = 1; k <= n; k++) { me.x = me.x0 + (fin[0] - me.x0) * k / n; me.y = me.y0 + (fin[1] - me.y0) * k / n; if (hkPredict(H, L, dt / n)) hit = true; }
       me.x = fin[0]; me.y = fin[1];
-      if (hit) H.pgrace = now + HK_PRED_GRACE * 1000;
-      if (now > (H.pgrace || 0)) {   // 沒有剛打過：慢慢對齊桌主的快照（位置與速度）
-        const a = 1 - Math.exp(-dt * 8);
-        if (Math.hypot(x - L.x, y - L.y) > 120) { L.x = x; L.y = y; L.vx = P.vx; L.vy = P.vy; }
-        else { L.x += (x - L.x) * a; L.y += (y - L.y) * a; L.vx += (P.vx - L.vx) * a; L.vy += (P.vy - L.vy) * a; }
+      if (hit) { H.pgrace = now + HK_PRED_GRACE * 1000; H.hit = true; }   // 打到了：下一次 hp 夾帶回報；桌主確認採用（快照的 k）之前不拉回，最多等 PRED_GRACE 秒
+      if (now > (H.pgrace || 0)) {   // 沒有剛打過：緊跟桌主的快照（速度直接照用、位置快速滑過去；原本 8／秒太慢，桌主一擊球這邊就落後一大段再瞬移）
+        const a = 1 - Math.exp(-dt * 20);
+        if (Math.hypot(x - L.x, y - L.y) > 260) { L.x = x; L.y = y; }
+        else { L.x += (x - L.x) * a; L.y += (y - L.y) * a; }
+        L.vx = E.vx; L.vy = E.vy;
       }
     }
     V.x = L.x; V.y = L.y;
@@ -6826,6 +6870,7 @@ function onNetThp(m) {   // 別人的握把位置（i＝座位）
   if (p.at && dt > .01 && dt < .5) { p.vx = Math.max(-HK_MAX_PAD, Math.min(HK_MAX_PAD, (m.x - p.tx) / dt)); p.vy = Math.max(-HK_MAX_PAD, Math.min(HK_MAX_PAD, (m.y - p.ty) / dt)); }
   else { p.vx = 0; p.vy = 0; }
   p.tx = m.x; p.ty = m.y; p.at = now;
+  if (H.host && Array.isArray(m.h) && m.h.length === 6) hkApplyHit(H, m.i, m.h);   // 擊球回報：桌主照用
 }
 function onNetThs(m) {   // 桌主的圓盤快照
   const H = S.hk; if (!H || H.host) return;
@@ -6833,6 +6878,8 @@ function onNetThs(m) {   // 桌主的圓盤快照
   if (m.sb > H.sb) H.flash = { team: 1, until: performance.now() + 1200 };
   if (m.sa !== H.sa || m.sb !== H.sb) H.snapReset = true;   // 進球：預測的圓盤作廢，照快照
   H.puck = { x: m.x, y: m.y, vx: m.vx, vy: m.vy }; H.sa = m.sa; H.sb = m.sb; H.f = m.f / 1000; H.snapPerf = performance.now();
+  H.snapT = typeof m.ts === 'number' ? m.ts / 1000 : null;
+  if (!H.hit && !H.rel && H.hitT && typeof m.k === 'number' && m.k >= H.hitT) H.pgrace = 0;   // 桌主已經照我回報的擊球算了：可以開始對齊快照
 }
 function hkKey(e, down) {   // 遊戲中的方向鍵（回 true＝已處理）
   const H = S.hk, k = HK_KEYS[e.key.toLowerCase()];
@@ -6866,7 +6913,7 @@ function hkDraw(H, t, v) {
   }
   if (H.me >= 0) { g.fillStyle = H.me % 2 ? 'rgba(224,72,72,.06)' : 'rgba(59,120,232,.06)'; g.fillRect(H.me % 2 ? HK_W / 2 : 0, 0, HK_W / 2, HK_H); }   // 自己的半場
   // 圓盤
-  const V = H.host ? H.puck : H.view;
+  const V = H.view;
   g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.arc(V.x + 2, V.y + 3, HK_BR, 0, Math.PI * 2); g.fill();
   g.fillStyle = '#2a2a30'; g.beginPath(); g.arc(V.x, V.y, HK_BR, 0, Math.PI * 2); g.fill();
   g.strokeStyle = '#5a5a68'; g.lineWidth = 2; g.beginPath(); g.arc(V.x, V.y, HK_BR - 3, 0, Math.PI * 2); g.stroke();

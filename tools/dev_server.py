@@ -5078,7 +5078,7 @@ def pb_relay(t, cid, msg, scr=None):
 
 # ---- 空氣曲棍球（第十五、十六桌 t15／t16，2026-11-13，使用者要求）：2～4 人分藍紅兩隊（座位 0、2 藍隊，1、3 紅隊；2026-11-14 使用者要求最多 2v2，原本 2～8 人），人數要偶數 ----
 # 先得 HK_GOALS 分、或 HK_LIM_MS 到時分數高的隊伍贏（同分平手），不進排行榜；有人離開＝這一局結束（一般桌子的規則）。
-# 物理在桌主（座位 0）的客戶端跑：桌主送圓盤快照 hs → ths，每個人送自己握把的位置 hp → thp，桌主判斷結束送 hend。
+# 物理在桌主（座位 0）的客戶端跑：桌主送圓盤快照 hs → ths，每個人送自己握把的位置 hp → thp（非桌主打到圓盤時夾帶擊球結果 h，桌主照用），桌主判斷結束送 hend。
 # 與 worker/src/index.js 的 hk* 同一套，改規則兩邊一起改。
 HK_W, HK_H, HK_GOALS, HK_LIM_MS, HK_COUNTDOWN_MS, HK_XP = 640, 320, 7, 180000, 3000, 3
 
@@ -5128,6 +5128,11 @@ def hk_relay(t, cid, msg):
         if not (_hk_num(x, 0, HK_W) and _hk_num(y, 0, HK_H)):
             return []
         data = {"t": "thp", "i": i, "x": round(x), "y": round(y)}
+        # 擊球回報（2026-11-16）：非桌主自己的握把打到圓盤時，夾帶打完之後的圓盤 h＝[x, y, vx, vy, 遊戲時間毫秒, 握把還貼著圓盤 1／0]，桌主照用（不再自己另算一次）
+        h = msg.get("h")
+        if (i != 0 and isinstance(h, list) and len(h) == 6 and h[5] in (0, 1) and type(h[5]) is int and _hk_num(h[0], -60, HK_W + 60) and _hk_num(h[1], -60, HK_H + 60)
+                and _hk_num(h[2], -3000, 3000) and _hk_num(h[3], -3000, 3000) and _hk_num(h[4], 0, HK_LIM_MS + 60000)):
+            data["h"] = [round(n) for n in h]
     elif msg.get("a") == "hs" and i == 0:
         x, y, vx, vy, sa, sb, f = (msg.get(k) for k in ("x", "y", "vx", "vy", "sa", "sb", "f"))
         if not (_hk_num(x, -60, HK_W + 60) and _hk_num(y, -60, HK_H + 60) and _hk_num(vx, -3000, 3000) and _hk_num(vy, -3000, 3000)
@@ -5135,6 +5140,10 @@ def hk_relay(t, cid, msg):
             return []
         g["sa"], g["sb"] = sa, sb
         data = {"t": "ths", "x": round(x), "y": round(y), "vx": round(vx), "vy": round(vy), "sa": sa, "sb": sb, "f": round(f)}
+        if _hk_num(msg.get("ts"), 0, HK_LIM_MS + 60000):   # 這份快照的遊戲時間（毫秒）：收到的人照真正的延遲往前推算
+            data["ts"] = round(msg["ts"])
+        if _hk_num(msg.get("k"), 0, HK_LIM_MS + 60000):   # 桌主最後採用的擊球回報的時間（回報的人用它確認「桌主已經照我的結果算了」）
+            data["k"] = round(msg["k"])
     if data is None:
         return []
     to = [m for m in t["seats"] + t["specs"] if m["cid"] is not None and m["cid"] != cid]

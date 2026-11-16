@@ -3402,7 +3402,7 @@ function mzOver(t, cid, msg) {
 }
 // ---- 空氣曲棍球（第十五、十六桌 t15／t16，2026-11-13，使用者要求）：2～4 人分藍紅兩隊（座位 0、2 藍隊，1、3 紅隊；2026-11-14 使用者要求最多 2v2，原本 2～8 人），人數要偶數 ----
 // 先得 HK_GOALS 分、或 HK_LIM_MS 到時分數高的隊伍贏（同分平手），不進排行榜；有人離開＝這一局結束（一般桌子的規則）。
-// 物理在桌主（座位 0）的客戶端跑：桌主送圓盤快照 hs → ths，每個人送自己握把的位置 hp → thp，桌主判斷結束送 hend。
+// 物理在桌主（座位 0）的客戶端跑：桌主送圓盤快照 hs → ths，每個人送自己握把的位置 hp → thp（非桌主打到圓盤時夾帶擊球結果 h，桌主照用），桌主判斷結束送 hend。
 // 與 tools/dev_server.py 的 hk_* 同一套，改規則兩邊一起改。
 const HK_W = 640, HK_H = 320, HK_GOALS = 7, HK_LIM_MS = 180000, HK_COUNTDOWN_MS = 3000, HK_XP = 3;
 const HK_MSGS = new Set(["hend"]);
@@ -3435,11 +3435,16 @@ function hkRelay(t, cid, msg) {
   if (msg.a === "hp") {   // 自己握把的位置（px）
     if (!hkNum(msg.x, 0, HK_W) || !hkNum(msg.y, 0, HK_H)) return [];
     data = { t: "thp", i, x: Math.round(msg.x), y: Math.round(msg.y) };
+    // 擊球回報（2026-11-16）：非桌主自己的握把打到圓盤時，夾帶打完之後的圓盤 h＝[x, y, vx, vy, 遊戲時間毫秒, 握把還貼著圓盤 1／0]，桌主照用（不再自己另算一次）
+    const h = msg.h;
+    if (i !== 0 && Array.isArray(h) && h.length === 6 && (h[5] === 0 || h[5] === 1) && hkNum(h[0], -60, HK_W + 60) && hkNum(h[1], -60, HK_H + 60) && hkNum(h[2], -3000, 3000) && hkNum(h[3], -3000, 3000) && hkNum(h[4], 0, HK_LIM_MS + 60000)) data.h = h.map(Math.round);
   } else if (msg.a === "hs" && i === 0) {   // 桌主：圓盤 x／y／vx／vy、比分 sa／sb、開球前的凍結毫秒 f、桌主自己的握把 px／py
     if (!hkNum(msg.x, -60, HK_W + 60) || !hkNum(msg.y, -60, HK_H + 60) || !hkNum(msg.vx, -3000, 3000) || !hkNum(msg.vy, -3000, 3000)) return [];
     if (!Number.isInteger(msg.sa) || !Number.isInteger(msg.sb) || msg.sa < 0 || msg.sb < 0 || msg.sa > 99 || msg.sb > 99 || !hkNum(msg.f, 0, 5000)) return [];
     g.sa = msg.sa; g.sb = msg.sb;
     data = { t: "ths", x: Math.round(msg.x), y: Math.round(msg.y), vx: Math.round(msg.vx), vy: Math.round(msg.vy), sa: msg.sa, sb: msg.sb, f: Math.round(msg.f) };
+    if (hkNum(msg.ts, 0, HK_LIM_MS + 60000)) data.ts = Math.round(msg.ts);   // 這份快照的遊戲時間（毫秒）：收到的人照真正的延遲往前推算
+    if (hkNum(msg.k, 0, HK_LIM_MS + 60000)) data.k = Math.round(msg.k);    // 桌主最後採用的擊球回報的時間（回報的人用它確認「桌主已經照我的結果算了」）
   }
   if (!data) return [];
   const to = [...t.seats, ...t.specs].filter(m => m.cid != null && m.cid !== cid), out = to.map(m => [m.cid, data]);
