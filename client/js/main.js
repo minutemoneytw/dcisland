@@ -6039,7 +6039,7 @@ function scrWatchTick() {
   if (S.t < (S.scrWatchNext || 0)) return;
   S.scrWatchNext = S.t + .5;
   const pr = S.terrain === 'peace' ? propsHere().find(p => p.kind === 'screen') : null;
-  const want = !!pr && !S.tableOpen && !S.players[0].dead && propDist(pr, S.players[0].x, S.players[0].y) <= SCR_WATCH_DIST;
+  const want = !!pr && !S.tableOpen && !S.players[0].dead && (!!S.scrView || propDist(pr, S.players[0].x, S.players[0].y) <= SCR_WATCH_DIST);   // 觀看視角開著：離得遠也要收畫面
   if (want !== !!S.scrWatching || (want && S.t > (S.scrBeat || 0))) {   // 狀態變了就通知；在看的時候每 10 秒補送一次（伺服器重啟也撐得住）
     S.scrWatching = want; S.scrBeat = S.t + 10;
     S.net?.tbl?.({ a: 'scr_watch', on: want });
@@ -6209,6 +6209,30 @@ function drawScreenProp(pr, r) {
   ctx.drawImage(S.scrCv, ix, iy, SCR_W, SCR_H);
   ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(ix, iy, SCR_W, 70);   // 玻璃反光
   ctx.fillStyle = S.scr ? '#5ae07a' : '#c85a5a'; ctx.fillRect(r.x + r.w - 20, r.y + r.h - 7, 5, 3);   // 電源燈
+  // 眼睛按鈕（觀看視角）：螢幕右下角外側
+  const b = scrEyeRect(pr), on = !!S.scrView, ex = b.x + b.w / 2, ey = b.y + b.h / 2;
+  ctx.save();
+  ctx.fillStyle = on ? '#ffe08a' : '#12141c'; ctx.fillRect(b.x, b.y, b.w, b.h);
+  ctx.fillStyle = on ? '#3a2e12' : '#2a2e3c'; ctx.fillRect(b.x + 2, b.y + 2, b.w - 4, b.h - 4);
+  ctx.strokeStyle = on ? '#ffe08a' : '#d8dcec'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(ex - 10, ey); ctx.quadraticCurveTo(ex, ey - 10, ex + 10, ey); ctx.quadraticCurveTo(ex, ey + 10, ex - 10, ey); ctx.stroke();   // 眼眶
+  ctx.fillStyle = on ? '#ffe08a' : '#d8dcec'; ctx.beginPath(); ctx.arc(ex, ey, 3.5, 0, Math.PI * 2); ctx.fill();   // 瞳孔
+  ctx.textAlign = 'center'; ctx.font = '10px "Microsoft JhengHei"'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = on ? '#ffe08a' : '#fff6e0';
+  const lb = on ? '觀看中' : '觀看'; ctx.strokeText(lb, ex, b.y + b.h + 11); ctx.fillText(lb, ex, b.y + b.h + 11);
+  ctx.restore();
+}
+// 觀看視角（2026-11-16，使用者要求）：螢幕旁邊的眼睛按鈕，按下去角色不動、鏡頭拉到以螢幕為中心；角色一移動（或再按一次、換島、倒下）就回到跟隨角色。
+// 純客戶端：S.scrView＝按下時角色的位置（null＝沒開），鏡頭在 draw() 裡用 S.scrViewK（0～1）平滑過去；開著的時候不管離多遠都訂閱螢幕畫面（scrWatchTick）。
+function scrEyeRect(pr) { const r = propRect(pr); return { x: r.x + r.w + 8, y: r.y + r.h - 46, w: 32, h: 32 }; }
+function scrEyeAt(wx, wy) {
+  const pr = S.terrain === 'peace' ? propsHere().find(p => p.kind === 'screen') : null; if (!pr) return false;
+  const b = scrEyeRect(pr); return wx >= b.x && wx < b.x + b.w && wy >= b.y && wy < b.y + b.h + 12;
+}
+function scrViewToggle() {
+  const p = S.players[0];
+  S.scrView = S.scrView || !p ? null : { x: p.x, y: p.y };
+  S.scrWatchNext = 0;   // 馬上重算要不要訂閱螢幕畫面
+  if (S.scrView) toast('觀看大螢幕中：移動角色就回到原本的視角', 2200);
 }
 // ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：正六邊形的三角格棋盤（邊長 9，486 格）＋我的方塊托盤（22 塊，1～6 個三角形）。
 // 操作同Blokus：點選方塊 → 旋轉 60 度（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。座標系與規則同 worker 的 tg*（三角形 (x, y)，(x + y) 偶數＝朝上；頂點 (i, j)，i + j 偶數）。
@@ -10527,8 +10551,18 @@ function draw() {
   if (!ims) return; // 載圖中略過本幀
   // 鏡頭跟隨（任何人多時也可提供跟隨對象）
   const me = S.players[0] || { x: 0, y: 0 };
-  S.cam.x = clamp(me.x - canvas.width / 2, 0, COLS * CELL - canvas.width);
-  S.cam.y = clamp(me.y - canvas.height * .58, 0, ROWS * CELL - canvas.height);
+  let camX = me.x - canvas.width / 2, camY = me.y - canvas.height * .58;
+  // 大螢幕的觀看視角（眼睛按鈕）：角色動了、換島、倒下就取消；鏡頭在跟隨角色與「以螢幕為中心」之間平滑移動
+  if (S.scrView && (Math.abs(me.x - S.scrView.x) > 1 || Math.abs(me.y - S.scrView.y) > 1 || T !== 'peace' || me.dead)) { S.scrView = null; S.scrWatchNext = 0; }
+  const camNow = performance.now(), camDt = Math.min(.1, (camNow - (S.camAt || camNow)) / 1000); S.camAt = camNow;
+  S.scrViewK = clamp((S.scrViewK || 0) + (S.scrView ? 1 : -1) * camDt * 3.5, 0, 1);
+  if (S.scrViewK > 0) {
+    const spr = T === 'peace' ? propsHere().find(p => p.kind === 'screen') : null;
+    if (!spr) S.scrViewK = 0;
+    else { const r = propRect(spr), k = S.scrViewK * S.scrViewK * (3 - 2 * S.scrViewK); camX += (r.x + r.w / 2 - canvas.width / 2 - camX) * k; camY += (r.y + r.h / 2 - canvas.height / 2 - camY) * k; }
+  }
+  S.cam.x = clamp(camX, 0, COLS * CELL - canvas.width);
+  S.cam.y = clamp(camY, 0, ROWS * CELL - canvas.height);
   const x0 = Math.max(0, Math.floor(S.cam.x / CELL)), y0 = Math.max(0, Math.floor(S.cam.y / CELL));
   const x1 = Math.min(COLS - 1, Math.ceil((S.cam.x + canvas.width) / CELL));
   const y1 = Math.min(ROWS - 1, Math.ceil((S.cam.y + canvas.height) / CELL));
@@ -11838,6 +11872,7 @@ function clickAttack(wx, wy) {
   });
   // 點到可坐/可睡的家具（椅子、沙發、床）→ 坐下/躺下；再點一次起身。長按自動連擊時不處理，避免反覆切換
   if (!onOwner && !quiet) {
+    if (scrEyeAt(wx, wy)) { scrViewToggle(); return; }   // 大螢幕旁的眼睛按鈕：觀看視角（不用走近）
     const f = furnAtPoint(wx, wy);
     if (f && furnitureDef(f.type)?.use) { usePose(f); return; }
     if (f && furnitureDef(f.type)?.text) { openSign(f); return; }
@@ -11914,7 +11949,8 @@ canvas.addEventListener('contextmenu', e => {
   if (S.mode === 'walk') {   // 右鍵和左鍵一樣：點椅子/沙發/床就坐下/躺下，再點一次起身；點遊戲桌就入座／觀戰（2026-11-12 使用者要求）
     const r = canvas.getBoundingClientRect(), wx = e.clientX - r.left + S.cam.x, wy = e.clientY - r.top + S.cam.y;
     const f = furnAtPoint(wx, wy), tb = tableAtPoint(wx, wy), pr = propAtPoint(wx, wy);
-    if (pr) { if (propDist(pr, S.players[0].x, S.players[0].y) < PROP_RANGE) useProp(pr); else toast('走近一點', 1200); }   // 右鍵點餐飲區
+    if (scrEyeAt(wx, wy)) scrViewToggle();   // 右鍵點眼睛按鈕也一樣
+    else if (pr) { if (propDist(pr, S.players[0].x, S.players[0].y) < PROP_RANGE) useProp(pr); else toast('走近一點', 1200); }   // 右鍵點餐飲區
     else if (f && furnitureDef(f.type)?.use) usePose(f);
     else if (f && furnitureDef(f.type)?.text) openSign(f);
     else if (tb) { if (tableDist(tb, S.players[0].x, S.players[0].y) < TABLE_RANGE) openTable(tb); else toast('走近一點再入座', 1200); }
