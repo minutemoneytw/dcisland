@@ -7521,22 +7521,22 @@ const PB_FLIP = { L: 47, REST: 26 * Math.PI / 180, UP: -30 * Math.PI / 180, SPD:
 // 座標＝設計圖座標換算（x＝10＋(x'−390)×0.5、y＝8＋(y'−30)×0.45）；以下 x、y、半徑都是畫布座標
 const PB_BUMPERS = [[100.5, 148, 20, 330, 100], [170.5, 148, 20, 330, 100], [135.5, 202, 20, 330, 100],   // 水母（大）：踢力強、100 分
   [135.5, 122, 9, 160, 25], [215.5, 167, 9, 160, 25], [60.5, 180, 9, 160, 25], [100.5, 257, 9, 160, 25], [175.5, 262, 9, 160, 25]];   // 海膽（小 5 個）：25 分，魚群標靶全倒後 ×2。閃光位元 0～2 水母、3～7 海膽
-const PB_FISH = [[30.5, 273.5], [30.5, 293.5], [30.5, 313.5]];     // 魚群標靶（左）：50 分，打到就倒；全倒 +500、海膽 ×2、左反彈器充能
-const PB_UGLY = [[240.5, 273.5], [240.5, 293.5], [240.5, 313.5]];  // 丑魚標靶（右）：50 分；全倒 +500、貝殼洞開啟（1000 分）、右閘門關上
+const PB_FISH = [[33, 326], [33, 345], [33, 364]];     // 魚群標靶（左）：50 分，打到就倒；全倒 +500、海膽 ×2、左反彈器充能
+const PB_UGLY = [[238.5, 326], [238.5, 345], [238.5, 364]];  // 丑魚標靶（右）：50 分；全倒 +500、貝殼洞開啟（1000 分）、右閘門關上
 const PB_ENT = [215, 245, 275, 305].map(d => { const a = d * Math.PI / 180; return [150 + 125 * Math.cos(a), 148 + 125 * Math.sin(a), a]; });   // 入口燈：沿著上方弧形外框斜著排（離牆 15）；球貼著外框滾過去就亮，4 顆全亮＝鯨魚軌道雙倍計分
 const PB_LANEL = [[19.5, 410], [39.5, 410], [231.5, 410], [251.5, 410]];   // 內外線道燈：球滾過就亮，全亮 +300
-const PB_SPIN = [[232.5, 225, 14], [135.5, 316, 14], [24, 190, 12], [137, 84, 14], [39.5, 450, 9], [231.5, 450, 9], [85, 228, 12], [186, 228, 12]];   // 旋轉門（球穿過去會轉，每轉一圈 10 分）：x、y、半寬。2026-11-16 使用者要求多放（原本只有前兩個）：左牆邊（發球繞一圈下來會經過）、隧道出口下面、左右內線道、水母群下面兩側。觀戰者的閃光位元只有兩個（11、12），照「第幾個 % 2」共用
+const PB_SPIN = [[40, 213, 11, 0, 40], [58, 148, 11, .54, 40], [110, 105, 11, .87, 40], [173, 89, 11, 1.1, 40], [275, 215, 10, 0, 12], [275, 259, 10, 0, 12], [275, 301, 10, 0, 12]];   // 旋轉門（球穿過去會轉，每轉一圈 10 分）：x、y、半寬、擺放角度（弧度）、被球帶動的最大轉速。2026-11-16 使用者給的圖：鯨魚軌道上 4 條（斜的、垂直於軌道，球走鯨魚軌道時會一路帶轉）、發球道裡 3 條（轉速上限低，不然每次發球都白拿一堆分）。觀戰者的閃光位元只有兩個（11、12），照「第幾個 % 2」共用
 const PB_SHELLS = [{ x: 198.5, y: 356, v: [-40, 120] }];   // 貝殼洞（2026-11-16 使用者要求刪掉左邊那個，只剩右邊）：球掉進去關 0.8 秒再彈出（250 分，開啟時 1000），並升起一次救援柱。彈出方向＝落在同側擋板上（原本往場中央丟，會直接掉進兩個擋板中間的排水口）
 const PB_POSTS = [[70.5, 311, 6], [200.5, 311, 6]];                // 珊瑚柱（橡膠立柱）：只讓球改變方向
 const PB_PEARLS = [[100.5, 342], [135.5, 342], [170.5, 342]];      // 珍珠標靶：30 分；三顆都亮送一顆球（+500）。2026-11-16 使用者要求往上移（原本在擋板正上方 y＝460，球一打就被彈回排水口）
-const PB_CHEST = [256, 326, 256, 360];                             // 寶箱標靶：打到倍率 +1（最高 ×5，掉球歸 1）。2026-11-16 使用者說正中間的橫板很礙事，改成貼著右邊發球道隔板的直板（左擋板自然出球的路線上，跟左牆的隧道對稱；貼牆是為了不讓球卡在板子上面）
+const PB_CHEST = [136.5, 266, 136.5, 304];                             // 寶箱標靶：打到倍率 +1（最高 ×5，掉球歸 1）。2026-11-16 使用者說正中間的橫板很礙事，改成貼著右邊發球道隔板的直板（左擋板自然出球的路線上，跟左牆的隧道對稱；貼牆是為了不讓球卡在板子上面）
 const PB_RAMP = [[36, 252], [34, 120], [90, 92], [220, 90]], PB_RAMP_T = 1.1;   // 鯨魚軌道（貝茲曲線，球從左邊入口被帶到上面右邊的出口）
 const PB_RESCUE = [135.5, 579, 7], PB_RESCUE_S = 12;               // 救援柱位置；救球燈：發射後 12 秒內掉進排水口，重發同一顆
 const PB_SLOW = .7;                                                 // 整台的時間倍率（2026-11-16 使用者說球太快看不到就死了）：物理照原本的數值算，只是每秒只前進 0.7 秒，軌跡不變、整體慢動作
 const PB_ZOOM = 1.4;                                                // 牌桌上的顯示倍率（2026-11-16 使用者要求放大，先 1.2 後再加大到 1.4；物理座標不變，pbDraw 依 canvas 寬度自己縮放）
 const PB_LGATE = [260, 109, 271.2, 78];                             // 發球道出口的擋板：球射出、離開出口後關上（球不會再掉回發球道），回到等拉桿時打開
 const PB_JACK_MS = 3200;                                             // 深海寶藏（隧道滿 3 次）的全場燈效長度：場上所有會亮的東西輪流閃（老機台那種「能用的燈都拿來閃」）
-const PB_TUN = { x: 30, y: 345, r: 17, t: 1, n: 3, out: [135.5, 46, 25, 60], pts: 1000, jack: 5000 };   // 海底隧道（主要目標）：左牆的洞口，在右擋板自然出球的路線上，球往上衝（vy < −150）經過洞口才算；1 秒後從上方掉進水母群。每次 1000 分，集滿 3 次＝深海寶藏 +5000（跨球保留）
+const PB_TUN = { x: 30, y: 285, r: 17, t: 1, n: 3, out: [135.5, 46, 25, 60], pts: 1000, jack: 5000 };   // 海底隧道（主要目標）：左牆的洞口，在右擋板自然出球的路線上，球往上衝（vy < −150）經過洞口才算；1 秒後從上方掉進水母群。每次 1000 分，集滿 3 次＝深海寶藏 +5000（跨球保留）
 const PB_TRIS = [[[50.5, 428], [78.5, 510], [50.5, 494]], [[220.5, 428], [192.5, 510], [220.5, 494]]];   // 珊瑚彈弓（三角形）的三個頂點：第一點→第二點那條是朝場內的踢球邊，其他兩條只是實心牆
 const PB_SLINGS = PB_TRIS.map(t => [t[0][0], t[0][1], t[1][0], t[1][1]]);   // 彈弓：打到會被踢回去，得 10 分
 const PB_ARCH = (() => {   // 外框：左牆往上、上方半圓（圓心 [150,148]、半徑 140）、右牆往下
@@ -7548,6 +7548,7 @@ const PB_SEGS = (() => {   // 牆與導軌：[x1, y1, x2, y2]
   const s = [];
   for (let k = 0; k + 1 < PB_ARCH.length; k++) s.push([PB_ARCH[k][0], PB_ARCH[k][1], PB_ARCH[k + 1][0], PB_ARCH[k + 1][1]]);
   s.push([260, 109, 260, 585], [260, 585, 290, 585]);                                  // 發球道的隔板與底
+  s.push([14, 228, 37, 252]);                                                          // 隧道上方從左牆斜下來的擋板（使用者給的圖）：沿牆掉下來的球被推開，不會直接掉進隧道口
   s.push([28.5, 392, 28.5, 495], [28.5, 495, 75, 541], [242.5, 392, 242.5, 495], [242.5, 495, 200, 541]);   // 左右外線道的內牆，再斜下去把球送到擋板
   for (const t of PB_TRIS) s.push([t[1][0], t[1][1], t[2][0], t[2][1]], [t[2][0], t[2][1], t[0][0], t[0][1]]);   // 三角彈弓的另外兩條邊
   return s;
@@ -7632,6 +7633,7 @@ function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
   });
   if (P.ramp) {   // 鯨魚軌道：球沿著曲線走，到終點從出口射出
     P.ramp.t += dt; const p = pbBez(PB_RAMP, Math.min(1, P.ramp.t / PB_RAMP_T)); b.x = p[0]; b.y = p[1]; b.vx = b.vy = 0;
+    PB_SPIN.forEach(([x, y, hw, , cap], i) => { if (Math.hypot(b.x - x, b.y - y) < hw + 5) P.sp[i].w = Math.max(P.sp[i].w, Math.min(cap, 24)); });   // 沿軌道走過的旋轉門一路帶轉
     if (P.ramp.t >= PB_RAMP_T) { P.ramp = null; b.vx = 50; b.vy = 80; P.rampCd = 1; }
     return;
   }
@@ -7682,7 +7684,7 @@ function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
     P.lane[i] = 1; P.score += 20 * P.mult;
     if (P.lane.every(Boolean)) { P.lane = [0, 0, 0, 0]; P.score += 300 * P.mult; pbNote(P, '線道燈全亮 +300', now); }
   });
-  PB_SPIN.forEach(([x, y, hw], i) => { if (Math.abs(b.x - x) < hw + 3 && Math.abs(b.y - y) < 7) P.sp[i].w = Math.max(P.sp[i].w, Math.min(40, Math.hypot(b.vx, b.vy) * .06)); });
+  PB_SPIN.forEach(([x, y, hw, , cap], i) => { if (Math.hypot(b.x - x, b.y - y) < hw + 2) P.sp[i].w = Math.max(P.sp[i].w, Math.min(cap, Math.hypot(b.vx, b.vy) * .06)); });
   if (!(P.rampCd > 0) && b.vy < -120 && Math.hypot(b.x - PB_RAMP[0][0], b.y - PB_RAMP[0][1]) < 13) { P.ramp = { t: 0 }; P.score += 200 * (P.whale ? 2 : 1) * P.mult; return; }
   if (!(P.capCd > 0)) PB_SHELLS.forEach((sh, i) => {
     if (P.cap || Math.hypot(b.x - sh.x, b.y - sh.y) > 8) return;
@@ -7831,7 +7833,7 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
     else { circ(bx, by, br, lit ? '#ffffff' : (P.u2 ? '#ffe6a0' : '#dcd8ff'), P.u2 ? '#c08a10' : '#6a5acd', 2); }
   });
   // 旋轉門
-  PB_SPIN.forEach(([x, y, hw], i) => { const s = P.sp[i], th = 1.5 + 4.5 * Math.abs(Math.cos(s.a)); pbRR(g, x - hw, y - th / 2, hw * 2, th, Math.min(th / 2, 3)); g.fillStyle = '#cfe6ff'; g.fill(); g.strokeStyle = '#2a6ab8'; g.lineWidth = 1.5; g.stroke(); });
+  PB_SPIN.forEach(([x, y, hw, ang], i) => { const s = P.sp[i], th = 1.5 + 4.5 * Math.abs(Math.cos(s.a)); g.save(); g.translate(x, y); g.rotate(ang); pbRR(g, -hw, -th / 2, hw * 2, th, Math.min(th / 2, 3)); g.fillStyle = '#cfe6ff'; g.fill(); g.strokeStyle = '#2a6ab8'; g.lineWidth = 1.5; g.stroke(); g.restore(); });
   // 魚群標靶（左，橘）／丑魚標靶（右，粉紅）：倒下的變淡
   PB_FISH.forEach(([x, y], i) => { g.globalAlpha = P.fish[i] && !jk ? .22 : 1; pbRR(g, x - 6.5, y - 7, 13, 14, 3); g.fillStyle = L(0, x, y) ? '#ffffff' : '#f8e0bc'; g.fill(); g.strokeStyle = '#c07a30'; g.lineWidth = 1.5; g.stroke(); g.globalAlpha = 1; });
   PB_UGLY.forEach(([x, y], i) => { g.globalAlpha = P.ugly[i] && !jk ? .22 : 1; pbRR(g, x - 6.5, y - 7, 13, 14, 3); g.fillStyle = L(0, x, y) ? '#ffffff' : '#f8d4cc'; g.fill(); g.strokeStyle = '#c0583c'; g.lineWidth = 1.5; g.stroke(); g.globalAlpha = 1; });
@@ -7870,8 +7872,9 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
   }
   // HUD
   g.textBaseline = 'middle'; g.font = 'bold 14px "Microsoft JhengHei"'; g.fillStyle = '#ffe08a'; g.textAlign = 'left'; g.fillText(String(Math.round(P.score)), 12, 14);
-  g.font = 'bold 12px "Microsoft JhengHei"'; g.fillStyle = '#9fb0d8'; g.textAlign = 'right'; g.fillText(P.mult > 1 ? `×${P.mult}` : '', 288, 14);
-  for (let i = 0; i < Math.max(PB_BALLS, P.balls); i++) { g.fillStyle = i < P.balls ? '#e8ecf8' : 'rgba(255,255,255,.18)'; g.beginPath(); g.arc(214 + i * 11, 15, 3.8, 0, TAU); g.fill(); }
+  g.font = 'bold 12px "Microsoft JhengHei"'; g.fillStyle = '#9fb0d8'; g.textAlign = 'right'; g.fillText(P.mult > 1 ? `×${P.mult}` : '', 288, 28);
+  const nb = Math.max(PB_BALLS, P.balls);   // 剩餘球數靠右排：掉一顆就從最左邊那顆開始變暗（使用者要求）
+  for (let i = 0; i < nb; i++) { g.fillStyle = i >= nb - P.balls ? '#e8ecf8' : 'rgba(255,255,255,.18)'; g.beginPath(); g.arc(285 - (nb - 1 - i) * 11, 14, 3.8, 0, TAU); g.fill(); }
   g.textAlign = 'center';
   let msg = null;
   if (t < 0) msg = String(Math.ceil(-t));
