@@ -7525,13 +7525,18 @@ const PB_FISH = [[30.5, 273.5], [30.5, 293.5], [30.5, 313.5]];     // 魚群標�
 const PB_UGLY = [[240.5, 273.5], [240.5, 293.5], [240.5, 313.5]];  // 丑魚標靶（右）：50 分；全倒 +500、貝殼洞開啟（1000 分）、右閘門關上
 const PB_ENT = [215, 245, 275, 305].map(d => { const a = d * Math.PI / 180; return [150 + 125 * Math.cos(a), 148 + 125 * Math.sin(a), a]; });   // 入口燈：沿著上方弧形外框斜著排（離牆 15）；球貼著外框滾過去就亮，4 顆全亮＝鯨魚軌道雙倍計分
 const PB_LANEL = [[19.5, 410], [39.5, 410], [231.5, 410], [251.5, 410]];   // 內外線道燈：球滾過就亮，全亮 +300
-const PB_SPIN = [[232.5, 225, 14], [135.5, 316, 14]];              // 旋轉門（球穿過去會轉，每轉一圈 10 分）：x、y、半寬
-const PB_SHELLS = [{ x: 72.5, y: 356, v: [110, 40] }, { x: 198.5, y: 356, v: [-110, 40] }];   // 貝殼洞：球掉進去關 0.8 秒再彈出（250 分，開啟時 1000），並升起一次救援柱
+const PB_SPIN = [[232.5, 225, 14], [135.5, 316, 14], [24, 190, 12], [137, 84, 14], [39.5, 450, 9], [231.5, 450, 9], [85, 228, 12], [186, 228, 12]];   // 旋轉門（球穿過去會轉，每轉一圈 10 分）：x、y、半寬。2026-11-16 使用者要求多放（原本只有前兩個）：左牆邊（發球繞一圈下來會經過）、隧道出口下面、左右內線道、水母群下面兩側。觀戰者的閃光位元只有兩個（11、12），照「第幾個 % 2」共用
+const PB_SHELLS = [{ x: 198.5, y: 356, v: [-40, 120] }];   // 貝殼洞（2026-11-16 使用者要求刪掉左邊那個，只剩右邊）：球掉進去關 0.8 秒再彈出（250 分，開啟時 1000），並升起一次救援柱。彈出方向＝落在同側擋板上（原本往場中央丟，會直接掉進兩個擋板中間的排水口）
 const PB_POSTS = [[70.5, 311, 6], [200.5, 311, 6]];                // 珊瑚柱（橡膠立柱）：只讓球改變方向
-const PB_PEARLS = [[110.5, 460], [135.5, 460], [160.5, 460]];      // 珍珠標靶：30 分；三顆都亮送一顆球（+500）
-const PB_CHEST = [117, 383, 154, 383];                             // 寶箱標靶：打到倍率 +1（最高 ×5，掉球歸 1）
+const PB_PEARLS = [[100.5, 342], [135.5, 342], [170.5, 342]];      // 珍珠標靶：30 分；三顆都亮送一顆球（+500）。2026-11-16 使用者要求往上移（原本在擋板正上方 y＝460，球一打就被彈回排水口）
+const PB_CHEST = [256, 326, 256, 360];                             // 寶箱標靶：打到倍率 +1（最高 ×5，掉球歸 1）。2026-11-16 使用者說正中間的橫板很礙事，改成貼著右邊發球道隔板的直板（左擋板自然出球的路線上，跟左牆的隧道對稱；貼牆是為了不讓球卡在板子上面）
 const PB_RAMP = [[36, 252], [34, 120], [90, 92], [220, 90]], PB_RAMP_T = 1.1;   // 鯨魚軌道（貝茲曲線，球從左邊入口被帶到上面右邊的出口）
 const PB_RESCUE = [135.5, 579, 7], PB_RESCUE_S = 12;               // 救援柱位置；救球燈：發射後 12 秒內掉進排水口，重發同一顆
+const PB_SLOW = .7;                                                 // 整台的時間倍率（2026-11-16 使用者說球太快看不到就死了）：物理照原本的數值算，只是每秒只前進 0.7 秒，軌跡不變、整體慢動作
+const PB_ZOOM = 1.4;                                                // 牌桌上的顯示倍率（2026-11-16 使用者要求放大，先 1.2 後再加大到 1.4；物理座標不變，pbDraw 依 canvas 寬度自己縮放）
+const PB_LGATE = [260, 109, 271.2, 78];                             // 發球道出口的擋板：球射出、離開出口後關上（球不會再掉回發球道），回到等拉桿時打開
+const PB_JACK_MS = 2600;                                             // 深海寶藏（隧道滿 3 次）的全場光效長度
+const PB_TUN = { x: 30, y: 345, r: 17, t: 1, n: 3, out: [135.5, 46, 25, 60], pts: 1000, jack: 5000 };   // 海底隧道（主要目標）：左牆的洞口，在右擋板自然出球的路線上，球往上衝（vy < −150）經過洞口才算；1 秒後從上方掉進水母群。每次 1000 分，集滿 3 次＝深海寶藏 +5000（跨球保留）
 const PB_TRIS = [[[50.5, 428], [78.5, 510], [50.5, 494]], [[220.5, 428], [192.5, 510], [220.5, 494]]];   // 珊瑚彈弓（三角形）的三個頂點：第一點→第二點那條是朝場內的踢球邊，其他兩條只是實心牆
 const PB_SLINGS = PB_TRIS.map(t => [t[0][0], t[0][1], t[1][0], t[1][1]]);   // 彈弓：打到會被踢回去，得 10 分
 const PB_ARCH = (() => {   // 外框：左牆往上、上方半圓（圓心 [150,148]、半徑 140）、右牆往下
@@ -7551,15 +7556,15 @@ const pbBez = (c, s) => { const u = 1 - s, a = u * u * u, b = 3 * u * u * s, d =
 function pbNewBall(P) {   // 下一顆球：回發球道，這一顆的狀態歸零（珍珠不歸零：三顆集滿才送球）
   const b = P.ball; b.x = PB_LANE_X; b.y = PB_LANE_Y; b.vx = b.vy = 0;
   P.st = 0; P.power = 0; P.mult = 1; P.ent = [0, 0, 0, 0]; P.lane = [0, 0, 0, 0]; P.fish = [0, 0, 0]; P.ugly = [0, 0, 0];
-  P.gate = P.shell = P.post = P.whale = P.u2 = 0; P.kick = 1; P.ramp = P.cap = null; P.rescued = 0; P.ballT = 0;
+  P.gate = P.shell = P.post = P.whale = P.u2 = P.lg = 0; P.kick = 1; P.ramp = P.cap = null; P.rescued = 0; P.ballT = 0;
 }
 function pbMake(v) {
   const z = v.pb, me = v.role === 'seat';
   const P = {
     key: z.seed + ':' + z.t0, t0: z.t0, off: z.sn - Date.now(), role: me ? 'seat' : 'spec', over: false,
-    balls: PB_BALLS, score: 0, mult: 1, st: 0, power: 0, calm: 0, ballT: 0, pearl: [0, 0, 0], resc: 0, note: null,
+    balls: PB_BALLS, score: 0, mult: 1, st: 0, power: 0, calm: 0, ballT: 0, pearl: [0, 0, 0], tun: 0, resc: 0, note: null,
     ball: { x: PB_LANE_X, y: PB_LANE_Y, vx: 0, vy: 0 },
-    fl: { a: PB_FLIP.REST }, fr: { a: PB_FLIP.REST }, keys: { l: 0, r: 0, p: 0 }, flash: new Array(16).fill(0), sp: [{ a: 0, w: 0, acc: 0 }, { a: 0, w: 0, acc: 0 }],
+    fl: { a: PB_FLIP.REST }, fr: { a: PB_FLIP.REST }, keys: { l: 0, r: 0, p: 0 }, flash: new Array(16).fill(0), sp: PB_SPIN.map(() => ({ a: 0, w: 0, acc: 0 })), jack: 0,
     snap: null, snapAt: 0, last: performance.now(), acc: 0,
   };
   pbNewBall(P); return P;
@@ -7622,7 +7627,7 @@ function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
   P.sp.forEach((s, i) => {   // 旋轉門：每轉一圈 10 分
     s.a += s.w * dt; s.w *= Math.exp(-1.2 * dt);
     if (s.w < .3) { s.w = 0; return; }
-    P.flash[11 + i] = now + 140;
+    P.flash[11 + i % 2] = now + 140;
     s.acc += s.w * dt; while (s.acc >= Math.PI * 2) { s.acc -= Math.PI * 2; P.score += 10 * P.mult; }
   });
   if (P.ramp) {   // 鯨魚軌道：球沿著曲線走，到終點從出口射出
@@ -7632,7 +7637,11 @@ function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
   }
   if (P.cap) {   // 在貝殼洞裡：球不見，時間到彈出來
     P.cap.t -= dt;
-    if (P.cap.t <= 0) { const sh = PB_SHELLS[P.cap.i]; b.vx = sh.v[0]; b.vy = sh.v[1]; P.cap = null; P.capCd = .8; }
+    if (P.cap.t <= 0) {
+      if (P.cap.i === 2) [b.x, b.y, b.vx, b.vy] = PB_TUN.out;   // 海底隧道：從上方出口掉出來
+      else { const sh = PB_SHELLS[P.cap.i]; b.vx = sh.v[0]; b.vy = sh.v[1]; }
+      P.cap = null; P.capCd = .8;
+    }
     return;
   }
   if (P.rampCd > 0) P.rampCd -= dt;
@@ -7641,6 +7650,11 @@ function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
   b.vy += PB_G * dt; b.x += b.vx * dt; b.y += b.vy * dt;
   const sp = Math.hypot(b.vx, b.vy); if (sp > 1100) { b.vx *= 1100 / sp; b.vy *= 1100 / sp; }
   for (const s of PB_SEGS) pbHitSeg(b, s[0], s[1], s[2], s[3], .5, 1);
+  if (P.lg) pbHitSeg(b, PB_LGATE[0], PB_LGATE[1], PB_LGATE[2], PB_LGATE[3], .5, 1);   // 發球道出口的擋板（關著）
+  else {   // 球整顆到了擋板的場內那一側就關上
+    const gx = PB_LGATE[2] - PB_LGATE[0], gy = PB_LGATE[3] - PB_LGATE[1];
+    if (((b.x - PB_LGATE[0]) * gy - (b.y - PB_LGATE[1]) * gx) / Math.hypot(gx, gy) > PB_R + 3) P.lg = 1;
+  }
   PB_BUMPERS.forEach(([bx, by, br, kick, pts], i) => {   // 水母（0～2）、海膽（3～7）
     if (!pbCirc(b, bx, by, br, 1, kick)) return;
     P.score += pts * P.mult * (i >= 3 && P.u2 ? 2 : 1); P.flash[i] = now + 140;
@@ -7674,6 +7688,11 @@ function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
     if (P.cap || Math.hypot(b.x - sh.x, b.y - sh.y) > 8) return;
     P.cap = { i, t: .8 }; P.score += (P.shell ? 1000 : 250) * P.mult; P.post = 1; P.flash[8 + i] = now + 300; b.x = sh.x; b.y = sh.y; b.vx = b.vy = 0;
   });
+  if (!P.cap && !(P.capCd > 0) && b.vy < -150 && Math.hypot(b.x - PB_TUN.x, b.y - PB_TUN.y) < PB_TUN.r) {   // 海底隧道：要往上衝進洞口才算（＝擋板打上來的球；沿著左牆掉下來的不算）
+    P.cap = { i: 2, t: PB_TUN.t }; P.tun++; P.score += PB_TUN.pts * P.mult; P.flash[15] = now + 400; b.x = PB_TUN.x; b.y = PB_TUN.y; b.vx = b.vy = 0;
+    if (P.tun >= PB_TUN.n) { P.tun = 0; P.score += PB_TUN.jack * P.mult; P.jack = now + PB_JACK_MS; P.flash.fill(now + PB_JACK_MS); pbNote(P, `深海寶藏！+${PB_TUN.jack * P.mult}`, now); }
+    else pbNote(P, `海底隧道 ${P.tun}／${PB_TUN.n}`, now);
+  }
   if (P.cap) return;
   for (const [px, py, pr] of PB_POSTS) pbCirc(b, px, py, pr, .75, 0);   // 珊瑚柱
   PB_PEARLS.forEach(([x, y], i) => {
@@ -7708,30 +7727,32 @@ function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
     if (vn < 0) { b.vx = rvx - 1.35 * vn * nx + vsx; b.vy = rvy - 1.35 * vn * ny + vsy; }
   }
   // 卡在發球道：球慢下來停在道內（拉桿沒蓄夠力）→ 回到等拉桿
-  if (b.x > 262 && b.y > 480 && Math.hypot(b.vx, b.vy) < 25) { P.st = 0; return; }
+  if (b.x > 262 && b.y > 480 && Math.hypot(b.vx, b.vy) < 25) { P.st = 0; P.lg = 0; return; }
   // 卡住：太久沒怎麼動就輕推一下
   if (Math.hypot(b.vx, b.vy) < 12) { P.calm += dt; if (P.calm > 3) { b.vx += (Math.random() - .5) * 200; b.vy -= 160; P.calm = 0; } } else P.calm = 0;
   if ((b.y > 600 && b.x < 262) || b.y > PB_H + 20) {   // 掉進排水口
     if (P.ballT < PB_RESCUE_S && !P.rescued) {   // 救球燈：發射後 12 秒內掉進去，重發同一顆
-      P.rescued = 1; P.st = 0; P.power = 0; b.x = PB_LANE_X; b.y = PB_LANE_Y; b.vx = b.vy = 0; P.ramp = P.cap = null; pbNote(P, '救球燈！重發這一顆', now); return;
+      P.rescued = 1; P.st = 0; P.lg = 0; P.power = 0; b.x = PB_LANE_X; b.y = PB_LANE_Y; b.vx = b.vy = 0; P.ramp = P.cap = null; pbNote(P, '救球燈！重發這一顆', now); return;
     }
     P.balls--;
     if (P.balls <= 0) { P.st = 3; P.over = true; tblFinal({ a: 'over', sc: P.score }); pbSnap(P, true); }
     else pbNewBall(P);
   }
 }
-function pbBits(P, now) {   // 快照的 f：閃光（16 位）＋各種燈／標靶狀態（24 位）＋倍率；總共 < 2^43（兩份伺服器的上限是 2^46）
+function pbBits(P, now) {   // 快照的 f：閃光（16 位）＋各種燈／標靶狀態（24 位）＋倍率（3 位）＋發球道擋板（1 位）＋隧道次數（2 位）；剛好用到 2^46（兩份伺服器的上限）
   let fl = 0; P.flash.forEach((u, i) => { if (u > now) fl += 2 ** i; });
   const st = [...P.ent, ...P.lane, ...P.fish, ...P.ugly, ...P.pearl, P.gate, P.shell, P.post, P.kick, P.whale, P.u2, P.st === 1 && P.ballT < PB_RESCUE_S && !P.rescued ? 1 : 0];
   let n = 0; st.forEach((v, i) => { if (v) n += 2 ** i; });
-  return fl + n * 65536 + Math.max(1, Math.min(7, P.mult)) * 2 ** 40;
+  return fl + n * 65536 + Math.max(1, Math.min(7, P.mult)) * 2 ** 40 + (P.lg ? 2 ** 43 : 0) + Math.max(0, Math.min(3, P.tun)) * 2 ** 44;
 }
 function pbUnbits(P, f, now) {
   const fl = f % 65536, n = Math.floor(f / 65536) % 2 ** 24, bit = i => Math.floor(n / 2 ** i) % 2;
   for (let i = 0; i < 16; i++) if (Math.floor(fl / 2 ** i) % 2) P.flash[i] = now + 140;
   P.ent = [0, 1, 2, 3].map(i => bit(i)); P.lane = [0, 1, 2, 3].map(i => bit(4 + i)); P.fish = [0, 1, 2].map(i => bit(8 + i)); P.ugly = [0, 1, 2].map(i => bit(11 + i)); P.pearl = [0, 1, 2].map(i => bit(14 + i));
   P.gate = bit(17); P.shell = bit(18); P.post = bit(19); P.kick = bit(20); P.whale = bit(21); P.u2 = bit(22); P.resc = bit(23);
-  P.mult = Math.max(1, Math.floor(f / 2 ** 40));
+  const hi = Math.floor(f / 2 ** 40); P.mult = Math.max(1, hi % 8); P.lg = Math.floor(hi / 8) % 2;
+  const tn = Math.floor(hi / 16) % 4; if (tn < P.tun) P.jack = now + PB_JACK_MS;   // 隧道次數歸零＝剛開出深海寶藏：觀戰者也放全場光效
+  P.tun = tn;
 }
 function pbSnap(P, force) {   // 自己的局：快照給觀戰者與大螢幕（約 10 次／秒）
   const now = performance.now();
@@ -7747,7 +7768,7 @@ function pbApplySnap(P, m) {   // 觀戰者／大螢幕：套用快照（球的�
 function pbAdvance(P, dt) {   // 每一幀：自己的局跑物理＋送快照；旁觀的局讓球和擋板追上最新快照
   if (P.role === 'seat') {
     const t = pbNow(P);
-    if (t >= 0 && !P.over) { P.acc += dt; let n = 0; while (P.acc >= PB_DT && n++ < 20) { pbStep(P, PB_DT); P.acc -= PB_DT; } if (n >= 20) P.acc = 0; pbSnap(P, false); }
+    if (t >= 0 && !P.over) { P.acc += dt * PB_SLOW; let n = 0; while (P.acc >= PB_DT && n++ < 20) { pbStep(P, PB_DT); P.acc -= PB_DT; } if (n >= 20) P.acc = 0; pbSnap(P, false); }
     else P.acc = 0;
   } else {
     if (P.snap) { const a = 1 - Math.exp(-dt * 16); P.ball.x += (P.snap.x - P.ball.x) * a; P.ball.y += (P.snap.y - P.ball.y) * a; }
@@ -7755,7 +7776,7 @@ function pbAdvance(P, dt) {   // 每一幀：自己的局跑物理＋送快照�
       const f = left ? P.fl : P.fr, want = (left ? P.keys.l : P.keys.r) ? PB_FLIP.UP : PB_FLIP.REST;
       f.a += Math.max(-PB_FLIP.SPD * dt, Math.min(PB_FLIP.SPD * dt, want - f.a));
     }
-    const now = performance.now(); P.sp.forEach((s, i) => { s.a += (P.flash[11 + i] > now ? 14 : 0) * dt; });   // 旋轉門：閃光位元亮著就轉
+    const now = performance.now(); P.sp.forEach((s, i) => { s.a += (P.flash[11 + i % 2] > now ? 14 : 0) * dt; });   // 旋轉門：閃光位元亮著就轉
   }
 }
 function pbFrame() {
@@ -7769,13 +7790,25 @@ function pbFrame() {
 function pbRR(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 PB_W×PB_H 的 canvas
   if (!cv) return;
-  const g = cv.getContext('2d'), now = performance.now(), TAU = Math.PI * 2;
+  const g = cv.getContext('2d'), now = performance.now(), TAU = Math.PI * 2, zk = cv.width / PB_W;
+  g.setTransform(zk, 0, 0, zk, 0, 0);   // canvas 比 PB_W×PB_H 大（牌桌放大顯示）就整個放大畫，座標照舊
   const circ = (x, y, r, fill, stroke, lw = 2) => { g.beginPath(); g.arc(x, y, r, 0, TAU); if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.stroke(); } };
   g.fillStyle = '#0d1030'; g.fillRect(0, 0, PB_W, PB_H);
   const gr = g.createLinearGradient(0, 0, 0, PB_H); gr.addColorStop(0, '#1b2f5e'); gr.addColorStop(1, '#122040');
   g.fillStyle = gr; g.beginPath(); PB_ARCH.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fill();
   g.strokeStyle = '#9db4f4'; g.lineWidth = 2.5; g.lineCap = 'round'; g.lineJoin = 'round';
   for (const s of PB_SEGS) { g.beginPath(); g.moveTo(s[0], s[1]); g.lineTo(s[2], s[3]); g.stroke(); }
+  // 發球道出口的擋板（關上才實心）
+  g.strokeStyle = P.lg ? '#5ad0aa' : 'rgba(90,208,170,.25)'; g.lineWidth = 3; g.beginPath(); g.moveTo(PB_LGATE[0], PB_LGATE[1]); g.lineTo(PB_LGATE[2], PB_LGATE[3]); g.stroke();
+  // 海底隧道：左牆的洞口＋進度燈＋指向洞口的箭頭（閃爍）
+  {
+    const T = PB_TUN, hit = P.flash[15] > now, bl = Math.floor(now / 350) % 2;
+    g.beginPath(); g.ellipse(11, T.y, 24, 20, 0, -Math.PI / 2, Math.PI / 2); g.closePath(); g.fillStyle = hit ? '#fff6c0' : '#05060f'; g.fill(); g.strokeStyle = '#ffd060'; g.lineWidth = 2.5; g.stroke();
+    for (let i = 0; i < T.n; i++) { const a = (i - (T.n - 1) / 2) * .85; circ(11 + 31 * Math.cos(a), T.y + 28 * Math.sin(a), 3.2, i < P.tun ? '#ffd060' : 'rgba(255,208,96,.18)', '#c08a10', 1); }
+    g.strokeStyle = bl ? '#ffd060' : 'rgba(255,208,96,.35)'; g.lineWidth = 2;
+    for (const ax of [48, 55]) { g.beginPath(); g.moveTo(ax + 5, T.y - 5); g.lineTo(ax, T.y); g.lineTo(ax + 5, T.y + 5); g.stroke(); }
+    g.font = 'bold 9px "Microsoft JhengHei"'; g.fillStyle = hit ? '#05060f' : '#ffd060'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText('隧道', 13, T.y);
+  }
   // 鯨魚軌道（虛線；雙倍計分時變金色）
   g.setLineDash([6, 5]); g.strokeStyle = P.whale ? '#ffd060' : 'rgba(170,185,230,.55)'; g.lineWidth = 2; g.beginPath();
   for (let k = 0; k <= 24; k++) { const p = pbBez(PB_RAMP, k / 24); k ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); }
@@ -7799,7 +7832,7 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
   // 珊瑚柱、珍珠、寶箱
   for (const [px, py, pr] of PB_POSTS) circ(px, py, pr, '#f4cfc8', '#c0583c', 1.5);
   PB_PEARLS.forEach(([x, y], i) => circ(x, y, 6, P.pearl[i] ? '#ff7fb8' : '#f6c8dc', '#b04070', 1.5));
-  { const c = PB_CHEST; pbRR(g, c[0] - 1, c[1] - 4.5, c[2] - c[0] + 2, 9, 3); g.fillStyle = P.flash[10] > now ? '#ffffff' : '#f7d9b0'; g.fill(); g.strokeStyle = '#b8701c'; g.lineWidth = 1.5; g.stroke(); }
+  { const c = PB_CHEST; pbRR(g, Math.min(c[0], c[2]) - 4.5, Math.min(c[1], c[3]) - 1, Math.abs(c[2] - c[0]) + 9, Math.abs(c[3] - c[1]) + 2, 3); g.fillStyle = P.flash[10] > now ? '#ffffff' : '#f7d9b0'; g.fill(); g.strokeStyle = '#b8701c'; g.lineWidth = 1.5; g.stroke(); }
   // 線道燈
   PB_LANEL.forEach(([x, y], i) => circ(x, y, 5, P.lane[i] ? '#8bf050' : '#dff0c8', '#4a8a20', 1.5));
   // 左反彈器（綠，有電才亮）／右閘門（青，關上才實心）
@@ -7822,6 +7855,23 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
     const pull = P.power * 20;
     g.fillStyle = '#9a9aa8'; g.fillRect(PB_LANE_X - 3, PB_LANE_Y + PB_R + pull, 6, 22); g.fillStyle = '#d84a4a'; g.fillRect(PB_LANE_X - 6, PB_LANE_Y + PB_R + 20 + pull, 12, 4);
   }
+  // 深海寶藏：全場光效（金色光束旋轉＋從隧道洞口擴散的光環＋外框閃爍；物件本身靠閃光位元全亮）
+  if (P.jack > now) {
+    const k = (P.jack - now) / PB_JACK_MS, e = 1 - k, fade = Math.min(1, k * 3);
+    g.save(); g.beginPath(); PB_ARCH.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.clip();
+    g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 12; i++) {   // 光束
+      const a = i * TAU / 12 + e * 5; g.beginPath(); g.moveTo(150, 300); g.arc(150, 300, 700, a, a + TAU / 30); g.closePath();
+      g.fillStyle = `hsla(${(i * 30 + e * 720) % 360}, 95%, 62%, ${.2 * fade})`; g.fill();
+    }
+    for (let i = 0; i < 4; i++) {   // 光環
+      const u = (e * 2.2 + i * .25) % 1; g.beginPath(); g.arc(PB_TUN.x, PB_TUN.y, 20 + u * 620, 0, TAU);
+      g.strokeStyle = `rgba(255,224,130,${.55 * (1 - u) * fade})`; g.lineWidth = 10 * (1 - u) + 2; g.stroke();
+    }
+    g.fillStyle = `rgba(255,236,170,${.28 * Math.max(0, 1 - e * 5)})`; g.fillRect(0, 0, PB_W, PB_H);   // 一開始整片閃一下
+    g.restore();
+    g.strokeStyle = `hsla(${(e * 1080) % 360}, 95%, 70%, ${fade})`; g.lineWidth = 4; g.beginPath(); PB_ARCH.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
+  }
   // 球
   if (P.st !== 3 && t >= -1 && !P.cap) {
     const b = P.ball, bg = g.createRadialGradient(b.x - 2, b.y - 2, 1, b.x, b.y, PB_R);
@@ -7837,8 +7887,8 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
   else if (P.st === 3) msg = '遊戲結束';
   else if (P.st === 0 && P.role === 'seat') msg = P.power > 0 ? '放開發射！' : '按住空白蓄力、放開發射';
   else if (P.note && P.note.until > now) msg = P.note.t;
-  if (msg) { g.font = 'bold 15px "Microsoft JhengHei"'; g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,.85)'; g.fillStyle = '#ffe08a'; g.strokeText(msg, 140, 340); g.fillText(msg, 140, 340); }
-  g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+  if (msg) { g.font = 'bold 15px "Microsoft JhengHei"'; g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,.85)'; g.fillStyle = '#ffe08a'; g.strokeText(msg, 140, 404); g.fillText(msg, 140, 404); }   // 寶箱與彈弓之間的空位（原本 y＝340，珍珠移上來後會蓋到）
+  g.textBaseline = 'alphabetic'; g.textAlign = 'left'; g.setTransform(1, 0, 0, 1, 0, 0);
 }
 function buildPinball(box, v, mk, gd) {
   const playing = v.phase === 'playing', z = v.pb;
@@ -7865,7 +7915,7 @@ function buildPinball(box, v, mk, gd) {
     box.appendChild(row);
   } else {
     const wrap = mk('div', 'pb-wrap'), cv = document.createElement('canvas');
-    cv.id = 'pbCanvas'; cv.width = PB_W; cv.height = PB_H; cv.className = 'pb-canvas';
+    cv.id = 'pbCanvas'; cv.width = PB_W * PB_ZOOM * 2; cv.height = PB_H * PB_ZOOM * 2; cv.className = 'pb-canvas';   // 顯示 420×840（CSS），內部解析度再 ×2 讓放大後不糊
     wrap.appendChild(cv); box.appendChild(wrap);
   }
   const btns = mk('div', 'table-btns');

@@ -374,7 +374,7 @@ body {
 .dodge-wrap { position: relative; width: min(640px, 100%); margin: 10px auto; }
 .dodge-canvas { display: block; width: 100%; height: auto; border: 2px solid #3a4a8a; background: #0c1020; }
 .pb-wrap { display: flex; justify-content: center; margin: 8px auto; }
-.pb-canvas { display: block; max-width: 100%; max-height: calc(100vh - 290px); width: auto; height: auto; border: 2px solid #8aa0e0; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+.pb-canvas { display: block; height: min(844px, calc(100vh - 210px)); width: auto; aspect-ratio: 1 / 2; border: 2px solid #8aa0e0; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
 .brk-canvas { display: block; max-width: 100%; max-height: calc(100vh - 290px); width: auto; height: auto; border: 2px solid #1f9a8a; box-shadow: 0 4px 16px rgba(0,0,0,.5); cursor: none; }
 .mz-wrap { display: flex; justify-content: center; margin: 8px auto; }
 .mz-canvas { display: block; max-width: 100%; max-height: calc(100vh - 290px); width: auto; height: auto; border: 2px solid #2fc8b0; box-shadow: 0 4px 16px rgba(0,0,0,.5); image-rendering: auto; }
