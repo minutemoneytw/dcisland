@@ -7872,7 +7872,7 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
   }
   // HUD
   g.textBaseline = 'middle'; g.font = 'bold 14px "Microsoft JhengHei"'; g.fillStyle = '#ffe08a'; g.textAlign = 'left'; g.fillText(String(Math.round(P.score)), 12, 14);
-  g.font = 'bold 12px "Microsoft JhengHei"'; g.fillStyle = '#9fb0d8'; g.textAlign = 'right'; g.fillText(P.mult > 1 ? `×${P.mult}` : '', 288, 28);
+  g.font = 'bold 12px "Microsoft JhengHei"'; g.fillStyle = '#9fb0d8'; g.textAlign = 'left'; g.fillText(P.mult > 1 ? `×${P.mult}` : '', 12, 29);   // 倍率放在分數正下方（2026-11-17 使用者要求，原本在右上角球數下面）
   const nb = Math.max(PB_BALLS, P.balls);   // 剩餘球數靠右排：掉一顆就從最左邊那顆開始變暗（使用者要求）
   for (let i = 0; i < nb; i++) { g.fillStyle = i >= nb - P.balls ? '#e8ecf8' : 'rgba(255,255,255,.18)'; g.beginPath(); g.arc(285 - (nb - 1 - i) * 11, 14, 3.8, 0, TAU); g.fill(); }
   g.textAlign = 'center';
