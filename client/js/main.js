@@ -7535,7 +7535,7 @@ const PB_RESCUE = [135.5, 579, 7], PB_RESCUE_S = 12;               // 救援柱�
 const PB_SLOW = .7;                                                 // 整台的時間倍率（2026-11-16 使用者說球太快看不到就死了）：物理照原本的數值算，只是每秒只前進 0.7 秒，軌跡不變、整體慢動作
 const PB_ZOOM = 1.4;                                                // 牌桌上的顯示倍率（2026-11-16 使用者要求放大，先 1.2 後再加大到 1.4；物理座標不變，pbDraw 依 canvas 寬度自己縮放）
 const PB_LGATE = [260, 109, 271.2, 78];                             // 發球道出口的擋板：球射出、離開出口後關上（球不會再掉回發球道），回到等拉桿時打開
-const PB_JACK_MS = 2600;                                             // 深海寶藏（隧道滿 3 次）的全場光效長度
+const PB_JACK_MS = 3200;                                             // 深海寶藏（隧道滿 3 次）的全場燈效長度：場上所有會亮的東西輪流閃（老機台那種「能用的燈都拿來閃」）
 const PB_TUN = { x: 30, y: 345, r: 17, t: 1, n: 3, out: [135.5, 46, 25, 60], pts: 1000, jack: 5000 };   // 海底隧道（主要目標）：左牆的洞口，在右擋板自然出球的路線上，球往上衝（vy < −150）經過洞口才算；1 秒後從上方掉進水母群。每次 1000 分，集滿 3 次＝深海寶藏 +5000（跨球保留）
 const PB_TRIS = [[[50.5, 428], [78.5, 510], [50.5, 494]], [[220.5, 428], [192.5, 510], [220.5, 494]]];   // 珊瑚彈弓（三角形）的三個頂點：第一點→第二點那條是朝場內的踢球邊，其他兩條只是實心牆
 const PB_SLINGS = PB_TRIS.map(t => [t[0][0], t[0][1], t[1][0], t[1][1]]);   // 彈弓：打到會被踢回去，得 10 分
@@ -7690,7 +7690,7 @@ function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
   });
   if (!P.cap && !(P.capCd > 0) && b.vy < -150 && Math.hypot(b.x - PB_TUN.x, b.y - PB_TUN.y) < PB_TUN.r) {   // 海底隧道：要往上衝進洞口才算（＝擋板打上來的球；沿著左牆掉下來的不算）
     P.cap = { i: 2, t: PB_TUN.t }; P.tun++; P.score += PB_TUN.pts * P.mult; P.flash[15] = now + 400; b.x = PB_TUN.x; b.y = PB_TUN.y; b.vx = b.vy = 0;
-    if (P.tun >= PB_TUN.n) { P.tun = 0; P.score += PB_TUN.jack * P.mult; P.jack = now + PB_JACK_MS; P.flash.fill(now + PB_JACK_MS); pbNote(P, `深海寶藏！+${PB_TUN.jack * P.mult}`, now); }
+    if (P.tun >= PB_TUN.n) { P.tun = 0; P.score += PB_TUN.jack * P.mult; P.jack = now + PB_JACK_MS; for (const sp of P.sp) sp.w = Math.max(sp.w, 26); pbNote(P, `深海寶藏！+${PB_TUN.jack * P.mult}`, now); }
     else pbNote(P, `海底隧道 ${P.tun}／${PB_TUN.n}`, now);
   }
   if (P.cap) return;
@@ -7792,6 +7792,14 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
   if (!cv) return;
   const g = cv.getContext('2d'), now = performance.now(), TAU = Math.PI * 2, zk = cv.width / PB_W;
   g.setTransform(zk, 0, 0, zk, 0, 0);   // canvas 比 PB_W×PB_H 大（牌桌放大顯示）就整個放大畫，座標照舊
+  // 燈亮不亮：平常照各自的狀態；深海寶藏期間全場的燈輪流閃——先一排一排由下往上跑、再棋盤格交錯、最後全部一起閃
+  const jk = P.jack > now, jms = jk ? PB_JACK_MS - (P.jack - now) : 0;
+  const L = (on, x, y) => {
+    if (!jk) return !!on;
+    if (jms < PB_JACK_MS * .45) return (y / 45 + jms / 110) % 4 < 1.4;
+    if (jms < PB_JACK_MS * .75) return (Math.floor(x / 28) + Math.floor(y / 28) + Math.floor(jms / 130)) % 2 === 0;
+    return Math.floor(jms / 110) % 2 === 0;
+  };
   const circ = (x, y, r, fill, stroke, lw = 2) => { g.beginPath(); g.arc(x, y, r, 0, TAU); if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.stroke(); } };
   g.fillStyle = '#0d1030'; g.fillRect(0, 0, PB_W, PB_H);
   const gr = g.createLinearGradient(0, 0, 0, PB_H); gr.addColorStop(0, '#1b2f5e'); gr.addColorStop(1, '#122040');
@@ -7802,9 +7810,9 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
   g.strokeStyle = P.lg ? '#5ad0aa' : 'rgba(90,208,170,.25)'; g.lineWidth = 3; g.beginPath(); g.moveTo(PB_LGATE[0], PB_LGATE[1]); g.lineTo(PB_LGATE[2], PB_LGATE[3]); g.stroke();
   // 海底隧道：左牆的洞口＋進度燈＋指向洞口的箭頭（閃爍）
   {
-    const T = PB_TUN, hit = P.flash[15] > now, bl = Math.floor(now / 350) % 2;
+    const T = PB_TUN, hit = L(P.flash[15] > now, 11, T.y), bl = Math.floor(now / 350) % 2;
     g.beginPath(); g.ellipse(11, T.y, 24, 20, 0, -Math.PI / 2, Math.PI / 2); g.closePath(); g.fillStyle = hit ? '#fff6c0' : '#05060f'; g.fill(); g.strokeStyle = '#ffd060'; g.lineWidth = 2.5; g.stroke();
-    for (let i = 0; i < T.n; i++) { const a = (i - (T.n - 1) / 2) * .85; circ(11 + 31 * Math.cos(a), T.y + 28 * Math.sin(a), 3.2, i < P.tun ? '#ffd060' : 'rgba(255,208,96,.18)', '#c08a10', 1); }
+    for (let i = 0; i < T.n; i++) { const a = (i - (T.n - 1) / 2) * .85; circ(11 + 31 * Math.cos(a), T.y + 28 * Math.sin(a), 3.2, L(i < P.tun, 40, T.y + 28 * Math.sin(a)) ? '#ffd060' : 'rgba(255,208,96,.18)', '#c08a10', 1); }
     g.strokeStyle = bl ? '#ffd060' : 'rgba(255,208,96,.35)'; g.lineWidth = 2;
     for (const ax of [48, 55]) { g.beginPath(); g.moveTo(ax + 5, T.y - 5); g.lineTo(ax, T.y); g.lineTo(ax + 5, T.y + 5); g.stroke(); }
     g.font = 'bold 9px "Microsoft JhengHei"'; g.fillStyle = hit ? '#05060f' : '#ffd060'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText('隧道', 13, T.y);
@@ -7815,34 +7823,34 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
   g.stroke(); g.setLineDash([]);
   { const e = PB_RAMP[3]; g.fillStyle = P.whale ? '#ffd060' : 'rgba(170,185,230,.75)'; g.beginPath(); g.moveTo(e[0] + 7, e[1]); g.lineTo(e[0] - 2, e[1] - 5); g.lineTo(e[0] - 2, e[1] + 5); g.closePath(); g.fill(); }
   // 入口燈（4 顆綠色膠囊）
-  PB_ENT.forEach(([x, y, a], i) => { g.save(); g.translate(x, y); g.rotate(a + Math.PI / 2); pbRR(g, -13, -5, 26, 10, 5); g.fillStyle = P.ent[i] ? '#8bf050' : '#dff0c8'; g.fill(); g.strokeStyle = '#4a8a20'; g.lineWidth = 1.5; g.stroke(); g.restore(); });
+  PB_ENT.forEach(([x, y, a], i) => { g.save(); g.translate(x, y); g.rotate(a + Math.PI / 2); pbRR(g, -13, -5, 26, 10, 5); g.fillStyle = L(P.ent[i], x, y) ? '#8bf050' : '#dff0c8'; g.fill(); g.strokeStyle = '#4a8a20'; g.lineWidth = 1.5; g.stroke(); g.restore(); });
   // 水母（大）／海膽（小）彈跳器
   PB_BUMPERS.forEach(([bx, by, br], i) => {
-    const lit = P.flash[i] > now;
+    const lit = L(P.flash[i] > now, bx, by);
     if (i < 3) { circ(bx, by, br, lit ? '#ffffff' : '#d4f1e8', '#2e9c82', 2.5); circ(bx, by, br * .42, lit ? '#ffd8c8' : '#f6c6b6', '#b4583c', 1.5); }
     else { circ(bx, by, br, lit ? '#ffffff' : (P.u2 ? '#ffe6a0' : '#dcd8ff'), P.u2 ? '#c08a10' : '#6a5acd', 2); }
   });
   // 旋轉門
   PB_SPIN.forEach(([x, y, hw], i) => { const s = P.sp[i], th = 1.5 + 4.5 * Math.abs(Math.cos(s.a)); pbRR(g, x - hw, y - th / 2, hw * 2, th, Math.min(th / 2, 3)); g.fillStyle = '#cfe6ff'; g.fill(); g.strokeStyle = '#2a6ab8'; g.lineWidth = 1.5; g.stroke(); });
   // 魚群標靶（左，橘）／丑魚標靶（右，粉紅）：倒下的變淡
-  PB_FISH.forEach(([x, y], i) => { g.globalAlpha = P.fish[i] ? .22 : 1; pbRR(g, x - 6.5, y - 7, 13, 14, 3); g.fillStyle = '#f8e0bc'; g.fill(); g.strokeStyle = '#c07a30'; g.lineWidth = 1.5; g.stroke(); g.globalAlpha = 1; });
-  PB_UGLY.forEach(([x, y], i) => { g.globalAlpha = P.ugly[i] ? .22 : 1; pbRR(g, x - 6.5, y - 7, 13, 14, 3); g.fillStyle = '#f8d4cc'; g.fill(); g.strokeStyle = '#c0583c'; g.lineWidth = 1.5; g.stroke(); g.globalAlpha = 1; });
+  PB_FISH.forEach(([x, y], i) => { g.globalAlpha = P.fish[i] && !jk ? .22 : 1; pbRR(g, x - 6.5, y - 7, 13, 14, 3); g.fillStyle = L(0, x, y) ? '#ffffff' : '#f8e0bc'; g.fill(); g.strokeStyle = '#c07a30'; g.lineWidth = 1.5; g.stroke(); g.globalAlpha = 1; });
+  PB_UGLY.forEach(([x, y], i) => { g.globalAlpha = P.ugly[i] && !jk ? .22 : 1; pbRR(g, x - 6.5, y - 7, 13, 14, 3); g.fillStyle = L(0, x, y) ? '#ffffff' : '#f8d4cc'; g.fill(); g.strokeStyle = '#c0583c'; g.lineWidth = 1.5; g.stroke(); g.globalAlpha = 1; });
   // 貝殼洞
-  PB_SHELLS.forEach((sh, i) => { circ(sh.x, sh.y, 12.5, P.flash[8 + i] > now ? '#fff6c0' : '#ece8dc', P.shell ? '#f0b020' : '#777', P.shell ? 3 : 2); circ(sh.x, sh.y, 6, '#05060f'); });
+  PB_SHELLS.forEach((sh, i) => { circ(sh.x, sh.y, 12.5, L(P.flash[8 + i] > now, sh.x, sh.y) ? '#fff6c0' : '#ece8dc', P.shell ? '#f0b020' : '#777', P.shell ? 3 : 2); circ(sh.x, sh.y, 6, '#05060f'); });
   // 珊瑚柱、珍珠、寶箱
   for (const [px, py, pr] of PB_POSTS) circ(px, py, pr, '#f4cfc8', '#c0583c', 1.5);
-  PB_PEARLS.forEach(([x, y], i) => circ(x, y, 6, P.pearl[i] ? '#ff7fb8' : '#f6c8dc', '#b04070', 1.5));
-  { const c = PB_CHEST; pbRR(g, Math.min(c[0], c[2]) - 4.5, Math.min(c[1], c[3]) - 1, Math.abs(c[2] - c[0]) + 9, Math.abs(c[3] - c[1]) + 2, 3); g.fillStyle = P.flash[10] > now ? '#ffffff' : '#f7d9b0'; g.fill(); g.strokeStyle = '#b8701c'; g.lineWidth = 1.5; g.stroke(); }
+  PB_PEARLS.forEach(([x, y], i) => circ(x, y, 6, L(P.pearl[i], x, y) ? '#ff7fb8' : '#f6c8dc', '#b04070', 1.5));
+  { const c = PB_CHEST; pbRR(g, Math.min(c[0], c[2]) - 4.5, Math.min(c[1], c[3]) - 1, Math.abs(c[2] - c[0]) + 9, Math.abs(c[3] - c[1]) + 2, 3); g.fillStyle = L(P.flash[10] > now, c[0], (c[1] + c[3]) / 2) ? '#ffffff' : '#f7d9b0'; g.fill(); g.strokeStyle = '#b8701c'; g.lineWidth = 1.5; g.stroke(); }
   // 線道燈
-  PB_LANEL.forEach(([x, y], i) => circ(x, y, 5, P.lane[i] ? '#8bf050' : '#dff0c8', '#4a8a20', 1.5));
+  PB_LANEL.forEach(([x, y], i) => circ(x, y, 5, L(P.lane[i], x, y) ? '#8bf050' : '#dff0c8', '#4a8a20', 1.5));
   // 左反彈器（綠，有電才亮）／右閘門（青，關上才實心）
   g.globalAlpha = P.kick ? 1 : .35; pbRR(g, 12, 517, 15, 15, 3); g.fillStyle = '#e4f4d8'; g.fill(); g.strokeStyle = '#4a8a20'; g.lineWidth = 1.5; g.stroke(); g.globalAlpha = 1;
   pbRR(g, 244, 517, 15, 15, 3); g.fillStyle = P.gate ? '#5ad0aa' : 'rgba(216,242,234,.35)'; g.fill(); g.strokeStyle = '#2a8a6a'; g.lineWidth = 1.5; g.stroke();
   // 珊瑚彈弓
-  for (let i = 0; i < PB_TRIS.length; i++) { const tr = PB_TRIS[i]; g.beginPath(); g.moveTo(tr[0][0], tr[0][1]); g.lineTo(tr[1][0], tr[1][1]); g.lineTo(tr[2][0], tr[2][1]); g.closePath(); g.fillStyle = P.flash[13 + i] > now ? 'rgba(255,200,170,.6)' : 'rgba(240,130,100,.22)'; g.fill(); g.strokeStyle = '#e8805e'; g.lineWidth = 2.5; g.stroke(); }
+  for (let i = 0; i < PB_TRIS.length; i++) { const tr = PB_TRIS[i]; g.beginPath(); g.moveTo(tr[0][0], tr[0][1]); g.lineTo(tr[1][0], tr[1][1]); g.lineTo(tr[2][0], tr[2][1]); g.closePath(); g.fillStyle = L(P.flash[13 + i] > now, tr[0][0], 470) ? 'rgba(255,200,170,.6)' : 'rgba(240,130,100,.22)'; g.fill(); g.strokeStyle = '#e8805e'; g.lineWidth = 2.5; g.stroke(); }
   // 救球燈、救援柱
   const resc = P.role === 'seat' ? (P.st === 1 && P.ballT < PB_RESCUE_S && !P.rescued) : !!P.resc;
-  circ(135.5, 507, 5, resc ? '#ffc060' : 'rgba(255,192,96,.2)', '#c08a30', 1.5);
+  circ(135.5, 507, 5, L(resc, 135.5, 507) ? '#ffc060' : 'rgba(255,192,96,.2)', '#c08a30', 1.5);
   if (P.post) circ(PB_RESCUE[0], PB_RESCUE[1], PB_RESCUE[2], '#bfeee0', '#2a8a6a', 2); else circ(PB_RESCUE[0], PB_RESCUE[1], PB_RESCUE[2], null, 'rgba(90,200,170,.35)', 1.5);
   // 擋板
   for (const left of [true, false]) {
@@ -7854,23 +7862,6 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
   if (P.st === 0 || P.power > 0) {
     const pull = P.power * 20;
     g.fillStyle = '#9a9aa8'; g.fillRect(PB_LANE_X - 3, PB_LANE_Y + PB_R + pull, 6, 22); g.fillStyle = '#d84a4a'; g.fillRect(PB_LANE_X - 6, PB_LANE_Y + PB_R + 20 + pull, 12, 4);
-  }
-  // 深海寶藏：全場光效（金色光束旋轉＋從隧道洞口擴散的光環＋外框閃爍；物件本身靠閃光位元全亮）
-  if (P.jack > now) {
-    const k = (P.jack - now) / PB_JACK_MS, e = 1 - k, fade = Math.min(1, k * 3);
-    g.save(); g.beginPath(); PB_ARCH.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.clip();
-    g.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 12; i++) {   // 光束
-      const a = i * TAU / 12 + e * 5; g.beginPath(); g.moveTo(150, 300); g.arc(150, 300, 700, a, a + TAU / 30); g.closePath();
-      g.fillStyle = `hsla(${(i * 30 + e * 720) % 360}, 95%, 62%, ${.2 * fade})`; g.fill();
-    }
-    for (let i = 0; i < 4; i++) {   // 光環
-      const u = (e * 2.2 + i * .25) % 1; g.beginPath(); g.arc(PB_TUN.x, PB_TUN.y, 20 + u * 620, 0, TAU);
-      g.strokeStyle = `rgba(255,224,130,${.55 * (1 - u) * fade})`; g.lineWidth = 10 * (1 - u) + 2; g.stroke();
-    }
-    g.fillStyle = `rgba(255,236,170,${.28 * Math.max(0, 1 - e * 5)})`; g.fillRect(0, 0, PB_W, PB_H);   // 一開始整片閃一下
-    g.restore();
-    g.strokeStyle = `hsla(${(e * 1080) % 360}, 95%, 70%, ${fade})`; g.lineWidth = 4; g.beginPath(); PB_ARCH.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
   }
   // 球
   if (P.st !== 3 && t >= -1 && !P.cap) {
