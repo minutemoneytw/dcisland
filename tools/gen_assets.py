@@ -1625,7 +1625,9 @@ TABLES_BY_TERRAIN = {
               # 俄羅斯方塊（2026-11-13，使用者要求）：場地上方一排 4 台，造型一樣、配色不同，間距約一個人（1 格）。
               # 4 台共用同一張邏輯桌 t13（伺服器的 TABLE_DEFS 只有 t13），cab＝第幾台（0～3），img＝這台的圖（配色）
               *[dict(id="t13", game="arcade", cab=k, img=f"arcade_{k}.png", cell=[48 + k * 3, 14.5], w=2, h=3) for k in range(4)],
-              dict(id="t19", game="pinball", cell=[45, 14.5], w=2, h=3)],   # 彈珠台（2026-11-15，使用者要求：俄羅斯方塊機台左邊）：同樣 2×3 格、靠北牆，跟機台隔 1 格；單人、分數進排行榜,   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
+              dict(id="t19", game="pinball", cell=[45, 14.5], w=2, h=3),
+              # 打磚塊機台（2026-11-16，使用者要求：畫面右側牆邊、餐飲區的下方，機台面向左邊，先放一台）：貼著東牆（房間最右兩欄 x＝83、84），餐飲區地毯（y 16～20）下面隔 1 格
+              dict(id="t20", game="breakout", cell=[83, 22], w=2, h=3)],   # 彈珠台（2026-11-15，使用者要求：俄羅斯方塊機台左邊）：同樣 2×3 格、靠北牆，跟機台隔 1 格；單人、分數進排行榜,   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
 }
 
 # 和平島的固定小物件（不是遊戲桌、不是可擺設的家具）：地形 → [物件]。kind＝互動種類（drink 喝飲料／food 吃點心，客戶端 useProp）、
@@ -2031,6 +2033,44 @@ def table_pinball():
     cv.rect(24, 30, 25, 36, hx("#9a9aa8")); cv.rect(24, 36, 25, 37, hx("#d84a4a"))   # 右邊拉桿
     cv.rect(5, 37, 26, 38, dark)
     cv.rect(8, 40, 23, 46, shade(body, .8)); cv.rect(11, 42, 20, 44, hx("#1a1a22")); cv.hline(13, 18, 43, hx("#e8c060"))   # 下方投幣口
+    cv.outline()
+    return cv
+
+def table_breakout():
+    """打磚塊機台（32×48，畫 scale 2＝2×3 格）：**側面、面向左邊**的街機（靠東牆擺）——左上是往前伸的發光招牌、下面一道往內斜的發光螢幕、
+    往左突出的操作台（搖桿），側板上畫著幾排彩色磚塊、一顆球和一塊板子。"""
+    cv = Canvas(32, 48)
+    c = hx("#1f9a8a"); dark = shade(c, .6); lite = shade(c, 1.35)
+    def left(y):   # 每一列機身的左緣（側面輪廓）
+        if y <= 1: return 10
+        if y <= 8: return 7                                   # 招牌往前伸
+        if y <= 10: return 10
+        if y <= 22: return round(12 - (y - 11) * 3 / 11)      # 螢幕面往內斜
+        if y <= 27: return 3                                  # 操作台往左突出
+        if y <= 29: return 6
+        if y <= 45: return 9
+        return 7
+    for y in range(48):
+        cv.hline(left(y), 28 if y < 46 else 29, y, c)
+    cv.vline(28, 0, 45, dark); cv.vline(27, 0, 45, shade(c, .8))          # 背板（靠牆那一側）
+    cv.hline(10, 28, 0, lite)                                             # 頂面
+    for y in range(2, 9):                                                 # 招牌正面（發光）
+        cv.set(7, y, hx("#fffbe0")); cv.set(8, y, hx("#fff0b0"))
+    cv.hline(9, 26, 8, dark)
+    for y in range(11, 23):                                               # 螢幕（從側面只看得到一道發亮的面）
+        x = left(y); cv.set(x, y, hx("#bff4ff")); cv.set(x + 1, y, hx("#4fc8e8")); cv.set(x + 2, y, hx("#12102a"))
+    cv.hline(3, 12, 23, lite); cv.hline(3, 12, 27, dark); cv.vline(3, 23, 27, lite)   # 操作台
+    cv.vline(5, 20, 22, hx("#2a2a30")); cv.rect(4, 18, 6, 19, hx("#e83a3a")); cv.set(4, 18, hx("#ff9a9a"))   # 搖桿
+    cv.rect(14, 10, 26, 28, hx("#12102a")); cv.rect(15, 11, 25, 27, hx("#0c1830"))    # 側板上的圖：深色底
+    for r, bc in enumerate(["#e04848", "#f0a020", "#f0e040", "#3cb45a"]):             # 四排彩色磚塊
+        for k in range(3):
+            if r == 3 and k == 1: continue                                            # 打掉一塊
+            x = 16 + k * 3 + (r % 2); b = hx(bc); cv.rect(x, 12 + r * 2, x + 1, 12 + r * 2, b)
+    cv.set(21, 22, hx("#ffffff"))                                                     # 球
+    cv.hline(18, 22, 25, hx("#e8e8f0"))                                               # 板子
+    for y in (34, 37, 40):
+        cv.hline(18, 25, y, dark)                                                     # 下半身的散熱孔
+    cv.hline(7, 29, 46, dark); cv.hline(7, 29, 47, dark)
     cv.outline()
     return cv
 
@@ -3963,6 +4003,7 @@ def main():
     for k, col in enumerate(ARCADE_COLORS):
         save(arcade_cabinet(col), f"arcade_{k}.png", "games")
     save(table_pinball(), "table_pinball.png", "games")
+    save(table_breakout(), "table_breakout.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")

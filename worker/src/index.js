@@ -499,8 +499,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey", t17: "kingdom", t18: "bigtwo", t19: "pinball" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 4], kingdom: [2, 4], bigtwo: [2, 4], pinball: [1, 1] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey", t17: "kingdom", t18: "bigtwo", t19: "pinball", t20: "breakout" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 4], kingdom: [2, 4], bigtwo: [2, 4], pinball: [1, 1], breakout: [1, 1] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -514,7 +514,7 @@ const GM_XP_MIN_MOVES = 10;
 // 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號存在 Registry 的 gstats:<uid> = {遊戲 id: {鍵: 數字}}；各遊戲結算時在 result.gs
 // （依「結算後留下的座位」順序，與 result.xp 同；null＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器（tableStats）照著寫進 Registry，
 // 再把整份 gstats 送給本人；result.gs 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）；其餘鍵見 docs/notes.md「小遊戲戰績與稱號」。與 tools/dev_server.py 的 gs_mk 同一套
-const GS_GAMES = new Set(["oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo", "pinball"]), GS_KEY_RE = /^[a-z0-9_]{1,12}$/, GS_CAP = 1000000, GS_KEYS_MAX = 24;
+const GS_GAMES = new Set(["oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo", "pinball", "breakout"]), GS_KEY_RE = /^[a-z0-9_]{1,12}$/, GS_CAP = 1000000, GS_KEYS_MAX = 24;
 const gsMk = (add, mx, mn) => ({ add: { p: 1, ...(add || {}) }, max: mx || {}, min: mn || {} });
 const OM_SYM = { S: "♠", H: "♥", D: "♦", C: "♣" };
 const omRank = c => (c === "JK" ? null : Number(c.slice(1)));
@@ -1730,7 +1730,7 @@ const isTy = t => t.game === "typing" || t.game === "zhtyping";
 const tyUnit = t => (t.game === "zhtyping" ? "詞" : "單字");
 // 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 // 記在這座島的 storage（"boards"），每次結算後更新，table 畫面帶 board 給客戶端顯示。與 tools/dev_server.py 的 BOARDS 同一套
-const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage", "arcade", "maze", "pinball"]), BOARD_N = 3;   // 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
+const BOARD_GAMES = new Set(["typing", "zhtyping", "dodge", "mage", "arcade", "maze", "pinball", "breakout"]), BOARD_N = 3;   // 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
 // 躲彈幕 2026-11-12 起改記「分數」（存活秒數＋道具分），舊的秒數紀錄放在 "dodge" 不再使用，分數另記在 "dodge2"，避免單位混在一起
 const boardKey = game => (game === "dodge" ? "dodge2" : game);
 function boardMerge(list, entries) {
@@ -3389,6 +3389,39 @@ function pbRelay(t, cid, msg, scr) {
   if (scr) scr.push(data);
   return t.specs.filter(m => m.cid != null).map(m => [m.cid, data]);
 }
+// ---- 打磚塊（第二十桌 t20，2026-11-16，使用者要求：東牆邊、餐飲區下方放一台面向左的機台）：單人、3 條命、一關接一關、分數進排行榜；
+// 跟彈珠台同一套做法：物理全在客戶端跑，伺服器只開局、收結算分數（限幅）、把進行中的快照 brs 轉給觀戰者（tbr；大螢幕只顯示分數）。
+// 有人離開＝這一局不算（一般桌子的規則）。與 tools/dev_server.py 的 br_* 同一套，改規則兩邊一起改。
+const BR_COUNTDOWN_MS = 1500, BR_XP = 4, BR_XP_MIN = 2000, BR_SCORE_MAX = 99999999, BR_LV_MAX = 999, BR_CELLS_MAX = 120;
+function brStart(t) {
+  t.g = { seed: Math.floor(Math.random() * 2147483648), t0: Date.now() + BR_COUNTDOWN_MS };
+  t.result = null; t.phase = "playing";
+  for (const s of t.seats) { s.ready = false; s.left = false; s.sc = 0; }
+  tblLog(t, `${t.seats[0].name} 開始打磚塊`);
+}
+function brOver(t, cid, msg) {   // 客戶端回報這局結束（最終分數 sc、打到第幾關 lv）
+  const [role, i] = tblFind(t, cid), sc = msg.sc, lv = msg.lv;
+  if (t.game !== "breakout" || role !== "seat" || t.phase !== "playing" || !t.g || !mzInt(sc, 0, BR_SCORE_MAX) || !mzInt(lv, 1, BR_LV_MAX)) return;
+  const s = t.seats[i];
+  s.sc = sc;
+  t.result = { solo: true, text: `遊戲結束！${s.name} ${sc} 分（第 ${lv} 關）`, rid: Math.floor(Math.random() * 4294967296),
+    ranking: [{ name: s.name, uid: s.uid || null, score: sc, left: false }], xp: [sc >= BR_XP_MIN ? BR_XP : 0], gs: [gsMk({}, { best: sc, lv })] };   // best＝最高分、lv＝最高關卡（都取最大）
+  tblLog(t, t.result.text);
+  tblResetSeats(t);
+}
+// 進行中的快照（球 bl＝[x, y, …] 最多 3 顆、板子 p／寬 pw、分數、剩幾條命、關卡、磚塊 m＝每格一個數字的字串）：只轉給觀戰者。回 [[cid, msg]…]
+function brRelay(t, cid, msg) {
+  const [role, i] = tblFind(t, cid);
+  if (t.game !== "breakout" || role !== "seat" || t.phase !== "playing" || !t.g) return [];
+  const num = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
+  const bl = msg.bl;
+  if (!Array.isArray(bl) || bl.length > 6 || bl.length % 2 || !bl.every(n => num(n, -100, 1000))) return [];
+  if (!(num(msg.p, -100, 1000) && num(msg.pw, 10, 400) && mzInt(msg.sc, 0, BR_SCORE_MAX) && mzInt(msg.b, 0, 9) && mzInt(msg.lv, 1, BR_LV_MAX))) return [];
+  if (typeof msg.m !== "string" || msg.m.length > BR_CELLS_MAX || !/^[0-9]*$/.test(msg.m)) return [];
+  const data = { t: "tbr", bl: bl.map(Math.round), p: Math.round(msg.p), pw: Math.round(msg.pw), sc: msg.sc, b: msg.b, lv: msg.lv, m: msg.m };
+  t.seats[i].sc = msg.sc;
+  return t.specs.filter(m => m.cid != null).map(m => [m.cid, data]);
+}
 // 豆豆那台回報結束：單人＝命用完（帶 lvl）；對抗＝win（豆子吃光）或沒有（命用完／tu 時間到），ct＝各幽靈位置抓到幾次
 function mzOver(t, cid, msg) {
   const [role, i] = tblFind(t, cid), g = t.g;
@@ -3460,7 +3493,7 @@ function hkEnd(t, cid, msg) {   // 桌主那台回報結束（有一隊到 HK_GO
   if (!Number.isInteger(msg.sa) || !Number.isInteger(msg.sb) || msg.sa < 0 || msg.sb < 0 || msg.sa > 99 || msg.sb > 99) return;
   hkFinish(t, msg.sa, msg.sb, msg.sa >= HK_GOALS || msg.sb >= HK_GOALS ? "" : "時間到");
 }
-const GAME_START = { pinball: pbStart, bigtwo: btStart, kingdom: kgStart, arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+const GAME_START = { breakout: brStart, pinball: pbStart, bigtwo: btStart, kingdom: kgStart, arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 const SCR_CD_MS = 5000;   // 大螢幕手動切台的冷卻（全島共用；2026-11-14 使用者要求）
 const SCR_CID = "__screen__";   // 大螢幕轉播用的虛擬連線編號（tblView 把它當觀戰者：手牌全翻開）
@@ -3480,6 +3513,11 @@ function tblView(t, cid) {
     v.pac = playing && t.g ? t.g.pac : mzPacIdx(t);
     t.seats.forEach((s, k) => Object.assign(v.seats[k], { sc: s.sc || 0, lvl: s.lvl || 1, left: !!s.left }));
     if (t.g && playing) v.mz = { seed: t.g.seed, t0: t.g.t0, sn: Date.now(), pac: t.g.pac, gh: [...t.g.gh], solo: t.g.solo, lim: MZ_VS_MS };
+    return v;
+  }
+  if (t.game === "breakout") {   // 打磚塊：分數／離開；進行中附上 seed（關卡用）、開始時間與伺服器時間
+    t.seats.forEach((s, k) => Object.assign(v.seats[k], { sc: s.sc || 0, left: !!s.left }));
+    if (t.g && playing) v.br = { seed: t.g.seed, t0: t.g.t0, sn: Date.now() };
     return v;
   }
   if (t.game === "pinball") {   // 彈珠台：分數／離開；進行中附上開始時間與伺服器時間（客戶端倒數用）
@@ -4142,7 +4180,7 @@ export class Island {
   }
   async tableMsg(ws, att, msg) {
     const now = Date.now(), a = msg.a;
-    if (a === "pos" || a === "word" || a === "tb" || a === "ms" || a === "mp" || a === "hp" || a === "hs" || a === "pbs") {   // 躲彈幕的位置回報、英文打字競賽的分數回報、豆豆迷宮的快照／幽靈位置：自己的限流，不影響 hit／finish 等操作
+    if (a === "pos" || a === "word" || a === "tb" || a === "ms" || a === "mp" || a === "hp" || a === "hs" || a === "pbs" || a === "brs") {   // 躲彈幕的位置回報、英文打字競賽的分數回報、豆豆迷宮的快照／幽靈位置：自己的限流，不影響 hit／finish 等操作
       if (now - (this.lastTblPos.get(ws) || 0) < TBL_POS_CD_MS) return;
       this.lastTblPos.set(ws, now);
     } else if (a === "typ" || a === "sync") {   // 英文打字競賽的打字進度（只轉發給觀戰者）、見習驅魔師的每秒對時：自己的限流
@@ -4205,6 +4243,10 @@ export class Island {
       for (const [cid, m] of hkRelay(t, att.id, msg)) this.sendToId(cid, m);
       const resBefore = t.result;
       if (hkTick(t, now)) { await this.saveTable(t); this.tableNotify(t); await this.tableBroadcastInfo(terr); await this.tableXp(t, resBefore); }
+      return;
+    }
+    if (t.game === "breakout" && a === "brs") {   // 打磚塊：進行中的快照，只轉發給觀戰者（不存檔、不通知畫面）
+      for (const [cid, m] of brRelay(t, att.id, msg)) this.sendToId(cid, m);
       return;
     }
     if (t.game === "pinball" && a === "pbs") {   // 彈珠台：進行中的快照，只轉發給觀戰者與大螢幕（不存檔、不通知畫面）
@@ -4281,6 +4323,7 @@ export class Island {
       if (!changed) return;
     }
     else if (t.game === "hockey" && HK_MSGS.has(a)) hkEnd(t, att.id, msg);   // 空氣曲棍球：桌主那台回報結束
+    else if (t.game === "breakout" && a === "over") brOver(t, att.id, msg);   // 打磚塊：客戶端回報結束（最終分數、關卡）
     else if (t.game === "pinball" && a === "over") pbOver(t, att.id, msg);   // 彈珠台：客戶端回報結束（最終分數）
     else if (t.game === "maze" && MZ_MSGS.has(a)) { if (a === "mpac") mzSetPac(t, att.id, msg.v); else mzOver(t, att.id, msg); }   // 豆豆迷宮：桌主指定豆豆／豆豆那台回報結束
     else if (t.game === "bigtwo" && BT_MSGS.has(a)) { if (!(a === "bplay" ? btPlay(t, att.id, msg.cs, now) : btPass(t, att.id, now))) return; }   // 大老二：出牌 {cs: [牌]}／pass
