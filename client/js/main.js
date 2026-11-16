@@ -7554,9 +7554,9 @@ const PB_SEGS = (() => {   // 牆與導軌：[x1, y1, x2, y2]
   return s;
 })();
 const pbBez = (c, s) => { const u = 1 - s, a = u * u * u, b = 3 * u * u * s, d = 3 * u * s * s, e = s * s * s; return [a * c[0][0] + b * c[1][0] + d * c[2][0] + e * c[3][0], a * c[0][1] + b * c[1][1] + d * c[2][1] + e * c[3][1]]; };
-function pbNewBall(P) {   // 下一顆球：回發球道，這一顆的狀態歸零（珍珠不歸零：三顆集滿才送球）
+function pbNewBall(P) {   // 下一顆球：回發球道，這一顆的狀態歸零（珍珠也歸零：2026-11-17 使用者說太好湊，改成同一顆球內打滿三顆才送球）
   const b = P.ball; b.x = PB_LANE_X; b.y = PB_LANE_Y; b.vx = b.vy = 0;
-  P.st = 0; P.power = 0; P.mult = 1; P.ent = [0, 0, 0, 0]; P.lane = [0, 0, 0, 0]; P.fish = [0, 0, 0]; P.ugly = [0, 0, 0];
+  P.st = 0; P.power = 0; P.mult = 1; P.ent = [0, 0, 0, 0]; P.lane = [0, 0, 0, 0]; P.fish = [0, 0, 0]; P.ugly = [0, 0, 0]; P.pearl = [0, 0, 0];
   P.gate = P.shell = P.post = P.whale = P.u2 = P.lg = 0; P.kick = 1; P.ramp = P.cap = null; P.rescued = 0; P.ballT = 0;
 }
 function pbMake(v) {
