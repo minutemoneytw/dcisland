@@ -7814,10 +7814,10 @@ function buildPinball(box, v, mk, gd) {
 function onNetTpb(m) { const P = S.pb; if (P && P.role === 'spec') pbApplySnap(P, m); }   // 觀戰者：玩家那台的快照
 // ---- 打磚塊（第二十桌 t20，2026-11-16，使用者要求：畫面右側牆邊、餐飲區下方放一台面向左的機台）：單人、3 條命、一關接一關、分數進排行榜 ----
 // 跟彈珠台同一套做法：**物理全在自己這台算**（沒有要跟別人即時共用的球，延遲不影響手感），伺服器只開局、收結算分數；進行中約 8 次／秒送快照 brs（伺服器轉成 tbr）給觀戰者。
-// 用滑鼠（或 ← → ／ A D）移動板子，空白／點一下把球發出去；磚塊打光進下一關（球變快、磚塊變硬）。打掉磚塊偶爾掉道具：寬（板子變寬）、多（多兩顆球）、慢（球變慢）、命（多一條命）。
+// 用滑鼠（或 ← → ／ A D）移動板子，空白／點一下把球發出去；磚塊打光進下一關（球變快、磚塊變硬）。打掉磚塊偶爾掉道具：寬（板子變寬）、多（每顆球變三顆）、慢（球變慢）、命（多一條命）。
 // 關卡版面由 seed＋關卡算出（原創版面，不是任何現有遊戲的關卡）；協定與欄位見 notes「和平島與遊戲桌」。
 const BRK_W = 480, BRK_H = 540, BRK_HUD = 32, BRK_COLS = 12, BRK_ROWS = 9, BRK_BW = 36, BRK_BH = 16, BRK_PX = 38, BRK_PY = 18, BRK_X0 = 13, BRK_Y0 = 60;
-const BRK_PAD_Y = 500, BRK_PAD_H = 10, BRK_PAD_W = 76, BRK_PAD_WIDE = 118, BRK_R = 6, BRK_LIVES = 3, BRK_LIVES_MAX = 5, BRK_KEY_SPD = 560, BRK_DT = 1 / 240, BRK_SNAP_MS = 120;
+const BRK_PAD_Y = 500, BRK_PAD_H = 10, BRK_PAD_W = 76, BRK_PAD_WIDE = 118, BRK_R = 6, BRK_LIVES = 3, BRK_LIVES_MAX = 5, BRK_KEY_SPD = 560, BRK_DT = 1 / 240, BRK_SNAP_MS = 120, BRK_BALLS_MAX = 27;   // 場上最多幾顆球（快照的 bl 也是這個上限，兩份伺服器的 BR_BALLS_MAX 要一致）
 const BRK_ROW_COL = ['#e04848', '#f08030', '#f0c020', '#3cb45a', '#40c8e0', '#3b78e8', '#9a5ad8', '#e868a8', '#b8c4dc'];
 const BRK_DROPS = { W: ['寬', '#3b78e8'], M: ['多', '#e08a20'], S: ['慢', '#3cb45a'], L: ['命', '#e04848'] };
 const brkSpeed = lv => Math.min(520, 290 + 22 * (lv - 1));   // 第 lv 關的球速（px／秒）
@@ -7876,14 +7876,15 @@ function brkTake(B, k) {   // 板子接到道具
   else if (k === 'S') { B.slowT = 8; brkNote(B, '球變慢！'); }
   else if (k === 'L') { B.lives = Math.min(BRK_LIVES_MAX, B.lives + 1); brkNote(B, '多一條命！'); }
   else if (k === 'M') {
-    const src = B.balls.find(b => !b.stuck) || B.balls[0];
-    for (const d of [-.5, .5]) {
-      if (!src || B.balls.length >= 3) break;
-      const s = brkSpeed(B.lv), a = Math.atan2(src.vx || 0, -(src.vy || -1)) + d;
-      B.balls.push({ x: src.x, y: src.y, vx: Math.sin(a) * s, vy: -Math.abs(Math.cos(a) * s) || -s, stuck: false });
+    // 倍數成長（2026-11-16 使用者要求）：場上**每一顆**球都分裂成三顆（3 顆 → 9 顆），上限 BRK_BALLS_MAX；原本只多兩顆、最多 3 顆
+    const s = brkSpeed(B.lv);
+    for (const b of B.balls) if (b.stuck) { b.stuck = false; b.vx = 0; b.vy = -s; }
+    for (const src of B.balls.slice()) for (const d of [-.45, .45]) {
+      if (B.balls.length >= BRK_BALLS_MAX) break;
+      const a = Math.atan2(src.vx, -src.vy) + d;   // 原本的方向往兩邊各偏一點
+      B.balls.push({ x: src.x, y: src.y, vx: Math.sin(a) * s, vy: -Math.cos(a) * s, stuck: false });
     }
-    for (const b of B.balls) if (b.stuck) { b.stuck = false; b.vx = 0; b.vy = -brkSpeed(B.lv); }
-    brkNote(B, '多球！');
+    brkNote(B, `多球 ×3！`);
   }
   B.score += 20;
 }
@@ -7946,7 +7947,7 @@ function brkSnap(B, force) {   // 自己的局：快照給觀戰者
   const now = performance.now();
   if (!force && now - B.snapAt < BRK_SNAP_MS) return;
   B.snapAt = now;
-  const bl = []; for (const b of B.balls.slice(0, 3)) bl.push(Math.round(b.x), Math.round(b.y));
+  const bl = []; for (const b of B.balls.slice(0, BRK_BALLS_MAX)) bl.push(Math.round(b.x), Math.round(b.y));
   S.net?.tbl?.({ a: 'brs', bl, p: Math.round(B.pad.x), pw: B.pad.w, sc: Math.min(99999999, Math.round(B.score)), b: Math.max(0, Math.min(9, B.lives)), lv: B.lv, m: Array.from(B.bricks).join('') });
 }
 function brkApplySnap(B, m) {   // 觀戰者：套用快照（球和板子平滑追過去）

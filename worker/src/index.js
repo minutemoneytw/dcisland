@@ -3392,7 +3392,7 @@ function pbRelay(t, cid, msg, scr) {
 // ---- 打磚塊（第二十桌 t20，2026-11-16，使用者要求：東牆邊、餐飲區下方放一台面向左的機台）：單人、3 條命、一關接一關、分數進排行榜；
 // 跟彈珠台同一套做法：物理全在客戶端跑，伺服器只開局、收結算分數（限幅）、把進行中的快照 brs 轉給觀戰者（tbr；大螢幕只顯示分數）。
 // 有人離開＝這一局不算（一般桌子的規則）。與 tools/dev_server.py 的 br_* 同一套，改規則兩邊一起改。
-const BR_COUNTDOWN_MS = 1500, BR_XP = 4, BR_XP_MIN = 2000, BR_SCORE_MAX = 99999999, BR_LV_MAX = 999, BR_CELLS_MAX = 120;
+const BR_COUNTDOWN_MS = 1500, BR_XP = 4, BR_XP_MIN = 2000, BR_SCORE_MAX = 99999999, BR_LV_MAX = 999, BR_CELLS_MAX = 120, BR_BALLS_MAX = 27;
 function brStart(t) {
   t.g = { seed: Math.floor(Math.random() * 2147483648), t0: Date.now() + BR_COUNTDOWN_MS };
   t.result = null; t.phase = "playing";
@@ -3409,13 +3409,13 @@ function brOver(t, cid, msg) {   // 客戶端回報這局結束（最終分數 s
   tblLog(t, t.result.text);
   tblResetSeats(t);
 }
-// 進行中的快照（球 bl＝[x, y, …] 最多 3 顆、板子 p／寬 pw、分數、剩幾條命、關卡、磚塊 m＝每格一個數字的字串）：只轉給觀戰者。回 [[cid, msg]…]
+// 進行中的快照（球 bl＝[x, y, …] 最多 BR_BALLS_MAX 顆、板子 p／寬 pw、分數、剩幾條命、關卡、磚塊 m＝每格一個數字的字串）：只轉給觀戰者。回 [[cid, msg]…]
 function brRelay(t, cid, msg) {
   const [role, i] = tblFind(t, cid);
   if (t.game !== "breakout" || role !== "seat" || t.phase !== "playing" || !t.g) return [];
   const num = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
   const bl = msg.bl;
-  if (!Array.isArray(bl) || bl.length > 6 || bl.length % 2 || !bl.every(n => num(n, -100, 1000))) return [];
+  if (!Array.isArray(bl) || bl.length > BR_BALLS_MAX * 2 || bl.length % 2 || !bl.every(n => num(n, -100, 1000))) return [];
   if (!(num(msg.p, -100, 1000) && num(msg.pw, 10, 400) && mzInt(msg.sc, 0, BR_SCORE_MAX) && mzInt(msg.b, 0, 9) && mzInt(msg.lv, 1, BR_LV_MAX))) return [];
   if (typeof msg.m !== "string" || msg.m.length > BR_CELLS_MAX || !/^[0-9]*$/.test(msg.m)) return [];
   const data = { t: "tbr", bl: bl.map(Math.round), p: Math.round(msg.p), pw: Math.round(msg.pw), sc: msg.sc, b: msg.b, lv: msg.lv, m: msg.m };

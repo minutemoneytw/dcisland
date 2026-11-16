@@ -5079,7 +5079,7 @@ def pb_relay(t, cid, msg, scr=None):
 # ---- 打磚塊（第二十桌 t20，2026-11-16，使用者要求：東牆邊、餐飲區下方放一台面向左的機台）：單人、3 條命、一關接一關、分數進排行榜；
 # 跟彈珠台同一套做法：物理全在客戶端跑，伺服器只開局、收結算分數（限幅）、把進行中的快照 brs 轉給觀戰者（tbr；大螢幕只顯示分數）。
 # 有人離開＝這一局不算（一般桌子的規則）。與 worker/src/index.js 的 br* 同一套，改規則兩邊一起改。
-BR_COUNTDOWN_MS, BR_XP, BR_XP_MIN, BR_SCORE_MAX, BR_LV_MAX, BR_CELLS_MAX = 1500, 4, 2000, 99999999, 999, 120
+BR_COUNTDOWN_MS, BR_XP, BR_XP_MIN, BR_SCORE_MAX, BR_LV_MAX, BR_CELLS_MAX, BR_BALLS_MAX = 1500, 4, 2000, 99999999, 999, 120, 27
 _BR_CELLS_RE = re.compile(r"[0-9]*\Z")
 
 def br_start(t):
@@ -5108,14 +5108,14 @@ def br_over(t, cid, msg):
     tbl_reset_seats(t)
 
 def br_relay(t, cid, msg):
-    """進行中的快照（球 bl＝[x, y, …] 最多 3 顆、板子 p／寬 pw、分數、剩幾條命、關卡、磚塊 m＝每格一個數字的字串）：只轉給觀戰者。回 [(cid, msg)]。"""
+    """進行中的快照（球 bl＝[x, y, …] 最多 BR_BALLS_MAX 顆、板子 p／寬 pw、分數、剩幾條命、關卡、磚塊 m＝每格一個數字的字串）：只轉給觀戰者。回 [(cid, msg)]。"""
     role, i = tbl_find(t, cid)
     if t["game"] != "breakout" or role != "seat" or t["phase"] != "playing" or not t.get("g"):
         return []
     def num(v, lo, hi):
         return type(v) in (int, float) and not isinstance(v, bool) and math.isfinite(v) and lo <= v <= hi
     bl, p, pw, sc, b, lv, m = (msg.get(k) for k in ("bl", "p", "pw", "sc", "b", "lv", "m"))
-    if not isinstance(bl, list) or len(bl) > 6 or len(bl) % 2 or not all(num(n, -100, 1000) for n in bl):
+    if not isinstance(bl, list) or len(bl) > BR_BALLS_MAX * 2 or len(bl) % 2 or not all(num(n, -100, 1000) for n in bl):
         return []
     if not (num(p, -100, 1000) and num(pw, 10, 400) and _mz_int(sc, 0, BR_SCORE_MAX) and _mz_int(b, 0, 9) and _mz_int(lv, 1, BR_LV_MAX)):
         return []
