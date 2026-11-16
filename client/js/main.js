@@ -7530,7 +7530,7 @@ const PB_SHELLS = [{ x: 198.5, y: 356, v: [-40, 120] }];   // 貝殼洞（2026-1
 const PB_POSTS = [[70.5, 311, 6], [200.5, 311, 6]];                // 珊瑚柱（橡膠立柱）：只讓球改變方向
 const PB_PEARLS = [[100.5, 342], [135.5, 342], [170.5, 342]];      // 珍珠標靶：30 分；三顆都亮送一顆球（+500）。2026-11-16 使用者要求往上移（原本在擋板正上方 y＝460，球一打就被彈回排水口）
 const PB_CHEST = [136.5, 266, 136.5, 304];                             // 寶箱標靶：打到倍率 +1（最高 ×5，掉球歸 1）。2026-11-16 使用者說正中間的橫板很礙事，改成貼著右邊發球道隔板的直板（左擋板自然出球的路線上，跟左牆的隧道對稱；貼牆是為了不讓球卡在板子上面）
-const PB_RAMP = [[36, 252], [34, 120], [90, 92], [220, 90]], PB_RAMP_T = 1.1;   // 鯨魚軌道（貝茲曲線，球從左邊入口被帶到上面右邊的出口）
+const PB_RAMP = [[36, 252], [34, 120], [90, 92], [205, 92]], PB_RAMP_T = 1.1;   // 鯨魚軌道（貝茲曲線，球從左邊入口被帶到上面右邊的出口）。2026-11-16 使用者說原本出口往右（球直衝最右邊掉進右外線道，模擬 100% 兩三秒內死掉），改成出口往左下、丟回水母群：出口 [205,92]、速度（−40～−100, 60）隨機，四秒內掉光的比例降到約 2 成
 const PB_RESCUE = [135.5, 579, 7], PB_RESCUE_S = 12;               // 救援柱位置；救球燈：發射後 12 秒內掉進排水口，重發同一顆
 const PB_SLOW = .7;                                                 // 整台的時間倍率（2026-11-16 使用者說球太快看不到就死了）：物理照原本的數值算，只是每秒只前進 0.7 秒，軌跡不變、整體慢動作
 const PB_ZOOM = 1.4;                                                // 牌桌上的顯示倍率（2026-11-16 使用者要求放大，先 1.2 後再加大到 1.4；物理座標不變，pbDraw 依 canvas 寬度自己縮放）
@@ -7634,7 +7634,7 @@ function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
   if (P.ramp) {   // 鯨魚軌道：球沿著曲線走，到終點從出口射出
     P.ramp.t += dt; const p = pbBez(PB_RAMP, Math.min(1, P.ramp.t / PB_RAMP_T)); b.x = p[0]; b.y = p[1]; b.vx = b.vy = 0;
     PB_SPIN.forEach(([x, y, hw, , cap], i) => { if (Math.hypot(b.x - x, b.y - y) < hw + 5) P.sp[i].w = Math.max(P.sp[i].w, Math.min(cap, 24)); });   // 沿軌道走過的旋轉門一路帶轉
-    if (P.ramp.t >= PB_RAMP_T) { P.ramp = null; b.vx = 50; b.vy = 80; P.rampCd = 1; }
+    if (P.ramp.t >= PB_RAMP_T) { P.ramp = null; b.vx = -40 - Math.random() * 60; b.vy = 60; P.rampCd = 1; }
     return;
   }
   if (P.cap) {   // 在貝殼洞裡：球不見，時間到彈出來
@@ -7823,7 +7823,7 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
   g.setLineDash([6, 5]); g.strokeStyle = P.whale ? '#ffd060' : 'rgba(170,185,230,.55)'; g.lineWidth = 2; g.beginPath();
   for (let k = 0; k <= 24; k++) { const p = pbBez(PB_RAMP, k / 24); k ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]); }
   g.stroke(); g.setLineDash([]);
-  { const e = PB_RAMP[3]; g.fillStyle = P.whale ? '#ffd060' : 'rgba(170,185,230,.75)'; g.beginPath(); g.moveTo(e[0] + 7, e[1]); g.lineTo(e[0] - 2, e[1] - 5); g.lineTo(e[0] - 2, e[1] + 5); g.closePath(); g.fill(); }
+  { const e = PB_RAMP[3], d = [-.76, .65], n = [-d[1], d[0]]; g.fillStyle = P.whale ? '#ffd060' : 'rgba(170,185,230,.75)'; g.beginPath(); g.moveTo(e[0] + d[0] * 9, e[1] + d[1] * 9); g.lineTo(e[0] - d[0] * 2 + n[0] * 5, e[1] - d[1] * 2 + n[1] * 5); g.lineTo(e[0] - d[0] * 2 - n[0] * 5, e[1] - d[1] * 2 - n[1] * 5); g.closePath(); g.fill(); }   // 箭頭朝出口的方向（左下）
   // 入口燈（4 顆綠色膠囊）
   PB_ENT.forEach(([x, y, a], i) => { g.save(); g.translate(x, y); g.rotate(a + Math.PI / 2); pbRR(g, -13, -5, 26, 10, 5); g.fillStyle = L(P.ent[i], x, y) ? '#8bf050' : '#dff0c8'; g.fill(); g.strokeStyle = '#4a8a20'; g.lineWidth = 1.5; g.stroke(); g.restore(); });
   // 水母（大）／海膽（小）彈跳器
