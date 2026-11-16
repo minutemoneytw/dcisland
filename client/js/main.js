@@ -4954,6 +4954,49 @@ function rulesShow(on, tab) {
   box.classList.remove('hidden');
 }
 const rulesToggle = tab => { const open = !$('rulesBox').classList.contains('hidden'); if (open && S.rulesTab === tab) rulesShow(false); else rulesShow(true, tab); };   // 再點同一顆按鈕關閉，點另一顆切換內容
+// ---- 回合提示音（2026-11-16，使用者要求）：有回合時限的遊戲（Blokus／Blokus Trigon／列島建國／大老二／秘藥情報戰／UNO），輪到自己時響一聲，
+// 自己的回合剩 30／10／5／4／3／2／1 秒時再各提醒一次（越接近越急）。純客戶端；聲音用 Web Audio 現場合成（沒有音檔，不用記授權）。
+// 設定選單可以關（S.profile.sfx === false）。瀏覽器要有過使用者操作才能出聲，所以第一次點擊／按鍵時把 AudioContext 叫醒。
+const TURN_WARN = [30, 10, 5, 4, 3, 2, 1];   // 剩幾秒時提醒（4～1 秒是 2026-11-16 使用者追加：最後五秒每秒都響）
+let sfxCtx = null;
+function sfxWake() { try { sfxCtx ||= new (window.AudioContext || window.webkitAudioContext)(); if (sfxCtx.state === 'suspended') sfxCtx.resume(); } catch { sfxCtx = null; } }
+addEventListener('pointerdown', sfxWake, true); addEventListener('keydown', sfxWake, true);
+function sfxTones(list) {   // list＝[[頻率 Hz, 開始秒, 長度秒]…]：一串短促的正弦音
+  if (S.profile?.sfx === false || !sfxCtx || sfxCtx.state !== 'running') return;
+  const t0 = sfxCtx.currentTime + .01;
+  for (const [f, at, len] of list) {
+    const o = sfxCtx.createOscillator(), g = sfxCtx.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(0, t0 + at); g.gain.linearRampToValueAtTime(.09, t0 + at + .012); g.gain.exponentialRampToValueAtTime(.0008, t0 + at + len);
+    o.connect(g).connect(sfxCtx.destination); o.start(t0 + at); o.stop(t0 + at + len + .02);
+  }
+}
+const SFX_TURN = { start: [[660, 0, .16], [880, .13, .24]], 30: [[520, 0, .2]], 10: [[700, 0, .12], [700, .18, .12]], 5: [[900, 0, .09], [900, .13, .09], [900, .26, .09]], 4: [[900, 0, .1]], 3: [[900, 0, .1]], 2: [[900, 0, .1]], 1: [[1100, 0, .16]] };
+function turnAlertInfo(v) {   // 現在這桌的回合：回 { mine＝是不是輪到我要動作, end＝期限（伺服器時間毫秒）, off＝伺服器時間 − 本機時間 }；沒有時限的遊戲／狀態回 null
+  if (!v || v.phase !== 'playing' || v.role !== 'seat') return null;
+  const me = v.me, turn = v.turn === me;
+  if (v.game === 'blokus' || v.game === 'trigon') { const z = v.bk || v.tg; return z ? { mine: turn, end: z.deadline, off: S.bkOff } : null; }
+  if (v.game === 'kingdom') return v.kg ? { mine: turn, end: v.kg.deadline, off: S.kgOff } : null;
+  if (v.game === 'bigtwo') return v.bt ? { mine: turn, end: v.bt.deadline, off: S.btOff } : null;
+  if (v.game === 'uno') return v.un ? { mine: turn, end: v.un.deadline, off: S.unOff } : null;
+  if (v.game === 'intel') {   // 秘藥情報戰：輪到我投遞、密函在我手上要決定、要我做技能決定、被查驗要回答（識破倒數是所有人的，不算「我的回合」）
+    const it = v.it; if (!it || it.untimed || it.step === 'pick') return null;
+    const L = it.letter;
+    const mine = !it.pend && (it.prompt ? it.prompt.seat === me : it.ask ? it.ask.tgt === me : it.step === 'turn' ? turn : it.step === 'pass' && !it.arrive && !!L && L.at === me);
+    return { mine, end: it.deadline, off: S.itOff };
+  }
+  return null;
+}
+function turnAlertTick() {
+  const v = S.tableOpen ? S.tableView : null, a = turnAlertInfo(v), P = S.turnAlert;
+  if (!a || !Number.isFinite(a.end) || !Number.isFinite(a.off)) { S.turnAlert = null; return; }
+  const left = (a.end - (Date.now() + a.off)) / 1000;
+  const fresh = !P || P.tid !== S.tableId || !P.mine || a.end > P.end + 3000;   // 剛輪到我，或同樣是我但期限往後跳了一大段＝新的一回合
+  if (a.mine && fresh) sfxTones(SFX_TURN.start);
+  else if (a.mine) for (const w of TURN_WARN) if (P.left > w && left <= w && left > w - 2) { sfxTones(SFX_TURN[w]); break; }
+  S.turnAlert = { tid: S.tableId, mine: a.mine, end: a.end, left };
+}
+setInterval(turnAlertTick, 200);
 // 只送一次的結算回報（空氣曲棍球 hend、豆豆迷宮／彈珠台／打磚塊 over）：記下來，剛好在斷線的那一瞬間送不出去的話，回座（rejoin）後補送一次；
 // 不然伺服器那邊這一局永遠不會結束。收到「不是進行中」的牌桌畫面（＝伺服器已經結算）就清掉。
 function tblFinal(m) { S.tblFinal = { id: S.tableId, m }; S.net?.tbl?.(m); }
@@ -11999,7 +12042,12 @@ $('menuLv').onclick = () => {   // 設定 → 名牌等級顯示開關（2026-11
 };
 const menuHpLabel = () => $('menuHp').textContent = `血量條：${S.profile.showHp === false ? '隱藏' : '顯示'}`;
 const menuXpLabel = () => $('menuXp').textContent = `經驗條：${S.profile.showXp === false ? '隱藏' : '顯示'}`;
-menuHpLabel(); menuXpLabel();   // 開先把開關文字對齊存檔
+const menuSfxLabel = () => $('menuSfx').textContent = `回合提示音：${S.profile.sfx === false ? '關' : '開'}`;
+menuHpLabel(); menuXpLabel(); menuSfxLabel();   // 開先把開關文字對齊存檔
+$('menuSfx').onclick = () => {   // 設定 → 回合提示音開關（開的時候順便響一聲試聽）
+  S.profile.sfx = S.profile.sfx === false;
+  saveProfile(); menuSfxLabel(); sfxWake(); sfxTones(SFX_TURN.start);
+};
 $('menuHp').onclick = () => {   // 設定 → 底部血量條顯示開關
   S.profile.showHp = S.profile.showHp === false;
   saveProfile(); menuHpLabel(); syncHud();
