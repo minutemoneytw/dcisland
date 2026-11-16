@@ -4486,7 +4486,7 @@ function stopFishing(p, msg) {
 function stepFishing(p) {
   const f = p.fish;
   if (!f) return;
-  if (f.ph === 'wait' && S.t >= f.biteAt) { f.ph = 'bite'; f.t = S.t; }
+  if (f.ph === 'wait' && S.t >= f.biteAt) { f.ph = 'bite'; f.t = S.t; if (p === S.players[0]) sfxTones(SFX_BITE); }   // 魚上鉤：除了頭上的「!」再響一聲（只有自己的；2026-11-16 使用者要求）
   else if (f.ph === 'bite' && S.t - f.t > FISH_BITE) stopFishing(p, '魚逃走了…');
   else if (f.ph === 'reel' && S.t - f.t >= FISH_REEL) {
     if (f.result) { p.fish = null; showCatch(p, f.result); }
@@ -4971,6 +4971,7 @@ function sfxTones(list) {   // list＝[[頻率 Hz, 開始秒, 長度秒]…]：�
     o.connect(g).connect(sfxCtx.destination); o.start(t0 + at); o.stop(t0 + at + len + .02);
   }
 }
+const SFX_BITE = [[1320, 0, .07], [1760, .07, .16]];   // 釣魚上鉤：短促的兩聲高音「叮鈴」（跟回合提示音共用設定選單的開關）
 const SFX_TURN = { start: [[660, 0, .16], [880, .13, .24]], 30: [[520, 0, .2]], 10: [[700, 0, .12], [700, .18, .12]], 5: [[900, 0, .09], [900, .13, .09], [900, .26, .09]], 4: [[900, 0, .1]], 3: [[900, 0, .1]], 2: [[900, 0, .1]], 1: [[1100, 0, .16]] };
 function turnAlertInfo(v) {   // 現在這桌的回合：回 { mine＝是不是輪到我要動作, end＝期限（伺服器時間毫秒）, off＝伺服器時間 − 本機時間 }；沒有時限的遊戲／狀態回 null
   if (!v || v.phase !== 'playing' || v.role !== 'seat') return null;
@@ -12042,9 +12043,9 @@ $('menuLv').onclick = () => {   // 設定 → 名牌等級顯示開關（2026-11
 };
 const menuHpLabel = () => $('menuHp').textContent = `血量條：${S.profile.showHp === false ? '隱藏' : '顯示'}`;
 const menuXpLabel = () => $('menuXp').textContent = `經驗條：${S.profile.showXp === false ? '隱藏' : '顯示'}`;
-const menuSfxLabel = () => $('menuSfx').textContent = `回合提示音：${S.profile.sfx === false ? '關' : '開'}`;
+const menuSfxLabel = () => $('menuSfx').textContent = `提示音效：${S.profile.sfx === false ? '關' : '開'}`;
 menuHpLabel(); menuXpLabel(); menuSfxLabel();   // 開先把開關文字對齊存檔
-$('menuSfx').onclick = () => {   // 設定 → 回合提示音開關（開的時候順便響一聲試聽）
+$('menuSfx').onclick = () => {   // 設定 → 提示音效開關（回合提示音＋釣魚上鉤；開的時候順便響一聲試聽）
   S.profile.sfx = S.profile.sfx === false;
   saveProfile(); menuSfxLabel(); sfxWake(); sfxTones(SFX_TURN.start);
 };
