@@ -4895,7 +4895,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); pbStop(); hkStop(); unStopTimer(); bkStopTimer(); kgStopTimer(); btStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; S.tblFinal = null; brkStop(); dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); pbStop(); hkStop(); unStopTimer(); bkStopTimer(); kgStopTimer(); btStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
   rulesShow(false); leaveAsk(false);
   $('tableBox').classList.add('hidden');
 }
@@ -4954,9 +4954,13 @@ function rulesShow(on, tab) {
   box.classList.remove('hidden');
 }
 const rulesToggle = tab => { const open = !$('rulesBox').classList.contains('hidden'); if (open && S.rulesTab === tab) rulesShow(false); else rulesShow(true, tab); };   // 再點同一顆按鈕關閉，點另一顆切換內容
+// 只送一次的結算回報（空氣曲棍球 hend、豆豆迷宮／彈珠台／打磚塊 over）：記下來，剛好在斷線的那一瞬間送不出去的話，回座（rejoin）後補送一次；
+// 不然伺服器那邊這一局永遠不會結束。收到「不是進行中」的牌桌畫面（＝伺服器已經結算）就清掉。
+function tblFinal(m) { S.tblFinal = { id: S.tableId, m }; S.net?.tbl?.(m); }
 function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已離開這桌）
   if (!S.tableOpen || m.id !== S.tableId) return;
   if (m.v === null) { closeTable(false); return; }
+  if (m.v.phase !== 'playing') S.tblFinal = null;
   // 玩小遊戲得 XP：登入者由伺服器記（收到 xp 訊息飄字）；訪客（本機記帳）在這裡依 result.xp 補發。只算「我自己坐著打完的那一局」
   if (m.v.phase === 'playing') S.tableLocalLog = [];   // 新的一局開始：清掉上一局的 XP 提示
   if (m.v.phase === 'playing' && m.v.role === 'seat') S.gamePlayed = true;
@@ -6840,7 +6844,7 @@ function hkFrame() {
     H.pads.forEach((p, i) => { p.x = fin[i][0]; p.y = fin[i][1]; });
     if (now - H.hsAt >= (H.hsNow ? 64 : HK_SEND_MS)) { H.hsAt = now; H.hsNow = false; const P = H.puck;   // 桌主自己剛打到圓盤：不等 80ms，過了伺服器的 60ms 限流就送（別人早一點看到球被打回來）
       const me = H.pads[0]; S.net?.tbl?.({ a: 'hs', x: Math.round(P.x), y: Math.round(P.y), vx: Math.round(P.vx), vy: Math.round(P.vy), sa: H.sa, sb: H.sb, f: Math.round(Math.max(0, H.f) * 1000), px: Math.round(me.x), py: Math.round(me.y), ts: Math.max(0, Math.round(t * 1000)), k: Math.max(0, H.ackT) }); }
-    if (H.sa >= H.goals || H.sb >= H.goals || t >= H.lim) { H.over = true; S.net?.tbl?.({ a: 'hend', sa: H.sa, sb: H.sb }); }
+    if (H.sa >= H.goals || H.sb >= H.goals || t >= H.lim) { H.over = true; tblFinal({ a: 'hend', sa: H.sa, sb: H.sb }); }
     const da = Math.exp(-dt * 14); H.vo.x *= da; H.vo.y *= da;   // 採用別人的擊球回報時的位置修正，滑過去
     H.view.x = H.puck.x + H.vo.x; H.view.y = H.puck.y + H.vo.y;
   } else if (!H.host) {   // 其他人：圓盤＝最後一次快照往前推算（碰到上下牆反彈），再平滑
@@ -7153,7 +7157,7 @@ function mzResetPos(M) {   // 被抓後／過關：大家回起點
 function mzEnd(M, win, tu) {
   if (M.over) return;
   M.over = true; mzSnap(M, true);
-  S.net?.tbl?.({ a: 'over', sc: M.sc, lvl: M.lvl, win: !!win, tu: !!tu, ct: M.ct.map(n => Math.min(99, n)) });
+  tblFinal({ a: 'over', sc: M.sc, lvl: M.lvl, win: !!win, tu: !!tu, ct: M.ct.map(n => Math.min(99, n)) });
 }
 function mzPower(M) {
   M.pw = mzPowerDur(M); M.chain = 0;
@@ -7644,7 +7648,7 @@ function pbStep(P, dt) {   // 往前模擬 dt 秒（只有自己的局）
       P.rescued = 1; P.st = 0; P.power = 0; b.x = PB_LANE_X; b.y = PB_LANE_Y; b.vx = b.vy = 0; P.ramp = P.cap = null; pbNote(P, '救球燈！重發這一顆', now); return;
     }
     P.balls--;
-    if (P.balls <= 0) { P.st = 3; P.over = true; S.net?.tbl?.({ a: 'over', sc: P.score }); pbSnap(P, true); }
+    if (P.balls <= 0) { P.st = 3; P.over = true; tblFinal({ a: 'over', sc: P.score }); pbSnap(P, true); }
     else pbNewBall(P);
   }
 }
@@ -7937,7 +7941,7 @@ function brkStep(B, dt) {   // 往前模擬 dt 秒（只有自己的局）
   }
   B.drops = B.drops.filter(d => !d.got && d.y < BRK_H + 12);
   if (!B.balls.length) {   // 球全掉了：少一條命
-    if (--B.lives <= 0) { B.lives = 0; B.over = true; brkSnap(B, true); S.net?.tbl?.({ a: 'over', sc: Math.min(99999999, Math.round(B.score)), lv: B.lv }); return; }
+    if (--B.lives <= 0) { B.lives = 0; B.over = true; brkSnap(B, true); tblFinal({ a: 'over', sc: Math.min(99999999, Math.round(B.score)), lv: B.lv }); return; }
     brkNewBall(B); brkNote(B, `剩 ${B.lives} 條命`);
   } else if (!B.bricks.some(h => h > 0)) {   // 磚塊打光：下一關
     B.score += 300 * B.lv; B.lv++; B.bricks = brkLevel(B.seed, B.lv); brkNewBall(B); brkNote(B, `第 ${B.lv} 關`);
@@ -12253,7 +12257,11 @@ async function boot() {
     onGstats: onNetGstats,   // 登入後／每局結算後伺服器送來的遊戲戰績（跟著帳號，稱號用）   // 登入後／改暱稱後伺服器送來的暱稱（跟著帳號）
     onDex: dex => { S.dex = dex || {}; S.dexSource = 'server'; if (S.dexOpen) buildDex(); checkTitles(true); },   // 登入後伺服器送來的圖鑑（稱號跟著重算，不跳提示）
     onOpen: net => {
-      if (S.tableOpen) closeTable(false);   // 重連：伺服器已當作我離開牌桌，畫面跟著關
+      // 重連（2026-11-16 斷線保留座位）：牌局進行中而且我坐在位子上 → 伺服器保留座位 20 秒，帶回座代碼接回去（接不回去伺服器回 v:null，onNetTable 會關掉牌桌）；
+      // 其他情況（觀戰、還沒開局、俄羅斯方塊機台）伺服器已當作我離開，畫面跟著關。稍等一下再送：要排在 enter（宣告我在哪個地形）處理完之後
+      const tv = S.tableView;
+      if (S.tableOpen && tv && tv.phase === 'playing' && tv.role === 'seat' && tv.game !== 'arcade') { const tid = S.tableId; setTimeout(() => { if (!S.tableOpen || S.tableId !== tid) return; net.tbl({ a: 'rejoin', id: tid }); setTimeout(() => { if (S.tableOpen && S.tblFinal?.id === tid) net.tbl(S.tblFinal.m); }, 600); }, 300); }   // 斷線那一瞬間沒送出去的結算回報也補送（隔 0.6 秒：牌桌訊息有限流，緊接著送會被丟掉）
+      else if (S.tableOpen) closeTable(false);
       if (performance.now() >= welcomeUntil) toast(`已連上島（${net.room}）`, 2000);
       // 連上（或重連）時補傳目前地形的陸地位圖（新連線重新算「傳過沒」）
       S.landSent = null;

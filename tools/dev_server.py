@@ -751,16 +751,29 @@ def tbl_reset_seats(t):
         s["ready"], s["hand"], s["out"] = False, [], False
     t["phase"], t["turn"], t["g"] = "lobby", -1, None
 
-def tbl_join(t, cid, name, want="seat", uid=None):
-    """want＝'seat'（有空位且還沒開局才會入座，否則自動觀戰）或 'spec'（使用者自己選觀戰：沒滿人也可以）。"""
+# ---- 斷線保留座位（2026-11-16，使用者要求：玩到一半有人推新版本，自動部署讓島的伺服器重啟、全員瞬間斷線，一瞬間就連回來了卻被當成全員離開而結束）----
+# 入座時客戶端帶一組回座代碼 rk（每個分頁隨機產生），記在座位上；**牌局進行中**的入座者斷線不馬上離桌：座位標 gone＝斷線時間、保留 TBL_HOLD_MS，
+# 期間同一個 rk 送 tbl {a:'rejoin'} 就接回原座位；過期才照原本的規則離桌。主動按離開、換地形仍然立刻離桌。觀戰者、還沒開局的座位、俄羅斯方塊機台不保留。
+# 與 worker/src/index.js 的同名邏輯同一套，改規則兩邊一起改（Worker 另外處理「伺服器重啟後連線都不在了」；本機伺服器重啟就整個清空，沒有這個情境）。
+TBL_HOLD_MS = 20000
+_TBL_RK_RE = re.compile(r"[A-Za-z0-9_-]{16,48}\Z")
+
+def tbl_rk(v):
+    return v if isinstance(v, str) and _TBL_RK_RE.match(v) else None
+
+def tbl_can_hold(t, s):
+    return t["phase"] == "playing" and t["game"] != "arcade" and bool(s.get("rk")) and not s.get("left") and s.get("cid") is not None and any(x is s for x in t["seats"])
+
+def tbl_join(t, cid, name, want="seat", uid=None, rk=None):
+    """want＝'seat'（有空位且還沒開局才會入座，否則自動觀戰）或 'spec'（使用者自己選觀戰：沒滿人也可以）。rk＝回座代碼（斷線保留座位用）。"""
     if tbl_find(t, cid)[0]:
         return
     mn, mx = GAME_LIMITS[t["game"]]
     if want != "spec" and t["phase"] == "lobby" and len(t["seats"]) < mx:
-        t["seats"].append({"cid": cid, "name": name, "uid": uid, "ready": False, "hand": [], "out": False})
+        t["seats"].append({"cid": cid, "name": name, "uid": uid, "rk": rk, "ready": False, "hand": [], "out": False})
         tbl_log(t, f"{name} 入座了")
     else:
-        t["specs"].append({"cid": cid, "name": name, "uid": uid})
+        t["specs"].append({"cid": cid, "name": name, "uid": uid, "rk": rk})
         tbl_log(t, f"{name} 來觀戰")
 
 def tbl_leave(t, cid):
@@ -831,7 +844,7 @@ def tbl_sit(t, cid):
     if role != "spec" or t["phase"] != "lobby" or len(t["seats"]) >= mx or t["game"] == "arcade":   # 俄羅斯方塊：要入座就走到空機台
         return
     s = t["specs"].pop(i)
-    t["seats"].append({"cid": cid, "name": s["name"], "uid": s.get("uid"), "ready": False, "hand": [], "out": False})
+    t["seats"].append({"cid": cid, "name": s["name"], "uid": s.get("uid"), "rk": s.get("rk"), "ready": False, "hand": [], "out": False})
     tbl_log(t, f"{s['name']} 入座了")
 
 def tbl_ready(t, cid, v):
@@ -6725,6 +6738,23 @@ class Room:
                     self.screen[terr] = tid
                     self._scr_push(terr, out, True)
                 return out, None, None
+            if a == "rejoin":   # 斷線後連回來：用回座代碼接回保留中的座位；接不回去（過期／這一局已結束）回 v:None 讓客戶端關掉牌桌
+                tid = str(msg.get("id") or "")
+                rk = tbl_rk(msg.get("rk"))
+                t = self.tables.get(tid) if rk and TABLE_DEFS.get(terr, {}).get(tid) else None
+                s = next((x for x in t["seats"] if x.get("gone") and x.get("rk") == rk), None) if t and t["phase"] == "playing" else None
+                if not s:
+                    return [(cid, {"t": "table", "id": tid, "v": None})], None, None
+                if c.get("table") and c["table"] != tid:
+                    self._table_leave_locked(cid, out)
+                if t.get("pac_cid") == s["cid"]:   # 豆豆迷宮：桌主指定的豆豆是記連線編號的，跟著換
+                    t["pac_cid"] = cid
+                s["cid"] = cid
+                s.pop("gone", None)
+                c["table"], c["table_terr"] = tid, terr
+                tbl_log(t, f"{s['name']} 連回來了")
+                self._table_notify_locked(t, out)
+                return out, self.table_info_msg(terr), terr
             if a == "join":
                 tid = str(msg.get("id") or "")
                 game = TABLE_DEFS.get(terr, {}).get(tid)
@@ -6737,7 +6767,7 @@ class Room:
                 if game == "arcade":   # 俄羅斯方塊：坐哪一台由 cab 決定
                     ar_join(t, cid, name, "spec" if msg.get("role") == "spec" else "seat", (c.get("user") or {}).get("id"), msg.get("cab"))
                 else:
-                    tbl_join(t, cid, name, "spec" if msg.get("role") == "spec" else "seat", (c.get("user") or {}).get("id"))
+                    tbl_join(t, cid, name, "spec" if msg.get("role") == "spec" else "seat", (c.get("user") or {}).get("id"), tbl_rk(msg.get("rk")))
                 c["table"], c["table_terr"] = tid, terr
                 self._table_notify_locked(t, out)
             else:
@@ -6908,14 +6938,46 @@ class Room:
                     self._table_collect_xp(t, before)   # 這個操作結束了對局：收集 XP（鎖外發）
             return out, self.table_info_msg(c.get("table_terr") or terr), c.get("table_terr") or terr
 
-    def table_drop(self, cid):
-        """連線離開地形或斷線：離開牌桌（牌局進行中就結束這一局）。"""
+    def table_hold_expire(self, tid, cid, gone):
+        """保留時間到了還沒連回來：照原本的規則離桌（結束這一局，或那個遊戲自己的離開規則）。"""
+        out = []
+        with self.lock:
+            t = self.tables.get(tid)
+            s = next((x for x in t["seats"] if x.get("cid") == cid and x.get("gone") == gone), None) if t else None
+            if not s:
+                return [], None, None   # 已經連回來了，或這一局已經結束
+            s.pop("gone", None)
+            before = t.get("result")
+            tbl_leave(t, cid)
+            self._table_collect_xp(t, before)
+            terr = next((k for k, d in TABLE_DEFS.items() if tid in d), None)
+            if not t["seats"] and not t["specs"]:
+                self.tables.pop(tid, None)
+                self._scr_after(tid, out)
+            else:
+                self._table_notify_locked(t, out)
+            return out, (self.table_info_msg(terr) if terr else None), terr
+
+    def table_drop(self, cid, closing=False):
+        """連線離開地形或斷線：離開牌桌（牌局進行中就結束這一局）。closing＝連線斷了：進行中的入座者先保留座位 TBL_HOLD_MS。"""
         out = []
         with self.lock:
             c = self.clients.get(cid)
             terr = c.get("table_terr") if c else None
             if not c or not c.get("table"):
                 return [], None, None
+            t = self.tables.get(c["table"]) if closing else None
+            s = next((x for x in t["seats"] if x.get("cid") == cid), None) if t else None
+            if s and tbl_can_hold(t, s):
+                tid = c.pop("table")
+                c.pop("table_terr", None)
+                gone = s["gone"] = int(time.time() * 1000)
+                tbl_log(t, f"{s['name']} 斷線了，座位保留 {TBL_HOLD_MS // 1000} 秒")
+                self._table_notify_locked(t, out)
+                tm = threading.Timer(TBL_HOLD_MS / 1000 + .05, lambda: self.table_op(self.table_hold_expire, tid, cid, gone))
+                tm.daemon = True
+                tm.start()
+                return out, None, None
             self._table_leave_locked(cid, out)
             c.pop("table_terr", None)
             return out, self.table_info_msg(terr), terr
@@ -7434,7 +7496,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             print(f"[ws] !{cid} {e}", file=sys.stderr, flush=True)
         finally:
             last = room.terrain_of(cid)
-            room.table_op(room.table_drop, cid)   # 斷線：離開牌桌（牌局進行中就結束這一局）
+            room.table_op(room.table_drop, cid, True)   # 斷線：離開牌桌（牌局進行中的入座者先保留座位，過期才結束這一局）
             room.remove(cid)
             if last:
                 room.broadcast({"t": "leave", "id": cid}, terrain=last)

@@ -555,11 +555,19 @@ function tblResetSeats(t) {
   t.phase = "lobby"; t.turn = -1; t.g = null;
 }
 // want＝"seat"（有空位且還沒開局才會入座，否則自動觀戰）或 "spec"（使用者自己選觀戰：沒滿人也可以）
-function tblJoin(t, cid, name, want, uid) {
+// ---- 斷線保留座位（2026-11-16，使用者要求：玩到一半有人推新版本，自動部署讓島的伺服器重啟、全員瞬間斷線，一瞬間就連回來了卻被當成全員離開而結束）----
+// 座位原本綁「連線編號」，重連就是另一個人。現在入座時客戶端帶一組回座代碼 rk（每個分頁隨機產生，只有本人和伺服器知道），記在座位上；
+// **牌局進行中**的入座者斷線（或伺服器重啟後連線不在了）不馬上離桌：座位標 gone＝斷線時間、保留 TBL_HOLD_MS，期間同一個 rk 送 tbl {a:'rejoin'} 就接回原座位；
+// 過期才照原本的規則離桌（結束這一局，或那個遊戲自己的離開規則）。主動按離開、換地形仍然立刻離桌。觀戰者、還沒開局的座位、俄羅斯方塊機台不保留。
+// 與 tools/dev_server.py 的同名邏輯同一套，改規則兩邊一起改。
+const TBL_HOLD_MS = 20000, TBL_RK_RE = /^[A-Za-z0-9_-]{16,48}$/;
+const tblRk = v => (typeof v === "string" && TBL_RK_RE.test(v) ? v : null);
+const tblCanHold = (t, s) => t.phase === "playing" && t.game !== "arcade" && !!s.rk && !s.left && s.cid != null && t.seats.includes(s);
+function tblJoin(t, cid, name, want, uid, rk) {
   if (tblFind(t, cid)[0]) return;
   const mx = GAME_LIMITS[t.game][1];
-  if (want !== "spec" && t.phase === "lobby" && t.seats.length < mx) { t.seats.push({ cid, name, uid: uid || null, ready: false, hand: [], out: false }); tblLog(t, `${name} 入座了`); }
-  else { t.specs.push({ cid, name, uid: uid || null }); tblLog(t, `${name} 來觀戰`); }
+  if (want !== "spec" && t.phase === "lobby" && t.seats.length < mx) { t.seats.push({ cid, name, uid: uid || null, rk: rk || null, ready: false, hand: [], out: false }); tblLog(t, `${name} 入座了`); }
+  else { t.specs.push({ cid, name, uid: uid || null, rk: rk || null }); tblLog(t, `${name} 來觀戰`); }
 }
 function tblLeave(t, cid) {
   const [role, i] = tblFind(t, cid);
@@ -589,7 +597,7 @@ function tblSit(t, cid) {
   const [role, i] = tblFind(t, cid);
   if (role !== "spec" || t.phase !== "lobby" || t.seats.length >= GAME_LIMITS[t.game][1] || t.game === "arcade") return;   // 俄羅斯方塊：要入座就走到空機台
   const s = t.specs.splice(i, 1)[0];
-  t.seats.push({ cid, name: s.name, uid: s.uid || null, ready: false, hand: [], out: false });
+  t.seats.push({ cid, name: s.name, uid: s.uid || null, rk: s.rk || null, ready: false, hand: [], out: false });
   tblLog(t, `${s.name} 入座了`);
 }
 function tblReady(t, cid, v) {
@@ -4017,9 +4025,14 @@ export class Island {
     if (game === "kingdom" && !(await this.kgLoad())) return null;   // 列島建國的牌庫要先從 assets 讀進來（載入失敗＝這張桌開不了，其他遊戲不受影響）
     t = (await this.state.storage.get("table:" + tid)) || tblNew(tid, game);
     if (BOARD_GAMES.has(game)) t.board = (await this.getBoards())[boardKey(game)] || [];   // 排行榜（前三名）
-    const alive = this.liveIds();
-    for (const m of [...t.seats, ...t.specs]) if (!alive.has(m.cid)) tblLeave(t, m.cid);
+    const alive = this.liveIds(), nowH = Date.now();
+    let held = false;
+    for (const m of [...t.seats, ...t.specs]) if (!alive.has(m.cid)) {
+      if (tblCanHold(t, m)) { if (!m.gone) m.gone = nowH; held = true; }   // 伺服器重啟（部署）後連線都不在了：進行中的入座者先保留座位，等他們連回來
+      else tblLeave(t, m.cid);
+    }
     this.tables.set(tid, t);
+    if (held) { await this.saveTable(t); await this.holdArm(tid, nowH); }
     return t;
   }
   async saveTable(t) {
@@ -4106,7 +4119,45 @@ export class Island {
   }
   async tableBroadcastInfo(terrain) { this.broadcast(await this.tableInfoMsg(terrain), undefined, terrain); this.scrAfter(terrain); }
   // 離開牌桌（Esc、換地形、斷線）：牌局進行中就結束這一局
-  async tableLeave(ws) {
+  // 保留座位：記下「哪幾桌有保留中的座位」（storage 的 holds；DO 休眠後記憶體裡的桌子會不見，鬧鐘醒來要靠它找回來）並排鬧鐘（與島主共用同一個）
+  async holdArm(tid, from) {
+    const tids = (await this.state.storage.get("holds")) || [];
+    if (!tids.includes(tid)) { tids.push(tid); await this.state.storage.put("holds", tids); }
+    const at = from + TBL_HOLD_MS + 50, cur = await this.state.storage.getAlarm();
+    if (cur && cur <= at) return;   // 已經有更早的鬧鐘（島主）：它醒來時 holdSweep 會回下一次要醒的時間
+    await this.setOwnerAlarm(at);
+  }
+  // 鬧鐘醒來：保留時間過了還沒連回來的座位，照原本的規則離桌。回下一次要醒的時間（null＝沒有保留中的座位）
+  async holdSweep(now) {
+    const tids = (await this.state.storage.get("holds")) || [];
+    if (!tids.length) return null;
+    let next = null;
+    const keep = [];
+    for (const tid of tids) {
+      const t = await this.getTable(tid);
+      if (!t) continue;
+      for (const s of t.seats.filter(x => x.gone)) {
+        if (now < s.gone + TBL_HOLD_MS) { const at = s.gone + TBL_HOLD_MS + 50; if (next === null || at < next) next = at; if (!keep.includes(tid)) keep.push(tid); continue; }
+        if (!t.seats.includes(s)) continue;   // 前一個人離桌時這一局已經結束、座位被清掉了
+        delete s.gone;
+        await this.tableKick(t, s.cid);
+      }
+    }
+    if (keep.length) await this.state.storage.put("holds", keep); else await this.state.storage.delete("holds");
+    return next;
+  }
+  // 某個座位（或觀戰者）離桌之後的收尾：存檔、通知同桌、更新島上的桌況、結算 XP／戰績／排行榜
+  async tableKick(t, cid) {
+    const resBefore = t.result;
+    tblLeave(t, cid);
+    await this.saveTable(t);
+    this.tableNotify(t);
+    for (const [terr, defs] of Object.entries(TABLE_DEFS)) if (defs[t.id]) await this.tableBroadcastInfo(terr);
+    await this.tableXp(t, resBefore);
+    await this.tableStats(t, resBefore);
+    await this.tableBoard(t, resBefore);
+  }
+  async tableLeave(ws, closing = false) {   // closing＝連線斷了（不是主動離開／換地形）：進行中的入座者先保留座位
     const att = ws.deserializeAttachment() || {};
     const tid = att.table;
     if (!tid) return;
@@ -4114,6 +4165,17 @@ export class Island {
     try { ws.serializeAttachment(att); } catch { /* 連線已關閉：記憶體裡的 att 已改，不影響後面的清理 */ }
     const t = await this.getTable(tid);
     if (!t) return;
+    if (closing) {
+      const s = t.seats.find(x => x.cid === att.id);
+      if (s && tblCanHold(t, s)) {
+        s.gone = Date.now();
+        tblLog(t, `${s.name} 斷線了，座位保留 ${TBL_HOLD_MS / 1000} 秒`);
+        await this.saveTable(t);
+        this.tableNotify(t);
+        await this.holdArm(tid, s.gone);
+        return;
+      }
+    }
     const resBefore = t.result;
     tblLeave(t, att.id);
     try { ws.send(JSON.stringify({ t: "table", id: tid, v: null })); } catch { /* 已斷線 */ }
@@ -4214,6 +4276,22 @@ export class Island {
       }
       return;
     }
+    if (a === "rejoin") {   // 斷線後連回來：用回座代碼接回保留中的座位；接不回去（過期／這一局已結束）回 v:null 讓客戶端關掉牌桌
+      const tid = String(msg.id || ""), rk = tblRk(msg.rk), game = (TABLE_DEFS[terr] || {})[tid];
+      const t = game && rk ? await this.getTable(tid) : null;
+      const s = t && t.phase === "playing" ? t.seats.find(x => x.gone && x.rk === rk) : null;
+      if (!s) { ws.send(JSON.stringify({ t: "table", id: tid, v: null })); return; }
+      if (att.table && att.table !== tid) await this.tableLeave(ws);
+      if (t.pacCid === s.cid) t.pacCid = att.id;   // 豆豆迷宮：桌主指定的豆豆是記連線編號的，跟著換
+      s.cid = att.id; delete s.gone;
+      const cur = ws.deserializeAttachment() || {};
+      cur.table = tid; ws.serializeAttachment(cur);
+      tblLog(t, `${s.name} 連回來了`);
+      await this.saveTable(t);
+      this.tableNotify(t);
+      await this.tableBroadcastInfo(terr);
+      return;
+    }
     if (a === "join") {
       const tid = String(msg.id || ""), game = (TABLE_DEFS[terr] || {})[tid];
       if (!game) return;
@@ -4223,7 +4301,7 @@ export class Island {
       const cur = ws.deserializeAttachment() || {};
       const pname = String((att.state && att.state.name) || (att.user && att.user.name) || `玩家${att.id}`).slice(0, 12);
       if (game === "arcade") arJoin(t, att.id, pname, msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null, msg.cab);   // 俄羅斯方塊：坐哪一台由 cab 決定
-      else tblJoin(t, att.id, pname, msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null);
+      else tblJoin(t, att.id, pname, msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null, tblRk(msg.rk));
       cur.table = tid; ws.serializeAttachment(cur);
       await this.saveTable(t);
       this.tableNotify(t);
@@ -5165,6 +5243,10 @@ export class Island {
         this.lurkers.delete(terrain);   // 出錯就讓牠消失，不要卡住鬧鐘（客戶端幾秒沒收到事件會自己移除）
       }
     }
+    try {   // 牌桌：保留時間過了還沒連回來的座位
+      const hw = await this.holdSweep(now);
+      if (hw !== null && (next === null || hw < next)) next = hw;
+    } catch (e) { console.error("[table] holdSweep 錯誤：", e); }
     const dirtyWake = await this.flushDragons();   // 節流中沒寫的變動：到期的現在補寫，沒到期的把鬧鐘排進去
     if (dirtyWake !== null && (next === null || dirtyWake < next)) next = dirtyWake;
     if (next !== null) await this.setOwnerAlarm(next);
@@ -5409,8 +5491,8 @@ export class Island {
     this.broadcast({ t: "furn", items }, null, att.terrain);
   }
 
-  async webSocketClose(ws) { await this.tableLeave(ws); this.leave(ws); await this.flushDragons(true); }   // 有人離線就把節流中的島主狀態全部寫掉（之後可能沒人了，DO 隨時會休眠）
-  async webSocketError(ws) { await this.tableLeave(ws); this.leave(ws); await this.flushDragons(true); }
+  async webSocketClose(ws) { await this.tableLeave(ws, true); this.leave(ws); await this.flushDragons(true); }   // 有人離線就把節流中的島主狀態全部寫掉（之後可能沒人了，DO 隨時會休眠）
+  async webSocketError(ws) { await this.tableLeave(ws, true); this.leave(ws); await this.flushDragons(true); }
 
   leave(ws) {
     this.rate.delete(ws);

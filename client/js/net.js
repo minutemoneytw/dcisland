@@ -265,7 +265,9 @@ export function connectNet(S, opts = {}) {
   net.xpPetKill = () => net.connected && send({ t: 'xpe', k: 'petkill' });   // 和平島殺寵懲罰：不帶量，伺服器照現值自己算「掉一等」的扣量（worker／dev_server 限定 peace 地形＋夾頻）
   // 合成解鎖（素材圖鑑／配方筆記）：登入者由伺服器存（訪客伺服器會略過）。craftUnlock＝解鎖一筆（k：mat／furn／rec）；craftSync＝補傳本機有、伺服器沒有的
   // 和平島遊戲桌（牌局由伺服器權威）：a＝join（id；role＝'spec' 表示選觀戰）／leave／stand（入座改觀戰）／ready（v）／sit／draw（idx）／shuffle（抽鬼牌）／move（x, y；五子棋）／pos（x, y）、hit、finish（躲彈幕）／play（idx, color）、pass、uno、catch、timeout、mode（UNO；draw 在 UNO 是抽牌）
-  net.tbl = m => net.connected && send({ t: 'tbl', ...m });
+  // 回座代碼 rk（斷線保留座位用，2026-11-16）：這個分頁隨機產生一組，入座（join）和斷線後回座（rejoin）時帶給伺服器；只放記憶體，重新整理頁面就換一組
+  const rk = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join('');
+  net.tbl = m => net.connected && send(m.a === 'join' || m.a === 'rejoin' ? { t: 'tbl', ...m, rk } : { t: 'tbl', ...m });
   net.craftUnlock = (k, id) => net.connected && send({ t: 'craft', k, id });
   net.craftSync = v => net.connected && send({ t: 'craftsync', mat: v.mat || [], furn: v.furn || [], rec: v.rec || [] });
 
