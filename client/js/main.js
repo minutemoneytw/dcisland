@@ -6156,7 +6156,7 @@ function buildPurify(box, v, mk, gd) {
       v.seats.forEach((s, k) => { if (k === me) return; const b = mk('button', 'ff-btn small', `給 ${s.name}`); b.disabled = !acts || !o.card || !ok[k]; b.title = !o.card ? '先點選上面自己的一張牌' : ok[k] ? '' : '要在同一格；對方手牌滿了也能給，他要立刻丟一張'; b.onclick = () => { S.net?.tbl?.({ a: 'pgive', to: k, c: o.card }); o.card = null; }; btns.appendChild(b); });
     }
     const end = mk('button', 'ff-btn' + (myTurn && g.step === 'act' && g.acts <= 0 ? ' active' : ''), '結束行動');
-    end.disabled = !(myTurn && g.step === 'act'); end.title = end.disabled ? noAct : '抽 2 張補給牌，然後污染擴散';
+    end.disabled = !(myTurn && g.step === 'act'); end.title = end.disabled ? noAct : `抽 ${g.sdraw ?? 2} 張補給牌，然後污染擴散`;
     end.onclick = () => S.net?.tbl?.({ a: 'pend' }); btns.appendChild(end);
     const synth = g.got.every(Boolean) && g.pawn.every((p, k) => p === 12 || v.seats[k].left || v.seats[k].fo);
     const sb = mk('button', 'ff-btn' + (synth ? ' active' : ''), '合成解藥'); sb.disabled = !synth; sb.title = synth ? '' : '四種素材都取得，而且全員在研究院才能合成';

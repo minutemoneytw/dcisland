@@ -1405,7 +1405,7 @@ function pgStart(t) {
   const roles = shuffle([...PG_ROLES]);
   t.seats.forEach((s, k) => { s.hand = [supply.pop(), supply.pop()].sort(); s.out = false; s.ready = false; s.left = false; s.forfeit = false; s.idle = 0; });
   supply.push("X", "X", "X", "X", "Nb", "Nk"); shuffle(supply);
-  const g = { tiles, pawn: t.seats.map(() => PG_LAB), role: roles.slice(0, n), got: [0, 0, 0, 0], lvl: 1, sup: supply, sdis: [], sd, sdd: [], acts: PG_ACTS, step: "act", block: null, deadline: 0 };
+  const g = { tiles, pawn: t.seats.map(() => PG_LAB), role: roles.slice(0, n), got: [0, 0, 0, 0], lvl: 1, sup: supply, sdis: [], sd, sdd: [], sdraw: n === 2 ? 3 : 2, acts: PG_ACTS, step: "act", block: null, deadline: 0 };
   t.g = g; t.result = null; t.phase = "playing";
   for (let hit = 0; hit < 6 && g.sd.length;) {   // 開局先污染 6 格（打到已污染的格子就換一張，不會一開局就荒廢）
     const c = g.sd.pop(), i = pgHit(g, c);
@@ -1485,7 +1485,7 @@ function pgBlock(t) {
 function pgDrawPhase(t, now) {   // 結束行動：抽 2 張補給牌
   const g = t.g, s = t.seats[t.turn];
   g.step = "draw";
-  for (let k = 0; k < 2; k++) {
+  for (let k = 0; k < (g.sdraw ?? 2); k++) {   // 補給牌每回合抽幾張：2 人局 3 張（2026-11-17 使用者說兩人局抽牌太少、湊不滿素材），其他人數 2 張；舊的進行中牌局沒有 sdraw 退回 2
     if (!g.sup.length) { g.sup = shuffle(g.sdis); g.sdis = []; }
     if (!g.sup.length) break;
     const c = g.sup.pop();
@@ -1627,7 +1627,7 @@ function pgView(t, cid, v) {
   const g = t.g, playing = t.phase === "playing", [role, i] = tblFind(t, cid);
   if (!(g && playing)) return;
   v.pg = { tiles: g.tiles.map(x => x.r + x.s), pawn: [...g.pawn], role: [...g.role], got: [...g.got], lvl: g.lvl, draws: PG_LV_DRAWS[g.lvl] || 0, lose: PG_LV_LOSE,
-           sup: g.sup.length, sd: g.sd.length, sdd: [...g.sdd], acts: g.acts, step: g.step, block: g.block ? g.block.tile : -1, hands: t.seats.map(s => [...s.hand]),
+           sdraw: g.sdraw ?? 2, sup: g.sup.length, sd: g.sd.length, sdd: [...g.sdd], acts: g.acts, step: g.step, block: g.block ? g.block.tile : -1, hands: t.seats.map(s => [...s.hand]),
            peek: role === "seat" && g.role[i] === "weather" && g.sd.length ? g.sd[g.sd.length - 1] : null, deadline: g.deadline, sn: Date.now() };
   t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].fo = !!s.forfeit; });
 }

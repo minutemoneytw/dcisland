@@ -1993,7 +1993,7 @@ def pg_start(t):
         s["out"], s["ready"], s["left"], s["forfeit"], s["idle"] = False, False, False, False, 0
     supply += ["X", "X", "X", "X", "Nb", "Nk"]
     random.shuffle(supply)
-    g = {"tiles": tiles, "pawn": [PG_LAB] * n, "role": roles[:n], "got": [0, 0, 0, 0], "lvl": 1, "sup": supply, "sdis": [], "sd": sd, "sdd": [], "acts": PG_ACTS, "step": "act", "block": None, "deadline": 0}
+    g = {"tiles": tiles, "pawn": [PG_LAB] * n, "role": roles[:n], "got": [0, 0, 0, 0], "lvl": 1, "sup": supply, "sdis": [], "sd": sd, "sdd": [], "sdraw": 3 if n == 2 else 2, "acts": PG_ACTS, "step": "act", "block": None, "deadline": 0}
     t["g"], t["result"], t["phase"] = g, None, "playing"
     hit = 0
     while hit < 6 and g["sd"]:   # 開局先污染 6 格（打到已污染的格子就換一張，不會一開局就荒廢）
@@ -2106,7 +2106,7 @@ def pg_draw_phase(t, now):
     g = t["g"]
     s = t["seats"][t["turn"]]
     g["step"] = "draw"
-    for _ in range(2):
+    for _ in range(g.get("sdraw", 2)):   # 補給牌每回合抽幾張：2 人局 3 張（2026-11-17 使用者說兩人局抽牌太少、湊不滿素材；模擬湊齊素材的回合數 13.3 → 8.9，和 4 人局的 9.9 差不多），其他人數 2 張
         if not g["sup"]:
             g["sup"], g["sdis"] = g["sdis"], []
             random.shuffle(g["sup"])
@@ -2340,7 +2340,7 @@ def pg_view(t, cid, v):
     if not (g and playing):
         return
     v["pg"] = {"tiles": [x["r"] + str(x["s"]) for x in g["tiles"]], "pawn": list(g["pawn"]), "role": list(g["role"]), "got": list(g["got"]), "lvl": g["lvl"],
-               "draws": PG_LV_DRAWS[g["lvl"]] if g["lvl"] < len(PG_LV_DRAWS) else 0, "lose": PG_LV_LOSE, "sup": len(g["sup"]), "sd": len(g["sd"]), "sdd": list(g["sdd"]),
+               "draws": PG_LV_DRAWS[g["lvl"]] if g["lvl"] < len(PG_LV_DRAWS) else 0, "lose": PG_LV_LOSE, "sdraw": g.get("sdraw", 2), "sup": len(g["sup"]), "sd": len(g["sd"]), "sdd": list(g["sdd"]),
                "acts": g["acts"], "step": g["step"], "block": g["block"]["tile"] if g["block"] else -1, "hands": [list(s["hand"]) for s in t["seats"]],
                "peek": g["sd"][-1] if role == "seat" and g["role"][i] == "weather" and g["sd"] else None, "deadline": g["deadline"], "sn": int(time.time() * 1000)}
     for k, s in enumerate(t["seats"]):
