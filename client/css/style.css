@@ -368,7 +368,6 @@ body {
 .rules-sec h4 { margin: 0 0 4px; font-size: 14px; color: var(--gold); border-left: 3px solid var(--gold-dim); padding-left: 8px; }
 .rules-sec ul { margin: 0; padding-left: 22px; font-size: 13px; line-height: 1.75; color: var(--text); }
 .rules-sec li.num { list-style: none; margin-left: -18px; }
-.table-rules { font-size: 11px; color: var(--text-dim); margin-top: 8px; line-height: 1.5; }
 .gomoku-board { display: block; margin: 10px auto; max-width: 100%; height: auto; border: 2px solid #5a3a1a; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
 .gomoku-board.mine { cursor: pointer; }
 .dodge-wrap { position: relative; width: min(640px, 100%); margin: 10px auto; }

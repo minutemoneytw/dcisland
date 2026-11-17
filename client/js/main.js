@@ -5159,7 +5159,6 @@ function buildTable() {
     }
     const lv = mk('button', 'ff-btn small', '離開（Esc）'); lv.onclick = () => leaveTable(); bs.appendChild(lv);
     box.appendChild(bs);
-    if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
     return;
   }
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
@@ -5233,7 +5232,6 @@ function buildTable() {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 五子棋畫面：15×15 棋盤（canvas）；輪到自己時點交叉點下子，滑過會顯示淡淡的預覽棋子 ----
 const GM_N = 15, GM_CELL = 26, GM_MARGIN = 16;   // 2026-11-13 使用者要求盤面縮小到約 80%（原本 32／20）
@@ -5337,7 +5335,6 @@ function buildGomoku(box, v, mk) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  const gd = gameDef('gomoku'); if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- Blokus（第十一桌 t11；2026-11-13，使用者要求）：20×20 棋盤（canvas）＋我的方塊托盤。選方塊 → 旋轉（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。
 // 合法與否在本機先判（只用來顯示預覽與標出可接的角），最後以伺服器為準（和 worker 的 bkLegal 同一套規則）。棋盤、各人用掉的方塊都是公開資訊，觀戰者也看得到 ----
@@ -5552,7 +5549,6 @@ function buildBlokus(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 列島建國（第十七桌 t17；2026-11-14，使用者要求）：引擎構築＋共同目標＋事件牌。規則在伺服器（worker 的 kg*、dev_server 的 kg_*）；規格見 docs/kingdom-spec.md。
 // 這裡只負責畫面與「預估」：卡面用文字＋顏色（沒有圖）；成本預估 kgcCost 與伺服器的 kgCost 同一套算法，只用來決定按鈕能不能按、超過上限時要丟哪些，最後以伺服器判定為準。
@@ -5860,7 +5856,6 @@ function buildKingdom(box, v, mk, gd) {
   const log = mk('div', 'table-log kg-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules && !playing) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 大老二（第十八桌 t18；2026-11-14，使用者要求）：2～4 人、單局。規則在伺服器（worker 的 bt*、dev_server 的 bt_*）；這裡只負責畫面與「預估」：
 // btCombo／btBeats 與伺服器同一套，只用來決定「出牌」鈕能不能按，最後以伺服器判定為準。
@@ -5992,7 +5987,6 @@ function buildBigTwo(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules && !playing) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 淨土守護戰（第二十一桌 t21；2026-11-17，使用者要求）：2～4 人合作。規則全在伺服器（worker 的 pg*、dev_server 的 pg_*）；這裡只畫畫面與「預估」：
 // pgNbrs 與伺服器同一套，只用來標出「可以點的格子」，最後以伺服器判定為準。協定（tbl）：pmove {to}／pclean {tiles}／pgive {to, c}／pcollect／psynth／
@@ -6158,7 +6152,6 @@ function buildPurify(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules && !playing) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 大螢幕（和平島左上角的圍觀休息區；2026-11-14，使用者要求）：全島共用一個頻道，轉播某一桌的畫面 ----
 // 伺服器（worker 的 scr*、dev_server 的 _scr_*）推 {t:'scr', id, game, v}（v＝那桌「觀戰者視角」的 tbl view，手牌全翻開；id＝null＝螢幕關閉）給不在牌桌裡的人；
@@ -6782,7 +6775,6 @@ function buildTrigon(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 躲彈幕（第五桌 t5）：即時遊戲。彈幕由「伺服器給的 seed＋開始時間 t0」決定性地在每個畫面各自產生（所有人看到的彈幕一樣，不用同步彈幕）；
 // 自己的移動與碰撞在本機算，被打到回報 hit，命數／淘汰／評分以伺服器為準；其他人的位置由 tpos 訊息轉發（約 8 次／秒，客戶端內插）----
@@ -7033,7 +7025,6 @@ function buildDodge(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 空氣曲棍球（t15／t16，2026-11-13，使用者要求）：2～4 人分藍紅兩隊（入座順序輪流：座位 0、2 藍隊在左，1、3 紅隊在右；2026-11-14 使用者要求最多 2v2，原本 2～8 人），人數要偶數 ----
 // 用滑鼠（或 WASD／方向鍵）移動自己的握把，只能在自己的半場；把圓盤打進對方球門得 1 分，先得 7 分或 3 分鐘到時分數高的贏。
@@ -7347,7 +7338,6 @@ function buildHockey(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 豆豆迷宮（吃豆迷宮類；第十四桌 t14，2026-11-13，使用者要求）：1～5 人，一人當「豆豆」吃光迷宮裡的豆子，其他人當「幽靈」抓豆豆 ----
 // 1 人＝單人：自己當豆豆、對 4 隻電腦幽靈，一關接一關到命用完，分數進排行榜；2～5 人＝對抗：桌主指定誰當豆豆，其他人當幽靈（不足 4 隻由電腦補），
@@ -8209,7 +8199,6 @@ function buildPinball(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 function onNetTpb(m) { const P = S.pb; if (P && P.role === 'spec') pbApplySnap(P, m); }   // 觀戰者：玩家那台的快照
 // ---- 打磚塊（第二十桌 t20，2026-11-16，使用者要求：畫面右側牆邊、餐飲區下方放一台面向左的機台）：單人、3 條命、一關接一關、分數進排行榜 ----
@@ -8457,7 +8446,6 @@ function buildBreakout(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 function onNetTbr(m) { const B = S.brk; if (B && B.role === 'spec') brkApplySnap(B, m); }   // 觀戰者：玩家那台的快照
 function buildMaze(box, v, mk, gd) {
@@ -8525,7 +8513,6 @@ function buildMaze(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 見習驅魔師（第十桌 t10；2026-11-12，使用者要求）：1～4 人合作。玩家在場地正中央，幽靈從四面八方飄向中央，用滑鼠畫出幽靈身上的符號消除它；
 // 3 波小怪＋1 隻 Boss（Boss 有血條，一直畫符號直到血條清空）。幽靈由「伺服器給的 seed」決定性地產生（與 worker 的 mgGen、dev_server 的 mg_gen 同一套，隨機只用 dodgeHash）；
@@ -8827,7 +8814,6 @@ function buildMage(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 英文打字競賽（第七桌 t7）：題目由「伺服器給的 seed」決定性地從 games.json 的 typing.words 抽（大家同一串單字）；
 // 打字判定、錯字鎖定 0.7 秒都在本機，每打完一個字回報 word {n}（n＝目前總分），其他人的分數由 tsc 訊息轉發；時間到後送 finish 請伺服器結算 ----
@@ -9044,7 +9030,6 @@ function buildTyping(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
   if (S.ty) { S.ty.wordKey = ''; typingRender(); }
 }
 // ---- 秘藥情報戰（第八桌 t8）：規則與狀態全在伺服器（見 worker 的 it*），客戶端只畫畫面、送 isend／itake／ifwd／iact／timeout ----
@@ -9599,7 +9584,6 @@ function buildIntel(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- UNO（第六桌 t6）：牌面用 DOM 畫（原創設計：圓角色塊＋大符號）；規則與狀態全在伺服器，客戶端只畫畫面、送 play／draw／pass／uno／catch／timeout／mode ----
 const UN_FILL = { R: '#d83a3a', Y: '#e8b820', G: '#2ea84a', B: '#2f66d8' };
@@ -9737,7 +9721,6 @@ function buildUno(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 // ---- 俄羅斯方塊（t13，2026-11-13，使用者要求）：場地上方 4 台街機共用一張邏輯桌，每台一個人玩 ----
 // 單人模式：各自一局，分數進排行榜；聯機模式：發起後其他機台的人收到邀請（最多 4 人），一般模式（各玩各的、全員出局後依分數排名）
@@ -10105,7 +10088,6 @@ function buildArcade(box, v, mk, gd) {
   const log = mk('div', 'table-log');
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
-  if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
 function arOppEl(v, cab, mk, cs) {
   const s = v.seats.find(x => x.cab === cab), el = mk('div', 'ar-opp');
