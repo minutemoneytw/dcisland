@@ -1405,7 +1405,7 @@ function pgStart(t) {
   const roles = shuffle([...PG_ROLES]);
   t.seats.forEach((s, k) => { s.hand = [supply.pop(), supply.pop()].sort(); s.out = false; s.ready = false; s.left = false; s.forfeit = false; s.idle = 0; });
   supply.push("X", "X", "X", "X", "Nb", "Nk"); shuffle(supply);
-  const g = { tiles, pawn: t.seats.map(() => PG_LAB), role: roles.slice(0, n), got: [0, 0, 0, 0], lvl: 1, sup: supply, sdis: [], sd, sdd: [], acts: PG_ACTS + (n === 2 ? 1 : 0), amax: PG_ACTS + (n === 2 ? 1 : 0), step: "act", block: null, deadline: 0 };
+  const g = { tiles, pawn: t.seats.map(() => PG_LAB), role: roles.slice(0, n), got: [0, 0, 0, 0], lvl: 1, sup: supply, sdis: [], sd, sdd: [], acts: PG_ACTS, step: "act", block: null, deadline: 0 };
   t.g = g; t.result = null; t.phase = "playing";
   for (let hit = 0; hit < 6 && g.sd.length;) {   // 開局先污染 6 格（打到已污染的格子就換一張，不會一開局就荒廢）
     const c = g.sd.pop(), i = pgHit(g, c);
@@ -1416,8 +1416,7 @@ function pgStart(t) {
   pgSetTurn(t, first, now);
   tblLog(t, `任務開始！先污染了 6 格，由 ${t.seats[first].name} 先行動`);
 }
-function pgSetTurn(t, i, now) { t.turn = i; t.g.acts = t.g.amax ?? PG_ACTS;   // 舊的進行中牌局（部署前存的）沒有 amax   // amax：每回合行動點（2 人局多 1 點，2026-11-17 使用者說兩人局太難）
-  t.g.step = "act"; t.g.deadline = now + PG_TURN_MS; }
+function pgSetTurn(t, i, now) { t.turn = i; t.g.acts = PG_ACTS; t.g.step = "act"; t.g.deadline = now + PG_TURN_MS; }
 function pgFinish(t, win, why) {
   const stay = t.seats.filter(s => !s.left), clean = t.seats.every(s => !s.left && !s.forfeit);
   const players = t.seats.map(s => ({ name: s.name, left: !!s.left, forfeit: !!s.forfeit }));

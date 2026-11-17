@@ -1993,7 +1993,7 @@ def pg_start(t):
         s["out"], s["ready"], s["left"], s["forfeit"], s["idle"] = False, False, False, False, 0
     supply += ["X", "X", "X", "X", "Nb", "Nk"]
     random.shuffle(supply)
-    g = {"tiles": tiles, "pawn": [PG_LAB] * n, "role": roles[:n], "got": [0, 0, 0, 0], "lvl": 1, "sup": supply, "sdis": [], "sd": sd, "sdd": [], "acts": PG_ACTS + (1 if n == 2 else 0), "amax": PG_ACTS + (1 if n == 2 else 0), "step": "act", "block": None, "deadline": 0}
+    g = {"tiles": tiles, "pawn": [PG_LAB] * n, "role": roles[:n], "got": [0, 0, 0, 0], "lvl": 1, "sup": supply, "sdis": [], "sd": sd, "sdd": [], "acts": PG_ACTS, "step": "act", "block": None, "deadline": 0}
     t["g"], t["result"], t["phase"] = g, None, "playing"
     hit = 0
     while hit < 6 and g["sd"]:   # 開局先污染 6 格（打到已污染的格子就換一張，不會一開局就荒廢）
@@ -2009,7 +2009,7 @@ def pg_start(t):
 
 def pg_set_turn(t, i, now):
     t["turn"] = i
-    t["g"]["acts"], t["g"]["step"], t["g"]["deadline"] = t["g"].get("amax", PG_ACTS), "act", now + PG_TURN_MS   # amax：每回合行動點（2 人局多 1 點，2026-11-17 使用者說兩人局太難）
+    t["g"]["acts"], t["g"]["step"], t["g"]["deadline"] = PG_ACTS, "act", now + PG_TURN_MS
 
 def pg_finish(t, win, why):
     stay = [s for s in t["seats"] if not s.get("left")]
