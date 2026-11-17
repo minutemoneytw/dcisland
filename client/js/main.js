@@ -6003,6 +6003,25 @@ const PG_ROLE = {
 const PG_SEATCOL = ['#4aa8ff', '#ffd24a', '#ff6a6a', '#6aff9a'];
 const PG_D4 = [[0, -1], [1, 0], [0, 1], [-1, 0]], PG_D8 = [...PG_D4, [1, -1], [1, 1], [-1, 1], [-1, -1]];
 const pgCardName = c => (c === 'Ispray' ? '淨化噴霧' : c === 'Itele' ? '傳送器' : `${PG_RNAME[c[1]]}採樣`);
+// 擴散牌一覽（2026-11-17 使用者要求「介面上展示事件牌，只靠上下的小字不方便看」）：20 張牌排成 4 個方向 × 5 條線的表，翻過的（＝棄牌堆）變暗並標第幾張翻出、最近一張金框、氣象員看到的下一張藍框；
+// 滑鼠停在格子上會寫出這張牌現在會打到哪一格（pgHitTile 與伺服器 pgHit 同一套）。污染爆發時棄牌堆會洗回牌庫頂，所以暗的那些就是「馬上會再被打一次」的地方。
+const pgHitTile = (v, c) => { const d = c[0], l = +c[1]; for (let k = 0; k < 5; k++) { const i = d === 'N' ? k * 5 + l : d === 'S' ? (4 - k) * 5 + l : d === 'W' ? l * 5 + k : l * 5 + (4 - k); if (pgTile(v, i).s !== 2) return i; } return -1; };
+function pgSpreadPanel(v, g, mk) {
+  const box = mk('div', 'pg-sd'), order = new Map(); g.sdd.forEach((c, k) => order.set(c, k + 1));
+  box.appendChild(mk('div', 'pg-sd-h', `擴散牌（牌庫 ${g.sd} 張・已翻 ${g.sdd.length} 張）　數字＝第幾條線；暗＝已翻過（#是第幾張翻出，污染爆發時洗回牌庫頂）；金框＝最近一張${g.peek ? '・藍框＝氣象員偵測的下一張' : ''}`));
+  const grid = mk('div', 'pg-sd-grid');
+  for (const d of 'NSWE') {
+    grid.appendChild(mk('div', 'pg-sd-lbl', `${{ N: '北', S: '南', W: '西', E: '東' }[d]}（${'NS'.includes(d) ? '欄' : '列'}）`));
+    for (let l = 0; l < 5; l++) {
+      const c = d + l, n = order.get(c), hit = pgHitTile(v, c), tt = hit < 0 ? null : pgTile(v, hit);
+      const el = mk('div', 'pg-sd-c' + (n ? ' used' : '') + (n && n === g.sdd.length ? ' last' : '') + (g.peek === c ? ' peek' : ''), String(l + 1));
+      if (n) el.appendChild(mk('small', null, `#${n}`));
+      el.title = `${pgDirName(c)}：${tt ? `會打在${PG_RNAME[tt.r]}(${hit % 5 + 1},${Math.floor(hit / 5) + 1})` : '這一條已經沒有格子了'}${n ? `（第 ${n} 張翻出）` : ''}`;
+      grid.appendChild(el);
+    }
+  }
+  box.appendChild(grid); return box;
+}
 const pgDirName = c => `${{ N: '北', S: '南', W: '西', E: '東' }[c[0]]}${'NS'.includes(c[0]) ? '第' + (Number(c[1]) + 1) + '欄' : '第' + (Number(c[1]) + 1) + '列'}`;
 const pgTile = (v, i) => ({ r: v.pg.tiles[i][0], s: Number(v.pg.tiles[i][1]) });
 function pgNbrs(v, seat, from, through) {   // 與伺服器 pgNbrs 同一套
@@ -6079,7 +6098,7 @@ function buildPurify(box, v, mk, gd) {
     PG_REGIONS.forEach((r, k) => { const m = mk('span', 'pg-got' + (g.got[k] ? ' on' : ''), `${g.got[k] ? '✔' : '○'} ${PG_RNAME[r]}素材`); m.style.borderColor = PG_RCOL[r]; info.appendChild(m); });
     info.appendChild(mk('span', 'table-tag', `補給牌庫 ${g.sup}・擴散牌庫 ${g.sd}`));
     box.appendChild(info);
-    if (g.sdd.length) box.appendChild(mk('div', 'table-tag', `擴散棄牌（新→舊）：${[...g.sdd].reverse().slice(0, 8).map(pgDirName).join('、')}${g.sdd.length > 8 ? '⋯' : ''}　＝剛打過的地方，等污染爆發時會洗回牌庫頂`));
+    box.appendChild(pgSpreadPanel(v, g, mk));   // 擴散牌一覽（2026-11-17 使用者要求：原本只有一行小字）
     if (g.peek) box.appendChild(mk('div', 'table-tag pg-peek', `氣象員偵測：下一張擴散牌是「${pgDirName(g.peek)}」`));
     // 棋盤
     const me = seat ? v.me : -1, mine = myTurn && g.step === 'act' && g.acts > 0;

@@ -627,6 +627,15 @@ body {
 .pg-hand { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; margin-top: 4px; }
 .pg-card { font-size: 11px; padding: 1px 5px; border: 2px solid #888; border-radius: 4px; background: #f6f2e6; color: #1e1e24; }
 .pg-card.item { background: #d8e8f8; border-color: #3a78c8; }
+.pg-sd { margin: 6px auto; max-width: 420px; padding: 6px 8px; background: rgba(0,0,0,.25); border: 1px solid #3a3f55; border-radius: 6px; }
+.pg-sd-h { font-size: 11px; color: #9fb0d8; margin-bottom: 4px; }
+.pg-sd-grid { display: grid; grid-template-columns: 62px repeat(5, 1fr); gap: 3px; align-items: center; }
+.pg-sd-lbl { font-size: 11px; color: #c8d4f0; text-align: right; padding-right: 4px; }
+.pg-sd-c { text-align: center; font-size: 12px; padding: 2px 0; border-radius: 4px; background: #f6f2e6; color: #1e1e24; border: 2px solid transparent; cursor: help; }
+.pg-sd-c small { font-size: 9px; margin-left: 2px; opacity: .85; }
+.pg-sd-c.used { background: #3a3d4a; color: #8a90a8; }
+.pg-sd-c.last { border-color: #ffe08a; color: #ffe08a; }
+.pg-sd-c.peek { border-color: #6ab0ff; }
 .pg-card.click { cursor: pointer; } .pg-card.sel { outline: 2px solid #ffe08a; }
 .pg-info { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; margin: 6px 0; }
 .pg-lv { font-weight: bold; } .pg-lv.danger { color: #ff7a6a; }
