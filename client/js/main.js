@@ -6003,6 +6003,38 @@ const PG_ROLE = {
 const PG_SEATCOL = ['#4aa8ff', '#ffd24a', '#ff6a6a', '#6aff9a'];
 const PG_D4 = [[0, -1], [1, 0], [0, 1], [-1, 0]], PG_D8 = [...PG_D4, [1, -1], [1, 1], [-1, 1], [-1, -1]];
 const pgCardName = c => (c === 'Ispray' ? '淨化噴霧' : c === 'Itele' ? '傳送器' : `${PG_RNAME[c[1]]}採樣`);
+// 污染等級量表（2026-11-17 使用者要求：放左邊做成垂直的量表）：由下往上 1～7 級，每級旁邊寫每回合翻幾張擴散牌，最上面是 8＝輸；目前的等級亮起
+function pgGauge(g) {
+  const box = mk2('div', 'pg-gauge');
+  box.appendChild(mk2('div', 'pg-g-top', '☠ 8\n輸'));
+  for (let l = g.lose - 1; l >= 1; l--) {
+    const draws = PG_LV_DRAWS[l] ?? 5, seg = mk2('div', 'pg-g-seg' + (l === g.lvl ? ' cur' : '') + (l < g.lvl ? ' past' : '') + (l >= g.lose - 2 ? ' hot' : ''));
+    seg.appendChild(mk2('b', null, String(l))); seg.appendChild(mk2('small', null, `翻${draws}`));
+    seg.title = `污染等級 ${l}：每回合翻 ${draws} 張擴散牌${l === g.lvl ? '（現在）' : ''}`;
+    box.appendChild(seg);
+  }
+  box.appendChild(mk2('div', 'pg-g-lbl', '污染\n等級'));
+  return box;
+}
+const PG_LV_DRAWS = [0, 2, 2, 3, 3, 4, 4, 5];   // 與兩份伺服器的 PG_LV_DRAWS 一致
+const mk2 = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+// 上一次翻出的擴散牌（2026-11-17 使用者要求：放右邊上面）：最新的一張放大，後面是更早的幾張；牌上寫打到哪一格（伺服器記錄翻牌當下打到的格子 g.rc）
+function pgLastCards(v, g, mk) {
+  const box = mk('div', 'pg-last'), rc = [...(g.rc || [])].reverse();
+  box.appendChild(mk('div', 'pg-sd-h', '上一次翻出的擴散牌'));
+  if (!rc.length) { box.appendChild(mk('div', 'table-tag', '還沒有翻過')); return box; }
+  const tn = i => { if (i < 0) return '那一條已經沒有格子'; const t = pgTile(v, i); return `${PG_RNAME[t.r]}(${i % 5 + 1},${Math.floor(i / 5) + 1})`; };
+  const [c0, i0] = rc[0], big = mk('div', 'pg-last-big');
+  big.appendChild(mk('div', 'pg-last-dir', pgDirName(c0)));
+  big.appendChild(mk('div', 'pg-last-hit', i0 < 0 ? tn(i0) : `→ 打在${tn(i0)}`));
+  box.appendChild(big);
+  if (rc.length > 1) {
+    const row = mk('div', 'pg-last-row');
+    for (const [c, i] of rc.slice(1)) { const e = mk('div', 'pg-last-s', pgDirName(c)); e.title = i < 0 ? tn(i) : `打在${tn(i)}`; row.appendChild(e); }
+    box.appendChild(row);
+  }
+  return box;
+}
 // 擴散牌一覽（2026-11-17 使用者要求「介面上展示事件牌，只靠上下的小字不方便看」）：20 張牌排成 4 個方向 × 5 條線的表，翻過的（＝棄牌堆）變暗並標第幾張翻出、最近一張金框、氣象員看到的下一張藍框；
 // 滑鼠停在格子上會寫出這張牌現在會打到哪一格（pgHitTile 與伺服器 pgHit 同一套）。污染爆發時棄牌堆會洗回牌庫頂，所以暗的那些就是「馬上會再被打一次」的地方。
 const pgHitTile = (v, c) => { const d = c[0], l = +c[1]; for (let k = 0; k < 5; k++) { const i = d === 'N' ? k * 5 + l : d === 'S' ? (4 - k) * 5 + l : d === 'W' ? l * 5 + k : l * 5 + (4 - k); if (pgTile(v, i).s !== 2) return i; } return -1; };
@@ -6094,11 +6126,9 @@ function buildPurify(box, v, mk, gd) {
   if (playing) {
     // 儀表：污染等級、素材、牌庫
     const info = mk('div', 'pg-info');
-    info.appendChild(mk('span', 'pg-lv' + (g.lvl >= g.lose - 2 ? ' danger' : ''), `污染等級 ${g.lvl}／${g.lose - 1}（每回合翻 ${g.draws} 張）`));
     PG_REGIONS.forEach((r, k) => { const m = mk('span', 'pg-got' + (g.got[k] ? ' on' : ''), `${g.got[k] ? '✔' : '○'} ${PG_RNAME[r]}素材`); m.style.borderColor = PG_RCOL[r]; info.appendChild(m); });
     info.appendChild(mk('span', 'table-tag', `補給牌庫 ${g.sup}・擴散牌庫 ${g.sd}`));
     box.appendChild(info);
-    box.appendChild(pgSpreadPanel(v, g, mk));   // 擴散牌一覽（2026-11-17 使用者要求：原本只有一行小字）
     if (g.peek) box.appendChild(mk('div', 'table-tag pg-peek', `氣象員偵測：下一張擴散牌是「${pgDirName(g.peek)}」`));
     // 棋盤
     const me = seat ? v.me : -1, mine = myTurn && g.step === 'act' && g.acts > 0;
@@ -6130,7 +6160,11 @@ function buildPurify(box, v, mk, gd) {
       };
       bd.appendChild(el);
     }
-    box.appendChild(bd);
+    // 版面（2026-11-17 使用者要求）：左邊垂直的污染等級量表、中間棋盤、右邊上面「上一次翻出的牌」、右邊下面擴散牌一覽
+    const main = mk('div', 'pg-main'), side = mk('div', 'pg-side');
+    side.appendChild(pgLastCards(v, g, mk)); side.appendChild(pgSpreadPanel(v, g, mk));
+    main.appendChild(pgGauge(g)); main.appendChild(bd); main.appendChild(side);
+    box.appendChild(main);
   }
   // 操作按鈕
   const btns = mk('div', 'table-btns');

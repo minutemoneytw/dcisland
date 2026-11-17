@@ -1454,6 +1454,7 @@ function pgSpread(t, n) {   // 翻 n 張擴散牌
     if (!g.sd.length) break;
     const c = g.sd.pop(), i = pgHit(g, c);
     g.sdd.push(c);
+    g.rc = [...(g.rc || []), [c, i]].slice(-5);   // 最近翻出的擴散牌（介面右上「上一次翻出的牌」用）
     if (i < 0) continue;
     const x = g.tiles[i];
     x.s++;
@@ -1469,6 +1470,7 @@ function pgOutbreak(t) {
     if (!g.sd.length) { g.sd = shuffle(g.sdd); g.sdd = []; }
     const c = g.sd.shift(), i = pgHit(g, c);   // 牌庫最底下那張立刻打下去，再把擴散棄牌洗回牌庫頂（剛打過的地方會再被打一次）
     g.sdd.push(c);
+    g.rc = [...(g.rc || []), [c, i]].slice(-5);
     if (i >= 0) { const x = g.tiles[i]; x.s++; tblLog(t, x.s === 2 ? `${pgTn(g, i)} 荒廢了！` : `${pgTn(g, i)} 被污染了`); }
     g.sd.push(...shuffle(g.sdd)); g.sdd = [];
   }
@@ -1627,7 +1629,7 @@ function pgView(t, cid, v) {
   const g = t.g, playing = t.phase === "playing", [role, i] = tblFind(t, cid);
   if (!(g && playing)) return;
   v.pg = { tiles: g.tiles.map(x => x.r + x.s), pawn: [...g.pawn], role: [...g.role], got: [...g.got], lvl: g.lvl, draws: PG_LV_DRAWS[g.lvl] || 0, lose: PG_LV_LOSE,
-           sdraw: g.sdraw ?? 2, sup: g.sup.length, sd: g.sd.length, sdd: [...g.sdd], acts: g.acts, step: g.step, block: g.block ? g.block.tile : -1, hands: t.seats.map(s => [...s.hand]),
+           sdraw: g.sdraw ?? 2, rc: g.rc || [], sup: g.sup.length, sd: g.sd.length, sdd: [...g.sdd], acts: g.acts, step: g.step, block: g.block ? g.block.tile : -1, hands: t.seats.map(s => [...s.hand]),
            peek: role === "seat" && g.role[i] === "weather" && g.sd.length ? g.sd[g.sd.length - 1] : null, deadline: g.deadline, sn: Date.now() };
   t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].fo = !!s.forfeit; });
 }

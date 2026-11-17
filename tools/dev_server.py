@@ -2066,6 +2066,7 @@ def pg_spread(t, n):
         c = g["sd"].pop()
         i = pg_hit(g, c)
         g["sdd"].append(c)
+        g["rc"] = (g.get("rc", []) + [[c, i]])[-5:]   # 最近翻出的擴散牌（介面右上「上一次翻出的牌」用）
         if i < 0:
             continue
         x = g["tiles"][i]
@@ -2084,6 +2085,7 @@ def pg_outbreak(t):
         c = g["sd"].pop(0)   # 牌庫最底下那張立刻打下去，再把擴散棄牌洗回牌庫頂（剛打過的地方會再被打一次）
         i = pg_hit(g, c)
         g["sdd"].append(c)
+        g["rc"] = (g.get("rc", []) + [[c, i]])[-5:]
         if i >= 0:
             x = g["tiles"][i]
             x["s"] += 1
@@ -2340,7 +2342,7 @@ def pg_view(t, cid, v):
     if not (g and playing):
         return
     v["pg"] = {"tiles": [x["r"] + str(x["s"]) for x in g["tiles"]], "pawn": list(g["pawn"]), "role": list(g["role"]), "got": list(g["got"]), "lvl": g["lvl"],
-               "draws": PG_LV_DRAWS[g["lvl"]] if g["lvl"] < len(PG_LV_DRAWS) else 0, "lose": PG_LV_LOSE, "sdraw": g.get("sdraw", 2), "sup": len(g["sup"]), "sd": len(g["sd"]), "sdd": list(g["sdd"]),
+               "draws": PG_LV_DRAWS[g["lvl"]] if g["lvl"] < len(PG_LV_DRAWS) else 0, "lose": PG_LV_LOSE, "sdraw": g.get("sdraw", 2), "rc": list(g.get("rc", [])), "sup": len(g["sup"]), "sd": len(g["sd"]), "sdd": list(g["sdd"]),
                "acts": g["acts"], "step": g["step"], "block": g["block"]["tile"] if g["block"] else -1, "hands": [list(s["hand"]) for s in t["seats"]],
                "peek": g["sd"][-1] if role == "seat" and g["role"][i] == "weather" and g["sd"] else None, "deadline": g["deadline"], "sn": int(time.time() * 1000)}
     for k, s in enumerate(t["seats"]):
