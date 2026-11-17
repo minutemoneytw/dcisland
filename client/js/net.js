@@ -126,6 +126,7 @@ export function connectNet(S, opts = {}) {
       case 'ths': if (opts.onThs) opts.onThs(msg); break;      // 空氣曲棍球：桌主的圓盤快照（x／y／vx／vy、sa／sb 比分、f 開球前凍結毫秒）
       case 'scr': if (opts.onScr) opts.onScr(msg); break;   // 和平島大螢幕：目前轉播的桌與畫面（id＝null＝關閉）
       case 'scrcd': if (opts.onScrCd) opts.onScrCd(msg); break;   // 大螢幕切台冷卻中：left＝還要幾毫秒
+      case 'ttf': if (opts.onTtf) opts.onTtf(msg); break;   // 2048（觀戰者才收到）：玩家那台每一步的盤面（m 16 字元、sc 分數、mx 最大方塊指數）
       case 'tbu': if (opts.onTbu) opts.onTbu(msg); break;   // 泡泡射手（觀戰者才收到）：玩家那台的快照（m 盤面、par 排列奇偶、cur／nx 手上與下一顆、an 瞄準角度〔十分之一度〕、bx／by 飛行中的泡泡、sc 分數、lv 關卡、f 離下一排還有幾發）
       case 'tbr': if (opts.onTbr) opts.onTbr(msg); break;   // 打磚塊（觀戰者才收到）：玩家那台的快照（bl 球、p／pw 板子、sc 分數、b 剩幾條命、lv 關卡、m 磚塊）
       case 'tpb': if (opts.onTpb) opts.onTpb(msg); break;   // 彈珠台（觀戰者才收到）：玩家那台的快照（x／y 球、sc 分數、b 剩球、st 狀態、l／r 擋板、f 彈跳器閃光）

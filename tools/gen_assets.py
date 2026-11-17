@@ -1629,7 +1629,9 @@ TABLES_BY_TERRAIN = {
               dict(id="t19", game="pinball", cell=[83, 26], w=2, h=3),   # 彈珠台（2026-11-17 使用者要求：轉到側面、放到打磚塊底下）：貼東牆、面向左，在打磚塊下面隔 1 格
               # 打磚塊機台（2026-11-16，使用者要求：畫面右側牆邊、餐飲區的下方，機台面向左邊，先放一台）：貼著東牆（房間最右兩欄 x＝83、84），餐飲區地毯（y 16～20）下面隔 1 格
               dict(id="t20", game="breakout", cell=[83, 22], w=2, h=3),
-              dict(id="t22", game="bubble", cell=[83, 30], w=2, h=3)],   # 泡泡射手（2026-11-17，使用者要求：彈珠台下方放一台）：貼東牆、面向左，在彈珠台下面隔 1 格；單人、分數進排行榜    # 彈珠台（2026-11-15，使用者要求：俄羅斯方塊機台左邊）：同樣 2×3 格、靠北牆，跟機台隔 1 格；單人、分數進排行榜,   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
+              dict(id="t22", game="bubble", cell=[83, 30], w=2, h=3),
+              dict(id="t23", game="g2048", cell=[83, 34], w=2, h=3)],   # 2048（2026-11-17，使用者要求：泡泡射手下方再放一台）：貼東牆、面向左，在泡泡射手下面隔 1 格；單人、分數進排行榜
+#   # 泡泡射手（2026-11-17，使用者要求：彈珠台下方放一台）：貼東牆、面向左，在彈珠台下面隔 1 格；單人、分數進排行榜    # 彈珠台（2026-11-15，使用者要求：俄羅斯方塊機台左邊）：同樣 2×3 格、靠北牆，跟機台隔 1 格；單人、分數進排行榜,   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
 }
 
 # 和平島的固定小物件（不是遊戲桌、不是可擺設的家具）：地形 → [物件]。kind＝互動種類（drink 喝飲料／food 吃點心，客戶端 useProp）、
@@ -2147,6 +2149,44 @@ def table_bubble():
         for k in range(3):
             x = 17 + k * 3 + (r % 2) * 1; cv.ellipse(x, 13 + r * 2, 1.2, 1.2, hx("#" + row))
     cv.vline(20, 22, 26, hx("#c8d4f0")); cv.ellipse(20, 27, 1.4, 1.4, hx("#40c8e0"))   # 發射台與待發的泡泡
+    for y in (34, 37, 40):
+        cv.hline(18, 25, y, dark)                                                     # 下半身的散熱孔
+    cv.hline(7, 29, 46, dark); cv.hline(7, 29, 47, dark)
+    cv.outline()
+    return cv
+
+def table_g2048():
+    """2048 機台（32×48，畫 scale 2＝2×3 格）：**側面、面向左邊**的街機（靠東牆擺，放在泡泡射手底下）——暖橘色機身，左上是往前伸的發光招牌，
+    下面一道往內斜的發光螢幕、往左突出的操作台（四個方向鍵），側板上畫著一小塊 4×4 的方塊盤。"""
+    cv = Canvas(32, 48)
+    c = hx("#d8803a"); dark = shade(c, .6); lite = shade(c, 1.3)
+    def left(y):   # 每一列機身的左緣（側面輪廓）
+        if y <= 1: return 10
+        if y <= 8: return 7                                   # 招牌往前伸
+        if y <= 10: return 10
+        if y <= 22: return round(12 - (y - 11) * 3 / 11)      # 螢幕面往內斜
+        if y <= 27: return 3                                  # 操作台往左突出
+        if y <= 29: return 6
+        if y <= 45: return 9
+        return 7
+    for y in range(48):
+        cv.hline(left(y), 28 if y < 46 else 29, y, c)
+    cv.vline(28, 0, 45, dark); cv.vline(27, 0, 45, shade(c, .8))          # 背板（靠牆那一側）
+    cv.hline(10, 28, 0, lite)                                             # 頂面
+    for y in range(2, 9):                                                 # 招牌正面（發光）
+        cv.set(7, y, hx("#fffbe0")); cv.set(8, y, hx("#fff0b0"))
+    cv.hline(9, 26, 8, dark)
+    for y in range(11, 23):                                               # 螢幕（從側面只看得到一道發亮的面）
+        x = left(y); cv.set(x, y, hx("#fff0d8")); cv.set(x + 1, y, hx("#f0b070")); cv.set(x + 2, y, hx("#2a2018"))
+    cv.hline(3, 12, 23, lite); cv.hline(3, 12, 27, dark); cv.vline(3, 23, 27, lite)   # 操作台
+    for dx, dy in ((5, 24), (3, 25), (7, 25), (5, 26)):                   # 四個方向鍵（十字）
+        cv.rect(dx, dy, dx + 1, dy + 1, hx("#fff0b0"))
+    cv.rect(14, 10, 26, 28, hx("#2a2018")); cv.rect(15, 11, 25, 27, hx("#bbada0"))   # 側板上的圖：棋盤底
+    tiles = (("eee4da", "ede0c8", "f2b179", "f59563"), ("f67c5f", "f65e3b", "edcf72", "edc22e"),
+             ("eee4da", "f2b179", "f67c5f", "cdc1b4"), ("cdc1b4", "cdc1b4", "ede0c8", "cdc1b4"))
+    for r, row in enumerate(tiles):                                                   # 4×4 的方塊（每格 2×2 像素、留 1 格縫）
+        for k, col in enumerate(row):
+            x = 16 + k * 3; y = 12 + r * 4; cv.rect(x, y, x + 1, y + 2, hx("#" + col))
     for y in (34, 37, 40):
         cv.hline(18, 25, y, dark)                                                     # 下半身的散熱孔
     cv.hline(7, 29, 46, dark); cv.hline(7, 29, 47, dark)
@@ -4085,6 +4125,7 @@ def main():
     save(table_pinball(), "table_pinball.png", "games")
     save(table_breakout(), "table_breakout.png", "games")
     save(table_bubble(), "table_bubble.png", "games")
+    save(table_g2048(), "table_g2048.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")
