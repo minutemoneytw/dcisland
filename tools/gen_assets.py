@@ -1626,7 +1626,7 @@ TABLES_BY_TERRAIN = {
               # 俄羅斯方塊（2026-11-13，使用者要求）：場地上方一排 4 台，造型一樣、配色不同，間距約一個人（1 格）。
               # 4 台共用同一張邏輯桌 t13（伺服器的 TABLE_DEFS 只有 t13），cab＝第幾台（0～3），img＝這台的圖（配色）
               *[dict(id="t13", game="arcade", cab=k, img=f"arcade_{k}.png", cell=[48 + k * 3, 14.5], w=2, h=3) for k in range(4)],
-              dict(id="t19", game="pinball", cell=[45, 14.5], w=2, h=3),
+              dict(id="t19", game="pinball", cell=[83, 26], w=2, h=3),   # 彈珠台（2026-11-17 使用者要求：轉到側面、放到打磚塊底下）：貼東牆、面向左，在打磚塊下面隔 1 格
               # 打磚塊機台（2026-11-16，使用者要求：畫面右側牆邊、餐飲區的下方，機台面向左邊，先放一台）：貼著東牆（房間最右兩欄 x＝83、84），餐飲區地毯（y 16～20）下面隔 1 格
               dict(id="t20", game="breakout", cell=[83, 22], w=2, h=3)],   # 彈珠台（2026-11-15，使用者要求：俄羅斯方塊機台左邊）：同樣 2×3 格、靠北牆，跟機台隔 1 格；單人、分數進排行榜,   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
 }
@@ -2033,27 +2033,38 @@ def table_intel():
 ARCADE_COLORS = ["#d84a4a", "#3b78e8", "#3cb45a", "#9a5ad8"]
 
 def table_pinball():
-    """彈珠台（32×48，畫 scale 2＝2×3 格）：紫色機身、上方發光的背玻璃、斜放的球檯（三個圓形彈跳器、兩支擋板、一顆銀色小球）、右邊拉桿、下方投幣口。"""
+    """彈珠台（32×48，畫 scale 2＝2×3 格）：**側面、面向左邊**的機台（靠東牆擺，放在打磚塊底下）——左上是往前伸的發光背玻璃（招牌）、
+    下面一道往內斜的發亮球檯面、往左突出的操作台（擋板按鈕），側板上畫著水母、小球與擋板；紫色機身。"""
     cv = Canvas(32, 48)
-    body = hx("#6a3aa8"); dark = shade(body, .6); lite = shade(body, 1.35)
-    cv.rect(2, 0, 29, 47, body)
-    cv.rect(2, 0, 4, 47, dark); cv.rect(27, 0, 29, 47, dark)
-    cv.rect(5, 1, 26, 12, hx("#fff0b0")); cv.hline(5, 26, 1, hx("#fffbe0")); cv.hline(5, 26, 12, hx("#e8c060"))   # 背玻璃（發光）
-    for k, bc in enumerate(["#e04848", "#f0c020", "#3cb45a", "#3b78e8"]):   # 背玻璃上的彩色星星
-        x = 8 + k * 5; cv.rect(x, 4, x + 2, 6, hx(bc)); cv.set(x + 1, 3, hx(bc)); cv.set(x + 1, 7, hx(bc))
-    cv.rect(8, 9, 23, 10, hx("#c04040"))                         # 背玻璃下緣的紅條
-    cv.rect(5, 13, 26, 36, hx("#12102a"))                        # 球檯外框
-    cv.rect(6, 14, 25, 35, hx("#1d2a5c"))                        # 球檯面（深藍）
-    cv.hline(6, 25, 14, hx("#33448a"))
-    for bx, by, bc in ((11, 20, "#f06060"), (20, 20, "#f0c020"), (15, 26, "#40c8e0")):   # 三個圓形彈跳器
-        cv.ellipse(bx, by, 2.6, 2.6, hx(bc)); cv.set(bx - 1, by - 1, hx("#ffffff"))
-    cv.vline(23, 22, 34, hx("#8aa0e0")); cv.vline(8, 24, 31, hx("#8aa0e0"))   # 兩邊導軌
-    cv.set(9, 32, hx("#8aa0e0")); cv.set(10, 33, hx("#8aa0e0")); cv.set(22, 32, hx("#8aa0e0")); cv.set(21, 33, hx("#8aa0e0"))
-    cv.rect(11, 33, 14, 34, hx("#e8e8f0")); cv.rect(17, 33, 20, 34, hx("#e8e8f0"))   # 兩支擋板
-    cv.ellipse(16, 30, 1.2, 1.2, hx("#f4f4f8")); cv.set(15, 29, hx("#ffffff"))      # 銀色小球
-    cv.rect(24, 30, 25, 36, hx("#9a9aa8")); cv.rect(24, 36, 25, 37, hx("#d84a4a"))   # 右邊拉桿
-    cv.rect(5, 37, 26, 38, dark)
-    cv.rect(8, 40, 23, 46, shade(body, .8)); cv.rect(11, 42, 20, 44, hx("#1a1a22")); cv.hline(13, 18, 43, hx("#e8c060"))   # 下方投幣口
+    c = hx("#6a3aa8"); dark = shade(c, .6); lite = shade(c, 1.35)
+    def left(y):   # 每一列機身的左緣（側面輪廓）
+        if y <= 1: return 10
+        if y <= 8: return 7                                   # 背玻璃往前伸
+        if y <= 10: return 10
+        if y <= 22: return round(12 - (y - 11) * 3 / 11)      # 球檯面往內斜
+        if y <= 27: return 3                                  # 操作台往左突出
+        if y <= 29: return 6
+        if y <= 45: return 9
+        return 7
+    for y in range(48):
+        cv.hline(left(y), 28 if y < 46 else 29, y, c)
+    cv.vline(28, 0, 45, dark); cv.vline(27, 0, 45, shade(c, .8))          # 背板（靠牆那一側）
+    cv.hline(10, 28, 0, lite)                                             # 頂面
+    for y in range(2, 9):                                                 # 背玻璃正面（發光，帶一點彩色）
+        cv.set(7, y, hx("#fffbe0")); cv.set(8, y, hx("#ffd890" if y % 2 else "#fff0b0"))
+    cv.hline(9, 26, 8, dark)
+    for y in range(11, 23):                                               # 球檯面（從側面只看得到一道發亮的斜面）
+        x = left(y); cv.set(x, y, hx("#bfd4ff")); cv.set(x + 1, y, hx("#4f78e8")); cv.set(x + 2, y, hx("#12102a"))
+    cv.hline(3, 12, 23, lite); cv.hline(3, 12, 27, dark); cv.vline(3, 23, 27, lite)   # 操作台
+    cv.rect(4, 20, 6, 22, hx("#e8e8f0")); cv.set(4, 20, hx("#ffffff"))    # 擋板按鈕
+    cv.rect(14, 10, 26, 28, hx("#12102a")); cv.rect(15, 11, 25, 27, hx("#1d2a5c"))    # 側板上的圖：深藍底
+    cv.ellipse(20, 15, 3, 2.4, hx("#f06060")); cv.vline(18, 17, 20, hx("#f06060")); cv.vline(20, 17, 21, hx("#f06060")); cv.vline(22, 17, 20, hx("#f06060"))   # 水母
+    cv.set(19, 14, hx("#ffffff"))
+    cv.ellipse(18, 24, 1.2, 1.2, hx("#f4f4f8"))                           # 球
+    cv.hline(20, 24, 26, hx("#e8e8f0"))                                   # 擋板
+    for y in (34, 37, 40):
+        cv.hline(18, 25, y, dark)                                         # 下半身的散熱孔
+    cv.hline(7, 29, 46, dark); cv.hline(7, 29, 47, dark)
     cv.outline()
     return cv
 
