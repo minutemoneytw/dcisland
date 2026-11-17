@@ -4986,7 +4986,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; S.tblFinal = null; brkStop(); dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); pbStop(); hkStop(); unStopTimer(); bkStopTimer(); kgStopTimer(); btStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
+  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; S.tblFinal = null; brkStop(); bubStop(); dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); pbStop(); hkStop(); unStopTimer(); bkStopTimer(); kgStopTimer(); btStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
   rulesShow(false); leaveAsk(false);
   $('tableBox').classList.add('hidden');
 }
@@ -5172,6 +5172,7 @@ function buildTable() {
   if (tb?.game === 'mage') { buildMage(box, v, mk, gd); return; }   // 見習驅魔師有自己的畫面（畫符號的場地）
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
   if (tb?.game === 'breakout') { buildBreakout(box, v, mk, gd); return; }   // 打磚塊有自己的畫面
+  if (tb?.game === 'bubble') { buildBubble(box, v, mk, gd); return; }   // 泡泡射手有自己的畫面
   if (tb?.game === 'pinball') { buildPinball(box, v, mk, gd); return; }   // 彈珠台有自己的畫面（球檯）
   if (tb?.game === 'maze') { buildMaze(box, v, mk, gd); return; }   // 豆豆迷宮有自己的畫面（迷宮）
   if (tb?.game === 'hockey') { buildHockey(box, v, mk, gd); return; }   // 空氣曲棍球有自己的畫面（球場）
@@ -6416,7 +6417,7 @@ function scrSeatTag(v, s, k) {
   if (gm === 'typing' || gm === 'zhtyping') return `${Math.max(s.score ?? 0, S.scrTy?.prog?.[k]?.n ?? 0)} 分`;
   if (gm === 'maze') return `${s.sc ?? 0} 分`;
   if (gm === 'pinball') return `${Math.max(s.sc ?? 0, S.scrPb?.score ?? 0)} 分`;
-  if (gm === 'breakout') return `${s.sc ?? 0} 分`;
+  if (gm === 'breakout' || gm === 'bubble') return `${s.sc ?? 0} 分`;
   if (gm === 'intel') return s.out ? '出局' : '';
   return '';
 }
@@ -8450,6 +8451,245 @@ function buildBreakout(box, v, mk, gd) {
   box.appendChild(log);
 }
 function onNetTbr(m) { const B = S.brk; if (B && B.role === 'spec') brkApplySnap(B, m); }   // 觀戰者：玩家那台的快照
+// ---- 泡泡射手（第二十二桌 t22，2026-11-17，使用者要求：畫面右側牆邊、彈珠台下方放一台面向左的機台）：單人、一條命、一關接一關、分數進排行榜 ----
+// 跟彈珠台／打磚塊同一套做法：**物理全在自己這台算**（沒有要跟別人即時共用的東西，延遲不影響手感），伺服器只開局、收結算分數；進行中約 8 次／秒送快照 bus（伺服器轉成 tbu）給觀戰者。
+// 玩法（原創規則，常見的「泡泡龍」類型）：蜂巢排列的彩色泡泡從上方垂下來，滑鼠（或 ← →）瞄準、空白／↑／W／點一下發射；泡泡碰到牆會反彈，碰到別的泡泡或天花板就黏住；
+// 同色 3 個以上連在一起就爆掉，爆掉後沒有連到天花板的泡泡跟著掉下來。連續幾發都沒爆，天花板就多垂下一排；泡泡垂到底線就結束。清光盤面進下一關（排數、顏色變多、垂得更快）。
+// 盤面格子：BUB_COLS 欄，第 r 排是否右移半格由 (r + par) & 1 決定（右移的排少一格）；天花板多垂一排時整盤下移一排、par 翻面，所有泡泡的相對位置不變。協定與欄位見 notes「和平島與遊戲桌」。
+const BUB_W = 384, BUB_H = 560, BUB_HUD = 32, BUB_R = 16, BUB_DX = 32, BUB_DY = 28, BUB_COLS = 12, BUB_ROWS = 14, BUB_X0 = 16, BUB_Y0 = 48, BUB_LOSE = 12;
+const BUB_SX = BUB_W / 2, BUB_SY = 518, BUB_SPD = 900, BUB_DT = 1 / 240, BUB_SNAP_MS = 120, BUB_ANG_MAX = 1.35, BUB_KEY_SPD = 1.7;
+const BUB_COL = ['', '#e04848', '#f0c020', '#3cb45a', '#3b78e8', '#9a5ad8', '#40c8e0'];
+const bubLim = lv => Math.max(4, 7 - Math.ceil(lv / 2));   // 連續幾發沒爆掉，天花板就垂下一排（第 1 關 6 發，第 5 關起 4 發）
+const bubOff = (B, r) => ((r + B.par) & 1) * BUB_R;
+const bubOk = (B, r, c) => r >= 0 && r < BUB_ROWS && c >= 0 && c < BUB_COLS - ((r + B.par) & 1);
+const bubXY = (B, r, c) => [BUB_X0 + c * BUB_DX + bubOff(B, r), BUB_Y0 + r * BUB_DY];
+function bubNbrs(B, r, c) {   // 相鄰的六格（只回有效的格子）
+  const o = (r + B.par) & 1, out = [];
+  for (const [dr, dc] of [[0, -1], [0, 1], [-1, o ? 0 : -1], [-1, o ? 1 : 0], [1, o ? 0 : -1], [1, o ? 1 : 0]]) if (bubOk(B, r + dr, c + dc)) out.push([r + dr, c + dc]);
+  return out;
+}
+function bubLevel(B, seed, lv) {   // 第 lv 關的起始盤面（排數、顏色數隨關卡增加）；回傳顏色數
+  const R = mulberry32((seed + lv * 104729) >>> 0), rows = Math.min(9, 5 + Math.floor((lv - 1) / 2)), nc = Math.min(6, 3 + Math.floor((lv + 1) / 2));
+  B.g = new Uint8Array(BUB_ROWS * BUB_COLS); B.par = 0;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < BUB_COLS - (r & 1); c++) {
+    let col = 1 + Math.floor(R() * nc);
+    if (c > 0 && R() < .4) col = B.g[r * BUB_COLS + c - 1]; else if (r > 0 && R() < .25) col = B.g[(r - 1) * BUB_COLS + c];
+    B.g[r * BUB_COLS + c] = col;
+  }
+  return nc;
+}
+function bubColors(B) {   // 盤面上現有的顏色（新泡泡只會從這裡面挑，不然會發出沒人接得上的顏色）
+  const has = new Set(); for (const v of B.g) if (v) has.add(v);
+  return has.size ? [...has] : [1, 2, 3, 4];
+}
+const bubPick = B => { const cs = bubColors(B); return cs[Math.floor(B.rnd() * cs.length)]; };
+function bubMake(v) {
+  const z = v.bu, me = v.role === 'seat';
+  const B = {
+    key: z.seed + ':' + z.t0, t0: z.t0, off: z.sn - Date.now(), seed: z.seed, role: me ? 'seat' : 'spec', over: false,
+    score: 0, lv: 1, miss: 0, par: 0, g: null, ang: 0, cur: 1, nx: 1, fly: null, fx: [], mx: null, my: null, keys: { l: 0, r: 0 },
+    note: null, snap: null, snapAt: 0, last: performance.now(), acc: 0, rnd: mulberry32((z.seed ^ 0x2545f491) >>> 0), sh: 0,
+  };
+  bubLevel(B, z.seed, 1); B.cur = bubPick(B); B.nx = bubPick(B); return B;
+}
+function bubStart(v) { bubStop(); S.bub = bubMake(v); S.bubRaf = requestAnimationFrame(bubFrame); }
+function bubStop() { S.bub = null; if (S.bubRaf) { cancelAnimationFrame(S.bubRaf); S.bubRaf = 0; } }
+const bubNow = B => (Date.now() + B.off - B.t0) / 1000;   // 開局後的秒數（開局前是負的＝倒數）
+function bubNote(B, t) { B.note = { t, until: performance.now() + 1600 }; }
+function bubFire(B) {   // 發射現在這顆（飛行中、倒數中、結束後不能發）
+  if (B.role !== 'seat' || B.over || bubNow(B) < 0 || B.fly) return;
+  const a = B.ang; B.fly = { x: BUB_SX, y: BUB_SY, vx: Math.sin(a) * BUB_SPD, vy: -Math.cos(a) * BUB_SPD, c: B.cur };
+  B.cur = B.nx; B.nx = bubPick(B); B.sh++;
+}
+function bubKey(e, down) {   // 泡泡射手的按鍵：← A／→ D 轉動瞄準，空白 ↑ W 發射（回 true＝已處理）
+  const B = S.bub, v = S.tableView; if (!B || !v || v.game !== 'bubble' || B.role !== 'seat') return false;
+  const k = e.key.toLowerCase(), l = k === 'arrowleft' || k === 'a', r = k === 'arrowright' || k === 'd', go = k === ' ' || k === 'arrowup' || k === 'w';
+  if (!l && !r && !go) return false;
+  e.preventDefault();
+  if (l) B.keys.l = down ? 1 : 0; if (r) B.keys.r = down ? 1 : 0; if (go && down && !e.repeat) bubFire(B);
+  return true;
+}
+function bubSnapTo(B, x, y) {   // 飛行中的泡泡停下來：黏在最近的空格（要貼著天花板或別的泡泡）；回 [r, c]
+  let best = null, bd = 1e9;
+  for (let r = 0; r < BUB_ROWS; r++) for (let c = 0; c < BUB_COLS; c++) {
+    if (!bubOk(B, r, c) || B.g[r * BUB_COLS + c]) continue;
+    const [cx, cy] = bubXY(B, r, c), d = (cx - x) ** 2 + (cy - y) ** 2;
+    if (d >= bd) continue;
+    if (r > 0 && !bubNbrs(B, r, c).some(([a, b]) => B.g[a * BUB_COLS + b])) continue;
+    best = [r, c]; bd = d;
+  }
+  return best;
+}
+function bubPlace(B, r, c, col) {   // 放下泡泡 → 結算：爆掉、掉落、天花板下降、結束／過關
+  B.g[r * BUB_COLS + c] = col;
+  const seen = new Set([r * BUB_COLS + c]), st = [[r, c]];
+  while (st.length) { const [a, b] = st.pop(); for (const [p, q] of bubNbrs(B, a, b)) { const k = p * BUB_COLS + q; if (!seen.has(k) && B.g[k] === col) { seen.add(k); st.push([p, q]); } } }
+  let popped = 0;
+  if (seen.size >= 3) {
+    for (const k of seen) { const [x, y] = bubXY(B, Math.floor(k / BUB_COLS), k % BUB_COLS); B.fx.push({ x, y, vx: 0, vy: 0, c: B.g[k], t: 0, pop: 1 }); B.g[k] = 0; }
+    popped = seen.size; B.score += 10 * popped + (popped > 3 ? 15 * (popped - 3) : 0);
+    const keep = new Set(), q = [];   // 還連著天花板的泡泡
+    for (let c2 = 0; c2 < BUB_COLS; c2++) if (bubOk(B, 0, c2) && B.g[c2]) { keep.add(c2); q.push([0, c2]); }
+    while (q.length) { const [a, b] = q.pop(); for (const [p, q2] of bubNbrs(B, a, b)) { const k = p * BUB_COLS + q2; if (!keep.has(k) && B.g[k]) { keep.add(k); q.push([p, q2]); } } }
+    let fell = 0;
+    for (let k = 0; k < B.g.length; k++) if (B.g[k] && !keep.has(k)) { const [x, y] = bubXY(B, Math.floor(k / BUB_COLS), k % BUB_COLS); B.fx.push({ x, y, vx: (B.rnd() - .5) * 120, vy: -60 - B.rnd() * 80, c: B.g[k], t: 0 }); B.g[k] = 0; fell++; }
+    if (fell) { B.score += 20 * fell; bubNote(B, `掉落 ${fell} 顆！`); }
+    B.miss = 0;
+  } else B.miss++;
+  if (!B.g.some(Boolean)) {   // 清光：過關
+    B.score += 500 * B.lv; B.lv++; B.miss = 0; B.fly = null; bubLevel(B, B.seed, B.lv); B.cur = bubPick(B); B.nx = bubPick(B); bubNote(B, `第 ${B.lv} 關`);
+    return;
+  }
+  if (B.miss >= bubLim(B.lv)) {   // 天花板垂下一排：整盤下移一排、par 翻面，最上面補一排新的
+    B.miss = 0; B.g.copyWithin(BUB_COLS, 0, (BUB_ROWS - 1) * BUB_COLS); B.par ^= 1;
+    const cs = bubColors(B);
+    for (let c2 = 0; c2 < BUB_COLS; c2++) B.g[c2] = bubOk(B, 0, c2) ? cs[Math.floor(B.rnd() * cs.length)] : 0;
+    bubNote(B, '天花板下降！');
+  }
+  const cs = bubColors(B); if (!cs.includes(B.cur)) B.cur = cs[Math.floor(B.rnd() * cs.length)]; if (!cs.includes(B.nx)) B.nx = cs[Math.floor(B.rnd() * cs.length)];   // 手上那兩顆的顏色已經沒有了就換掉
+  for (let k = BUB_LOSE * BUB_COLS; k < B.g.length; k++) if (B.g[k]) {   // 垂到底線：結束
+    B.over = true; B.fly = null; bubSnap(B, true); tblFinal({ a: 'over', sc: Math.min(99999999, Math.round(B.score)), lv: Math.min(999, B.lv) }); return;
+  }
+}
+function bubStep(B, dt) {   // 往前模擬 dt 秒（只有自己的局）
+  const kx = B.keys.r - B.keys.l;
+  if (kx) { B.ang += kx * BUB_KEY_SPD * dt; B.mx = null; }
+  else if (B.mx != null) B.ang = Math.atan2(B.mx - BUB_SX, BUB_SY - B.my);
+  B.ang = Math.max(-BUB_ANG_MAX, Math.min(BUB_ANG_MAX, B.ang));
+  for (const f of B.fx) { f.t += dt; if (!f.pop) { f.vy += 900 * dt; f.x += f.vx * dt; f.y += f.vy * dt; } }
+  B.fx = B.fx.filter(f => f.pop ? f.t < .25 : f.y < BUB_H + 30);
+  const f = B.fly; if (!f) return;
+  f.x += f.vx * dt; f.y += f.vy * dt;
+  if (f.x < BUB_R) { f.x = BUB_R; f.vx = Math.abs(f.vx); } else if (f.x > BUB_W - BUB_R) { f.x = BUB_W - BUB_R; f.vx = -Math.abs(f.vx); }
+  let hit = f.y <= BUB_Y0;   // 撞到天花板
+  if (!hit) for (let r = 0; r < BUB_ROWS && !hit; r++) for (let c = 0; c < BUB_COLS; c++) {
+    if (!bubOk(B, r, c) || !B.g[r * BUB_COLS + c]) continue;
+    const [cx, cy] = bubXY(B, r, c);
+    if ((cx - f.x) ** 2 + (cy - f.y) ** 2 < (BUB_R * 1.75) ** 2) { hit = true; break; }
+  }
+  if (!hit) return;
+  B.fly = null;
+  const cell = bubSnapTo(B, f.x, Math.max(BUB_Y0, f.y));
+  if (cell) bubPlace(B, cell[0], cell[1], f.c);
+}
+function bubSnap(B, force) {   // 自己的局：快照給觀戰者
+  const now = performance.now();
+  if (!force && now - B.snapAt < BUB_SNAP_MS) return;
+  B.snapAt = now;
+  S.net?.tbl?.({ a: 'bus', m: Array.from(B.g).join(''), par: B.par, cur: B.cur, nx: B.nx, an: Math.round(B.ang * 1800 / Math.PI), bx: B.fly ? Math.round(B.fly.x) : -1, by: B.fly ? Math.round(B.fly.y) : -1,
+    sc: Math.min(99999999, Math.round(B.score)), lv: Math.min(999, B.lv), f: Math.max(0, bubLim(B.lv) - B.miss) });
+}
+function bubApplySnap(B, m) {   // 觀戰者：套用快照（盤面直接換、瞄準線和飛行中的泡泡平滑追過去）
+  const was = B.cur;
+  B.snap = m; B.score = m.sc; B.lv = m.lv; B.par = m.par; B.cur = m.cur; B.nx = m.nx; B.f = m.f;
+  for (let i = 0; i < B.g.length; i++) B.g[i] = +m.m[i] || 0;
+  if (m.bx >= 0) { if (!B.fly) B.fly = { x: m.bx, y: m.by, vx: 0, vy: 0, c: was }; B.fly.tx = m.bx; B.fly.ty = m.by; } else B.fly = null;
+}
+function bubAdvance(B, dt) {   // 每一幀：自己的局跑物理＋送快照；旁觀的局讓瞄準線和泡泡追上最新快照
+  if (B.role === 'seat') {
+    if (bubNow(B) >= 0 && !B.over) { B.acc += dt; let n = 0; while (B.acc >= BUB_DT && n++ < 20 && !B.over) { bubStep(B, BUB_DT); B.acc -= BUB_DT; } if (n >= 20) B.acc = 0; if (!B.over) bubSnap(B, false); }
+    else B.acc = 0;
+  } else if (B.snap) {
+    const a = 1 - Math.exp(-dt * 18);
+    B.ang += (B.snap.an * Math.PI / 1800 - B.ang) * a;
+    if (B.fly) { B.fly.x += (B.fly.tx - B.fly.x) * a; B.fly.y += (B.fly.ty - B.fly.y) * a; }
+  }
+}
+function bubFrame() {
+  const B = S.bub, v = S.tableView;
+  if (!B || !S.tableOpen || !v || v.game !== 'bubble') { S.bubRaf = 0; return; }
+  S.bubRaf = requestAnimationFrame(bubFrame);
+  const now = performance.now(), dt = Math.max(0, Math.min(.05, (now - B.last) / 1000)); B.last = now;
+  bubAdvance(B, dt);
+  bubDraw(B, $('bubCanvas'), bubNow(B));
+}
+function bubBall(g, x, y, col, a = 1) {   // 一顆泡泡
+  g.globalAlpha = a; g.fillStyle = BUB_COL[col]; g.beginPath(); g.arc(x, y, BUB_R - 1, 0, Math.PI * 2); g.fill();
+  g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.arc(x, y, BUB_R - 1, .2, Math.PI - .2); g.lineTo(x, y); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.55)'; g.beginPath(); g.arc(x - 5, y - 5, 4, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, BUB_R - 1, 0, Math.PI * 2); g.stroke();
+  g.globalAlpha = 1;
+}
+function bubDraw(B, cv, t) {
+  if (!cv) return;
+  const g = cv.getContext('2d'), now = performance.now();
+  const bg = g.createLinearGradient(0, 0, 0, BUB_H); bg.addColorStop(0, '#142a4a'); bg.addColorStop(1, '#0c1830'); g.fillStyle = bg; g.fillRect(0, 0, BUB_W, BUB_H);
+  g.fillStyle = '#16203a'; g.fillRect(0, 0, BUB_W, BUB_HUD);
+  g.font = 'bold 15px "Microsoft JhengHei"'; g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillStyle = '#ffe08a'; g.fillText(`${Math.round(B.score)} 分`, 10, BUB_HUD / 2);
+  g.textAlign = 'center'; g.fillStyle = '#b8c4dc'; g.fillText(`第 ${B.lv} 關`, BUB_W / 2, BUB_HUD / 2);
+  const left = B.role === 'seat' ? Math.max(0, bubLim(B.lv) - B.miss) : (B.f ?? bubLim(B.lv)), lim = bubLim(B.lv);   // 離下一排還有幾發：畫成右上角的小方塊
+  for (let i = 0; i < lim; i++) { g.fillStyle = i < left ? (left <= 2 ? '#ff6a5a' : '#e8e8f0') : 'rgba(255,255,255,.18)'; g.fillRect(BUB_W - 14 - i * 12, BUB_HUD / 2 - 5, 8, 10); }
+  g.fillStyle = '#243656'; g.fillRect(0, BUB_HUD, BUB_W, BUB_Y0 - BUB_R - BUB_HUD + 2);   // 天花板
+  g.strokeStyle = 'rgba(255,90,90,.55)'; g.lineWidth = 1.5; g.setLineDash([6, 6]); const ly = BUB_Y0 + (BUB_LOSE - 1) * BUB_DY + BUB_R;
+  g.beginPath(); g.moveTo(0, ly); g.lineTo(BUB_W, ly); g.stroke(); g.setLineDash([]);   // 底線
+  for (let r = 0; r < BUB_ROWS; r++) for (let c = 0; c < BUB_COLS; c++) { const col = B.g[r * BUB_COLS + c]; if (col) { const [x, y] = bubXY(B, r, c); bubBall(g, x, y, col); } }
+  for (const f of B.fx) { if (f.pop) { g.strokeStyle = BUB_COL[f.c]; g.lineWidth = 2; g.globalAlpha = 1 - f.t / .25; g.beginPath(); g.arc(f.x, f.y, BUB_R - 1 + f.t * 40, 0, Math.PI * 2); g.stroke(); g.globalAlpha = 1; } else bubBall(g, f.x, f.y, f.c); }
+  const a = B.ang, ok = !B.over && t >= 0;   // 瞄準線（碰牆反彈一次）
+  if (ok && !B.fly) {
+    g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 2; g.setLineDash([3, 8]); g.beginPath();
+    let x = BUB_SX, y = BUB_SY, dx = Math.sin(a), dy = -Math.cos(a); g.moveTo(x, y);
+    for (let k = 0; k < 2; k++) {
+      const tw = dx > 0 ? (BUB_W - BUB_R - x) / dx : dx < 0 ? (BUB_R - x) / dx : 1e9, tt = (BUB_Y0 - y) / dy, s = Math.min(tw, tt);
+      x += dx * s; y += dy * s; g.lineTo(x, y); if (s === tt) break; dx = -dx;
+    }
+    g.stroke(); g.setLineDash([]);
+  }
+  g.save(); g.translate(BUB_SX, BUB_SY); g.rotate(a); g.fillStyle = '#c8d4f0'; g.fillRect(-4, -34, 8, 34); g.fillStyle = '#8aa0d8'; g.fillRect(-6, -36, 12, 5); g.restore();   // 砲管
+  g.fillStyle = '#243656'; g.beginPath(); g.arc(BUB_SX, BUB_SY + 6, 22, Math.PI, 0); g.fill(); g.strokeStyle = '#4a6aa8'; g.lineWidth = 2; g.stroke();
+  if (!B.over) { bubBall(g, BUB_SX, BUB_SY, B.cur); g.font = '12px "Microsoft JhengHei"'; g.fillStyle = '#9fb0d8'; g.textAlign = 'center'; g.fillText('下一顆', BUB_SX + 62, BUB_SY + 20); bubBall(g, BUB_SX + 62, BUB_SY, B.nx); }
+  if (B.fly) bubBall(g, B.fly.x, B.fly.y, B.fly.c ?? B.cur);
+  let msg = null;
+  if (t < 0) msg = String(Math.ceil(-t));
+  else if (B.over) msg = '遊戲結束';
+  else if (B.note && B.note.until > now) msg = B.note.t;
+  else if (B.role === 'seat' && B.sh === 0) msg = '滑鼠瞄準、點一下發射';
+  if (msg) { g.font = 'bold 22px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 5; g.strokeStyle = 'rgba(0,0,0,.85)'; g.fillStyle = '#ffe08a'; g.strokeText(msg, BUB_W / 2, 440); g.fillText(msg, BUB_W / 2, 440); }
+  g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+}
+function buildBubble(box, v, mk, gd) {
+  const playing = v.phase === 'playing', z = v.bu;
+  if (playing && z && (!S.bub || S.bub.key !== z.seed + ':' + z.t0)) bubStart(v);
+  if (!playing) bubStop();
+  const B = S.bub;
+  let status;
+  if (playing && B) status = B.role === 'seat' ? '泡泡射手：滑鼠（或 ← →）瞄準，空白鍵／點一下發射' : '觀戰中';
+  else status = v.seats.length < v.min ? '等待玩家入座（單人）' : '按「準備」就開始（一條命，分數進排行榜）';
+  box.appendChild(mk('div', 'table-status' + (playing && B?.role === 'seat' ? ' mine' : ''), status));
+  const r = v.result;
+  if (r && !playing) box.appendChild(mk('div', 'table-result', r.text));
+  if (!playing) boardBlock(box, v, mk, sc => `${sc} 分`);
+  if (!playing) {
+    const row = mk('div', 'table-seats');
+    v.seats.forEach(s => {
+      const seat = mk('div', 'table-seat' + (s.you ? ' you' : '') + (s.left ? ' out' : ''));
+      seat.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '')));
+      seat.appendChild(mk('div', 'table-tag', s.ready ? '已準備' : '未準備'));
+      row.appendChild(seat);
+    });
+    for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+    box.appendChild(row);
+  } else {
+    const wrap = mk('div', 'pb-wrap'), cv = document.createElement('canvas');
+    cv.id = 'bubCanvas'; cv.width = BUB_W; cv.height = BUB_H; cv.className = 'bub-canvas';
+    cv.onmousemove = e => { const b = cv.getBoundingClientRect(); if (S.bub?.role === 'seat') { S.bub.mx = (e.clientX - b.left) * cv.width / b.width; S.bub.my = (e.clientY - b.top) * cv.height / b.height; } };
+    cv.onmousedown = e => { const B2 = S.bub; if (B2) { e.preventDefault(); if (B2.role === 'seat') { cv.onmousemove(e); bubStep(B2, 0); bubFire(B2); } } };
+    wrap.appendChild(cv); box.appendChild(wrap);
+  }
+  const btns = mk('div', 'table-btns');
+  if (v.role === 'seat' && !playing) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+}
+function onNetTbu(m) { const B = S.bub; if (B && B.role === 'spec') bubApplySnap(B, m); }   // 觀戰者：玩家那台的快照
 function buildMaze(box, v, mk, gd) {
   const playing = v.phase === 'playing', z = v.mz;
   if (playing && z && (!S.mz || S.mz.key !== z.seed + ':' + z.t0)) mzStart(v);
@@ -12113,6 +12353,7 @@ addEventListener('keydown', e => {
     else if (S.mz && mzKey(e)) { /* 豆豆迷宮：方向鍵／WASD */ }
     else if (S.pb && pbKey(e, true)) { /* 彈珠台：← → 空白 */ }
     else if (S.brk && brkKey(e, true)) { /* 打磚塊：← → 空白 */ }
+    else if (S.bub && bubKey(e, true)) { /* 泡泡射手：← → 空白 */ }
     else if (S.hk && hkKey(e, true)) { /* 空氣曲棍球：方向鍵／WASD */ }
     else if (S.ty) typingKey(e);   // 英文打字競賽：英文字母
     else if (S.tableView?.game === 'blokus' && S.tableView.phase === 'playing' && S.tableView.role === 'seat') bkKey(e);
@@ -12155,7 +12396,7 @@ addEventListener('keydown', e => {
   if ((k === '1' || k === '2') && !e.repeat) tryJobSkill(+k - 1);   // 1／2：職業技能
   if (k === 'shift' && !e.repeat) toggleSprint();   // Shift：切換疾走／步行（與右下角虛擬按鍵同一個開關）
 });
-addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; arKeyUp(e.key.toLowerCase()); if (S.pb) pbKey(e, false); if (S.brk) brkKey(e, false); if (S.hk) hkKey(e, false); if (e.key.toLowerCase() === 'f') S.holdSkipF = false; if (S.dg && DG_KEYS[e.key.toLowerCase()]) S.dg.keys[DG_KEYS[e.key.toLowerCase()]] = false; });
+addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; arKeyUp(e.key.toLowerCase()); if (S.pb) pbKey(e, false); if (S.brk) brkKey(e, false); if (S.bub) bubKey(e, false); if (S.hk) hkKey(e, false); if (e.key.toLowerCase() === 'f') S.holdSkipF = false; if (S.dg && DG_KEYS[e.key.toLowerCase()]) S.dg.keys[DG_KEYS[e.key.toLowerCase()]] = false; });
 // ---------------- 疾走虛擬按鍵（畫面右下角）----------------
 // 圓形＋跑步像素小人；點擊或按 Shift 切換疾走／步行（2026-11-06 使用者要求：點擊後持續生效，再點擊或再按 Shift 切回步行）
 function toggleSprint() {
@@ -12662,7 +12903,7 @@ async function boot() {
     onThp: onNetThp,           // 空氣曲棍球：別人的握把位置
     onThs: onNetThs,           // 空氣曲棍球：桌主的圓盤快照
     onTblInfo: onNetTblInfo,   // 和平島各桌的人數／狀態
-    onScr: onNetScr, onScrList: onNetScrList, onScrTb: onNetScrTb, onScrTp: onNetScrTp, onScrMz: onNetScrMz, onTpb: onNetTpb, onTbr: onNetTbr, onScrCd: onNetScrCd,   // 和平島大螢幕
+    onScr: onNetScr, onScrList: onNetScrList, onScrTb: onNetScrTb, onScrTp: onNetScrTp, onScrMz: onNetScrMz, onTpb: onNetTpb, onTbr: onNetTbr, onTbu: onNetTbu, onScrCd: onNetScrCd,   // 和平島大螢幕
     onCraftDb: onNetCraftDb,   // 登入後伺服器送來的合成解鎖紀錄（素材圖鑑／配方筆記）
     onKills: onNetKills,       // 登入後／擊倒島主時伺服器送來的擊倒紀錄（跟著帳號）
     onNick: nick => { S.nick = nick || ''; applyMyName(); },
