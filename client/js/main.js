@@ -6360,6 +6360,24 @@ function onNetScrList(msg) {
   S.scrList = msg; S.scrCdAt = Date.now() + (msg.cd || 0);
   if (S.scrPickOpen) buildScrPick();
 }
+// 大螢幕：淨土守護戰——左邊 5×5 的島（污染＝紫、荒廢＝黑、人偶＝座位色圓點），右邊污染等級、四種素材、牌庫與剛打過的擴散牌
+function scrPurify(g, v, MX, MY, MW) {
+  const z = v.pg, C = 36, bx = MX + 4, by = MY + 8;
+  for (let i = 0; i < 25; i++) {
+    const t = pgTile(v, i), x = bx + (i % 5) * C, y = by + Math.floor(i / 5) * C;
+    g.fillStyle = t.s === 2 ? '#1a1a1e' : PG_RCOL[t.r]; g.fillRect(x, y, C - 2, C - 2);
+    if (t.s === 1) { g.fillStyle = 'rgba(138,79,184,.7)'; g.fillRect(x, y, C - 2, C - 2); g.fillStyle = '#fff'; g.font = `bold 16px ${SCR_FONT}`; g.textAlign = 'center'; g.fillText('☣', x + C / 2 - 1, y + C / 2 + 6); }
+    if (z.block === i) { g.font = `11px ${SCR_FONT}`; g.textAlign = 'left'; g.fillText('🔒', x + 1, y + 12); }
+    z.pawn.forEach((p, k) => { if (p === i && !v.seats[k].left && !v.seats[k].fo) { g.fillStyle = PG_SEATCOL[k]; g.beginPath(); g.arc(x + 8 + (k % 2) * 13, y + C - 11 - (k > 1 ? 11 : 0), 5, 0, 7); g.fill(); } });
+  }
+  const X = MX + 196;
+  g.textAlign = 'left'; g.fillStyle = z.lvl >= z.lose - 2 ? '#ff7a6a' : '#e8ecf8'; g.font = `bold 13px ${SCR_FONT}`;
+  g.fillText(`污染等級 ${z.lvl}／${z.lose - 1}`, X, MY + 18); g.fillStyle = '#9fb0d8'; g.font = `12px ${SCR_FONT}`; g.fillText(`每回合翻 ${z.draws} 張擴散牌`, X, MY + 34);
+  PG_REGIONS.forEach((r, k) => { g.fillStyle = z.got[k] ? PG_RCOL[r] : '#4a5578'; g.fillText(`${z.got[k] ? '✔' : '○'} ${PG_RNAME[r]}素材`, X, MY + 58 + k * 18); });
+  g.fillStyle = '#9fb0d8'; g.fillText(`補給 ${z.sup}・擴散 ${z.sd}`, X, MY + 142);
+  g.fillText(`剛打過：${[...z.sdd].reverse().slice(0, 2).map(pgDirName).join('、')}`, X, MY + 160, 125);
+  g.fillStyle = '#ffe08a'; g.fillText(`${v.seats[v.turn]?.name || ''} 行動中（${z.acts} 點）`, X, MY + 182, 125);
+}
 function scrTmp(w, h) { const c = (S.scrTmp ||= document.createElement('canvas')); c.width = w; c.height = h; return c; }
 function scrMiniCard(g, x, y, c, kind) {   // 22×30 的小牌；kind＝'uno' 用 UNO 牌面，否則一般撲克牌；c＝null 畫牌背
   const w = 22, h = 30;
@@ -6463,6 +6481,7 @@ function scrRender() {
       drew = true;
     } else if (sc.game === 'oldmaid' && playing) { scrHands(g, v, MX, MY, MW, 44, null); drew = true; }
     else if (sc.game === 'kingdom' && v.kg) { scrKingdom(g, v, MX, MY, MW); drew = true; }
+    else if (sc.game === 'purify' && v.pg) { scrPurify(g, v, MX, MY, MW); drew = true; }
     else if (sc.game === 'maze' && playing && v.mz) { scrMaze(g, v, MX, MY, MW, MH); drew = true; }
     else if (sc.game === 'pinball' && playing && v.pb) { scrPinball(g, v, MX, MY, MW, MH); drew = true; }
     else if (wideIntel) { scrIntel(g, v, MX, MY, SCR_W - MX * 2); drew = true; }
