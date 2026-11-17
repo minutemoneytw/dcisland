@@ -8766,8 +8766,8 @@ function onNetTbu(m) { const B = S.bub; if (B && B.role === 'spec') bubApplySnap
 // ---- 2048（第二十三桌 t23，2026-11-17，使用者要求：泡泡射手下方再放一台）：單人、4×4 滑動合併、分數進排行榜；跟泡泡射手同一套做法 ----
 // 玩法全在自己這台算，新方塊由 seed 決定性產生（B.rnd）；伺服器只開局、收結算（分數 sc、最大方塊指數 mx）、把每一步的盤面 tfs 轉成 ttf 給觀戰者與大螢幕。
 // 盤面 B.g＝16 格（由左上起一列一列），每格存方塊的指數（0＝空、1＝2、2＝4…）；快照字串 m＝每格一個 base36 字元。合併得分＝合出來的方塊數字；湊出 2048 以後可以繼續玩，無法再移動就結束。
-const TF_W = 360, TF_H = 430, TF_HUD = 62, TF_X0 = 12, TF_Y0 = 70, TF_CS = 74, TF_GAP = 8, TF_SNAP_MS = 1000;
-const TF_COL = ['#cdc1b4', '#eee4da', '#ede0c8', '#f2b179', '#f59563', '#f67c5f', '#f65e3b', '#edcf72', '#edcc61', '#edc850', '#edc53f', '#edc22e', '#3c3a32', '#3c3a32', '#3c3a32', '#3c3a32', '#3c3a32', '#3c3a32'];
+const TF_W = 360, TF_H = 412, TF_HUD = 62, TF_X0 = 20, TF_Y0 = 70, TF_CS = 74, TF_GAP = 8, TF_SNAP_MS = 1000;
+const TF_COL = ['#2c3552', '#5b7fb8', '#4f9fc0', '#3fb0a0', '#5cba7a', '#a8c860', '#e0c050', '#f0a840', '#f08850', '#e86a6a', '#c860b0', '#9a5ad8', '#ffe08a', '#ffe08a', '#ffe08a', '#ffe08a', '#ffe08a', '#ffe08a'];   // 配合介面的深藍＋金色：由冷色（小數字）漸層到暖色、紫色（2048）、金色（更大）
 const tfNow = B => (Date.now() + B.off - B.t0) / 1000;
 function tfMake(v) {
   const z = v.tf, me = v.role === 'seat';
@@ -8833,18 +8833,18 @@ function tfFrame() {
 function tfDraw(B, cv, t) {
   if (!cv) return;
   const g = cv.getContext('2d'), now = performance.now();
-  g.fillStyle = '#1c2430'; g.fillRect(0, 0, TF_W, TF_H);
+  g.fillStyle = '#182034'; g.fillRect(0, 0, TF_W, TF_H);
   g.textBaseline = 'middle'; g.textAlign = 'left'; g.font = 'bold 20px "Microsoft JhengHei"'; g.fillStyle = '#ffe08a'; g.fillText(`${Math.round(B.score)} 分`, 14, 26);
   g.font = '14px "Microsoft JhengHei"'; g.fillStyle = '#b8c4dc'; g.fillText(`最大方塊 ${2 ** B.mx}`, 14, 50);
   g.textAlign = 'right'; g.fillText(B.role === 'seat' ? '方向鍵／WASD／滑動' : '觀戰中', TF_W - 14, 26);
-  g.fillStyle = '#bbada0'; g.beginPath(); g.roundRect(TF_X0 - 8, TF_Y0 - 8, TF_CS * 4 + TF_GAP * 3 + 16, TF_CS * 4 + TF_GAP * 3 + 16, 8); g.fill();
+  g.fillStyle = '#222c48'; g.beginPath(); g.roundRect(TF_X0 - 8, TF_Y0 - 8, TF_CS * 4 + TF_GAP * 3 + 16, TF_CS * 4 + TF_GAP * 3 + 16, 8); g.fill();
   for (let i = 0; i < 16; i++) {
     const x = TF_X0 + (i & 3) * (TF_CS + TF_GAP), y = TF_Y0 + (i >> 2) * (TF_CS + TF_GAP), e = B.g[i];
-    g.fillStyle = 'rgba(238,228,218,.35)'; g.beginPath(); g.roundRect(x, y, TF_CS, TF_CS, 6); g.fill();
+    g.fillStyle = '#2c3552'; g.beginPath(); g.roundRect(x, y, TF_CS, TF_CS, 6); g.fill();
     if (!e) continue;
     const a = Math.min(1, (now - B.pop[i]) / 140), k = a < 1 ? .6 + .4 * a + .12 * Math.sin(a * Math.PI) : 1, s = TF_CS * k, ox = x + (TF_CS - s) / 2, oy = y + (TF_CS - s) / 2;
-    g.fillStyle = TF_COL[e] || '#3c3a32'; g.beginPath(); g.roundRect(ox, oy, s, s, 6); g.fill();
-    const n = 2 ** e; g.fillStyle = e <= 2 ? '#776e65' : '#f9f6f2'; g.textAlign = 'center';
+    g.fillStyle = TF_COL[e] || '#ffe08a'; g.beginPath(); g.roundRect(ox, oy, s, s, 6); g.fill();
+    const n = 2 ** e; g.fillStyle = e >= 5 && e <= 7 || e >= 12 ? '#1a2030' : '#fff'; g.textAlign = 'center';
     g.font = `bold ${(n < 100 ? 34 : n < 1000 ? 30 : n < 10000 ? 24 : 19) * k}px "Microsoft JhengHei"`; g.fillText(String(n), x + TF_CS / 2, y + TF_CS / 2 + 2);
   }
   let msg = null;
