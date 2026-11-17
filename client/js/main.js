@@ -8908,9 +8908,9 @@ function scrG2048(g, v, MX, MY, MW, MH) {
   if (!S.scrTf || S.scrTf.key !== key) S.scrTf = tfMake({ ...v, role: 'spec' });
   const B = S.scrTf, cv = (S.scrTfCv ||= Object.assign(document.createElement('canvas'), { width: TF_W, height: TF_H }));
   tfDraw(B, cv, tfNow(B));
-  const k = Math.min(MW / TF_W, MH / TF_H);
+  const k = Math.min(MW / TF_W, MH / TF_H), FW = SCR_W - MX * 2;   // 盤面窄，置中在整個螢幕寬度（不是只有左半邊；右邊座位欄不會被蓋到）
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
-  g.drawImage(cv, MX + (MW - TF_W * k) / 2, MY + (MH - TF_H * k) / 2, TF_W * k, TF_H * k);
+  g.drawImage(cv, MX + (FW - TF_W * k) / 2, MY + (MH - TF_H * k) / 2, TF_W * k, TF_H * k);
 }
 function buildMaze(box, v, mk, gd) {
   const playing = v.phase === 'playing', z = v.mz;
