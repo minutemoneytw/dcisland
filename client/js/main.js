@@ -3234,7 +3234,7 @@ function stepPlayer(p, dt) {
       if (p.pose === 'sit') seatFace(p, seatItem(p).dir || 0);   // 椅子被轉了方向：人跟著轉
       if (p.fish) {   // 坐著釣魚（2026-11-14 使用者要求）：等魚／上鉤／拉竿照常推進；換掉釣竿、進裝飾模式、被石化就收竿
         if (S.mode !== 'walk' || S.t < (p.petUntil ?? 0) || (p === S.players[0] && !isRod())) stopFishing(p);
-        stepFishing(p);
+        stepFishing(p, dt);
       }
       return;
     }
@@ -3268,8 +3268,8 @@ function stepPlayer(p, dt) {
   if (p.fish && !reeling) {
     if (Math.hypot(p.fish.x - p.x, p.fish.y - p.y) > FISH_LEASH) stopFishing(p, '離浮標太遠，收竿了');
     else if (S.mode !== 'walk' || !isRod() || pet) stopFishing(p);
-  }
-  stepFishing(p);
+  } else if (p.fish?.mg && (S.mode !== 'walk' || !isRod() || pet)) stopFishing(p);   // 拉扯小遊戲很長（不像原本只有 1 秒），中途也要能被打斷
+  stepFishing(p, dt);
   if (p === S.players[0]) stepCast(p);
   if (p.moving) {
     if (S.mode === 'walk' && S.mouseHeld && S.mouseClient) {   // 按住滑鼠攻擊時，面向跟著游標（四方向；可以一邊朝右攻擊一邊往左退）
@@ -4022,8 +4022,11 @@ function drawPersonBase(p, wi, nameColor) {
     ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
     const yy = headY - 14 - Math.abs(Math.sin(S.t * 10)) * 4;
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.9)'; ctx.fillStyle = '#ffd84a';
-    ctx.strokeText('!', p.x, yy); ctx.fillText('!', p.x, yy);
-  } else if (p.guide) {   // 嚮導頭上有個會晃動的「？」，提示可以問他
+    const tier = tugTier(p.fish);   // 罕見「!!」、稀有「!!!」（顏色也不同）
+    if (tier) ctx.fillStyle = tier.color;
+    ctx.strokeText(tier?.mark || '!', p.x, yy); ctx.fillText(tier?.mark || '!', p.x, yy);
+  } else if (p.fish?.mg) drawTug(p, p.fish.mg, headY);
+  else if (p.guide) {   // 嚮導頭上有個會晃動的「？」，提示可以問他
     ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
     const yy = nameY - 14 + Math.sin(S.t * 4) * 2;
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#ffd86b';
@@ -4421,6 +4424,23 @@ const FISH_REEL = 1;             // 拉竿的拉扯動畫秒數
 const FISH_RANGE = [36, 140];    // 浮標離人的距離（px）
 const FISH_LEASH = 5 * CELL;     // 釣魚中可以走動，離浮標超過這個距離（5 格）才自動收竿
 const FISH_RESULT_WAIT = 4;      // 連線時拉竿後，最多再等伺服器結果幾秒
+// 拉扯小遊戲（2026-11-17 使用者要求）：依上鉤那條魚的稀有度分級（TUG.tier）——常見＝照舊按一下就釣上來（頭上「!」）；
+// 罕見＝「!!」、控線約 2 秒、魚不會掙扎；稀有＝「!!!」、完整的拉扯（魚會掙扎）。音效也各不相同。
+// 拉扯：按住 F／左鍵收線（張力上升）、放開放線（張力下降）：張力待在中段進度才會漲；頂到上限太久＝斷線，鬆弛累計太久＝魚跑掉。
+// 稀有魚會在「喘息」與「掙扎」之間切換，掙扎時按住張力暴漲，要放線。有小遊戲的魚不算脫鉤（escape）。
+const TUG = {
+  slack: .25, danger: .85,          // 張力條：低於 slack＝鬆弛區；高於 danger＝警戒區（只是提示色，頂到 1 才算斷線時間）
+  up: [.6, 1.6], down: [.75, .35],  // 每秒張力變化：按住［喘息, 掙扎］、放開［喘息, 掙扎］
+  snapAfter: .4, loseAfter: 1.5,    // 張力頂在上限累計幾秒斷線；鬆弛累計幾秒魚跑掉（回到安全區會慢慢消退）
+  drop: .08,                        // 鬆弛區每秒進度倒退
+  calm: [1.2, 2.4], surge: [.7, 1.3],   // 喘息／掙扎各持續幾秒（隨機）
+  // 各稀有度的分級（沒列的＝沒有小遊戲）：mark＝上鉤時頭上的字、gain＝每秒進度［安全區下緣, 上緣］、surge＝魚會不會掙扎
+  tier: {
+    uncommon: { mark: '!!', color: '#7ab8f0', sfx: 'SFX_BITE_UNCOMMON', gain: [.42, .5], surge: false },   // 待在安全區約 2 秒
+    rare: { mark: '!!!', color: '#ff9a3a', sfx: 'SFX_BITE_RARE', gain: [.1, .3], surge: true },
+  },
+};
+const tugTier = f => TUG.tier[f?.rar] || null;
 const isRod = () => !!S.avatar?.weapons.find(w => w.id === S.me.weapon)?.fishing;
 const isWater = (wx, wy) => {
   const x = Math.floor(wx / CELL), y = Math.floor(wy / CELL);
@@ -4469,25 +4489,59 @@ function fishAction(wx, wy) {
     p.fish = { ph: 'wait', x: Math.round(pt.x), y: Math.round(pt.y), t: S.t, c0: S.t, biteAt: S.t + FISH_WAIT[0] + Math.random() * (FISH_WAIT[1] - FISH_WAIT[0]) };
     if (Math.abs(pt.x - p.x) > 4) p.dir = Math.sign(pt.x - p.x);
     p.d8 = dir4To(pt.x - p.x, pt.y - p.y, p); p.face = p.d8 === 'up' || p.d8 === 'down' ? p.d8 : 'side'; p.tool = null;
+    if (netOn()) S.net.fishHook();   // 伺服器現在就抽好這一竿的魚，用 fish_hook 回稀有度（onFishHook）；沒回＝當常見魚處理
     toast('拋竿了，等魚上鉤…（再按一次收竿）', 1800);
   } else if (f.ph === 'wait') stopFishing(p, '收竿了');
   else if (f.ph === 'bite') {
     f.ph = 'reel'; f.t = S.t; f.result = null;
+    if (tugTier(f)) { f.mg = { tier: tugTier(f), T: .45, prog: .12, over: 0, slack: 0, surge: false, next: S.t + 1 + Math.random() * .8, t0: S.t }; return; }   // 罕見／稀有魚：先拉扯，贏了才揭曉（stepTug）
     if (netOn()) S.net.fishCatch();            // 伺服器抽魚並記進圖鑑，結果由 fish_result 回來
-    else f.result = rollFish(S.terrain, f);
+    else f.result = f.pre || rollFish(S.terrain, f);
+  }
+}
+// 拉扯小遊戲每幀（只有自己的角色有 f.mg；別人看到的就是一直在拉竿）
+function stepTug(p, f, dt) {
+  const g = f.mg, hold = !!(keys['f'] || S.mouseHeld), k = g.surge ? 1 : 0;
+  const gain = g.tier.gain;
+  if (g.tier.surge && S.t >= g.next) {   // 喘息 ↔ 掙扎（只有稀有魚）
+    g.surge = !g.surge;
+    const r = g.surge ? TUG.surge : TUG.calm;
+    g.next = S.t + r[0] + Math.random() * (r[1] - r[0]);
+    if (g.surge) sfxTones(SFX_TUG_SURGE);
+  }
+  g.T = Math.max(0, Math.min(1, g.T + (hold ? TUG.up[k] : -TUG.down[k]) * dt));
+  g.over = g.T >= 1 ? g.over + dt : Math.max(0, g.over - dt * .5);
+  if (g.T < TUG.slack) { g.slack += dt; g.prog = Math.max(0, g.prog - TUG.drop * dt); }
+  else {
+    g.slack = Math.max(0, g.slack - dt * .5);
+    g.prog += (gain[0] + (gain[1] - gain[0]) * (g.T - TUG.slack) / (1 - TUG.slack)) * dt;
+  }
+  if (g.over >= TUG.snapAfter) { sfxTones(SFX_TUG_FAIL); stopFishing(p, '拉太緊，魚線斷了！'); }
+  else if (g.slack >= TUG.loseAfter) { sfxTones(SFX_TUG_FAIL); stopFishing(p, '線太鬆，魚跑掉了…'); }
+  else if (g.prog >= 1) {   // 贏了：這時才請伺服器抽魚（單機用上鉤時先抽好的 f.pre），短暫收尾後揭曉
+    f.mg = null; f.won = true; f.t = S.t - FISH_REEL + .3;
+    if (netOn()) S.net.fishCatch(); else f.result = f.pre;
   }
 }
 function stopFishing(p, msg) {
   if (!p.fish) return;
+  if (p === S.players[0] && p.fish.ph !== 'wait' && netOn()) S.net.fishDrop();   // 上鉤後沒釣上來（沒拉、小遊戲輸了、被打斷）：伺服器把那條魚丟掉；等魚時收竿不丟，重拋還是同一條
   p.fish = null;
   if (msg) toast(msg, 1800);
 }
 // 每幀：等魚 → 上鉤 → 逾時跑掉；拉扯動畫結束時揭曉結果
-function stepFishing(p) {
+function stepFishing(p, dt) {
   const f = p.fish;
   if (!f) return;
-  if (f.ph === 'wait' && S.t >= f.biteAt) { f.ph = 'bite'; f.t = S.t; if (p === S.players[0]) sfxTones(SFX_BITE); }   // 魚上鉤：除了頭上的「!」再響一聲（只有自己的；2026-11-16 使用者要求）
+  if (f.ph === 'wait' && S.t >= f.biteAt) {
+    f.ph = 'bite'; f.t = S.t;
+    if (p === S.players[0]) {
+      if (!netOn()) { f.pre = rollFish(S.terrain, f); f.rar = f.pre.rarity; }   // 單機：上鉤時就抽好，才知道稀有度（決定有沒有小遊戲）
+      sfxTones(SFX_BITES[tugTier(f)?.sfx] || SFX_BITE);   // 魚上鉤：除了頭上的「!」再響一聲（只有自己的；2026-11-16 使用者要求）；罕見／稀有各有自己的音效
+    }
+  }
   else if (f.ph === 'bite' && S.t - f.t > FISH_BITE) stopFishing(p, '魚逃走了…');
+  else if (f.ph === 'reel' && f.mg) stepTug(p, f, dt);
   else if (f.ph === 'reel' && S.t - f.t >= FISH_REEL) {
     if (f.result) { p.fish = null; showCatch(p, f.result); }
     else if (S.t - f.t > FISH_REEL + FISH_RESULT_WAIT) stopFishing(p, '連線不穩，魚跑掉了…');
@@ -4499,16 +4553,23 @@ function rollFish(terrain, bob) {
   const db = S.fishDB, fc = db?.foreignChance?.[terrain], home = terrain;   // 和平島等：極低機率改釣別座島的魚（圖鑑記在那座島；怪物判定仍看自己這座島）
   if (fc && Math.random() < fc) { const others = Object.keys(db.terrains).filter(k => k !== terrain && db.terrains[k].length); if (others.length) terrain = others[Math.floor(Math.random() * others.length)]; }
   const list = db?.terrains[terrain] || [];
-  if (!list.length || Math.random() < db.escape) return { terrain, escaped: true };
+  if (!list.length) return { terrain, escaped: true };
+  const esc = Math.random() < db.escape;   // 脫鉤：抽到有拉扯小遊戲的稀有度（罕見／稀有）就不算（2026-11-17 使用者定），所以要等稀有度抽完才判
   // 極低機率釣到敵對怪物（場上已經有一隻就照常釣魚）；與兩份伺服器的 fishCatch 同規則
-  if (db.lurker && !(db.noLurker || []).includes(home) && mobDef(db.lurker) && !S.mobs.some(v => v.lurker && !v.dead) && Math.random() < (db.lurkerChance || 0))   // noLurker：和平島不會釣到
+  if (!esc && db.lurker && !(db.noLurker || []).includes(home) && mobDef(db.lurker) && !S.mobs.some(v => v.lurker && !v.dead) && Math.random() < (db.lurkerChance || 0))   // noLurker：和平島不會釣到
     return { terrain, lurker: db.lurker, bx: bob?.x, by: bob?.y };
   const rars = Object.entries(db.rarity).filter(([k]) => list.some(f => f.rarity === k));
   let r = Math.random() * rars.reduce((s, [, v]) => s + v.weight, 0), rar = rars[rars.length - 1][0];
   for (const [k, v] of rars) { if ((r -= v.weight) < 0) { rar = k; break; } }
+  if (esc && !TUG.tier[rar]) return { terrain, escaped: true };
   const cands = list.filter(f => f.rarity === rar), f = cands[Math.floor(Math.random() * cands.length)];
   const size = Math.round((f.size[0] + (f.size[1] - f.size[0]) * Math.random() ** 1.6) * 10) / 10;
   return { terrain, id: f.id, size, rarity: rar };
+}
+// 伺服器回這一竿的稀有度（拋竿時送 fish_hook 問的）：記在 f.rar，上鉤時決定頭上的驚嘆號、音效與要不要玩拉扯小遊戲
+function onFishHook(m) {
+  const f = S.players[0].fish;
+  if (f && f.ph === 'wait' && typeof m.rar === 'string') f.rar = m.rar;
 }
 // 伺服器回來的結果：正在拉扯就等動畫結束再揭曉；其餘情況（例如拉扯中斷線又重連）直接記錄
 function onFishResult(m) {
@@ -4542,6 +4603,30 @@ function showCatch(p, m) {
   toast(`釣到了 ${def.name}！${m.size} cm（${rar?.name || ''}）${foreign ? ` · 來自${foreign}` : ''}${big ? ' · 大尺寸！' : ''}${isNew ? ' · 新發現！' : isRecord ? ' · 尺寸新紀錄！' : ''}`, 3400);
   if (S.dexOpen) buildDex();
   checkTitles(false);
+}
+// 拉扯小遊戲的張力條（畫在自己頭上，世界座標）：橫條左＝鬆、右＝緊，藍＝鬆弛區、綠＝安全區、紅＝警戒區，白色指針＝目前張力；
+// 下面細的金色條＝收線進度；離失敗（斷線／魚跑掉）越近，外框越紅
+function drawTug(p, g, headY) {
+  const w = 72, h = 7, x = Math.round(p.x - w / 2), y = Math.round(headY - 30);
+  ctx.save();
+  ctx.fillStyle = 'rgba(8,10,14,.8)'; ctx.fillRect(x - 2, y - 2, w + 4, h + 10);
+  ctx.fillStyle = '#4a7ab0'; ctx.fillRect(x, y, w * TUG.slack, h);
+  ctx.fillStyle = '#58b868'; ctx.fillRect(x + w * TUG.slack, y, w * (TUG.danger - TUG.slack), h);
+  ctx.fillStyle = '#d8503c'; ctx.fillRect(x + w * TUG.danger, y, w * (1 - TUG.danger), h);
+  const risk = Math.max(g.over / TUG.snapAfter, g.slack / TUG.loseAfter);
+  if (risk > 0) { ctx.strokeStyle = `rgba(255,90,70,${.35 + .65 * Math.min(1, risk)})`; ctx.lineWidth = 2; ctx.strokeRect(x - 1, y - 1, w + 2, h + 2); }
+  const mx = x + Math.round(w * g.T) + (g.surge ? Math.round(Math.sin(S.t * 40)) : 0);
+  ctx.fillStyle = '#10141c'; ctx.fillRect(mx - 2, y - 2, 5, h + 4);
+  ctx.fillStyle = '#fff'; ctx.fillRect(mx - 1, y - 1, 3, h + 2);
+  ctx.fillStyle = '#3a3428'; ctx.fillRect(x, y + h + 3, w, 3);
+  ctx.fillStyle = '#ffd84a'; ctx.fillRect(x, y + h + 3, w * Math.min(1, g.prog), 3);
+  const tip = g.surge ? '魚在掙扎！放線' : S.t - g.t0 < 3 ? '按住收線・放開放線' : '';
+  if (tip) {
+    ctx.font = 'bold 10px "Microsoft JhengHei"'; ctx.textAlign = 'center';
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = g.surge ? '#ff9a7a' : '#fff6e0';
+    ctx.strokeText(tip, p.x, y - 6); ctx.fillText(tip, p.x, y - 6);
+  }
+  ctx.restore();
 }
 // 釣竿拋出去的姿勢角度（正值＝竿尖往面向那側前傾）：等魚前傾、上鉤被往下拉、拉扯時往後上方甩
 function rodAngle(f) {
@@ -4596,13 +4681,14 @@ function drawLineAndBobber(p, wi, f, tip) {
     bx = tx + (f.x - tx) * e; by = ty + (f.y - ty) * e - Math.sin(Math.PI * q) * h;
     sag = 2 + 10 * q; flying = true;
   } else if (f.ph === 'reel') {   // 拉竿：浮標沿水面直直拉向人（跟原本一樣，不往上甩）
-    const q = Math.min(1, since / FISH_REEL);
+    const q = f.mg ? f.mg.prog : f.won ? 1 : Math.min(1, since / FISH_REEL);   // 拉扯小遊戲：浮標跟著進度一點一點收回來
     bx += (p.x - bx) * q * .6; by += (p.y - 10 - by) * q * .6;
+    if (f.mg) { sag = 14 * (1 - f.mg.T); if (f.mg.surge) { bx += Math.sin(S.t * 38) * 2; by += Math.cos(S.t * 31) * 1.2; } }   // 線越鬆垂越低；魚掙扎時浮標亂竄
   }
   else if (f.ph === 'wait') by += Math.sin(S.t * 3) * 1.5;
   else by += 3;
   ctx.save();
-  ctx.strokeStyle = 'rgba(240,240,232,.85)'; ctx.lineWidth = 1;
+  ctx.strokeStyle = f.mg && f.mg.T > TUG.danger ? (Math.floor(S.t * 12) % 2 ? '#ff5a4a' : '#ffd0c0') : 'rgba(240,240,232,.85)'; ctx.lineWidth = 1;   // 快斷了：釣線閃紅
   ctx.beginPath(); ctx.moveTo(tx, ty); ctx.quadraticCurveTo((tx + bx) / 2, Math.max(ty, by) + sag, bx, by - 3); ctx.stroke();
   const splash = cast - ROD_FLY[1];
   if (splash >= 0 && splash < .45) {       // 落水：一圈較大的水花
@@ -4619,6 +4705,11 @@ function drawLineAndBobber(p, wi, f, tip) {
     const q = (S.t * (f.ph === 'bite' ? 2.5 : .8)) % 1;
     ctx.strokeStyle = `rgba(230,245,255,${.55 * (1 - q)})`;
     ctx.beginPath(); ctx.ellipse(f.x, f.y + 1, 4 + q * (f.ph === 'bite' ? 12 : 6), 1.5 + q * (f.ph === 'bite' ? 4 : 2), 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  if (f.mg?.surge) {                       // 魚在掙扎：浮標旁濺水
+    const q = (S.t * 3) % 1;
+    ctx.strokeStyle = `rgba(240,250,255,${.8 * (1 - q)})`;
+    ctx.beginPath(); ctx.ellipse(bx, by, 4 + q * 12, 1.5 + q * 4, 0, 0, Math.PI * 2); ctx.stroke();
   }
   if (f.ph === 'bite') {                   // 上鉤：浮標被拉下水，只露出一點紅頂
     ctx.fillStyle = '#e04a3a'; ctx.beginPath(); ctx.ellipse(bx, by - 2, 2.5, 1.2, 0, 0, Math.PI * 2); ctx.fill();
@@ -4971,6 +5062,11 @@ function sfxTones(list) {   // list＝[[頻率 Hz, 開始秒, 長度秒]…]：�
     o.connect(g).connect(sfxCtx.destination); o.start(t0 + at); o.stop(t0 + at + len + .02);
   }
 }
+const SFX_BITE_RARE = [[1320, 0, .06], [1760, .07, .06], [2217, .14, .06], [2637, .21, .26]];   // 稀有魚上鉤：一路往上的四聲（跟平常的「叮鈴」分得出來）
+const SFX_BITE_UNCOMMON = [[1320, 0, .06], [1760, .07, .06], [2093, .14, .2]];   // 罕見魚上鉤：三聲
+const SFX_BITES = { SFX_BITE_UNCOMMON, SFX_BITE_RARE };   // TUG.tier 的 sfx 用名字查（TUG 宣告得比音效早）
+const SFX_TUG_SURGE = [[520, 0, .05], [390, .05, .08]];   // 拉扯小遊戲：魚開始掙扎（往下的兩聲）
+const SFX_TUG_FAIL = [[330, 0, .1], [220, .1, .22]];      // 拉扯失敗（斷線／魚跑掉）
 const SFX_BITE = [[1320, 0, .07], [1760, .07, .16]];   // 釣魚上鉤：短促的兩聲高音「叮鈴」（跟回合提示音共用設定選單的開關）
 const SFX_TURN = { start: [[660, 0, .16], [880, .13, .24]], 30: [[520, 0, .2]], 10: [[700, 0, .12], [700, .18, .12]], 5: [[900, 0, .09], [900, .13, .09], [900, .26, .09]], 4: [[900, 0, .1]], 3: [[900, 0, .1]], 2: [[900, 0, .1]], 1: [[1100, 0, .16]] };
 function turnAlertInfo(v) {   // 現在這桌的回合：回 { mine＝是不是輪到我要動作, end＝期限（伺服器時間毫秒）, off＝伺服器時間 − 本機時間 }；沒有時限的遊戲／狀態回 null
@@ -8714,7 +8810,7 @@ function buildTyping(box, v, mk, gd) {
   let status;
   if (playing) status = mySeat ? (v.game === 'zhtyping' ? '比賽中：照著打出畫面中央的詞（不用按 Enter）' : '比賽中：照著打出畫面中央的單字（不用按 Enter）') : '觀戰中';
   else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始';
-  box.appendChild(mk('div', 'table-status' + (playing && mySeat ? ' mine' : ''), status));
+  box.insertBefore(mk('div', 'table-status' + (playing && mySeat ? ' mine' : ''), status), old);   // old＝null 時等於 appendChild
   if (v.result && !playing && v.result.ranking) {   // 結算：依分數排名（同分同名次）
     box.appendChild(mk('div', 'table-result', v.result.text));
     const rk = mk('div', 'dodge-rank'), rs = v.result.ranking;
@@ -12381,6 +12477,7 @@ async function boot() {
     onDeco: onNetDeco,
     onDragon: onNetDragon,   // 島主事件（aim/hp/dead/spawn/state 快照）
     onLurker: onNetLurker,   // 釣上來的敵對怪物（spawn/wander/claw/aggro/hp/dead/gone/state 快照）
+    onFishHook,              // 釣魚：這一竿的稀有度（伺服器拋竿時就抽好）
     onFishResult,            // 釣魚結果（伺服器抽的魚；登入的人已記進伺服器的圖鑑）
     onTable: onNetTable,       // 和平島遊戲桌：伺服器給我的牌桌畫面
     onTpos: onNetTpos,         // 躲彈幕：其他玩家的位置

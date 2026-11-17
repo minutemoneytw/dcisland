@@ -327,7 +327,7 @@ function sanitizeState(s, prev) {
     dead: s.dead ? 1 : 0,
     // 釣魚：浮標位置與階段（只轉發給同地形的人畫圖；釣到什麼由伺服器的 fish 訊息決定）
     fish: s.fish && typeof s.fish === "object" && FISH_PHASES.includes(s.fish.ph)
-      ? { x: num(s.fish.x, 0, COLS * CELL, 0), y: num(s.fish.y, 0, ROWS * CELL, 0), ph: s.fish.ph } : null,
+      ? { x: num(s.fish.x, 0, COLS * CELL, 0), y: num(s.fish.y, 0, ROWS * CELL, 0), ph: s.fish.ph, ...(FISH_TUG.includes(s.fish.r) ? { r: s.fish.r } : {}) } : null,   // r＝上鉤那條魚的稀有度（只有罕見／稀有才帶；別人頭上畫「!!」「!!!」用，只轉發）
     // 等級（名牌顯示用）：登入者由伺服器以存檔的 XP 覆寫；訪客照客戶端報的（只影響顯示）
     lvl: Math.max(1, Math.round(num(s.lvl, 1, 2000, prev.lvl ?? 1))),
   };
@@ -385,14 +385,17 @@ const dragonHpMsg = d => ({ t: "dragon", ev: "hp", hp: d.hp, lvl: dlLv(d.xp), ma
 // 演算法與 client/js/main.js 的 rollFish、dev_server.py 的 roll_fish 一致（改一邊要改另一邊）
 const FISH_PHASES = ["wait", "bite", "reel"];
 const FISH_CD_MS = 2500;     // 同一條連線兩次釣魚結果的最短間隔（拋竿到上鉤最快 3 秒）
+// 有拉扯小遊戲的稀有度（客戶端 main.js 的 TUG.tier、dev_server.py 的 FISH_TUG 要一致）：這些稀有度的魚不算脫鉤（escape）
+const FISH_TUG = ["uncommon", "rare"];
 function rollFish(db, terrain) {
   const fc = (db.foreignChance || {})[terrain];   // 和平島等：極低機率改釣別座島的魚（圖鑑記在那座島，不擴充自己的）
   if (fc && Math.random() < fc) { const others = Object.keys(db.terrains || {}).filter(k => k !== terrain && (db.terrains[k] || []).length); if (others.length) terrain = others[Math.floor(Math.random() * others.length)]; }
   const list = (db.terrains || {})[terrain] || [];
-  if (!list.length || Math.random() < (db.escape || 0)) return { terrain, escaped: true };
+  if (!list.length) return { terrain, escaped: true };
   const rars = Object.entries(db.rarity || {}).filter(([k]) => list.some(f => f.rarity === k));
   let r = Math.random() * rars.reduce((s, [, v]) => s + v.weight, 0), rar = rars[rars.length - 1][0];
   for (const [k, v] of rars) { if ((r -= v.weight) < 0) { rar = k; break; } }
+  if (!FISH_TUG.includes(rar) && Math.random() < (db.escape || 0)) return { terrain, escaped: true };   // 脫鉤：有拉扯小遊戲的稀有度不算（2026-11-17 使用者定），所以稀有度抽完才判
   const cands = list.filter(f => f.rarity === rar), f = cands[Math.floor(Math.random() * cands.length)];
   const size = Math.round((f.size[0] + (f.size[1] - f.size[0]) * Math.random() ** 1.6) * 10) / 10;
   return { terrain, id: f.id, size, rarity: rar };
@@ -3637,7 +3640,8 @@ export class Island {
     this.dragonMapLoaded = new Set();
     this.dragonMapRaw = new Map();   // 地形 → storage 裡目前存的島形字串（比對用：內容沒變就不重寫）
     this.fishDB = null;              // 釣魚：fish.json（懶載入）
-    this.lastFish = new Map();       // ws → 上次釣魚結果的時間（冷卻）
+    this.lastFish = new Map();       // ws → 上次抽魚的時間（冷卻）
+    this.fishPend = new Map();       // ws → 拋竿時先抽好、還沒拉上來的那條魚 { terrain, at, res, lurk }（見 fishHook；只放記憶體，掉了就退回拉竿時當場抽）
     this.lastXpMob = new Map();      // ws → 上次擊倒非主動怪的時間（XP 夾頻；2026-11-07）
     this.lastDeathCredit = new Map();   // ws → 上次倒地記帳的時間（DEATH_CREDIT_MIN_MS）
     this.tables = new Map();         // 桌 id → 牌桌狀態（和平島遊戲桌；懶載入 storage，每次變動都寫回）
@@ -3902,15 +3906,47 @@ export class Island {
     return att && att.user && att.xpKnown && typeof att.xp === "number" ? xpInfo(att.xp).lv : 1;
   }
 
-  // 釣魚：魚上鉤後拉竿成功 → 伺服器抽一條魚回給這條連線；登入的人同時記進 Registry 的圖鑑（帶回最新紀錄）
-  async fishCatch(ws, att) {
+  // 釣魚（2026-11-17 起）：拋竿時客戶端送 fish_hook → 伺服器當下就抽好這一竿的魚、暫存在這條連線上，只回稀有度
+  // （客戶端要在上鉤那一刻知道稀有度：頭上「!」「!!」「!!!」、罕見／稀有要先玩拉扯小遊戲）。拉上來（fish）時用暫存的結果。
+  // 已經有暫存（收竿重拋）就回同一條、不重抽；小遊戲失敗／上鉤沒拉＝客戶端送 fish_hook {drop:1} 丟掉。
+  // 每條連線 FISH_CD_MS 內最多抽一次（跟原本 fish 的冷卻同一個計時），所以重拋／drop 都刷不出更多次抽魚。
+  // 小遊戲有沒有真的玩，伺服器驗不了（跟「有沒有等到上鉤」一樣信任客戶端）。
+  async fishHook(ws, att, msg) {
+    if (msg.drop) { this.fishPend.delete(ws); return; }
     const now = Date.now();
-    if (now - (this.lastFish.get(ws) || 0) < FISH_CD_MS) return;
-    this.lastFish.set(ws, now);
+    let pd = this.fishPend.get(ws);
+    if (!pd || pd.terrain !== att.terrain) {
+      if (now - (this.lastFish.get(ws) || 0) < FISH_CD_MS) return;
+      this.lastFish.set(ws, now);
+      const db = await this.getFishDB();
+      // 釣到敵對怪物也在這時決定（拉上來時該地形已經有一隻就照常給魚）；牠沒有小遊戲，所以備用的那條魚重抽到沒有小遊戲的稀有度
+      const lurk = !!db.lurker && !(db.noLurker || []).includes(att.terrain) && Math.random() < (db.lurkerChance || 0);   // noLurker：和平島不會釣到
+      let res = rollFish(db, att.terrain);
+      for (let i = 0; lurk && i < 20 && FISH_TUG.includes(res.rarity); i++) res = rollFish(db, att.terrain);
+      pd = { terrain: att.terrain, at: now, res, lurk };
+      this.fishPend.set(ws, pd);
+    }
+    try { ws.send(JSON.stringify({ t: "fish_hook", rar: pd.res.escaped ? null : pd.res.rarity })); } catch { /* 對方已斷線 */ }
+  }
+
+  // 拉竿成功（罕見／稀有＝小遊戲贏了）→ 把魚回給這條連線；登入的人同時記進 Registry 的圖鑑（帶回最新紀錄）。
+  // 有 fish_hook 暫存的結果就用它；沒有（舊客戶端、暫存掉了）就照舊當場抽
+  async fishCatch(ws, att) {
+    const now = Date.now(), pd = this.fishPend.get(ws);
+    this.fishPend.delete(ws);
     const db = await this.getFishDB();
-    const res = rollFish(db, att.terrain);
+    let res, lurk;
+    if (pd && pd.terrain === att.terrain) {
+      if (now - pd.at < FISH_CD_MS) return;   // 拋竿到上鉤最快 3 秒：太早來的不理
+      res = pd.res; lurk = pd.lurk;
+    } else {
+      if (now - (this.lastFish.get(ws) || 0) < FISH_CD_MS) return;
+      this.lastFish.set(ws, now);
+      res = rollFish(db, att.terrain);
+      lurk = !!db.lurker && !(db.noLurker || []).includes(att.terrain) && Math.random() < (db.lurkerChance || 0);   // noLurker：和平島不會釣到
+    }
     // 極低機率釣到敵對怪物（該地形沒有其他還在的怪物時才會）：不記圖鑑，改成在浮標旁落地追殺釣到牠的人
-    if (!res.escaped && db.lurker && !(db.noLurker || []).includes(att.terrain) && !this.lurkers.has(att.terrain) && Math.random() < (db.lurkerChance || 0)   // noLurker：和平島不會釣到
+    if (!res.escaped && lurk && !this.lurkers.has(att.terrain)
         && await this.spawnLurker(ws, att, String(db.lurker), now)) {
       try { ws.send(JSON.stringify({ t: "fish_result", terrain: att.terrain, lurker: String(db.lurker), saved: false })); } catch { /* 對方已斷線 */ }
       return;
@@ -4619,7 +4655,9 @@ export class Island {
       if (att.terrain) await this.editSign(ws, att, msg);
     } else if (msg.t === "event") {
       if (att.terrain) this.broadcast({ t: "event", id: att.id, kind: msg.kind }, ws, att.terrain);
-    } else if (msg.t === "fish") {   // 釣魚：拉竿成功，伺服器抽魚
+    } else if (msg.t === "fish_hook") {   // 釣魚：拋竿，伺服器先抽好這一竿的魚、回稀有度（drop＝丟掉）
+      if (att.terrain) await this.fishHook(ws, att, msg);
+    } else if (msg.t === "fish") {   // 釣魚：拉竿成功，把魚給他
       if (att.terrain) await this.fishCatch(ws, att);
     }
   }
@@ -5502,7 +5540,7 @@ export class Island {
     this.dragonHits.delete(ws);
     this.debuffs.delete(ws);
     this.skillHits.delete(ws);
-    this.lastFish.delete(ws);
+    this.lastFish.delete(ws); this.fishPend.delete(ws);
     this.lastXpMob.delete(ws);
     this.lastDeathCredit.delete(ws);
     this.lastTbl.delete(ws);

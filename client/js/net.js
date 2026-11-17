@@ -42,7 +42,7 @@ export function connectNet(S, opts = {}) {
       hp: p.dead ? 0 : Math.round(p.hp ?? 10),   // 血量（島主爪擊扣 2、殺動物回 1；龍衝直接倒地）
       dead: p.dead ? 1 : 0,                // 死亡（墓碑）：被島主打倒後倒數復活
       lvl: S.myLvl ? S.myLvl() : 1,        // 等級（名牌顯示用）：登入者由伺服器覆寫，訪客照客戶端報的
-      fish: p.fish ? { x: p.fish.x, y: p.fish.y, ph: p.fish.ph } : null,   // 釣魚：浮標位置與階段（wait 等魚／bite 上鉤／reel 拉扯）
+      fish: p.fish ? { x: p.fish.x, y: p.fish.y, ph: p.fish.ph, ...(p.fish.ph === 'bite' && p.fish.rar ? { r: p.fish.rar } : {}) } : null,   // 釣魚：浮標位置與階段（wait 等魚／bite 上鉤／reel 拉扯）；r＝上鉤那條魚的稀有度（伺服器只留罕見／稀有，別人頭上畫「!!」「!!!」）
       fx: S.myFx ? S.myFx() : [],          // 持續型技能效果（翅膀、護盾、結印…）：給同地形的人畫特效
       circle: S.fx?.circle && S.t < S.fx.circle.until ? { x: S.fx.circle.x, y: S.fx.circle.y } : null,   // 黑魔法師的魔法陣
     };
@@ -70,7 +70,7 @@ export function connectNet(S, opts = {}) {
       r.seatType = typeof st.seat === 'string' ? st.seat : null;
       // 釣魚：浮標位置與階段；階段變了就重新起算（拉扯動畫要知道從什麼時候開始）
       const fs = st.fish && ['wait', 'bite', 'reel'].includes(st.fish.ph) ? st.fish : null;
-      r.fish = fs ? { x: fs.x, y: fs.y, ph: fs.ph, t: r.fish?.ph === fs.ph ? r.fish.t : S.t } : null;
+      r.fish = fs ? { x: fs.x, y: fs.y, ph: fs.ph, rar: typeof fs.r === 'string' ? fs.r : undefined, t: r.fish?.ph === fs.ph ? r.fish.t : S.t } : null;
       const wasDead = !!r.dead;
       r.dead = !!st.dead;                  // 死亡（墓碑）：進出死亡時跟同島的人說一聲
       if (st.hp != null) r.hp = st.hp;     // 血量同步（對方自己算好的）
@@ -112,6 +112,7 @@ export function connectNet(S, opts = {}) {
       case 'xp': if (opts.onXp) opts.onXp(msg); break;   // 自己的 XP 記帳結果（伺服器權威；不廣播）
       case 'commit_result': if (opts.onCommitResult) opts.onCommitResult(msg); break;
       case 'fish_result': if (opts.onFishResult) opts.onFishResult(msg); break;   // 釣魚結果（伺服器抽）
+      case 'fish_hook': if (opts.onFishHook) opts.onFishHook(msg); break;       // 這一竿的稀有度（拋竿時伺服器就抽好了）
       case 'table': if (opts.onTable) opts.onTable(msg); break;           // 和平島遊戲桌：我這桌的畫面（v＝null＝我已離開）
       case 'tpos': if (opts.onTpos) opts.onTpos(msg); break;   // 躲彈幕：其他玩家的位置（i＝座位編號）
       case 'tpg': if (opts.onTpg) opts.onTpg(msg); break;      // 英文打字競賽（觀戰者才收到）：其他玩家的打字進度（i＝座位編號、n＝第幾個字、p＝已打對幾個字母、e＝剛打錯）
@@ -252,7 +253,11 @@ export function connectNet(S, opts = {}) {
   net.sendDragonMap = v => net.connected && send({ t: 'dragonMap', v });
   // staff：法杖／咒杖遠距詠唱（伺服器放寬射程，並核對 state.weapon）；sk：職業技能（忍術／閃耀，伺服器驗證職業與冷卻、傷害照技能）
   net.dragonHit = (x, y, dmg, ddx, ddy, staff, sk) => net.connected && send({ t: 'dragonHit', x, y, dmg, ddx, ddy, ...(staff ? { staff: 1 } : {}), ...(sk ? { sk } : {}) });
-  // 釣魚：魚上鉤後拉竿成功，請伺服器抽一條魚（登入的人順便記進伺服器的圖鑑），結果用 fish_result 回來
+  // 釣魚：拋竿時請伺服器先抽好這一竿的魚（只回稀有度 fish_hook {rar}，上鉤時才知道要不要玩拉扯小遊戲）；
+  // 拉竿成功（小遊戲贏了）送 fish 把魚拿回來（登入的人順便記進伺服器的圖鑑），結果用 fish_result 回來；
+  // 上鉤沒拉／小遊戲輸了送 fishDrop 把那條魚丟掉
+  net.fishHook = () => net.connected && send({ t: 'fish_hook' });
+  net.fishDrop = () => net.connected && send({ t: 'fish_hook', drop: 1 });
   net.fishCatch = () => net.connected && send({ t: 'fish' });
   // 分頁凍結恢復後要島主即時快照（伺服器用 dragon 事件的 state 回這條連線）
   net.requestDragonSnap = () => net.connected && send({ t: 'dragonSnap' });

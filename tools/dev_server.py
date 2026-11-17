@@ -246,7 +246,9 @@ def sanitize_state(s, prev):
         # 等級（名牌顯示用）：登入者由伺服器以存檔的 XP 覆寫；訪客照客戶端報的（只影響顯示）
         "lvl": max(1, round(_num(s.get("lvl"), 1, 2000, (prev.get("lvl") or 1)))),
         # 釣魚：浮標位置與階段（只轉發；釣到什麼由 fish 訊息決定）
-        "fish": {"x": _num(fs.get("x"), 0, COLS * CELL, 0), "y": _num(fs.get("y"), 0, ROWS * CELL, 0), "ph": fs["ph"]}
+        # r＝上鉤那條魚的稀有度（只有罕見／稀有才帶；別人頭上畫「!!」「!!!」用，只轉發）
+        "fish": {"x": _num(fs.get("x"), 0, COLS * CELL, 0), "y": _num(fs.get("y"), 0, ROWS * CELL, 0), "ph": fs["ph"],
+                 **({"r": fs["r"]} if fs.get("r") in FISH_TUG else {})}
                 if isinstance(fs, dict) and fs.get("ph") in FISH_PHASES else None,
     }
 
@@ -372,7 +374,8 @@ def xp_grant(c, d, k):
 # ---- 釣魚（魚類圖鑑）：與 worker/src/index.js 一致（改一邊要改另一邊）----
 # 釣到什麼由伺服器抽；登入的人記進圖鑑（本機版存在記憶體，重開就清空；正式站存在 Worker 的全域 Registry）
 FISH_PHASES = ("wait", "bite", "reel")
-FISH_CD = 2.5            # 同一條連線兩次釣魚結果的最短間隔（秒）
+FISH_CD = 2.5            # 同一條連線兩次抽魚的最短間隔（秒）
+FISH_TUG = ("uncommon", "rare")   # 有拉扯小遊戲的稀有度（與 Worker 的 FISH_TUG、main.js 的 TUG.tier 一致）：這些稀有度的魚不算脫鉤
 _FISH_DB = None
 def fish_db():
     """fish.json（各地形的魚與稀有度）。"""
@@ -383,7 +386,7 @@ def fish_db():
     return _FISH_DB
 
 def roll_fish(terrain):
-    """先脫鉤判定，再依權重抽稀有度，從該地形同稀有度的魚裡平均抽一種；尺寸越大越難（範圍內取 r^1.6）。"""
+    """依權重抽稀有度（沒有拉扯小遊戲的稀有度才判脫鉤），從該地形同稀有度的魚裡平均抽一種；尺寸越大越難（範圍內取 r^1.6）。"""
     db = fish_db()
     fc = (db.get("foreignChance") or {}).get(terrain)   # 和平島等：極低機率改釣別座島的魚（圖鑑記在那座島，不擴充自己的）
     if fc and random.random() < fc:
@@ -391,7 +394,7 @@ def roll_fish(terrain):
         if others:
             terrain = random.choice(others)
     lst = db.get("terrains", {}).get(terrain) or []
-    if not lst or random.random() < db.get("escape", 0):
+    if not lst:
         return {"terrain": terrain, "escaped": True}
     rars = [(k, v) for k, v in db["rarity"].items() if any(f["rarity"] == k for f in lst)]
     r, rar = random.random() * sum(v["weight"] for _, v in rars), rars[-1][0]
@@ -400,6 +403,8 @@ def roll_fish(terrain):
         if r < 0:
             rar = k
             break
+    if rar not in FISH_TUG and random.random() < db.get("escape", 0):   # 脫鉤：有拉扯小遊戲的稀有度不算（2026-11-17 使用者定）
+        return {"terrain": terrain, "escaped": True}
     f = random.choice([f for f in lst if f["rarity"] == rar])
     size = round((f["size"][0] + (f["size"][1] - f["size"][0]) * random.random() ** 1.6) * 10) / 10
     return {"terrain": terrain, "id": f["id"], "size": size, "rarity": rar}
@@ -7184,7 +7189,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         last_pos = 0.0   # 躲彈幕位置回報的限流（TBL_POS_CD）
         last_typ = 0.0   # 英打進度回報的限流（TBL_TYP_CD）
         last_dragon_hit = 0.0   # 打島主的每連線冷卻（與 last_hit 同款）
-        last_fish = 0.0         # 釣魚結果的每連線冷卻
+        last_fish = 0.0         # 抽魚的每連線冷卻
+        fish_pend = None        # 拋竿時先抽好、還沒拉上來的那條魚 {terrain, at, res, lurk}（對應 Worker 的 fishPend）
         last_xp_mob = 0.0       # 擊倒非主動怪的 XP 冷卻（2026-11-07）
         last_death_credit = 0.0   # 倒地記帳的每連線冷卻（DEATH_CREDIT_MIN）
         last_sign = 0.0         # 改看板的每連線冷卻
@@ -7467,16 +7473,47 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     cur = room.terrain_of(cid)
                     if cur:
                         room.broadcast({"t": "event", "id": cid, "kind": msg.get("kind")}, skip=cid, terrain=cur)
-                elif t == "fish":   # 釣魚：拉竿成功，伺服器抽魚（登入的人記進圖鑑）
+                elif t == "fish_hook":   # 釣魚：拋竿，伺服器先抽好這一竿的魚、只回稀有度（規則同 Worker 的 fishHook；drop＝丟掉）
+                    cur = room.terrain_of(cid)
+                    if not cur:
+                        continue
+                    if msg.get("drop"):
+                        fish_pend = None
+                        continue
+                    now = time.time()
+                    if not fish_pend or fish_pend["terrain"] != cur:
+                        if now - last_fish < FISH_CD:
+                            continue
+                        last_fish = now
+                        db = fish_db()
+                        lurk = bool(db.get("lurker")) and cur not in (db.get("noLurker") or []) and random.random() < db.get("lurkerChance", 0)   # noLurker：和平島不會釣到
+                        res = roll_fish(cur)
+                        for _ in range(20):   # 釣到怪物沒有小遊戲：備用的那條魚重抽到沒有小遊戲的稀有度
+                            if not lurk or res.get("rarity") not in FISH_TUG:
+                                break
+                            res = roll_fish(cur)
+                        fish_pend = {"terrain": cur, "at": now, "res": res, "lurk": lurk}
+                    with (room.clients.get(cid) or {}).get("send") or threading.Lock():
+                        ws_send(sock, json.dumps({"t": "fish_hook", "rar": None if fish_pend["res"].get("escaped") else fish_pend["res"]["rarity"]}))
+                elif t == "fish":   # 釣魚：拉竿成功，把魚給他（登入的人記進圖鑑）；有 fish_hook 暫存的結果就用它，沒有就照舊當場抽
                     cur = room.terrain_of(cid)
                     now = time.time()
-                    if not cur or now - last_fish < FISH_CD:
+                    pd, fish_pend = fish_pend, None
+                    if not cur:
                         continue
-                    last_fish = now
-                    res = roll_fish(cur)
                     db = fish_db()
+                    if pd and pd["terrain"] == cur:
+                        if now - pd["at"] < FISH_CD:   # 拋竿到上鉤最快 3 秒：太早來的不理
+                            continue
+                        res, lurk = pd["res"], pd["lurk"]
+                    else:
+                        if now - last_fish < FISH_CD:
+                            continue
+                        last_fish = now
+                        res = roll_fish(cur)
+                        lurk = bool(db.get("lurker")) and cur not in (db.get("noLurker") or []) and random.random() < db.get("lurkerChance", 0)   # noLurker：和平島不會釣到
                     # 極低機率釣到敵對怪物（該地形沒有其他還在的怪物時才會）：不記圖鑑，改成在浮標旁落地追殺釣到牠的人
-                    if not res.get("escaped") and db.get("lurker") and cur not in (db.get("noLurker") or []) and random.random() < db.get("lurkerChance", 0):   # noLurker：和平島不會釣到
+                    if not res.get("escaped") and lurk:
                         sp = room.spawn_lurker(cid, str(db["lurker"]))
                         if sp:
                             room.broadcast(sp[1], terrain=sp[0])
