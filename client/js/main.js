@@ -8601,7 +8601,10 @@ function typingKey(e) {
 function typingZhCheck(e) {
   const T = S.ty, v = S.tableView, inp = $('tyZh');
   if (!T || !T.zh || !inp || !v || v.role !== 'seat' || v.phase !== 'playing' || (e && e.isComposing)) return;
-  const t = typingNow(), w = T.word(T.idx), val = inp.value;
+  const t = typingNow(), w = T.word(T.idx);
+  // 半形字元＝輸入法還沒接手（輸入框剛聚焦）或在英文模式時漏進來的按鍵：題目全是中文，直接丟掉、不算打錯
+  if (/[\x20-\x7e]/.test(inp.value)) inp.value = inp.value.replace(/[\x20-\x7e]/g, '');
+  const val = inp.value;
   if (!val) return;
   if (t < 0 || t >= T.dur) { inp.value = ''; return; }
   if (performance.now() < T.lockUntil) { inp.value = w.slice(0, T.pos); return; }   // 打錯鎖定中
@@ -8689,8 +8692,10 @@ function typingRender() {
     } else wd.textContent = !seated ? '' : t < 0 ? '準備…' : '時間到！等待結算…';
   }
   if (inp) inp.textContent = showWord ? w.slice(0, T.pos) : '';
-  const zi = $('tyZh'); if (zi) { zi.disabled = !showWord; if (showWord && document.activeElement !== zi) zi.focus(); }   // 中文打字：輸入框保持聚焦，玩家直接用輸入法打字
-  const hint = $('tyHint'); if (hint) hint.textContent = T.zh ? (showWord ? '請切換成中文輸入法（例如注音），打出上面的詞，選字送出後自動計分' : '') : T.ime ? '偵測到中文輸入法：請切換成英文輸入（例如按 Shift）' : '';
+  // 中文打字：輸入框保持聚焦，玩家直接用輸入法打字。倒數中就啟用並聚焦（倒數中送出的字會被 typingZhCheck 清掉）——
+  // 等開始才啟用的話，輸入法要一小段時間才接手，第一個字的按鍵會以英文字母漏進輸入框、被判成打錯
+  const zi = $('tyZh'); if (zi) { zi.disabled = !seated || t >= T.dur; if (!zi.disabled && document.activeElement !== zi) zi.focus(); }
+  const hint = $('tyHint'); if (hint) hint.textContent = T.zh ? (seated && t < T.dur ? '請切換成中文輸入法（例如注音），打出上面的詞，選字送出後自動計分' : '') : T.ime ? '偵測到中文輸入法：請切換成英文輸入（例如按 Shift）' : '';
 }
 function buildTyping(box, v, mk, gd) {
   const playing = v.phase === 'playing', mySeat = v.role === 'seat' ? v.seats[v.me] : null;
