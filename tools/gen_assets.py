@@ -1930,22 +1930,58 @@ def table_bigtwo():
     return cv
 
 def table_purify():
-    """淨土守護戰：深灰綠木桌（有桌腳），桌面是 5×5 的小地塊棋盤：中央白色研究院，外圈一圈綠色乾淨地，混著幾格紫色污染與一格黑色荒廢，角落放一支淡藍色解藥試管。"""
+    """淨土守護戰（48×32，畫 scale 2＝3×2 格）：青灰色金屬邊的實驗桌（有桌腳），桌面是 5×5 的島嶼沙盤——草原／森林／礦區／濕地四種地塊交錯（每塊有小圖樣），
+    中央白色研究院（青色十字），幾格紫色污染（冒泡）與一格黑色荒廢（有裂痕），研究院上站著三個藍／黃／紅的小人偶；
+    左邊一瓶發光的藍色解藥燒瓶，右邊一疊紫色背面的擴散牌，桌角有鉚釘。"""
     cv = Canvas(48, 32)
-    wood = hx("#44504a")
-    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
-    cv.rect(2, 6, 45, 25, hx("#26302b"))
-    for gy in range(5):
-        for gx in range(5):
+    rim = hx("#3e5a60")
+    cv.rect(0, 4, 47, 27, rim); cv.rect(0, 4, 47, 5, shade(rim, 1.35)); cv.rect(0, 26, 47, 27, shade(rim, .7))
+    cv.rect(2, 6, 45, 25, hx("#1a2a30"))                                                 # 桌面底（深青）
+    cv.rect(2, 6, 45, 6, hx("#2c4650"))
+    for x, y in ((1, 5), (46, 5), (1, 26), (46, 26)): cv.set(x, y, hx("#b8d0d4"))        # 鉚釘
+    land = {"g": "#5aa84a", "f": "#2f7a4a", "m": "#8a8f98", "w": "#3a8fb8"}
+    grid = ("fgwmg",
+            "gGfwm",   # G＝被污染的草原
+            "mfLgw",
+            "wgmfP",   # P＝被污染的森林
+            "gwfXm")   # X＝荒廢
+    for gy, row in enumerate(grid):
+        for gx, ch in enumerate(row):
             x, y = 9 + gx * 6, 7 + gy * 4
-            if gx == 2 and gy == 2: col = "#e8f0f0"
-            elif (gx, gy) in ((0, 1), (4, 3), (1, 4), (3, 0)): col = "#8a4fb8"
-            elif (gx, gy) == (4, 0): col = "#1a1a1e"
-            else: col = "#5aa84a" if (gx + gy) % 2 else "#4a9a3e"
-            cv.rect(x, y, x + 4, y + 2, hx(col)); cv.hline(x, x + 4, y, shade(hx(col), 1.25)); cv.hline(x, x + 4, y + 2, shade(hx(col), .7))
-    cv.rect(33, 12, 34, 14, hx("#2a6a88"))                                               # 研究院的十字
-    cv.rect(4, 12, 6, 20, hx("#cfe8f4")); cv.rect(4, 11, 6, 11, hx("#9a6a3a")); cv.rect(4, 16, 6, 20, hx("#6ab8ff"))   # 解藥試管
-    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+            base = {"G": "g", "P": "f"}.get(ch, ch)
+            if ch == "L": col = "#e8f0f0"
+            elif ch == "X": col = "#1a1a1e"
+            else: col = land[base]
+            c = hx(col)
+            cv.rect(x, y, x + 4, y + 2, c); cv.hline(x, x + 4, y, shade(c, 1.28)); cv.hline(x, x + 4, y + 2, shade(c, .68))
+            if ch in "Gp" or ch == "G" or ch == "P":                                       # 污染：紫色罩上去、冒幾個泡
+                pc = hx("#8a4fb8")
+                cv.rect(x, y, x + 4, y + 2, pc); cv.hline(x, x + 4, y, shade(pc, 1.25)); cv.hline(x, x + 4, y + 2, shade(pc, .65))
+                cv.set(x + 1, y + 1, hx("#d8b0f0")); cv.set(x + 3, y, hx("#c89ae8")); cv.set(x + 3, y + 2, hx("#b890d8"))
+            elif ch == "X":                                                                # 荒廢：黑底、一道裂痕
+                cv.set(x + 1, y, hx("#3a3a44")); cv.set(x + 2, y + 1, hx("#3a3a44")); cv.set(x + 3, y + 2, hx("#3a3a44")); cv.set(x + 3, y, hx("#2a2a32"))
+            elif ch == "f": cv.set(x + 2, y + 1, shade(c, .6)); cv.set(x + 2, y, shade(c, .8))            # 森林：樹
+            elif ch == "g": cv.set(x + 1, y + 1, shade(c, 1.3)); cv.set(x + 3, y + 1, shade(c, 1.3))      # 草原：草尖
+            elif ch == "m": cv.set(x + 2, y, shade(c, 1.4)); cv.set(x + 1, y + 1, shade(c, .8)); cv.set(x + 3, y + 1, shade(c, .8))   # 礦區：山
+            elif ch == "w": cv.hline(x + 1, x + 3, y + 1, shade(c, 1.4))                                   # 濕地：水波
+    cv.set(23, 15, hx("#2a8aa8")); cv.hline(22, 24, 16, hx("#2a8aa8")); cv.set(23, 17, hx("#2a8aa8"))     # 研究院的十字
+    for x, y, col in ((30, 11, "#4aa8ff"), (17, 19, "#ffd24a"), (36, 15, "#ff6a6a")):                    # 三個人偶（頭＋身體）：各站在一格地塊上
+        cv.set(x, y, hx(col)); cv.set(x, y + 1, shade(hx(col), .7)); cv.set(x - 1, y, shade(hx(col), 1.3))
+    # 解藥燒瓶（左邊）：軟木塞、細頸、圓肚、發光的藍色藥水
+    cv.rect(4, 10, 6, 10, hx("#9a6a3a")); cv.hline(4, 6, 10, hx("#c08a50"))
+    glass, liquid = hx("#cfe8f4"), hx("#4aa8ff")
+    for y, hw in ((11, 1), (12, 1), (13, 1), (14, 1), (15, 2), (16, 3), (17, 3), (18, 3), (19, 3), (20, 3)):
+        cv.rect(5 - hw, y, 5 + hw, y, liquid if y >= 17 else glass)
+    cv.vline(4, 11, 14, hx("#f4fcff")); cv.hline(3, 7, 17, hx("#9ad4ff"))                                  # 瓶頸的反光、藥水液面
+    cv.set(3, 19, hx("#e8fbff")); cv.set(6, 18, hx("#e8fbff")); cv.set(5, 20, hx("#9ad4ff"))               # 泡泡
+    cv.hline(2, 8, 21, hx("#2a7aa8")); cv.hline(3, 7, 22, shade(hx("#2a7aa8"), .6))                        # 瓶底的反光
+    # 擴散牌堆（右邊）：三張疊著的紫色背面牌，頂上一張有亮邊和 X
+    for k, (cx, cy) in enumerate(((39, 16), (40, 15), (41, 14))):
+        pc = (hx("#3a2058"), hx("#4a2a6a"), hx("#6a3a98"))[k]
+        cv.rect(cx, cy, cx + 4, cy + 6, pc)
+        cv.hline(cx, cx + 4, cy, shade(pc, 1.6)); cv.hline(cx, cx + 4, cy + 6, shade(pc, .55)); cv.vline(cx, cy, cy + 6, shade(pc, 1.35)); cv.vline(cx + 4, cy, cy + 6, shade(pc, .65))
+    for dx, dy in ((0, 0), (2, 0), (1, 1), (0, 2), (2, 2)): cv.set(42 + dx - 1, 16 + dy, hx("#e8c8ff"))   # 頂牌上的 X
+    cv.rect(2, 26, 5, 31, shade(rim, .62)); cv.rect(42, 26, 45, 31, shade(rim, .62)); cv.hline(2, 5, 28, shade(rim, .8)); cv.hline(42, 45, 28, shade(rim, .8))   # 桌腳
     cv.outline()
     return cv
 
