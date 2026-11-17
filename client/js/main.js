@@ -5675,6 +5675,7 @@ function buildKingdom(box, v, mk, gd) {
   if (playing) { const tm = mk('span', 'bk-timer'); tm.id = 'kgTimer'; st.appendChild(tm); }
   box.appendChild(st);
   if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  if (!playing && gd?.story) box.appendChild(mk('div', 'it-story', gd.story));   // 開局前：故事背景
   if (!playing) {   // 開局前：座位列（誰入座、誰準備好了），和其他遊戲一樣；開局後改看下面各人的王國
     const row = mk('div', 'table-seats');
     v.seats.forEach(s => {
@@ -6044,6 +6045,7 @@ function buildPurify(box, v, mk, gd) {
   if (playing) { const tm = mk('span', 'bk-timer'); tm.id = 'pgTimer'; st.appendChild(tm); }
   box.appendChild(st);
   if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  if (!playing && gd?.story) box.appendChild(mk('div', 'it-story', gd.story));   // 開局前：故事背景
   // 座位：職業、手牌（公開）
   const row = mk('div', 'table-seats');
   v.seats.forEach((s, i) => {
