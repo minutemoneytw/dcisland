@@ -5559,7 +5559,7 @@ def br_relay(t, cid, msg):
     return [(c["cid"], data) for c in t["specs"] if c["cid"] is not None]
 
 # ---- 泡泡射手（第二十二桌 t22，2026-11-17，使用者要求：東牆邊、彈珠台下方放一台面向左的機台）：單人、一條命、一關接一關、分數進排行榜；
-# 跟彈珠台／打磚塊同一套做法：物理全在客戶端跑，伺服器只開局、收結算分數（限幅）、把進行中的快照 bus 轉給觀戰者（tbu；大螢幕只顯示分數）。
+# 跟彈珠台／打磚塊同一套做法：物理全在客戶端跑，伺服器只開局、收結算分數（限幅）、把進行中的快照 bus 轉給觀戰者與大螢幕（tbu／sttm）。
 # 有人離開＝這一局不算（一般桌子的規則）。與 worker/src/index.js 的 bu* 同一套，改規則兩邊一起改。
 BU_COUNTDOWN_MS, BU_XP, BU_XP_MIN, BU_SCORE_MAX, BU_LV_MAX, BU_CELLS_MAX = 1500, 4, 1500, 99999999, 999, 200
 _BU_CELLS_RE = re.compile(r"[0-6]*\Z")
@@ -5589,8 +5589,8 @@ def bu_over(t, cid, msg):
     tbl_log(t, t["result"]["text"])
     tbl_reset_seats(t)
 
-def bu_relay(t, cid, msg):
-    """進行中的快照（盤面 m＝每格一個字元 0～6 的字串、排列奇偶 par、現在／下一顆的顏色 cur／nx、瞄準角度 an（十分之一度）、飛行中的泡泡 bx／by（沒有＝-1）、分數、關卡、離下一排還有幾發 f）：只轉給觀戰者。回 [(cid, msg)]。"""
+def bu_relay(t, cid, msg, scr=None):
+    """進行中的快照（盤面 m＝每格一個字元 0～6 的字串、排列奇偶 par、現在／下一顆的顏色 cur／nx、瞄準角度 an（十分之一度）、飛行中的泡泡 bx／by（沒有＝-1）、分數、關卡、離下一排還有幾發 f）：只轉給觀戰者與大螢幕（scr 傳進來的話，快照也放一份進去給大螢幕）。回 [(cid, msg)]。"""
     role, i = tbl_find(t, cid)
     if t["game"] != "bubble" or role != "seat" or t["phase"] != "playing" or not t.get("g"):
         return []
@@ -5604,6 +5604,8 @@ def bu_relay(t, cid, msg):
         return []
     data = {"t": "tbu", "m": m, "par": par, "cur": cur, "nx": nx, "an": an, "bx": round(bx), "by": round(by), "sc": sc, "lv": lv, "f": f}
     t["seats"][i]["sc"] = sc
+    if scr is not None:
+        scr.append(data)
     return [(c["cid"], data) for c in t["specs"] if c["cid"] is not None]
 
 # ---- 空氣曲棍球（第十五、十六桌 t15／t16，2026-11-13，使用者要求）：2～4 人分藍紅兩隊（座位 0、2 藍隊，1、3 紅隊；2026-11-14 使用者要求最多 2v2，原本 2～8 人），人數要偶數 ----
@@ -7258,8 +7260,12 @@ class Room:
                     self._table_notify_locked(t, out)
                     self._table_collect_xp(t, before)
                     return out, self.table_info_msg(c.get("table_terr") or terr), c.get("table_terr") or terr
-                if t["game"] == "bubble" and a == "bus":   # 泡泡射手：進行中的快照，只轉發給觀戰者（不存檔、不通知畫面）
-                    return bu_relay(t, cid, msg), None, None
+                if t["game"] == "bubble" and a == "bus":   # 泡泡射手：進行中的快照，只轉發給觀戰者與大螢幕（不存檔、不通知畫面）
+                    scr = []
+                    out = bu_relay(t, cid, msg, scr)
+                    for d in scr:
+                        self._scr_fwd(terr, t, {**d, "w": "tbu", "t": "sttm"}, out)
+                    return out, None, None
                 if t["game"] == "breakout" and a == "brs":   # 打磚塊：進行中的快照，只轉發給觀戰者（不存檔、不通知畫面）
                     return br_relay(t, cid, msg), None, None
                 if t["game"] == "pinball" and a == "pbs":   # 彈珠台：進行中的快照，只轉發給觀戰者與大螢幕（不存檔、不通知畫面）

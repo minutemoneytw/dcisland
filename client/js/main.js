@@ -6173,6 +6173,7 @@ function onNetScrTb(msg) {   // 俄羅斯方塊的盤面快照（每台約 4 次
 }
 function onNetScrMz(m) {   // 大螢幕轉播豆豆迷宮／彈珠台：套到螢幕自己的那份狀態（螢幕沒開這桌就忽略）
   if (m.w === 'tpb') { onNetScrPb(m); return; }
+  if (m.w === 'tbu') { if (S.scrBub) { bubApplySnap(S.scrBub, m); S.scrDirty = true; } return; }
   const M = S.scrMz; if (!M) return;
   if (m.w === 'tms') mzApplyTms(M, m); else if (m.w === 'tmp') mzApplyTmp(M, m);
   S.scrDirty = true;
@@ -6202,6 +6203,18 @@ function scrPinball(g, v, MX, MY, MW, MH) {
   const k = Math.min(MW / PB_W, MH / PB_H);
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
   g.drawImage(cv, MX + (MW - PB_W * k) / 2, MY + (MH - PB_H * k) / 2, PB_W * k, PB_H * k);
+}
+// 大螢幕：泡泡射手——整盤縮小畫在左邊（同一個 bubDraw，只吃快照），右邊座位欄是分數
+function scrBubble(g, v, MX, MY, MW, MH) {
+  const key = v.bu.seed + ':' + v.bu.t0;
+  if (!S.scrBub || S.scrBub.key !== key) S.scrBub = bubMake({ ...v, role: 'spec' });
+  const B = S.scrBub, now = performance.now(), dt = Math.max(0, Math.min(.05, (now - B.last) / 1000)); B.last = now;
+  bubAdvance(B, dt);
+  const cv = (S.scrBubCv ||= Object.assign(document.createElement('canvas'), { width: BUB_W, height: BUB_H }));
+  bubDraw(B, cv, bubNow(B));
+  const k = Math.min(MW / BUB_W, MH / BUB_H);
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  g.drawImage(cv, MX + (MW - BUB_W * k) / 2, MY + (MH - BUB_H * k) / 2, BUB_W * k, BUB_H * k);
 }
 function onNetScrTp(msg) {   // 打字競賽的進度（大螢幕轉播中才會收到）：i＝座位、n＝第幾個字（＝分數）、p＝已打對幾個字母、e＝剛打錯
   const T = (S.scrTy ||= { key: '', prog: {} });
@@ -6417,7 +6430,8 @@ function scrSeatTag(v, s, k) {
   if (gm === 'typing' || gm === 'zhtyping') return `${Math.max(s.score ?? 0, S.scrTy?.prog?.[k]?.n ?? 0)} 分`;
   if (gm === 'maze') return `${s.sc ?? 0} 分`;
   if (gm === 'pinball') return `${Math.max(s.sc ?? 0, S.scrPb?.score ?? 0)} 分`;
-  if (gm === 'breakout' || gm === 'bubble') return `${s.sc ?? 0} 分`;
+  if (gm === 'bubble') return `${Math.max(s.sc ?? 0, S.scrBub?.score ?? 0)} 分`;
+  if (gm === 'breakout') return `${s.sc ?? 0} 分`;
   if (gm === 'intel') return s.out ? '出局' : '';
   return '';
 }
@@ -6480,6 +6494,7 @@ function scrRender() {
     else if (sc.game === 'purify' && v.pg) { scrPurify(g, v, MX, MY, MW); drew = true; }
     else if (sc.game === 'maze' && playing && v.mz) { scrMaze(g, v, MX, MY, MW, MH); drew = true; }
     else if (sc.game === 'pinball' && playing && v.pb) { scrPinball(g, v, MX, MY, MW, MH); drew = true; }
+    else if (sc.game === 'bubble' && playing && v.bu) { scrBubble(g, v, MX, MY, MW, MH); drew = true; }
     else if (wideIntel) { scrIntel(g, v, MX, MY, SCR_W - MX * 2); drew = true; }
     else if ((sc.game === 'typing' || sc.game === 'zhtyping') && playing && v.ty) { scrTyping(g, v, MX, MY, MW); drew = true; }
     } catch (e) { drew = false; }
@@ -6525,7 +6540,7 @@ function buildScrPick() {
 }
 // 島上的螢幕物件：外框＋離屏 canvas 的內容（沒收到過畫面時先畫成關閉的樣子）
 function drawScreenProp(pr, r) {
-  if (!S.scrCv || S.scrDirty || (S.scr && (S.scr.v?.ty || S.scr.game === 'maze' || S.scr.game === 'pinball') && S.scr.v.phase === 'playing')) { S.scrDirty = false; scrRender(); }   // 打字競賽進行中：每幀重畫（倒數的秒數會動）
+  if (!S.scrCv || S.scrDirty || (S.scr && (S.scr.v?.ty || S.scr.game === 'maze' || S.scr.game === 'pinball' || S.scr.game === 'bubble') && S.scr.v.phase === 'playing')) { S.scrDirty = false; scrRender(); }   // 打字競賽進行中：每幀重畫（倒數的秒數會動）
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#12141c'; ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.fillStyle = '#2a2e3c'; ctx.fillRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);

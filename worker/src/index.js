@@ -3696,7 +3696,7 @@ function brRelay(t, cid, msg) {
   return t.specs.filter(m => m.cid != null).map(m => [m.cid, data]);
 }
 // ---- 泡泡射手（第二十二桌 t22，2026-11-17，使用者要求：東牆邊、彈珠台下方放一台面向左的機台）：單人、一條命、一關接一關、分數進排行榜；
-// 跟彈珠台／打磚塊同一套做法：物理全在客戶端跑，伺服器只開局、收結算分數（限幅）、把進行中的快照 bus 轉給觀戰者（tbu；大螢幕只顯示分數）。
+// 跟彈珠台／打磚塊同一套做法：物理全在客戶端跑，伺服器只開局、收結算分數（限幅）、把進行中的快照 bus 轉給觀戰者與大螢幕（tbu／sttm）。
 // 有人離開＝這一局不算（一般桌子的規則）。與 tools/dev_server.py 的 bu_* 同一套，改規則兩邊一起改。
 const BU_COUNTDOWN_MS = 1500, BU_XP = 4, BU_XP_MIN = 1500, BU_SCORE_MAX = 99999999, BU_LV_MAX = 999, BU_CELLS_MAX = 200;
 function buStart(t) {
@@ -3715,8 +3715,8 @@ function buOver(t, cid, msg) {   // 客戶端回報這局結束（最終分數 s
   tblLog(t, t.result.text);
   tblResetSeats(t);
 }
-// 進行中的快照（盤面 m＝每格一個字元 0～6 的字串、排列奇偶 par、現在／下一顆的顏色 cur／nx、瞄準角度 an（十分之一度）、飛行中的泡泡 bx／by（沒有＝-1）、分數、關卡、離下一排還有幾發 f）：只轉給觀戰者。回 [[cid, msg]…]
-function buRelay(t, cid, msg) {
+// 進行中的快照（盤面 m＝每格一個字元 0～6 的字串、排列奇偶 par、現在／下一顆的顏色 cur／nx、瞄準角度 an（十分之一度）、飛行中的泡泡 bx／by（沒有＝-1）、分數、關卡、離下一排還有幾發 f）：只轉給觀戰者與大螢幕（scrOut 傳進來的話，快照也放一份進去給大螢幕）。回 [[cid, msg]…]
+function buRelay(t, cid, msg, scrOut) {
   const [role, i] = tblFind(t, cid);
   if (t.game !== "bubble" || role !== "seat" || t.phase !== "playing" || !t.g) return [];
   const num = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
@@ -3725,6 +3725,7 @@ function buRelay(t, cid, msg) {
     && mzInt(msg.sc, 0, BU_SCORE_MAX) && mzInt(msg.lv, 1, BU_LV_MAX) && mzInt(msg.f, 0, 20))) return [];
   const data = { t: "tbu", m: msg.m, par: msg.par, cur: msg.cur, nx: msg.nx, an: msg.an, bx: Math.round(msg.bx), by: Math.round(msg.by), sc: msg.sc, lv: msg.lv, f: msg.f };
   t.seats[i].sc = msg.sc;
+  if (scrOut) scrOut.push(data);
   return t.specs.filter(m => m.cid != null).map(m => [m.cid, data]);
 }
 // 豆豆那台回報結束：單人＝命用完（帶 lvl）；對抗＝win（豆子吃光）或沒有（命用完／tu 時間到），ct＝各幽靈位置抓到幾次
@@ -4660,8 +4661,10 @@ export class Island {
       if (hkTick(t, now)) { await this.saveTable(t); this.tableNotify(t); await this.tableBroadcastInfo(terr); await this.tableXp(t, resBefore); }
       return;
     }
-    if (t.game === "bubble" && a === "bus") {   // 泡泡射手：進行中的快照，只轉發給觀戰者（不存檔、不通知畫面）
-      for (const [cid, m] of buRelay(t, att.id, msg)) this.sendToId(cid, m);
+    if (t.game === "bubble" && a === "bus") {   // 泡泡射手：進行中的快照，只轉發給觀戰者與大螢幕（不存檔、不通知畫面）
+      const scrOut = [];
+      for (const [cid, m] of buRelay(t, att.id, msg, scrOut)) this.sendToId(cid, m);
+      for (const d of scrOut) this.scrFwd(terr, t, { ...d, w: "tbu", t: "sttm" });
       return;
     }
     if (t.game === "breakout" && a === "brs") {   // 打磚塊：進行中的快照，只轉發給觀戰者（不存檔、不通知畫面）
