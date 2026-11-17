@@ -6040,7 +6040,7 @@ function buildPurify(box, v, mk, gd) {
   let status;
   if (playing) {
     const who = v.seats[v.turn]?.name;
-    status = !seat ? `觀戰中 · 輪到 ${who}` : g.step === 'discard' ? (myTurn ? `手牌超過 5 張：點一張要丟掉的牌` : `輪到 ${who}：丟牌中`) : myTurn ? `輪到你：還有 ${g.acts} 點行動` : `輪到 ${who}`;
+    status = !seat ? `觀戰中 · 輪到 ${who}` : g.step === 'discard' ? (myTurn ? `手牌超過 5 張：點一張要丟掉的牌` : `輪到 ${who}：丟牌中`) : g.hands.some(h => h.length > 5) ? (g.hands[v.me]?.length > 5 ? '你的手牌超過 5 張：點一張要丟掉的牌（或用掉道具）' : `${v.seats[g.hands.findIndex(h => h.length > 5)].name} 手牌超過 5 張，丟牌中⋯`) : myTurn ? `輪到你：還有 ${g.acts} 點行動` : `輪到 ${who}`;
   } else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始（每回合限時 120 秒）';
   const st = mk('div', 'table-status' + (myTurn ? ' mine' : ''), status);
   if (playing) { const tm = mk('span', 'bk-timer'); tm.id = 'pgTimer'; st.appendChild(tm); }
@@ -6061,7 +6061,7 @@ function buildPurify(box, v, mk, gd) {
       for (const c of g.hands[i] || []) {
         const ch = mk('span', 'pg-card' + (c[0] === 'I' ? ' item' : ''), pgCardName(c));
         if (c[0] === 'S') ch.style.borderColor = PG_RCOL[c[1]];
-        if (i === v.me && myTurn && g.step === 'discard') { ch.classList.add('click'); ch.onclick = () => S.net?.tbl?.({ a: 'pdiscard', c }); }
+        if (i === v.me && ((myTurn && g.step === 'discard') || (g.step === 'act' && g.hands[i].length > 5 && c[0] !== 'I'))) { ch.classList.add('click'); ch.onclick = () => S.net?.tbl?.({ a: 'pdiscard', c }); }   // 被給牌而超過 5 張時，不分回合都能點牌丟掉（道具牌改用「使用」來減少，點了是選取）
         else if (i === v.me && myTurn && g.step === 'act' && o.mode === 'give') { ch.classList.add('click'); if (o.card === c) ch.classList.add('sel'); ch.onclick = () => { o.card = o.card === c ? null : c; buildTable(); }; }
         else if (i === v.me && seat && c[0] === 'I') { ch.classList.add('click'); if (o.card === c) ch.classList.add('sel'); ch.onclick = () => { o.card = o.card === c ? null : c; o.mode = o.card === 'Ispray' ? 'spray' : o.card === 'Itele' ? 'tele1' : 'move'; o.from = null; buildTable(); }; }
         cs.appendChild(ch);
@@ -6116,14 +6116,15 @@ function buildPurify(box, v, mk, gd) {
   // 操作按鈕
   const btns = mk('div', 'table-btns');
   if (seat && playing) {
-    const me = v.me, acts = myTurn && g.step === 'act' && g.acts > 0;
+    const me = v.me, acts = myTurn && g.step === 'act' && g.acts > 0 && !g.hands.some(h => h.length > 5);
     const mode = (key, label, why) => {
       const b = mk('button', 'ff-btn small' + (o.mode === key ? ' active' : ''), label);
       b.disabled = !!why; b.title = why || '';
       b.onclick = () => { o.mode = o.mode === key ? 'move' : key; o.sel = []; o.card = null; o.from = null; buildTable(); };
       btns.appendChild(b);
     };
-    const noAct = !myTurn ? '還沒輪到你' : g.step !== 'act' ? '現在不能行動' : g.acts <= 0 ? '行動點用完了' : '';
+    const over = g.hands.findIndex(h => h.length > 5);   // 被給牌而超過上限的人：要先丟牌（禁忌之島規則）
+    const noAct = !myTurn ? '還沒輪到你' : g.step !== 'act' ? '現在不能行動' : over >= 0 ? `${v.seats[over].name} 手牌超過 5 張，要先丟一張` : g.acts <= 0 ? '行動點用完了' : '';
     mode('move', '移動', noAct); mode('clean', g.role[me] === 'chemist' ? '清潔（最多 2 格）' : '清潔', noAct); mode('give', '給牌', noAct);
     const reg = PG_REGIONS.indexOf(pgTile(v, g.pawn[me]).r), need = g.role[me] === 'sampler' ? 3 : 4;
     let why = noAct;
@@ -6132,8 +6133,8 @@ function buildPurify(box, v, mk, gd) {
     col.onclick = () => S.net?.tbl?.({ a: 'pcollect' }); btns.appendChild(col);
     if (o.mode === 'clean' && o.sel.length) { const c = mk('button', 'ff-btn small', `清潔 ${o.sel.length} 格`); c.onclick = () => { S.net?.tbl?.({ a: 'pclean', tiles: o.sel }); o.sel = []; }; btns.appendChild(c); }
     if (o.mode === 'give') {   // 選一張牌，再選要給誰
-      const ok = v.seats.map((s, k) => k !== me && !s.left && !s.fo && (g.role[me] === 'courier' || g.pawn[k] === g.pawn[me]) && g.hands[k].length < 5);
-      v.seats.forEach((s, k) => { if (k === me) return; const b = mk('button', 'ff-btn small', `給 ${s.name}`); b.disabled = !acts || !o.card || !ok[k]; b.title = !o.card ? '先點選上面自己的一張牌' : ok[k] ? '' : '要在同一格，而且對方手牌不能滿'; b.onclick = () => { S.net?.tbl?.({ a: 'pgive', to: k, c: o.card }); o.card = null; }; btns.appendChild(b); });
+      const ok = v.seats.map((s, k) => k !== me && !s.left && !s.fo && (g.role[me] === 'courier' || g.pawn[k] === g.pawn[me]));
+      v.seats.forEach((s, k) => { if (k === me) return; const b = mk('button', 'ff-btn small', `給 ${s.name}`); b.disabled = !acts || !o.card || !ok[k]; b.title = !o.card ? '先點選上面自己的一張牌' : ok[k] ? '' : '要在同一格；對方手牌滿了也能給，他要立刻丟一張'; b.onclick = () => { S.net?.tbl?.({ a: 'pgive', to: k, c: o.card }); o.card = null; }; btns.appendChild(b); });
     }
     const end = mk('button', 'ff-btn' + (myTurn && g.step === 'act' && g.acts <= 0 ? ' active' : ''), '結束行動');
     end.disabled = !(myTurn && g.step === 'act'); end.title = end.disabled ? noAct : '抽 2 張補給牌，然後污染擴散';

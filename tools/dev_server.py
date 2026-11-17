@@ -2213,6 +2213,14 @@ def pg_act(t, cid, msg, now, keep_idle=False):
             done()
             pg_spread_phase(t, now)
         return True
+    if a == "pdiscard" and not mine:   # 被給牌而超過上限的人：立刻丟一張（禁忌之島規則，2026-11-17 使用者要求；原本給牌會被「對方手牌已滿」擋掉，全隊滿手牌就卡死）
+        c = msg.get("c")
+        if g["step"] != "act" or len(s["hand"]) <= PG_HAND_MAX or not isinstance(c, str) or c not in s["hand"]:
+            return False
+        s["hand"].remove(c)
+        g["sdis"].append(c)
+        tbl_log(t, f"{s['name']} 手牌超過 {PG_HAND_MAX} 張，丟掉了一張")
+        return True
     if not mine:
         return False
     if a == "pdiscard":
@@ -2226,6 +2234,8 @@ def pg_act(t, cid, msg, now, keep_idle=False):
             pg_spread_phase(t, now)
         return True
     if g["step"] != "act":
+        return False
+    if any(len(x["hand"]) > PG_HAND_MAX for x in t["seats"]):   # 有人被給牌而超過上限：要先丟牌才能繼續行動（合成、道具、丟牌不受影響）
         return False
     if a == "pend":
         done()
@@ -2257,12 +2267,12 @@ def pg_act(t, cid, msg, now, keep_idle=False):
             return False
         if g["role"][i] != "courier" and g["pawn"][to] != frm:
             return False
-        if len(t["seats"][to]["hand"]) >= PG_HAND_MAX:
-            return False
         s["hand"].remove(c)
         t["seats"][to]["hand"].append(c)
         t["seats"][to]["hand"].sort()
         tbl_log(t, f"{s['name']} 把一張牌交給 {t['seats'][to]['name']}")
+        if len(t["seats"][to]["hand"]) > PG_HAND_MAX:
+            tbl_log(t, f"{t['seats'][to]['name']} 手牌超過 {PG_HAND_MAX} 張，要先丟一張")
     elif a == "pcollect":
         reg = g["tiles"][frm]["r"]
         r = PG_REGIONS.index(reg) if reg in PG_REGIONS else -1
@@ -2283,6 +2293,16 @@ def pg_timeout(t, now):
     """回合限時到了：直接結束行動（要丟牌就丟第一張）；連續超時 PG_IDLE_MAX 次視為棄權。"""
     g = t.get("g")
     if t["game"] != "purify" or t["phase"] != "playing" or not g or now < g["deadline"] - 300:
+        return
+    if g["step"] == "act" and any(len(x["hand"]) > PG_HAND_MAX for x in t["seats"]):   # 卡在「有人被給牌要先丟牌」：幫沒丟的人丟一張（優先丟數量最少的採樣牌），回合時間延長 15 秒，不算回合玩家超時
+        for x in t["seats"]:
+            while len(x["hand"]) > PG_HAND_MAX:
+                cs = [c for c in x["hand"] if c[0] == "S"] or x["hand"]
+                c = min(cs, key=lambda k: x["hand"].count(k))
+                x["hand"].remove(c)
+                g["sdis"].append(c)
+                tbl_log(t, f"{x['name']} 手牌超過 {PG_HAND_MAX} 張，自動丟掉了一張")
+        g["deadline"] = now + 15000
         return
     i = t["turn"]
     s = t["seats"][i]

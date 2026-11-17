@@ -1544,6 +1544,12 @@ function pgAct(t, cid, msg, now, keepIdle) {
     if (g.step === "discard" && mine && s.hand.length <= PG_HAND_MAX) { done(); pgSpreadPhase(t, now); return true; }
     return true;
   }
+  if (a === "pdiscard" && !mine) {   // 被給牌而超過上限的人：立刻丟一張（禁忌之島規則，2026-11-17 使用者要求；原本給牌會被「對方手牌已滿」擋掉，全隊滿手牌就卡死）
+    if (g.step !== "act" || s.hand.length <= PG_HAND_MAX || typeof msg.c !== "string" || !s.hand.includes(msg.c)) return false;
+    s.hand.splice(s.hand.indexOf(msg.c), 1); g.sdis.push(msg.c);
+    tblLog(t, `${s.name} 手牌超過 ${PG_HAND_MAX} 張，丟掉了一張`);
+    return true;
+  }
   if (!mine) return false;
   if (a === "pdiscard") {
     if (g.step !== "discard" || typeof msg.c !== "string" || !s.hand.includes(msg.c)) return false;
@@ -1553,6 +1559,7 @@ function pgAct(t, cid, msg, now, keepIdle) {
     return true;
   }
   if (g.step !== "act") return false;
+  if (t.seats.some(x => x.hand.length > PG_HAND_MAX)) return false;   // 有人被給牌而超過上限：要先丟牌才能繼續行動（合成、道具、丟牌不受影響）
   if (a === "pend") { done(); pgDrawPhase(t, now); return true; }
   if (g.acts <= 0) return false;
   const from = g.pawn[i];
@@ -1571,9 +1578,9 @@ function pgAct(t, cid, msg, now, keepIdle) {
     const to = msg.to, c = msg.c;
     if (!ok(to, 0, 3) || to === i || !t.seats[to] || t.seats[to].left || t.seats[to].forfeit || typeof c !== "string" || !s.hand.includes(c)) return false;
     if (g.role[i] !== "courier" && g.pawn[to] !== from) return false;
-    if (t.seats[to].hand.length >= PG_HAND_MAX) return false;
     s.hand.splice(s.hand.indexOf(c), 1); t.seats[to].hand.push(c); t.seats[to].hand.sort();
     tblLog(t, `${s.name} 把一張牌交給 ${t.seats[to].name}`);
+    if (t.seats[to].hand.length > PG_HAND_MAX) tblLog(t, `${t.seats[to].name} 手牌超過 ${PG_HAND_MAX} 張，要先丟一張`);
   } else if (a === "pcollect") {
     const r = PG_REGIONS.indexOf(g.tiles[from].r), need = g.role[i] === "sampler" ? 3 : 4;
     if (r < 0 || g.got[r] || s.hand.filter(c => c === "S" + PG_REGIONS[r]).length < need) return false;
@@ -1587,6 +1594,16 @@ function pgAct(t, cid, msg, now, keepIdle) {
 function pgTimeout(t, now) {   // 回合限時到了：直接結束行動（要丟牌就丟第一張）；連續超時 PG_IDLE_MAX 次視為棄權
   const g = t.g;
   if (t.game !== "purify" || t.phase !== "playing" || !g || now < g.deadline - 300) return;
+  if (g.step === "act" && t.seats.some(x => x.hand.length > PG_HAND_MAX)) {   // 卡在「有人被給牌要先丟牌」：幫沒丟的人丟一張（優先丟數量最少的採樣牌），回合時間延長 15 秒，不算回合玩家超時
+    for (const x of t.seats) while (x.hand.length > PG_HAND_MAX) {
+      const pool = x.hand.filter(c => c[0] === "S"), cs = pool.length ? pool : x.hand;
+      const c = cs.reduce((b, k) => (x.hand.filter(h => h === k).length < x.hand.filter(h => h === b).length ? k : b), cs[0]);
+      x.hand.splice(x.hand.indexOf(c), 1); g.sdis.push(c);
+      tblLog(t, `${x.name} 手牌超過 ${PG_HAND_MAX} 張，自動丟掉了一張`);
+    }
+    g.deadline = now + 15000;
+    return;
+  }
   const i = t.turn, s = t.seats[i];
   s.idle++;
   if (s.idle >= PG_IDLE_MAX) {
