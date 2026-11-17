@@ -121,7 +121,7 @@ NAME_MAX = 24
 # 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號（Worker 存 Registry 的 gstats:<uid>，這裡只存記憶體 GSTATS）。各遊戲結算時在 result["gs"]
 # （依「結算後留下的座位」順序，與 result["xp"] 同；None＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器照著記進 GSTATS 並把整份送給本人；
 # result["gs"] 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）。與 worker 的 gsMk／tableStats 同一套
-GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo", "pinball", "breakout"}
+GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo", "pinball", "breakout", "purify"}
 GS_CAP, GS_KEYS_MAX = 1000000, 24
 GSTATS = {}
 
@@ -688,8 +688,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey", "t17": "kingdom", "t18": "bigtwo", "t19": "pinball", "t20": "breakout"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4), "kingdom": (2, 4), "bigtwo": (2, 4), "pinball": (1, 1), "breakout": (1, 1)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey", "t17": "kingdom", "t18": "bigtwo", "t19": "pinball", "t20": "breakout", "t21": "purify"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4), "kingdom": (2, 4), "bigtwo": (2, 4), "pinball": (1, 1), "breakout": (1, 1), "purify": (2, 4)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -792,6 +792,9 @@ def tbl_leave(t, cid):
             return
         if t["phase"] == "playing" and t["game"] == "trigon":   # Blokus Trigon：離開不中斷，棋子留在棋盤上、之後跳過
             tg_leave(t, i, int(time.time() * 1000))
+            return
+        if t["phase"] == "playing" and t["game"] == "purify":   # 淨土守護戰：離開者手牌收回、人偶移出，其餘人繼續（沒人了就清桌）
+            pg_leave(t, i, int(time.time() * 1000))
             return
         if t["phase"] == "playing" and t["game"] == "bigtwo":   # 大老二：離開者手牌作廢，其餘人繼續（剩不到 2 人就結束）
             bt_leave(t, i, int(time.time() * 1000))
@@ -1913,6 +1916,418 @@ def bt_view(t, cid, v):
         v["seats"][k]["fo"] = bool(s.get("forfeit"))
     v["canPass"] = role == "seat" and i == t["turn"] and bool(g["last"])
 
+# ---- 淨土守護戰（第二十一桌 t21；2026-11-17，使用者要求）：2～4 人合作，5×5 的島、鄰國從外圍一格格投放污染；規則與 worker/src/index.js 的 pg* 是同一套，逐行對照 ----
+# 目標：四個區域（草原 g／森林 f／礦區 m／濕地 w，各 6 格，隨機排在外圈 24 格）各取得一種解藥素材，全員回到正中央的研究院（編號 12）後「合成」＝全員獲勝。
+# 土地三種狀態 s：0 乾淨／1 污染／2 荒廢（永久失效）。回合：3 點行動（移動／清潔／給牌／取素材）→ 抽 2 張補給牌 → 依污染等級翻擴散牌。
+# 擴散牌 "N2"＝北邊第 2 條直線（N／S 配欄 0～4，W／E 配列 0～4）：從那一側往內找「最外面還沒荒廢的格子」，乾淨→污染、污染→荒廢，所以污染是從外圍往內縮。
+# 補給牌：S+區域＝採樣牌、Ispray＝淨化噴霧、Itele＝傳送器（道具不佔行動、隨時能用）、X＝污染爆發、Nb／Nk＝鄰國行動（立刻生效：多翻 1 張擴散牌／封鎖一格 1 輪不能清潔）。
+# 輸：研究院荒廢、某區域素材還沒取得而該區 6 格全荒廢、有人所在的格子荒廢又無處可逃、污染等級到頂。手牌公開（和原版桌遊一樣）。
+PG_TURN_MS, PG_IDLE_MAX, PG_HAND_MAX, PG_ACTS, PG_LV_LOSE, PG_XP_WIN, PG_XP_LOSE, PG_LAB = 120000, 2, 5, 3, 8, 8, 4, 12
+PG_LV_DRAWS = [0, 2, 2, 3, 3, 4, 4, 5]
+PG_REGIONS = ["g", "f", "m", "w"]
+PG_RNAME = {"g": "草原", "f": "森林", "m": "礦區", "w": "濕地", "L": "研究院"}
+PG_ROLES = ["medic", "chemist", "courier", "sampler", "scout", "weather"]
+PG_D4 = [(0, -1), (1, 0), (0, 1), (-1, 0)]
+PG_D8 = PG_D4 + [(1, -1), (1, 1), (-1, 1), (-1, -1)]
+
+def pg_active(t):
+    return [k for k, s in enumerate(t["seats"]) if not s.get("left") and not s.get("forfeit")]
+
+def pg_tn(g, i):
+    return f"{PG_RNAME[g['tiles'][i]['r']]}({i % 5 + 1},{i // 5 + 1})"
+
+def pg_dist(i):
+    return abs(i % 5 - 2) + abs(i // 5 - 2)
+
+def pg_hit(g, card):
+    """擴散牌打到哪一格（-1＝那一條已經沒有格子了）。"""
+    d, l = card[0], int(card[1])
+    for k in range(5):
+        i = k * 5 + l if d == "N" else (4 - k) * 5 + l if d == "S" else l * 5 + k if d == "W" else l * 5 + (4 - k)
+        if g["tiles"][i]["s"] != 2:
+            return i
+    return -1
+
+def pg_nbrs(g, i, frm, through):
+    """玩家 i 從 frm 一步能到的格子（不含荒廢格）；防疫員 through＝可以穿過荒廢格；偵察兵可以斜走。"""
+    role = g["role"][i]
+    dirs = PG_D8 if role == "scout" else PG_D4
+    out, seen, q = set(), {frm}, [frm]
+    while q:
+        c = q.pop(0)
+        cx, cy = c % 5, c // 5
+        for dx, dy in dirs:
+            nx, ny = cx + dx, cy + dy
+            if nx < 0 or ny < 0 or nx > 4 or ny > 4:
+                continue
+            n = ny * 5 + nx
+            if g["tiles"][n]["s"] != 2:
+                out.add(n)
+            elif through and role == "medic" and n not in seen:
+                seen.add(n)
+                q.append(n)
+    out.discard(frm)
+    return sorted(out)
+
+def pg_start(t):
+    now = int(time.time() * 1000)
+    n = len(t["seats"])
+    regs = [r for r in PG_REGIONS for _ in range(6)]
+    random.shuffle(regs)
+    q = 0
+    tiles = []
+    for i in range(25):
+        if i == PG_LAB:
+            tiles.append({"r": "L", "s": 0})
+        else:
+            tiles.append({"r": regs[q], "s": 0})
+            q += 1
+    supply = ["S" + r for r in PG_REGIONS for _ in range(5)] + ["Ispray", "Itele"] * 3
+    random.shuffle(supply)
+    sd = [d + str(l) for d in "NSWE" for l in range(5)]
+    random.shuffle(sd)
+    roles = list(PG_ROLES)
+    random.shuffle(roles)
+    for s in t["seats"]:
+        s["hand"] = sorted([supply.pop(), supply.pop()])
+        s["out"], s["ready"], s["left"], s["forfeit"], s["idle"] = False, False, False, False, 0
+    supply += ["X", "X", "X", "X", "Nb", "Nk"]
+    random.shuffle(supply)
+    g = {"tiles": tiles, "pawn": [PG_LAB] * n, "role": roles[:n], "got": [0, 0, 0, 0], "lvl": 1, "sup": supply, "sdis": [], "sd": sd, "sdd": [], "acts": PG_ACTS, "step": "act", "block": None, "deadline": 0}
+    t["g"], t["result"], t["phase"] = g, None, "playing"
+    hit = 0
+    while hit < 6 and g["sd"]:   # 開局先污染 6 格（打到已污染的格子就換一張，不會一開局就荒廢）
+        c = g["sd"].pop()
+        i = pg_hit(g, c)
+        g["sdd"].append(c)
+        if i >= 0 and g["tiles"][i]["s"] == 0:
+            g["tiles"][i]["s"] = 1
+            hit += 1
+    first = random.randrange(n)
+    pg_set_turn(t, first, now)
+    tbl_log(t, f"任務開始！先污染了 6 格，由 {t['seats'][first]['name']} 先行動")
+
+def pg_set_turn(t, i, now):
+    t["turn"] = i
+    t["g"]["acts"], t["g"]["step"], t["g"]["deadline"] = PG_ACTS, "act", now + PG_TURN_MS
+
+def pg_finish(t, win, why):
+    stay = [s for s in t["seats"] if not s.get("left")]
+    clean = all(not s.get("left") and not s.get("forfeit") for s in t["seats"])
+    players = [{"name": s["name"], "left": bool(s.get("left")), "forfeit": bool(s.get("forfeit"))} for s in t["seats"]]
+    t["result"] = {"win": win, "text": "合成成功！解藥淨化了全島，任務完成！" if win else f"任務失敗：{why}", "rid": random.getrandbits(32),
+                   "xp": [(PG_XP_WIN if win else PG_XP_LOSE) if clean and not s.get("forfeit") else 0 for s in stay], "players": players,
+                   "gs": [gs_mk({"w": 1} if win else {"l": 1}) if clean and not s.get("forfeit") else None for s in stay]}
+    tbl_log(t, t["result"]["text"])
+    t["seats"] = stay
+    tbl_reset_seats(t)
+    t["g"] = None
+
+def pg_lose_why(g):
+    if g["tiles"][PG_LAB]["s"] == 2:
+        return "研究院荒廢了"
+    for r in range(4):
+        if not g["got"][r] and all(x["r"] != PG_REGIONS[r] or x["s"] == 2 for x in g["tiles"]):
+            return f"{PG_RNAME[PG_REGIONS[r]]}整區荒廢，拿不到那種素材了"
+    if g["lvl"] >= PG_LV_LOSE:
+        return "污染等級到頂"
+    return None
+
+def pg_settle(t):
+    """所在格子荒廢的玩家被迫撤到最近研究院的鄰格（沒路就輸）；再檢查輸的條件。結束了回 True。"""
+    g = t["g"]
+    for k in pg_active(t):
+        if g["tiles"][g["pawn"][k]]["s"] != 2:
+            continue
+        best, bd = -1, 99
+        for c in pg_nbrs(g, k, g["pawn"][k], True):
+            if pg_dist(c) < bd:
+                bd, best = pg_dist(c), c
+        if best < 0:
+            pg_finish(t, False, f"{t['seats'][k]['name']} 被困在荒廢的土地上，無處可逃")
+            return True
+        g["pawn"][k] = best
+        tbl_log(t, f"{t['seats'][k]['name']} 所在的土地荒廢了，被迫撤到{pg_tn(g, best)}")
+    why = pg_lose_why(g)
+    if why:
+        pg_finish(t, False, why)
+        return True
+    return False
+
+def pg_spread(t, n):
+    """翻 n 張擴散牌。"""
+    g = t["g"]
+    for _ in range(n):
+        if not g["sd"]:
+            g["sd"], g["sdd"] = g["sdd"], []
+            random.shuffle(g["sd"])
+        if not g["sd"]:
+            break
+        c = g["sd"].pop()
+        i = pg_hit(g, c)
+        g["sdd"].append(c)
+        if i < 0:
+            continue
+        x = g["tiles"][i]
+        x["s"] += 1
+        tbl_log(t, f"{pg_tn(g, i)} 荒廢了！" if x["s"] == 2 else f"{pg_tn(g, i)} 被污染了")
+    return pg_settle(t)
+
+def pg_outbreak(t):
+    g = t["g"]
+    g["lvl"] += 1
+    tbl_log(t, f"污染爆發！污染等級升到 {g['lvl']}")
+    if g["lvl"] < PG_LV_LOSE:
+        if not g["sd"]:
+            g["sd"], g["sdd"] = g["sdd"], []
+            random.shuffle(g["sd"])
+        c = g["sd"].pop(0)   # 牌庫最底下那張立刻打下去，再把擴散棄牌洗回牌庫頂（剛打過的地方會再被打一次）
+        i = pg_hit(g, c)
+        g["sdd"].append(c)
+        if i >= 0:
+            x = g["tiles"][i]
+            x["s"] += 1
+            tbl_log(t, f"{pg_tn(g, i)} 荒廢了！" if x["s"] == 2 else f"{pg_tn(g, i)} 被污染了")
+        random.shuffle(g["sdd"])
+        g["sd"] += g["sdd"]
+        g["sdd"] = []
+    return pg_settle(t)
+
+def pg_block(t):
+    g = t["g"]
+    pol = [i for i, x in enumerate(g["tiles"]) if x["s"] == 1]
+    anyt = [i for i, x in enumerate(g["tiles"]) if x["s"] != 2]
+    i = random.choice(pol or anyt)
+    g["block"] = {"tile": i, "left": len(pg_active(t))}
+    tbl_log(t, f"鄰國封鎖了{pg_tn(g, i)}，一輪內不能清潔那一格")
+
+def pg_draw_phase(t, now):
+    """結束行動：抽 2 張補給牌。"""
+    g = t["g"]
+    s = t["seats"][t["turn"]]
+    g["step"] = "draw"
+    for _ in range(2):
+        if not g["sup"]:
+            g["sup"], g["sdis"] = g["sdis"], []
+            random.shuffle(g["sup"])
+        if not g["sup"]:
+            break
+        c = g["sup"].pop()
+        over = False
+        if c == "X":
+            g["sdis"].append(c)
+            over = pg_outbreak(t)
+        elif c == "Nb":
+            g["sdis"].append(c)
+            tbl_log(t, "鄰國行動：污染源增強，多翻 1 張擴散牌")
+            over = pg_spread(t, 1)
+        elif c == "Nk":
+            g["sdis"].append(c)
+            pg_block(t)
+        else:
+            s["hand"].append(c)
+        if over:
+            return
+    s["hand"].sort()
+    if len(s["hand"]) > PG_HAND_MAX:
+        g["step"], g["deadline"] = "discard", now + PG_TURN_MS
+        tbl_log(t, f"{s['name']} 手牌超過 {PG_HAND_MAX} 張，要丟掉 {len(s['hand']) - PG_HAND_MAX} 張")
+        return
+    pg_spread_phase(t, now)
+
+def pg_spread_phase(t, now):
+    """依污染等級翻擴散牌，然後換下一位。"""
+    g = t["g"]
+    i = t["turn"]
+    if pg_spread(t, PG_LV_DRAWS[g["lvl"]]):
+        return
+    if g["block"]:
+        g["block"]["left"] -= 1
+        if g["block"]["left"] <= 0:
+            g["block"] = None
+    pg_next(t, i, now)
+
+def pg_next(t, i, now):
+    n = len(t["seats"])
+    act = pg_active(t)
+    for k in range(1, n + 1):
+        j = (i + k) % n
+        if j in act:
+            pg_set_turn(t, j, now)
+            return
+
+def pg_check_empty(t):
+    """一個人都不剩就清桌。"""
+    if t["phase"] != "playing" or pg_active(t):
+        return False
+    t["seats"] = []
+    tbl_reset_seats(t)
+    t["g"] = None
+    return True
+
+def pg_act(t, cid, msg, now, keep_idle=False):
+    role, i = tbl_find(t, cid)
+    g = t.get("g")
+    a = msg.get("a")
+    if t["game"] != "purify" or role != "seat" or t["phase"] != "playing" or not g or t["seats"][i].get("left") or t["seats"][i].get("forfeit"):
+        return False
+    s = t["seats"][i]
+    mine = i == t["turn"]
+
+    def ok(v, lo, hi):
+        return isinstance(v, int) and not isinstance(v, bool) and lo <= v <= hi
+
+    def done():
+        if not keep_idle:
+            s["idle"] = 0
+        return True
+
+    if a == "psynth":   # 合成：四種素材齊全、全員（還在場的）都在研究院；隨時能做
+        if any(not x for x in g["got"]) or any(g["pawn"][k] != PG_LAB for k in pg_active(t)):
+            return False
+        pg_finish(t, True, "")
+        return True
+    if a == "puse":   # 道具（不佔行動、不限回合）：Ispray 清掉任一格的污染 {tile}；Itele 把某格的所有人傳到另一格 {from, to}
+        c = msg.get("c")
+        if c not in ("Ispray", "Itele") or c not in s["hand"]:
+            return False
+        if c == "Ispray":
+            tile = msg.get("tile")
+            if not ok(tile, 0, 24) or g["tiles"][tile]["s"] != 1 or (g["block"] and g["block"]["tile"] == tile):
+                return False
+            g["tiles"][tile]["s"] = 0
+            tbl_log(t, f"{s['name']} 用淨化噴霧清潔了{pg_tn(g, tile)}")
+        else:
+            fr, to = msg.get("from"), msg.get("to")
+            if not ok(fr, 0, 24) or not ok(to, 0, 24) or fr == to or g["tiles"][to]["s"] == 2:
+                return False
+            who = [k for k in pg_active(t) if g["pawn"][k] == fr]
+            if not who:
+                return False
+            for k in who:
+                g["pawn"][k] = to
+            tbl_log(t, f"{s['name']} 用傳送器把 {'、'.join(t['seats'][k]['name'] for k in who)} 送到{pg_tn(g, to)}")
+        s["hand"].remove(c)
+        g["sdis"].append(c)
+        if g["step"] == "discard" and mine and len(s["hand"]) <= PG_HAND_MAX:
+            done()
+            pg_spread_phase(t, now)
+        return True
+    if not mine:
+        return False
+    if a == "pdiscard":
+        c = msg.get("c")
+        if g["step"] != "discard" or not isinstance(c, str) or c not in s["hand"]:
+            return False
+        s["hand"].remove(c)
+        g["sdis"].append(c)
+        done()
+        if len(s["hand"]) <= PG_HAND_MAX:
+            pg_spread_phase(t, now)
+        return True
+    if g["step"] != "act":
+        return False
+    if a == "pend":
+        done()
+        pg_draw_phase(t, now)
+        return True
+    if g["acts"] <= 0:
+        return False
+    frm = g["pawn"][i]
+    if a == "pmove":
+        to = msg.get("to")
+        if not ok(to, 0, 24) or to not in pg_nbrs(g, i, frm, True):
+            return False
+        g["pawn"][i] = to
+        tbl_log(t, f"{s['name']} 移動到{pg_tn(g, to)}")
+    elif a == "pclean":
+        ts = msg.get("tiles")
+        if not isinstance(ts, list) or not 1 <= len(ts) <= (2 if g["role"][i] == "chemist" else 1) or len(set(x for x in ts if isinstance(x, int))) != len(ts):
+            return False
+        near = pg_nbrs(g, i, frm, False)
+        for x in ts:
+            if not ok(x, 0, 24) or g["tiles"][x]["s"] != 1 or (g["block"] and g["block"]["tile"] == x) or (x != frm and x not in near):
+                return False
+        for x in ts:
+            g["tiles"][x]["s"] = 0
+        tbl_log(t, f"{s['name']} 清潔了{'、'.join(pg_tn(g, x) for x in ts)}")
+    elif a == "pgive":
+        to, c = msg.get("to"), msg.get("c")
+        if not ok(to, 0, 3) or to == i or to >= len(t["seats"]) or t["seats"][to].get("left") or t["seats"][to].get("forfeit") or not isinstance(c, str) or c not in s["hand"]:
+            return False
+        if g["role"][i] != "courier" and g["pawn"][to] != frm:
+            return False
+        if len(t["seats"][to]["hand"]) >= PG_HAND_MAX:
+            return False
+        s["hand"].remove(c)
+        t["seats"][to]["hand"].append(c)
+        t["seats"][to]["hand"].sort()
+        tbl_log(t, f"{s['name']} 把一張牌交給 {t['seats'][to]['name']}")
+    elif a == "pcollect":
+        reg = g["tiles"][frm]["r"]
+        r = PG_REGIONS.index(reg) if reg in PG_REGIONS else -1
+        need = 3 if g["role"][i] == "sampler" else 4
+        if r < 0 or g["got"][r] or s["hand"].count("S" + PG_REGIONS[r]) < need:
+            return False
+        for _ in range(need):
+            s["hand"].remove("S" + PG_REGIONS[r])
+            g["sdis"].append("S" + PG_REGIONS[r])
+        g["got"][r] = 1
+        tbl_log(t, f"{s['name']} 取得了{PG_RNAME[PG_REGIONS[r]]}的解藥素材！（{sum(1 for x in g['got'] if x)}/4）")
+    else:
+        return False
+    g["acts"] -= 1
+    return done()
+
+def pg_timeout(t, now):
+    """回合限時到了：直接結束行動（要丟牌就丟第一張）；連續超時 PG_IDLE_MAX 次視為棄權。"""
+    g = t.get("g")
+    if t["game"] != "purify" or t["phase"] != "playing" or not g or now < g["deadline"] - 300:
+        return
+    i = t["turn"]
+    s = t["seats"][i]
+    s["idle"] += 1
+    if s["idle"] >= PG_IDLE_MAX:
+        s["forfeit"] = True
+        g["sdis"] += s["hand"]
+        s["hand"] = []
+        tbl_log(t, f"{s['name']} 連續超時，視為棄權")
+        if not pg_check_empty(t):
+            pg_next(t, i, now)
+        return
+    tbl_log(t, f"{s['name']} 超時")
+    if g["step"] == "discard":
+        pg_act(t, s["cid"], {"a": "pdiscard", "c": s["hand"][0]}, now, True)
+    else:
+        pg_act(t, s["cid"], {"a": "pend"}, now, True)
+
+def pg_leave(t, i, now):
+    """遊戲進行中有人離開：手牌收回、那位的人偶移出，其餘人繼續（一個人都不剩就清桌）。"""
+    s = t["seats"][i]
+    s["left"], s["cid"] = True, None
+    t["g"]["sdis"] += s["hand"]
+    s["hand"] = []
+    tbl_log(t, f"{s['name']} 離開了")
+    if pg_check_empty(t):
+        return
+    if i == t["turn"]:
+        pg_next(t, i, now)
+
+def pg_view(t, cid, v):
+    g = t["g"]
+    playing = t["phase"] == "playing"
+    role, i = tbl_find(t, cid)
+    if not (g and playing):
+        return
+    v["pg"] = {"tiles": [x["r"] + str(x["s"]) for x in g["tiles"]], "pawn": list(g["pawn"]), "role": list(g["role"]), "got": list(g["got"]), "lvl": g["lvl"],
+               "draws": PG_LV_DRAWS[g["lvl"]] if g["lvl"] < len(PG_LV_DRAWS) else 0, "lose": PG_LV_LOSE, "sup": len(g["sup"]), "sd": len(g["sd"]), "sdd": list(g["sdd"]),
+               "acts": g["acts"], "step": g["step"], "block": g["block"]["tile"] if g["block"] else -1, "hands": [list(s["hand"]) for s in t["seats"]],
+               "peek": g["sd"][-1] if role == "seat" and g["role"][i] == "weather" and g["sd"] else None, "deadline": g["deadline"], "sn": int(time.time() * 1000)}
+    for k, s in enumerate(t["seats"]):
+        v["seats"][k]["left"] = bool(s.get("left"))
+        v["seats"][k]["fo"] = bool(s.get("forfeit"))
+
+PG_MSGS = ("pmove", "pclean", "pgive", "pcollect", "psynth", "puse", "pdiscard", "pend")
 # ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：2～4 人、正六邊形的三角格棋盤（邊長 9，共 486 格）、每人 22 塊（1～6 個三角形，共 110 格）----
 # 規則與座標系說明見 worker/src/index.js 的 tg*（同一套）：三角形 (x, y)、(x + y) 偶數＝朝上；頂點是格點 (i, j)；方向轉換用軸座標 ((i − j) / 2, j)。
 TG_N, TG_CX, TG_W, TG_ROWS, TG_VW, TG_TURN_MS, TG_IDLE_MAX, TG_XP, TG_TOTAL = 9, 19, 39, 18, 41, 45000, 2, 6, 110
@@ -5231,7 +5646,7 @@ def hk_end(t, cid, msg):
         return
     hk_finish(t, sa, sb, "" if sa >= HK_GOALS or sb >= HK_GOALS else "時間到")
 
-GAME_START = {"breakout": br_start, "pinball": pb_start, "bigtwo": bt_start, "kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+GAME_START = {"purify": pg_start, "breakout": br_start, "pinball": pb_start, "bigtwo": bt_start, "kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 SCR_CID = "__screen__"   # 大螢幕轉播用的虛擬連線編號（tbl_view 把它當觀戰者）
 SCR_CD_MS = 5000          # 大螢幕手動切台的冷卻（全島共用；2026-11-14 使用者要求）
@@ -5344,6 +5759,8 @@ def tbl_view(t, cid):
             for k, s in enumerate(t["seats"]):
                 v["seats"][k]["left"] = bool(s.get("left"))
                 v["seats"][k]["rem"] = tg_rem(g, k)
+    elif g and t["game"] == "purify":   # 淨土守護戰：整個盤面與手牌都公開（氣象員另外看得到擴散牌庫頂）
+        pg_view(t, cid, v)
     elif g and t["game"] == "bigtwo":   # 大老二：桌面上最後一手、連續 pass 數、期限；手牌走共通的 hand／hands（觀戰者看得到每個人的牌）
         bt_view(t, cid, v)
     elif g and t["game"] == "kingdom":   # 列島建國：整個盤面公開（市場、資源、各人的王國），只有自己保留的牌看得到內容
@@ -6887,6 +7304,9 @@ class Room:
                         un_say(t, cid)
                     elif a == "catch":
                         un_catch(t, cid)
+                    elif a in PG_MSGS and t["game"] == "purify":   # 淨土守護戰：移動／清潔／給牌／取素材／合成／道具／丟牌／結束行動
+                        if not pg_act(t, cid, msg, now_ms):
+                            return out, None, None
                     elif a in ("bplay", "bpass"):   # 大老二：出牌 {cs: [牌]}／pass
                         if not (bt_play(t, cid, msg.get("cs"), now_ms) if a == "bplay" else bt_pass(t, cid, now_ms)):
                             return out, None, None
@@ -6894,7 +7314,9 @@ class Room:
                         if not kg_act(t, cid, msg, now_ms):
                             return out, None, None
                     elif a == "timeout":   # UNO／Blokus：回合限時到了（伺服器核對時鐘）
-                        if t["game"] == "bigtwo":
+                        if t["game"] == "purify":
+                            pg_timeout(t, now_ms)
+                        elif t["game"] == "bigtwo":
                             bt_timeout(t, now_ms)
                         elif t["game"] == "kingdom":
                             kg_timeout(t, now_ms)

@@ -502,8 +502,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey", t17: "kingdom", t18: "bigtwo", t19: "pinball", t20: "breakout" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 4], kingdom: [2, 4], bigtwo: [2, 4], pinball: [1, 1], breakout: [1, 1] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey", t17: "kingdom", t18: "bigtwo", t19: "pinball", t20: "breakout", t21: "purify" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 4], kingdom: [2, 4], bigtwo: [2, 4], pinball: [1, 1], breakout: [1, 1], purify: [2, 4] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -517,7 +517,7 @@ const GM_XP_MIN_MOVES = 10;
 // 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號存在 Registry 的 gstats:<uid> = {遊戲 id: {鍵: 數字}}；各遊戲結算時在 result.gs
 // （依「結算後留下的座位」順序，與 result.xp 同；null＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器（tableStats）照著寫進 Registry，
 // 再把整份 gstats 送給本人；result.gs 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）；其餘鍵見 docs/notes.md「小遊戲戰績與稱號」。與 tools/dev_server.py 的 gs_mk 同一套
-const GS_GAMES = new Set(["oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo", "pinball", "breakout"]), GS_KEY_RE = /^[a-z0-9_]{1,12}$/, GS_CAP = 1000000, GS_KEYS_MAX = 24;
+const GS_GAMES = new Set(["oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo", "pinball", "breakout", "purify"]), GS_KEY_RE = /^[a-z0-9_]{1,12}$/, GS_CAP = 1000000, GS_KEYS_MAX = 24;
 const gsMk = (add, mx, mn) => ({ add: { p: 1, ...(add || {}) }, max: mx || {}, min: mn || {} });
 const OM_SYM = { S: "♠", H: "♥", D: "♦", C: "♣" };
 const omRank = c => (c === "JK" ? null : Number(c.slice(1)));
@@ -579,6 +579,7 @@ function tblLeave(t, cid) {
     const name = t.seats[i].name;
     if (t.game === "arcade") { arLeave(t, i); return; }   // 俄羅斯方塊：單人局作廢、聯機照當時分數排名，不中斷其他人
     if (t.phase === "playing" && t.game === "trigon") { tgLeave(t, i, Date.now()); return; }   // Blokus Trigon：離開不中斷，棋子留在棋盤上、之後跳過
+    if (t.phase === "playing" && t.game === "purify") { pgLeave(t, i, Date.now()); return; }   // 淨土守護戰：離開者手牌收回、人偶移出，其餘人繼續（沒人了就清桌）
     if (t.phase === "playing" && t.game === "bigtwo") { btLeave(t, i, Date.now()); return; }   // 大老二：離開者手牌作廢，其餘人繼續（剩不到 2 人就結束）
     if (t.phase === "playing" && t.game === "kingdom") { kgLeave(t, i, Date.now()); return; }   // 列島建國：離開者視同棄權，其餘人繼續（剩不到 2 人就結束）
     if (t.phase === "playing" && t.game === "blokus") { bkLeave(t, i, Date.now()); return; }   // Blokus：離開不中斷，棋子留在棋盤上、之後跳過
@@ -1353,6 +1354,267 @@ function btView(t, cid, v) {
   v.canPass = role === "seat" && i === t.turn && !!g.last;
 }
 const BT_MSGS = new Set(["bplay", "bpass"]);
+// ---- 淨土守護戰（第二十一桌 t21；2026-11-17，使用者要求）：2～4 人合作，5×5 的島、鄰國從外圍一格格投放污染；規則與 tools/dev_server.py 的 pg_* 是同一套，逐行對照 ----
+// 目標：四個區域（草原 g／森林 f／礦區 m／濕地 w，各 6 格，隨機排在外圈 24 格）各取得一種解藥素材，全員回到正中央的研究院（編號 12）後「合成」＝全員獲勝。
+// 土地三種狀態 s：0 乾淨／1 污染／2 荒廢（永久失效）。回合：3 點行動（移動／清潔／給牌／取素材）→ 抽 2 張補給牌 → 依污染等級翻擴散牌。
+// 擴散牌 "N2"＝北邊第 2 條直線（N／S 配欄 0～4，W／E 配列 0～4）：從那一側往內找「最外面還沒荒廢的格子」，乾淨→污染、污染→荒廢，所以污染是從外圍往內縮。
+// 補給牌：S+區域＝採樣牌、Ispray＝淨化噴霧、Itele＝傳送器（道具不佔行動、隨時能用）、X＝污染爆發、Nb／Nk＝鄰國行動（立刻生效：多翻 1 張擴散牌／封鎖一格 1 輪不能清潔）。
+// 輸：研究院荒廢、某區域素材還沒取得而該區 6 格全荒廢、有人所在的格子荒廢又無處可逃、污染等級到頂。手牌公開（和原版桌遊一樣）。
+const PG_TURN_MS = 120000, PG_IDLE_MAX = 2, PG_HAND_MAX = 5, PG_ACTS = 3, PG_LV_LOSE = 8, PG_LV_DRAWS = [0, 2, 2, 3, 3, 4, 4, 5], PG_XP_WIN = 8, PG_XP_LOSE = 4, PG_LAB = 12;
+const PG_REGIONS = ["g", "f", "m", "w"], PG_RNAME = { g: "草原", f: "森林", m: "礦區", w: "濕地", L: "研究院" };
+const PG_ROLES = ["medic", "chemist", "courier", "sampler", "scout", "weather"], PG_ROLE_NAME = { medic: "防疫員", chemist: "化學師", courier: "通訊員", sampler: "採樣員", scout: "偵察兵", weather: "氣象員" };
+const PG_D4 = [[0, -1], [1, 0], [0, 1], [-1, 0]], PG_D8 = [...PG_D4, [1, -1], [1, 1], [-1, 1], [-1, -1]];
+const pgActive = t => { const out = []; t.seats.forEach((s, k) => { if (!s.left && !s.forfeit) out.push(k); }); return out; };
+const pgTn = (g, i) => `${PG_RNAME[g.tiles[i].r]}(${(i % 5) + 1},${Math.floor(i / 5) + 1})`;
+const pgDist = i => Math.abs((i % 5) - 2) + Math.abs(Math.floor(i / 5) - 2);
+function pgHit(g, card) {   // 擴散牌打到哪一格（-1＝那一條已經沒有格子了）
+  const d = card[0], l = Number(card[1]);
+  for (let k = 0; k < 5; k++) {
+    const i = d === "N" ? k * 5 + l : d === "S" ? (4 - k) * 5 + l : d === "W" ? l * 5 + k : l * 5 + (4 - k);
+    if (g.tiles[i].s !== 2) return i;
+  }
+  return -1;
+}
+function pgNbrs(g, i, from, through) {   // 玩家 i 從 from 一步能到的格子（不含荒廢格）；防疫員 through＝可以穿過荒廢格；偵察兵可以斜走
+  const role = g.role[i], dirs = role === "scout" ? PG_D8 : PG_D4, out = new Set(), seen = new Set([from]), q = [from];
+  while (q.length) {
+    const c = q.shift(), cx = c % 5, cy = (c - cx) / 5;
+    for (const [dx, dy] of dirs) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx > 4 || ny > 4) continue;
+      const n = ny * 5 + nx;
+      if (g.tiles[n].s !== 2) out.add(n);
+      else if (through && role === "medic" && !seen.has(n)) { seen.add(n); q.push(n); }
+    }
+  }
+  out.delete(from);
+  return [...out];
+}
+function pgStart(t) {
+  const now = Date.now(), n = t.seats.length;
+  const regs = shuffle(PG_REGIONS.flatMap(r => Array(6).fill(r)));
+  let q = 0;
+  const tiles = Array.from({ length: 25 }, (_, i) => (i === PG_LAB ? { r: "L", s: 0 } : { r: regs[q++], s: 0 }));
+  const supply = [];
+  for (const r of PG_REGIONS) for (let k = 0; k < 5; k++) supply.push("S" + r);
+  for (let k = 0; k < 3; k++) supply.push("Ispray", "Itele");
+  shuffle(supply);
+  const sd = [];
+  for (const d of "NSWE") for (let l = 0; l < 5; l++) sd.push(d + l);
+  shuffle(sd);
+  const roles = shuffle([...PG_ROLES]);
+  t.seats.forEach((s, k) => { s.hand = [supply.pop(), supply.pop()].sort(); s.out = false; s.ready = false; s.left = false; s.forfeit = false; s.idle = 0; });
+  supply.push("X", "X", "X", "X", "Nb", "Nk"); shuffle(supply);
+  const g = { tiles, pawn: t.seats.map(() => PG_LAB), role: roles.slice(0, n), got: [0, 0, 0, 0], lvl: 1, sup: supply, sdis: [], sd, sdd: [], acts: PG_ACTS, step: "act", block: null, deadline: 0 };
+  t.g = g; t.result = null; t.phase = "playing";
+  for (let hit = 0; hit < 6 && g.sd.length;) {   // 開局先污染 6 格（打到已污染的格子就換一張，不會一開局就荒廢）
+    const c = g.sd.pop(), i = pgHit(g, c);
+    g.sdd.push(c);
+    if (i >= 0 && g.tiles[i].s === 0) { g.tiles[i].s = 1; hit++; }
+  }
+  const first = Math.floor(Math.random() * n);
+  pgSetTurn(t, first, now);
+  tblLog(t, `任務開始！先污染了 6 格，由 ${t.seats[first].name} 先行動`);
+}
+function pgSetTurn(t, i, now) { t.turn = i; t.g.acts = PG_ACTS; t.g.step = "act"; t.g.deadline = now + PG_TURN_MS; }
+function pgFinish(t, win, why) {
+  const stay = t.seats.filter(s => !s.left), clean = t.seats.every(s => !s.left && !s.forfeit);
+  const players = t.seats.map(s => ({ name: s.name, left: !!s.left, forfeit: !!s.forfeit }));
+  t.result = { win, text: win ? "合成成功！解藥淨化了全島，任務完成！" : `任務失敗：${why}`, rid: Math.floor(Math.random() * 4294967296),
+               xp: stay.map(s => (clean && !s.forfeit ? (win ? PG_XP_WIN : PG_XP_LOSE) : 0)), players, gs: stay.map(s => (clean && !s.forfeit ? gsMk(win ? { w: 1 } : { l: 1 }) : null)) };
+  tblLog(t, t.result.text);
+  t.seats = stay;
+  tblResetSeats(t);
+  t.g = null;
+}
+function pgLoseWhy(g) {
+  if (g.tiles[PG_LAB].s === 2) return "研究院荒廢了";
+  for (let r = 0; r < 4; r++) if (!g.got[r] && g.tiles.every(x => x.r !== PG_REGIONS[r] || x.s === 2)) return `${PG_RNAME[PG_REGIONS[r]]}整區荒廢，拿不到那種素材了`;
+  if (g.lvl >= PG_LV_LOSE) return "污染等級到頂";
+  return null;
+}
+function pgSettle(t) {   // 所在格子荒廢的玩家被迫撤到最近研究院的鄰格（沒路就輸）；再檢查輸的條件。結束了回 true
+  const g = t.g;
+  for (const k of pgActive(t)) {
+    if (g.tiles[g.pawn[k]].s !== 2) continue;
+    let best = -1, bd = 99;
+    for (const c of pgNbrs(g, k, g.pawn[k], true)) if (pgDist(c) < bd) { bd = pgDist(c); best = c; }
+    if (best < 0) { pgFinish(t, false, `${t.seats[k].name} 被困在荒廢的土地上，無處可逃`); return true; }
+    g.pawn[k] = best;
+    tblLog(t, `${t.seats[k].name} 所在的土地荒廢了，被迫撤到${pgTn(g, best)}`);
+  }
+  const why = pgLoseWhy(g);
+  if (why) { pgFinish(t, false, why); return true; }
+  return false;
+}
+function pgSpread(t, n) {   // 翻 n 張擴散牌
+  const g = t.g;
+  for (let k = 0; k < n; k++) {
+    if (!g.sd.length) { g.sd = shuffle(g.sdd); g.sdd = []; }
+    if (!g.sd.length) break;
+    const c = g.sd.pop(), i = pgHit(g, c);
+    g.sdd.push(c);
+    if (i < 0) continue;
+    const x = g.tiles[i];
+    x.s++;
+    tblLog(t, x.s === 2 ? `${pgTn(g, i)} 荒廢了！` : `${pgTn(g, i)} 被污染了`);
+  }
+  return pgSettle(t);
+}
+function pgOutbreak(t) {
+  const g = t.g;
+  g.lvl++;
+  tblLog(t, `污染爆發！污染等級升到 ${g.lvl}`);
+  if (g.lvl < PG_LV_LOSE) {
+    if (!g.sd.length) { g.sd = shuffle(g.sdd); g.sdd = []; }
+    const c = g.sd.shift(), i = pgHit(g, c);   // 牌庫最底下那張立刻打下去，再把擴散棄牌洗回牌庫頂（剛打過的地方會再被打一次）
+    g.sdd.push(c);
+    if (i >= 0) { const x = g.tiles[i]; x.s++; tblLog(t, x.s === 2 ? `${pgTn(g, i)} 荒廢了！` : `${pgTn(g, i)} 被污染了`); }
+    g.sd.push(...shuffle(g.sdd)); g.sdd = [];
+  }
+  return pgSettle(t);
+}
+function pgBlock(t) {
+  const g = t.g, pol = [], any = [];
+  g.tiles.forEach((x, i) => { if (x.s === 1) pol.push(i); if (x.s !== 2) any.push(i); });
+  const pick = pol.length ? pol : any;
+  const i = pick[Math.floor(Math.random() * pick.length)];
+  g.block = { tile: i, left: pgActive(t).length };
+  tblLog(t, `鄰國封鎖了${pgTn(g, i)}，一輪內不能清潔那一格`);
+}
+function pgDrawPhase(t, now) {   // 結束行動：抽 2 張補給牌
+  const g = t.g, s = t.seats[t.turn];
+  g.step = "draw";
+  for (let k = 0; k < 2; k++) {
+    if (!g.sup.length) { g.sup = shuffle(g.sdis); g.sdis = []; }
+    if (!g.sup.length) break;
+    const c = g.sup.pop();
+    let over = false;
+    if (c === "X") { g.sdis.push(c); over = pgOutbreak(t); }
+    else if (c === "Nb") { g.sdis.push(c); tblLog(t, "鄰國行動：污染源增強，多翻 1 張擴散牌"); over = pgSpread(t, 1); }
+    else if (c === "Nk") { g.sdis.push(c); pgBlock(t); }
+    else s.hand.push(c);
+    if (over) return;
+  }
+  s.hand.sort();
+  if (s.hand.length > PG_HAND_MAX) { g.step = "discard"; g.deadline = now + PG_TURN_MS; tblLog(t, `${s.name} 手牌超過 ${PG_HAND_MAX} 張，要丟掉 ${s.hand.length - PG_HAND_MAX} 張`); return; }
+  pgSpreadPhase(t, now);
+}
+function pgSpreadPhase(t, now) {   // 依污染等級翻擴散牌，然後換下一位
+  const g = t.g, i = t.turn;
+  if (pgSpread(t, PG_LV_DRAWS[g.lvl])) return;
+  if (g.block && --g.block.left <= 0) g.block = null;
+  pgNext(t, i, now);
+}
+function pgNext(t, i, now) {
+  const n = t.seats.length, act = pgActive(t);
+  for (let k = 1; k <= n; k++) { const j = (i + k) % n; if (act.includes(j)) { pgSetTurn(t, j, now); return; } }
+}
+function pgCheckEmpty(t) {   // 一個人都不剩就清桌
+  if (t.phase !== "playing" || pgActive(t).length) return false;
+  t.seats = []; tblResetSeats(t); t.g = null;
+  return true;
+}
+function pgAct(t, cid, msg, now, keepIdle) {
+  const [role, i] = tblFind(t, cid), g = t.g, a = msg.a;
+  if (t.game !== "purify" || role !== "seat" || t.phase !== "playing" || !g || t.seats[i].left || t.seats[i].forfeit) return false;
+  const s = t.seats[i], mine = i === t.turn, ok = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+  const done = () => { if (!keepIdle) s.idle = 0; return true; };
+  if (a === "psynth") {   // 合成：四種素材齊全、全員（還在場的）都在研究院；隨時能做
+    if (g.got.some(x => !x) || pgActive(t).some(k => g.pawn[k] !== PG_LAB)) return false;
+    pgFinish(t, true, "");
+    return true;
+  }
+  if (a === "puse") {   // 道具（不佔行動、不限回合）：Ispray 清掉任一格的污染 {tile}；Itele 把某格的所有人傳到另一格 {from, to}
+    const c = msg.c;
+    if (c !== "Ispray" && c !== "Itele") return false;
+    if (!s.hand.includes(c)) return false;
+    if (c === "Ispray") {
+      if (!ok(msg.tile, 0, 24) || g.tiles[msg.tile].s !== 1 || g.block?.tile === msg.tile) return false;
+      g.tiles[msg.tile].s = 0;
+      tblLog(t, `${s.name} 用淨化噴霧清潔了${pgTn(g, msg.tile)}`);
+    } else {
+      if (!ok(msg.from, 0, 24) || !ok(msg.to, 0, 24) || msg.from === msg.to || g.tiles[msg.to].s === 2) return false;
+      const who = pgActive(t).filter(k => g.pawn[k] === msg.from);
+      if (!who.length) return false;
+      for (const k of who) g.pawn[k] = msg.to;
+      tblLog(t, `${s.name} 用傳送器把 ${who.map(k => t.seats[k].name).join("、")} 送到${pgTn(g, msg.to)}`);
+    }
+    s.hand.splice(s.hand.indexOf(c), 1); g.sdis.push(c);
+    if (g.step === "discard" && mine && s.hand.length <= PG_HAND_MAX) { done(); pgSpreadPhase(t, now); return true; }
+    return true;
+  }
+  if (!mine) return false;
+  if (a === "pdiscard") {
+    if (g.step !== "discard" || typeof msg.c !== "string" || !s.hand.includes(msg.c)) return false;
+    s.hand.splice(s.hand.indexOf(msg.c), 1); g.sdis.push(msg.c);
+    done();
+    if (s.hand.length <= PG_HAND_MAX) pgSpreadPhase(t, now);
+    return true;
+  }
+  if (g.step !== "act") return false;
+  if (a === "pend") { done(); pgDrawPhase(t, now); return true; }
+  if (g.acts <= 0) return false;
+  const from = g.pawn[i];
+  if (a === "pmove") {
+    if (!ok(msg.to, 0, 24) || !pgNbrs(g, i, from, true).includes(msg.to)) return false;
+    g.pawn[i] = msg.to;
+    tblLog(t, `${s.name} 移動到${pgTn(g, msg.to)}`);
+  } else if (a === "pclean") {
+    const ts = msg.tiles;
+    if (!Array.isArray(ts) || ts.length < 1 || ts.length > (g.role[i] === "chemist" ? 2 : 1) || new Set(ts).size !== ts.length) return false;
+    const near = pgNbrs(g, i, from, false);
+    for (const x of ts) if (!ok(x, 0, 24) || g.tiles[x].s !== 1 || g.block?.tile === x || (x !== from && !near.includes(x))) return false;
+    for (const x of ts) g.tiles[x].s = 0;
+    tblLog(t, `${s.name} 清潔了${ts.map(x => pgTn(g, x)).join("、")}`);
+  } else if (a === "pgive") {
+    const to = msg.to, c = msg.c;
+    if (!ok(to, 0, 3) || to === i || !t.seats[to] || t.seats[to].left || t.seats[to].forfeit || typeof c !== "string" || !s.hand.includes(c)) return false;
+    if (g.role[i] !== "courier" && g.pawn[to] !== from) return false;
+    if (t.seats[to].hand.length >= PG_HAND_MAX) return false;
+    s.hand.splice(s.hand.indexOf(c), 1); t.seats[to].hand.push(c); t.seats[to].hand.sort();
+    tblLog(t, `${s.name} 把一張牌交給 ${t.seats[to].name}`);
+  } else if (a === "pcollect") {
+    const r = PG_REGIONS.indexOf(g.tiles[from].r), need = g.role[i] === "sampler" ? 3 : 4;
+    if (r < 0 || g.got[r] || s.hand.filter(c => c === "S" + PG_REGIONS[r]).length < need) return false;
+    for (let k = 0; k < need; k++) { s.hand.splice(s.hand.indexOf("S" + PG_REGIONS[r]), 1); g.sdis.push("S" + PG_REGIONS[r]); }
+    g.got[r] = 1;
+    tblLog(t, `${s.name} 取得了${PG_RNAME[PG_REGIONS[r]]}的解藥素材！（${g.got.filter(Boolean).length}/4）`);
+  } else return false;
+  g.acts--;
+  return done();
+}
+function pgTimeout(t, now) {   // 回合限時到了：直接結束行動（要丟牌就丟第一張）；連續超時 PG_IDLE_MAX 次視為棄權
+  const g = t.g;
+  if (t.game !== "purify" || t.phase !== "playing" || !g || now < g.deadline - 300) return;
+  const i = t.turn, s = t.seats[i];
+  s.idle++;
+  if (s.idle >= PG_IDLE_MAX) {
+    s.forfeit = true; g.sdis.push(...s.hand); s.hand = [];
+    tblLog(t, `${s.name} 連續超時，視為棄權`);
+    if (!pgCheckEmpty(t)) pgNext(t, i, now);
+    return;
+  }
+  tblLog(t, `${s.name} 超時`);
+  if (g.step === "discard") pgAct(t, s.cid, { a: "pdiscard", c: s.hand[0] }, now, true);
+  else pgAct(t, s.cid, { a: "pend" }, now, true);
+}
+function pgLeave(t, i, now) {   // 遊戲進行中有人離開：手牌收回、那位的人偶移出，其餘人繼續（一個人都不剩就清桌）
+  const s = t.seats[i];
+  s.left = true; s.cid = null; t.g.sdis.push(...s.hand); s.hand = [];
+  tblLog(t, `${s.name} 離開了`);
+  if (pgCheckEmpty(t)) return;
+  if (i === t.turn) pgNext(t, i, now);
+}
+function pgView(t, cid, v) {
+  const g = t.g, playing = t.phase === "playing", [role, i] = tblFind(t, cid);
+  if (!(g && playing)) return;
+  v.pg = { tiles: g.tiles.map(x => x.r + x.s), pawn: [...g.pawn], role: [...g.role], got: [...g.got], lvl: g.lvl, draws: PG_LV_DRAWS[g.lvl] || 0, lose: PG_LV_LOSE,
+           sup: g.sup.length, sd: g.sd.length, sdd: [...g.sdd], acts: g.acts, step: g.step, block: g.block ? g.block.tile : -1, hands: t.seats.map(s => [...s.hand]),
+           peek: role === "seat" && g.role[i] === "weather" && g.sd.length ? g.sd[g.sd.length - 1] : null, deadline: g.deadline, sn: Date.now() };
+  t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].fo = !!s.forfeit; });
+}
+const PG_MSGS = new Set(["pmove", "pclean", "pgive", "pcollect", "psynth", "puse", "pdiscard", "pend"]);
 // ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：2～4 人、正六邊形的三角格棋盤（邊長 9，共 486 格）、每人 22 塊（1～6 個三角形，共 110 格）----
 // 規則同Blokus：第一塊要蓋住自己的角落（這裡是「棋盤六個頂點之一」：塊上有一格以那個頂點為角）；之後每塊要「點對點」接到自己的舊方塊（共用至少一個頂點），且不能「邊對邊」（共用一條邊）；
 // 放不下的人自動跳過、全員放不下就結束；計分＝−剩下的格數，全部放完 +15、最後一塊是單格再 +5；每手限時 TG_TURN_MS，連續超時 TG_IDLE_MAX 次視為棄權；沒有排行榜。與 tools/dev_server.py 的 tg_* 同一套。
@@ -3504,7 +3766,7 @@ function hkEnd(t, cid, msg) {   // 桌主那台回報結束（有一隊到 HK_GO
   if (!Number.isInteger(msg.sa) || !Number.isInteger(msg.sb) || msg.sa < 0 || msg.sb < 0 || msg.sa > 99 || msg.sb > 99) return;
   hkFinish(t, msg.sa, msg.sb, msg.sa >= HK_GOALS || msg.sb >= HK_GOALS ? "" : "時間到");
 }
-const GAME_START = { breakout: brStart, pinball: pbStart, bigtwo: btStart, kingdom: kgStart, arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+const GAME_START = { purify: pgStart, breakout: brStart, pinball: pbStart, bigtwo: btStart, kingdom: kgStart, arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 const SCR_CD_MS = 5000;   // 大螢幕手動切台的冷卻（全島共用；2026-11-14 使用者要求）
 const SCR_CID = "__screen__";   // 大螢幕轉播用的虛擬連線編號（tblView 把它當觀戰者：手牌全翻開）
@@ -3586,6 +3848,8 @@ function tblView(t, cid) {
     const g = t.g;
     v.tg = { board: g.board.join(""), col: [...g.col], corner: [...g.corner], used: g.sd.map(d => [...d.used]), done: g.sd.map(d => d.done), last: g.last, moves: g.moves, deadline: playing ? g.deadline : 0, sn: Date.now() };
     if (playing) t.seats.forEach((s, k) => { v.seats[k].left = !!s.left; v.seats[k].rem = tgRem(g, k); });
+  } else if (t.g && t.game === "purify") {   // 淨土守護戰：整個盤面與手牌都公開（氣象員另外看得到擴散牌庫頂）
+    pgView(t, cid, v);
   } else if (t.g && t.game === "bigtwo") {   // 大老二：桌面上最後一手、連續 pass 數、期限；手牌走共通的 hand／hands（觀戰者看得到每個人的牌）
     btView(t, cid, v);
   } else if (t.g && t.game === "kingdom") {   // 列島建國：整個盤面公開（市場、資源、各人的王國），只有自己保留的牌看得到內容
@@ -4441,6 +4705,7 @@ export class Island {
     else if (t.game === "pinball" && a === "over") pbOver(t, att.id, msg);   // 彈珠台：客戶端回報結束（最終分數）
     else if (t.game === "maze" && MZ_MSGS.has(a)) { if (a === "mpac") mzSetPac(t, att.id, msg.v); else mzOver(t, att.id, msg); }   // 豆豆迷宮：桌主指定豆豆／豆豆那台回報結束
     else if (t.game === "bigtwo" && BT_MSGS.has(a)) { if (!(a === "bplay" ? btPlay(t, att.id, msg.cs, now) : btPass(t, att.id, now))) return; }   // 大老二：出牌 {cs: [牌]}／pass
+    else if (t.game === "purify" && PG_MSGS.has(a)) { if (!pgAct(t, att.id, msg, now)) return; }   // 淨土守護戰：移動／清潔／給牌／取素材／合成／道具／丟牌／結束行動
     else if (t.game === "kingdom" && KG_MSGS.has(a)) { if (!kgAct(t, att.id, msg, now)) return; }   // 列島建國：拿資源／保留／建造／交易／封鎖／跳過
     else if (t.game === "intel" && IT_MSGS.has(a)) itMsg(t, att.id, msg, now);   // 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
     else if (a === "ready") tblReady(t, att.id, msg.v);
@@ -4453,7 +4718,7 @@ export class Island {
     else if (a === "pass") unPass(t, att.id, now);
     else if (a === "uno") unSay(t, att.id);
     else if (a === "catch") unCatch(t, att.id);
-    else if (a === "timeout") { if (t.game === "bigtwo") btTimeout(t, now); else if (t.game === "kingdom") kgTimeout(t, now); else if (t.game === "blokus") bkTimeout(t, now); else if (t.game === "trigon") tgTimeout(t, now); else unTimeout(t, now); }   // UNO／Blokus：回合限時到了（伺服器核對時鐘）
+    else if (a === "timeout") { if (t.game === "purify") pgTimeout(t, now); else if (t.game === "bigtwo") btTimeout(t, now); else if (t.game === "kingdom") kgTimeout(t, now); else if (t.game === "blokus") bkTimeout(t, now); else if (t.game === "trigon") tgTimeout(t, now); else unTimeout(t, now); }   // UNO／Blokus：回合限時到了（伺服器核對時鐘）
     else if (a === "place") { if (t.game === "trigon") tgPlace(t, att.id, msg.p, msg.c, now); else bkPlace(t, att.id, msg.p, msg.c, now); }   // Blokus：放方塊 {p 第幾塊, c 佔用的格子座標}
     else if (a === "mode") unSetMode(t, att.id, msg.v);   // UNO：桌主在開局前選玩法（classic／wild）
     else if (a === "hit") dgHit(t, att.id, now);   // 躲彈幕：我被打到（客戶端自判，伺服器管命數與無敵時間）

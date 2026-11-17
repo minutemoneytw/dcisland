@@ -1612,6 +1612,7 @@ TABLES_BY_TERRAIN = {
               dict(id="t8", game="intel", cell=tbl_cell(1, 0), w=3, h=2),      # (1,0) 秘藥情報戰（2026-11-10，使用者要求）
               dict(id="t11", game="blokus", cell=tbl_cell(2, 1), w=3, h=2),    # (2,1) Blokus（2026-11-13，使用者要求；2026-11-14 由 (1,1) 移到 (2,1)）
               dict(id="t12", game="trigon", cell=tbl_cell(2, 2), w=3, h=2),    # (2,2) Blokus Trigon（2026-11-13，使用者要求；2026-11-14 由 (1,2) 移到 (2,2)）
+              dict(id="t21", game="purify", cell=tbl_cell(1, 2), w=3, h=2),    # (1,2) 淨土守護戰（2026-11-17，使用者要求）
               dict(id="t18", game="bigtwo", cell=tbl_cell(0, 1), w=3, h=2),   # (0,1) 大老二（2026-11-14，使用者要求：放在牌類桌子附近；先放 (1,1)，同日與 UNO 對調到 (0,1)）
               dict(id="t17", game="kingdom", cell=tbl_cell(2, 0), w=3, h=2),   # (2,0) 列島建國（2026-11-14，使用者要求；一度放 (2,1)，同日改到 (2,0)）
               dict(id="t10", game="mage", cell=tbl_cell(3, 0), w=3, h=2),      # (3,0) 見習驅魔師（2026-11-12，使用者要求；原本在第 2 欄）
@@ -1923,6 +1924,26 @@ def table_bigtwo():
     for k in range(5): card(8 + k * 3, 8 - (1 if k in (0, 4) else 0), k % 2 == 0)       # 上方扇形
     for k in range(5): card(8 + k * 3, 19 + (1 if k in (0, 4) else 0), k % 2 == 1)      # 下方扇形
     card(30, 14, True); card(34, 15, False)                              # 打出去的一手（對子）
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    cv.outline()
+    return cv
+
+def table_purify():
+    """淨土守護戰：深灰綠木桌（有桌腳），桌面是 5×5 的小地塊棋盤：中央白色研究院，外圈一圈綠色乾淨地，混著幾格紫色污染與一格黑色荒廢，角落放一支淡藍色解藥試管。"""
+    cv = Canvas(48, 32)
+    wood = hx("#44504a")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
+    cv.rect(2, 6, 45, 25, hx("#26302b"))
+    for gy in range(5):
+        for gx in range(5):
+            x, y = 9 + gx * 6, 7 + gy * 4
+            if gx == 2 and gy == 2: col = "#e8f0f0"
+            elif (gx, gy) in ((0, 1), (4, 3), (1, 4), (3, 0)): col = "#8a4fb8"
+            elif (gx, gy) == (4, 0): col = "#1a1a1e"
+            else: col = "#5aa84a" if (gx + gy) % 2 else "#4a9a3e"
+            cv.rect(x, y, x + 4, y + 2, hx(col)); cv.hline(x, x + 4, y, shade(hx(col), 1.25)); cv.hline(x, x + 4, y + 2, shade(hx(col), .7))
+    cv.rect(33, 12, 34, 14, hx("#2a6a88"))                                               # 研究院的十字
+    cv.rect(4, 12, 6, 20, hx("#cfe8f4")); cv.rect(4, 11, 6, 11, hx("#9a6a3a")); cv.rect(4, 16, 6, 20, hx("#6ab8ff"))   # 解藥試管
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
@@ -3999,6 +4020,7 @@ def main():
     save(table_blokus(), "table_blokus.png", "games")
     save(table_kingdom(), "table_kingdom.png", "games")
     save(table_bigtwo(), "table_bigtwo.png", "games")
+    save(table_purify(), "table_purify.png", "games")
     save(table_trigon(), "table_trigon.png", "games")
     for k, col in enumerate(ARCADE_COLORS):
         save(arcade_cabinet(col), f"arcade_{k}.png", "games")

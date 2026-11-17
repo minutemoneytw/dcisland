@@ -5074,6 +5074,7 @@ function turnAlertInfo(v) {   // 現在這桌的回合：回 { mine＝是不是�
   const me = v.me, turn = v.turn === me;
   if (v.game === 'blokus' || v.game === 'trigon') { const z = v.bk || v.tg; return z ? { mine: turn, end: z.deadline, off: S.bkOff } : null; }
   if (v.game === 'kingdom') return v.kg ? { mine: turn, end: v.kg.deadline, off: S.kgOff } : null;
+  if (v.game === 'purify') return v.pg ? { mine: turn, end: v.pg.deadline, off: S.pgOff } : null;
   if (v.game === 'bigtwo') return v.bt ? { mine: turn, end: v.bt.deadline, off: S.btOff } : null;
   if (v.game === 'uno') return v.un ? { mine: turn, end: v.un.deadline, off: S.unOff } : null;
   if (v.game === 'intel') {   // 秘藥情報戰：輪到我投遞、密函在我手上要決定、要我做技能決定、被查驗要回答（識破倒數是所有人的，不算「我的回合」）
@@ -5164,6 +5165,7 @@ function buildTable() {
   if (!v) { box.appendChild(mk('div', 'table-status', '連線中…')); return; }
   if (tb?.game === 'arcade') { buildArcade(box, v, mk, gd); return; }   // 俄羅斯方塊有自己的畫面（盤面＋聯機）
   if (tb?.game === 'gomoku') { buildGomoku(box, v, mk); return; }   // 五子棋有自己的畫面（棋盤）
+  if (tb?.game === 'purify') { buildPurify(box, v, mk, gd); return; }   // 淨土守護戰有自己的畫面（5×5 的島、手牌、行動）
   if (tb?.game === 'bigtwo') { buildBigTwo(box, v, mk, gd); return; }   // 大老二有自己的畫面（桌面最後一手＋手牌選牌）
   if (tb?.game === 'kingdom') { buildKingdom(box, v, mk, gd); return; }   // 列島建國有自己的畫面（市場、事件、目標、各人的王國）
   if (tb?.game === 'trigon') { buildTrigon(box, v, mk, gd); return; }   // Blokus Trigon有自己的畫面（三角格棋盤＋方塊托盤）
@@ -5992,6 +5994,172 @@ function buildBigTwo(box, v, mk, gd) {
   box.appendChild(log);
   if (gd?.rules && !playing) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
+// ---- 淨土守護戰（第二十一桌 t21；2026-11-17，使用者要求）：2～4 人合作。規則全在伺服器（worker 的 pg*、dev_server 的 pg_*）；這裡只畫畫面與「預估」：
+// pgNbrs 與伺服器同一套，只用來標出「可以點的格子」，最後以伺服器判定為準。協定（tbl）：pmove {to}／pclean {tiles}／pgive {to, c}／pcollect／psynth／
+// puse {c:'Ispray', tile}／{c:'Itele', from, to}／pdiscard {c}／pend；逾時送 timeout。v.pg：tiles（'g0'＝區域＋狀態 0 乾淨／1 污染／2 荒廢）、pawn、role、got、hands⋯⋯
+const PG_REGIONS = ['g', 'f', 'm', 'w'];
+const PG_RNAME = { g: '草原', f: '森林', m: '礦區', w: '濕地', L: '研究院' };
+const PG_RCOL = { g: '#5aa84a', f: '#2f7a4a', m: '#8a8f98', w: '#3a8fb8', L: '#e8f0f0' };
+const PG_ROLE = {
+  medic: ['防疫員', '可以穿過荒廢的土地'], chemist: ['化學師', '一次行動清潔兩格'], courier: ['通訊員', '不必同格就能給牌'],
+  sampler: ['採樣員', '3 張採樣牌就能取素材'], scout: ['偵察兵', '可以斜向移動、清潔'], weather: ['氣象員', '看得到擴散牌庫頂的下一張'],
+};
+const PG_SEATCOL = ['#4aa8ff', '#ffd24a', '#ff6a6a', '#6aff9a'];
+const PG_D4 = [[0, -1], [1, 0], [0, 1], [-1, 0]], PG_D8 = [...PG_D4, [1, -1], [1, 1], [-1, 1], [-1, -1]];
+const pgCardName = c => (c === 'Ispray' ? '淨化噴霧' : c === 'Itele' ? '傳送器' : `${PG_RNAME[c[1]]}採樣`);
+const pgDirName = c => `${{ N: '北', S: '南', W: '西', E: '東' }[c[0]]}${'NS'.includes(c[0]) ? '第' + (Number(c[1]) + 1) + '欄' : '第' + (Number(c[1]) + 1) + '列'}`;
+const pgTile = (v, i) => ({ r: v.pg.tiles[i][0], s: Number(v.pg.tiles[i][1]) });
+function pgNbrs(v, seat, from, through) {   // 與伺服器 pgNbrs 同一套
+  const role = v.pg.role[seat], dirs = role === 'scout' ? PG_D8 : PG_D4, out = new Set(), seen = new Set([from]), q = [from];
+  while (q.length) {
+    const c = q.shift(), cx = c % 5, cy = (c - cx) / 5;
+    for (const [dx, dy] of dirs) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || ny < 0 || nx > 4 || ny > 4) continue;
+      const n = ny * 5 + nx;
+      if (pgTile(v, n).s !== 2) out.add(n);
+      else if (through && role === 'medic' && !seen.has(n)) { seen.add(n); q.push(n); }
+    }
+  }
+  out.delete(from);
+  return [...out];
+}
+function pgStopTimer() { if (S.pgTimer) { clearInterval(S.pgTimer); S.pgTimer = 0; } }
+function pgStartTimer(v) {
+  pgStopTimer();
+  S.pgOff = v.pg.sn - Date.now();   // 伺服器時間 − 本機時間
+  S.pgTimer = setInterval(() => {
+    const cur = S.tableView;
+    if (!S.tableOpen || !cur || cur.game !== 'purify' || cur.phase !== 'playing') { pgStopTimer(); return; }
+    const left = (cur.pg.deadline - (Date.now() + S.pgOff)) / 1000, el = $('pgTimer');
+    if (el) { el.textContent = left > 0 ? `${Math.ceil(left)} 秒` : '時間到'; el.classList.toggle('urgent', left <= 15); }
+    if (left <= 0 && cur.role === 'seat' && Date.now() - (S.pgTimeoutAt || 0) > 1000) { S.pgTimeoutAt = Date.now(); S.net?.tbl?.({ a: 'timeout' }); }
+  }, 250);
+}
+function buildPurify(box, v, mk, gd) {
+  const playing = v.phase === 'playing', seat = v.role === 'seat', g = v.pg, myTurn = playing && seat && v.turn === v.me;
+  if (!playing) pgStopTimer();
+  const o = (S.pgUi ||= { mode: 'move', sel: [], card: null, from: null });
+  if (!playing || (!myTurn && ['move', 'clean', 'give'].includes(o.mode))) { o.mode = 'move'; o.sel = []; o.card = null; o.from = null; }   // 道具（噴霧／傳送器）不限回合，其餘模式只有自己的回合才留著
+  let status;
+  if (playing) {
+    const who = v.seats[v.turn]?.name;
+    status = !seat ? `觀戰中 · 輪到 ${who}` : g.step === 'discard' ? (myTurn ? `手牌超過 5 張：點一張要丟掉的牌` : `輪到 ${who}：丟牌中`) : myTurn ? `輪到你：還有 ${g.acts} 點行動` : `輪到 ${who}`;
+  } else status = v.seats.length < v.min ? `等待玩家入座（至少 ${v.min} 人，最多 ${v.max} 人）` : '全員按「準備」就開始（每回合限時 120 秒）';
+  const st = mk('div', 'table-status' + (myTurn ? ' mine' : ''), status);
+  if (playing) { const tm = mk('span', 'bk-timer'); tm.id = 'pgTimer'; st.appendChild(tm); }
+  box.appendChild(st);
+  if (v.result && !playing) box.appendChild(mk('div', 'table-result', v.result.text));
+  // 座位：職業、手牌（公開）
+  const row = mk('div', 'table-seats');
+  v.seats.forEach((s, i) => {
+    const e = mk('div', 'table-seat' + (s.you ? ' you' : '') + (playing && v.turn === i ? ' turn' : '') + (s.left || s.fo ? ' out' : ''));
+    const nm = mk('div', 'table-name', s.name + (s.you ? '（你）' : '') + (s.left ? '（已離開）' : s.fo ? '（棄權）' : ''));
+    if (playing) nm.style.color = PG_SEATCOL[i];
+    e.appendChild(nm);
+    if (playing && g.role[i]) { const r = mk('div', 'table-tag', PG_ROLE[g.role[i]][0]); r.title = PG_ROLE[g.role[i]][1]; e.appendChild(r); e.appendChild(mk('div', 'pg-skill', PG_ROLE[g.role[i]][1])); }
+    else e.appendChild(mk('div', 'table-tag', s.ready ? '已準備' : '未準備'));
+    if (playing && !s.left && !s.fo) {
+      const cs = mk('div', 'pg-hand');
+      for (const c of g.hands[i] || []) {
+        const ch = mk('span', 'pg-card' + (c[0] === 'I' ? ' item' : ''), pgCardName(c));
+        if (c[0] === 'S') ch.style.borderColor = PG_RCOL[c[1]];
+        if (i === v.me && myTurn && g.step === 'discard') { ch.classList.add('click'); ch.onclick = () => S.net?.tbl?.({ a: 'pdiscard', c }); }
+        else if (i === v.me && myTurn && g.step === 'act' && o.mode === 'give') { ch.classList.add('click'); if (o.card === c) ch.classList.add('sel'); ch.onclick = () => { o.card = o.card === c ? null : c; buildTable(); }; }
+        else if (i === v.me && seat && c[0] === 'I') { ch.classList.add('click'); if (o.card === c) ch.classList.add('sel'); ch.onclick = () => { o.card = o.card === c ? null : c; o.mode = o.card === 'Ispray' ? 'spray' : o.card === 'Itele' ? 'tele1' : 'move'; o.from = null; buildTable(); }; }
+        cs.appendChild(ch);
+      }
+      e.appendChild(cs);
+    }
+    row.appendChild(e);
+  });
+  if (!playing) for (let i = v.seats.length; i < v.max; i++) row.appendChild(mk('div', 'table-seat empty', '空位'));
+  box.appendChild(row);
+  if (playing) {
+    // 儀表：污染等級、素材、牌庫
+    const info = mk('div', 'pg-info');
+    info.appendChild(mk('span', 'pg-lv' + (g.lvl >= g.lose - 2 ? ' danger' : ''), `污染等級 ${g.lvl}／${g.lose - 1}（每回合翻 ${g.draws} 張）`));
+    PG_REGIONS.forEach((r, k) => { const m = mk('span', 'pg-got' + (g.got[k] ? ' on' : ''), `${g.got[k] ? '✔' : '○'} ${PG_RNAME[r]}素材`); m.style.borderColor = PG_RCOL[r]; info.appendChild(m); });
+    info.appendChild(mk('span', 'table-tag', `補給牌庫 ${g.sup}・擴散牌庫 ${g.sd}`));
+    box.appendChild(info);
+    if (g.sdd.length) box.appendChild(mk('div', 'table-tag', `擴散棄牌（新→舊）：${[...g.sdd].reverse().slice(0, 8).map(pgDirName).join('、')}${g.sdd.length > 8 ? '⋯' : ''}　＝剛打過的地方，等污染爆發時會洗回牌庫頂`));
+    if (g.peek) box.appendChild(mk('div', 'table-tag pg-peek', `氣象員偵測：下一張擴散牌是「${pgDirName(g.peek)}」`));
+    // 棋盤
+    const me = seat ? v.me : -1, mine = myTurn && g.step === 'act' && g.acts > 0;
+    const near = new Set();
+    if (mine && o.mode === 'move') for (const c of pgNbrs(v, me, g.pawn[me], true)) near.add(c);
+    if (mine && o.mode === 'clean') for (const c of [g.pawn[me], ...pgNbrs(v, me, g.pawn[me], false)]) if (pgTile(v, c).s === 1 && g.block !== c) near.add(c);
+    if (seat && o.mode === 'spray') for (let c = 0; c < 25; c++) if (pgTile(v, c).s === 1 && g.block !== c) near.add(c);
+    if (seat && o.mode === 'tele1') for (let c = 0; c < 25; c++) if (g.pawn.some((p, k) => p === c && !v.seats[k].left && !v.seats[k].fo)) near.add(c);
+    if (seat && o.mode === 'tele2') for (let c = 0; c < 25; c++) if (pgTile(v, c).s !== 2 && c !== o.from) near.add(c);
+    const bd = mk('div', 'pg-board');
+    for (let i = 0; i < 25; i++) {
+      const t = pgTile(v, i), el = mk('div', 'pg-tile s' + t.s + (near.has(i) ? ' ok' : '') + (o.sel.includes(i) || o.from === i ? ' sel' : ''));
+      el.style.background = t.s === 2 ? '#1a1a1e' : PG_RCOL[t.r];
+      el.appendChild(mk('div', 'pg-tname', t.s === 2 ? '荒廢' : PG_RNAME[t.r]));
+      if (t.s === 1) el.appendChild(mk('div', 'pg-mark', '☣'));
+      if (g.block === i) el.appendChild(mk('div', 'pg-lock', '🔒'));
+      const pw = mk('div', 'pg-pawns');
+      g.pawn.forEach((p, k) => { if (p === i && !v.seats[k].left && !v.seats[k].fo) { const d = mk('span', 'pg-pawn', v.seats[k].name.slice(0, 1)); d.style.background = PG_SEATCOL[k]; d.title = v.seats[k].name; pw.appendChild(d); } });
+      el.appendChild(pw);
+      el.onclick = () => {
+        if (!near.has(i)) return;
+        if (o.mode === 'move') S.net?.tbl?.({ a: 'pmove', to: i });
+        else if (o.mode === 'clean') {
+          if (g.role[me] === 'chemist') { o.sel = o.sel.includes(i) ? o.sel.filter(x => x !== i) : [...o.sel, i].slice(-2); buildTable(); }
+          else S.net?.tbl?.({ a: 'pclean', tiles: [i] });
+        } else if (o.mode === 'spray') { S.net?.tbl?.({ a: 'puse', c: 'Ispray', tile: i }); o.mode = 'move'; o.card = null; }
+        else if (o.mode === 'tele1') { o.from = i; o.mode = 'tele2'; buildTable(); }
+        else if (o.mode === 'tele2') { S.net?.tbl?.({ a: 'puse', c: 'Itele', from: o.from, to: i }); o.mode = 'move'; o.card = null; o.from = null; }
+      };
+      bd.appendChild(el);
+    }
+    box.appendChild(bd);
+  }
+  // 操作按鈕
+  const btns = mk('div', 'table-btns');
+  if (seat && playing) {
+    const me = v.me, acts = myTurn && g.step === 'act' && g.acts > 0;
+    const mode = (key, label, why) => {
+      const b = mk('button', 'ff-btn small' + (o.mode === key ? ' active' : ''), label);
+      b.disabled = !!why; b.title = why || '';
+      b.onclick = () => { o.mode = o.mode === key ? 'move' : key; o.sel = []; o.card = null; o.from = null; buildTable(); };
+      btns.appendChild(b);
+    };
+    const noAct = !myTurn ? '還沒輪到你' : g.step !== 'act' ? '現在不能行動' : g.acts <= 0 ? '行動點用完了' : '';
+    mode('move', '移動', noAct); mode('clean', g.role[me] === 'chemist' ? '清潔（最多 2 格）' : '清潔', noAct); mode('give', '給牌', noAct);
+    const reg = PG_REGIONS.indexOf(pgTile(v, g.pawn[me]).r), need = g.role[me] === 'sampler' ? 3 : 4;
+    let why = noAct;
+    if (!why) why = reg < 0 ? '要站在草原／森林／礦區／濕地的土地上' : g.got[reg] ? '這個區域的素材已經取得了' : g.hands[me].filter(c => c === 'S' + PG_REGIONS[reg]).length < need ? `要 ${need} 張「${PG_RNAME[PG_REGIONS[reg]]}採樣」` : '';
+    const col = mk('button', 'ff-btn small', '取素材'); col.disabled = !!why; col.title = why;
+    col.onclick = () => S.net?.tbl?.({ a: 'pcollect' }); btns.appendChild(col);
+    if (o.mode === 'clean' && o.sel.length) { const c = mk('button', 'ff-btn small', `清潔 ${o.sel.length} 格`); c.onclick = () => { S.net?.tbl?.({ a: 'pclean', tiles: o.sel }); o.sel = []; }; btns.appendChild(c); }
+    if (o.mode === 'give') {   // 選一張牌，再選要給誰
+      const ok = v.seats.map((s, k) => k !== me && !s.left && !s.fo && (g.role[me] === 'courier' || g.pawn[k] === g.pawn[me]) && g.hands[k].length < 5);
+      v.seats.forEach((s, k) => { if (k === me) return; const b = mk('button', 'ff-btn small', `給 ${s.name}`); b.disabled = !acts || !o.card || !ok[k]; b.title = !o.card ? '先點選上面自己的一張牌' : ok[k] ? '' : '要在同一格，而且對方手牌不能滿'; b.onclick = () => { S.net?.tbl?.({ a: 'pgive', to: k, c: o.card }); o.card = null; }; btns.appendChild(b); });
+    }
+    const end = mk('button', 'ff-btn' + (myTurn && g.step === 'act' && g.acts <= 0 ? ' active' : ''), '結束行動');
+    end.disabled = !(myTurn && g.step === 'act'); end.title = end.disabled ? noAct : '抽 2 張補給牌，然後污染擴散';
+    end.onclick = () => S.net?.tbl?.({ a: 'pend' }); btns.appendChild(end);
+    const synth = g.got.every(Boolean) && g.pawn.every((p, k) => p === 12 || v.seats[k].left || v.seats[k].fo);
+    const sb = mk('button', 'ff-btn' + (synth ? ' active' : ''), '合成解藥'); sb.disabled = !synth; sb.title = synth ? '' : '四種素材都取得，而且全員在研究院才能合成';
+    sb.onclick = () => S.net?.tbl?.({ a: 'psynth' }); btns.appendChild(sb);
+    if (o.mode === 'spray' || o.mode === 'tele1' || o.mode === 'tele2') btns.appendChild(mk('span', 'table-tag', o.mode === 'spray' ? '點一格污染的土地' : o.mode === 'tele1' ? '點要送走的那一格（那格所有人一起走）' : '點目的地'));
+  } else if (seat) {
+    const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+    b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+    const sb = mk('button', 'ff-btn small', '改為觀戰'); sb.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(sb);
+  } else if (v.role === 'spec' && !playing && v.seats.length < v.max) {
+    const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit' }); btns.appendChild(b);
+  }
+  box.appendChild(btns);
+  if (playing) pgStartTimer(v);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+  if (gd?.rules && !playing) box.appendChild(mk('div', 'table-rules', gd.rules));
+}
 // ---- 大螢幕（和平島左上角的圍觀休息區；2026-11-14，使用者要求）：全島共用一個頻道，轉播某一桌的畫面 ----
 // 伺服器（worker 的 scr*、dev_server 的 _scr_*）推 {t:'scr', id, game, v}（v＝那桌「觀戰者視角」的 tbl view，手牌全翻開；id＝null＝螢幕關閉）給不在牌桌裡的人；
 // 這裡把它畫進一張離屏 canvas（S.scrCv，收到新畫面才重畫一次），島上的螢幕物件（terrain.json props 的 kind:'screen'）每幀只是 drawImage。
@@ -6226,7 +6394,7 @@ function scrSeatTag(v, s, k) {
   if (v.phase !== 'playing') return s.ready ? '已準備' : '未準備';
   const gm = v.game;
   if (s.left) return '離開';
-  if (gm === 'oldmaid' || gm === 'uno' || gm === 'bigtwo') return s.fo ? '棄權' : `${s.n} 張`;
+  if (gm === 'oldmaid' || gm === 'uno' || gm === 'bigtwo' || gm === 'purify') return s.fo ? '棄權' : `${s.n} 張`;
   if (gm === 'kingdom') return `${v.kg?.sd?.[k]?.vp ?? 0} 分`;
   if (gm === 'blokus' || gm === 'trigon') return s.rem != null ? `剩 ${s.rem}` : '';
   if (gm === 'gomoku') return v.black == null ? '' : (k === v.black ? '黑棋' : '白棋');
