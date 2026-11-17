@@ -5040,7 +5040,8 @@ function cardEl(c) {   // 牌面：c＝'S7'／'H13'／'JK'；null＝牌背
   return e;
 }
 function buildTable() {
-  const box = $('tableBody'); box.innerHTML = '';
+  const box = $('tableBody'), keep = typingKeepWrap();
+  if (keep) { for (const c of [...box.children]) if (c !== keep) c.remove(); } else box.innerHTML = '';   // 中文打字比賽中：留著輸入框那一塊，其餘照常重畫
   const tb = tablesHere().find(t => t.id === S.tableId), gd = tb && gameDef(tb.game), v = S.tableView;
   $('tableTitle').textContent = gd ? gd.name : '遊戲桌';
   $('tableRulesBtn').classList.toggle('hidden', !gdGuide(gd));
@@ -8697,7 +8698,15 @@ function typingRender() {
   const zi = $('tyZh'); if (zi) { zi.disabled = !seated || t >= T.dur; if (!zi.disabled && document.activeElement !== zi) zi.focus(); }
   const hint = $('tyHint'); if (hint) hint.textContent = T.zh ? (seated && t < T.dur ? '請切換成中文輸入法（例如注音），打出上面的詞，選字送出後自動計分' : '') : T.ime ? '偵測到中文輸入法：請切換成英文輸入（例如按 Shift）' : '';
 }
+// 中文打字比賽進行中、同一局、我坐著：伺服器重送畫面（有人進來觀戰／中途離開）時，回傳現有的 .typing-wrap 讓 buildTable 留著不重建——
+// 輸入框一重建，組字到一半的字與已打對的前綴都會不見（T.pos 卻還在），接著打剩下的字會被判錯
+function typingKeepWrap() {
+  const T = S.ty, v = S.tableView, zi = $('tyZh');
+  if (!zi || !T || !T.zh || !v || S.tableChoice || v.phase !== 'playing' || v.role !== 'seat' || v.game !== 'zhtyping' || T.id !== S.tableId || T.t0 !== v.ty?.t0) return null;
+  return zi.closest('.typing-wrap');
+}
 function buildTyping(box, v, mk, gd) {
+  const old = box.querySelector('.typing-wrap');   // buildTable 留下來的比賽畫面（見 typingKeepWrap）；沒有就是 null
   const playing = v.phase === 'playing', mySeat = v.role === 'seat' ? v.seats[v.me] : null;
   if (playing && v.ty && (!S.ty || S.ty.id !== S.tableId || S.ty.t0 !== v.ty.t0)) typingStart(v);   // 新的一局（或剛進來觀戰一局進行中的）：重置本機狀態
   else if (playing && S.ty) S.ty.scores = v.seats.map((s, i) => (i === v.me && v.role === 'seat' ? S.ty.score : Math.max(s.score || 0, S.ty.scores[i] || 0)));
@@ -8713,7 +8722,8 @@ function buildTyping(box, v, mk, gd) {
     box.appendChild(rk);
   }
   if (!playing) boardBlock(box, v, mk, sc => `${sc} ${v.game === 'zhtyping' ? '個詞' : '個單字'}`);
-  if (playing) {   // 比賽畫面：上方其他人的分數、中央題目與自己的分數、下方自己打的內容
+  if (playing && old) { /* 沿用現有的比賽畫面，內容由下面的 typingRender 更新 */ }
+  else if (playing) {   // 比賽畫面：上方其他人的分數、中央題目與自己的分數、下方自己打的內容
     const wrap = mk('div', 'typing-wrap');
     wrap.appendChild(mk('div', 'typing-others')).id = 'tyOthers';
     wrap.appendChild(mk('div', 'typing-time')).id = 'tyTime';
