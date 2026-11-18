@@ -4986,7 +4986,7 @@ function openTable(tb) {
 }
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
-  S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; S.tblFinal = null; brkStop(); bubStop(); tfStop(); dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); pbStop(); hkStop(); unStopTimer(); bkStopTimer(); kgStopTimer(); btStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
+  S.pgSeen = null; S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; S.tblFinal = null; brkStop(); bubStop(); tfStop(); dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); pbStop(); hkStop(); unStopTimer(); bkStopTimer(); kgStopTimer(); btStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
   rulesShow(false); leaveAsk(false);
   $('tableBox').classList.add('hidden');
 }
@@ -6005,6 +6005,13 @@ const PG_SEATCOL = ['#4aa8ff', '#ffd24a', '#ff6a6a', '#6aff9a'];
 const PG_D4 = [[0, -1], [1, 0], [0, 1], [-1, 0]], PG_D8 = [...PG_D4, [1, -1], [1, 1], [-1, 1], [-1, -1]];
 const pgCardName = c => (c === 'Ispray' ? '淨化噴霧' : c === 'Itele' ? '傳送器' : `${PG_RNAME[c[1]]}採樣`);
 // 污染等級量表（2026-11-17 使用者要求：放左邊做成垂直的量表）：由下往上 1～7 級，每級旁邊寫每回合翻幾張擴散牌，最上面是 8＝輸；目前的等級亮起
+// 螢幕中央的大提示（kind＝boom 紅／lock 橘）：掛在 body 上不受牌桌重畫影響，3.2 秒後自己消失；爆發時整個牌桌震一下
+function pgBanner(kind, title, sub) {
+  const b = mk2('div', 'pg-banner ' + kind); b.appendChild(mk2('b', null, title)); b.appendChild(mk2('span', null, sub));
+  let box = $('pgBanners'); if (!box) { box = mk2('div'); box.id = 'pgBanners'; document.body.appendChild(box); }   // 同時有爆發＋封鎖時上下排開，不疊在一起
+  box.appendChild(b); setTimeout(() => b.remove(), 3200);
+  if (kind === 'boom') { const tb = $('tableBox'); tb.classList.remove('pg-shake'); void tb.offsetWidth; tb.classList.add('pg-shake'); setTimeout(() => tb.classList.remove('pg-shake'), 600); }
+}
 function pgGauge(g) {
   const box = mk2('div', 'pg-gauge');
   box.appendChild(mk2('div', 'pg-g-top', '☠ 8\n輸'));
@@ -6087,6 +6094,15 @@ function pgStartTimer(v) {
 function buildPurify(box, v, mk, gd) {
   const playing = v.phase === 'playing', seat = v.role === 'seat', g = v.pg, myTurn = playing && seat && v.turn === v.me;
   if (!playing) pgStopTimer();
+  // 污染爆發／鄰國封鎖的醒目提示（2026-11-18 使用者要求）：用狀態變化偵測（日誌只留 8 行，一回合可能蓋掉），第一次看到的牌局只記基準、不跳提示
+  if (playing && g) {
+    const ps = S.pgSeen;
+    if (ps && ps.id === S.tableId) {
+      if (g.lvl > ps.lvl) pgBanner('boom', `☣ 污染爆發！`, `污染等級 ${ps.lvl} → ${g.lvl}　每回合翻 ${PG_LV_DRAWS[g.lvl] ?? 5} 張擴散牌`);
+      if (g.block >= 0 && g.block !== ps.block) { const bt = pgTile(v, g.block); pgBanner('lock', `🔒 鄰國封鎖！`, `${PG_RNAME[bt.r]}(${g.block % 5 + 1},${Math.floor(g.block / 5) + 1}) 一輪內不能清潔`); }
+    }
+    S.pgSeen = { id: S.tableId, lvl: g.lvl, block: g.block };
+  } else S.pgSeen = null;
   const o = (S.pgUi ||= { mode: 'move', sel: [], card: null, from: null });
   if (!playing || (!myTurn && ['move', 'clean', 'give'].includes(o.mode))) { o.mode = 'move'; o.sel = []; o.card = null; o.from = null; }   // 道具（噴霧／傳送器）不限回合，其餘模式只有自己的回合才留著
   let status;
@@ -6145,7 +6161,10 @@ function buildPurify(box, v, mk, gd) {
       el.style.background = t.s === 2 ? '#1a1a1e' : PG_RCOL[t.r];
       el.appendChild(mk('div', 'pg-tname', t.s === 2 ? '荒廢' : PG_RNAME[t.r]));
       if (t.s === 1) el.appendChild(mk('div', 'pg-mark', '☣'));
-      if (g.block === i) el.appendChild(mk('div', 'pg-lock', '🔒'));
+      if (g.block === i) {
+        el.classList.add('blocked');
+        el.appendChild(mk('div', 'pg-lock', '🔒')).title = '鄰國封鎖：這一格一輪內不能清潔（淨化噴霧也不行）。\n「一輪」＝場上每位玩家各結束一次回合，之後自動解除。\n擴散牌照常會打到這一格。';
+      }
       const pw = mk('div', 'pg-pawns');
       g.pawn.forEach((p, k) => { if (p === i && !v.seats[k].left && !v.seats[k].fo) { const d = mk('span', 'pg-pawn', v.seats[k].name.slice(0, 1)); d.style.background = PG_SEATCOL[k]; d.title = v.seats[k].name; pw.appendChild(d); } });
       el.appendChild(pw);
