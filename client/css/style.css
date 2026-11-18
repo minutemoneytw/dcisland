@@ -646,7 +646,7 @@ body {
 .pg-last-s { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #3a3d4a; color: #c8cde0; cursor: help; }
 .pg-sd { margin: 0; padding: 6px 8px; background: rgba(0,0,0,.25); border: 1px solid #3a3f55; border-radius: 6px; }
 .pg-sd-h { font-size: 11px; color: #9fb0d8; margin-bottom: 4px; }
-.pg-sd-grid { display: grid; grid-template-columns: 58px repeat(5, 1fr); gap: 3px; align-items: center; }
+.pg-sd-grid { display: grid; grid-template-columns: 68px repeat(5, 1fr); gap: 3px; align-items: center; }
 .pg-sd-lbl { font-size: 11px; color: #c8d4f0; text-align: right; padding-right: 4px; }
 .pg-sd-c { text-align: center; font-size: 12px; padding: 2px 0; border-radius: 4px; background: #f6f2e6; color: #1e1e24; border: 2px solid transparent; cursor: help; }
 .pg-sd-c small { font-size: 9px; margin-left: 2px; opacity: .85; }
