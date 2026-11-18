@@ -6051,7 +6051,7 @@ function pgSpreadPanel(v, g, mk) {
   box.appendChild(mk('div', 'pg-sd-h', `擴散牌（牌庫 ${g.sd} 張・已翻 ${g.sdd.length} 張）　數字＝第幾條線；暗＝已翻過（#是第幾張翻出，污染爆發時洗回牌庫頂）；金框＝最近一張${g.peek ? '・藍框＝氣象員偵測的下一張' : ''}`));
   const grid = mk('div', 'pg-sd-grid');
   for (const d of 'NSWE') {
-    grid.appendChild(mk('div', 'pg-sd-lbl', `${{ N: '上方', S: '下方', W: '左側', E: '右側' }[d]}（${'NS'.includes(d) ? '欄' : '列'}）`));
+    grid.appendChild(mk('div', 'pg-sd-lbl', `${{ N: '北', S: '南', W: '西', E: '東' }[d]}（${'NS'.includes(d) ? '欄' : '列'}）`));
     for (let l = 0; l < 5; l++) {
       const c = d + l, n = order.get(c), hit = pgHitTile(v, c), tt = hit < 0 ? null : pgTile(v, hit);
       const el = mk('div', 'pg-sd-c' + (n ? ' used' : '') + (n && n === g.sdd.length ? ' last' : '') + (g.peek === c ? ' peek' : ''), String(l + 1));
@@ -6062,7 +6062,7 @@ function pgSpreadPanel(v, g, mk) {
   }
   box.appendChild(grid); return box;
 }
-const pgDirName = c => `${{ N: '上方', S: '下方', W: '左側', E: '右側' }[c[0]]}${'NS'.includes(c[0]) ? '第' + (Number(c[1]) + 1) + '欄' : '第' + (Number(c[1]) + 1) + '列'}`;
+const pgDirName = c => `${{ N: '北', S: '南', W: '西', E: '東' }[c[0]]}${'NS'.includes(c[0]) ? '第' + (Number(c[1]) + 1) + '欄' : '第' + (Number(c[1]) + 1) + '列'}`;
 const pgTile = (v, i) => ({ r: v.pg.tiles[i][0], s: Number(v.pg.tiles[i][1]) });
 function pgNbrs(v, seat, from, through) {   // 與伺服器 pgNbrs 同一套
   const role = v.pg.role[seat], dirs = role === 'scout' ? PG_D8 : PG_D4, out = new Set(), seen = new Set([from]), q = [from];
