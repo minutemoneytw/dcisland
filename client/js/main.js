@@ -4991,8 +4991,21 @@ function closeTable(sendLeave = true) {
   $('tableBox').classList.add('hidden');
 }
 // 使用者主動離開（離開按鈕／Esc）：我是入座玩家而且牌局進行中 → 先跳確認（離開會直接中斷這一局或放棄成績）；觀戰、還沒開局就直接離開
+// 主動中途退出機台小遊戲＝用當下的分數結算（2026-11-19 使用者要求：有的遊戲死不掉）：彈珠台／打磚塊／泡泡射手／2048 的玩法都在客戶端算，
+// 所以離開前補送一個 over（跟打完一樣的結算；伺服器不用改）。分數是 0（倒數中、還沒得分）就不結算，照一般規則這一局不算。
+const QUIT_SCORE_GAMES = ['pinball', 'breakout', 'bubble', 'g2048'];
+function quitScoreNow() {
+  const v = S.tableView;
+  if (!v || v.phase !== 'playing' || v.role !== 'seat' || !QUIT_SCORE_GAMES.includes(v.game)) return;
+  const cap = n => Math.min(99999999, Math.round(n));
+  if (v.game === 'pinball') { const P = S.pb; if (P && P.role === 'seat' && !P.over && P.score > 0) { P.over = true; P.st = 3; tblFinal({ a: 'over', sc: cap(P.score) }); pbSnap(P, true); } }
+  else if (v.game === 'breakout') { const B = S.brk; if (B && B.role === 'seat' && !B.over && B.score > 0) { B.over = true; brkSnap(B, true); tblFinal({ a: 'over', sc: cap(B.score), lv: B.lv }); } }
+  else if (v.game === 'bubble') { const B = S.bub; if (B && B.role === 'seat' && !B.over && B.score > 0) { B.over = true; B.fly = null; bubSnap(B, true); tblFinal({ a: 'over', sc: cap(B.score), lv: Math.min(999, B.lv) }); } }
+  else if (v.game === 'g2048') { const B = S.tf; if (B && B.role === 'seat' && !B.over && B.score > 0) { B.over = true; tfSnap(B, true); tblFinal({ a: 'over', sc: Math.min(TF_SCORE_MAX_C, Math.round(B.score)), mx: Math.min(17, B.mx) }); } }
+}
 function leaveAsk(on) {
   const box = $('leaveBox'); box.classList.toggle('hidden', !on);
+  if (on) { const v = S.tableView, sub = box.querySelector('.leave-sub'); if (sub) { if (!sub.dataset.def) sub.dataset.def = sub.textContent; sub.textContent = v && QUIT_SCORE_GAMES.includes(v.game) ? '離開會用你目前的分數結算這一局（還沒得分就不算）。' : sub.dataset.def; } }
   if (on) $('leaveStay').focus();   // 預設停在「繼續遊戲」，連點空白鍵也不會誤退出
 }
 function leaveTable() {
@@ -12929,7 +12942,7 @@ $('btnAvatar').onclick = () => { if ($('avatarPanel').classList.contains('hidden
 $('avatarClose').onclick = closeAvatar;
 $('tableClose').onclick = () => leaveTable();
 $('leaveStay').onclick = () => leaveAsk(false);
-$('leaveGo').onclick = () => { leaveAsk(false); closeTable(); };
+$('leaveGo').onclick = () => { leaveAsk(false); quitScoreNow(); closeTable(); };
 $('tableRulesBtn').onclick = () => rulesToggle('rules');   // 再點一下關閉
 $('tableCharsBtn').onclick = () => rulesToggle('chars');
 $('rulesClose').onclick = () => rulesShow(false);
