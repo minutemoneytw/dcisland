@@ -6126,12 +6126,13 @@ function buildPurify(box, v, mk, gd) {
     else e.appendChild(mk('div', 'table-tag', s.ready ? '已準備' : '未準備'));
     if (playing && !s.left && !s.fo) {
       const cs = mk('div', 'pg-hand');
+      let selUsed = false;   // 同種牌有好幾張時只亮第一張（選的是「這種牌」，給出去哪一張都一樣）
       for (const c of g.hands[i] || []) {
         const ch = mk('span', 'pg-card' + (c[0] === 'I' ? ' item' : ''), pgCardName(c));
         if (c[0] === 'S') ch.style.borderColor = PG_RCOL[c[1]];
         if (i === v.me && ((myTurn && g.step === 'discard') || (g.step === 'act' && g.hands[i].length > 5 && c[0] !== 'I'))) { ch.classList.add('click'); ch.onclick = () => S.net?.tbl?.({ a: 'pdiscard', c }); }   // 被給牌而超過 5 張時，不分回合都能點牌丟掉（道具牌改用「使用」來減少，點了是選取）
-        else if (i === v.me && myTurn && g.step === 'act' && o.mode === 'give') { ch.classList.add('click'); if (o.card === c) ch.classList.add('sel'); ch.onclick = () => { o.card = o.card === c ? null : c; buildTable(); }; }
-        else if (i === v.me && seat && c[0] === 'I') { ch.classList.add('click'); if (o.card === c) ch.classList.add('sel'); ch.onclick = () => { o.card = o.card === c ? null : c; o.mode = o.card === 'Ispray' ? 'spray' : o.card === 'Itele' ? 'tele1' : 'move'; o.from = null; buildTable(); }; }
+        else if (i === v.me && myTurn && g.step === 'act' && o.mode === 'give') { ch.classList.add('click'); if (o.card === c && !selUsed) { ch.classList.add('sel'); selUsed = true; } ch.onclick = () => { o.card = o.card === c ? null : c; buildTable(); }; }
+        else if (i === v.me && seat && c[0] === 'I') { ch.classList.add('click'); if (o.card === c && !selUsed) { ch.classList.add('sel'); selUsed = true; } ch.onclick = () => { o.card = o.card === c ? null : c; o.mode = o.card === 'Ispray' ? 'spray' : o.card === 'Itele' ? 'tele1' : 'move'; o.from = null; buildTable(); }; }
         cs.appendChild(ch);
       }
       e.appendChild(cs);
