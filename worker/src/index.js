@@ -1390,6 +1390,21 @@ function pgNbrs(g, i, from, through) {   // 玩家 i 從 from 一步能到的格
   out.delete(from);
   return [...out];
 }
+// 補給牌庫分堆洗牌（2026-11-18 使用者要求，仿《瘟疫危機》）：有幾張污染爆發就分幾堆，每堆放 1 張爆發再各自洗牌、疊起來——爆發的間隔平均，不會連著兩張；
+// 牌庫翻完把棄牌洗回去時也用同一套。與 tools/dev_server.py 的 pg_stack 一致。
+function pgStack(cards) {
+  const xs = cards.filter(c => c === "X"), rest = shuffle(cards.filter(c => c !== "X"));
+  if (!xs.length) return rest;
+  const piles = xs.map(() => ["X"]);
+  rest.forEach((c, k) => piles[k % xs.length].push(c));
+  let out = [];
+  for (let tries = 0; tries < 50; tries++) {   // 堆與堆交界處可能兩張爆發貼在一起：間隔不到 3 張（一回合最多抽 3 張）就重洗，最多 50 次
+    out = piles.flatMap(p => shuffle(p));
+    const pos = out.flatMap((c, i) => (c === "X" ? [i] : []));
+    if (pos.every((p, k) => k === 0 || p - pos[k - 1] >= 3)) break;
+  }
+  return out;
+}
 function pgStart(t) {
   const now = Date.now(), n = t.seats.length;
   const regs = shuffle(PG_REGIONS.flatMap(r => Array(6).fill(r)));
@@ -1404,8 +1419,8 @@ function pgStart(t) {
   shuffle(sd);
   const roles = shuffle([...PG_ROLES]);
   t.seats.forEach((s, k) => { s.hand = [supply.pop(), supply.pop()].sort(); s.out = false; s.ready = false; s.left = false; s.forfeit = false; s.idle = 0; });
-  supply.push("X", "X", "X", "X", "Nb", "Nk"); shuffle(supply);
-  const g = { tiles, pawn: t.seats.map(() => PG_LAB), role: roles.slice(0, n), got: [0, 0, 0, 0], lvl: 1, sup: supply, sdis: [], sd, sdd: [], sdraw: n === 2 ? 3 : 2, acts: PG_ACTS, step: "act", block: null, deadline: 0 };
+  const stacked = pgStack([...supply, "X", "X", "X", "X", "Nb", "Nk"]);
+  const g = { tiles, pawn: t.seats.map(() => PG_LAB), role: roles.slice(0, n), got: [0, 0, 0, 0], lvl: 1, sup: stacked, sdis: [], sd, sdd: [], sdraw: n === 2 ? 3 : 2, acts: PG_ACTS, step: "act", block: null, deadline: 0 };
   t.g = g; t.result = null; t.phase = "playing";
   for (let hit = 0; hit < 6 && g.sd.length;) {   // 開局先污染 6 格（打到已污染的格子就換一張，不會一開局就荒廢）
     const c = g.sd.pop(), i = pgHit(g, c);
@@ -1488,7 +1503,7 @@ function pgDrawPhase(t, now) {   // 結束行動：抽 2 張補給牌
   const g = t.g, s = t.seats[t.turn];
   g.step = "draw";
   for (let k = 0; k < (g.sdraw ?? 2); k++) {   // 補給牌每回合抽幾張：2 人局 3 張（2026-11-17 使用者說兩人局抽牌太少、湊不滿素材），其他人數 2 張；舊的進行中牌局沒有 sdraw 退回 2
-    if (!g.sup.length) { g.sup = shuffle(g.sdis); g.sdis = []; }
+    if (!g.sup.length) { g.sup = pgStack(g.sdis); g.sdis = []; }
     if (!g.sup.length) break;
     const c = g.sup.pop();
     let over = false;

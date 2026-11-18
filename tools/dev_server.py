@@ -1933,6 +1933,28 @@ PG_D8 = PG_D4 + [(1, -1), (1, 1), (-1, 1), (-1, -1)]
 def pg_active(t):
     return [k for k, s in enumerate(t["seats"]) if not s.get("left") and not s.get("forfeit")]
 
+def pg_stack(cards):
+    """補給牌庫分堆洗牌（2026-11-18 使用者要求，仿《瘟疫危機》）：有幾張污染爆發就分幾堆，每堆放 1 張爆發再各自洗牌、疊起來——
+    爆發的間隔平均，不會連著兩張；牌庫翻完把棄牌洗回去時也用同一套。與 worker/src/index.js 的 pgStack 一致。"""
+    xs = [c for c in cards if c == "X"]
+    rest = [c for c in cards if c != "X"]
+    random.shuffle(rest)
+    if not xs:
+        return rest
+    piles = [["X"] for _ in xs]
+    for k, c in enumerate(rest):
+        piles[k % len(xs)].append(c)
+    out = []
+    for _ in range(50):   # 堆與堆交界處可能兩張爆發貼在一起：間隔不到 3 張（一回合最多抽 3 張）就重洗，最多 50 次
+        out = []
+        for p in piles:
+            random.shuffle(p)
+            out += p
+        pos = [i for i, c in enumerate(out) if c == "X"]
+        if all(b - a >= 3 for a, b in zip(pos, pos[1:])):
+            break
+    return out
+
 def pg_tn(g, i):
     return f"{PG_RNAME[g['tiles'][i]['r']]}({i % 5 + 1},{i // 5 + 1})"
 
@@ -1991,8 +2013,7 @@ def pg_start(t):
     for s in t["seats"]:
         s["hand"] = sorted([supply.pop(), supply.pop()])
         s["out"], s["ready"], s["left"], s["forfeit"], s["idle"] = False, False, False, False, 0
-    supply += ["X", "X", "X", "X", "Nb", "Nk"]
-    random.shuffle(supply)
+    supply = pg_stack(supply + ["X", "X", "X", "X", "Nb", "Nk"])
     g = {"tiles": tiles, "pawn": [PG_LAB] * n, "role": roles[:n], "got": [0, 0, 0, 0], "lvl": 1, "sup": supply, "sdis": [], "sd": sd, "sdd": [], "sdraw": 3 if n == 2 else 2, "acts": PG_ACTS, "step": "act", "block": None, "deadline": 0}
     t["g"], t["result"], t["phase"] = g, None, "playing"
     hit = 0
@@ -2110,8 +2131,7 @@ def pg_draw_phase(t, now):
     g["step"] = "draw"
     for _ in range(g.get("sdraw", 2)):   # 補給牌每回合抽幾張：2 人局 3 張（2026-11-17 使用者說兩人局抽牌太少、湊不滿素材；模擬湊齊素材的回合數 13.3 → 8.9，和 4 人局的 9.9 差不多），其他人數 2 張
         if not g["sup"]:
-            g["sup"], g["sdis"] = g["sdis"], []
-            random.shuffle(g["sup"])
+            g["sup"], g["sdis"] = pg_stack(g["sdis"]), []
         if not g["sup"]:
             break
         c = g["sup"].pop()
