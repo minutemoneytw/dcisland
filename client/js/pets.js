@@ -80,7 +80,10 @@ export function stepPets(dt, me) {
       if (Math.abs(dx) > 1) pt.face = dx > 0 ? 1 : -1;
     }
     pt.spd = spd; pt.moving = spd > 0;
-    pt.ph = pt.moving ? pt.ph + dt * (3.2 + spd / 38) : 0;   // 步伐相位：走路慢慢蹦、跑起來蹦得快
+    pt.ph = pt.moving ? pt.ph + dt * (3.2 + spd / 38) : 0;   // 步伐相位（蹦跳用）：走路慢慢蹦、跑起來蹦得快
+    pt.bob = (pt.bob || 0) + dt;
+    const sp = petDef(pt.id)?.species, fl = !!sp?.float;   // 飄浮的寵物（鳳凰／水母／眼球）：站著也一直拍翅／脈動並上下輕飄，不然像貼圖定在空中
+    pt.at = pt.moving ? (pt.at || 0) + dt * Math.min(14, 8 + spd / 30) : fl ? (pt.at || 0) + dt * 6 : 0;   // 走路動畫的幀計時：固定每秒約 8～14 格（跟蹦跳分開算；之前綁在步伐相位上，14 格的狐狸每秒換約 40 格，看起來頭在亂晃）
   });
 }
 
@@ -94,11 +97,12 @@ export function petEntries(entries, ctx) {
     entries.push({
       y: pt.y, draw: () => {
         const cyc = pt.ph * Math.PI, hop = pt.moving ? Math.abs(Math.sin(cyc)) : 0;
-        const col = pt.moving ? sp.walk[Math.floor(pt.ph * (sp.rate ?? 1)) % sp.walk.length] : 0, lift = Math.round(hop * (2 + Math.min(2, pt.spd / 120))), sway = pt.moving ? Math.round(Math.sin(cyc) * 1.2) : 0;   // 全部取整數像素：不旋轉、不縮放，邊緣才不會糊或漏線
+        const col = (pt.moving || sp.float) ? sp.walk[Math.floor(pt.at || 0) % sp.walk.length] : 0, lift = Math.round(hop * (2 + Math.min(2, pt.spd / 120))), sway = pt.moving ? Math.round(Math.sin(cyc) * 1.2) : 0;   // 全部取整數像素：不旋轉、不縮放，邊緣才不會糊或漏線
         const fc = frameOf(d.sid, d.vi, col); if (!fc) return;
         ctx.save(); ctx.imageSmoothingEnabled = false;
         ctx.fillStyle = 'rgba(10,14,20,.28)'; ctx.beginPath(); ctx.ellipse(pt.x, pt.y - 1, W * (.34 - hop * .04), Math.max(3, H * .12), 0, 0, Math.PI * 2); ctx.fill();
-        ctx.translate(Math.round(pt.x), Math.round(pt.y) - lift);
+        const floatY = sp.float ? Math.round(Math.sin((pt.bob || 0) * 2.6) * 2.5) : 0;   // 飄浮：上下輕輕浮動
+        ctx.translate(Math.round(pt.x), Math.round(pt.y) - lift - floatY);
         if (pt.face < 0) ctx.scale(-1, 1);
         ctx.drawImage(fc, 0, 0, cw, ch, -W / 2 + sway, -H + (sp.drop ?? 0) * sc, W, H);
         ctx.restore();
