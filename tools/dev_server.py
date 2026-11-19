@@ -178,6 +178,7 @@ SKILL_HITS = {
     "poison": {"job": "bard", "dmg": 1, "cd_ms": 2700, "range": 2000},   # 吟遊詩人上毒：每 3 秒跳一次（持續傷害不看距離）
 }
 FX_MAX = 8
+PETS_MAX = 5   # state.pets：跟隨寵物的 id 清單（與 worker/src/index.js 的 PETS_MAX 一致）
 
 
 def _hex_or(v):
@@ -237,6 +238,7 @@ def sanitize_state(s, prev):
         "face": s.get("face") if s.get("face") in ("up", "side") else "down",
         "seat": _id_or(s.get("seat"), None),
         "job": _job_or(s.get("job")),   # 職業：白名單（JOB_ROLE），舊客戶端的 tank/healer/dps 轉換，不合法＝忍者（職能驗證靠這欄）
+        "pets": [v for v in s.get("pets") if isinstance(v, str) and ID_RE.match(v)][:PETS_MAX] if isinstance(s.get("pets"), list) else [],   # 跟隨寵物 id 清單：只轉發
         "fx": [v for v in s.get("fx") if isinstance(v, str) and ID_RE.match(v)][:FX_MAX] if isinstance(s.get("fx"), list) else [],   # 持續型技能效果：只轉發
         "circle": {"x": _num(s["circle"].get("x"), 0, COLS * CELL, 0), "y": _num(s["circle"].get("y"), 0, ROWS * CELL, 0)}
                   if isinstance(s.get("circle"), dict) else None,   # 黑魔法師的魔法陣位置（只轉發）

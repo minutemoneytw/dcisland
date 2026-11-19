@@ -280,6 +280,7 @@ const JOB_DEFAULT = "ninja";
 const jobOr = v => (JOB_ROLE[v] ? v : JOB_LEGACY[v] || JOB_DEFAULT);
 const roleOf = st => JOB_ROLE[st && st.job] || null;
 const RANGED_WEAPONS = ["staff", "scepter", "tome", "harpbow"];   // 遠距攻擊的武器（法杖、咒杖、魔導書、豎琴弓）：放寬打島主／深海魚人的距離
+const PETS_MAX = 5;   // state.pets：跟隨寵物的 id 清單（扭蛋寵物，只轉發給同地形的人各自畫；上限與 client/assets/pets/pets.json 的 max 一致）
 const FX_MAX = 8;   // state.fx：持續型技能效果的 id 清單（只轉發給同地形的人畫特效）
 function sanitizeState(s, prev) {
   prev = prev || {};
@@ -319,6 +320,7 @@ function sanitizeState(s, prev) {
     face: s.face === "up" || s.face === "side" ? s.face : "down",
     seat: idOr(s.seat, null),
     job: jobOr(s.job),                     // 職業：白名單（JOB_ROLE），舊客戶端的 tank/healer/dps 轉成騎士/白魔法師/忍者，不合法＝忍者（挑釁等職能驗證靠這欄）
+    pets: Array.isArray(s.pets) ? s.pets.filter(v => typeof v === "string" && ID_RE.test(v)).slice(0, PETS_MAX) : [],   // 跟隨寵物 id 清單：只轉發（別人的畫面各自模擬跟隨，不傳座標）
     fx: Array.isArray(s.fx) ? s.fx.filter(v => typeof v === "string" && ID_RE.test(v)).slice(0, FX_MAX) : [],   // 持續型技能效果（翅膀、護盾…）：只轉發
     circle: s.circle && typeof s.circle === "object"   // 黑魔法師的魔法陣位置（只轉發）
       ? { x: num(s.circle.x, 0, COLS * CELL, 0), y: num(s.circle.y, 0, ROWS * CELL, 0) } : null,

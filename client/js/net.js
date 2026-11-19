@@ -43,6 +43,7 @@ export function connectNet(S, opts = {}) {
       dead: p.dead ? 1 : 0,                // 死亡（墓碑）：被島主打倒後倒數復活
       lvl: S.myLvl ? S.myLvl() : 1,        // 等級（名牌顯示用）：登入者由伺服器覆寫，訪客照客戶端報的
       fish: p.fish ? { x: p.fish.x, y: p.fish.y, ph: p.fish.ph, ...(p.fish.ph === 'bite' && p.fish.rar ? { r: p.fish.rar } : {}) } : null,   // 釣魚：浮標位置與階段（wait 等魚／bite 上鉤／reel 拉扯）；r＝上鉤那條魚的稀有度（伺服器只留罕見／稀有，別人頭上畫「!!」「!!!」）
+      pets: S.myPets ? S.myPets() : [],    // 跟隨寵物的 id 清單（扭蛋寵物）：別人的畫面在你身後各自模擬跟隨
       fx: S.myFx ? S.myFx() : [],          // 持續型技能效果（翅膀、護盾、結印…）：給同地形的人畫特效
       circle: S.fx?.circle && S.t < S.fx.circle.until ? { x: S.fx.circle.x, y: S.fx.circle.y } : null,   // 黑魔法師的魔法陣
     };
@@ -77,6 +78,7 @@ export function connectNet(S, opts = {}) {
       r.title = typeof st.title === 'string' ? st.title : null;   // 稱號 id（舊客戶端沒送＝不顯示；main.js 的 titleText() 查不到也不顯示）
       if (st.lvl != null) r.lvl = st.lvl;   // 等級（名牌的 Lv.N；舊客戶端沒送＝不顯示；登入者由伺服器算好）
       if (st.job) r.job = st.job;          // 職業：只收字串，main.js 的 jobOf() 會做白名單解讀（舊客戶端的 tank/healer/dps 照 legacy 轉）
+      r.petIds = Array.isArray(st.pets) ? st.pets.filter(v => typeof v === 'string').slice(0, 5) : [];   // 舊客戶端沒送＝沒有寵物；main.js 的 syncRemotePets 照這份建立／更新
       r.fx = Array.isArray(st.fx) ? st.fx.filter(v => typeof v === 'string') : [];
       r.circle = st.circle && typeof st.circle.x === 'number' ? { x: st.circle.x, y: st.circle.y } : null;
       if (r.snapNext) { r.snapNext = false; r.x = st.x; r.y = st.y; }   // 縮地：不要從原地滑過去，直接跳到新位置
