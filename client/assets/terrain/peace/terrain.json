@@ -343,7 +343,8 @@
   },
   {
    "id": "gacha",
-   "kind": "deco",
+   "kind": "gacha",
+   "name": "扭蛋機",
    "img": "gacha_machine.png",
    "cell": [
     65,

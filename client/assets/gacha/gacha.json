@@ -1,0 +1,27 @@
+{
+  "_說明": "扭蛋機資料（手寫，不由 gen_assets.py 產生）。機台 id 要對得上 terrain.json 的 props（kind=gacha）。rarities＝稀有度與抽中權重（總和不用剛好 100）；prizes＝獎品池（rarity 對應 rarities 的 id，weight 省略＝1，同稀有度內依權重抽）；pulls＝抽數按鈕（n＝抽幾顆，label＝按鈕字）。目前 prizes 都是範例，等使用者決定獎品再換；cost（抽的條件／貨幣）還沒決定，由 main.js 的 gachaCanPull 判斷。",
+  "machines": {
+    "gacha": {
+      "name": "扭蛋機",
+      "pulls": [
+        { "n": 1, "label": "1 抽" },
+        { "n": 11, "label": "10 + 1 抽" }
+      ],
+      "rarities": [
+        { "id": "N", "name": "普通", "color": "#c8d0dc", "weight": 70 },
+        { "id": "R", "name": "稀有", "color": "#5aa9ff", "weight": 22 },
+        { "id": "SR", "name": "超稀有", "color": "#c77dff", "weight": 6 },
+        { "id": "SSR", "name": "傳說", "color": "#ffd24a", "weight": 2 }
+      ],
+      "prizes": [
+        { "id": "sample_n1", "name": "範例獎品 A", "rarity": "N" },
+        { "id": "sample_n2", "name": "範例獎品 B", "rarity": "N" },
+        { "id": "sample_n3", "name": "範例獎品 C", "rarity": "N" },
+        { "id": "sample_r1", "name": "範例稀有 A", "rarity": "R" },
+        { "id": "sample_r2", "name": "範例稀有 B", "rarity": "R" },
+        { "id": "sample_sr1", "name": "範例超稀有", "rarity": "SR" },
+        { "id": "sample_ssr1", "name": "範例傳說", "rarity": "SSR" }
+      ]
+    }
+  }
+}
