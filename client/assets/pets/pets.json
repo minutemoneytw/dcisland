@@ -1,8 +1,7 @@
 {
- "_說明": "扭蛋寵物（手寫；sheet 由 tools/gen_assets.py 的 pet_sheet 產生：每種一張橫排圖，5 品種 × 2 格走路幀，每格 16×16、朝右）。寵物 id＝<種類><品種序號>（cat0～rabbit4）。max＝最多同時跟幾隻、minutes＝跟隨幾分鐘、gap＝串火車時前後間距（px）、scale＝畫面放大倍數。buff＝寵物的增益效果（還沒決定，先空著，只有圖示）。",
+ "_說明": "扭蛋寵物（手寫；sheet 由 tools/gen_assets.py 的 pet_sheet 產生：每種一張橫排圖，5 品種 × 2 格走路幀，每格 16×16、朝右）。寵物 id＝<種類><品種序號>（cat0～rabbit4）。max＝最多同時跟幾隻、minutes＝跟隨幾分鐘、follow＝前面那位（玩家或前一隻寵物）離開超過幾 px 才追、stop＝追到離幾 px 就停、scale＝畫面放大倍數。buff＝寵物的增益效果（還沒決定，先空著，只有圖示）。",
  "max": 5,
  "minutes": 10,
- "gap": 26,
  "scale": 2,
  "species": {
   "cat": {
@@ -60,5 +59,7 @@
     "花"
    ]
   }
- }
+ },
+ "follow": 58,
+ "stop": 42
 }

@@ -1,11 +1,12 @@
 // 跟隨寵物（2026-11-19，使用者要求：扭蛋抽到寵物就跟著玩家 10 分鐘、最多 5 隻、像火車一樣一隻接一隻、增益圖示右鍵取消）
 // 資料在 assets/pets/pets.json（種類／品種名稱、人數上限、時間、間距），圖是 gen_assets.py 的 pet_sheet 畫的（每種一張橫排 10 格：5 品種 × 2 走路幀）。
 // 純客戶端：只有自己看得到自己的寵物（別人看不到、不同步）。剩餘時間存在 localStorage（dcisland.m0.pets，記到期的真實時間），重新整理還在。
-// 跟隨方式：記下玩家走過的路徑，第 k 隻站在「路徑上往回 (k+1)×gap 像素」的位置，所以轉彎、停下來都是一條線接在後面。
+// 跟隨方式（2026-11-19 使用者要求）：每隻只看自己前面那一位（第 1 隻看玩家、第 k 隻看第 k−1 隻），前面的人離開超過 follow（px）才開始追，
+// 追到離前面 stop（px）就停下來休息（所以玩家站著不動時整串會停住，走遠一點才一隻接一隻跟上）。走起來有一蹦一蹦的步伐（上下彈跳＋左右搖擺），
+// 速度越快步伐越密。
 const KEY = 'dcisland.m0.pets';
-let DB = null, list = [], seq = 0, onChange = () => { };
+let DB = null, list = [], seq = 0, onChange = () => { }, me0 = null;   // me0＝最近一次看到的玩家（新寵物先站在最後一隻／玩家身上）
 const imgs = {};
-let trail = [];   // 玩家走過的點，最新的在最後
 
 export const petDef = id => {   // 'cat2' → { sid, vi, species, name }
   const m = /^([a-z]+)(\d)$/.exec(id || ''), sp = m && DB?.species?.[m[1]];
@@ -30,8 +31,8 @@ export function initPets(db, changeCb) {
 export function addPet(id) {
   if (!petDef(id)) return 'bad';
   if (list.length >= petMax()) return 'full';
-  const last = trail[trail.length - 1];
-  list.push({ uid: ++seq, id, until: Date.now() + (DB.minutes ?? 10) * 60000, x: last?.x ?? 0, y: last?.y ?? 0, face: 1, ph: 0, moving: false, fresh: !last });
+  const lead = list[list.length - 1] || me0;
+  list.push({ uid: ++seq, id, until: Date.now() + (DB.minutes ?? 10) * 60000, x: lead?.x ?? 0, y: lead?.y ?? 0, face: 1, ph: 0, spd: 0, go: false, moving: false, fresh: !lead });
   save(); onChange();
   return 'ok';
 }
@@ -41,33 +42,27 @@ export function removePet(uid) {
   return pt;
 }
 
-// 每幀：me＝玩家（x,y 是腳底）；過期的拿掉、更新路徑與每隻的位置
+// 每幀：me＝玩家（x,y 是腳底）；過期的拿掉、每隻各自決定要不要追前面那一位
 export function stepPets(dt, me) {
   if (!DB || !me) return;
+  me0 = { x: me.x, y: me.y };
   const now = Date.now();
   if (list.some(p => p.until <= now)) { list = list.filter(p => p.until > now); save(); onChange(); }
-  const last = trail[trail.length - 1];
-  if (!last || Math.hypot(me.x - last.x, me.y - last.y) > 260) trail = [{ x: me.x, y: me.y }];   // 換地圖／傳送：路徑重來，寵物全部疊在玩家身上再慢慢拉開
-  else if (Math.hypot(me.x - last.x, me.y - last.y) >= 2) trail.push({ x: me.x, y: me.y });
-  const gap = DB.gap ?? 20, need = (petMax() + 1) * gap;
-  for (;;) {   // 路徑夠長就丟掉最舊的點（保留到最遠那隻要用到的長度）
-    if (trail.length < 3) break;
-    let len = 0; for (let i = trail.length - 1; i > 1; i--) len += Math.hypot(trail[i].x - trail[i - 1].x, trail[i].y - trail[i - 1].y);
-    if (len >= need) trail.shift(); else break;
-  }
+  const FOLLOW = DB.follow ?? 56, STOP = DB.stop ?? 40;
+  if (list.length && Math.hypot(me.x - list[0].x, me.y - list[0].y) > 420) for (const pt of list) { pt.x = me.x; pt.y = me.y; pt.go = false; }   // 換地圖／傳送：直接跟過來
   list.forEach((pt, k) => {
-    const target = (k + 1) * gap;
-    let acc = 0, nx = trail[0].x, ny = trail[0].y;
-    for (let i = trail.length - 1; i > 0; i--) {
-      const a = trail[i], b = trail[i - 1], seg = Math.hypot(a.x - b.x, a.y - b.y);
-      if (acc + seg >= target) { const f = seg ? (target - acc) / seg : 0; nx = a.x + (b.x - a.x) * f; ny = a.y + (b.y - a.y) * f; break; }
-      acc += seg; nx = b.x; ny = b.y;
+    const lead = k ? list[k - 1] : me, dx = lead.x - pt.x, dy = lead.y - pt.y, d = Math.hypot(dx, dy);
+    if (!pt.go && d > FOLLOW) pt.go = true;
+    else if (pt.go && d <= STOP) pt.go = false;
+    let spd = 0;
+    if (pt.go) {   // 離得越遠追得越快（追得上跑步的玩家）；到 STOP 前一點點減速停下
+      spd = Math.min(300, 60 + (d - STOP) * 3.2);
+      const step = Math.min(spd * dt, d - STOP + 1);
+      pt.x += dx / d * step; pt.y += dy / d * step;
+      if (Math.abs(dx) > 1) pt.face = dx > 0 ? 1 : -1;
     }
-    const dx = nx - pt.x, dy = ny - pt.y, mv = Math.hypot(dx, dy);
-    pt.moving = mv > .15;
-    if (Math.abs(dx) > .05) pt.face = dx > 0 ? 1 : -1;
-    pt.x = nx; pt.y = ny;
-    pt.ph = pt.moving ? pt.ph + dt : 0;
+    pt.spd = spd; pt.moving = spd > 0;
+    pt.ph = pt.moving ? pt.ph + dt * (3.2 + spd / 38) : 0;   // 步伐相位：走路慢慢蹦、跑起來蹦得快
   });
 }
 
@@ -79,11 +74,13 @@ export function petEntries(entries, ctx) {
     const d = petDef(pt.id), im = imgs[d?.sid]; if (!d || !im?.complete || !im.naturalWidth) continue;
     entries.push({
       y: pt.y, draw: () => {
-        const fr = pt.moving ? Math.floor(pt.ph * 8) % 2 : 0, sx = (d.vi * 2 + fr) * 16;
+        const cyc = pt.ph * Math.PI, hop = pt.moving ? Math.abs(Math.sin(cyc)) : 0, sway = pt.moving ? Math.sin(cyc) * .09 : 0;
+        const fr = pt.moving ? (Math.floor(pt.ph) % 2) : 0, sx = (d.vi * 2 + fr) * 16, lift = Math.round(hop * (2 + Math.min(2, pt.spd / 120)));
         ctx.save(); ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = 'rgba(10,14,20,.28)'; ctx.beginPath(); ctx.ellipse(pt.x, pt.y - 1, W * .3, W * .09, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.translate(Math.round(pt.x), Math.round(pt.y));
+        ctx.fillStyle = 'rgba(10,14,20,.28)'; ctx.beginPath(); ctx.ellipse(pt.x, pt.y - 1, W * (.3 - hop * .04), W * .09, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.translate(Math.round(pt.x), Math.round(pt.y) - lift);
         if (pt.face < 0) ctx.scale(-1, 1);
+        ctx.rotate(sway);   // 著地點在腳下：以腳底為軸左右搖
         ctx.drawImage(im, sx, 0, 16, 16, -W / 2, -W + 2, W, W);
         ctx.restore();
       }
