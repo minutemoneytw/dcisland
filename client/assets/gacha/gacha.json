@@ -936,6 +936,76 @@
           "cols": 5,
           "rows": 5,
           "row": 4
+        },
+        {
+          "id": "dog0",
+          "name": "小狗・白",
+          "rarity": "P",
+          "pet": "dog0",
+          "sheet": "assets/pets/dog.png",
+          "cell": [
+            14,
+            10
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 0
+        },
+        {
+          "id": "dog1",
+          "name": "小狗・黑",
+          "rarity": "P",
+          "pet": "dog1",
+          "sheet": "assets/pets/dog.png",
+          "cell": [
+            14,
+            10
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 1
+        },
+        {
+          "id": "dog2",
+          "name": "小狗・棕",
+          "rarity": "P",
+          "pet": "dog2",
+          "sheet": "assets/pets/dog.png",
+          "cell": [
+            14,
+            10
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 2
+        },
+        {
+          "id": "dog3",
+          "name": "小狗・黃",
+          "rarity": "P",
+          "pet": "dog3",
+          "sheet": "assets/pets/dog.png",
+          "cell": [
+            14,
+            10
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 3
+        },
+        {
+          "id": "dog4",
+          "name": "小狗・灰",
+          "rarity": "P",
+          "pet": "dog4",
+          "sheet": "assets/pets/dog.png",
+          "cell": [
+            14,
+            10
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 4
         }
       ]
     }

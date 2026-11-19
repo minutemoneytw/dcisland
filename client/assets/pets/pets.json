@@ -1,5 +1,5 @@
 {
- "_說明": "扭蛋寵物（手寫；圖由 tools/gen_assets.py 產生：Elthen 素材改色〔ELTHEN_PETS〕與自畫的小狗／鸚鵡／倉鼠／兔子〔PET_TEMPLATES〕）。每種一張 sheet：橫向＝幀、縱向＝品種（rows 個）；cell＝每格像素大小、cols＝幀數、walk＝走路循環用哪幾格（0 格是待機）、rate＝走路時每個步伐週期推進幾格、drop＝畫圖時往下多放幾個原圖像素。寵物 id＝<種類><品種序號 0 起>（cat0、fox3…）。max＝最多同時跟幾隻、minutes＝跟隨幾分鐘、follow／stop＝前面那位離開超過幾 px 才追、追到離幾 px 就停、scale＝畫面放大倍數。buff＝寵物的增益效果（還沒決定，先空著，只有圖示）。",
+ "_說明": "扭蛋寵物（手寫；圖由 tools/gen_assets.py 產生：Elthen 素材改色〔ELTHEN_PETS〕與自畫的小狗／鸚鵡／倉鼠／兔子〔PET_TEMPLATES〕）。每種一張 sheet：橫向＝幀、縱向＝品種（rows 個）；cell＝每格像素大小、cols＝幀數、walk＝走路循環用哪幾格（0 格是待機）、rate＝走路時每個步伐週期推進幾格、drop＝畫圖時往下多放幾個原圖像素（負的＝離地）、float＝飄浮型（站著也一直播動畫並上下輕飄）。寵物 id＝<種類><品種序號 0 起>（cat0、fox3…）。max＝最多同時跟幾隻、minutes＝跟隨幾分鐘、follow／stop＝前面那位離開超過幾 px 才追、追到離幾 px 就停、scale＝畫面放大倍數。buff＝寵物的增益效果（還沒決定，先空著，只有圖示）。",
  "max": 5,
  "minutes": 10,
  "follow": 58,
@@ -250,6 +250,7 @@
    ],
    "rate": 2.0,
    "drop": -6,
+   "float": true,
    "variants": [
     "赤焰",
     "藍焰",
@@ -276,6 +277,7 @@
    ],
    "rate": 2.5,
    "drop": -4,
+   "float": true,
    "variants": [
     "粉",
     "藍",
@@ -330,6 +332,7 @@
    ],
    "rate": 4.0,
    "drop": -3,
+   "float": true,
    "variants": [
     "黃眼",
     "藍眼",
@@ -361,6 +364,33 @@
     "紅",
     "黃",
     "紫"
+   ]
+  },
+  "dog": {
+   "name": "小狗",
+   "sheet": "assets/pets/dog.png",
+   "cell": [
+    14,
+    10
+   ],
+   "cols": 7,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "rate": 3.0,
+   "drop": 0,
+   "variants": [
+    "白",
+    "黑",
+    "棕",
+    "黃",
+    "灰"
    ]
   }
  }

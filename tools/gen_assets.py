@@ -2286,6 +2286,10 @@ ELTHEN_PETS = {
         ("褐", {}), ("雪", dict(ms=.08, mv=1.5)), ("黑", dict(ms=.3, mv=.55)), ("金", dict(dh=12, ms=.9, mv=1.3)), ("灰", dict(ms=.12, mv=1.05))]),
     "phoenix": dict(file="phoenix.png", cs=64, idle=(0, 0), walk=_row(0, 0, 4), variants=[
         ("赤焰", {}), ("藍焰", dict(dh=170)), ("綠焰", dict(dh=100)), ("紫焰", dict(dh=230)), ("銀", dict(ms=.15, mv=1.3))]),
+    # 小狗（2026-11-19，使用者提供 OpenGameArt「Dog spritesheets」的白／黑／棕三張，每格 16×16，6 欄×5 列；第 0 列是坐著、第 1 列是小跑；授權待使用者確認）
+    "dog": dict(dir="dog", file="spritesheet_white.png", cs=16, idle=(0, 0), walk=_row(1, 0, 6), variants=[
+        ("白", {}), ("黑", dict(file="spritesheet_black.png")), ("棕", dict(file="spritesheet_brown.png")),
+        ("黃", dict(file="spritesheet_brown.png", dh=12, ms=.85, mv=1.45)), ("灰", dict(file="spritesheet_black.png", mv=1.7))]),
     "slime": dict(file="slime.png", idle=(0, 0), walk=_row(0, 0, 4), variants=[
         ("藍", {}), ("綠", dict(dh=-90)), ("紅", dict(dh=150)), ("黃", dict(dh=-150)), ("紫", dict(dh=70))]),
 }
@@ -2299,7 +2303,12 @@ def _recolor_px(r, g_, b, spec):
     r2, g2, b2 = colorsys.hsv_to_rgb(h, s, v)
     return int(r2 * 255 + .5), int(g2 * 255 + .5), int(b2 * 255 + .5)
 def elthen_pet_sheet(spec):
-    w, h, px = read_png_pixels(os.path.join(ASSETS, "external", "elthen", spec["file"]))
+    sdir = os.path.join(ASSETS, "external", spec.get("dir", "elthen"))
+    w, h, px = read_png_pixels(os.path.join(sdir, spec["file"]))
+    srcs = {spec["file"]: (w, px)}   # 品種可以指定別的原圖（file）；同一種的原圖版面要一樣
+    for _n, _v in spec["variants"]:
+        if _v.get("file") and _v["file"] not in srcs:
+            _w, _h, _p = read_png_pixels(os.path.join(sdir, _v["file"])); srcs[_v["file"]] = (_w, _p)
     cells = [spec["idle"]] + spec["walk"]
     cs = spec.get("cs", 32)   # 原圖每格邊長（鳳凰是 64）
     def cell_px(r, c):
@@ -2309,6 +2318,7 @@ def elthen_pet_sheet(spec):
     cw, ch = x1 - x0 + 1, y1 - y0 + 1
     sheet = Canvas(cw * len(cells), ch * len(spec["variants"]))
     for vi, (_name, vs) in enumerate(spec["variants"]):
+        w, px = srcs[vs.get("file", spec["file"])]
         for fi, (r, c) in enumerate(cells):
             for y in range(ch):
                 for x in range(cw):
