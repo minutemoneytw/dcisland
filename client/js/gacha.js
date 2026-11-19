@@ -150,7 +150,7 @@ async function openCap(slot, cap, prize, big) {
   const card = el('div', 'gc-card' + (big ? ' gc-big' : ''));
   card.style.setProperty('--rc', rar.color);
   card.append(el('div', 'gc-rar', rar.id));
-  if (prize.img) { const im = el('img'); im.src = prize.img; im.draggable = false; card.appendChild(im); } else card.appendChild(el('div', 'gc-ico', '✦'));
+  if (prize.img) { const im = el('img'); im.src = prize.img; im.draggable = false; card.appendChild(im); } else card.appendChild(el('div', 'gc-ico'));
   card.append(el('div', 'gc-name', prize.name));
   card.style.opacity = '0'; slot.appendChild(card);
   await sleep(120);
