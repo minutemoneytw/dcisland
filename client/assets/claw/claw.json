@@ -3,7 +3,7 @@
   "machines": {
     "claw": {
       "name": "夾娃娃機",
-      "slots": 8,
+      "slots": 11,
       "prizes": [
         { "id": "plush_orange", "name": "暫代玩偶・橘", "weight": 1, "sheet": "assets/claw/plush.png", "cell": [16, 16], "cols": 6, "idx": 0 },
         { "id": "plush_pink", "name": "暫代玩偶・粉", "weight": 1, "sheet": "assets/claw/plush.png", "cell": [16, 16], "cols": 6, "idx": 1 },
