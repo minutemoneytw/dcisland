@@ -6483,7 +6483,7 @@ function vidPanel() {   // 直的面板：放在螢幕左邊（進度條、時�
   if (S.vidPanelEl) return S.vidPanelEl;
   const el = document.createElement('div'); el.id = 'vidPanel';
   el.style.cssText = 'position:fixed;z-index:25;display:none;flex-direction:column;align-items:stretch;gap:5px;width:118px;padding:6px 8px;background:rgba(14,16,24,.9);border:1px solid #8a7536;font:12px "Microsoft JhengHei",sans-serif;color:#e8e4d8;box-sizing:border-box';
-  const mkb = (txt, tip, fn) => { const b = document.createElement('button'); b.className = 'ff-btn small'; b.textContent = txt; b.title = tip; b.onclick = fn; return b; };
+  const mkb = (txt, tip, fn) => { const b = document.createElement('button'); b.className = 'ff-btn small'; b.textContent = txt; b.title = tip; b.onclick = fn; b.style.cssText = 'flex:1 1 0;min-width:0;padding:3px 0;margin:0;white-space:nowrap'; return b; };   // 三顆按鈕平分一列、不超出面板
   const lab = txt => { const d = document.createElement('div'); d.textContent = txt; d.style.cssText = 'color:#a09a86;font-size:11px;display:flex;justify-content:space-between'; return d; };
   const B = S.vidB = {
     back: mkb('−10', '倒退 10 秒', () => { const v = S.vid; if (v) v.el.currentTime = Math.max(0, v.el.currentTime - 10); }),
@@ -6491,13 +6491,13 @@ function vidPanel() {   // 直的面板：放在螢幕左邊（進度條、時�
     fwd: mkb('+10', '快轉 10 秒', () => { const v = S.vid; if (v) v.el.currentTime = (v.el.currentTime + 10) % (v.el.duration || 1e9); }),
     mute: mkb('🔊 靜音', '靜音／開聲音', () => { S.vidMuted = !S.vidMuted; if (S.vid) S.vid.el.muted = S.vidMuted; }),
   };
-  const seek = B.seek = document.createElement('input'); seek.type = 'range'; seek.min = 0; seek.max = 1000; seek.value = 0; seek.title = '進度（拖曳跳到想看的地方）';
+  const seek = B.seek = document.createElement('input'); seek.type = 'range'; seek.min = 0; seek.max = 1000; seek.value = 0; seek.title = '進度（拖曳跳到想看的地方）'; seek.style.cssText = 'width:100%;margin:0;box-sizing:border-box';
   seek.oninput = () => { const v = S.vid; if (v && v.el.duration) v.el.currentTime = seek.value / 1000 * v.el.duration; };
-  const vol = B.vol = document.createElement('input'); vol.type = 'range'; vol.min = 0; vol.max = 100; vol.value = Math.round((S.vidVol ?? .6) * 100); vol.title = '音量';
+  const vol = B.vol = document.createElement('input'); vol.type = 'range'; vol.min = 0; vol.max = 100; vol.value = Math.round((S.vidVol ?? .6) * 100); vol.title = '音量'; vol.style.cssText = 'width:100%;margin:0;box-sizing:border-box';
   vol.oninput = () => { S.vidVol = +vol.value / 100; S.vidMuted = false; if (S.vid) { S.vid.el.muted = false; } };
   B.time = document.createElement('span'); B.volTxt = document.createElement('span');
   const l1 = lab('進度'), l2 = lab('音量'); l1.appendChild(B.time); l2.appendChild(B.volTxt); B.time.style.fontVariantNumeric = 'tabular-nums';
-  const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:4px;justify-content:space-between'; row.append(B.back, B.play, B.fwd);
+  const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:4px;width:100%'; row.append(B.back, B.play, B.fwd);
   el.append(l1, seek, row, B.mute, l2, vol);
   for (const ev of ['mousedown', 'click', 'contextmenu', 'wheel']) el.addEventListener(ev, e => e.stopPropagation());   // 點面板不算遊戲裡的點擊
   document.body.appendChild(el); return S.vidPanelEl = el;
