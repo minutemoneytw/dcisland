@@ -1,7 +1,7 @@
 {
   "_說明": "大螢幕 YouTube 試播（實驗）。進 Discord 要先在 Developer Portal 的 URL Mapping 加：prefix「/youtube」→ target「www.youtube.com」。videoId＝影片 ID、duration＝影片秒數、epoch＝「從哪個時刻起算循環」（毫秒時間戳，所有人用同一個值，所以大家看到的是同一段）。directBase＝本機／一般瀏覽器用的嵌入網址、discordBase＝Discord 裡走代理的嵌入網址。",
   "videoId": "aqz-KE-bpKQ",
-  "duration": 634,
+  "duration": 635,
   "epoch": 1700000000000,
   "directBase": "https://www.youtube-nocookie.com/embed/",
   "discordBase": "/.proxy/youtube/embed/"

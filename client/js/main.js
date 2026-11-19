@@ -6464,25 +6464,55 @@ async function ytToggle() {
   toast(S.ytOn ? '大螢幕 YouTube 試播：走近螢幕就會開始（只有你看得到）' : '已關閉 YouTube 試播', 2200);
   if (S.scrPickOpen) buildScrPick();
 }
-function ytSound() {   // 影片在畫布下面點不到播放器，聲音靠 postMessage 控制（enablejsapi=1）
-  S.ytSnd = !S.ytSnd;
-  const cmd = (func, args = '') => S.ytFrame?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), '*');
-  if (S.ytSnd) { cmd('unMute'); cmd('setVolume', [70]); } else cmd('mute');
-  if (S.scrPickOpen) buildScrPick();
+// 控制面板（影片在畫布下面點不到播放器本身，所以另外做一條蓋在影片下緣的面板）：播放／暫停、倒退／快轉 10 秒、靜音、音量、目前時間。
+// 靠 postMessage 控制（enablejsapi=1）：送 {event:'command', func, args}；先送 {event:'listening'} 之後播放器會回 initialDelivery／infoDelivery（currentTime／playerState／volume／muted；事件名是 infoDelivery，不是 infoDelta）。
+// 暫停、快轉只影響自己這邊（本機），不影響別人。
+function ytCmd(func, args = []) { S.ytFrame?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), '*'); }
+addEventListener('message', e => {
+  if (!S.ytFrame || e.source !== S.ytFrame.contentWindow) return;
+  let d; try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
+  if (d?.info && (d.event === 'infoDelivery' || d.event === 'initialDelivery')) { S.ytInfo = Object.assign(S.ytInfo || {}, d.info); ytPanelSync(); }
+});
+const ytFmt = t => { t = Math.max(0, Math.floor(t || 0)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+function ytPanel() {
+  if (S.ytPanelEl) return S.ytPanelEl;
+  const el = document.createElement('div'); el.id = 'ytPanel';
+  el.style.cssText = 'position:fixed;z-index:25;display:none;align-items:center;gap:6px;padding:4px 8px;background:rgba(14,16,24,.82);border:1px solid #8a7536;font:12px "Microsoft JhengHei",sans-serif;color:#e8e4d8;box-sizing:border-box';
+  const mkb = (txt, tip, fn) => { const b = document.createElement('button'); b.className = 'ff-btn small'; b.textContent = txt; b.title = tip; b.onclick = fn; return b; };
+  S.ytB = {
+    play: mkb('⏸', '暫停／播放', () => ytCmd(S.ytInfo?.playerState === 2 ? 'playVideo' : 'pauseVideo')),
+    back: mkb('⏪10', '倒退 10 秒', () => ytCmd('seekTo', [Math.max(0, (S.ytInfo?.currentTime || 0) - 10), true])),
+    fwd: mkb('10⏩', '快轉 10 秒', () => ytCmd('seekTo', [(S.ytInfo?.currentTime || 0) + 10, true])),
+    mute: mkb('🔇', '靜音／開聲音', () => { if (S.ytInfo?.muted === false) ytCmd('mute'); else { ytCmd('unMute'); if (!(S.ytInfo?.volume > 0)) ytCmd('setVolume', [60]); } }),
+  };
+  const vol = document.createElement('input'); vol.type = 'range'; vol.min = 0; vol.max = 100; vol.value = 60; vol.style.cssText = 'width:90px;flex:none'; vol.title = '音量';
+  vol.oninput = () => { ytCmd('setVolume', [+vol.value]); if (+vol.value > 0) ytCmd('unMute'); };
+  S.ytB.vol = vol; S.ytB.time = document.createElement('span'); S.ytB.time.style.cssText = 'margin-left:auto;font-variant-numeric:tabular-nums';
+  el.append(S.ytB.back, S.ytB.play, S.ytB.fwd, S.ytB.mute, vol, S.ytB.time);
+  for (const ev of ['mousedown', 'click', 'contextmenu', 'wheel']) el.addEventListener(ev, e => e.stopPropagation());   // 不讓點面板變成遊戲裡的點擊
+  document.body.appendChild(el); return S.ytPanelEl = el;
+}
+function ytPanelSync() {
+  const i = S.ytInfo || {}, b = S.ytB; if (!b) return;
+  b.play.textContent = i.playerState === 2 ? '▶' : '⏸';
+  b.mute.textContent = i.muted === false && (i.volume ?? 1) > 0 ? '🔊' : '🔇';
+  if (document.activeElement !== b.vol && i.volume != null) b.vol.value = i.volume;
+  b.time.textContent = ytFmt(i.currentTime) + (i.duration || S.ytCfg?.duration ? ` / ${ytFmt(i.duration || S.ytCfg.duration)}` : '');
 }
 function ytTick() {
   if (!S.ytOn && !S.ytFrame) return;   // 沒開過就什麼都不做（連 iframe 都不建）
   const fr = S.ytFrame || (S.ytFrame = (() => { const f = document.createElement('iframe'); f.id = 'ytScreen'; f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen'; f.referrerPolicy = 'strict-origin-when-cross-origin'; f.setAttribute('allowfullscreen', ''); f.style.cssText = 'position:fixed;border:0;z-index:0;background:#000;display:none'; document.body.appendChild(f); canvas.style.position = 'relative'; canvas.style.zIndex = '1'; return f; /* iframe 放在畫布下面：螢幕位置的畫布像素挖成透明（drawScreenProp），影片從洞裡透出來，人物與家具就會畫在影片上面 */ })());
   const pr = S.ytOn && S.terrain === 'peace' ? propsHere().find(p => p.kind === 'screen') : null;
   const near = !!pr && !S.tableOpen && !S.players[0].dead && (!!S.scrView || propDist(pr, S.players[0].x, S.players[0].y) <= SCR_WATCH_DIST);
-  if (!near) { if (S.ytShown) { S.ytShown = false; S.ytSnd = false; fr.style.display = 'none'; fr.src = 'about:blank'; } return; }
+  if (!near) { if (S.ytShown) { S.ytShown = false; S.ytInfo = null; fr.style.display = 'none'; fr.src = 'about:blank'; ytPanel().style.display = 'none'; } return; }
   const c = S.ytCfg, r = propRect(pr), rc = canvas.getBoundingClientRect(), k = rc.width / canvas.width;
   const x = rc.left + (r.x + (r.w - SCR_W) / 2 - S.cam.x) * k, y = rc.top + (r.y + 8 - S.cam.y) * k, w = SCR_W * k, h = SCR_H * k;
   fr.style.left = x + 'px'; fr.style.top = y + 'px'; fr.style.width = w + 'px'; fr.style.height = h + 'px';
   const cl = Math.max(0, rc.left - x), ct = Math.max(0, rc.top - y), cr = Math.max(0, x + w - rc.right), cb = Math.max(0, y + h - rc.bottom);   // 超出遊戲畫面的部分裁掉（不蓋到上方的按鈕列）
   fr.style.clipPath = `inset(${ct}px ${cr}px ${cb}px ${cl}px)`;
+  const pn = ytPanel(); pn.style.display = 'flex'; pn.style.left = x + 'px'; pn.style.top = (y + h - 34 * k) + 'px'; pn.style.width = w + 'px'; pn.style.height = 34 * k + 'px'; pn.style.clipPath = fr.style.clipPath;   // 蓋在影片下緣
   if (!S.ytShown) {
-    S.ytShown = true; S.ytSnd = false; fr.style.display = 'block';
+    S.ytShown = true; S.ytInfo = null; fr.style.display = 'block'; fr.onload = () => { for (const t of [800, 3000]) setTimeout(() => fr.contentWindow?.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*'), t); };   // 讓播放器開始回報狀態
     const base = new URLSearchParams(location.search).has('frame_id') ? c.discordBase : c.directBase;
     const start = Math.floor(((Date.now() - c.epoch) / 1000) % c.duration);
     fr.src = `${base}${c.videoId}?autoplay=1&mute=1&start=${start}&loop=1&playlist=${c.videoId}&rel=0&playsinline=1&enablejsapi=1`;
@@ -6651,7 +6681,7 @@ function buildScrPick() {
   const lst = S.scrList?.list || [];
   if (!S.scrList) { body.textContent = '讀取中…'; return; }
   { const yt = document.createElement('div'); yt.className = 'scr-opt' + (S.ytOn ? ' cur' : ''); yt.innerHTML = `<span class="scr-name">YouTube 試播（實驗）</span><span class="scr-st">${S.ytOn ? '開著：走近螢幕就會播（只有你看得到）' : '只有你自己看得到；點一下開啟'}</span>`; yt.onclick = ytToggle; body.appendChild(yt);
-    if (S.ytOn) { const sd = document.createElement('div'); sd.className = 'scr-opt' + (S.ytSnd ? ' cur' : ''); sd.innerHTML = `<span class="scr-name">YouTube 聲音</span><span class="scr-st">${S.ytSnd ? '開（點一下靜音）' : '靜音中（點一下開聲音，要先走近螢幕讓影片載入）'}</span>`; sd.onclick = ytSound; body.appendChild(sd); } }
+ }
   if (!lst.length) { const e = document.createElement('div'); e.className = 'ff-panel-hint'; e.textContent = '目前沒有進行中、或有人入座的遊戲。有人入座之後再來選。'; body.appendChild(e); return; }
   for (const it of lst) {
     const gd = gameDef(it.game), row = document.createElement('div');
