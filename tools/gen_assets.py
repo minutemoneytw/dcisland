@@ -2262,35 +2262,36 @@ def claw_machine():
 # idle＝(列, 欄)；walk＝[(列, 欄)…]；variants＝(名稱, 改色參數)：dh＝色相轉幾度、ms／mv＝飽和度／亮度倍率、col＝(色相度, 飽和度) 把灰白色系上色（原本沒有顏色的素材用）。
 def _row(r, a, b): return [(r, i) for i in range(a, b)]
 ELTHEN_PETS = {
-    "cat": dict(file="cat.png", idle=(9, 0), walk=_row(9, 1, 7), variants=[
+    "cat": dict(file="cat.png", idle=_row(0, 0, 4), walk=_row(9, 1, 7), variants=[
         ("銀灰", {}), ("橘", dict(col=(28, .62))), ("黑", dict(mv=.45)), ("奶油", dict(col=(40, .28), mv=1.05)), ("褐", dict(col=(25, .5), mv=.72))]),
-    "fox": dict(file="fox.png", idle=(0, 0), walk=_row(1, 0, 14), variants=[
+    # 狐狸：這張沒有走路循環（第 1 列是回頭看，已不用）；待機與移動都用第 0 列（站著搖尾巴），移動時靠蹦跳
+    "fox": dict(file="fox.png", idle=_row(0, 0, 5), walk=_row(0, 0, 5), variants=[
         ("赤", {}), ("雪", dict(ms=.08, mv=1.25)), ("銀", dict(ms=.12, mv=.95)), ("黑", dict(ms=.25, mv=.5)), ("金", dict(dh=14, ms=.9, mv=1.15))]),
-    "redpanda": dict(file="redpanda.png", idle=(0, 0), walk=_row(0, 0, 6), variants=[
+    "redpanda": dict(file="redpanda.png", idle=[(0, 0)], walk=_row(0, 0, 6), variants=[
         ("赤", {}), ("金", dict(dh=16, mv=1.15)), ("灰", dict(ms=.12)), ("黑", dict(ms=.3, mv=.55)), ("雪", dict(ms=.1, mv=1.3))]),
-    "porcupine": dict(file="porcupine.png", idle=(0, 0), walk=_row(0, 0, 5), variants=[
+    "porcupine": dict(file="porcupine.png", idle=[(0, 0)], walk=_row(0, 0, 5), variants=[
         ("灰", {}), ("棕", dict(col=(25, .5), mv=.85)), ("黑", dict(mv=.5)), ("白", dict(mv=1.25)), ("藍灰", dict(col=(215, .3)))]),
-    "jellyfish": dict(file="jellyfish.png", idle=(0, 0), walk=_row(0, 0, 5), variants=[
+    "jellyfish": dict(file="jellyfish.png", idle=[(0, 0)], walk=_row(0, 0, 5), variants=[
         ("粉", {}), ("藍", dict(dh=-110)), ("綠", dict(dh=160)), ("紫", dict(dh=-40)), ("橘", dict(dh=70))]),
-    "hedgehog": dict(file="hedgehog.png", idle=(0, 0), walk=_row(0, 0, 4), variants=[
+    "hedgehog": dict(file="hedgehog.png", idle=[(0, 0)], walk=_row(0, 0, 4), variants=[
         ("灰", {}), ("棕", dict(col=(30, .45), mv=.9)), ("黑", dict(mv=.5)), ("白", dict(mv=1.2)), ("粉", dict(col=(340, .25), mv=1.1))]),
-    "crab": dict(file="crab.png", idle=(0, 0), walk=_row(0, 0, 4), variants=[
+    "crab": dict(file="crab.png", idle=[(0, 0)], walk=_row(0, 0, 4), variants=[
         ("橘", {}), ("紅", dict(dh=-20, ms=1.1)), ("藍", dict(dh=190)), ("綠", dict(dh=100)), ("紫", dict(dh=260))]),
-    "eye": dict(file="eye.png", idle=(0, 0), walk=_row(0, 0, 8), variants=[
+    "eye": dict(file="eye.png", idle=[(0, 0)], walk=_row(0, 0, 8), variants=[
         ("黃眼", {}), ("藍眼", dict(dh=160)), ("紅眼", dict(dh=-50)), ("綠眼", dict(dh=70)), ("紫眼", dict(dh=230))]),
-    "squirrel": dict(file="squirrel.png", idle=(0, 0), walk=_row(3, 0, 4), variants=[
+    "squirrel": dict(file="squirrel.png", idle=_row(0, 0, 6), walk=_row(3, 0, 4), variants=[
         ("棕", {}), ("灰", dict(ms=.1, mv=1.1)), ("紅", dict(dh=-10, ms=1.2, mv=1.1)), ("白", dict(ms=.08, mv=1.5)), ("黑", dict(ms=.3, mv=.55))]),
-    "mouse": dict(file="mouse.png", idle=(1, 0), walk=_row(1, 0, 12), variants=[
+    "mouse": dict(file="mouse.png", idle=_row(0, 0, 12), walk=_row(1, 0, 12), variants=[
         ("灰", {}), ("白", dict(col=(220, .04), mv=1.4)), ("棕", dict(col=(28, .5), mv=.8)), ("黑", dict(mv=.5)), ("米", dict(col=(42, .3), mv=1.1))]),
-    "weasel": dict(file="weasel.png", idle=(0, 0), walk=_row(0, 0, 8), variants=[
+    "weasel": dict(file="weasel.png", idle=[(0, 0)], walk=_row(0, 0, 8), variants=[
         ("褐", {}), ("雪", dict(ms=.08, mv=1.5)), ("黑", dict(ms=.3, mv=.55)), ("金", dict(dh=12, ms=.9, mv=1.3)), ("灰", dict(ms=.12, mv=1.05))]),
-    "phoenix": dict(file="phoenix.png", cs=64, idle=(0, 0), walk=_row(0, 0, 4), variants=[
+    "phoenix": dict(file="phoenix.png", cs=64, idle=[(0, 0)], walk=_row(0, 0, 4), variants=[
         ("赤焰", {}), ("藍焰", dict(dh=170)), ("綠焰", dict(dh=100)), ("紫焰", dict(dh=230)), ("銀", dict(ms=.15, mv=1.3))]),
     # 小狗（2026-11-19，使用者提供 OpenGameArt「Dog spritesheets」的白／黑／棕三張，每格 16×16，6 欄×5 列；第 0 列是坐著、第 1 列是小跑；授權待使用者確認）
-    "dog": dict(dir="dog", file="spritesheet_white.png", cs=16, idle=(0, 0), walk=_row(1, 0, 6), variants=[
+    "dog": dict(dir="dog", file="spritesheet_white.png", cs=16, idle=_row(0, 0, 6), walk=_row(1, 0, 6), variants=[
         ("白", {}), ("黑", dict(file="spritesheet_black.png")), ("棕", dict(file="spritesheet_brown.png")),
         ("黃", dict(file="spritesheet_brown.png", dh=12, ms=.85, mv=1.45)), ("灰", dict(file="spritesheet_black.png", mv=1.7))]),
-    "slime": dict(file="slime.png", idle=(0, 0), walk=_row(0, 0, 4), variants=[
+    "slime": dict(file="slime.png", idle=_row(0, 0, 4), walk=_row(0, 0, 4), variants=[
         ("藍", {}), ("綠", dict(dh=-90)), ("紅", dict(dh=150)), ("黃", dict(dh=-150)), ("紫", dict(dh=70))]),
 }
 def _recolor_px(r, g_, b, spec):
@@ -2309,7 +2310,7 @@ def elthen_pet_sheet(spec):
     for _n, _v in spec["variants"]:
         if _v.get("file") and _v["file"] not in srcs:
             _w, _h, _p = read_png_pixels(os.path.join(sdir, _v["file"])); srcs[_v["file"]] = (_w, _p)
-    cells = [spec["idle"]] + spec["walk"]
+    cells = list(spec["idle"]) + spec["walk"]
     cs = spec.get("cs", 32)   # 原圖每格邊長（鳳凰是 64）
     def cell_px(r, c):
         return [(c * cs + x, r * cs + y) for y in range(cs) for x in range(cs) if px[((r * cs + y) * w + c * cs + x) * 4 + 3]]

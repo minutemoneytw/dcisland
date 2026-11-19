@@ -7,6 +7,7 @@
 const KEY = 'dcisland.m0.pets';
 let DB = null, list = [], seq = 0, onChange = () => { }, me0 = null;   // me0＝最近一次看到的玩家（新寵物先站在最後一隻／玩家身上）
 const imgs = {};
+const PAT_DUR = .55;   // 被點到的壓一下再彈回去的長度（秒）
 const frames = {};   // 每一格先切成自己的小畫布：直接從整張 sheet 切來畫，縮放／位移時會漏出相鄰格的邊（走路時像沒擦乾淨的線）
 function frameOf(sid, vi, col) {   // 第 vi 個品種（列）的第 col 格（欄）
   const key = `${sid}:${vi}:${col}`;
@@ -82,8 +83,11 @@ export function stepPets(dt, me) {
     pt.spd = spd; pt.moving = spd > 0;
     pt.ph = pt.moving ? pt.ph + dt * (3.2 + spd / 38) : 0;   // 步伐相位（蹦跳用）：走路慢慢蹦、跑起來蹦得快
     pt.bob = (pt.bob || 0) + dt;
+    if (pt.pat != null) { pt.pat += dt; if (pt.pat > PAT_DUR) pt.pat = null; }   // 被摸：壓扁再彈回
+    if (pt.hearts) { for (const h of pt.hearts) h.t += dt; pt.hearts = pt.hearts.filter(h => h.t < 1); }
     const sp = petDef(pt.id)?.species, fl = !!sp?.float;   // 飄浮的寵物（鳳凰／水母／眼球）：站著也一直拍翅／脈動並上下輕飄，不然像貼圖定在空中
-    pt.at = pt.moving ? (pt.at || 0) + dt * Math.min(14, 8 + spd / 30) : fl ? (pt.at || 0) + dt * 6 : 0;   // 走路動畫的幀計時：固定每秒約 8～14 格（跟蹦跳分開算；之前綁在步伐相位上，14 格的狐狸每秒換約 40 格，看起來頭在亂晃）
+    pt.at = pt.moving ? (pt.at || 0) + dt * Math.min(14, 8 + spd / 30) : fl ? (pt.at || 0) + dt * 6 : 0;
+    pt.it = pt.moving ? 0 : (pt.it || 0) + dt * (sp?.idleFps ?? 5);   // 站著時的待機動畫幀計時（有多格待機圖的種類：貓坐著、狐狸搖尾巴、松鼠坐著…）   // 走路動畫的幀計時：固定每秒約 8～14 格（跟蹦跳分開算；之前綁在步伐相位上，14 格的狐狸每秒換約 40 格，看起來頭在亂晃）
   });
 }
 
@@ -97,16 +101,45 @@ export function petEntries(entries, ctx) {
     entries.push({
       y: pt.y, draw: () => {
         const cyc = pt.ph * Math.PI, hop = pt.moving ? Math.abs(Math.sin(cyc)) : 0;
-        const col = (pt.moving || sp.float) ? sp.walk[Math.floor(pt.at || 0) % sp.walk.length] : 0, lift = Math.round(hop * (2 + Math.min(2, pt.spd / 120))), sway = pt.moving ? Math.round(Math.sin(cyc) * 1.2) : 0;   // 全部取整數像素：不旋轉、不縮放，邊緣才不會糊或漏線
+        const col = (pt.moving || sp.float) ? sp.walk[Math.floor(pt.at || 0) % sp.walk.length] : (sp.idle?.length ? sp.idle[Math.floor(pt.it || 0) % sp.idle.length] : 0), lift = Math.round(hop * (2 + Math.min(2, pt.spd / 120))), sway = pt.moving ? Math.round(Math.sin(cyc) * 1.2) : 0;   // 全部取整數像素：不旋轉、不縮放，邊緣才不會糊或漏線
         const fc = frameOf(d.sid, d.vi, col); if (!fc) return;
         ctx.save(); ctx.imageSmoothingEnabled = false;
         ctx.fillStyle = 'rgba(10,14,20,.28)'; ctx.beginPath(); ctx.ellipse(pt.x, pt.y - 1, W * (.34 - hop * .04), Math.max(3, H * .12), 0, 0, Math.PI * 2); ctx.fill();
         const floatY = sp.float ? Math.round(Math.sin((pt.bob || 0) * 2.6) * 2.5) : 0;   // 飄浮：上下輕輕浮動
         ctx.translate(Math.round(pt.x), Math.round(pt.y) - lift - floatY);
         if (pt.face < 0) ctx.scale(-1, 1);
+        if (pt.pat != null) {   // 被摸：先壓扁（約 .12 秒）→ 彈高 → 回原狀；以腳底為軸
+          const t = pt.pat, sy = t < .12 ? 1 - .35 * (t / .12) : t < .32 ? .65 + .5 * ((t - .12) / .2) : 1.15 - .15 * ((t - .32) / (PAT_DUR - .32)), sx = 1 + (1 - sy) * .6, dr = (sp.drop ?? 0) * sc;
+          ctx.translate(0, dr); ctx.scale(sx, sy); ctx.translate(0, -dr);
+        }
         ctx.drawImage(fc, 0, 0, cw, ch, -W / 2 + sway, -H + (sp.drop ?? 0) * sc, W, H);
         ctx.restore();
+        for (const h of pt.hearts || []) drawHeart(ctx, Math.round(pt.x + h.ox + Math.sin(h.t * 6 + h.ph) * 3), Math.round(pt.y - H - 6 - h.t * 30), h.t);   // 愛心往上飄、後段淡出
       }
     });
   }
+}
+
+// ---- 摸寵物（2026-11-19，使用者要求：空手點寵物＝玩家不揮拳，寵物被壓一下再彈回去＋愛心）----
+export function petAtPoint(wx, wy) {   // 世界座標點到哪隻寵物（排在前面＝畫在上面的優先）
+  if (!DB) return null;
+  const sc = DB.scale ?? 2;
+  for (const pt of [...list].reverse()) {
+    const d = petDef(pt.id); if (!d) continue;
+    const [cw, ch] = d.species.cell, W = cw * sc, H = ch * sc, dr = (d.species.drop ?? 0) * sc;
+    if (wx >= pt.x - W / 2 && wx <= pt.x + W / 2 && wy >= pt.y - H + dr && wy <= pt.y + dr) return pt;
+  }
+  return null;
+}
+export function petPat(pt) {
+  pt.pat = 0;
+  pt.hearts = (pt.hearts || []).concat([-10, 2, 12].map((ox, i) => ({ ox, t: -i * .12, ph: i * 2 })));   // t 負的＝晚一點才冒出來
+}
+const HEART = ['.XX.XX.', 'XXXXXXX', 'XXXXXXX', '.XXXXX.', '..XXX..', '...X...'];
+function drawHeart(ctx, x, y, t) {
+  if (t < 0) return;
+  ctx.save(); ctx.globalAlpha = t > .7 ? 1 - (t - .7) / .3 : 1;
+  const k = 2;   // 一格＝2px 的像素愛心
+  for (let r = 0; r < HEART.length; r++) for (let c = 0; c < 7; c++) if (HEART[r][c] === 'X') { ctx.fillStyle = r < 2 && c < 3 ? '#ffb3cf' : '#ff5d8f'; ctx.fillRect(x + (c - 3) * k, y + r * k, k, k); }
+  ctx.restore();
 }

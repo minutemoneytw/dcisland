@@ -35,9 +35,9 @@
           "sheet": "assets/pets/cat.png",
           "cell": [
             17,
-            11
+            12
           ],
-          "cols": 7,
+          "cols": 10,
           "rows": 5,
           "row": 0
         },
@@ -49,9 +49,9 @@
           "sheet": "assets/pets/cat.png",
           "cell": [
             17,
-            11
+            12
           ],
-          "cols": 7,
+          "cols": 10,
           "rows": 5,
           "row": 1
         },
@@ -63,9 +63,9 @@
           "sheet": "assets/pets/cat.png",
           "cell": [
             17,
-            11
+            12
           ],
-          "cols": 7,
+          "cols": 10,
           "rows": 5,
           "row": 2
         },
@@ -77,9 +77,9 @@
           "sheet": "assets/pets/cat.png",
           "cell": [
             17,
-            11
+            12
           ],
-          "cols": 7,
+          "cols": 10,
           "rows": 5,
           "row": 3
         },
@@ -91,9 +91,9 @@
           "sheet": "assets/pets/cat.png",
           "cell": [
             17,
-            11
+            12
           ],
-          "cols": 7,
+          "cols": 10,
           "rows": 5,
           "row": 4
         },
@@ -107,7 +107,7 @@
             22,
             15
           ],
-          "cols": 15,
+          "cols": 10,
           "rows": 5,
           "row": 0
         },
@@ -121,7 +121,7 @@
             22,
             15
           ],
-          "cols": 15,
+          "cols": 10,
           "rows": 5,
           "row": 1
         },
@@ -135,7 +135,7 @@
             22,
             15
           ],
-          "cols": 15,
+          "cols": 10,
           "rows": 5,
           "row": 2
         },
@@ -149,7 +149,7 @@
             22,
             15
           ],
-          "cols": 15,
+          "cols": 10,
           "rows": 5,
           "row": 3
         },
@@ -163,7 +163,7 @@
             22,
             15
           ],
-          "cols": 15,
+          "cols": 10,
           "rows": 5,
           "row": 4
         },
@@ -245,9 +245,9 @@
           "sheet": "assets/pets/mouse.png",
           "cell": [
             20,
-            11
+            15
           ],
-          "cols": 13,
+          "cols": 24,
           "rows": 5,
           "row": 0
         },
@@ -259,9 +259,9 @@
           "sheet": "assets/pets/mouse.png",
           "cell": [
             20,
-            11
+            15
           ],
-          "cols": 13,
+          "cols": 24,
           "rows": 5,
           "row": 1
         },
@@ -273,9 +273,9 @@
           "sheet": "assets/pets/mouse.png",
           "cell": [
             20,
-            11
+            15
           ],
-          "cols": 13,
+          "cols": 24,
           "rows": 5,
           "row": 2
         },
@@ -287,9 +287,9 @@
           "sheet": "assets/pets/mouse.png",
           "cell": [
             20,
-            11
+            15
           ],
-          "cols": 13,
+          "cols": 24,
           "rows": 5,
           "row": 3
         },
@@ -301,9 +301,9 @@
           "sheet": "assets/pets/mouse.png",
           "cell": [
             20,
-            11
+            15
           ],
-          "cols": 13,
+          "cols": 24,
           "rows": 5,
           "row": 4
         },
@@ -525,9 +525,9 @@
           "sheet": "assets/pets/squirrel.png",
           "cell": [
             19,
-            14
+            15
           ],
-          "cols": 5,
+          "cols": 10,
           "rows": 5,
           "row": 0
         },
@@ -539,9 +539,9 @@
           "sheet": "assets/pets/squirrel.png",
           "cell": [
             19,
-            14
+            15
           ],
-          "cols": 5,
+          "cols": 10,
           "rows": 5,
           "row": 1
         },
@@ -553,9 +553,9 @@
           "sheet": "assets/pets/squirrel.png",
           "cell": [
             19,
-            14
+            15
           ],
-          "cols": 5,
+          "cols": 10,
           "rows": 5,
           "row": 2
         },
@@ -567,9 +567,9 @@
           "sheet": "assets/pets/squirrel.png",
           "cell": [
             19,
-            14
+            15
           ],
-          "cols": 5,
+          "cols": 10,
           "rows": 5,
           "row": 3
         },
@@ -581,9 +581,9 @@
           "sheet": "assets/pets/squirrel.png",
           "cell": [
             19,
-            14
+            15
           ],
-          "cols": 5,
+          "cols": 10,
           "rows": 5,
           "row": 4
         },
@@ -877,7 +877,7 @@
             14,
             9
           ],
-          "cols": 5,
+          "cols": 8,
           "rows": 5,
           "row": 0
         },
@@ -891,7 +891,7 @@
             14,
             9
           ],
-          "cols": 5,
+          "cols": 8,
           "rows": 5,
           "row": 1
         },
@@ -905,7 +905,7 @@
             14,
             9
           ],
-          "cols": 5,
+          "cols": 8,
           "rows": 5,
           "row": 2
         },
@@ -919,7 +919,7 @@
             14,
             9
           ],
-          "cols": 5,
+          "cols": 8,
           "rows": 5,
           "row": 3
         },
@@ -933,7 +933,7 @@
             14,
             9
           ],
-          "cols": 5,
+          "cols": 8,
           "rows": 5,
           "row": 4
         },
@@ -945,9 +945,9 @@
           "sheet": "assets/pets/dog.png",
           "cell": [
             14,
-            10
+            11
           ],
-          "cols": 7,
+          "cols": 12,
           "rows": 5,
           "row": 0
         },
@@ -959,9 +959,9 @@
           "sheet": "assets/pets/dog.png",
           "cell": [
             14,
-            10
+            11
           ],
-          "cols": 7,
+          "cols": 12,
           "rows": 5,
           "row": 1
         },
@@ -973,9 +973,9 @@
           "sheet": "assets/pets/dog.png",
           "cell": [
             14,
-            10
+            11
           ],
-          "cols": 7,
+          "cols": 12,
           "rows": 5,
           "row": 2
         },
@@ -987,9 +987,9 @@
           "sheet": "assets/pets/dog.png",
           "cell": [
             14,
-            10
+            11
           ],
-          "cols": 7,
+          "cols": 12,
           "rows": 5,
           "row": 3
         },
@@ -1001,9 +1001,9 @@
           "sheet": "assets/pets/dog.png",
           "cell": [
             14,
-            10
+            11
           ],
-          "cols": 7,
+          "cols": 12,
           "rows": 5,
           "row": 4
         }
