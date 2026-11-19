@@ -4998,12 +4998,13 @@ function closeTable(sendLeave = true) {
 const QUIT_SCORE_GAMES = ['pinball', 'breakout', 'bubble', 'g2048'];
 function quitScoreNow() {
   const v = S.tableView;
-  if (!v || v.phase !== 'playing' || v.role !== 'seat' || !QUIT_SCORE_GAMES.includes(v.game)) return;
+  if (!v || v.phase !== 'playing' || v.role !== 'seat' || !QUIT_SCORE_GAMES.includes(v.game)) return false;
   const cap = n => Math.min(99999999, Math.round(n));
-  if (v.game === 'pinball') { const P = S.pb; if (P && P.role === 'seat' && !P.over && P.score > 0) { P.over = true; P.st = 3; tblFinal({ a: 'over', sc: cap(P.score) }); pbSnap(P, true); } }
-  else if (v.game === 'breakout') { const B = S.brk; if (B && B.role === 'seat' && !B.over && B.score > 0) { B.over = true; brkSnap(B, true); tblFinal({ a: 'over', sc: cap(B.score), lv: B.lv }); } }
-  else if (v.game === 'bubble') { const B = S.bub; if (B && B.role === 'seat' && !B.over && B.score > 0) { B.over = true; B.fly = null; bubSnap(B, true); tblFinal({ a: 'over', sc: cap(B.score), lv: Math.min(999, B.lv) }); } }
-  else if (v.game === 'g2048') { const B = S.tf; if (B && B.role === 'seat' && !B.over && B.score > 0) { B.over = true; tfSnap(B, true); tblFinal({ a: 'over', sc: Math.min(TF_SCORE_MAX_C, Math.round(B.score)), mx: Math.min(17, B.mx) }); } }
+  if (v.game === 'pinball') { const P = S.pb; if (P && P.role === 'seat' && !P.over && P.score > 0) { P.over = true; P.st = 3; tblFinal({ a: 'over', sc: cap(P.score) }); pbSnap(P, true); return true; } }
+  else if (v.game === 'breakout') { const B = S.brk; if (B && B.role === 'seat' && !B.over && B.score > 0) { B.over = true; brkSnap(B, true); tblFinal({ a: 'over', sc: cap(B.score), lv: B.lv }); return true; } }
+  else if (v.game === 'bubble') { const B = S.bub; if (B && B.role === 'seat' && !B.over && B.score > 0) { B.over = true; B.fly = null; bubSnap(B, true); tblFinal({ a: 'over', sc: cap(B.score), lv: Math.min(999, B.lv) }); return true; } }
+  else if (v.game === 'g2048') { const B = S.tf; if (B && B.role === 'seat' && !B.over && B.score > 0) { B.over = true; tfSnap(B, true); tblFinal({ a: 'over', sc: Math.min(TF_SCORE_MAX_C, Math.round(B.score)), mx: Math.min(17, B.mx) }); return true; } }
+  return false;
 }
 function leaveAsk(on) {
   const box = $('leaveBox'); box.classList.toggle('hidden', !on);
@@ -13138,7 +13139,11 @@ $('btnAvatar').onclick = () => { if ($('avatarPanel').classList.contains('hidden
 $('avatarClose').onclick = closeAvatar;
 $('tableClose').onclick = () => leaveTable();
 $('leaveStay').onclick = () => leaveAsk(false);
-$('leaveGo').onclick = () => { leaveAsk(false); quitScoreNow(); closeTable(); };
+$('leaveGo').onclick = () => {
+  leaveAsk(false);
+  // 伺服器對每條連線的牌桌操作有 100 ms 的最短間隔（TBL_CD）：結算 over 後馬上送 leave 會被丟掉（座位卡在「入座中」），所以結算有送出就等 0.4 秒再關桌子（2026-11-20 修正）
+  if (quitScoreNow()) { const id = S.tableId; setTimeout(() => { if (S.tableOpen && S.tableId === id) closeTable(); }, 400); } else closeTable();
+};
 $('tableRulesBtn').onclick = () => rulesToggle('rules');   // 再點一下關閉
 $('tableCharsBtn').onclick = () => rulesToggle('chars');
 $('rulesClose').onclick = () => rulesShow(false);
