@@ -2276,17 +2276,18 @@ PET_TEMPLATES = {
         "...bb.bb..bb.bb.",
         "...dd.dd..dd.dd.",
     ],
-    "dog": [
-        "........bbbbbb..",
-        ".......dbbbbbbb.",
-        ".......dbebbebl.",
-        ".......dbbbllnl.",
-        "..b.....bbbbll..",
-        "..bb..bbbbbbb...",
-        "...bbbbbbkkbbb..",
-        "...bbbbbbkkbbb..",
-        "...bbbbblllbbb..",
+    "dog": [   # 側面：長口鼻（尖端黑鼻頭、吐舌頭）、垂下的深色大耳朵、紅項圈、翹起的尾巴、長腿（r＝耳朵色、c＝項圈）
+        "..........bbbb..",
+        "..b.....rrbbbb..",
+        "..b.....rrbebll.",
+        "..bb....rrbblln.",
+        "..bbb...rrbllpl.",
+        "..bbbbbbbccbbb..",
+        "...bbbkkbbbbbb..",
+        "...bbbkkbllbbb..",
         "...dbbbbbbbbbd..",
+        "...bb.bb..bb.bb.",
+        "...bb.bb..bb.bb.",
         "...bb.bb..bb.bb.",
         "...dd.dd..dd.dd.",
     ],
@@ -2338,11 +2339,11 @@ PET_VARIANTS = {   # 每個品種的色盤（b d l k q p e y n）；沒寫的沿
             dict(b="#f4f4f4", d="#d0d0d8", l="#ffffff", k="#f4f4f4", q="#f4f4f4", p="#f5a8a0"),
             dict(b="#8a96aa", d="#6c778a", l="#c8d0dc", k="#6c778a", q="#8a96aa", p="#f5a8a0"),
             dict(b="#f4f4f4", d="#d0d0d8", l="#ffffff", k="#e8923a", q="#3a3a48", p="#f5a8a0")],
-    "dog": [dict(b="#d99a50", d="#b07838", l="#fff0d8", k="#d99a50"),
-            dict(b="#3a3040", d="#2a2430", l="#c8964a", k="#3a3040", e="#f0f0f0"),
-            dict(b="#f2f2f2", d="#cfcfd8", l="#ffffff", k="#f2f2f2"),
-            dict(b="#7a4a2e", d="#5a3420", l="#c8a078", k="#7a4a2e", e="#f0f0f0"),
-            dict(b="#f4f4f4", d="#5a4030", l="#ffffff", k="#6a4a30")],
+    "dog": [dict(b="#d99a50", d="#b07838", l="#fff0d8", k="#d99a50", r="#a8682c"),
+            dict(b="#3a3040", d="#2a2430", l="#c8964a", k="#3a3040", e="#f0f0f0", r="#1f1a26"),
+            dict(b="#f2f2f2", d="#cfcfd8", l="#ffffff", k="#f2f2f2", r="#cfc6b4"),
+            dict(b="#7a4a2e", d="#5a3420", l="#c8a078", k="#7a4a2e", e="#f0f0f0", r="#4a2a18"),
+            dict(b="#f4f4f4", d="#5a4030", l="#ffffff", k="#6a4a30", r="#6a4a30")],
     "parrot": [dict(b="#d83a3a", k="#3b78e8", y="#f0c020"),
                dict(b="#3b78e8", k="#40c8e0", y="#2a2a30"),
                dict(b="#3cb45a", k="#f0c020", y="#e8a030"),
@@ -2361,11 +2362,11 @@ PET_VARIANTS = {   # 每個品種的色盤（b d l k q p e y n）；沒寫的沿
 }
 def pet_sheet(species):
     tpl = PET_TEMPLATES[species]
-    rows = ["." * 16] + tpl
+    rows = ["." * 16] * (14 - len(tpl)) + tpl   # 腳底一律對齊第 13 列（矮的種類往下靠，不然會飄在空中）
     rows = (rows + ["." * 16] * 16)[:16]
     sheet = Canvas(16 * 10, 16)
     for vi, pal in enumerate(PET_VARIANTS[species]):
-        col = dict(b="#ccc", d="#999", l="#eee", k="#bbb", q="#bbb", p="#f5a8a0", e="#20202a", y="#e8a030", n="#20202a")
+        col = dict(c="#e84848", r="#999", b="#ccc", d="#999", l="#eee", k="#bbb", q="#bbb", p="#f5a8a0", e="#20202a", y="#e8a030", n="#20202a")
         col.update(pal)
         for fi in range(2):
             cv = Canvas(16, 16)

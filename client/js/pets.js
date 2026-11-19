@@ -7,6 +7,17 @@
 const KEY = 'dcisland.m0.pets';
 let DB = null, list = [], seq = 0, onChange = () => { }, me0 = null;   // me0＝最近一次看到的玩家（新寵物先站在最後一隻／玩家身上）
 const imgs = {};
+const frames = {};   // 每一格先切成自己的小畫布：直接從整張 sheet 切來畫，縮放／位移時會漏出相鄰格的邊（走路時像沒擦乾淨的線）
+function frameOf(sid, idx) {
+  const key = sid + ':' + idx;
+  if (!frames[key]) {
+    const im = imgs[sid]; if (!im?.complete || !im.naturalWidth) return null;
+    const c = document.createElement('canvas'); c.width = c.height = 16;
+    c.getContext('2d').drawImage(im, idx * 16, 0, 16, 16, 0, 0, 16, 16);
+    frames[key] = c;
+  }
+  return frames[key];
+}
 
 export const petDef = id => {   // 'cat2' → { sid, vi, species, name }
   const m = /^([a-z]+)(\d)$/.exec(id || ''), sp = m && DB?.species?.[m[1]];
@@ -74,14 +85,14 @@ export function petEntries(entries, ctx) {
     const d = petDef(pt.id), im = imgs[d?.sid]; if (!d || !im?.complete || !im.naturalWidth) continue;
     entries.push({
       y: pt.y, draw: () => {
-        const cyc = pt.ph * Math.PI, hop = pt.moving ? Math.abs(Math.sin(cyc)) : 0, sway = pt.moving ? Math.sin(cyc) * .09 : 0;
-        const fr = pt.moving ? (Math.floor(pt.ph) % 2) : 0, sx = (d.vi * 2 + fr) * 16, lift = Math.round(hop * (2 + Math.min(2, pt.spd / 120)));
+        const cyc = pt.ph * Math.PI, hop = pt.moving ? Math.abs(Math.sin(cyc)) : 0;
+        const fr = pt.moving ? (Math.floor(pt.ph) % 2) : 0, lift = Math.round(hop * (2 + Math.min(2, pt.spd / 120))), sway = pt.moving ? Math.round(Math.sin(cyc) * 1.2) : 0;   // 全部取整數像素：不旋轉、不縮放，邊緣才不會糊或漏線
+        const fc = frameOf(d.sid, d.vi * 2 + fr); if (!fc) return;
         ctx.save(); ctx.imageSmoothingEnabled = false;
         ctx.fillStyle = 'rgba(10,14,20,.28)'; ctx.beginPath(); ctx.ellipse(pt.x, pt.y - 1, W * (.3 - hop * .04), W * .09, 0, 0, Math.PI * 2); ctx.fill();
         ctx.translate(Math.round(pt.x), Math.round(pt.y) - lift);
         if (pt.face < 0) ctx.scale(-1, 1);
-        ctx.rotate(sway);   // 著地點在腳下：以腳底為軸左右搖
-        ctx.drawImage(im, sx, 0, 16, 16, -W / 2, -W + 2, W, W);
+        ctx.drawImage(fc, 0, 0, 16, 16, -W / 2 + sway, -W + 2, W, W);
         ctx.restore();
       }
     });
