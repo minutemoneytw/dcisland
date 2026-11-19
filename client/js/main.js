@@ -10748,7 +10748,7 @@ function arOppEl(v, cab, mk, cs) {
 const PROP_RANGE = 48;   // 離物件邊多近才能互動（px）
 const propsHere = () => S.terrains[S.terrain]?.props || [];
 const propRect = pr => ({ x: pr.cell[0] * CELL, y: pr.cell[1] * CELL, w: pr.w * CELL, h: pr.h * CELL });
-const propUse = pr => pr.kind === 'drink' || pr.kind === 'food' || pr.kind === 'screen' || pr.kind === 'gacha';   // 能互動（吃喝）的物件；deco（隔板）只擋路、rug（地毯）畫在地板層
+const propUse = pr => pr.kind === 'drink' || pr.kind === 'food' || pr.kind === 'screen' || pr.kind === 'gacha' || pr.kind === 'claw';   // 能互動（吃喝）的物件；deco（隔板）只擋路、rug（地毯）畫在地板層
 // ---- 扭蛋機（2026-11-19，使用者要求；畫面與動畫在 client/js/gacha.js，資料在 assets/gacha/gacha.json）----
 // 目前只有框架：抽的條件（貨幣）與獎品內容還沒決定。**之後要補的地方就是下面兩個函式**：
 //   gachaCanPull(M, n)  → { ok, reason }  能不能抽 n 顆（扣錢／次數限制寫這裡）
@@ -10772,6 +10772,18 @@ function openGachaProp(pr) {
     const ok = await m.openGacha(pr.id, { toast, sfx: sfxTones, canPull: gachaCanPull, grant: gachaGrant, onClose: () => { S.gachaOpen = false; } });
     S.gachaOpen = ok;
   }).catch(err => { console.warn('gacha:', err); toast('扭蛋機現在壞掉了', 1800); });
+}
+// ---- 夾娃娃機（2026-11-19，使用者要求先預做框架；畫面與玩法在 client/js/claw.js，資料在 assets/claw/claw.json）----
+// **之後要補的就是這兩個掛鉤**：clawCanPlay(M)＝能不能玩一次（貨幣／次數）、clawGrant(M, prize)＝夾到獎品之後怎麼發（背包／衣櫥、同步伺服器）。目前都是空的。
+const clawCanPlay = M => ({ ok: true });
+const clawGrant = (M, prize) => ({});
+function openClawProp(pr) {
+  for (const k of Object.keys(keys)) keys[k] = false;   // 畫面蓋住後收不到 keyup，先放開按住的鍵
+  S.mouseHeld = false;
+  import('./claw.js').then(async m => {
+    const ok = await m.openClaw(pr.id, { toast, sfx: sfxTones, canPlay: clawCanPlay, grant: clawGrant, onClose: () => { S.clawOpen = false; } });
+    S.clawOpen = ok;
+  }).catch(err => { console.warn('claw:', err); toast('夾娃娃機現在壞掉了', 1800); });
 }
 function propAtCell(x, y) {   // 這格被物件占著（擋路、不能擺家具；地毯不算）
   for (const pr of propsHere()) if (pr.kind !== 'rug' && x >= pr.cell[0] && x < pr.cell[0] + pr.w && y >= pr.cell[1] && y < pr.cell[1] + pr.h) return pr;
@@ -10821,6 +10833,7 @@ function useProp(pr) {
   if (p.dead) return;
   if (pr.kind === 'screen') { openScrPick(); return; }   // 大螢幕：開轉播清單
   if (pr.kind === 'gacha') { openGachaProp(pr); return; }   // 扭蛋機：開抽獎畫面
+  if (pr.kind === 'claw') { openClawProp(pr); return; }   // 夾娃娃機：開夾娃娃畫面
   if (S.t < S.foodCdUntil) { toast(pr.kind === 'food' ? '還在吃…' : '還在喝…', 900); return; }
   S.foodCdUntil = S.t + FOOD_CD;
   const names = FOOD_NAMES[pr.kind] || FOOD_NAMES.drink, nm = names[Math.floor(Math.random() * names.length)];
@@ -10984,7 +10997,7 @@ function propDrawEntries(list) {
         ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.fillStyle = '#ffe08a';
         ctx.strokeText(pr.name || '', cx, r.y - 6); ctx.fillText(pr.name || '', cx, r.y - 6);
         if (!S.tableOpen && propNear(p) === pr) {
-          const t = pr.kind === 'screen' ? '按 F 選擇轉播的遊戲' : pr.kind === 'gacha' ? '按 F 轉扭蛋' : pr.kind === 'food' ? '按 F 吃點心' : '按 F 喝飲料';
+          const t = pr.kind === 'screen' ? '按 F 選擇轉播的遊戲' : pr.kind === 'gacha' ? '按 F 轉扭蛋' : pr.kind === 'claw' ? '按 F 夾娃娃' : pr.kind === 'food' ? '按 F 吃點心' : '按 F 喝飲料';
           ctx.font = '11px "Microsoft JhengHei"'; ctx.fillStyle = '#fff6e0'; ctx.strokeText(t, cx, r.y - 20); ctx.fillText(t, cx, r.y - 20);
         }
         ctx.restore();
@@ -12747,7 +12760,7 @@ function cycleWeapon(step) {
   setWeapon(ws[(i + step + ws.length) % ws.length].id);
 }
 let wheelAcc = 0, wheelAt = 0;
-const wheelBlocked = () => S.gachaOpen || S.mode !== 'walk' || S.helpOpen || S.skillOpen || S.scrPickOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.colorOpen || S.glamOpen || S.signOpen || S.confirmOpen;
+const wheelBlocked = () => S.gachaOpen || S.clawOpen || S.mode !== 'walk' || S.helpOpen || S.skillOpen || S.scrPickOpen || S.listOpen || S.dexOpen || S.craftOpen || S.titleOpen || S.colorOpen || S.glamOpen || S.signOpen || S.confirmOpen;
 document.addEventListener('wheel', e => {
   const t = e.target;
   if (t !== canvas && !t.closest?.('#weaponBar')) return;   // 只有在遊戲畫面或武器列上滾才切換（面板、視窗要照常捲動）
@@ -12792,6 +12805,7 @@ addEventListener('keydown', e => {
     else if (k === 'enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveSign(); }
     return;
   }
+  if (S.clawOpen) return;   // 夾娃娃機開著：按鍵由 claw.js 自己處理（Esc 關閉），不能走路
   if (S.gachaOpen) { if (k === 'escape') { e.preventDefault(); S.gacha?.escape(); } return; }   // 扭蛋機開著：Esc 快轉／關閉，其他鍵不處理（不能走路）
   if (S.tableOpen) {   // 遊戲畫面開著：Esc 離開；五子棋復盤時 ←／→／Home／End 切換步數；其他鍵都不處理（不能走路）
     if (k === 'escape') { e.preventDefault(); if (!$('rulesBox').classList.contains('hidden')) rulesShow(false); else leaveTable(); }   // 規則視窗開著：Esc 先關；離開確認開著：Esc＝取消規則

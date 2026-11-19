@@ -733,3 +733,24 @@ body {
 .gc-btns { display: flex; gap: 12px; justify-content: center; }
 .gc-btns .gc-pull { min-width: 130px; padding: 8px 14px; font-size: 15px; }
 .gc-btns button:disabled { opacity: .45; cursor: default; }
+
+/* ---------- 夾娃娃機（2026-11-19；client/js/claw.js） ---------- */
+#clawBox { position: fixed; inset: 0; z-index: 62; background: rgba(8, 12, 20, .9); display: flex; align-items: center; justify-content: center; overflow: auto; }
+#clawBox.hidden { display: none !important; }
+.cl-panel { width: min(520px, 96vw); background: var(--panel-2); border: 1px solid var(--gold-dim); border-bottom: 2px solid var(--gold-dim); padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.cl-head { width: 100%; display: flex; align-items: center; justify-content: space-between; }
+.cl-title { font-size: 18px; letter-spacing: 6px; color: var(--gold); }
+.cl-stage { position: relative; width: 480px; max-width: 100%; }
+.cl-cv { width: 100%; image-rendering: pixelated; display: block; border: 3px solid #e07a68; box-shadow: 0 0 0 2px #12141c; background: #000; }
+.cl-msg { min-height: 20px; color: var(--text-dim); font-size: 13px; letter-spacing: 1px; }
+.cl-ctl { display: flex; gap: 12px; }
+.cl-ctl .cl-mv { min-width: 64px; padding: 10px 16px; font-size: 18px; touch-action: none; user-select: none; }
+.cl-ctl .cl-go { min-width: 120px; padding: 10px 16px; font-size: 16px; border-color: #e07a68; }
+.cl-hint { color: #6f7487; font-size: 11px; }
+.cl-result { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(8, 12, 20, .78); }
+.cl-result.hidden { display: none; }
+.cl-card { background: #14111f; padding: 14px 22px; display: flex; flex-direction: column; align-items: center; gap: 8px; box-shadow: 0 -3px 0 0 #ffd24a, 0 3px 0 0 #ffd24a, -3px 0 0 0 #ffd24a, 3px 0 0 0 #ffd24a; }
+.cl-get { color: #ffd24a; font-size: 16px; font-weight: bold; letter-spacing: 3px; }
+.cl-name { color: var(--text); font-size: 15px; }
+.cl-note { color: #ffb070; font-size: 13px; }
+.cl-btns { display: flex; gap: 10px; margin-top: 4px; }
