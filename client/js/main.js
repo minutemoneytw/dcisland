@@ -6253,6 +6253,9 @@ const SCR_W = 496, SCR_H = 272;
 const SCR_FONT = '"Microsoft JhengHei", sans-serif';
 function onNetScr(msg) {
   if ((msg.id || null) !== (S.scr?.id || null)) S.scrTb = {};   // 換台：舊的盤面快照作廢
+  // 新的遊戲開始轉播（換了一桌，或同一桌新開局）：螢幕自動打開、影片停掉（使用者定：關閉之後有新遊戲轉播就自動跳過去）
+  if (msg.id && (msg.id !== S.scrLastId || (msg.v?.phase === 'playing' && S.scrLastPhase !== 'playing'))) { S.scrOff = false; if (S.vid) vidStop(); }
+  if (msg.id) { S.scrLastId = msg.id; S.scrLastPhase = msg.v?.phase; }
   S.scr = msg.id ? msg : null;
   scrRender();
 }
@@ -6454,69 +6457,65 @@ function scrWatchTick() {
     if (!want && S.scr) { S.scr = null; scrRender(); }   // 走遠了：畫面不再更新，先清掉免得顯示過期內容
   }
 }
-// ---- 大螢幕 YouTube 試播（2026-11-19，使用者要求「做一個 YouTube 播放試試看，我去 DC 上跑跑看，不能用再退版」；**實驗**）----
-// 只有自己看得到（本機的選項，不經伺服器）：在大螢幕的畫面位置蓋一個 YouTube 嵌入 iframe；走近螢幕（或開觀看視角）才載入、離開就清掉（停止出聲）。
-// 設定在 assets/screen/youtube.json（影片、長度、起算時刻：所有人用同一個起算時刻，所以大家看到的是同一段）。在 Discord 裡要先在 Portal 設 URL Mapping（見 json 說明）。
-// iframe 蓋在畫布上，所以會擋住走過螢幕前面的人（實驗版先不處理）。
-async function ytToggle() {
-  if (!S.ytCfg) { try { S.ytCfg = await loadJSON('assets/screen/youtube.json'); } catch { toast('讀不到 YouTube 設定', 1600); return; } }
-  S.ytOn = !S.ytOn;
-  toast(S.ytOn ? '大螢幕 YouTube 試播：走近螢幕就會開始（只有你看得到）' : '已關閉 YouTube 試播', 2200);
-  if (S.scrPickOpen) buildScrPick();
+// ---- 大螢幕播放自己放的影片（2026-11-19；取代 YouTube 試播——YouTube 在 Discord 裡載不起來）----
+// 影片檔放 assets/screen/video/，清單在 assets/screen/videos.json。只有自己看得到（本機選項、不經伺服器）；大家用同一個起算時刻，選同一支的人看到同一段。
+// 影片直接畫進螢幕的畫布（同網域、沒有 iframe），人物自然畫在上面。走近螢幕（或開觀看視角）才播、離開就暫停；聲音隨距離變小。
+// 控制面板（暫停／快轉／音量）只在「點眼睛觀看」時出現，放在螢幕下方不擋畫面。有新的遊戲開始轉播就自動跳回轉播（影片停掉）。
+async function vidDB() { if (!S.vidCfg) { try { S.vidCfg = await loadJSON('assets/screen/videos.json'); } catch { S.vidCfg = { videos: [] }; } } return S.vidCfg; }
+function vidStop() {
+  const v = S.vid; if (v) { v.el.pause(); v.el.removeAttribute('src'); v.el.load(); }
+  S.vid = null; if (S.vidPanelEl) S.vidPanelEl.style.display = 'none';
 }
-// 控制面板（影片在畫布下面點不到播放器本身，所以另外做一條蓋在影片下緣的面板）：播放／暫停、倒退／快轉 10 秒、靜音、音量、目前時間。
-// 靠 postMessage 控制（enablejsapi=1）：送 {event:'command', func, args}；先送 {event:'listening'} 之後播放器會回 initialDelivery／infoDelivery（currentTime／playerState／volume／muted；事件名是 infoDelivery，不是 infoDelta）。
-// 暫停、快轉只影響自己這邊（本機），不影響別人。
-function ytCmd(func, args = []) { S.ytFrame?.contentWindow?.postMessage(JSON.stringify({ event: 'command', func, args }), '*'); }
-addEventListener('message', e => {
-  if (!S.ytFrame || e.source !== S.ytFrame.contentWindow) return;
-  let d; try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
-  if (d?.info && (d.event === 'infoDelivery' || d.event === 'initialDelivery')) { S.ytInfo = Object.assign(S.ytInfo || {}, d.info); ytPanelSync(); }
-});
-const ytFmt = t => { t = Math.max(0, Math.floor(t || 0)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
-function ytPanel() {
-  if (S.ytPanelEl) return S.ytPanelEl;
-  const el = document.createElement('div'); el.id = 'ytPanel';
-  el.style.cssText = 'position:fixed;z-index:25;display:none;align-items:center;gap:6px;padding:4px 8px;background:rgba(14,16,24,.82);border:1px solid #8a7536;font:12px "Microsoft JhengHei",sans-serif;color:#e8e4d8;box-sizing:border-box';
+function vidPlay(def) {
+  vidStop(); S.scrOff = false;
+  const el = document.createElement('video'); el.playsInline = true; el.loop = true; el.preload = 'auto'; el.src = /^(blob:|https?:)/.test(def.file) ? def.file : `assets/screen/video/${def.file}`;
+  S.vid = { def, el, needSync: true, userPaused: false };
+  el.volume = S.vidVol ?? .6; el.muted = !!S.vidMuted;
+  el.addEventListener('error', () => { toast('影片載入失敗', 1800); if (S.vid?.el === el) vidStop(); });
+  toast(`大螢幕播放：${def.name}（走近螢幕就會播，只有你看得到）`, 2600);
+}
+const vidClock = v => { const d = v.el.duration || v.def.duration || 1; return ((Date.now() - S.vidCfg.epoch) / 1000) % d; };
+function scrClose() {   // 螢幕上的關閉按鈕：關掉自己這邊的畫面（轉播或影片）；有新的遊戲轉播會自動再開
+  S.scrOff = true; vidStop();
+  toast('大螢幕已關閉（有新的遊戲開始轉播會自動打開）', 2200);
+}
+function vidPanel() {
+  if (S.vidPanelEl) return S.vidPanelEl;
+  const el = document.createElement('div'); el.id = 'vidPanel';
+  el.style.cssText = 'position:fixed;z-index:25;display:none;align-items:center;gap:6px;padding:3px 8px;background:rgba(14,16,24,.88);border:1px solid #8a7536;font:12px "Microsoft JhengHei",sans-serif;color:#e8e4d8;box-sizing:border-box';
   const mkb = (txt, tip, fn) => { const b = document.createElement('button'); b.className = 'ff-btn small'; b.textContent = txt; b.title = tip; b.onclick = fn; return b; };
-  S.ytB = {
-    play: mkb('⏸', '暫停／播放', () => ytCmd(S.ytInfo?.playerState === 2 ? 'playVideo' : 'pauseVideo')),
-    back: mkb('⏪10', '倒退 10 秒', () => ytCmd('seekTo', [Math.max(0, (S.ytInfo?.currentTime || 0) - 10), true])),
-    fwd: mkb('10⏩', '快轉 10 秒', () => ytCmd('seekTo', [(S.ytInfo?.currentTime || 0) + 10, true])),
-    mute: mkb('🔇', '靜音／開聲音', () => { if (S.ytInfo?.muted === false) ytCmd('mute'); else { ytCmd('unMute'); if (!(S.ytInfo?.volume > 0)) ytCmd('setVolume', [60]); } }),
+  const B = S.vidB = {
+    back: mkb('⏪10', '倒退 10 秒', () => { const v = S.vid; if (v) v.el.currentTime = Math.max(0, v.el.currentTime - 10); }),
+    play: mkb('⏸', '暫停／播放', () => { const v = S.vid; if (!v) return; if (v.el.paused) { v.userPaused = false; v.el.play().catch(() => { }); } else { v.userPaused = true; v.el.pause(); } }),
+    fwd: mkb('10⏩', '快轉 10 秒', () => { const v = S.vid; if (v) v.el.currentTime = (v.el.currentTime + 10) % (v.el.duration || 1e9); }),
+    mute: mkb('🔊', '靜音／開聲音', () => { S.vidMuted = !S.vidMuted; if (S.vid) S.vid.el.muted = S.vidMuted; }),
   };
-  const vol = document.createElement('input'); vol.type = 'range'; vol.min = 0; vol.max = 100; vol.value = 60; vol.style.cssText = 'width:90px;flex:none'; vol.title = '音量';
-  vol.oninput = () => { ytCmd('setVolume', [+vol.value]); if (+vol.value > 0) ytCmd('unMute'); };
-  S.ytB.vol = vol; S.ytB.time = document.createElement('span'); S.ytB.time.style.cssText = 'margin-left:auto;font-variant-numeric:tabular-nums';
-  el.append(S.ytB.back, S.ytB.play, S.ytB.fwd, S.ytB.mute, vol, S.ytB.time);
-  for (const ev of ['mousedown', 'click', 'contextmenu', 'wheel']) el.addEventListener(ev, e => e.stopPropagation());   // 不讓點面板變成遊戲裡的點擊
-  document.body.appendChild(el); return S.ytPanelEl = el;
+  const vol = B.vol = document.createElement('input'); vol.type = 'range'; vol.min = 0; vol.max = 100; vol.value = Math.round((S.vidVol ?? .6) * 100); vol.style.cssText = 'width:90px;flex:none'; vol.title = '音量';
+  vol.oninput = () => { S.vidVol = +vol.value / 100; S.vidMuted = false; if (S.vid) { S.vid.el.muted = false; } };
+  B.time = document.createElement('span'); B.time.style.cssText = 'margin-left:auto;font-variant-numeric:tabular-nums';
+  el.append(B.back, B.play, B.fwd, B.mute, vol, B.time);
+  for (const ev of ['mousedown', 'click', 'contextmenu', 'wheel']) el.addEventListener(ev, e => e.stopPropagation());   // 點面板不算遊戲裡的點擊
+  document.body.appendChild(el); return S.vidPanelEl = el;
 }
-function ytPanelSync() {
-  const i = S.ytInfo || {}, b = S.ytB; if (!b) return;
-  b.play.textContent = i.playerState === 2 ? '▶' : '⏸';
-  b.mute.textContent = i.muted === false && (i.volume ?? 1) > 0 ? '🔊' : '🔇';
-  if (document.activeElement !== b.vol && i.volume != null) b.vol.value = i.volume;
-  b.time.textContent = ytFmt(i.currentTime) + (i.duration || S.ytCfg?.duration ? ` / ${ytFmt(i.duration || S.ytCfg.duration)}` : '');
-}
-function ytTick() {
-  if (!S.ytOn && !S.ytFrame) return;   // 沒開過就什麼都不做（連 iframe 都不建）
-  const fr = S.ytFrame || (S.ytFrame = (() => { const f = document.createElement('iframe'); f.id = 'ytScreen'; f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen'; f.referrerPolicy = 'strict-origin-when-cross-origin'; f.setAttribute('allowfullscreen', ''); f.style.cssText = 'position:fixed;border:0;z-index:0;background:#000;display:none'; document.body.appendChild(f); canvas.style.position = 'relative'; canvas.style.zIndex = '1'; return f; /* iframe 放在畫布下面：螢幕位置的畫布像素挖成透明（drawScreenProp），影片從洞裡透出來，人物與家具就會畫在影片上面 */ })());
-  const pr = S.ytOn && S.terrain === 'peace' ? propsHere().find(p => p.kind === 'screen') : null;
-  const near = !!pr && !S.tableOpen && !S.players[0].dead && (!!S.scrView || propDist(pr, S.players[0].x, S.players[0].y) <= SCR_WATCH_DIST);
-  if (!near) { if (S.ytShown) { S.ytShown = false; S.ytInfo = null; fr.style.display = 'none'; fr.src = 'about:blank'; ytPanel().style.display = 'none'; } return; }
-  const c = S.ytCfg, r = propRect(pr), rc = canvas.getBoundingClientRect(), k = rc.width / canvas.width;
-  const x = rc.left + (r.x + (r.w - SCR_W) / 2 - S.cam.x) * k, y = rc.top + (r.y + 8 - S.cam.y) * k, w = SCR_W * k, h = SCR_H * k;
-  fr.style.left = x + 'px'; fr.style.top = y + 'px'; fr.style.width = w + 'px'; fr.style.height = h + 'px';
-  const cl = Math.max(0, rc.left - x), ct = Math.max(0, rc.top - y), cr = Math.max(0, x + w - rc.right), cb = Math.max(0, y + h - rc.bottom);   // 超出遊戲畫面的部分裁掉（不蓋到上方的按鈕列）
-  fr.style.clipPath = `inset(${ct}px ${cr}px ${cb}px ${cl}px)`;
-  const pn = ytPanel(); pn.style.display = 'flex'; pn.style.left = x + 'px'; pn.style.top = (y + h - 34 * k) + 'px'; pn.style.width = w + 'px'; pn.style.height = 34 * k + 'px'; pn.style.clipPath = fr.style.clipPath;   // 蓋在影片下緣
-  if (!S.ytShown) {
-    S.ytShown = true; S.ytInfo = null; fr.style.display = 'block'; fr.onload = () => { for (const t of [800, 3000]) setTimeout(() => fr.contentWindow?.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*'), t); };   // 讓播放器開始回報狀態
-    const base = new URLSearchParams(location.search).has('frame_id') ? c.discordBase : c.directBase;
-    const start = Math.floor(((Date.now() - c.epoch) / 1000) % c.duration);
-    fr.src = `${base}${c.videoId}?autoplay=1&mute=1&start=${start}&loop=1&playlist=${c.videoId}&rel=0&playsinline=1&enablejsapi=1`;
-  }
+const vidFmt = t => { t = Math.max(0, Math.floor(t || 0)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+function vidTick() {
+  const v = S.vid;
+  if (!v) { if (S.vidPanelEl) S.vidPanelEl.style.display = 'none'; return; }
+  const pr = S.terrain === 'peace' ? propsHere().find(p => p.kind === 'screen') : null;
+  const d = pr ? propDist(pr, S.players[0].x, S.players[0].y) : 1e9;
+  const near = !!pr && !S.scrOff && !S.tableOpen && !S.players[0].dead && (!!S.scrView || d <= SCR_WATCH_DIST);
+  const el = v.el;
+  if (!near) { if (!el.paused) { el.pause(); v.needSync = true; } if (S.vidPanelEl) S.vidPanelEl.style.display = 'none'; return; }
+  if (v.needSync && el.readyState >= 1) { el.currentTime = vidClock(v); v.needSync = false; }
+  if (el.paused && !v.userPaused && !v.needSync) el.play().catch(() => { el.muted = true; S.vidMuted = true; el.play().catch(() => { }); });   // 被瀏覽器擋掉有聲音的自動播放：先靜音播
+  el.volume = Math.max(0, Math.min(1, (S.vidVol ?? .6) * (S.scrView ? 1 : 1 - Math.max(0, d - 200) / (SCR_WATCH_DIST - 200))));   // 離螢幕越遠越小聲
+  if (!S.scrView) { if (S.vidPanelEl) S.vidPanelEl.style.display = 'none'; return; }   // 控制面板只在點眼睛觀看時出現
+  const pn = vidPanel(), B = S.vidB, rc = canvas.getBoundingClientRect(), k = rc.width / canvas.width, r = propRect(pr);
+  const x = rc.left + (r.x + (r.w - SCR_W) / 2 - S.cam.x) * k, y = rc.top + (r.y + r.h - S.cam.y) * k + 8, w = SCR_W * k;   // 螢幕外框下緣再往下 8px：不擋畫面
+  pn.style.display = y + 32 > rc.bottom ? 'none' : 'flex'; pn.style.left = x + 'px'; pn.style.top = y + 'px'; pn.style.width = w + 'px'; pn.style.height = '32px';
+  B.play.textContent = el.paused ? '▶' : '⏸'; B.mute.textContent = S.vidMuted || el.muted ? '🔇' : '🔊';
+  if (document.activeElement !== B.vol) B.vol.value = Math.round((S.vidVol ?? .6) * 100);
+  B.time.textContent = `${vidFmt(el.currentTime)} / ${vidFmt(el.duration || v.def.duration)}`;
 }
 function onNetScrCd(msg) { toast(`大螢幕剛切換過，${Math.ceil(msg.left / 1000)} 秒後才能再切`, 1800); }
 function onNetScrList(msg) {
@@ -6680,8 +6679,13 @@ function buildScrPick() {
   const body = $('scrBody'); body.innerHTML = '';
   const lst = S.scrList?.list || [];
   if (!S.scrList) { body.textContent = '讀取中…'; return; }
-  { const yt = document.createElement('div'); yt.className = 'scr-opt' + (S.ytOn ? ' cur' : ''); yt.innerHTML = `<span class="scr-name">YouTube 試播（實驗）</span><span class="scr-st">${S.ytOn ? '開著：走近螢幕就會播（只有你看得到）' : '只有你自己看得到；點一下開啟'}</span>`; yt.onclick = ytToggle; body.appendChild(yt);
- }
+  if (!S.vidCfg) vidDB().then(() => { if (S.scrPickOpen) buildScrPick(); });
+  for (const def of S.vidCfg?.videos || []) {   // 影片（自己放在專案裡的檔案；只有自己看得到）
+    const row = document.createElement('div'); row.className = 'scr-opt' + (S.vid?.def.id === def.id ? ' cur' : '');
+    row.innerHTML = `<span class="scr-name">▶ ${def.name}</span><span class="scr-st">影片　${S.vid?.def.id === def.id ? '播放中　' : ''}只有你自己看得到</span>`;
+    row.onclick = () => { vidPlay(def); closeScrPick(); };
+    body.appendChild(row);
+  }
   if (!lst.length) { const e = document.createElement('div'); e.className = 'ff-panel-hint'; e.textContent = '目前沒有進行中、或有人入座的遊戲。有人入座之後再來選。'; body.appendChild(e); return; }
   for (const it of lst) {
     const gd = gameDef(it.game), row = document.createElement('div');
@@ -6691,7 +6695,7 @@ function buildScrPick() {
     row.appendChild(a); row.appendChild(b);
     row.onclick = () => {
       if (Date.now() < (S.scrCdAt || 0)) { toast(`大螢幕剛切換過，${Math.ceil((S.scrCdAt - Date.now()) / 1000)} 秒後才能再切`, 1800); return; }
-      S.net?.tbl?.({ a: 'scr_pick', id: it.id }); closeScrPick();
+      S.scrOff = false; vidStop(); S.net?.tbl?.({ a: 'scr_pick', id: it.id }); closeScrPick();
     };
     body.appendChild(row);
   }
@@ -6703,12 +6707,24 @@ function drawScreenProp(pr, r) {
   ctx.fillStyle = '#12141c'; ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.fillStyle = '#2a2e3c'; ctx.fillRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
   const ix = r.x + (r.w - SCR_W) / 2, iy = r.y + 8;
-  if (S.ytShown) ctx.clearRect(ix, iy, SCR_W, SCR_H);   // YouTube 試播中：把螢幕位置挖成透明，下面的 iframe 透出來（人物畫在影片上面）
-  else {
+  const vd = S.vid && !S.scrOff && S.vid.el.readyState >= 2 ? S.vid.el : null;
+  if (S.scrOff) { ctx.fillStyle = '#07080c'; ctx.fillRect(ix, iy, SCR_W, SCR_H); }   // 手動關閉：黑屏
+  else if (vd) {   // 播自己的影片：保持比例、黑邊置中
+    ctx.fillStyle = '#000'; ctx.fillRect(ix, iy, SCR_W, SCR_H);
+    const ar = vd.videoWidth / vd.videoHeight, W = ar > SCR_W / SCR_H ? SCR_W : SCR_H * ar, H = ar > SCR_W / SCR_H ? SCR_W / ar : SCR_H;
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(vd, ix + (SCR_W - W) / 2, iy + (SCR_H - H) / 2, W, H); ctx.imageSmoothingEnabled = false;
+  } else {
     ctx.drawImage(S.scrCv, ix, iy, SCR_W, SCR_H);
     ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(ix, iy, SCR_W, 70);   // 玻璃反光
   }
-  ctx.fillStyle = S.scr ? '#5ae07a' : '#c85a5a'; ctx.fillRect(r.x + r.w - 20, r.y + r.h - 7, 5, 3);   // 電源燈
+  ctx.fillStyle = !S.scrOff && (S.scr || vd) ? '#5ae07a' : '#c85a5a'; ctx.fillRect(r.x + r.w - 20, r.y + r.h - 7, 5, 3);   // 電源燈
+  if (!S.scrOff && (S.scr || S.vid)) {   // 關閉按鈕（眼睛按鈕上面）：有在轉播或播影片才有
+    const c = scrCloseRect(pr), cx = c.x + c.w / 2, cy = c.y + c.h / 2;
+    ctx.save(); ctx.fillStyle = '#12141c'; ctx.fillRect(c.x, c.y, c.w, c.h); ctx.fillStyle = '#2a2e3c'; ctx.fillRect(c.x + 2, c.y + 2, c.w - 4, c.h - 4);
+    ctx.strokeStyle = '#e07a68'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - 7, cy - 7); ctx.lineTo(cx + 7, cy + 7); ctx.moveTo(cx + 7, cy - 7); ctx.lineTo(cx - 7, cy + 7); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.font = '10px "Microsoft JhengHei"'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#fff6e0'; ctx.strokeText('關閉', cx, c.y + c.h + 11); ctx.fillText('關閉', cx, c.y + c.h + 11);
+    ctx.restore();
+  }
   // 眼睛按鈕（觀看視角）：螢幕右下角外側
   const b = scrEyeRect(pr), on = !!S.scrView, ex = b.x + b.w / 2, ey = b.y + b.h / 2;
   ctx.save();
@@ -6723,6 +6739,11 @@ function drawScreenProp(pr, r) {
 }
 // 觀看視角（2026-11-16，使用者要求）：螢幕旁邊的眼睛按鈕，按下去角色不動、鏡頭拉到以螢幕為中心；角色一移動（或再按一次、換島、倒下）就回到跟隨角色。
 // 純客戶端：S.scrView＝按下時角色的位置（null＝沒開），鏡頭在 draw() 裡用 S.scrViewK（0～1）平滑過去；開著的時候不管離多遠都訂閱螢幕畫面（scrWatchTick）。
+function scrCloseRect(pr) { const r = propRect(pr); return { x: r.x + r.w + 8, y: r.y + r.h - 96, w: 32, h: 32 }; }   // 關閉按鈕：眼睛按鈕上面
+function scrCloseAt(wx, wy) {
+  const pr = S.terrain === 'peace' ? propsHere().find(p => p.kind === 'screen') : null; if (!pr || S.scrOff || !(S.scr || S.vid)) return false;
+  const b = scrCloseRect(pr); return wx >= b.x && wx < b.x + b.w && wy >= b.y && wy < b.y + b.h + 12;
+}
 function scrEyeRect(pr) { const r = propRect(pr); return { x: r.x + r.w + 8, y: r.y + r.h - 46, w: 32, h: 32 }; }
 function scrEyeAt(wx, wy) {
   const pr = S.terrain === 'peace' ? propsHere().find(p => p.kind === 'screen') : null; if (!pr) return false;
@@ -12310,7 +12331,7 @@ async function switchTerrain(id) {
     await ensureTerrain(id);      // 先載好圖，再切地形
     S.terrain = id; try { localStorage.setItem('dcisland.m0.terrain', id); } catch { /* 存不了不影響換地形 */ }
     S.remotes.clear();                          // 換了地形，原地形的人都看不到了
-    S.scr = null; S.scrList = null; S.scrWatching = false; closeScrPick(); scrRender();   // 大螢幕只在和平島；走近螢幕時才會送 scr_watch 收畫面
+    S.scr = null; S.scrList = null; S.scrWatching = false; S.scrOff = false; vidStop(); closeScrPick(); scrRender();   // 大螢幕只在和平島；走近螢幕時才會送 scr_watch 收畫面
     if (S.listOpen) { S.listSig = null; buildPlayerList(); }   // 線上列表開著：馬上清掉舊島的人，新島的人到了由計時器補上
     if (netOn()) { S.netFurn = []; S.netFloor = []; }   // 等伺服器送該地形的擺設與地板
     genWorld(id); loadLayout();
@@ -12874,6 +12895,7 @@ function clickAttack(wx, wy) {
   // 點到可坐/可睡的家具（椅子、沙發、床）→ 坐下/躺下；再點一次起身。長按自動連擊時不處理，避免反覆切換
   if (!onOwner && !quiet) {
     if (scrEyeAt(wx, wy)) { scrViewToggle(); return; }   // 大螢幕旁的眼睛按鈕：觀看視角（不用走近）
+    if (scrCloseAt(wx, wy)) { scrClose(); return; }   // 螢幕的關閉按鈕
     const f = furnAtPoint(wx, wy);
     if (f && furnitureDef(f.type)?.use) { usePose(f); return; }
     if (f && furnitureDef(f.type)?.text) { openSign(f); return; }
@@ -12951,6 +12973,7 @@ canvas.addEventListener('contextmenu', e => {
     const r = canvas.getBoundingClientRect(), wx = e.clientX - r.left + S.cam.x, wy = e.clientY - r.top + S.cam.y;
     const f = furnAtPoint(wx, wy), tb = tableAtPoint(wx, wy), pr = propAtPoint(wx, wy);
     if (scrEyeAt(wx, wy)) scrViewToggle();   // 右鍵點眼睛按鈕也一樣
+    else if (scrCloseAt(wx, wy)) scrClose();
     else if (pr) { if (propDist(pr, S.players[0].x, S.players[0].y) < PROP_RANGE) useProp(pr); else toast('走近一點', 1200); }   // 右鍵點餐飲區
     else if (f && furnitureDef(f.type)?.use) usePose(f);
     else if (f && furnitureDef(f.type)?.text) openSign(f);
@@ -13249,7 +13272,7 @@ async function boot() {
       }
       stepSkills();
       scrWatchTick();
-      ytTick();   // 大螢幕 YouTube 試播（實驗）
+      vidTick();   // 大螢幕播放自己放的影片
       updateSkillBar();
       updateStatBars();
       updateClock();     // 左上角的遊戲時間（時鐘、日期、季節）
