@@ -5981,6 +5981,8 @@ class Room:
         self.screen = {}         # 地形 -> 大螢幕目前轉播的桌 id（None＝關閉；2026-11-14，所有人共用）
         self.scr_last = {}       # 地形 -> 上一次送出的螢幕訊息（內容一樣就不重送）
         self.scr_cd = {}         # 地形 -> 手動切台冷卻到什麼時候（毫秒；全島共用，自動換台不算）
+        self.screen_vid = {}     # 地形 -> {"id","t0"}：螢幕正在播的影片（screen 的值是 "v:<影片 id>" 時；2026-11-19）
+        self.scr_hold = {}       # 地形 -> set(桌 id)：手動關閉螢幕那一刻已在進行的桌，不會把螢幕再打開（要等新開局）
         self.tlock = threading.Lock()   # 牌桌操作串行（table_op）
         self._xp_pending = []           # 對局結束待發的 XP：[(連線編號, XP)]（table_do 在鎖內收集、table_op 在鎖外發）
         self._gs_pending = []           # 對局結束待記的戰績：[(連線編號, 遊戲 id, 戰績增量)]
@@ -7185,6 +7187,9 @@ class Room:
 
     def _scr_msg(self, terr):
         tid = self.screen.get(terr)
+        if tid and tid.startswith("v:"):   # 影片頻道：客戶端用 vid.t0（伺服器時間）與 now 算出現在播到哪
+            sv = self.screen_vid.get(terr)
+            return {"t": "scr", "id": tid, "game": "video", "vid": sv, "now": int(time.time() * 1000)} if sv else {"t": "scr", "id": None}
         t = self.tables.get(tid) if tid else None
         if not t:
             return {"t": "scr", "id": None}
@@ -7200,7 +7205,7 @@ class Room:
 
     def _scr_resolve(self, terr):
         tid = self.screen.get(terr)
-        if not tid:
+        if not tid or tid.startswith("v:"):   # 影片不會因為沒人入座而被換掉
             return
         t = self.tables.get(tid)
         if t and t["seats"]:
@@ -7225,16 +7230,22 @@ class Room:
         if not terr:
             return
         self._scr_resolve(terr)
-        if not self.screen.get(terr):   # 螢幕關閉時有人開局：自動開始播（已經在播的時候不會被別桌搶走）
+        hold = self.scr_hold.get(terr)
+        if hold:   # 手動關閉時進行中的桌，結束之後再開的新局就算「新開局」
+            for hid in list(hold):
+                ht = self.tables.get(hid)
+                if not ht or not self._scr_playing(ht):
+                    hold.discard(hid)
+        if not self.screen.get(terr):   # 螢幕關閉時有人開局：自動開始播（已經在播的時候——遊戲或影片——不會被別桌搶走）
             t = self.tables.get(tid)
-            cands = [x for x in self._scr_active(terr) if self._scr_playing(x)]
+            cands = [x for x in self._scr_active(terr) if self._scr_playing(x) and not (hold and x["id"] in hold)]
             if cands:
                 self.screen[terr] = tid if t in cands else cands[0]["id"]
         self._scr_push(terr, out)
 
     def _scr_push(self, terr, out, force=False):
         msg = self._scr_msg(terr)
-        key = json.dumps(msg, sort_keys=True)
+        key = json.dumps({k: v for k, v in msg.items() if k != "now"}, sort_keys=True)   # 影片訊息的 now 每次不同，不算在「內容有沒有變」裡
         if not force and self.scr_last.get(terr) == key:
             return
         self.scr_last[terr] = key
@@ -7304,7 +7315,34 @@ class Room:
                 elif tid and any(x["id"] == tid for x in self._scr_active(terr)):
                     if self.screen.get(terr) != tid:
                         self.scr_cd[terr] = now_ms + SCR_CD_MS
+                    self.scr_hold.pop(terr, None)
                     self.screen[terr] = tid
+                    self._scr_push(terr, out, True)
+                return out, None, None
+            if a == "scr_vid":   # 大螢幕：播某一支影片（所有人共用；影片檔在客戶端，伺服器只驗 id 的格式；同一個冷卻）
+                vid = str(msg.get("id") or "")
+                now_ms = int(time.time() * 1000)
+                if not re.fullmatch(r"[a-z0-9_-]{1,40}", vid):
+                    return out, None, None
+                if now_ms < self.scr_cd.get(terr, 0):
+                    out.append((cid, {"t": "scrcd", "left": self.scr_cd[terr] - now_ms}))
+                else:
+                    if self.screen.get(terr) != "v:" + vid:
+                        self.scr_cd[terr] = now_ms + SCR_CD_MS
+                    self.scr_hold.pop(terr, None)
+                    self.screen[terr] = "v:" + vid
+                    self.screen_vid[terr] = {"id": vid, "t0": now_ms}
+                    self._scr_push(terr, out, True)
+                return out, None, None
+            if a == "scr_close":   # 大螢幕：關閉（轉播或影片都一樣，所有人共用；不另外加冷卻，但冷卻中不能關）
+                now_ms = int(time.time() * 1000)
+                if not self.screen.get(terr):
+                    return out, None, None
+                if now_ms < self.scr_cd.get(terr, 0):
+                    out.append((cid, {"t": "scrcd", "left": self.scr_cd[terr] - now_ms}))
+                else:
+                    self.scr_hold[terr] = {x["id"] for x in self._scr_active(terr) if self._scr_playing(x)}   # 現在進行中的桌不會把螢幕再打開
+                    self.screen[terr] = None
                     self._scr_push(terr, out, True)
                 return out, None, None
             if a == "rejoin":   # 斷線後連回來：用回座代碼接回保留中的座位；接不回去（過期／這一局已結束）回 v:None 讓客戶端關掉牌桌

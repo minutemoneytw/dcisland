@@ -4020,6 +4020,8 @@ export class Island {
     this.screen = new Map();         // 地形 → 大螢幕目前轉播的桌 id（null／沒有＝關閉；2026-11-14，所有人共用；只放記憶體）
     this.scrLast = new Map();        // 地形 → 上一次送出的螢幕訊息（內容一樣就不重送）
     this.scrCd = new Map();          // 地形 → 手動切台冷卻到什麼時候（毫秒；全島共用，自動換台不算）
+    this.screenVid = new Map();      // 地形 → { id, t0 }：螢幕正在播的影片（screen 的值是 "v:<影片 id>" 的時候；2026-11-19，影片檔在客戶端的 assets/screen/，伺服器只記「播哪一支、從什麼時候開始」，大家用同一個時間算進度；只放記憶體）
+    this.scrHold = new Map();        // 地形 → Set(桌 id)：手動關閉螢幕那一刻已經在進行的桌——它們不會把螢幕再打開，要等「新開局」才算（使用者定：螢幕關著、有新遊戲開始才自動跳過去）
     this.lastTblPos = new Map();     // ws → 上次躲彈幕位置回報的時間（TBL_POS_CD_MS）
     this.lastTblTyp = new Map();     // ws → 上次英打進度回報的時間（TBL_TYP_CD_MS）
     this.lastGameXp = new Map();     // 帳號 id → 上次玩小遊戲得 XP 的時間（GAME_XP_CD_MS；只放記憶體，休眠後重置無妨）
@@ -4488,21 +4490,27 @@ export class Island {
     }
   }
   scrMsg(terr) {
-    const tid = this.screen.get(terr), t = tid ? this.tables.get(tid) : null;
+    const tid = this.screen.get(terr);
+    if (tid && tid.startsWith("v:")) {   // 影片頻道：客戶端用 vid.t0（伺服器時間）與 now 算出現在播到哪
+      const sv = this.screenVid.get(terr);
+      return sv ? { t: "scr", id: tid, game: "video", vid: sv, now: Date.now() } : { t: "scr", id: null };
+    }
+    const t = tid ? this.tables.get(tid) : null;
     return t ? { t: "scr", id: tid, game: t.game, v: tblView(t, SCR_CID) } : { t: "scr", id: null };
   }
   scrResolve(terr) {
     const tid = this.screen.get(terr);
-    if (!tid) return;
+    if (!tid || tid.startsWith("v:")) return;   // 影片不會因為沒人入座而被換掉
     const t = this.tables.get(tid);
     if (t && t.seats.length) return;
     const cands = this.scrActive(terr).filter(x => this.scrPlaying(x) && x.id !== tid);
     this.screen.set(terr, cands.length ? cands[Math.floor(Math.random() * cands.length)].id : null);
   }
   scrPush(terr, force) {
-    const msg = this.scrMsg(terr), key = JSON.stringify(msg);
+    const msg = this.scrMsg(terr), { now: _n, ...rest } = msg, key = JSON.stringify(msg.game === "video" ? rest : msg);   // 影片訊息的 now 每次不同，不算在「內容有沒有變」裡
     if (!force && this.scrLast.get(terr) === key) return;
     this.scrLast.set(terr, key);
+    if (msg.game === "video") { const out = JSON.stringify(msg); for (const ws of this.state.getWebSockets()) { const a = ws.deserializeAttachment() || {}; if (a.terrain === terr && !a.table && a.scrWatch) { try { ws.send(out); } catch { /* 對方已斷線 */ } } } return; }
     for (const ws of this.state.getWebSockets()) {
       const a = ws.deserializeAttachment() || {};
       if (a.terrain === terr && !a.table && a.scrWatch) { try { ws.send(key); } catch { /* 對方已斷線 */ } }   // 只推給「走近螢幕」的人（客戶端送 scr_watch）
@@ -4510,8 +4518,10 @@ export class Island {
   }
   scrAfter(terr) {
     this.scrResolve(terr);
-    if (!this.screen.get(terr)) {   // 螢幕關閉時有人開局：自動開始播（已經在播的時候不會被別桌搶走）
-      const cands = this.scrActive(terr).filter(x => this.scrPlaying(x));
+    const hold = this.scrHold.get(terr);
+    if (hold) for (const id of [...hold]) { const t = this.tables.get(id); if (!t || !this.scrPlaying(t)) hold.delete(id); }   // 手動關閉時進行中的桌，結束之後再開的新局就算「新開局」
+    if (!this.screen.get(terr)) {   // 螢幕關閉時有人開局：自動開始播（已經在播的時候——遊戲或影片——不會被別桌搶走）
+      const cands = this.scrActive(terr).filter(x => this.scrPlaying(x) && !(hold && hold.has(x.id)));
       if (cands.length) this.screen.set(terr, cands[0].id);
     }
     this.scrPush(terr, false);
@@ -4679,7 +4689,26 @@ export class Island {
       if (now < (this.scrCd.get(terr) || 0)) ws.send(JSON.stringify({ t: "scrcd", left: this.scrCd.get(terr) - now }));   // 冷卻中（全島共用 5 秒）
       else if (tid && this.scrActive(terr).some(x => x.id === tid)) {
         if (this.screen.get(terr) !== tid) this.scrCd.set(terr, now + SCR_CD_MS);
-        this.screen.set(terr, tid); this.scrPush(terr, true);
+        this.scrHold.delete(terr); this.screen.set(terr, tid); this.scrPush(terr, true);
+      }
+      return;
+    }
+    if (a === "scr_vid") {   // 大螢幕：播某一支影片（所有人共用；影片檔在客戶端，伺服器只驗 id 的格式；同一個冷卻）
+      const vid = String(msg.id || "");
+      if (!/^[a-z0-9_-]{1,40}$/.test(vid)) return;
+      if (now < (this.scrCd.get(terr) || 0)) ws.send(JSON.stringify({ t: "scrcd", left: this.scrCd.get(terr) - now }));
+      else {
+        if (this.screen.get(terr) !== "v:" + vid) this.scrCd.set(terr, now + SCR_CD_MS);
+        this.scrHold.delete(terr); this.screen.set(terr, "v:" + vid); this.screenVid.set(terr, { id: vid, t0: now }); this.scrPush(terr, true);
+      }
+      return;
+    }
+    if (a === "scr_close") {   // 大螢幕：關閉（轉播或影片都一樣，所有人共用；不另外加冷卻，但冷卻中不能關）
+      if (!this.screen.get(terr)) return;
+      if (now < (this.scrCd.get(terr) || 0)) ws.send(JSON.stringify({ t: "scrcd", left: this.scrCd.get(terr) - now }));
+      else {
+        this.scrHold.set(terr, new Set(this.scrActive(terr).filter(x => this.scrPlaying(x)).map(x => x.id)));   // 現在進行中的桌不會把螢幕再打開
+        this.screen.set(terr, null); this.scrPush(terr, true);
       }
       return;
     }
