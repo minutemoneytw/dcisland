@@ -2281,8 +2281,6 @@ ELTHEN_PETS = {
         ("黃眼", {}), ("藍眼", dict(dh=160)), ("紅眼", dict(dh=-50)), ("綠眼", dict(dh=70)), ("紫眼", dict(dh=230))]),
     "squirrel": dict(file="squirrel.png", idle=_row(0, 0, 6), walk=_row(3, 0, 4), variants=[
         ("棕", {}), ("灰", dict(ms=.1, mv=1.1)), ("紅", dict(dh=-10, ms=1.2, mv=1.1)), ("白", dict(ms=.08, mv=1.5)), ("黑", dict(ms=.3, mv=.55))]),
-    "mouse": dict(file="mouse.png", idle=_row(0, 0, 12), walk=_row(1, 0, 12), variants=[
-        ("灰", {}), ("白", dict(col=(220, .04), mv=1.4)), ("棕", dict(col=(28, .5), mv=.8)), ("黑", dict(mv=.5)), ("米", dict(col=(42, .3), mv=1.1))]),
     "weasel": dict(file="weasel.png", idle=[(0, 0)], walk=_row(0, 0, 8), variants=[
         ("褐", {}), ("雪", dict(ms=.08, mv=1.5)), ("黑", dict(ms=.3, mv=.55)), ("金", dict(dh=12, ms=.9, mv=1.3)), ("灰", dict(ms=.12, mv=1.05))]),
     "phoenix": dict(file="phoenix.png", cs=64, idle=[(0, 0)], walk=_row(0, 0, 4), variants=[
