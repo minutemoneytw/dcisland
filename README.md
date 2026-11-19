@@ -184,6 +184,7 @@ git push              # 推到 main → GitHub Actions 自動部署（約 1 分�
 
 - **人物、服裝、武器**：LPC 素材（Universal-LPC-Spritesheet-Character-Generator，CC-BY-SA 3.0／GPL 3.0／OGA-BY 3.0 等，需標示作者）
 - **島主、營火與部分怪物**：使用者自製或提供的素材（img2pixel），以及 OpenGameArt 素材（CC0／CC-BY-SA 等）
+- **扭蛋寵物**：動物素材來自 **Elthen**（[Patreon](https://www.patreon.com/elthen)，Elthen's Common Sense License 1.0，我們改過顏色）；小狗來自 OpenGameArt「Dog spritesheets」，作者 **Jason of GDN**（CC0）
 - **其餘**（地形、家具、地板、魚、素材圖示、UI 圖示）：`tools/gen_assets.py` 畫的 placeholder
 - 每一項的來源與授權逐條記在 [`docs/assets-license.md`](docs/assets-license.md)；**引入外部素材一定要補記錄**
 
