@@ -133,7 +133,7 @@ export function petAtPoint(wx, wy) {   // 世界座標點到哪隻寵物（排�
 }
 export function petPat(pt) {
   pt.pat = 0;
-  pt.hearts = (pt.hearts || []).concat([-10, 2, 12].map((ox, i) => ({ ox, t: -i * .12, ph: i * 2 })));   // t 負的＝晚一點才冒出來
+  pt.hearts = (pt.hearts || []).concat([{ ox: Math.round(Math.random() * 10 - 5), t: 0, ph: Math.random() * 6 }]);   // 點一下一顆愛心（使用者定）
 }
 const HEART = ['.XX.XX.', 'XXXXXXX', 'XXXXXXX', '.XXXXX.', '..XXX..', '...X...'];
 function drawHeart(ctx, x, y, t) {

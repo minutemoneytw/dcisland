@@ -12801,7 +12801,7 @@ function clickAttack(wx, wy) {
     return od?.owner && !a.dead && Math.hypot(a.x - wx, a.y - wy) < 30 * (od.big || 1);
   });
   // 空手點寵物：玩家不揮拳，寵物被壓一下再彈回去＋愛心（長按自動連擊時不重複觸發、也不揮拳）
-  if (!onOwner && S.me.weapon === 'hands') { const pt = petAtPoint(wx, wy); if (pt) { if (!quiet) petPat(pt); return; } }
+  if (!onOwner && S.me.weapon === 'hands') { const pt = petAtPoint(wx, wy); if (pt) { if (!quiet) { aimAt(S.players[0], pt.x, pt.y); petPat(pt); } return; } }   // 摸的時候轉身面向寵物
   // 點到可坐/可睡的家具（椅子、沙發、床）→ 坐下/躺下；再點一次起身。長按自動連擊時不處理，避免反覆切換
   if (!onOwner && !quiet) {
     if (scrEyeAt(wx, wy)) { scrViewToggle(); return; }   // 大螢幕旁的眼睛按鈕：觀看視角（不用走近）
