@@ -6460,30 +6460,41 @@ function scrWatchTick() {
 // 影片檔放 assets/screen/video/，清單在 assets/screen/videos.json。**全島共用**（2026-11-19 使用者要求「大家一起看」）：選影片／關閉都送伺服器（scr_vid／scr_close，跟轉播同一個頻道與冷卻），
 // 伺服器只記「播哪一支、從什麼時候開始（t0，伺服器時間）」，每個人用 t0 與伺服器時間差算出現在播到哪，所以大家看到同一段。
 // 影片直接畫進螢幕的畫布（同網域、沒有 iframe），人物自然畫在上面。走近螢幕（或開觀看視角）才播、離開就暫停；聲音隨距離變小。
-// 控制面板（進度條／暫停／快轉／音量；直的）只在「點眼睛觀看」時出現，放在螢幕左邊不擋畫面；暫停、快轉只影響自己。
+// 控制面板（進度條／暫停／快轉／音量；直的）只在「點眼睛觀看」時出現，放在螢幕左邊不擋畫面。**暫停、繼續、快轉／倒退、拖進度條都是全島共用**（2026-11-19 使用者定：任何人都能控制、
+// 每次操作全島共用 5 秒冷卻、沒有「只影響自己」）：送 scr_ctl {op, pos}，伺服器改狀態再廣播，所有人一起動；靜音與音量只影響自己。
 // 螢幕在播影片時，新開局的遊戲**不會**自動跳過去；只有螢幕關著的時候，新遊戲開始才會自動打開（伺服器的 scrAfter 處理）。
 async function vidDB() { if (!S.vidCfg) { try { S.vidCfg = await loadJSON('assets/screen/videos.json'); } catch { S.vidCfg = { videos: [] }; } } return S.vidCfg; }
 function vidStop() {
   const v = S.vid; if (v) { v.el.pause(); v.el.removeAttribute('src'); v.el.load(); }
   S.vid = null; if (S.vidPanelEl) S.vidPanelEl.style.display = 'none';
 }
-function vidStart(def, t0, off) {   // 開始播（伺服器說螢幕現在在播這支）；t0＝伺服器時間的起點、off＝伺服器時間 − 本機時間
+function vidStart(def, t0, off, paused, pos) {   // 開始播（伺服器說螢幕現在在播這支）；t0＝伺服器時間的起點、off＝伺服器時間 − 本機時間；paused／pos＝共用的暫停狀態與暫停位置（秒）
   vidStop();
   const el = document.createElement('video'); el.playsInline = true; el.loop = true; el.preload = 'auto'; el.src = /^(blob:|https?:)/.test(def.file) ? def.file : `assets/screen/video/${def.file}`;
-  S.vid = { def, el, t0, off, needSync: true, userPaused: false };
+  S.vid = { def, el, t0, off, paused: !!paused, pos: pos || 0, needSync: true };
   el.volume = S.vidVol ?? .6; el.muted = !!S.vidMuted;
   el.addEventListener('error', () => { toast('影片載入失敗', 1800); if (S.vid?.el === el) vidStop(); });
 }
 function vidOnMsg(msg) {   // 伺服器的 scr 訊息：螢幕在播影片
   const v = msg.vid, off = msg.now - Date.now();
-  if (S.vid && S.vid.def.id === v.id && S.vid.t0 === v.t0) { S.vid.off = off; return; }   // 同一次播放（走近時重送）：不重來
+  const cur = S.vid;
+  if (cur && cur.def.id === v.id) {   // 同一支影片：只更新共用狀態（暫停／跳轉／走近時重送），不重來
+    cur.off = off;
+    if (cur.t0 !== v.t0 || cur.paused !== !!v.paused || cur.pos !== v.pos) { cur.t0 = v.t0; cur.paused = !!v.paused; cur.pos = v.pos || 0; cur.needSync = true; }
+    return;
+  }
   vidDB().then(db => {
     const def = (db.videos || []).find(x => x.id === v.id);
     if (!def) { toast('大螢幕在播的影片這個版本找不到', 2000); return; }
-    vidStart(def, v.t0, off);
+    vidStart(def, v.t0, off, v.paused, v.pos);
   });
 }
-const vidClock = v => { const d = v.el.duration || v.def.duration || 1; return (((Date.now() + v.off - v.t0) / 1000) % d + d) % d; };
+const vidClock = v => { const d = v.el.duration || v.def.duration || 1; return v.paused ? v.pos % d : (((Date.now() + v.off - v.t0) / 1000) % d + d) % d; };
+function vidCtl(op, pos) {   // 暫停／繼續／跳轉：送伺服器（全島共用、5 秒冷卻）；畫面等伺服器廣播回來才動
+  if (Date.now() < (S.vidCtlCdAt || 0)) { toast(`影片剛操作過，${Math.ceil((S.vidCtlCdAt - Date.now()) / 1000)} 秒後才能再操作`, 1600); return; }
+  S.vidCtlCdAt = Date.now() + 5000;
+  S.net?.tbl?.({ a: 'scr_ctl', op, pos });
+}
 function scrClose() {   // 螢幕上的關閉按鈕：送伺服器（全島共用）；有新的遊戲開始時，只有螢幕關著才會自動打開
   S.net?.tbl?.({ a: 'scr_close' });
 }
@@ -6494,13 +6505,13 @@ function vidPanel() {   // 直的面板：放在螢幕左邊（進度條、時�
   const mkb = (txt, tip, fn) => { const b = document.createElement('button'); b.className = 'ff-btn small'; b.textContent = txt; b.title = tip; b.onclick = fn; b.style.cssText = 'flex:1 1 0;min-width:0;padding:3px 0;margin:0;white-space:nowrap'; return b; };   // 三顆按鈕平分一列、不超出面板
   const lab = txt => { const d = document.createElement('div'); d.textContent = txt; d.style.cssText = 'color:#a09a86;font-size:11px;display:flex;justify-content:space-between'; return d; };
   const B = S.vidB = {
-    back: mkb('−10', '倒退 10 秒', () => { const v = S.vid; if (v) v.el.currentTime = Math.max(0, v.el.currentTime - 10); }),
-    play: mkb('⏸', '暫停／播放', () => { const v = S.vid; if (!v) return; if (v.el.paused) { v.userPaused = false; v.el.play().catch(() => { }); } else { v.userPaused = true; v.el.pause(); } }),
-    fwd: mkb('+10', '快轉 10 秒', () => { const v = S.vid; if (v) v.el.currentTime = (v.el.currentTime + 10) % (v.el.duration || 1e9); }),
+    back: mkb('−10', '倒退 10 秒（大家的螢幕一起）', () => { const v = S.vid; if (v) vidCtl('seek', Math.max(0, v.el.currentTime - 10)); }),
+    play: mkb('⏸', '暫停／播放（大家的螢幕一起）', () => { const v = S.vid; if (v) vidCtl(v.paused ? 'play' : 'pause', v.el.currentTime); }),
+    fwd: mkb('+10', '快轉 10 秒（大家的螢幕一起）', () => { const v = S.vid; if (v) vidCtl('seek', (v.el.currentTime + 10) % (v.el.duration || 1e9)); }),
     mute: mkb('🔊 靜音', '靜音／開聲音', () => { S.vidMuted = !S.vidMuted; if (S.vid) S.vid.el.muted = S.vidMuted; }),
   };
-  const seek = B.seek = document.createElement('input'); seek.type = 'range'; seek.min = 0; seek.max = 1000; seek.value = 0; seek.title = '進度（拖曳跳到想看的地方）'; seek.style.cssText = 'width:100%;margin:0;box-sizing:border-box';
-  seek.oninput = () => { const v = S.vid; if (v && v.el.duration) v.el.currentTime = seek.value / 1000 * v.el.duration; };
+  const seek = B.seek = document.createElement('input'); seek.type = 'range'; seek.min = 0; seek.max = 1000; seek.value = 0; seek.title = '進度（拖曳跳到想看的地方，大家的螢幕一起）'; seek.style.cssText = 'width:100%;margin:0;box-sizing:border-box';
+  seek.onchange = () => { const v = S.vid; if (v && v.el.duration) vidCtl('seek', seek.value / 1000 * v.el.duration); seek.blur(); };   // 放開才送（拖曳中不送），送完把焦點放掉讓進度條跟回伺服器的狀態
   const vol = B.vol = document.createElement('input'); vol.type = 'range'; vol.min = 0; vol.max = 100; vol.value = Math.round((S.vidVol ?? .6) * 100); vol.title = '音量'; vol.style.cssText = 'width:100%;margin:0;box-sizing:border-box';
   vol.oninput = () => { S.vidVol = +vol.value / 100; S.vidMuted = false; if (S.vid) { S.vid.el.muted = false; } };
   B.time = document.createElement('span'); B.volTxt = document.createElement('span');
@@ -6520,20 +6531,24 @@ function vidTick() {
   const el = v.el;
   if (!near) { if (!el.paused) { el.pause(); v.needSync = true; } if (S.vidPanelEl) S.vidPanelEl.style.display = 'none'; return; }
   if (v.needSync && el.readyState >= 1) { el.currentTime = vidClock(v); v.needSync = false; }
-  if (el.paused && !v.userPaused && !v.needSync) el.play().catch(() => { el.muted = true; S.vidMuted = true; el.play().catch(() => { }); });   // 被瀏覽器擋掉有聲音的自動播放：先靜音播
+  if (v.paused) { if (!el.paused) el.pause(); }   // 共用暫停：全部停在同一格
+  else if (el.paused && !v.needSync) el.play().catch(() => { el.muted = true; S.vidMuted = true; el.play().catch(() => { }); });   // 被瀏覽器擋掉有聲音的自動播放：先靜音播
   el.volume = Math.max(0, Math.min(1, (S.vidVol ?? .6) * (S.scrView ? 1 : 1 - Math.max(0, d - 200) / (SCR_WATCH_DIST - 200))));   // 離螢幕越遠越小聲
   if (!S.scrView) { if (S.vidPanelEl) S.vidPanelEl.style.display = 'none'; return; }   // 控制面板只在點眼睛觀看時出現
   const pn = vidPanel(), B = S.vidB, rc = canvas.getBoundingClientRect(), k = rc.width / canvas.width, r = propRect(pr);
   const x = rc.left + (r.x + (r.w - SCR_W) / 2 - S.cam.x) * k, y = rc.top + (r.y + 8 - S.cam.y) * k;   // 螢幕畫面的左上角；面板放在它的左邊（使用者定：做成直的放左邊，不擋畫面）
   const pw = 118, left = x - pw - 12;
   pn.style.display = left < rc.left || y + 170 > rc.bottom ? 'none' : 'flex'; pn.style.left = left + 'px'; pn.style.top = y + 'px';
-  B.play.textContent = el.paused ? '▶' : '⏸'; B.mute.textContent = S.vidMuted || el.muted ? '🔇 開聲音' : '🔊 靜音';
+  B.play.textContent = v.paused ? '▶' : '⏸'; B.mute.textContent = S.vidMuted || el.muted ? '🔇 開聲音' : '🔊 靜音';
   const dur = el.duration || v.def.duration || 1;
   if (document.activeElement !== B.seek) B.seek.value = Math.round(el.currentTime / dur * 1000);   // 拖曳時不被覆蓋
   if (document.activeElement !== B.vol) B.vol.value = Math.round((S.vidVol ?? .6) * 100);
   B.time.textContent = `${vidFmt(el.currentTime)} / ${vidFmt(dur)}`; B.volTxt.textContent = `${Math.round((S.vidVol ?? .6) * 100)}%`;
 }
-function onNetScrCd(msg) { toast(`大螢幕剛切換過，${Math.ceil(msg.left / 1000)} 秒後才能再切`, 1800); }
+function onNetScrCd(msg) {
+  if (msg.ctl) { S.vidCtlCdAt = Date.now() + msg.left; toast(`影片剛操作過，${Math.ceil(msg.left / 1000)} 秒後才能再操作`, 1600); return; }
+  toast(`大螢幕剛切換過，${Math.ceil(msg.left / 1000)} 秒後才能再切`, 1800);
+}
 function onNetScrList(msg) {
   S.scrList = msg; S.scrCdAt = Date.now() + (msg.cd || 0);
   if (S.scrPickOpen) buildScrPick();
