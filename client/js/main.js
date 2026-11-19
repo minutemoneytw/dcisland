@@ -12933,8 +12933,8 @@ function clickAttack(wx, wy) {
   if (!onOwner && S.me.weapon === 'hands') { const pt = petAtPoint(wx, wy); if (pt) { if (!quiet) { aimAt(S.players[0], pt.x, pt.y); petPat(pt); } return; } }   // 摸的時候轉身面向寵物
   // 點到可坐/可睡的家具（椅子、沙發、床）→ 坐下/躺下；再點一次起身。長按自動連擊時不處理，避免反覆切換
   if (!onOwner && !quiet) {
-    if (scrEyeAt(wx, wy)) { scrViewToggle(); return; }   // 大螢幕旁的眼睛按鈕：觀看視角（不用走近）
-    if (scrCloseAt(wx, wy)) { scrClose(); return; }   // 螢幕的關閉按鈕
+    if (scrEyeAt(wx, wy)) { S.mouseHeld = false; scrViewToggle(); return; }   // 大螢幕旁的眼睛按鈕：觀看視角（不用走近）。mousedown 已經把 mouseHeld 設成 true，不放掉的話「按住滑鼠面向游標」會把剛轉向螢幕的角色轉去游標方向
+    if (scrCloseAt(wx, wy)) { S.mouseHeld = false; scrClose(); return; }   // 螢幕的關閉按鈕
     const f = furnAtPoint(wx, wy);
     if (f && furnitureDef(f.type)?.use) { usePose(f); return; }
     if (f && furnitureDef(f.type)?.text) { openSign(f); return; }
