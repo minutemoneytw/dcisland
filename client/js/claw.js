@@ -11,7 +11,7 @@
 let DB = null, M = null, deps = null, box = null, ui = null, raf = 0, G = null;
 const sheets = {};   // 獎品圖（sheet 路徑 → Image）
 
-const W = 240, H = 200, FLOOR = 176, RAIL = 20, CHUTE = 46, X_MIN = 58, X_MAX = 226;   // 畫布大小、地板、軌道高度、出口右緣、爪子可走的左右範圍
+const W = 240, H = 200, FLOOR = 176, RAIL = 20, CHUTE = 46, X_MIN = 58, X_MAX = 226, HOME_X = 26;   // HOME_X＝出口（洞口）的位置：爪子一開始與每次結束都停在這裡（使用者定）   // 畫布大小、地板、軌道高度、出口右緣、爪子可走的左右範圍
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const loadSheet = src => sheets[src] || (sheets[src] = Object.assign(new Image(), { src }));
 
@@ -48,7 +48,7 @@ function newRound(prev) {
   const want = M.slots || 10;
   if (!prev) while (items.length < want) addItem(items);
   else if (items.length < Math.min(5, want)) while (items.length < want) addItem(items);   // 快被夾光了：補一批
-  return { items, cx: 140, cy: RAIL + 6, st: 'idle', t: 0, held: null, keys: {}, msg: '', pathT: 0 };
+  return { items, cx: HOME_X, cy: RAIL + 6, st: 'idle', t: 0, held: null, keys: {}, msg: '', pathT: 0 };
 }
 
 function sfx(list) { deps?.sfx?.(list); }
@@ -63,7 +63,7 @@ function releaseHeld(msg) {   // 爪子鬆手：獎品掉下去
 
 function step(dt) {
   const g = G, held = g.held;
-  if (g.st === 'idle') { const dx = ((g.keys.right ? 1 : 0) - (g.keys.left ? 1 : 0)) * 70 * dt; g.cx = Math.max(X_MIN, Math.min(X_MAX, g.cx + dx)); }
+  if (g.st === 'idle') { const dx = ((g.keys.right ? 1 : 0) - (g.keys.left ? 1 : 0)) * 70 * dt; g.cx = Math.max(HOME_X, Math.min(X_MAX, g.cx + dx)); }
   else if (g.st === 'down') {   // 往下，碰到最高的獎品（或地板）就停
     g.cy += 90 * dt;
     const surf = surfaceAt(g.items, g.cx - CLAW_SPREAD, g.cx + CLAW_SPREAD);
@@ -95,13 +95,13 @@ function step(dt) {
   } else if (g.st === 'carry') {
     if (!g.held) { g.st = 'back'; return; }   // 半路掉了：直接回中間
     g.cx -= 80 * dt; g.pathT += dt;
-    if (g.cx <= 26) { g.cx = 26; g.st = 'release'; g.t = 0; }
+    if (g.cx <= HOME_X) { g.cx = HOME_X; g.st = 'release'; g.t = 0; }
   } else if (g.st === 'release') {
     g.t += dt;
     if (g.t >= .3 && g.held) releaseHeld();
     if (g.t >= .5 && !g.held && !g.items.some(i => i.falling)) g.st = 'back';   // 掉完了（掉進出口的話 won 已經記下）
   } else if (g.st === 'back') {
-    g.cx += 90 * dt; if (g.cx >= 140) { g.cx = 140; finish(); return; }
+    g.cx = Math.max(HOME_X, g.cx - 90 * dt); if (g.cx <= HOME_X) { g.cx = HOME_X; finish(); return; }   // 回到洞口
   }
   if (held && g.slipAt >= 0 && g.pathT >= g.slipAt && g.st !== 'release') { releaseHeld('掉下去了…'); sfx([[330, 0, .05], [220, .05, .1]]); g.slipAt = -1; }
   if (g.held) {   // 被夾著的：跟著爪子，歪的獎品掛著晃（越不穩晃越大），偏移慢慢回正
