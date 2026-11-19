@@ -6454,6 +6454,34 @@ function scrWatchTick() {
     if (!want && S.scr) { S.scr = null; scrRender(); }   // 走遠了：畫面不再更新，先清掉免得顯示過期內容
   }
 }
+// ---- 大螢幕 YouTube 試播（2026-11-19，使用者要求「做一個 YouTube 播放試試看，我去 DC 上跑跑看，不能用再退版」；**實驗**）----
+// 只有自己看得到（本機的選項，不經伺服器）：在大螢幕的畫面位置蓋一個 YouTube 嵌入 iframe；走近螢幕（或開觀看視角）才載入、離開就清掉（停止出聲）。
+// 設定在 assets/screen/youtube.json（影片、長度、起算時刻：所有人用同一個起算時刻，所以大家看到的是同一段）。在 Discord 裡要先在 Portal 設 URL Mapping（見 json 說明）。
+// iframe 蓋在畫布上，所以會擋住走過螢幕前面的人（實驗版先不處理）。
+async function ytToggle() {
+  if (!S.ytCfg) { try { S.ytCfg = await loadJSON('assets/screen/youtube.json'); } catch { toast('讀不到 YouTube 設定', 1600); return; } }
+  S.ytOn = !S.ytOn;
+  toast(S.ytOn ? '大螢幕 YouTube 試播：走近螢幕就會開始（只有你看得到）' : '已關閉 YouTube 試播', 2200);
+  if (S.scrPickOpen) buildScrPick();
+}
+function ytTick() {
+  if (!S.ytOn && !S.ytFrame) return;   // 沒開過就什麼都不做（連 iframe 都不建）
+  const fr = S.ytFrame || (S.ytFrame = (() => { const f = document.createElement('iframe'); f.id = 'ytScreen'; f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen'; f.referrerPolicy = 'strict-origin-when-cross-origin'; f.setAttribute('allowfullscreen', ''); f.style.cssText = 'position:fixed;border:0;z-index:20;background:#000;display:none'; document.body.appendChild(f); return f; })());
+  const pr = S.ytOn && S.terrain === 'peace' ? propsHere().find(p => p.kind === 'screen') : null;
+  const near = !!pr && !S.tableOpen && !S.players[0].dead && (!!S.scrView || propDist(pr, S.players[0].x, S.players[0].y) <= SCR_WATCH_DIST);
+  if (!near) { if (S.ytShown) { S.ytShown = false; fr.style.display = 'none'; fr.src = 'about:blank'; } return; }
+  const c = S.ytCfg, r = propRect(pr), rc = canvas.getBoundingClientRect(), k = rc.width / canvas.width;
+  const x = rc.left + (r.x + (r.w - SCR_W) / 2 - S.cam.x) * k, y = rc.top + (r.y + 8 - S.cam.y) * k, w = SCR_W * k, h = SCR_H * k;
+  fr.style.left = x + 'px'; fr.style.top = y + 'px'; fr.style.width = w + 'px'; fr.style.height = h + 'px';
+  const cl = Math.max(0, rc.left - x), ct = Math.max(0, rc.top - y), cr = Math.max(0, x + w - rc.right), cb = Math.max(0, y + h - rc.bottom);   // 超出遊戲畫面的部分裁掉（不蓋到上方的按鈕列）
+  fr.style.clipPath = `inset(${ct}px ${cr}px ${cb}px ${cl}px)`;
+  if (!S.ytShown) {
+    S.ytShown = true; fr.style.display = 'block';
+    const base = new URLSearchParams(location.search).has('frame_id') ? c.discordBase : c.directBase;
+    const start = Math.floor(((Date.now() - c.epoch) / 1000) % c.duration);
+    fr.src = `${base}${c.videoId}?autoplay=1&mute=1&start=${start}&loop=1&playlist=${c.videoId}&rel=0&playsinline=1`;
+  }
+}
 function onNetScrCd(msg) { toast(`大螢幕剛切換過，${Math.ceil(msg.left / 1000)} 秒後才能再切`, 1800); }
 function onNetScrList(msg) {
   S.scrList = msg; S.scrCdAt = Date.now() + (msg.cd || 0);
@@ -6616,6 +6644,7 @@ function buildScrPick() {
   const body = $('scrBody'); body.innerHTML = '';
   const lst = S.scrList?.list || [];
   if (!S.scrList) { body.textContent = '讀取中…'; return; }
+  { const yt = document.createElement('div'); yt.className = 'scr-opt' + (S.ytOn ? ' cur' : ''); yt.innerHTML = `<span class="scr-name">YouTube 試播（實驗）</span><span class="scr-st">${S.ytOn ? '開著：走近螢幕就會播（只有你看得到）' : '只有你自己看得到；點一下開啟'}</span>`; yt.onclick = ytToggle; body.appendChild(yt); }
   if (!lst.length) { const e = document.createElement('div'); e.className = 'ff-panel-hint'; e.textContent = '目前沒有進行中、或有人入座的遊戲。有人入座之後再來選。'; body.appendChild(e); return; }
   for (const it of lst) {
     const gd = gameDef(it.game), row = document.createElement('div');
@@ -13180,6 +13209,7 @@ async function boot() {
       }
       stepSkills();
       scrWatchTick();
+      ytTick();   // 大螢幕 YouTube 試播（實驗）
       updateSkillBar();
       updateStatBars();
       updateClock();     // 左上角的遊戲時間（時鐘、日期、季節）
