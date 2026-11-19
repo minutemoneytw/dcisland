@@ -1646,7 +1646,7 @@ PROPS_BY_TERRAIN = {
               # 夾娃娃機與扭蛋機（2026-11-14，使用者要求）：俄羅斯方塊機台右側、靠北牆；底邊要跟俄羅斯方塊機台對齊（y＋h＝17.5，所以夾娃娃機比較高、y 從 14 開始）。先只做外觀框架（kind=deco：擋路、沒有名稱、不能互動），
               # 獎勵怎麼處理還沒決定，之後要開放時把 kind 改成新的互動種類（客戶端 propUse／useProp）
               # 扭蛋機（2026-11-19）已開放：kind＝gacha，走近按 F 開抽獎畫面（client/js/gacha.js，資料 assets/gacha/gacha.json，id 要對得上）
-              dict(id="claw", kind="deco", img="claw_machine.png", cell=[61, 14], w=3, h=3.5),
+              dict(id="claw", kind="claw", name="夾娃娃機", img="claw_machine.png", cell=[61, 14], w=3, h=3.5),
               dict(id="gacha", kind="gacha", name="扭蛋機", img="gacha_machine.png", cell=[65, 14.5], w=2, h=3),
               # 圍觀休息區（2026-11-14，使用者要求）：房間左上角。大螢幕＝水池水面（8×6）的 2 倍寬、1.5 倍高＝16×9 格（512×288 px，16:9），畫面由客戶端即時畫（kind＝screen，沒有圖）；
               # 前面鋪一塊休息區地毯。沒有在玩的人可以走到螢幕旁按 F 選轉播哪一桌（所有人共用），也能去餐飲區喝飲料
@@ -2223,6 +2223,25 @@ def arcade_cabinet(col):
     cv.rect(2, 46, 29, 47, dark)
     cv.outline()
     return cv
+
+# 夾娃娃機的暫代獎品圖（2026-11-19，使用者要求先預做框架）：6 隻不同顏色的小熊玩偶，16×16 一格、橫排。真正的獎品決定後換掉（assets/claw/claw.json 的 prizes）。
+CLAW_PLUSH_COLORS = ["#e8923a", "#f2a0c0", "#6b8cff", "#4ecdc4", "#c77dff", "#ffd166"]
+def claw_plush():
+    sheet = Canvas(16 * len(CLAW_PLUSH_COLORS), 16)
+    for i, col in enumerate(CLAW_PLUSH_COLORS):
+        cv = Canvas(16, 16); b = hx(col); d = shade(b, .78); l = shade(b, 1.25)
+        cv.ellipse(4, 3, 2, 2, b); cv.ellipse(11, 3, 2, 2, b)                     # 耳朵
+        cv.set(4, 3, hx("#f5a8a0")); cv.set(11, 3, hx("#f5a8a0"))
+        cv.ellipse(7.5, 6.5, 5, 4.5, b)                                            # 頭
+        cv.ellipse(7.5, 12, 4.5, 3.5, b)                                           # 身體
+        cv.rect(4, 14, 5, 15, d); cv.rect(9, 14, 11, 15, d)                        # 腳
+        cv.ellipse(7.5, 8, 2, 1.5, l)                                              # 口鼻
+        cv.set(5, 5, hx("#20202a")); cv.set(10, 5, hx("#20202a")); cv.set(7, 7, hx("#20202a")); cv.set(8, 7, hx("#20202a"))
+        cv.outline(hx("#1b1424"))
+        for y in range(16):
+            for x in range(16):
+                sheet.set(i * 16 + x, y, cv.get(x, y))
+    return sheet
 
 def claw_machine():
     """夾娃娃機（48×56，畫 scale 2＝3×3.5 格）：粉紅外殼與發光招牌、玻璃櫃裡堆著各色玩偶、頂端軌道垂下一支爪子，
@@ -4224,7 +4243,7 @@ def main():
     save(table_kingdom(), "table_kingdom.png", "games")
     save(table_bigtwo(), "table_bigtwo.png", "games")
     save(table_purify(), "table_purify.png", "games")
-    save(gacha_capsules(), "cap_halves.png", "gacha"); save(gacha_star(), "star.png", "gacha")
+    save(gacha_capsules(), "cap_halves.png", "gacha"); save(gacha_star(), "star.png", "gacha"); save(claw_plush(), "plush.png", "claw")   # 夾娃娃機暫代獎品
     for _sp, _spec in ELTHEN_PETS.items(): save(elthen_pet_sheet(_spec), _sp + ".png", "pets")   # 扭蛋寵物（Elthen 素材改色）   # 扭蛋殼（client/js/gacha.js）
     save(table_trigon(), "table_trigon.png", "games")
     for k, col in enumerate(ARCADE_COLORS):

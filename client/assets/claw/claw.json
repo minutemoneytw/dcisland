@@ -1,0 +1,17 @@
+{
+  "_說明": "夾娃娃機資料（手寫）。機台 id 要對得上 terrain.json 的 props（kind=claw）。slots＝每局擺幾個獎品、prizes＝獎品池（weight 省略＝1，決定出現在櫃子裡的機率；sheet／cell／cols／idx＝畫在櫃子與結果卡上的圖，圖是橫排格子）。目前 prizes 都是暫代的小熊玩偶，等使用者決定獎品再換；玩的條件（貨幣／次數）與發獎由 main.js 的 clawCanPlay／clawGrant 處理（還是空的）。",
+  "machines": {
+    "claw": {
+      "name": "夾娃娃機",
+      "slots": 8,
+      "prizes": [
+        { "id": "plush_orange", "name": "暫代玩偶・橘", "weight": 1, "sheet": "assets/claw/plush.png", "cell": [16, 16], "cols": 6, "idx": 0 },
+        { "id": "plush_pink", "name": "暫代玩偶・粉", "weight": 1, "sheet": "assets/claw/plush.png", "cell": [16, 16], "cols": 6, "idx": 1 },
+        { "id": "plush_blue", "name": "暫代玩偶・藍", "weight": 1, "sheet": "assets/claw/plush.png", "cell": [16, 16], "cols": 6, "idx": 2 },
+        { "id": "plush_teal", "name": "暫代玩偶・青", "weight": 1, "sheet": "assets/claw/plush.png", "cell": [16, 16], "cols": 6, "idx": 3 },
+        { "id": "plush_purple", "name": "暫代玩偶・紫", "weight": 1, "sheet": "assets/claw/plush.png", "cell": [16, 16], "cols": 6, "idx": 4 },
+        { "id": "plush_yellow", "name": "暫代玩偶・黃", "weight": 1, "sheet": "assets/claw/plush.png", "cell": [16, 16], "cols": 6, "idx": 5 }
+      ]
+    }
+  }
+}

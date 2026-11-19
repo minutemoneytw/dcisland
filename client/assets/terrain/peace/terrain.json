@@ -332,7 +332,8 @@
   },
   {
    "id": "claw",
-   "kind": "deco",
+   "kind": "claw",
+   "name": "夾娃娃機",
    "img": "claw_machine.png",
    "cell": [
     61,
