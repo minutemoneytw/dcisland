@@ -28,21 +28,26 @@ function surfaceAt(items, x0, x1, skip) {   // [x0, x1] 這段上面最高的東
   }
   return top;
 }
-function newRound() {   // 擺 N 個獎品：依權重抽（可重複）、隨機位置與傾斜，一個一個疊上去
-  const total = M.prizes.reduce((s, p) => s + (p.weight ?? 1), 0), items = [];
-  for (let i = 0; i < (M.slots || 10); i++) {
-    let t = Math.random() * total, pick = M.prizes[M.prizes.length - 1];
-    for (const p of M.prizes) { t -= p.weight ?? 1; if (t < 0) { pick = p; break; } }
-    const it = { p: pick, x: 0, y: 0, a: (Math.random() - .5) * 1.7, vy: 0, grabbed: false, falling: false, gone: false };
-    extent(it);
-    for (let tries = 0; tries < 12; tries++) {
-      it.x = X_MIN + it.hw + Math.random() * (X_MAX - X_MIN - it.hw * 2);
-      const top = surfaceAt(items, it.x - it.hw * .7, it.x + it.hw * .7);
-      it.y = top - it.hh;
-      if (it.y - it.hh > FLOOR - 46) break;   // 堆太高就換個位置
-    }
-    items.push(it);
+function addItem(items) {   // 抽一個獎品（依權重）、隨機傾斜，丟到目前的表面上
+  const total = M.prizes.reduce((s, p) => s + (p.weight ?? 1), 0);
+  let t = Math.random() * total, pick = M.prizes[M.prizes.length - 1];
+  for (const p of M.prizes) { t -= p.weight ?? 1; if (t < 0) { pick = p; break; } }
+  const it = { p: pick, x: 0, y: 0, a: (Math.random() - .5) * 1.7, vy: 0, grabbed: false, falling: false, gone: false };
+  extent(it);
+  for (let tries = 0; tries < 12; tries++) {
+    it.x = X_MIN + it.hw + Math.random() * (X_MAX - X_MIN - it.hw * 2);
+    const top = surfaceAt(items, it.x - it.hw * .7, it.x + it.hw * .7);
+    it.y = top - it.hh;
+    if (it.y - it.hh > FLOOR - 46) break;   // 堆太高就換個位置
   }
+  items.push(it);
+}
+// 擺獎品：prev＝上一局留下來的（不重刷，使用者定：離開再進來才重新擺；剩太少才補一些）
+function newRound(prev) {
+  const items = prev ? prev.filter(i => !i.gone) : [];
+  const want = M.slots || 10;
+  if (!prev) while (items.length < want) addItem(items);
+  else if (items.length < Math.min(5, want)) while (items.length < want) addItem(items);   // 快被夾光了：補一批
   return { items, cx: 140, cy: RAIL + 6, st: 'idle', t: 0, held: null, keys: {}, msg: '', pathT: 0 };
 }
 
@@ -73,10 +78,10 @@ function step(dt) {
       }
       if (best) {
         const dx = Math.abs(best.x - g.cx) / (CLAW_SPREAD + best.hw * .6), tilt = Math.min(Math.abs(best.a), 1.57) / 1.57;
-        const q = (1 - dx * .6 - tilt * .8 + (Math.random() - .5) * .3) * (best.p.grip ?? 1);   // 抓握穩定度：越偏中心、越歪越低
+        const q = (.72 - dx * .7 - tilt * .7 + (Math.random() - .5) * .25) * (best.p.grip ?? 1);   // 抓握穩定度（爪子鬆：就算對準、平正也只有 .72 上下）：越偏中心、越歪越低
         if (q >= .3) {
           best.grabbed = true; g.held = best; best.q = q; best.off = best.x - g.cx;
-          g.pathT = 0; g.slipAt = q >= .8 && Math.random() < .85 ? -1 : (Math.random() < 1.15 - q ? .3 + Math.random() * 2.8 : -1);   // 重心不穩的容易在半路掉
+          g.pathT = 0; g.slipAt = Math.random() < Math.max(.1, Math.min(.95, 1.3 - q * 1.1)) ? .3 + Math.random() * 2.8 : -1;   // 爪子鬆：就算夾得準也有約一半會在半路掉；越不穩越容易掉
         } else g.msg = '抓不穩…';
       } else g.msg = '沒夾到…';
       g.st = 'up'; g.t = 0; sfx([[220, 0, .06]]);
@@ -178,14 +183,14 @@ function showResult(prize, info) {
   im.style.cssText = `width:${Math.round(cw * k)}px;height:${Math.round(ch * k)}px;background:url(${prize.sheet}) no-repeat;background-size:${prize.cols * 100}% 100%;background-position:${prize.cols > 1 ? (prize.idx || 0) / (prize.cols - 1) * 100 : 0}% 0;image-rendering:pixelated`;
   card.append(el('div', 'cl-get', '夾到了！'), im, el('div', 'cl-name', prize.name));
   if (info.note) card.appendChild(el('div', 'cl-note', info.note));
-  const again = el('button', 'ff-btn', '再玩一次'); again.onclick = () => { ui.result.classList.add('hidden'); start(); };
+  const again = el('button', 'ff-btn', '再玩一次'); again.onclick = () => { ui.result.classList.add('hidden'); start(true); };
   const close_ = el('button', 'ff-btn', '關閉'); close_.onclick = () => close();
   const row = el('div', 'cl-btns'); row.append(again, close_); card.appendChild(row);
   ui.result.appendChild(card); ui.result.classList.remove('hidden');
 }
 
-function start() {
-  G = newRound(); setMsg('');
+function start(keep) {   // keep＝true：沿用上一局留下的獎品（「再玩一次」）；false：重新擺（剛打開機台）
+  G = newRound(keep && G ? G.items : null); setMsg('');
   if (!raf) raf = requestAnimationFrame(loop);
 }
 
@@ -225,7 +230,7 @@ export async function openClaw(id, d) {
   if (!box) build();
   for (const p of M.prizes) loadSheet(p.sheet);
   ui.title.textContent = M.name; ui.result.classList.add('hidden');
-  start(); box.classList.remove('hidden');
+  start(false); box.classList.remove('hidden');
   return true;
 }
 export function close() { if (!box) return; box.classList.add('hidden'); G = null; deps?.onClose?.(); }
