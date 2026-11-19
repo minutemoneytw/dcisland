@@ -2257,6 +2257,128 @@ def claw_machine():
     cv.outline()
     return cv
 
+# ---------------- 扭蛋寵物（2026-11-19，使用者要求：小貓／小狗／鸚鵡／倉鼠／兔子各 5 種品種或花色）----------------
+# 每種一張橫排 sheet（assets/pets/<種類>.png）：5 個品種 × 2 格走路幀，每格 16×16，朝右（client 往左走時翻面），客戶端放大 2 倍畫。
+# 圖樣是文字格：b 主色、d 暗部、l 淺色（肚子／口鼻）、k 花紋色、q 第二花紋色、p 粉色（耳內）、e 眼、n 鼻、y 嘴／腳；外框由 outline() 自動加。
+PET_TEMPLATES = {
+    "cat": [
+        "..........b..b..",
+        ".........bpbbpb.",
+        ".........bbqqbb.",
+        ".........bebbeb.",
+        ".........bllnll.",
+        ".b........bbbb..",
+        ".b.bbbbbbbbbbb..",
+        "..bbbkbkbbbbbb..",
+        "...bbbbbbllbbb..",
+        "...bbbbblllbbb..",
+        "...dbbbbbbbbbd..",
+        "...bb.bb..bb.bb.",
+        "...dd.dd..dd.dd.",
+    ],
+    "dog": [
+        "........bbbbbb..",
+        ".......dbbbbbbb.",
+        ".......dbebbebl.",
+        ".......dbbbllnl.",
+        "..b.....bbbbll..",
+        "..bb..bbbbbbb...",
+        "...bbbbbbkkbbb..",
+        "...bbbbbbkkbbb..",
+        "...bbbbblllbbb..",
+        "...dbbbbbbbbbd..",
+        "...bb.bb..bb.bb.",
+        "...dd.dd..dd.dd.",
+    ],
+    "parrot": [
+        "..........bbb...",
+        ".........bbbbb..",
+        ".........bebbyy.",
+        ".........bbbbyy.",
+        "..........bbby..",
+        "........bbbbbb..",
+        ".......bbbkbbbb.",
+        ".......bbkkkbbb.",
+        "......bbbkkkbb..",
+        "......bbbkkkb...",
+        ".....bbbbbbb....",
+        "....bbb.........",
+        "...kkk...y.y....",
+    ],
+    "hamster": [
+        ".........pb.bp..",
+        "....bbbbbbbbbb..",
+        "...bbbbbbbbbbbb.",
+        "...bbbbbbbbebbb.",
+        "...bbkkbbbbbbnl.",
+        "...bbkkbbllllb..",
+        "...bbbbbbbllbb..",
+        "....bbbbbbbbb...",
+        ".....pp...pp....",
+    ],
+    "rabbit": [
+        "..........bb.bb.",
+        "..........bp.bp.",
+        "..........bp.bp.",
+        ".........bbbbbb.",
+        ".........bebbeb.",
+        ".........bllnll.",
+        "...bbbbbbbbbbb..",
+        "..lbbbbkkbbbbb..",
+        "..llbbbkkbbbbb..",
+        "...lbbbbbllbbb..",
+        "....bbbbbbbbbb..",
+        "....bb.bb..bb.b.",
+        "....dd.dd..dd.d.",
+    ],
+}
+PET_VARIANTS = {   # 每個品種的色盤（b d l k q p e y n）；沒寫的沿用預設
+    "cat": [dict(b="#e8923a", d="#c47428", l="#fbe3c4", k="#b8641c", q="#e8923a", p="#f5a8a0"),
+            dict(b="#3a3a48", d="#26262f", l="#55556a", k="#3a3a48", q="#3a3a48", p="#c07890", e="#f0d040"),
+            dict(b="#f4f4f4", d="#d0d0d8", l="#ffffff", k="#f4f4f4", q="#f4f4f4", p="#f5a8a0"),
+            dict(b="#8a96aa", d="#6c778a", l="#c8d0dc", k="#6c778a", q="#8a96aa", p="#f5a8a0"),
+            dict(b="#f4f4f4", d="#d0d0d8", l="#ffffff", k="#e8923a", q="#3a3a48", p="#f5a8a0")],
+    "dog": [dict(b="#d99a50", d="#b07838", l="#fff0d8", k="#d99a50"),
+            dict(b="#3a3040", d="#2a2430", l="#c8964a", k="#3a3040", e="#f0f0f0"),
+            dict(b="#f2f2f2", d="#cfcfd8", l="#ffffff", k="#f2f2f2"),
+            dict(b="#7a4a2e", d="#5a3420", l="#c8a078", k="#7a4a2e", e="#f0f0f0"),
+            dict(b="#f4f4f4", d="#5a4030", l="#ffffff", k="#6a4a30")],
+    "parrot": [dict(b="#d83a3a", k="#3b78e8", y="#f0c020"),
+               dict(b="#3b78e8", k="#40c8e0", y="#2a2a30"),
+               dict(b="#3cb45a", k="#f0c020", y="#e8a030"),
+               dict(b="#f0d040", k="#f0a020", y="#e8884a"),
+               dict(b="#f4f4f4", k="#f0d040", y="#3a3a48")],
+    "hamster": [dict(b="#e0a850", k="#c88830", l="#fbe8c8", p="#f5a8a0"),
+                dict(b="#f6f2ee", k="#f6f2ee", l="#ffffff", p="#f5a8a0"),
+                dict(b="#98a0aa", k="#7c848e", l="#dde2e8", p="#f5a8a0"),
+                dict(b="#f0dcb0", k="#e0c890", l="#fff4dc", p="#f5a8a0"),
+                dict(b="#f6f2ee", k="#3a3a48", l="#ffffff", p="#f5a8a0")],
+    "rabbit": [dict(b="#f6f6f6", d="#d0d0d8", k="#f6f6f6", l="#ffffff", p="#f5a8a0"),
+               dict(b="#a8784a", d="#7a5232", k="#8a5c34", l="#e8d0b0", p="#e8a090"),
+               dict(b="#a0a4ac", d="#7c8088", k="#80848c", l="#e0e2e6", p="#f5a8a0"),
+               dict(b="#3a3a44", d="#26262c", k="#2a2a32", l="#5a5a68", p="#c07890", e="#f0d040"),
+               dict(b="#f6f6f6", d="#d0d0d8", k="#8a5c34", l="#ffffff", p="#f5a8a0")],
+}
+def pet_sheet(species):
+    tpl = PET_TEMPLATES[species]
+    rows = ["." * 16] + tpl
+    rows = (rows + ["." * 16] * 16)[:16]
+    sheet = Canvas(16 * 10, 16)
+    for vi, pal in enumerate(PET_VARIANTS[species]):
+        col = dict(b="#ccc", d="#999", l="#eee", k="#bbb", q="#bbb", p="#f5a8a0", e="#20202a", y="#e8a030", n="#20202a")
+        col.update(pal)
+        for fi in range(2):
+            cv = Canvas(16, 16)
+            for y, row in enumerate(rows):
+                assert len(row) == 16, (species, y, row)
+                for x, ch in enumerate(row):
+                    if ch != ".": cv.set(x, y - fi, hx(col[ch]))   # 第 2 格整隻往上 1 px（走路的小跳）
+            cv.outline(hx("#1b1424"))
+            for y in range(16):
+                for x in range(16):
+                    sheet.set((vi * 2 + fi) * 16 + x, y, cv.get(x, y))
+    return sheet
+
 GACHA_CAP_COLORS = ["#ff6b6b", "#ffd166", "#4ecdc4", "#6b8cff", "#c77dff", "#ff9f43"]   # 要跟 client/js/gacha.js 的 CAP_COLORS 一樣
 def gacha_capsules():
     """扭蛋殼的半顆圖（橫排 7 格、每格 16×8）：前 6 格是各色下半、第 7 格是透明（淡藍白）上半——跟一般扭蛋一樣透明在上、顏色在下。
@@ -4154,7 +4276,8 @@ def main():
     save(table_kingdom(), "table_kingdom.png", "games")
     save(table_bigtwo(), "table_bigtwo.png", "games")
     save(table_purify(), "table_purify.png", "games")
-    save(gacha_capsules(), "cap_halves.png", "gacha"); save(gacha_star(), "star.png", "gacha")   # 扭蛋殼（client/js/gacha.js）
+    save(gacha_capsules(), "cap_halves.png", "gacha"); save(gacha_star(), "star.png", "gacha")
+    for _sp in PET_TEMPLATES: save(pet_sheet(_sp), _sp + ".png", "pets")   # 扭蛋寵物   # 扭蛋殼（client/js/gacha.js）
     save(table_trigon(), "table_trigon.png", "games")
     for k, col in enumerate(ARCADE_COLORS):
         save(arcade_cabinet(col), f"arcade_{k}.png", "games")

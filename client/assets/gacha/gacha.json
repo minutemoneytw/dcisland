@@ -1,26 +1,232 @@
 {
-  "_說明": "扭蛋機資料（手寫，不由 gen_assets.py 產生）。機台 id 要對得上 terrain.json 的 props（kind=gacha）。rarities＝稀有度與抽中權重（總和不用剛好 100）；prizes＝獎品池（rarity 對應 rarities 的 id，weight 省略＝1，同稀有度內依權重抽）；pulls＝抽數按鈕（n＝抽幾顆，label＝按鈕字）。目前 prizes 都是範例，等使用者決定獎品再換；cost（抽的條件／貨幣）還沒決定，由 main.js 的 gachaCanPull 判斷。",
+  "_說明": "扭蛋機資料（手寫，不由 gen_assets.py 產生）。機台 id 要對得上 terrain.json 的 props（kind=gacha）。rarities＝稀有度與抽中權重（總和不用剛好 100）；prizes＝獎品池（rarity 對應 rarities 的 id，weight 省略＝1，同稀有度內依權重抽）；pulls＝抽數按鈕（n＝抽幾顆，label＝按鈕字，hidden＝true 先不顯示）。prizes 目前是全部 25 隻寵物（pet＝寵物 id，sheet／cell 是卡片上畫的圖，名稱與 client/assets/pets/pets.json 的 species 對應）、單一稀有度（先不分稀有度；只有一種稀有度時卡片不顯示稀有度標籤）；cost（抽的條件／貨幣）還沒決定，由 main.js 的 gachaCanPull 判斷。",
   "machines": {
     "gacha": {
-      "name": "扭蛋機",
+      "name": "寵物扭蛋機",
       "pulls": [
-        { "n": 1, "label": "1 抽" },
-        { "n": 11, "label": "10 + 1 抽" }
+        {
+          "n": 1,
+          "label": "1 抽"
+        },
+        {
+          "n": 5,
+          "label": "5 抽"
+        },
+        {
+          "n": 11,
+          "label": "10 + 1 抽",
+          "hidden": true
+        }
       ],
       "rarities": [
-        { "id": "N", "name": "普通", "color": "#c8d0dc", "weight": 70 },
-        { "id": "R", "name": "稀有", "color": "#5aa9ff", "weight": 22 },
-        { "id": "SR", "name": "超稀有", "color": "#c77dff", "weight": 6 },
-        { "id": "SSR", "name": "傳說", "color": "#ffd24a", "weight": 2 }
+        {
+          "id": "P",
+          "name": "寵物",
+          "color": "#7fd6ff",
+          "weight": 1
+        }
       ],
       "prizes": [
-        { "id": "sample_n1", "name": "範例獎品 A", "rarity": "N" },
-        { "id": "sample_n2", "name": "範例獎品 B", "rarity": "N" },
-        { "id": "sample_n3", "name": "範例獎品 C", "rarity": "N" },
-        { "id": "sample_r1", "name": "範例稀有 A", "rarity": "R" },
-        { "id": "sample_r2", "name": "範例稀有 B", "rarity": "R" },
-        { "id": "sample_sr1", "name": "範例超稀有", "rarity": "SR" },
-        { "id": "sample_ssr1", "name": "範例傳說", "rarity": "SSR" }
+        {
+          "id": "cat0",
+          "name": "小貓・橘虎斑",
+          "rarity": "P",
+          "pet": "cat0",
+          "sheet": "assets/pets/cat.png",
+          "cell": 0
+        },
+        {
+          "id": "cat1",
+          "name": "小貓・黑",
+          "rarity": "P",
+          "pet": "cat1",
+          "sheet": "assets/pets/cat.png",
+          "cell": 2
+        },
+        {
+          "id": "cat2",
+          "name": "小貓・白",
+          "rarity": "P",
+          "pet": "cat2",
+          "sheet": "assets/pets/cat.png",
+          "cell": 4
+        },
+        {
+          "id": "cat3",
+          "name": "小貓・灰藍",
+          "rarity": "P",
+          "pet": "cat3",
+          "sheet": "assets/pets/cat.png",
+          "cell": 6
+        },
+        {
+          "id": "cat4",
+          "name": "小貓・三花",
+          "rarity": "P",
+          "pet": "cat4",
+          "sheet": "assets/pets/cat.png",
+          "cell": 8
+        },
+        {
+          "id": "dog0",
+          "name": "小狗・柴犬",
+          "rarity": "P",
+          "pet": "dog0",
+          "sheet": "assets/pets/dog.png",
+          "cell": 0
+        },
+        {
+          "id": "dog1",
+          "name": "小狗・黑背",
+          "rarity": "P",
+          "pet": "dog1",
+          "sheet": "assets/pets/dog.png",
+          "cell": 2
+        },
+        {
+          "id": "dog2",
+          "name": "小狗・白",
+          "rarity": "P",
+          "pet": "dog2",
+          "sheet": "assets/pets/dog.png",
+          "cell": 4
+        },
+        {
+          "id": "dog3",
+          "name": "小狗・巧克力",
+          "rarity": "P",
+          "pet": "dog3",
+          "sheet": "assets/pets/dog.png",
+          "cell": 6
+        },
+        {
+          "id": "dog4",
+          "name": "小狗・花斑",
+          "rarity": "P",
+          "pet": "dog4",
+          "sheet": "assets/pets/dog.png",
+          "cell": 8
+        },
+        {
+          "id": "parrot0",
+          "name": "鸚鵡・紅",
+          "rarity": "P",
+          "pet": "parrot0",
+          "sheet": "assets/pets/parrot.png",
+          "cell": 0
+        },
+        {
+          "id": "parrot1",
+          "name": "鸚鵡・藍",
+          "rarity": "P",
+          "pet": "parrot1",
+          "sheet": "assets/pets/parrot.png",
+          "cell": 2
+        },
+        {
+          "id": "parrot2",
+          "name": "鸚鵡・綠",
+          "rarity": "P",
+          "pet": "parrot2",
+          "sheet": "assets/pets/parrot.png",
+          "cell": 4
+        },
+        {
+          "id": "parrot3",
+          "name": "鸚鵡・黃",
+          "rarity": "P",
+          "pet": "parrot3",
+          "sheet": "assets/pets/parrot.png",
+          "cell": 6
+        },
+        {
+          "id": "parrot4",
+          "name": "鸚鵡・白",
+          "rarity": "P",
+          "pet": "parrot4",
+          "sheet": "assets/pets/parrot.png",
+          "cell": 8
+        },
+        {
+          "id": "hamster0",
+          "name": "倉鼠・金黃",
+          "rarity": "P",
+          "pet": "hamster0",
+          "sheet": "assets/pets/hamster.png",
+          "cell": 0
+        },
+        {
+          "id": "hamster1",
+          "name": "倉鼠・白",
+          "rarity": "P",
+          "pet": "hamster1",
+          "sheet": "assets/pets/hamster.png",
+          "cell": 2
+        },
+        {
+          "id": "hamster2",
+          "name": "倉鼠・灰",
+          "rarity": "P",
+          "pet": "hamster2",
+          "sheet": "assets/pets/hamster.png",
+          "cell": 4
+        },
+        {
+          "id": "hamster3",
+          "name": "倉鼠・奶油",
+          "rarity": "P",
+          "pet": "hamster3",
+          "sheet": "assets/pets/hamster.png",
+          "cell": 6
+        },
+        {
+          "id": "hamster4",
+          "name": "倉鼠・花",
+          "rarity": "P",
+          "pet": "hamster4",
+          "sheet": "assets/pets/hamster.png",
+          "cell": 8
+        },
+        {
+          "id": "rabbit0",
+          "name": "兔子・白",
+          "rarity": "P",
+          "pet": "rabbit0",
+          "sheet": "assets/pets/rabbit.png",
+          "cell": 0
+        },
+        {
+          "id": "rabbit1",
+          "name": "兔子・棕",
+          "rarity": "P",
+          "pet": "rabbit1",
+          "sheet": "assets/pets/rabbit.png",
+          "cell": 2
+        },
+        {
+          "id": "rabbit2",
+          "name": "兔子・灰",
+          "rarity": "P",
+          "pet": "rabbit2",
+          "sheet": "assets/pets/rabbit.png",
+          "cell": 4
+        },
+        {
+          "id": "rabbit3",
+          "name": "兔子・黑",
+          "rarity": "P",
+          "pet": "rabbit3",
+          "sheet": "assets/pets/rabbit.png",
+          "cell": 6
+        },
+        {
+          "id": "rabbit4",
+          "name": "兔子・花",
+          "rarity": "P",
+          "pet": "rabbit4",
+          "sheet": "assets/pets/rabbit.png",
+          "cell": 8
+        }
       ]
     }
   }

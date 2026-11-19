@@ -1,7 +1,7 @@
 // 扭蛋機（2026-11-19，使用者要求：點了選 1 抽或 10+1 抽，有扭蛋掉出來的動畫與開蛋特效，11 抽是 5+5+1 顆快速照順序全部打開）
 // 只做「框架」：抽的條件（貨幣）與獎品內容之後再補。資料在 assets/gacha/gacha.json；抽的條件、發獎都是 main.js 傳進來的掛鉤：
 //   deps.canPull(M, n) → { ok, reason }   能不能抽（之後接貨幣）
-//   deps.grant(M, results)                抽到的獎品清單（之後接發放：寫進背包／衣櫥、同步伺服器）
+//   deps.grant(M, results)                抽到的獎品清單（發放；可回 { notes: [每顆的提示 {short, title} 或 null], msg } 顯示在卡片與結算列）
 //   deps.sfx(list)                        提示音（[[Hz, 開始秒, 長度秒]…]），可省略
 // 目前抽籤在客戶端（沒有任何東西會被帶走）。等獎品真的有價值時，抽籤要搬到伺服器（Worker＋dev_server 兩份），不然改封包就能指定結果。
 // 純 DOM＋CSS＋Web Animations，沒有 canvas，也不碰同步協定。
@@ -75,6 +75,7 @@ function setBusy(b) { busy = b; for (const x of ui.btns.querySelectorAll('button
 function buildButtons() {
   ui.btns.innerHTML = '';
   for (const p of M.pulls) {
+    if (p.hidden) continue;
     const b = el('button', 'ff-btn gc-pull', p.label); b.onclick = () => pull(p.n);
     ui.btns.appendChild(b);
   }
@@ -130,7 +131,7 @@ async function dropAll(slots, my) {
 }
 
 // 開蛋：蛋殼兩半飛開、閃光＋放射線、獎品卡跳出來。稀有度越高特效越大（SSR 全畫面閃光＋舞台震動）
-async function openCap(slot, cap, prize, big) {
+async function openCap(slot, cap, prize, big, note) {
   const rar = rarOf(M, prize.rarity), rank = M.rarities.indexOf(rar);
   slot.style.setProperty('--rc', rar.color);
   const burst = el('div', 'gc-burst gc-rk' + Math.min(rank, 3));
@@ -149,9 +150,12 @@ async function openCap(slot, cap, prize, big) {
   }
   const card = el('div', 'gc-card' + (big ? ' gc-big' : ''));
   card.style.setProperty('--rc', rar.color);
-  card.append(el('div', 'gc-rar', rar.id));
-  if (prize.img) { const im = el('img'); im.src = prize.img; im.draggable = false; card.appendChild(im); } else card.appendChild(el('div', 'gc-ico'));
+  if (M.rarities.length > 1) card.append(el('div', 'gc-rar', rar.id));   // 只有一種稀有度時不顯示標籤
+  if (prize.sheet) {   // 寵物之類的精靈圖：sheet 是橫排格子圖（10 格），cell 是第幾格
+    const sp = el('div', 'gc-pet'); sp.style.backgroundImage = `url(${prize.sheet})`; sp.style.backgroundPosition = `calc(${prize.cell || 0} / 9 * 100%) 0`; card.appendChild(sp);
+  } else if (prize.img) { const im = el('img'); im.src = prize.img; im.draggable = false; card.appendChild(im); } else card.appendChild(el('div', 'gc-ico'));
   card.append(el('div', 'gc-name', prize.name));
+  if (note) { const n = el('div', 'gc-note', note.short || note); if (note.title) card.title = note.title; card.appendChild(n); }
   card.style.opacity = '0'; slot.appendChild(card);
   await sleep(120);
   card.style.opacity = '';
@@ -167,7 +171,8 @@ async function pull(n) {
   const results = roll(M, n);
   const my = ++token; fast = false;
   setBusy(true); setMsg('');
-  try { deps.grant?.(M, results); } catch (e) { console.warn('gacha grant:', e); }
+  let info = {};
+  try { info = deps.grant?.(M, results) || {}; } catch (e) { console.warn('gacha grant:', e); }   // 回 { notes: [每顆的提示或 null], msg: 結算列的補充 }
   const slots = layout(n);
   const caps = await dropAll(slots, my);
   if (my !== token) return;
@@ -177,11 +182,11 @@ async function pull(n) {
     for (let k = 0; k < 3 && my === token; k++) await anim(caps[0], [{ transform: 'rotate(0)' }, { transform: 'rotate(-14deg)' }, { transform: 'rotate(12deg)' }, { transform: 'rotate(0)' }], { duration: 260 });
     await sleep(120);
   } else await sleep(260);
-  for (let i = 0; i < n && my === token; i++) { openCap(slots[i], caps[i], results[i], n === 1); await sleep(n === 1 ? 0 : 130); }
+  for (let i = 0; i < n && my === token; i++) { openCap(slots[i], caps[i], results[i], n === 1, info.notes?.[i]); await sleep(n === 1 ? 0 : 130); }
   await sleep(n === 1 ? 520 : 460);
   if (my !== token) return;
   const cnt = {}; for (const p of results) cnt[p.rarity] = (cnt[p.rarity] || 0) + 1;
-  setMsg(`獲得 ${n} 件　` + M.rarities.filter(r => cnt[r.id]).map(r => `${r.id}×${cnt[r.id]}`).join('　'));
+  setMsg(`獲得 ${n} 件` + (M.rarities.length > 1 ? '　' + M.rarities.filter(r => cnt[r.id]).map(r => `${r.id}×${cnt[r.id]}`).join('　') : '') + (info.msg ? `　${info.msg}` : ''));
   setBusy(false); fast = false;
 }
 

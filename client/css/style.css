@@ -564,6 +564,8 @@ body {
 #buffBar .buff { position: relative; width: 28px; height: 28px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; background: rgba(22, 25, 34, .72); border: 1px solid #5aa860; cursor: default; }
 #buffBar .buff.bad { border-color: #d05050; }
 #buffBar .bi { font-size: 16px; line-height: 1; }
+#buffBar .buff.pet { cursor: pointer; }
+#buffBar .bp { width: 24px; height: 24px; background-size: 1000% 100%; background-repeat: no-repeat; image-rendering: pixelated; }
 #buffBar .bt { position: absolute; right: 1px; bottom: -1px; font-size: 10px; font-weight: bold; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
 
 /* ---------- 列島建國（第十七桌 t17；2026-11-14）：卡面用文字＋顏色 ---------- */
@@ -714,6 +716,10 @@ body {
 .gc-card .gc-rar { position: absolute; top: 0; left: 0; padding: 0 3px; font-size: 10px; font-weight: bold; color: #14111f; background: var(--rc); line-height: 13px; }
 .gc-card .gc-ico { width: 22px; height: 22px; background: var(--rc); -webkit-mask: url(../assets/gacha/star.png) center / 100% 100% no-repeat; mask: url(../assets/gacha/star.png) center / 100% 100% no-repeat; image-rendering: pixelated; }
 .gc-card img { max-width: 70%; max-height: 50%; image-rendering: pixelated; }
+.gc-card .gc-pet { width: 32px; height: 32px; background-repeat: no-repeat; background-size: 1000% 100%; image-rendering: pixelated; }
+.gc-card.gc-big .gc-pet { width: 96px; height: 96px; }
+.gc-card .gc-note { font-size: 9px; color: #ffb070; text-align: center; line-height: 1.1; }
+.gc-card.gc-big .gc-note { font-size: 13px; margin-top: 2px; }
 .gc-card .gc-name { font-size: 11px; color: var(--text); text-shadow: 1px 1px 0 #000; text-align: center; line-height: 1.15; max-width: 100%; word-break: break-all; }
 .gc-card.gc-big { inset: 8px; }
 .gc-card.gc-big .gc-ico { width: 66px; height: 66px; }

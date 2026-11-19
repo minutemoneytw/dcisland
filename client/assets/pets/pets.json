@@ -1,0 +1,64 @@
+{
+ "_說明": "扭蛋寵物（手寫；sheet 由 tools/gen_assets.py 的 pet_sheet 產生：每種一張橫排圖，5 品種 × 2 格走路幀，每格 16×16、朝右）。寵物 id＝<種類><品種序號>（cat0～rabbit4）。max＝最多同時跟幾隻、minutes＝跟隨幾分鐘、gap＝串火車時前後間距（px）、scale＝畫面放大倍數。buff＝寵物的增益效果（還沒決定，先空著，只有圖示）。",
+ "max": 5,
+ "minutes": 10,
+ "gap": 26,
+ "scale": 2,
+ "species": {
+  "cat": {
+   "name": "小貓",
+   "sheet": "assets/pets/cat.png",
+   "variants": [
+    "橘虎斑",
+    "黑",
+    "白",
+    "灰藍",
+    "三花"
+   ]
+  },
+  "dog": {
+   "name": "小狗",
+   "sheet": "assets/pets/dog.png",
+   "variants": [
+    "柴犬",
+    "黑背",
+    "白",
+    "巧克力",
+    "花斑"
+   ]
+  },
+  "parrot": {
+   "name": "鸚鵡",
+   "sheet": "assets/pets/parrot.png",
+   "variants": [
+    "紅",
+    "藍",
+    "綠",
+    "黃",
+    "白"
+   ]
+  },
+  "hamster": {
+   "name": "倉鼠",
+   "sheet": "assets/pets/hamster.png",
+   "variants": [
+    "金黃",
+    "白",
+    "灰",
+    "奶油",
+    "花"
+   ]
+  },
+  "rabbit": {
+   "name": "兔子",
+   "sheet": "assets/pets/rabbit.png",
+   "variants": [
+    "白",
+    "棕",
+    "灰",
+    "黑",
+    "花"
+   ]
+  }
+ }
+}

@@ -1,4 +1,5 @@
 // DC島 — 遊戲本體（世界生成、移動、繪圖、戰鬥、動物、裝飾、造型、UI）。多人同步在 net.js，連線時以伺服器（Worker／dev_server）為準
+import { initPets, addPet, removePet, stepPets, petEntries, petList, petDef, petLeftMs } from './pets.js';   // 扭蛋寵物跟隨（2026-11-19）
 const CELL = 32, COLS = 108, ROWS = 72;   // 島放大：鏡頭跟隨（2026-11-09 前七座島半徑 ×1.5：88×56 → 108×72，島心 (43.5,27.5) → (53.5,35.5)；舊家具座標不遷移）
 const ISLAND_AREA = 2.25;   // 前七座島的面積倍數（半徑 1.5 倍）：野生動物數量照這個放大，素材（點綴物）本來就是每格機率，自動跟著多
 const VIEW_W = 29 * 32, VIEW_H = 17 * 32;
@@ -10625,7 +10626,15 @@ const propUse = pr => pr.kind === 'drink' || pr.kind === 'food' || pr.kind === '
 //   gachaGrant(M, results)                抽到的獎品清單（寫進背包／衣櫥、同步伺服器寫這裡）
 // 抽籤本身目前在客戶端；獎品有價值之後要搬到伺服器（見 gacha.js 開頭）。
 const gachaCanPull = (M, n) => ({ ok: true });
-const gachaGrant = (M, results) => { };
+function gachaGrant(M, results) {   // 抽到寵物就跟著玩家；已經 5 隻時照樣抽到、但不會出現，並提示
+  const notes = []; let full = false;
+  for (const pz of results) {
+    if (!pz.pet) { notes.push(null); continue; }
+    if (addPet(pz.pet) === 'full') { full = true; notes.push({ short: '已達上限', title: '跟隨寵物已達上限' }); } else notes.push(null);
+  }
+  if (full) { toast('跟隨寵物已達上限', 2000); return { notes, msg: '跟隨寵物已達上限' }; }
+  return { notes };
+}
 function openGachaProp(pr) {
   for (const k of Object.keys(keys)) keys[k] = false;   // 畫面蓋住後收不到 keyup，先放開按住的鍵
   S.mouseHeld = false;
@@ -10736,15 +10745,34 @@ function buffBarBuild() {
     el.innerHTML = `<span class="bi">${d.icon}</span><span class="bt"></span>`;
     bar.appendChild(el);
   }
-  bar.classList.toggle('hidden', !ks.length);
+  for (const pt of petList()) {   // 跟隨寵物：每隻一個增益圖示（右鍵取消跟隨）；效果還沒決定，現在只有圖示
+    const d = petDef(pt.id), el = document.createElement('div');
+    el.className = 'buff good pet'; el.title = d.name; el.dataset.pid = pt.uid;
+    el.innerHTML = `<span class="bp" style="background-image:url(${d.species.sheet});background-position:calc(${d.vi * 2} / 9 * 100%) 0"></span><span class="bt"></span>`;
+    bar.appendChild(el);
+  }
+  bar.classList.toggle('hidden', !ks.length && !petList().length);
   buffBarTick(true);
 }
 let buffTickAt = 0;
 function buffBarTick(force) {
   if (!force && S.t - buffTickAt < .2) return;
   buffTickAt = S.t;
-  for (const el of document.querySelectorAll('#buffBar .buff')) { const left = (S.foodFx[el.dataset.k] || 0) - S.t; el.querySelector('.bt').textContent = left > 0 ? Math.ceil(left) : ''; }
+  for (const el of document.querySelectorAll('#buffBar .buff')) {
+    if (el.dataset.pid) {   // 寵物：剩幾分鐘（最後一分鐘改顯示秒）
+      const pt = petList().find(p => p.uid === +el.dataset.pid), ms = pt ? petLeftMs(pt) : 0;
+      el.querySelector('.bt').textContent = ms > 60000 ? `${Math.ceil(ms / 60000)}m` : Math.ceil(ms / 1000);
+      continue;
+    }
+    const left = (S.foodFx[el.dataset.k] || 0) - S.t; el.querySelector('.bt').textContent = left > 0 ? Math.ceil(left) : '';
+  }
 }
+$('buffBar').addEventListener('contextmenu', e => {   // 右鍵寵物圖示＝取消跟隨（寵物消失）
+  e.preventDefault();
+  const el = e.target.closest?.('.buff.pet'); if (!el) return;
+  const pt = removePet(+el.dataset.pid);
+  if (pt) toast(`${petDef(pt.id)?.name ?? '寵物'}離開了`, 1400);
+});
 // 畫面濾鏡：視覺受損＝黑白、噁心＝畫面扭曲（SVG 位移濾鏡，波動跟著時間變）、神清氣爽＝亮一點、飽和一點
 let foodFilterKey = '';
 function foodScreenFilter() {
@@ -11534,6 +11562,7 @@ function draw() {
   }
   tableDrawEntries(list);   // 和平島遊戲桌
   propDrawEntries(list);    // 和平島餐飲區
+  petEntries(list, ctx);    // 跟隨寵物
   // 掉落物
   for (const dr of S.drops) {
     const def = S.toolsDB.items[dr.item] || matDef(dr.item), icon = S.craftImgs[dr.item];
@@ -13001,7 +13030,7 @@ let welcomeUntil = 0;
 async function boot() {
   $('btnDecor').disabled = false;
   // manifest：互不相依，一次全部並行抓（以前是一個接一個，首次進島要等一長串往返）
-  const [tjson, furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB, craftDB, gamesDB] = await Promise.all([
+  const [tjson, furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB, craftDB, gamesDB, petsDB] = await Promise.all([
     Promise.all(TERRAIN_IDS.map(id => loadJSON(`assets/terrain/${id}/terrain.json`))),
     loadJSON('assets/furniture/furniture.json'),
     loadJSON('assets/floors/floors.json'),
@@ -13015,6 +13044,7 @@ async function boot() {
     loadJSON('assets/jobs/jobs.json'),          // 職業（職能、職業武器、裝備、技能）
     loadJSON('assets/craft/craft.json').catch(() => null),   // 合成素材與配方；讀不到就沒有合成功能
     loadJSON('assets/games/games.json').catch(() => null),   // 和平島遊戲桌的遊戲定義；讀不到就沒有遊戲桌
+    loadJSON('assets/pets/pets.json').catch(() => null),     // 扭蛋寵物（種類／品種／上限）；讀不到就沒有寵物
   ]);
   TERRAIN_IDS.forEach((id, i) => S.terrains[id] = tjson[i]);
   Object.assign(S, { furn, floors, mobsDB, npcDB, toolsDB, avatar, fishDB, skillsDB, titlesDB, jobsDB });
@@ -13022,6 +13052,7 @@ async function boot() {
   loadJobs(jobsDB);
   initCraft(craftDB);
   S.gamesDB = gamesDB;
+  initPets(petsDB, buffBarBuild);   // 還原上次還沒過期的寵物
   S.myLook = myLook;   // net.js 送 state 時用（自己的顯示造型）
   S.myLvl = () => lvInfo(S.profile.xp).lv;   // net.js 送 state 時用（自己的等級；登入者由伺服器覆寫）
   S.floorSizes = new Map(floors.items.map(f => [f.id, { w: f.w || 1, h: f.h || 1 }]));   // 地板占幾格（地毯 2×2，其餘 1×1）
@@ -13115,6 +13146,7 @@ async function boot() {
       autoAttack();
       for (const p of S.players) stepPlayer(p, dt);
       stepFood(S.players[0]);   // 餐飲區吃喝的效果：中毒扣血、打嗝、過期、畫面濾鏡
+      stepPets(dt, S.players[0]);   // 跟隨寵物：串火車、過期
       if (S.mouseCell && S.mouseClient) {      // 裝飾模式邊走邊擺：鏡頭在動，滑鼠指的格子要跟著重算
         const r = canvas.getBoundingClientRect();
         S.mouseCell = [Math.floor((S.mouseClient[0] - r.left + S.cam.x) / CELL), Math.floor((S.mouseClient[1] - r.top + S.cam.y) / CELL)];
