@@ -8,15 +8,20 @@ const KEY = 'dcisland.m0.pets';
 let DB = null, list = [], seq = 0, onChange = () => { }, me0 = null;   // me0＝最近一次看到的玩家（新寵物先站在最後一隻／玩家身上）
 const imgs = {};
 const frames = {};   // 每一格先切成自己的小畫布：直接從整張 sheet 切來畫，縮放／位移時會漏出相鄰格的邊（走路時像沒擦乾淨的線）
-function frameOf(sid, idx) {
-  const key = sid + ':' + idx;
+function frameOf(sid, vi, col) {   // 第 vi 個品種（列）的第 col 格（欄）
+  const key = `${sid}:${vi}:${col}`;
   if (!frames[key]) {
-    const im = imgs[sid]; if (!im?.complete || !im.naturalWidth) return null;
-    const c = document.createElement('canvas'); c.width = c.height = 16;
-    c.getContext('2d').drawImage(im, idx * 16, 0, 16, 16, 0, 0, 16, 16);
+    const im = imgs[sid], sp = DB.species[sid]; if (!im?.complete || !im.naturalWidth) return null;
+    const [cw, ch] = sp.cell, c = document.createElement('canvas'); c.width = cw; c.height = ch;
+    c.getContext('2d').drawImage(im, col * cw, vi * ch, cw, ch, 0, 0, cw, ch);
     frames[key] = c;
   }
   return frames[key];
+}
+// 增益列／卡片用的小圖樣式：把「待機那格」縮放塞進 box×box
+export function petIconStyle(d, box = 24) {
+  const [cw, ch] = d.species.cell, k = Math.min(box / cw, box / ch), sp = d.species;
+  return `width:${Math.round(cw * k)}px;height:${Math.round(ch * k)}px;background-image:url(${sp.sheet});background-size:${sp.cols * 100}% ${sp.rows * 100}%;background-position:0 ${sp.rows > 1 ? d.vi / (sp.rows - 1) * 100 : 0}%`;
 }
 
 export const petDef = id => {   // 'cat2' → { sid, vi, species, name }
@@ -59,10 +64,12 @@ export function stepPets(dt, me) {
   me0 = { x: me.x, y: me.y };
   const now = Date.now();
   if (list.some(p => p.until <= now)) { list = list.filter(p => p.until > now); save(); onChange(); }
-  const FOLLOW = DB.follow ?? 56, STOP = DB.stop ?? 40;
+  const FOLLOW0 = DB.follow ?? 56, STOP0 = DB.stop ?? 40, sc = DB.scale ?? 2;
+  const wOf = pt => (petDef(pt.id)?.species.cell[0] ?? 16) * sc;   // 寵物畫面寬度（長的寵物要留更寬的間距，不然會疊在一起）
   if (list.length && Math.hypot(me.x - list[0].x, me.y - list[0].y) > 420) for (const pt of list) { pt.x = me.x; pt.y = me.y; pt.go = false; }   // 換地圖／傳送：直接跟過來
   list.forEach((pt, k) => {
     const lead = k ? list[k - 1] : me, dx = lead.x - pt.x, dy = lead.y - pt.y, d = Math.hypot(dx, dy);
+    const STOP = Math.max(STOP0, ((k ? wOf(lead) : 32) + wOf(pt)) / 2 + 8), FOLLOW = STOP + (FOLLOW0 - STOP0);
     if (!pt.go && d > FOLLOW) pt.go = true;
     else if (pt.go && d <= STOP) pt.go = false;
     let spd = 0;
@@ -80,19 +87,20 @@ export function stepPets(dt, me) {
 // 畫面：每隻一個 y 排序項目（跟角色、家具一起排）
 export function petEntries(entries, ctx) {
   if (!DB) return;
-  const sc = DB.scale ?? 2, W = 16 * sc;
+  const sc = DB.scale ?? 2;
   for (const pt of list) {
     const d = petDef(pt.id), im = imgs[d?.sid]; if (!d || !im?.complete || !im.naturalWidth) continue;
+    const sp = d.species, [cw, ch] = sp.cell, W = cw * sc, H = ch * sc;
     entries.push({
       y: pt.y, draw: () => {
         const cyc = pt.ph * Math.PI, hop = pt.moving ? Math.abs(Math.sin(cyc)) : 0;
-        const fr = pt.moving ? (Math.floor(pt.ph) % 2) : 0, lift = Math.round(hop * (2 + Math.min(2, pt.spd / 120))), sway = pt.moving ? Math.round(Math.sin(cyc) * 1.2) : 0;   // 全部取整數像素：不旋轉、不縮放，邊緣才不會糊或漏線
-        const fc = frameOf(d.sid, d.vi * 2 + fr); if (!fc) return;
+        const col = pt.moving ? sp.walk[Math.floor(pt.ph * (sp.rate ?? 1)) % sp.walk.length] : 0, lift = Math.round(hop * (2 + Math.min(2, pt.spd / 120))), sway = pt.moving ? Math.round(Math.sin(cyc) * 1.2) : 0;   // 全部取整數像素：不旋轉、不縮放，邊緣才不會糊或漏線
+        const fc = frameOf(d.sid, d.vi, col); if (!fc) return;
         ctx.save(); ctx.imageSmoothingEnabled = false;
-        ctx.fillStyle = 'rgba(10,14,20,.28)'; ctx.beginPath(); ctx.ellipse(pt.x, pt.y - 1, W * (.3 - hop * .04), W * .09, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(10,14,20,.28)'; ctx.beginPath(); ctx.ellipse(pt.x, pt.y - 1, W * (.34 - hop * .04), Math.max(3, H * .12), 0, 0, Math.PI * 2); ctx.fill();
         ctx.translate(Math.round(pt.x), Math.round(pt.y) - lift);
         if (pt.face < 0) ctx.scale(-1, 1);
-        ctx.drawImage(fc, 0, 0, 16, 16, -W / 2 + sway, -W + 2, W, W);
+        ctx.drawImage(fc, 0, 0, cw, ch, -W / 2 + sway, -H + (sp.drop ?? 0) * sc, W, H);
         ctx.restore();
       }
     });

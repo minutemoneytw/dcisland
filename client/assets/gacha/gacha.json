@@ -1,5 +1,5 @@
 {
-  "_說明": "扭蛋機資料（手寫，不由 gen_assets.py 產生）。機台 id 要對得上 terrain.json 的 props（kind=gacha）。rarities＝稀有度與抽中權重（總和不用剛好 100）；prizes＝獎品池（rarity 對應 rarities 的 id，weight 省略＝1，同稀有度內依權重抽）；pulls＝抽數按鈕（n＝抽幾顆，label＝按鈕字，hidden＝true 先不顯示）。prizes 目前是全部 25 隻寵物（pet＝寵物 id，sheet／cell 是卡片上畫的圖，名稱與 client/assets/pets/pets.json 的 species 對應）、單一稀有度（先不分稀有度；只有一種稀有度時卡片不顯示稀有度標籤）；cost（抽的條件／貨幣）還沒決定，由 main.js 的 gachaCanPull 判斷。",
+  "_說明": "扭蛋機資料（手寫，不由 gen_assets.py 產生）。機台 id 要對得上 terrain.json 的 props（kind=gacha）。rarities＝稀有度與抽中權重（總和不用剛好 100）；prizes＝獎品池（rarity 對應 rarities 的 id，weight 省略＝1，同稀有度內依權重抽）；pulls＝抽數按鈕（n＝抽幾顆，label＝按鈕字，hidden＝true 先不顯示）。prizes 目前是全部寵物（種類×品種）（pet＝寵物 id，sheet／cell／cols／rows／row 是卡片上畫的圖（待機那格），名稱與 client/assets/pets/pets.json 的 species 對應）、單一稀有度（先不分稀有度；只有一種稀有度時卡片不顯示稀有度標籤）；cost（抽的條件／貨幣）還沒決定，由 main.js 的 gachaCanPull 判斷。",
   "machines": {
     "gacha": {
       "name": "寵物扭蛋機",
@@ -29,203 +29,913 @@
       "prizes": [
         {
           "id": "cat0",
-          "name": "小貓・橘虎斑",
+          "name": "小貓・銀灰",
           "rarity": "P",
           "pet": "cat0",
           "sheet": "assets/pets/cat.png",
-          "cell": 0
+          "cell": [
+            17,
+            11
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 0
         },
         {
           "id": "cat1",
-          "name": "小貓・黑",
+          "name": "小貓・橘",
           "rarity": "P",
           "pet": "cat1",
           "sheet": "assets/pets/cat.png",
-          "cell": 2
+          "cell": [
+            17,
+            11
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 1
         },
         {
           "id": "cat2",
-          "name": "小貓・白",
+          "name": "小貓・黑",
           "rarity": "P",
           "pet": "cat2",
           "sheet": "assets/pets/cat.png",
-          "cell": 4
+          "cell": [
+            17,
+            11
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 2
         },
         {
           "id": "cat3",
-          "name": "小貓・灰藍",
+          "name": "小貓・奶油",
           "rarity": "P",
           "pet": "cat3",
           "sheet": "assets/pets/cat.png",
-          "cell": 6
+          "cell": [
+            17,
+            11
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 3
         },
         {
           "id": "cat4",
-          "name": "小貓・三花",
+          "name": "小貓・褐",
           "rarity": "P",
           "pet": "cat4",
           "sheet": "assets/pets/cat.png",
-          "cell": 8
+          "cell": [
+            17,
+            11
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 4
         },
         {
-          "id": "dog0",
-          "name": "小狗・柴犬",
+          "id": "fox0",
+          "name": "狐狸・赤",
           "rarity": "P",
-          "pet": "dog0",
-          "sheet": "assets/pets/dog.png",
-          "cell": 0
+          "pet": "fox0",
+          "sheet": "assets/pets/fox.png",
+          "cell": [
+            22,
+            15
+          ],
+          "cols": 15,
+          "rows": 5,
+          "row": 0
         },
         {
-          "id": "dog1",
-          "name": "小狗・黑背",
+          "id": "fox1",
+          "name": "狐狸・雪",
           "rarity": "P",
-          "pet": "dog1",
-          "sheet": "assets/pets/dog.png",
-          "cell": 2
+          "pet": "fox1",
+          "sheet": "assets/pets/fox.png",
+          "cell": [
+            22,
+            15
+          ],
+          "cols": 15,
+          "rows": 5,
+          "row": 1
         },
         {
-          "id": "dog2",
-          "name": "小狗・白",
+          "id": "fox2",
+          "name": "狐狸・銀",
           "rarity": "P",
-          "pet": "dog2",
-          "sheet": "assets/pets/dog.png",
-          "cell": 4
+          "pet": "fox2",
+          "sheet": "assets/pets/fox.png",
+          "cell": [
+            22,
+            15
+          ],
+          "cols": 15,
+          "rows": 5,
+          "row": 2
         },
         {
-          "id": "dog3",
-          "name": "小狗・巧克力",
+          "id": "fox3",
+          "name": "狐狸・黑",
           "rarity": "P",
-          "pet": "dog3",
-          "sheet": "assets/pets/dog.png",
-          "cell": 6
+          "pet": "fox3",
+          "sheet": "assets/pets/fox.png",
+          "cell": [
+            22,
+            15
+          ],
+          "cols": 15,
+          "rows": 5,
+          "row": 3
         },
         {
-          "id": "dog4",
-          "name": "小狗・花斑",
+          "id": "fox4",
+          "name": "狐狸・金",
           "rarity": "P",
-          "pet": "dog4",
-          "sheet": "assets/pets/dog.png",
-          "cell": 8
+          "pet": "fox4",
+          "sheet": "assets/pets/fox.png",
+          "cell": [
+            22,
+            15
+          ],
+          "cols": 15,
+          "rows": 5,
+          "row": 4
         },
         {
-          "id": "parrot0",
-          "name": "鸚鵡・紅",
+          "id": "redpanda0",
+          "name": "小熊貓・赤",
           "rarity": "P",
-          "pet": "parrot0",
-          "sheet": "assets/pets/parrot.png",
-          "cell": 0
+          "pet": "redpanda0",
+          "sheet": "assets/pets/redpanda.png",
+          "cell": [
+            20,
+            12
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 0
         },
         {
-          "id": "parrot1",
-          "name": "鸚鵡・藍",
+          "id": "redpanda1",
+          "name": "小熊貓・金",
           "rarity": "P",
-          "pet": "parrot1",
-          "sheet": "assets/pets/parrot.png",
-          "cell": 2
+          "pet": "redpanda1",
+          "sheet": "assets/pets/redpanda.png",
+          "cell": [
+            20,
+            12
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 1
         },
         {
-          "id": "parrot2",
-          "name": "鸚鵡・綠",
+          "id": "redpanda2",
+          "name": "小熊貓・灰",
           "rarity": "P",
-          "pet": "parrot2",
-          "sheet": "assets/pets/parrot.png",
-          "cell": 4
+          "pet": "redpanda2",
+          "sheet": "assets/pets/redpanda.png",
+          "cell": [
+            20,
+            12
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 2
         },
         {
-          "id": "parrot3",
-          "name": "鸚鵡・黃",
+          "id": "redpanda3",
+          "name": "小熊貓・黑",
           "rarity": "P",
-          "pet": "parrot3",
-          "sheet": "assets/pets/parrot.png",
-          "cell": 6
+          "pet": "redpanda3",
+          "sheet": "assets/pets/redpanda.png",
+          "cell": [
+            20,
+            12
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 3
         },
         {
-          "id": "parrot4",
-          "name": "鸚鵡・白",
+          "id": "redpanda4",
+          "name": "小熊貓・雪",
           "rarity": "P",
-          "pet": "parrot4",
-          "sheet": "assets/pets/parrot.png",
-          "cell": 8
+          "pet": "redpanda4",
+          "sheet": "assets/pets/redpanda.png",
+          "cell": [
+            20,
+            12
+          ],
+          "cols": 7,
+          "rows": 5,
+          "row": 4
         },
         {
-          "id": "hamster0",
-          "name": "倉鼠・金黃",
+          "id": "mouse0",
+          "name": "老鼠・灰",
           "rarity": "P",
-          "pet": "hamster0",
-          "sheet": "assets/pets/hamster.png",
-          "cell": 0
+          "pet": "mouse0",
+          "sheet": "assets/pets/mouse.png",
+          "cell": [
+            20,
+            11
+          ],
+          "cols": 13,
+          "rows": 5,
+          "row": 0
         },
         {
-          "id": "hamster1",
-          "name": "倉鼠・白",
+          "id": "mouse1",
+          "name": "老鼠・白",
           "rarity": "P",
-          "pet": "hamster1",
-          "sheet": "assets/pets/hamster.png",
-          "cell": 2
+          "pet": "mouse1",
+          "sheet": "assets/pets/mouse.png",
+          "cell": [
+            20,
+            11
+          ],
+          "cols": 13,
+          "rows": 5,
+          "row": 1
         },
         {
-          "id": "hamster2",
-          "name": "倉鼠・灰",
+          "id": "mouse2",
+          "name": "老鼠・棕",
           "rarity": "P",
-          "pet": "hamster2",
-          "sheet": "assets/pets/hamster.png",
-          "cell": 4
+          "pet": "mouse2",
+          "sheet": "assets/pets/mouse.png",
+          "cell": [
+            20,
+            11
+          ],
+          "cols": 13,
+          "rows": 5,
+          "row": 2
         },
         {
-          "id": "hamster3",
-          "name": "倉鼠・奶油",
+          "id": "mouse3",
+          "name": "老鼠・黑",
           "rarity": "P",
-          "pet": "hamster3",
-          "sheet": "assets/pets/hamster.png",
-          "cell": 6
+          "pet": "mouse3",
+          "sheet": "assets/pets/mouse.png",
+          "cell": [
+            20,
+            11
+          ],
+          "cols": 13,
+          "rows": 5,
+          "row": 3
         },
         {
-          "id": "hamster4",
-          "name": "倉鼠・花",
+          "id": "mouse4",
+          "name": "老鼠・米",
           "rarity": "P",
-          "pet": "hamster4",
-          "sheet": "assets/pets/hamster.png",
-          "cell": 8
+          "pet": "mouse4",
+          "sheet": "assets/pets/mouse.png",
+          "cell": [
+            20,
+            11
+          ],
+          "cols": 13,
+          "rows": 5,
+          "row": 4
         },
         {
-          "id": "rabbit0",
-          "name": "兔子・白",
+          "id": "weasel0",
+          "name": "小貂・褐",
           "rarity": "P",
-          "pet": "rabbit0",
-          "sheet": "assets/pets/rabbit.png",
-          "cell": 0
+          "pet": "weasel0",
+          "sheet": "assets/pets/weasel.png",
+          "cell": [
+            29,
+            12
+          ],
+          "cols": 9,
+          "rows": 5,
+          "row": 0
         },
         {
-          "id": "rabbit1",
-          "name": "兔子・棕",
+          "id": "weasel1",
+          "name": "小貂・雪",
           "rarity": "P",
-          "pet": "rabbit1",
-          "sheet": "assets/pets/rabbit.png",
-          "cell": 2
+          "pet": "weasel1",
+          "sheet": "assets/pets/weasel.png",
+          "cell": [
+            29,
+            12
+          ],
+          "cols": 9,
+          "rows": 5,
+          "row": 1
         },
         {
-          "id": "rabbit2",
-          "name": "兔子・灰",
+          "id": "weasel2",
+          "name": "小貂・黑",
           "rarity": "P",
-          "pet": "rabbit2",
-          "sheet": "assets/pets/rabbit.png",
-          "cell": 4
+          "pet": "weasel2",
+          "sheet": "assets/pets/weasel.png",
+          "cell": [
+            29,
+            12
+          ],
+          "cols": 9,
+          "rows": 5,
+          "row": 2
         },
         {
-          "id": "rabbit3",
-          "name": "兔子・黑",
+          "id": "weasel3",
+          "name": "小貂・金",
           "rarity": "P",
-          "pet": "rabbit3",
-          "sheet": "assets/pets/rabbit.png",
-          "cell": 6
+          "pet": "weasel3",
+          "sheet": "assets/pets/weasel.png",
+          "cell": [
+            29,
+            12
+          ],
+          "cols": 9,
+          "rows": 5,
+          "row": 3
         },
         {
-          "id": "rabbit4",
-          "name": "兔子・花",
+          "id": "weasel4",
+          "name": "小貂・灰",
           "rarity": "P",
-          "pet": "rabbit4",
-          "sheet": "assets/pets/rabbit.png",
-          "cell": 8
+          "pet": "weasel4",
+          "sheet": "assets/pets/weasel.png",
+          "cell": [
+            29,
+            12
+          ],
+          "cols": 9,
+          "rows": 5,
+          "row": 4
+        },
+        {
+          "id": "porcupine0",
+          "name": "豪豬・灰",
+          "rarity": "P",
+          "pet": "porcupine0",
+          "sheet": "assets/pets/porcupine.png",
+          "cell": [
+            19,
+            16
+          ],
+          "cols": 6,
+          "rows": 5,
+          "row": 0
+        },
+        {
+          "id": "porcupine1",
+          "name": "豪豬・棕",
+          "rarity": "P",
+          "pet": "porcupine1",
+          "sheet": "assets/pets/porcupine.png",
+          "cell": [
+            19,
+            16
+          ],
+          "cols": 6,
+          "rows": 5,
+          "row": 1
+        },
+        {
+          "id": "porcupine2",
+          "name": "豪豬・黑",
+          "rarity": "P",
+          "pet": "porcupine2",
+          "sheet": "assets/pets/porcupine.png",
+          "cell": [
+            19,
+            16
+          ],
+          "cols": 6,
+          "rows": 5,
+          "row": 2
+        },
+        {
+          "id": "porcupine3",
+          "name": "豪豬・白",
+          "rarity": "P",
+          "pet": "porcupine3",
+          "sheet": "assets/pets/porcupine.png",
+          "cell": [
+            19,
+            16
+          ],
+          "cols": 6,
+          "rows": 5,
+          "row": 3
+        },
+        {
+          "id": "porcupine4",
+          "name": "豪豬・藍灰",
+          "rarity": "P",
+          "pet": "porcupine4",
+          "sheet": "assets/pets/porcupine.png",
+          "cell": [
+            19,
+            16
+          ],
+          "cols": 6,
+          "rows": 5,
+          "row": 4
+        },
+        {
+          "id": "hedgehog0",
+          "name": "刺蝟・灰",
+          "rarity": "P",
+          "pet": "hedgehog0",
+          "sheet": "assets/pets/hedgehog.png",
+          "cell": [
+            17,
+            10
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 0
+        },
+        {
+          "id": "hedgehog1",
+          "name": "刺蝟・棕",
+          "rarity": "P",
+          "pet": "hedgehog1",
+          "sheet": "assets/pets/hedgehog.png",
+          "cell": [
+            17,
+            10
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 1
+        },
+        {
+          "id": "hedgehog2",
+          "name": "刺蝟・黑",
+          "rarity": "P",
+          "pet": "hedgehog2",
+          "sheet": "assets/pets/hedgehog.png",
+          "cell": [
+            17,
+            10
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 2
+        },
+        {
+          "id": "hedgehog3",
+          "name": "刺蝟・白",
+          "rarity": "P",
+          "pet": "hedgehog3",
+          "sheet": "assets/pets/hedgehog.png",
+          "cell": [
+            17,
+            10
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 3
+        },
+        {
+          "id": "hedgehog4",
+          "name": "刺蝟・粉",
+          "rarity": "P",
+          "pet": "hedgehog4",
+          "sheet": "assets/pets/hedgehog.png",
+          "cell": [
+            17,
+            10
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 4
+        },
+        {
+          "id": "squirrel0",
+          "name": "松鼠・棕",
+          "rarity": "P",
+          "pet": "squirrel0",
+          "sheet": "assets/pets/squirrel.png",
+          "cell": [
+            19,
+            14
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 0
+        },
+        {
+          "id": "squirrel1",
+          "name": "松鼠・灰",
+          "rarity": "P",
+          "pet": "squirrel1",
+          "sheet": "assets/pets/squirrel.png",
+          "cell": [
+            19,
+            14
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 1
+        },
+        {
+          "id": "squirrel2",
+          "name": "松鼠・紅",
+          "rarity": "P",
+          "pet": "squirrel2",
+          "sheet": "assets/pets/squirrel.png",
+          "cell": [
+            19,
+            14
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 2
+        },
+        {
+          "id": "squirrel3",
+          "name": "松鼠・白",
+          "rarity": "P",
+          "pet": "squirrel3",
+          "sheet": "assets/pets/squirrel.png",
+          "cell": [
+            19,
+            14
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 3
+        },
+        {
+          "id": "squirrel4",
+          "name": "松鼠・黑",
+          "rarity": "P",
+          "pet": "squirrel4",
+          "sheet": "assets/pets/squirrel.png",
+          "cell": [
+            19,
+            14
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 4
+        },
+        {
+          "id": "phoenix0",
+          "name": "鳳凰・赤焰",
+          "rarity": "P",
+          "pet": "phoenix0",
+          "sheet": "assets/pets/phoenix.png",
+          "cell": [
+            23,
+            24
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 0
+        },
+        {
+          "id": "phoenix1",
+          "name": "鳳凰・藍焰",
+          "rarity": "P",
+          "pet": "phoenix1",
+          "sheet": "assets/pets/phoenix.png",
+          "cell": [
+            23,
+            24
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 1
+        },
+        {
+          "id": "phoenix2",
+          "name": "鳳凰・綠焰",
+          "rarity": "P",
+          "pet": "phoenix2",
+          "sheet": "assets/pets/phoenix.png",
+          "cell": [
+            23,
+            24
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 2
+        },
+        {
+          "id": "phoenix3",
+          "name": "鳳凰・紫焰",
+          "rarity": "P",
+          "pet": "phoenix3",
+          "sheet": "assets/pets/phoenix.png",
+          "cell": [
+            23,
+            24
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 3
+        },
+        {
+          "id": "phoenix4",
+          "name": "鳳凰・銀",
+          "rarity": "P",
+          "pet": "phoenix4",
+          "sheet": "assets/pets/phoenix.png",
+          "cell": [
+            23,
+            24
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 4
+        },
+        {
+          "id": "jellyfish0",
+          "name": "水母・粉",
+          "rarity": "P",
+          "pet": "jellyfish0",
+          "sheet": "assets/pets/jellyfish.png",
+          "cell": [
+            9,
+            16
+          ],
+          "cols": 6,
+          "rows": 5,
+          "row": 0
+        },
+        {
+          "id": "jellyfish1",
+          "name": "水母・藍",
+          "rarity": "P",
+          "pet": "jellyfish1",
+          "sheet": "assets/pets/jellyfish.png",
+          "cell": [
+            9,
+            16
+          ],
+          "cols": 6,
+          "rows": 5,
+          "row": 1
+        },
+        {
+          "id": "jellyfish2",
+          "name": "水母・綠",
+          "rarity": "P",
+          "pet": "jellyfish2",
+          "sheet": "assets/pets/jellyfish.png",
+          "cell": [
+            9,
+            16
+          ],
+          "cols": 6,
+          "rows": 5,
+          "row": 2
+        },
+        {
+          "id": "jellyfish3",
+          "name": "水母・紫",
+          "rarity": "P",
+          "pet": "jellyfish3",
+          "sheet": "assets/pets/jellyfish.png",
+          "cell": [
+            9,
+            16
+          ],
+          "cols": 6,
+          "rows": 5,
+          "row": 3
+        },
+        {
+          "id": "jellyfish4",
+          "name": "水母・橘",
+          "rarity": "P",
+          "pet": "jellyfish4",
+          "sheet": "assets/pets/jellyfish.png",
+          "cell": [
+            9,
+            16
+          ],
+          "cols": 6,
+          "rows": 5,
+          "row": 4
+        },
+        {
+          "id": "crab0",
+          "name": "螃蟹・橘",
+          "rarity": "P",
+          "pet": "crab0",
+          "sheet": "assets/pets/crab.png",
+          "cell": [
+            18,
+            9
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 0
+        },
+        {
+          "id": "crab1",
+          "name": "螃蟹・紅",
+          "rarity": "P",
+          "pet": "crab1",
+          "sheet": "assets/pets/crab.png",
+          "cell": [
+            18,
+            9
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 1
+        },
+        {
+          "id": "crab2",
+          "name": "螃蟹・藍",
+          "rarity": "P",
+          "pet": "crab2",
+          "sheet": "assets/pets/crab.png",
+          "cell": [
+            18,
+            9
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 2
+        },
+        {
+          "id": "crab3",
+          "name": "螃蟹・綠",
+          "rarity": "P",
+          "pet": "crab3",
+          "sheet": "assets/pets/crab.png",
+          "cell": [
+            18,
+            9
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 3
+        },
+        {
+          "id": "crab4",
+          "name": "螃蟹・紫",
+          "rarity": "P",
+          "pet": "crab4",
+          "sheet": "assets/pets/crab.png",
+          "cell": [
+            18,
+            9
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 4
+        },
+        {
+          "id": "eye0",
+          "name": "飄浮眼球・黃眼",
+          "rarity": "P",
+          "pet": "eye0",
+          "sheet": "assets/pets/eye.png",
+          "cell": [
+            12,
+            15
+          ],
+          "cols": 9,
+          "rows": 5,
+          "row": 0
+        },
+        {
+          "id": "eye1",
+          "name": "飄浮眼球・藍眼",
+          "rarity": "P",
+          "pet": "eye1",
+          "sheet": "assets/pets/eye.png",
+          "cell": [
+            12,
+            15
+          ],
+          "cols": 9,
+          "rows": 5,
+          "row": 1
+        },
+        {
+          "id": "eye2",
+          "name": "飄浮眼球・紅眼",
+          "rarity": "P",
+          "pet": "eye2",
+          "sheet": "assets/pets/eye.png",
+          "cell": [
+            12,
+            15
+          ],
+          "cols": 9,
+          "rows": 5,
+          "row": 2
+        },
+        {
+          "id": "eye3",
+          "name": "飄浮眼球・綠眼",
+          "rarity": "P",
+          "pet": "eye3",
+          "sheet": "assets/pets/eye.png",
+          "cell": [
+            12,
+            15
+          ],
+          "cols": 9,
+          "rows": 5,
+          "row": 3
+        },
+        {
+          "id": "eye4",
+          "name": "飄浮眼球・紫眼",
+          "rarity": "P",
+          "pet": "eye4",
+          "sheet": "assets/pets/eye.png",
+          "cell": [
+            12,
+            15
+          ],
+          "cols": 9,
+          "rows": 5,
+          "row": 4
+        },
+        {
+          "id": "slime0",
+          "name": "史萊姆・藍",
+          "rarity": "P",
+          "pet": "slime0",
+          "sheet": "assets/pets/slime.png",
+          "cell": [
+            14,
+            9
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 0
+        },
+        {
+          "id": "slime1",
+          "name": "史萊姆・綠",
+          "rarity": "P",
+          "pet": "slime1",
+          "sheet": "assets/pets/slime.png",
+          "cell": [
+            14,
+            9
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 1
+        },
+        {
+          "id": "slime2",
+          "name": "史萊姆・紅",
+          "rarity": "P",
+          "pet": "slime2",
+          "sheet": "assets/pets/slime.png",
+          "cell": [
+            14,
+            9
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 2
+        },
+        {
+          "id": "slime3",
+          "name": "史萊姆・黃",
+          "rarity": "P",
+          "pet": "slime3",
+          "sheet": "assets/pets/slime.png",
+          "cell": [
+            14,
+            9
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 3
+        },
+        {
+          "id": "slime4",
+          "name": "史萊姆・紫",
+          "rarity": "P",
+          "pet": "slime4",
+          "sheet": "assets/pets/slime.png",
+          "cell": [
+            14,
+            9
+          ],
+          "cols": 5,
+          "rows": 5,
+          "row": 4
         }
       ]
     }

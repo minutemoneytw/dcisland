@@ -1,65 +1,367 @@
 {
- "_說明": "扭蛋寵物（手寫；sheet 由 tools/gen_assets.py 的 pet_sheet 產生：每種一張橫排圖，5 品種 × 2 格走路幀，每格 16×16、朝右）。寵物 id＝<種類><品種序號>（cat0～rabbit4）。max＝最多同時跟幾隻、minutes＝跟隨幾分鐘、follow＝前面那位（玩家或前一隻寵物）離開超過幾 px 才追、stop＝追到離幾 px 就停、scale＝畫面放大倍數。buff＝寵物的增益效果（還沒決定，先空著，只有圖示）。",
+ "_說明": "扭蛋寵物（手寫；圖由 tools/gen_assets.py 產生：Elthen 素材改色〔ELTHEN_PETS〕與自畫的小狗／鸚鵡／倉鼠／兔子〔PET_TEMPLATES〕）。每種一張 sheet：橫向＝幀、縱向＝品種（rows 個）；cell＝每格像素大小、cols＝幀數、walk＝走路循環用哪幾格（0 格是待機）、rate＝走路時每個步伐週期推進幾格、drop＝畫圖時往下多放幾個原圖像素。寵物 id＝<種類><品種序號 0 起>（cat0、fox3…）。max＝最多同時跟幾隻、minutes＝跟隨幾分鐘、follow／stop＝前面那位離開超過幾 px 才追、追到離幾 px 就停、scale＝畫面放大倍數。buff＝寵物的增益效果（還沒決定，先空著，只有圖示）。",
  "max": 5,
  "minutes": 10,
+ "follow": 58,
+ "stop": 42,
  "scale": 2,
  "species": {
   "cat": {
    "name": "小貓",
    "sheet": "assets/pets/cat.png",
+   "cell": [
+    17,
+    11
+   ],
+   "cols": 7,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "rate": 3.0,
+   "drop": 0,
    "variants": [
-    "橘虎斑",
+    "銀灰",
+    "橘",
+    "黑",
+    "奶油",
+    "褐"
+   ]
+  },
+  "fox": {
+   "name": "狐狸",
+   "sheet": "assets/pets/fox.png",
+   "cell": [
+    22,
+    15
+   ],
+   "cols": 15,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14
+   ],
+   "rate": 7.0,
+   "drop": 0,
+   "variants": [
+    "赤",
+    "雪",
+    "銀",
+    "黑",
+    "金"
+   ]
+  },
+  "redpanda": {
+   "name": "小熊貓",
+   "sheet": "assets/pets/redpanda.png",
+   "cell": [
+    20,
+    12
+   ],
+   "cols": 7,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+   ],
+   "rate": 3.0,
+   "drop": 0,
+   "variants": [
+    "赤",
+    "金",
+    "灰",
+    "黑",
+    "雪"
+   ]
+  },
+  "mouse": {
+   "name": "老鼠",
+   "sheet": "assets/pets/mouse.png",
+   "cell": [
+    20,
+    11
+   ],
+   "cols": 13,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12
+   ],
+   "rate": 6.0,
+   "drop": 0,
+   "variants": [
+    "灰",
+    "白",
+    "棕",
+    "黑",
+    "米"
+   ]
+  },
+  "weasel": {
+   "name": "小貂",
+   "sheet": "assets/pets/weasel.png",
+   "cell": [
+    29,
+    12
+   ],
+   "cols": 9,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+   ],
+   "rate": 4.0,
+   "drop": 0,
+   "variants": [
+    "褐",
+    "雪",
+    "黑",
+    "金",
+    "灰"
+   ]
+  },
+  "porcupine": {
+   "name": "豪豬",
+   "sheet": "assets/pets/porcupine.png",
+   "cell": [
+    19,
+    16
+   ],
+   "cols": 6,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "rate": 2.5,
+   "drop": 0,
+   "variants": [
+    "灰",
+    "棕",
     "黑",
     "白",
-    "灰藍",
-    "三花"
+    "藍灰"
    ]
   },
-  "dog": {
-   "name": "小狗",
-   "sheet": "assets/pets/dog.png",
+  "hedgehog": {
+   "name": "刺蝟",
+   "sheet": "assets/pets/hedgehog.png",
+   "cell": [
+    17,
+    10
+   ],
+   "cols": 5,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "rate": 2.0,
+   "drop": 0,
    "variants": [
-    "柴犬",
-    "黑背",
+    "灰",
+    "棕",
+    "黑",
     "白",
-    "巧克力",
-    "花斑"
+    "粉"
    ]
   },
-  "parrot": {
-   "name": "鸚鵡",
-   "sheet": "assets/pets/parrot.png",
+  "squirrel": {
+   "name": "松鼠",
+   "sheet": "assets/pets/squirrel.png",
+   "cell": [
+    19,
+    14
+   ],
+   "cols": 5,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "rate": 2.0,
+   "drop": 0,
    "variants": [
+    "棕",
+    "灰",
+    "紅",
+    "白",
+    "黑"
+   ]
+  },
+  "phoenix": {
+   "name": "鳳凰",
+   "sheet": "assets/pets/phoenix.png",
+   "cell": [
+    23,
+    24
+   ],
+   "cols": 5,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "rate": 2.0,
+   "drop": -6,
+   "variants": [
+    "赤焰",
+    "藍焰",
+    "綠焰",
+    "紫焰",
+    "銀"
+   ]
+  },
+  "jellyfish": {
+   "name": "水母",
+   "sheet": "assets/pets/jellyfish.png",
+   "cell": [
+    9,
+    16
+   ],
+   "cols": 6,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "rate": 2.5,
+   "drop": -4,
+   "variants": [
+    "粉",
+    "藍",
+    "綠",
+    "紫",
+    "橘"
+   ]
+  },
+  "crab": {
+   "name": "螃蟹",
+   "sheet": "assets/pets/crab.png",
+   "cell": [
+    18,
+    9
+   ],
+   "cols": 5,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "rate": 2.0,
+   "drop": 0,
+   "variants": [
+    "橘",
     "紅",
     "藍",
     "綠",
+    "紫"
+   ]
+  },
+  "eye": {
+   "name": "飄浮眼球",
+   "sheet": "assets/pets/eye.png",
+   "cell": [
+    12,
+    15
+   ],
+   "cols": 9,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+   ],
+   "rate": 4.0,
+   "drop": -3,
+   "variants": [
+    "黃眼",
+    "藍眼",
+    "紅眼",
+    "綠眼",
+    "紫眼"
+   ]
+  },
+  "slime": {
+   "name": "史萊姆",
+   "sheet": "assets/pets/slime.png",
+   "cell": [
+    14,
+    9
+   ],
+   "cols": 5,
+   "rows": 5,
+   "walk": [
+    1,
+    2,
+    3,
+    4
+   ],
+   "rate": 2.0,
+   "drop": 0,
+   "variants": [
+    "藍",
+    "綠",
+    "紅",
     "黃",
-    "白"
-   ]
-  },
-  "hamster": {
-   "name": "倉鼠",
-   "sheet": "assets/pets/hamster.png",
-   "variants": [
-    "金黃",
-    "白",
-    "灰",
-    "奶油",
-    "花"
-   ]
-  },
-  "rabbit": {
-   "name": "兔子",
-   "sheet": "assets/pets/rabbit.png",
-   "variants": [
-    "白",
-    "棕",
-    "灰",
-    "黑",
-    "花"
+    "紫"
    ]
   }
- },
- "follow": 58,
- "stop": 42
+ }
 }

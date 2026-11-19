@@ -3,7 +3,7 @@
 # DC島 素材產生器 v0.2：地形、家具、地板、魚、圖示等是程式畫的自製 placeholder；
 # 人物／服裝／武器（LPC）與部分怪物、島主用外部素材（EXTERNAL_BUNDLES 登記，授權逐條記在 docs/assets-license.md）。
 # 用法: python tools/gen_assets.py
-import struct, zlib, os, random, json, math
+import struct, zlib, os, random, json, math, colorsys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(HERE, "..", "client", "assets")
@@ -2257,127 +2257,65 @@ def claw_machine():
     cv.outline()
     return cv
 
-# ---------------- 扭蛋寵物（2026-11-19，使用者要求：小貓／小狗／鸚鵡／倉鼠／兔子各 5 種品種或花色）----------------
-# 每種一張橫排 sheet（assets/pets/<種類>.png）：5 個品種 × 2 格走路幀，每格 16×16，朝右（client 往左走時翻面），客戶端放大 2 倍畫。
-# 圖樣是文字格：b 主色、d 暗部、l 淺色（肚子／口鼻）、k 花紋色、q 第二花紋色、p 粉色（耳內）、e 眼、n 鼻、y 嘴／腳；外框由 outline() 自動加。
-PET_TEMPLATES = {
-    "cat": [
-        "..........b..b..",
-        ".........bpbbpb.",
-        ".........bbqqbb.",
-        ".........bebbeb.",
-        ".........bllnll.",
-        ".b........bbbb..",
-        ".b.bbbbbbbbbbb..",
-        "..bbbkbkbbbbbb..",
-        "...bbbbbbllbbb..",
-        "...bbbbblllbbb..",
-        "...dbbbbbbbbbd..",
-        "...bb.bb..bb.bb.",
-        "...dd.dd..dd.dd.",
-    ],
-    "dog": [   # 側面：長口鼻（尖端黑鼻頭、吐舌頭）、垂下的深色大耳朵、紅項圈、翹起的尾巴、長腿（r＝耳朵色、c＝項圈）
-        "..........bbbb..",
-        "..b.....rrbbbb..",
-        "..b.....rrbebll.",
-        "..bb....rrbblln.",
-        "..bbb...rrbllpl.",
-        "..bbbbbbbccbbb..",
-        "...bbbkkbbbbbb..",
-        "...bbbkkbllbbb..",
-        "...dbbbbbbbbbd..",
-        "...bb.bb..bb.bb.",
-        "...bb.bb..bb.bb.",
-        "...bb.bb..bb.bb.",
-        "...dd.dd..dd.dd.",
-    ],
-    "parrot": [
-        "..........bbb...",
-        ".........bbbbb..",
-        ".........bebbyy.",
-        ".........bbbbyy.",
-        "..........bbby..",
-        "........bbbbbb..",
-        ".......bbbkbbbb.",
-        ".......bbkkkbbb.",
-        "......bbbkkkbb..",
-        "......bbbkkkb...",
-        ".....bbbbbbb....",
-        "....bbb.........",
-        "...kkk...y.y....",
-    ],
-    "hamster": [
-        ".........pb.bp..",
-        "....bbbbbbbbbb..",
-        "...bbbbbbbbbbbb.",
-        "...bbbbbbbbebbb.",
-        "...bbkkbbbbbbnl.",
-        "...bbkkbbllllb..",
-        "...bbbbbbbllbb..",
-        "....bbbbbbbbb...",
-        ".....pp...pp....",
-    ],
-    "rabbit": [
-        "..........bb.bb.",
-        "..........bp.bp.",
-        "..........bp.bp.",
-        ".........bbbbbb.",
-        ".........bebbeb.",
-        ".........bllnll.",
-        "...bbbbbbbbbbb..",
-        "..lbbbbkkbbbbb..",
-        "..llbbbkkbbbbb..",
-        "...lbbbbbllbbb..",
-        "....bbbbbbbbbb..",
-        "....bb.bb..bb.b.",
-        "....dd.dd..dd.d.",
-    ],
+# ---- Elthen 的動物素材（2026-11-19，使用者提供）：改色後當扭蛋寵物。原圖在 client/assets/external/elthen/（每格 32×32，朝右）----
+# 每種取「待機一格＋走路幾格」，裁成共同的最小外框（腳底貼底），再用 recolor() 做 5 種顏色；輸出 assets/pets/<種類>.png（橫向＝幀、縱向＝品種）。
+# idle＝(列, 欄)；walk＝[(列, 欄)…]；variants＝(名稱, 改色參數)：dh＝色相轉幾度、ms／mv＝飽和度／亮度倍率、col＝(色相度, 飽和度) 把灰白色系上色（原本沒有顏色的素材用）。
+def _row(r, a, b): return [(r, i) for i in range(a, b)]
+ELTHEN_PETS = {
+    "cat": dict(file="cat.png", idle=(9, 0), walk=_row(9, 1, 7), variants=[
+        ("銀灰", {}), ("橘", dict(col=(28, .62))), ("黑", dict(mv=.45)), ("奶油", dict(col=(40, .28), mv=1.05)), ("褐", dict(col=(25, .5), mv=.72))]),
+    "fox": dict(file="fox.png", idle=(0, 0), walk=_row(1, 0, 14), variants=[
+        ("赤", {}), ("雪", dict(ms=.08, mv=1.25)), ("銀", dict(ms=.12, mv=.95)), ("黑", dict(ms=.25, mv=.5)), ("金", dict(dh=14, ms=.9, mv=1.15))]),
+    "redpanda": dict(file="redpanda.png", idle=(0, 0), walk=_row(0, 0, 6), variants=[
+        ("赤", {}), ("金", dict(dh=16, mv=1.15)), ("灰", dict(ms=.12)), ("黑", dict(ms=.3, mv=.55)), ("雪", dict(ms=.1, mv=1.3))]),
+    "porcupine": dict(file="porcupine.png", idle=(0, 0), walk=_row(0, 0, 5), variants=[
+        ("灰", {}), ("棕", dict(col=(25, .5), mv=.85)), ("黑", dict(mv=.5)), ("白", dict(mv=1.25)), ("藍灰", dict(col=(215, .3)))]),
+    "jellyfish": dict(file="jellyfish.png", idle=(0, 0), walk=_row(0, 0, 5), variants=[
+        ("粉", {}), ("藍", dict(dh=-110)), ("綠", dict(dh=160)), ("紫", dict(dh=-40)), ("橘", dict(dh=70))]),
+    "hedgehog": dict(file="hedgehog.png", idle=(0, 0), walk=_row(0, 0, 4), variants=[
+        ("灰", {}), ("棕", dict(col=(30, .45), mv=.9)), ("黑", dict(mv=.5)), ("白", dict(mv=1.2)), ("粉", dict(col=(340, .25), mv=1.1))]),
+    "crab": dict(file="crab.png", idle=(0, 0), walk=_row(0, 0, 4), variants=[
+        ("橘", {}), ("紅", dict(dh=-20, ms=1.1)), ("藍", dict(dh=190)), ("綠", dict(dh=100)), ("紫", dict(dh=260))]),
+    "eye": dict(file="eye.png", idle=(0, 0), walk=_row(0, 0, 8), variants=[
+        ("黃眼", {}), ("藍眼", dict(dh=160)), ("紅眼", dict(dh=-50)), ("綠眼", dict(dh=70)), ("紫眼", dict(dh=230))]),
+    "squirrel": dict(file="squirrel.png", idle=(0, 0), walk=_row(3, 0, 4), variants=[
+        ("棕", {}), ("灰", dict(ms=.1, mv=1.1)), ("紅", dict(dh=-10, ms=1.2, mv=1.1)), ("白", dict(ms=.08, mv=1.5)), ("黑", dict(ms=.3, mv=.55))]),
+    "mouse": dict(file="mouse.png", idle=(1, 0), walk=_row(1, 0, 12), variants=[
+        ("灰", {}), ("白", dict(col=(220, .04), mv=1.4)), ("棕", dict(col=(28, .5), mv=.8)), ("黑", dict(mv=.5)), ("米", dict(col=(42, .3), mv=1.1))]),
+    "weasel": dict(file="weasel.png", idle=(0, 0), walk=_row(0, 0, 8), variants=[
+        ("褐", {}), ("雪", dict(ms=.08, mv=1.5)), ("黑", dict(ms=.3, mv=.55)), ("金", dict(dh=12, ms=.9, mv=1.3)), ("灰", dict(ms=.12, mv=1.05))]),
+    "phoenix": dict(file="phoenix.png", cs=64, idle=(0, 0), walk=_row(0, 0, 4), variants=[
+        ("赤焰", {}), ("藍焰", dict(dh=170)), ("綠焰", dict(dh=100)), ("紫焰", dict(dh=230)), ("銀", dict(ms=.15, mv=1.3))]),
+    "slime": dict(file="slime.png", idle=(0, 0), walk=_row(0, 0, 4), variants=[
+        ("藍", {}), ("綠", dict(dh=-90)), ("紅", dict(dh=150)), ("黃", dict(dh=-150)), ("紫", dict(dh=70))]),
 }
-PET_VARIANTS = {   # 每個品種的色盤（b d l k q p e y n）；沒寫的沿用預設
-    "cat": [dict(b="#e8923a", d="#c47428", l="#fbe3c4", k="#b8641c", q="#e8923a", p="#f5a8a0"),
-            dict(b="#3a3a48", d="#26262f", l="#55556a", k="#3a3a48", q="#3a3a48", p="#c07890", e="#f0d040"),
-            dict(b="#f4f4f4", d="#d0d0d8", l="#ffffff", k="#f4f4f4", q="#f4f4f4", p="#f5a8a0"),
-            dict(b="#8a96aa", d="#6c778a", l="#c8d0dc", k="#6c778a", q="#8a96aa", p="#f5a8a0"),
-            dict(b="#f4f4f4", d="#d0d0d8", l="#ffffff", k="#e8923a", q="#3a3a48", p="#f5a8a0")],
-    "dog": [dict(b="#d99a50", d="#b07838", l="#fff0d8", k="#d99a50", r="#a8682c"),
-            dict(b="#3a3040", d="#2a2430", l="#c8964a", k="#3a3040", e="#f0f0f0", r="#1f1a26"),
-            dict(b="#f2f2f2", d="#cfcfd8", l="#ffffff", k="#f2f2f2", r="#cfc6b4"),
-            dict(b="#7a4a2e", d="#5a3420", l="#c8a078", k="#7a4a2e", e="#f0f0f0", r="#4a2a18"),
-            dict(b="#f4f4f4", d="#5a4030", l="#ffffff", k="#6a4a30", r="#6a4a30")],
-    "parrot": [dict(b="#d83a3a", k="#3b78e8", y="#f0c020"),
-               dict(b="#3b78e8", k="#40c8e0", y="#2a2a30"),
-               dict(b="#3cb45a", k="#f0c020", y="#e8a030"),
-               dict(b="#f0d040", k="#f0a020", y="#e8884a"),
-               dict(b="#f4f4f4", k="#f0d040", y="#3a3a48")],
-    "hamster": [dict(b="#e0a850", k="#c88830", l="#fbe8c8", p="#f5a8a0"),
-                dict(b="#f6f2ee", k="#f6f2ee", l="#ffffff", p="#f5a8a0"),
-                dict(b="#98a0aa", k="#7c848e", l="#dde2e8", p="#f5a8a0"),
-                dict(b="#f0dcb0", k="#e0c890", l="#fff4dc", p="#f5a8a0"),
-                dict(b="#f6f2ee", k="#3a3a48", l="#ffffff", p="#f5a8a0")],
-    "rabbit": [dict(b="#f6f6f6", d="#d0d0d8", k="#f6f6f6", l="#ffffff", p="#f5a8a0"),
-               dict(b="#a8784a", d="#7a5232", k="#8a5c34", l="#e8d0b0", p="#e8a090"),
-               dict(b="#a0a4ac", d="#7c8088", k="#80848c", l="#e0e2e6", p="#f5a8a0"),
-               dict(b="#3a3a44", d="#26262c", k="#2a2a32", l="#5a5a68", p="#c07890", e="#f0d040"),
-               dict(b="#f6f6f6", d="#d0d0d8", k="#8a5c34", l="#ffffff", p="#f5a8a0")],
-}
-def pet_sheet(species):
-    tpl = PET_TEMPLATES[species]
-    rows = ["." * 16] * (14 - len(tpl)) + tpl   # 腳底一律對齊第 13 列（矮的種類往下靠，不然會飄在空中）
-    rows = (rows + ["." * 16] * 16)[:16]
-    sheet = Canvas(16 * 10, 16)
-    for vi, pal in enumerate(PET_VARIANTS[species]):
-        col = dict(c="#e84848", r="#999", b="#ccc", d="#999", l="#eee", k="#bbb", q="#bbb", p="#f5a8a0", e="#20202a", y="#e8a030", n="#20202a")
-        col.update(pal)
-        for fi in range(2):
-            cv = Canvas(16, 16)
-            for y, row in enumerate(rows):
-                assert len(row) == 16, (species, y, row)
-                for x, ch in enumerate(row):
-                    if ch != ".": cv.set(x, y - fi, hx(col[ch]))   # 第 2 格整隻往上 1 px（走路的小跳）
-            cv.outline(hx("#1b1424"))
-            for y in range(16):
-                for x in range(16):
-                    sheet.set((vi * 2 + fi) * 16 + x, y, cv.get(x, y))
+def _recolor_px(r, g_, b, spec):
+    h, s, v = colorsys.rgb_to_hsv(r / 255, g_ / 255, b / 255)
+    if v >= .22:   # 太暗的像素是外框，不動色相
+        col = spec.get("col")
+        if col and s < .3: h, s = col[0] / 360, col[1]
+        else: h = (h + spec.get("dh", 0) / 360) % 1; s = min(1, s * spec.get("ms", 1))
+    v = min(1, v * spec.get("mv", 1))
+    r2, g2, b2 = colorsys.hsv_to_rgb(h, s, v)
+    return int(r2 * 255 + .5), int(g2 * 255 + .5), int(b2 * 255 + .5)
+def elthen_pet_sheet(spec):
+    w, h, px = read_png_pixels(os.path.join(ASSETS, "external", "elthen", spec["file"]))
+    cells = [spec["idle"]] + spec["walk"]
+    cs = spec.get("cs", 32)   # 原圖每格邊長（鳳凰是 64）
+    def cell_px(r, c):
+        return [(c * cs + x, r * cs + y) for y in range(cs) for x in range(cs) if px[((r * cs + y) * w + c * cs + x) * 4 + 3]]
+    xs = [x - c * cs for r, c in cells for x, y in cell_px(r, c)]; ys = [y - r * cs for r, c in cells for x, y in cell_px(r, c)]
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)   # 全部幀的共同外框
+    cw, ch = x1 - x0 + 1, y1 - y0 + 1
+    sheet = Canvas(cw * len(cells), ch * len(spec["variants"]))
+    for vi, (_name, vs) in enumerate(spec["variants"]):
+        for fi, (r, c) in enumerate(cells):
+            for y in range(ch):
+                for x in range(cw):
+                    i = ((r * cs + y0 + y) * w + c * cs + x0 + x) * 4
+                    if px[i + 3]:
+                        rr, gg, bb = _recolor_px(px[i], px[i + 1], px[i + 2], vs)
+                        sheet.set(fi * cw + x, vi * ch + y, (rr, gg, bb, px[i + 3]))
     return sheet
 
 GACHA_CAP_COLORS = ["#ff6b6b", "#ffd166", "#4ecdc4", "#6b8cff", "#c77dff", "#ff9f43"]   # 要跟 client/js/gacha.js 的 CAP_COLORS 一樣
@@ -4278,7 +4216,7 @@ def main():
     save(table_bigtwo(), "table_bigtwo.png", "games")
     save(table_purify(), "table_purify.png", "games")
     save(gacha_capsules(), "cap_halves.png", "gacha"); save(gacha_star(), "star.png", "gacha")
-    for _sp in PET_TEMPLATES: save(pet_sheet(_sp), _sp + ".png", "pets")   # 扭蛋寵物   # 扭蛋殼（client/js/gacha.js）
+    for _sp, _spec in ELTHEN_PETS.items(): save(elthen_pet_sheet(_spec), _sp + ".png", "pets")   # 扭蛋寵物（Elthen 素材改色）   # 扭蛋殼（client/js/gacha.js）
     save(table_trigon(), "table_trigon.png", "games")
     for k, col in enumerate(ARCADE_COLORS):
         save(arcade_cabinet(col), f"arcade_{k}.png", "games")

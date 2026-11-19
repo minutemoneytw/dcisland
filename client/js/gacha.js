@@ -152,7 +152,8 @@ async function openCap(slot, cap, prize, big, note) {
   card.style.setProperty('--rc', rar.color);
   if (M.rarities.length > 1) card.append(el('div', 'gc-rar', rar.id));   // 只有一種稀有度時不顯示標籤
   if (prize.sheet) {   // 寵物之類的精靈圖：sheet 是橫排格子圖（10 格），cell 是第幾格
-    const sp = el('div', 'gc-pet'); sp.style.backgroundImage = `url(${prize.sheet})`; sp.style.backgroundPosition = `calc(${prize.cell || 0} / 9 * 100%) 0`; card.appendChild(sp);
+    const sp = el('div', 'gc-pet'), [cw, ch] = prize.cell, k = Math.min((big ? 96 : 36) / cw, (big ? 96 : 36) / ch);   // 待機那格，縮放塞進框裡
+    sp.style.cssText = `width:${Math.round(cw * k)}px;height:${Math.round(ch * k)}px;background-image:url(${prize.sheet});background-size:${prize.cols * 100}% ${prize.rows * 100}%;background-position:0 ${prize.rows > 1 ? prize.row / (prize.rows - 1) * 100 : 0}%`; card.appendChild(sp);
   } else if (prize.img) { const im = el('img'); im.src = prize.img; im.draggable = false; card.appendChild(im); } else card.appendChild(el('div', 'gc-ico'));
   card.append(el('div', 'gc-name', prize.name));
   if (note) { const n = el('div', 'gc-note', note.short || note); if (note.title) card.title = note.title; card.appendChild(n); }

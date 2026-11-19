@@ -1,5 +1,5 @@
 // DC島 — 遊戲本體（世界生成、移動、繪圖、戰鬥、動物、裝飾、造型、UI）。多人同步在 net.js，連線時以伺服器（Worker／dev_server）為準
-import { initPets, addPet, removePet, stepPets, petEntries, petList, petDef, petLeftMs } from './pets.js';   // 扭蛋寵物跟隨（2026-11-19）
+import { initPets, addPet, removePet, stepPets, petEntries, petList, petDef, petLeftMs, petIconStyle } from './pets.js';   // 扭蛋寵物跟隨（2026-11-19）
 const CELL = 32, COLS = 108, ROWS = 72;   // 島放大：鏡頭跟隨（2026-11-09 前七座島半徑 ×1.5：88×56 → 108×72，島心 (43.5,27.5) → (53.5,35.5)；舊家具座標不遷移）
 const ISLAND_AREA = 2.25;   // 前七座島的面積倍數（半徑 1.5 倍）：野生動物數量照這個放大，素材（點綴物）本來就是每格機率，自動跟著多
 const VIEW_W = 29 * 32, VIEW_H = 17 * 32;
@@ -10748,7 +10748,7 @@ function buffBarBuild() {
   for (const pt of petList()) {   // 跟隨寵物：每隻一個增益圖示（右鍵取消跟隨）；效果還沒決定，現在只有圖示
     const d = petDef(pt.id), el = document.createElement('div');
     el.className = 'buff good pet'; el.title = d.name; el.dataset.pid = pt.uid;
-    el.innerHTML = `<span class="bp" style="background-image:url(${d.species.sheet});background-position:calc(${d.vi * 2} / 9 * 100%) 0"></span><span class="bt"></span>`;
+    el.innerHTML = `<span class="bp" style="${petIconStyle(d)}"></span><span class="bt"></span>`;
     bar.appendChild(el);
   }
   bar.classList.toggle('hidden', !ks.length && !petList().length);
