@@ -1,5 +1,5 @@
 // DC島 — 遊戲本體（世界生成、移動、繪圖、戰鬥、動物、裝飾、造型、UI）。多人同步在 net.js，連線時以伺服器（Worker／dev_server）為準
-import { initPets, addPet, removePet, stepPets, petEntries, petList, petDef, petLeftMs, petIconStyle, petAtPoint, petPat } from './pets.js';   // 扭蛋寵物跟隨（2026-11-19）
+import { initPets, addPet, removePet, stepPets, petEntries, syncRemotePets, stepRemotePets, remotePetEntries, petList, petDef, petLeftMs, petIconStyle, petAtPoint, petPat } from './pets.js';   // 扭蛋寵物跟隨（2026-11-19）
 const CELL = 32, COLS = 108, ROWS = 72;   // 島放大：鏡頭跟隨（2026-11-09 前七座島半徑 ×1.5：88×56 → 108×72，島心 (43.5,27.5) → (53.5,35.5)；舊家具座標不遷移）
 const ISLAND_AREA = 2.25;   // 前七座島的面積倍數（半徑 1.5 倍）：野生動物數量照這個放大，素材（點綴物）本來就是每格機率，自動跟著多
 const VIEW_W = 29 * 32, VIEW_H = 17 * 32;
@@ -1542,6 +1542,7 @@ function myFx() {   // 給 state 的持續型效果清單（id 要符合伺服�
   return out;
 }
 S.myFx = myFx;
+S.myPets = () => petList().map(p => p.id);   // state.pets：自己帶著的跟隨寵物 id 清單，別人的畫面各自模擬跟隨（2026-11-20）
 
 // 職業技能：jobs.json 的 skills 依序對應 1、2 鍵。name／desc 顯示在技能列與造型面板；cd＝冷卻秒數；
 // run(me) 回 true＝放出去了（才開始冷卻）；usable() 回 null＝可以放、字串＝不能放的原因（圖示變暗）
@@ -11921,6 +11922,7 @@ function draw() {
   // M2：同島的其他玩家
   for (const r of S.remotes.values()) {
     if (r.dead) { list.push(tombEntry(r.x, r.y, r.name, DEAD_SECONDS - (performance.now() - (r.deadAt || performance.now())) / 1000)); continue; }
+    remotePetEntries(list, ctx, r);   // 對方的跟隨寵物（各自模擬）
     list.push({
       y: r.y + (r.pose ? 2 : 0),
       draw: () => {   // 同島的人用暖金色名牌區分；賢具同樣不畫腰間武器圖
@@ -13299,7 +13301,7 @@ async function boot() {
         S.mouseCell = [Math.floor((S.mouseClient[0] - r.left + S.cam.x) / CELL), Math.floor((S.mouseClient[1] - r.top + S.cam.y) / CELL)];
       }
       paintFloor();                            // 地板模式長按中：游標掃過的格子持續鋪/拆
-      for (const r of S.remotes.values()) stepRemote(r, dt);
+      for (const r of S.remotes.values()) { stepRemote(r, dt); syncRemotePets(r); stepRemotePets(r, dt); }
       for (let i = S.mobs.length - 1; i >= 0; i--) {
         const a = S.mobs[i];
         if (a.dead) {

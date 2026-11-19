@@ -1,6 +1,6 @@
 // 跟隨寵物（2026-11-19，使用者要求：扭蛋抽到寵物就跟著玩家 10 分鐘、最多 5 隻、像火車一樣一隻接一隻、增益圖示右鍵取消）
 // 資料在 assets/pets/pets.json（種類／品種名稱、人數上限、時間、間距），圖是 gen_assets.py 的 pet_sheet 畫的（每種一張橫排 10 格：5 品種 × 2 走路幀）。
-// 純客戶端：只有自己看得到自己的寵物（別人看不到、不同步）。剩餘時間存在 localStorage（dcisland.m0.pets，記到期的真實時間），重新整理還在。
+// 計時與寵物清單在自己這台（2026-11-20 起別人也看得到：state.pets 只送 id 清單，別人的畫面在你身後各自模擬跟隨，見 syncRemotePets；別人的寵物不能摸、沒有時限）。剩餘時間存在 localStorage（dcisland.m0.pets，記到期的真實時間），重新整理還在。
 // 跟隨方式（2026-11-19 使用者要求）：每隻只看自己前面那一位（第 1 隻看玩家、第 k 隻看第 k−1 隻），前面的人離開超過 follow（px）才開始追，
 // 追到離前面 stop（px）就停下來休息（所以玩家站著不動時整串會停住，走遠一點才一隻接一隻跟上）。走起來有一蹦一蹦的步伐（上下彈跳＋左右搖擺），
 // 速度越快步伐越密。
@@ -65,6 +65,26 @@ export function stepPets(dt, me) {
   me0 = { x: me.x, y: me.y };
   const now = Date.now();
   if (list.some(p => p.until <= now)) { list = list.filter(p => p.until > now); save(); onChange(); }
+  stepFollow(list, me, dt);
+}
+// 別人的寵物（2026-11-20，使用者要求：寵物要讓別人也看到）：對方的 state.pets 只送 id 清單，這裡在對方（r，有 x／y）身後各自模擬跟隨，不傳座標、沒有時限（對方到期或取消會更新清單）
+export function syncRemotePets(r) {
+  if (!DB) return;
+  const ids = (r.petIds || []).filter(id => petDef(id)).slice(0, petMax());
+  const cur = r.pets || [];
+  if (cur.length === ids.length && cur.every((p, k) => p.id === ids[k])) return;
+  const old = cur.slice();
+  r.pets = ids.map((id, k) => {
+    const i = old.findIndex(p => p.id === id); if (i >= 0) return old.splice(i, 1)[0];   // 沒變的留著（位置不跳）
+    const lead = k ? null : r;   // 新來的先站在對方身上（之後在 stepFollow 一隻接一隻散開）
+    return { uid: ++seq, id, x: lead?.x ?? r.x, y: lead?.y ?? r.y, face: 1, ph: 0, spd: 0, go: false, moving: false };
+  });
+}
+export function stepRemotePets(r, dt) {
+  if (!DB || !r.pets?.length) return;
+  stepFollow(r.pets, r, dt);
+}
+function stepFollow(list, me, dt) {
   const FOLLOW0 = DB.follow ?? 56, STOP0 = DB.stop ?? 40, sc = DB.scale ?? 2;
   const wOf = pt => (petDef(pt.id)?.species.cell[0] ?? 16) * sc;   // 寵物畫面寬度（長的寵物要留更寬的間距，不然會疊在一起）
   if (list.length && Math.hypot(me.x - list[0].x, me.y - list[0].y) > 420) for (const pt of list) { pt.x = me.x; pt.y = me.y; pt.go = false; }   // 換地圖／傳送：直接跟過來
@@ -92,7 +112,9 @@ export function stepPets(dt, me) {
 }
 
 // 畫面：每隻一個 y 排序項目（跟角色、家具一起排）
-export function petEntries(entries, ctx) {
+export function petEntries(entries, ctx) { pushPets(entries, ctx, list); }
+export function remotePetEntries(entries, ctx, r) { if (r.pets?.length) pushPets(entries, ctx, r.pets); }
+function pushPets(entries, ctx, list) {
   if (!DB) return;
   const sc = DB.scale ?? 2;
   for (const pt of list) {
