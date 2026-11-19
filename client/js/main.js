@@ -6786,7 +6786,11 @@ function scrViewToggle() {
   const p = S.players[0];
   S.scrView = S.scrView || !p ? null : { x: p.x, y: p.y };
   S.scrWatchNext = 0;   // 馬上重算要不要訂閱螢幕畫面
-  if (S.scrView) toast('觀看大螢幕中：移動角色就回到原本的視角', 2200);
+  if (S.scrView) {
+    toast('觀看大螢幕中：移動角色就回到原本的視角', 2200);
+    const pr = propsHere().find(q => q.kind === 'screen');
+    if (pr && p) { const r = propRect(pr); aimAt(p, r.x + r.w / 2, r.y + r.h / 2); }   // 點觀看：角色自動轉向面對大螢幕（使用者要求）
+  }
 }
 // ---- Blokus Trigon（第十二桌 t12；2026-11-13，使用者要求）：正六邊形的三角格棋盤（邊長 9，486 格）＋我的方塊托盤（22 塊，1～6 個三角形）。
 // 操作同Blokus：點選方塊 → 旋轉 60 度（R／滾輪／右鍵）、翻面（F）→ 在棋盤上點一下放。座標系與規則同 worker 的 tg*（三角形 (x, y)，(x + y) 偶數＝朝上；頂點 (i, j)，i + j 偶數）。
