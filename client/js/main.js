@@ -6253,9 +6253,8 @@ const SCR_W = 496, SCR_H = 272;
 const SCR_FONT = '"Microsoft JhengHei", sans-serif';
 function onNetScr(msg) {
   if ((msg.id || null) !== (S.scr?.id || null)) S.scrTb = {};   // 換台：舊的盤面快照作廢
-  // 新的遊戲開始轉播（換了一桌，或同一桌新開局）：螢幕自動打開、影片停掉（使用者定：關閉之後有新遊戲轉播就自動跳過去）
-  if (msg.id && (msg.id !== S.scrLastId || (msg.v?.phase === 'playing' && S.scrLastPhase !== 'playing'))) { S.scrOff = false; if (S.vid) vidStop(); }
-  if (msg.id) { S.scrLastId = msg.id; S.scrLastPhase = msg.v?.phase; }
+  if (msg.game === 'video') { S.scr = null; vidOnMsg(msg); scrRender(); return; }   // 螢幕在播影片：沒有遊戲畫面，影片由 vidTick 畫
+  if (S.vid) vidStop();   // 轉播遊戲或關閉：影片停掉
   S.scr = msg.id ? msg : null;
   scrRender();
 }
@@ -6458,26 +6457,35 @@ function scrWatchTick() {
   }
 }
 // ---- 大螢幕播放自己放的影片（2026-11-19；取代 YouTube 試播——YouTube 在 Discord 裡載不起來）----
-// 影片檔放 assets/screen/video/，清單在 assets/screen/videos.json。只有自己看得到（本機選項、不經伺服器）；大家用同一個起算時刻，選同一支的人看到同一段。
+// 影片檔放 assets/screen/video/，清單在 assets/screen/videos.json。**全島共用**（2026-11-19 使用者要求「大家一起看」）：選影片／關閉都送伺服器（scr_vid／scr_close，跟轉播同一個頻道與冷卻），
+// 伺服器只記「播哪一支、從什麼時候開始（t0，伺服器時間）」，每個人用 t0 與伺服器時間差算出現在播到哪，所以大家看到同一段。
 // 影片直接畫進螢幕的畫布（同網域、沒有 iframe），人物自然畫在上面。走近螢幕（或開觀看視角）才播、離開就暫停；聲音隨距離變小。
-// 控制面板（進度條／暫停／快轉／音量；直的）只在「點眼睛觀看」時出現，放在螢幕左邊不擋畫面。有新的遊戲開始轉播就自動跳回轉播（影片停掉）。
+// 控制面板（進度條／暫停／快轉／音量；直的）只在「點眼睛觀看」時出現，放在螢幕左邊不擋畫面；暫停、快轉只影響自己。
+// 螢幕在播影片時，新開局的遊戲**不會**自動跳過去；只有螢幕關著的時候，新遊戲開始才會自動打開（伺服器的 scrAfter 處理）。
 async function vidDB() { if (!S.vidCfg) { try { S.vidCfg = await loadJSON('assets/screen/videos.json'); } catch { S.vidCfg = { videos: [] }; } } return S.vidCfg; }
 function vidStop() {
   const v = S.vid; if (v) { v.el.pause(); v.el.removeAttribute('src'); v.el.load(); }
   S.vid = null; if (S.vidPanelEl) S.vidPanelEl.style.display = 'none';
 }
-function vidPlay(def) {
-  vidStop(); S.scrOff = false;
+function vidStart(def, t0, off) {   // 開始播（伺服器說螢幕現在在播這支）；t0＝伺服器時間的起點、off＝伺服器時間 − 本機時間
+  vidStop();
   const el = document.createElement('video'); el.playsInline = true; el.loop = true; el.preload = 'auto'; el.src = /^(blob:|https?:)/.test(def.file) ? def.file : `assets/screen/video/${def.file}`;
-  S.vid = { def, el, needSync: true, userPaused: false };
+  S.vid = { def, el, t0, off, needSync: true, userPaused: false };
   el.volume = S.vidVol ?? .6; el.muted = !!S.vidMuted;
   el.addEventListener('error', () => { toast('影片載入失敗', 1800); if (S.vid?.el === el) vidStop(); });
-  toast(`大螢幕播放：${def.name}（走近螢幕就會播，只有你看得到）`, 2600);
 }
-const vidClock = v => { const d = v.el.duration || v.def.duration || 1; return ((Date.now() - S.vidCfg.epoch) / 1000) % d; };
-function scrClose() {   // 螢幕上的關閉按鈕：關掉自己這邊的畫面（轉播或影片）；有新的遊戲轉播會自動再開
-  S.scrOff = true; vidStop();
-  toast('大螢幕已關閉（有新的遊戲開始轉播會自動打開）', 2200);
+function vidOnMsg(msg) {   // 伺服器的 scr 訊息：螢幕在播影片
+  const v = msg.vid, off = msg.now - Date.now();
+  if (S.vid && S.vid.def.id === v.id && S.vid.t0 === v.t0) { S.vid.off = off; return; }   // 同一次播放（走近時重送）：不重來
+  vidDB().then(db => {
+    const def = (db.videos || []).find(x => x.id === v.id);
+    if (!def) { toast('大螢幕在播的影片這個版本找不到', 2000); return; }
+    vidStart(def, v.t0, off);
+  });
+}
+const vidClock = v => { const d = v.el.duration || v.def.duration || 1; return (((Date.now() + v.off - v.t0) / 1000) % d + d) % d; };
+function scrClose() {   // 螢幕上的關閉按鈕：送伺服器（全島共用）；有新的遊戲開始時，只有螢幕關著才會自動打開
+  S.net?.tbl?.({ a: 'scr_close' });
 }
 function vidPanel() {   // 直的面板：放在螢幕左邊（進度條、時間、倒退／暫停／快轉、靜音、音量）
   if (S.vidPanelEl) return S.vidPanelEl;
@@ -6508,7 +6516,7 @@ function vidTick() {
   if (!v) { if (S.vidPanelEl) S.vidPanelEl.style.display = 'none'; return; }
   const pr = S.terrain === 'peace' ? propsHere().find(p => p.kind === 'screen') : null;
   const d = pr ? propDist(pr, S.players[0].x, S.players[0].y) : 1e9;
-  const near = !!pr && !S.scrOff && !S.tableOpen && !S.players[0].dead && (!!S.scrView || d <= SCR_WATCH_DIST);
+  const near = !!pr && !S.tableOpen && !S.players[0].dead && (!!S.scrView || d <= SCR_WATCH_DIST);
   const el = v.el;
   if (!near) { if (!el.paused) { el.pause(); v.needSync = true; } if (S.vidPanelEl) S.vidPanelEl.style.display = 'none'; return; }
   if (v.needSync && el.readyState >= 1) { el.currentTime = vidClock(v); v.needSync = false; }
@@ -6690,8 +6698,11 @@ function buildScrPick() {
   if (!S.vidCfg) vidDB().then(() => { if (S.scrPickOpen) buildScrPick(); });
   for (const def of S.vidCfg?.videos || []) {   // 影片（自己放在專案裡的檔案；只有自己看得到）
     const row = document.createElement('div'); row.className = 'scr-opt' + (S.vid?.def.id === def.id ? ' cur' : '');
-    row.innerHTML = `<span class="scr-name">▶ ${def.name}</span><span class="scr-st">影片　${S.vid?.def.id === def.id ? '播放中　' : ''}只有你自己看得到</span>`;
-    row.onclick = () => { vidPlay(def); closeScrPick(); };
+    row.innerHTML = `<span class="scr-name">▶ ${def.name}</span><span class="scr-st">影片　${S.vid?.def.id === def.id ? '播放中　' : ''}大家的螢幕都會播</span>`;
+    row.onclick = () => {
+      if (Date.now() < (S.scrCdAt || 0)) { toast(`大螢幕剛切換過，${Math.ceil((S.scrCdAt - Date.now()) / 1000)} 秒後才能再切`, 1800); return; }
+      S.net?.tbl?.({ a: 'scr_vid', id: def.id }); closeScrPick();
+    };
     body.appendChild(row);
   }
   if (!lst.length) { const e = document.createElement('div'); e.className = 'ff-panel-hint'; e.textContent = '目前沒有進行中、或有人入座的遊戲。有人入座之後再來選。'; body.appendChild(e); return; }
@@ -6703,7 +6714,7 @@ function buildScrPick() {
     row.appendChild(a); row.appendChild(b);
     row.onclick = () => {
       if (Date.now() < (S.scrCdAt || 0)) { toast(`大螢幕剛切換過，${Math.ceil((S.scrCdAt - Date.now()) / 1000)} 秒後才能再切`, 1800); return; }
-      S.scrOff = false; vidStop(); S.net?.tbl?.({ a: 'scr_pick', id: it.id }); closeScrPick();
+      S.net?.tbl?.({ a: 'scr_pick', id: it.id }); closeScrPick();
     };
     body.appendChild(row);
   }
@@ -6715,9 +6726,8 @@ function drawScreenProp(pr, r) {
   ctx.fillStyle = '#12141c'; ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.fillStyle = '#2a2e3c'; ctx.fillRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
   const ix = r.x + (r.w - SCR_W) / 2, iy = r.y + 8;
-  const vd = S.vid && !S.scrOff && S.vid.el.readyState >= 2 ? S.vid.el : null;
-  if (S.scrOff) { ctx.fillStyle = '#07080c'; ctx.fillRect(ix, iy, SCR_W, SCR_H); }   // 手動關閉：黑屏
-  else if (vd) {   // 播自己的影片：保持比例、黑邊置中
+  const vd = S.vid && S.vid.el.readyState >= 2 ? S.vid.el : null;
+  if (vd) {   // 播自己的影片：保持比例、黑邊置中
     ctx.fillStyle = '#000'; ctx.fillRect(ix, iy, SCR_W, SCR_H);
     const ar = vd.videoWidth / vd.videoHeight, W = ar > SCR_W / SCR_H ? SCR_W : SCR_H * ar, H = ar > SCR_W / SCR_H ? SCR_W / ar : SCR_H;
     ctx.imageSmoothingEnabled = true; ctx.drawImage(vd, ix + (SCR_W - W) / 2, iy + (SCR_H - H) / 2, W, H); ctx.imageSmoothingEnabled = false;
@@ -6725,8 +6735,8 @@ function drawScreenProp(pr, r) {
     ctx.drawImage(S.scrCv, ix, iy, SCR_W, SCR_H);
     ctx.fillStyle = 'rgba(255,255,255,.05)'; ctx.fillRect(ix, iy, SCR_W, 70);   // 玻璃反光
   }
-  ctx.fillStyle = !S.scrOff && (S.scr || vd) ? '#5ae07a' : '#c85a5a'; ctx.fillRect(r.x + r.w - 20, r.y + r.h - 7, 5, 3);   // 電源燈
-  if (!S.scrOff && (S.scr || S.vid)) {   // 關閉按鈕（眼睛按鈕上面）：有在轉播或播影片才有
+  ctx.fillStyle = S.scr || vd ? '#5ae07a' : '#c85a5a'; ctx.fillRect(r.x + r.w - 20, r.y + r.h - 7, 5, 3);   // 電源燈
+  if (S.scr || S.vid) {   // 關閉按鈕（眼睛按鈕上面）：有在轉播或播影片才有
     const c = scrCloseRect(pr), cx = c.x + c.w / 2, cy = c.y + c.h / 2;
     ctx.save(); ctx.fillStyle = '#12141c'; ctx.fillRect(c.x, c.y, c.w, c.h); ctx.fillStyle = '#2a2e3c'; ctx.fillRect(c.x + 2, c.y + 2, c.w - 4, c.h - 4);
     ctx.strokeStyle = '#e07a68'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(cx - 7, cy - 7); ctx.lineTo(cx + 7, cy + 7); ctx.moveTo(cx + 7, cy - 7); ctx.lineTo(cx - 7, cy + 7); ctx.stroke();
@@ -6749,7 +6759,7 @@ function drawScreenProp(pr, r) {
 // 純客戶端：S.scrView＝按下時角色的位置（null＝沒開），鏡頭在 draw() 裡用 S.scrViewK（0～1）平滑過去；開著的時候不管離多遠都訂閱螢幕畫面（scrWatchTick）。
 function scrCloseRect(pr) { const r = propRect(pr); return { x: r.x + r.w + 8, y: r.y + r.h - 96, w: 32, h: 32 }; }   // 關閉按鈕：眼睛按鈕上面
 function scrCloseAt(wx, wy) {
-  const pr = S.terrain === 'peace' ? propsHere().find(p => p.kind === 'screen') : null; if (!pr || S.scrOff || !(S.scr || S.vid)) return false;
+  const pr = S.terrain === 'peace' ? propsHere().find(p => p.kind === 'screen') : null; if (!pr || !(S.scr || S.vid)) return false;
   const b = scrCloseRect(pr); return wx >= b.x && wx < b.x + b.w && wy >= b.y && wy < b.y + b.h + 12;
 }
 function scrEyeRect(pr) { const r = propRect(pr); return { x: r.x + r.w + 8, y: r.y + r.h - 46, w: 32, h: 32 }; }
@@ -12339,7 +12349,7 @@ async function switchTerrain(id) {
     await ensureTerrain(id);      // 先載好圖，再切地形
     S.terrain = id; try { localStorage.setItem('dcisland.m0.terrain', id); } catch { /* 存不了不影響換地形 */ }
     S.remotes.clear();                          // 換了地形，原地形的人都看不到了
-    S.scr = null; S.scrList = null; S.scrWatching = false; S.scrOff = false; vidStop(); closeScrPick(); scrRender();   // 大螢幕只在和平島；走近螢幕時才會送 scr_watch 收畫面
+    S.scr = null; S.scrList = null; S.scrWatching = false; vidStop(); closeScrPick(); scrRender();   // 大螢幕只在和平島；走近螢幕時才會送 scr_watch 收畫面
     if (S.listOpen) { S.listSig = null; buildPlayerList(); }   // 線上列表開著：馬上清掉舊島的人，新島的人到了由計時器補上
     if (netOn()) { S.netFurn = []; S.netFloor = []; }   // 等伺服器送該地形的擺設與地板
     genWorld(id); loadLayout();
