@@ -2257,6 +2257,32 @@ def claw_machine():
     cv.outline()
     return cv
 
+GACHA_CAP_COLORS = ["#ff6b6b", "#ffd166", "#4ecdc4", "#6b8cff", "#c77dff", "#ff9f43"]   # 要跟 client/js/gacha.js 的 CAP_COLORS 一樣
+def gacha_capsules():
+    """扭蛋殼的半顆圖（橫排 7 格、每格 16×8）：前 6 格是各色上半、第 7 格是白色下半。client/js/gacha.js 拿來拼成 16×16 的蛋（放大整數倍，保持像素感），
+    開蛋時上下兩半各自飛開。"""
+    def full(top, is_top):
+        cv = Canvas(16, 16)
+        for y in range(16):
+            for x in range(16):
+                if ((x - 7.5) / 6.5) ** 2 + ((y - 7.5) / 6.5) ** 2 <= 1.0:
+                    base = top if y < 8 else hx("#f4f0e6")
+                    if x + y >= 17: base = shade(base, .8)       # 右下較暗
+                    cv.set(x, y, base)
+        for x, y in ((3, 3), (4, 3), (3, 4)) if is_top else ((11, 12), (12, 11)):
+            cv.set(x, y, hx("#ffffff"))   # 高光
+        cv.outline(hx("#1b1424"))
+        for x in range(16):                                           # 上下殼的接縫（上半最底下一排）
+            if cv.get(x, 7)[3]: cv.set(x, 7, hx("#1b1424"))
+        return cv
+    sheet = Canvas(16 * 7, 8)
+    for i in range(7):
+        cv = full(hx(GACHA_CAP_COLORS[i]) if i < 6 else hx("#ffffff"), i < 6)
+        for y in range(8):
+            for x in range(16):
+                sheet.set(i * 16 + x, y, cv.get(x, y if i < 6 else y + 8))
+    return sheet
+
 def gacha_machine():
     """扭蛋機（32×48，畫 scale 2＝2×3 格）：上方透明圓罩裡裝滿彩色扭蛋、紅色機身中間一個黃色轉鈕，下方出蛋口。目前只是外觀（不能互動）。"""
     cv = Canvas(32, 48)
@@ -4120,6 +4146,7 @@ def main():
     save(table_kingdom(), "table_kingdom.png", "games")
     save(table_bigtwo(), "table_bigtwo.png", "games")
     save(table_purify(), "table_purify.png", "games")
+    save(gacha_capsules(), "cap_halves.png", "gacha")   # 扭蛋殼（client/js/gacha.js）
     save(table_trigon(), "table_trigon.png", "games")
     for k, col in enumerate(ARCADE_COLORS):
         save(arcade_cabinet(col), f"arcade_{k}.png", "games")

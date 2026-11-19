@@ -11,7 +11,7 @@ let box = null, ui = null, deps = null, M = null;
 let busy = false, fast = false, token = 0;   // fast＝點一下跳過動畫；token＝每次抽換一個，舊的動畫流程看到不一樣就停手
 const running = new Set();
 
-const CAP_COLORS = ['#ff6b6b', '#ffd166', '#4ecdc4', '#6b8cff', '#c77dff', '#ff9f43'];
+const CAP_COLORS = 6;   // 蛋殼有幾種顏色（圖是 assets/gacha/cap_halves.png，gen_assets.py 的 gacha_capsules 畫；前 6 格各色上半、第 7 格白色下半）
 const PER_ROW = 5;   // 11 抽＝5＋5＋1
 const SFX = {
   drop: [[330, 0, .05], [220, .05, .08]],
@@ -95,7 +95,7 @@ function layout(n) {   // 每個獎品一格：1 抽一格大的；多抽每列 
 }
 
 function capsule(i) {
-  const c = el('div', 'gc-cap'); c.style.setProperty('--cc', CAP_COLORS[i % CAP_COLORS.length]);
+  const c = el('div', 'gc-cap'); c.style.setProperty('--ci', i % CAP_COLORS);
   c.append(el('i', 't'), el('i', 'b'));
   return c;
 }
@@ -122,7 +122,7 @@ async function dropAll(slots, my) {
     ui.machine.classList.remove('gc-shake'); void ui.machine.offsetWidth; ui.machine.classList.add('gc-shake');
     deps.sfx?.(SFX.drop);
     c.style.opacity = '';
-    anim(c, dropKeyframes(dx, dy), { duration: slots.length === 1 ? 760 : 620, easing: 'linear', fill: 'backwards' });
+    anim(c, dropKeyframes(dx, dy), { duration: slots.length === 1 ? 760 : 620, easing: 'steps(22)', fill: 'backwards' });
     await sleep(slots.length === 1 ? 0 : 125);
   }
   await sleep(slots.length === 1 ? 780 : 560);   // 最後一顆落地
@@ -139,9 +139,9 @@ async function openCap(slot, cap, prize, big) {
   slot.appendChild(burst);
   deps.sfx?.(SFX[rar.id] || SFX.N);
   const t = cap.querySelector('.t'), b = cap.querySelector('.b');
-  anim(t, [{ transform: 'none', opacity: 1 }, { transform: 'translate(-40%,-130%) rotate(-50deg)', opacity: 0 }], { duration: 380, easing: 'ease-out', fill: 'forwards' });
-  anim(b, [{ transform: 'none', opacity: 1 }, { transform: 'translate(40%,80%) rotate(40deg)', opacity: 0 }], { duration: 380, easing: 'ease-out', fill: 'forwards' });
-  anim(burst, [{ opacity: 1, transform: 'scale(.2)' }, { opacity: 1, transform: 'scale(1)', offset: .35 }, { opacity: 0, transform: 'scale(1.5)' }], { duration: 520 + rank * 90, easing: 'ease-out', fill: 'forwards' });
+  anim(t, [{ transform: 'none', opacity: 1 }, { transform: 'translate(-40%,-130%) rotate(-50deg)', opacity: 0 }], { duration: 380, easing: 'steps(6)', fill: 'forwards' });
+  anim(b, [{ transform: 'none', opacity: 1 }, { transform: 'translate(40%,80%) rotate(40deg)', opacity: 0 }], { duration: 380, easing: 'steps(6)', fill: 'forwards' });
+  anim(burst, [{ opacity: 1, transform: 'scale(.2)' }, { opacity: 1, transform: 'scale(1)', offset: .35 }, { opacity: 0, transform: 'scale(1.5)' }], { duration: 520 + rank * 90, easing: 'steps(7)', fill: 'forwards' });
   if (rank >= 2) {   // SR／SSR：整個舞台閃一下；SSR 再加震動
     anim(ui.flash, [{ opacity: 0 }, { opacity: rank >= 3 ? .85 : .45, offset: .2 }, { opacity: 0 }], { duration: rank >= 3 ? 700 : 420, fill: 'none' });
     ui.flash.style.setProperty('--rc', rar.color);
@@ -155,7 +155,7 @@ async function openCap(slot, cap, prize, big) {
   card.style.opacity = '0'; slot.appendChild(card);
   await sleep(120);
   card.style.opacity = '';
-  anim(card, [{ transform: 'scale(.2)', opacity: 0 }, { transform: 'scale(1.18)', opacity: 1, offset: .6 }, { transform: 'scale(1)', opacity: 1 }], { duration: 360, easing: 'ease-out', fill: 'backwards' });
+  anim(card, [{ transform: 'scale(.2)', opacity: 0 }, { transform: 'scale(1.18)', opacity: 1, offset: .6 }, { transform: 'scale(1)', opacity: 1 }], { duration: 360, easing: 'steps(6)', fill: 'backwards' });
   setTimeout(() => cap.remove(), 420);
   if (rank >= 2) card.classList.add('gc-glow');
 }
