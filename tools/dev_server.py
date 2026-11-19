@@ -5786,6 +5786,7 @@ def hk_end(t, cid, msg):
 GAME_START = {"purify": pg_start, "g2048": tf_start, "bubble": bu_start, "breakout": br_start, "pinball": pb_start, "bigtwo": bt_start, "kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 SCR_CID = "__screen__"   # 大螢幕轉播用的虛擬連線編號（tbl_view 把它當觀戰者）
+SCR_CTL_CD_MS = 5000       # 大螢幕影片的暫停／繼續／跳轉冷卻（全島共用；2026-11-19 使用者定：任何人都能控制，每次操作 5 秒冷卻）
 SCR_CD_MS = 5000          # 大螢幕手動切台的冷卻（全島共用；2026-11-14 使用者要求）
 
 def tbl_view(t, cid):
@@ -5982,6 +5983,7 @@ class Room:
         self.scr_last = {}       # 地形 -> 上一次送出的螢幕訊息（內容一樣就不重送）
         self.scr_cd = {}         # 地形 -> 手動切台冷卻到什麼時候（毫秒；全島共用，自動換台不算）
         self.screen_vid = {}     # 地形 -> {"id","t0"}：螢幕正在播的影片（screen 的值是 "v:<影片 id>" 時；2026-11-19）
+        self.scr_ctl_cd = {}     # 地形 -> 影片控制（暫停／繼續／跳轉）冷卻到什麼時候（毫秒）
         self.scr_hold = {}       # 地形 -> set(桌 id)：手動關閉螢幕那一刻已在進行的桌，不會把螢幕再打開（要等新開局）
         self.tlock = threading.Lock()   # 牌桌操作串行（table_op）
         self._xp_pending = []           # 對局結束待發的 XP：[(連線編號, XP)]（table_do 在鎖內收集、table_op 在鎖外發）
@@ -7331,8 +7333,34 @@ class Room:
                         self.scr_cd[terr] = now_ms + SCR_CD_MS
                     self.scr_hold.pop(terr, None)
                     self.screen[terr] = "v:" + vid
-                    self.screen_vid[terr] = {"id": vid, "t0": now_ms}
+                    self.screen_vid[terr] = {"id": vid, "t0": now_ms, "paused": False, "pos": 0}
                     self._scr_push(terr, out, True)
+                return out, None, None
+            if a == "scr_ctl":   # 大螢幕影片：暫停／繼續／跳轉（任何人都能；全島共用冷卻）。pos＝操作的人那邊現在的秒數（伺服器不知道影片長度）
+                sv = self.screen_vid.get(terr)
+                op = str(msg.get("op") or "")
+                try:
+                    pos = float(msg.get("pos"))
+                except (TypeError, ValueError):
+                    return out, None, None
+                now_ms = int(time.time() * 1000)
+                if not sv or not str(self.screen.get(terr) or "").startswith("v:") or op not in ("pause", "play", "seek") or not (0 <= pos <= 86400):
+                    return out, None, None
+                if now_ms < self.scr_ctl_cd.get(terr, 0):
+                    out.append((cid, {"t": "scrcd", "ctl": True, "left": self.scr_ctl_cd[terr] - now_ms}))
+                    return out, None, None
+                self.scr_ctl_cd[terr] = now_ms + SCR_CTL_CD_MS
+                if op == "pause":
+                    sv["paused"] = True
+                    sv["pos"] = pos
+                elif op == "play":
+                    sv["paused"] = False
+                    sv["t0"] = now_ms - round(pos * 1000)
+                elif sv["paused"]:
+                    sv["pos"] = pos
+                else:
+                    sv["t0"] = now_ms - round(pos * 1000)
+                self._scr_push(terr, out, True)
                 return out, None, None
             if a == "scr_close":   # 大螢幕：關閉（轉播或影片都一樣，所有人共用；不另外加冷卻，但冷卻中不能關）
                 now_ms = int(time.time() * 1000)

@@ -3865,6 +3865,7 @@ function hkEnd(t, cid, msg) {   // 桌主那台回報結束（有一隊到 HK_GO
 }
 const GAME_START = { purify: pgStart, g2048: tfStart, bubble: buStart, breakout: brStart, pinball: pbStart, bigtwo: btStart, kingdom: kgStart, arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
+const SCR_CTL_CD_MS = 5000;   // 大螢幕影片的暫停／繼續／跳轉冷卻（全島共用；2026-11-19 使用者定：任何人都能控制，每次操作 5 秒冷卻）
 const SCR_CD_MS = 5000;   // 大螢幕手動切台的冷卻（全島共用；2026-11-14 使用者要求）
 const SCR_CID = "__screen__";   // 大螢幕轉播用的虛擬連線編號（tblView 把它當觀戰者：手牌全翻開）
 function tblView(t, cid) {
@@ -4021,6 +4022,7 @@ export class Island {
     this.scrLast = new Map();        // 地形 → 上一次送出的螢幕訊息（內容一樣就不重送）
     this.scrCd = new Map();          // 地形 → 手動切台冷卻到什麼時候（毫秒；全島共用，自動換台不算）
     this.screenVid = new Map();      // 地形 → { id, t0 }：螢幕正在播的影片（screen 的值是 "v:<影片 id>" 的時候；2026-11-19，影片檔在客戶端的 assets/screen/，伺服器只記「播哪一支、從什麼時候開始」，大家用同一個時間算進度；只放記憶體）
+    this.scrCtlCd = new Map();       // 地形 → 影片控制（暫停／繼續／跳轉）冷卻到什麼時候（毫秒）
     this.scrHold = new Map();        // 地形 → Set(桌 id)：手動關閉螢幕那一刻已經在進行的桌——它們不會把螢幕再打開，要等「新開局」才算（使用者定：螢幕關著、有新遊戲開始才自動跳過去）
     this.lastTblPos = new Map();     // ws → 上次躲彈幕位置回報的時間（TBL_POS_CD_MS）
     this.lastTblTyp = new Map();     // ws → 上次英打進度回報的時間（TBL_TYP_CD_MS）
@@ -4699,8 +4701,20 @@ export class Island {
       if (now < (this.scrCd.get(terr) || 0)) ws.send(JSON.stringify({ t: "scrcd", left: this.scrCd.get(terr) - now }));
       else {
         if (this.screen.get(terr) !== "v:" + vid) this.scrCd.set(terr, now + SCR_CD_MS);
-        this.scrHold.delete(terr); this.screen.set(terr, "v:" + vid); this.screenVid.set(terr, { id: vid, t0: now }); this.scrPush(terr, true);
+        this.scrHold.delete(terr); this.screen.set(terr, "v:" + vid); this.screenVid.set(terr, { id: vid, t0: now, paused: false, pos: 0 }); this.scrPush(terr, true);
       }
+      return;
+    }
+    if (a === "scr_ctl") {   // 大螢幕影片：暫停／繼續／跳轉（任何人都能；全島共用冷卻）。pos＝操作的人那邊現在的秒數（伺服器不知道影片長度）
+      const sv = this.screenVid.get(terr), op = String(msg.op || ""), pos = Number(msg.pos);
+      if (!sv || !String(this.screen.get(terr) || "").startsWith("v:") || !["pause", "play", "seek"].includes(op) || !Number.isFinite(pos) || pos < 0 || pos > 86400) return;
+      if (now < (this.scrCtlCd.get(terr) || 0)) { ws.send(JSON.stringify({ t: "scrcd", ctl: true, left: this.scrCtlCd.get(terr) - now })); return; }
+      this.scrCtlCd.set(terr, now + SCR_CTL_CD_MS);
+      if (op === "pause") { sv.paused = true; sv.pos = pos; }
+      else if (op === "play") { sv.paused = false; sv.t0 = now - Math.round(pos * 1000); }
+      else if (sv.paused) sv.pos = pos;
+      else sv.t0 = now - Math.round(pos * 1000);
+      this.scrPush(terr, true);
       return;
     }
     if (a === "scr_close") {   // 大螢幕：關閉（轉播或影片都一樣，所有人共用；不另外加冷卻，但冷卻中不能關）
