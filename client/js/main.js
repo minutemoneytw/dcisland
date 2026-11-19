@@ -6476,6 +6476,7 @@ function vidStart(def, t0, off, paused, pos) {   // 開始播（伺服器說螢�
   el.addEventListener('error', () => { toast('影片載入失敗', 1800); if (S.vid?.el === el) vidStop(); });
 }
 function vidOnMsg(msg) {   // 伺服器的 scr 訊息：螢幕在播影片
+  if (S.vidCfg && !S.vidCfg.enabled) return;   // 功能先關著：忽略（videos.json 的 enabled）
   const v = msg.vid, off = msg.now - Date.now();
   const cur = S.vid;
   if (cur && cur.def.id === v.id) {   // 同一支影片：只更新共用狀態（暫停／跳轉／走近時重送），不重來
@@ -6484,6 +6485,7 @@ function vidOnMsg(msg) {   // 伺服器的 scr 訊息：螢幕在播影片
     return;
   }
   vidDB().then(db => {
+    if (!db.enabled) return;   // 功能先關著
     const def = (db.videos || []).find(x => x.id === v.id);
     if (!def) { toast('大螢幕在播的影片這個版本找不到', 2000); return; }
     vidStart(def, v.t0, off, v.paused, v.pos);
@@ -6711,7 +6713,7 @@ function buildScrPick() {
   const lst = S.scrList?.list || [];
   if (!S.scrList) { body.textContent = '讀取中…'; return; }
   if (!S.vidCfg) vidDB().then(() => { if (S.scrPickOpen) buildScrPick(); });
-  for (const def of S.vidCfg?.videos || []) {   // 影片（自己放在專案裡的檔案；只有自己看得到）
+  for (const def of S.vidCfg?.enabled ? S.vidCfg.videos || [] : []) {   // 影片（videos.json 的 enabled＝false 時整個功能先不顯示，使用者定 2026-11-19）
     const row = document.createElement('div'); row.className = 'scr-opt' + (S.vid?.def.id === def.id ? ' cur' : '');
     row.innerHTML = `<span class="scr-name">▶ ${def.name}</span><span class="scr-st">影片　${S.vid?.def.id === def.id ? '播放中　' : ''}大家的螢幕都會播</span>`;
     row.onclick = () => {
