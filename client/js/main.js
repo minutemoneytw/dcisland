@@ -6460,7 +6460,7 @@ function scrWatchTick() {
 // ---- 大螢幕播放自己放的影片（2026-11-19；取代 YouTube 試播——YouTube 在 Discord 裡載不起來）----
 // 影片檔放 assets/screen/video/，清單在 assets/screen/videos.json。只有自己看得到（本機選項、不經伺服器）；大家用同一個起算時刻，選同一支的人看到同一段。
 // 影片直接畫進螢幕的畫布（同網域、沒有 iframe），人物自然畫在上面。走近螢幕（或開觀看視角）才播、離開就暫停；聲音隨距離變小。
-// 控制面板（暫停／快轉／音量）只在「點眼睛觀看」時出現，放在螢幕下方不擋畫面。有新的遊戲開始轉播就自動跳回轉播（影片停掉）。
+// 控制面板（進度條／暫停／快轉／音量；直的）只在「點眼睛觀看」時出現，放在螢幕左邊不擋畫面。有新的遊戲開始轉播就自動跳回轉播（影片停掉）。
 async function vidDB() { if (!S.vidCfg) { try { S.vidCfg = await loadJSON('assets/screen/videos.json'); } catch { S.vidCfg = { videos: [] }; } } return S.vidCfg; }
 function vidStop() {
   const v = S.vid; if (v) { v.el.pause(); v.el.removeAttribute('src'); v.el.load(); }
@@ -6479,21 +6479,26 @@ function scrClose() {   // 螢幕上的關閉按鈕：關掉自己這邊的畫�
   S.scrOff = true; vidStop();
   toast('大螢幕已關閉（有新的遊戲開始轉播會自動打開）', 2200);
 }
-function vidPanel() {
+function vidPanel() {   // 直的面板：放在螢幕左邊（進度條、時間、倒退／暫停／快轉、靜音、音量）
   if (S.vidPanelEl) return S.vidPanelEl;
   const el = document.createElement('div'); el.id = 'vidPanel';
-  el.style.cssText = 'position:fixed;z-index:25;display:none;align-items:center;gap:6px;padding:3px 8px;background:rgba(14,16,24,.88);border:1px solid #8a7536;font:12px "Microsoft JhengHei",sans-serif;color:#e8e4d8;box-sizing:border-box';
+  el.style.cssText = 'position:fixed;z-index:25;display:none;flex-direction:column;align-items:stretch;gap:5px;width:118px;padding:6px 8px;background:rgba(14,16,24,.9);border:1px solid #8a7536;font:12px "Microsoft JhengHei",sans-serif;color:#e8e4d8;box-sizing:border-box';
   const mkb = (txt, tip, fn) => { const b = document.createElement('button'); b.className = 'ff-btn small'; b.textContent = txt; b.title = tip; b.onclick = fn; return b; };
+  const lab = txt => { const d = document.createElement('div'); d.textContent = txt; d.style.cssText = 'color:#a09a86;font-size:11px;display:flex;justify-content:space-between'; return d; };
   const B = S.vidB = {
-    back: mkb('⏪10', '倒退 10 秒', () => { const v = S.vid; if (v) v.el.currentTime = Math.max(0, v.el.currentTime - 10); }),
+    back: mkb('−10', '倒退 10 秒', () => { const v = S.vid; if (v) v.el.currentTime = Math.max(0, v.el.currentTime - 10); }),
     play: mkb('⏸', '暫停／播放', () => { const v = S.vid; if (!v) return; if (v.el.paused) { v.userPaused = false; v.el.play().catch(() => { }); } else { v.userPaused = true; v.el.pause(); } }),
-    fwd: mkb('10⏩', '快轉 10 秒', () => { const v = S.vid; if (v) v.el.currentTime = (v.el.currentTime + 10) % (v.el.duration || 1e9); }),
-    mute: mkb('🔊', '靜音／開聲音', () => { S.vidMuted = !S.vidMuted; if (S.vid) S.vid.el.muted = S.vidMuted; }),
+    fwd: mkb('+10', '快轉 10 秒', () => { const v = S.vid; if (v) v.el.currentTime = (v.el.currentTime + 10) % (v.el.duration || 1e9); }),
+    mute: mkb('🔊 靜音', '靜音／開聲音', () => { S.vidMuted = !S.vidMuted; if (S.vid) S.vid.el.muted = S.vidMuted; }),
   };
-  const vol = B.vol = document.createElement('input'); vol.type = 'range'; vol.min = 0; vol.max = 100; vol.value = Math.round((S.vidVol ?? .6) * 100); vol.style.cssText = 'width:90px;flex:none'; vol.title = '音量';
+  const seek = B.seek = document.createElement('input'); seek.type = 'range'; seek.min = 0; seek.max = 1000; seek.value = 0; seek.title = '進度（拖曳跳到想看的地方）';
+  seek.oninput = () => { const v = S.vid; if (v && v.el.duration) v.el.currentTime = seek.value / 1000 * v.el.duration; };
+  const vol = B.vol = document.createElement('input'); vol.type = 'range'; vol.min = 0; vol.max = 100; vol.value = Math.round((S.vidVol ?? .6) * 100); vol.title = '音量';
   vol.oninput = () => { S.vidVol = +vol.value / 100; S.vidMuted = false; if (S.vid) { S.vid.el.muted = false; } };
-  B.time = document.createElement('span'); B.time.style.cssText = 'margin-left:auto;font-variant-numeric:tabular-nums';
-  el.append(B.back, B.play, B.fwd, B.mute, vol, B.time);
+  B.time = document.createElement('span'); B.volTxt = document.createElement('span');
+  const l1 = lab('進度'), l2 = lab('音量'); l1.appendChild(B.time); l2.appendChild(B.volTxt); B.time.style.fontVariantNumeric = 'tabular-nums';
+  const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:4px;justify-content:space-between'; row.append(B.back, B.play, B.fwd);
+  el.append(l1, seek, row, B.mute, l2, vol);
   for (const ev of ['mousedown', 'click', 'contextmenu', 'wheel']) el.addEventListener(ev, e => e.stopPropagation());   // 點面板不算遊戲裡的點擊
   document.body.appendChild(el); return S.vidPanelEl = el;
 }
@@ -6511,11 +6516,14 @@ function vidTick() {
   el.volume = Math.max(0, Math.min(1, (S.vidVol ?? .6) * (S.scrView ? 1 : 1 - Math.max(0, d - 200) / (SCR_WATCH_DIST - 200))));   // 離螢幕越遠越小聲
   if (!S.scrView) { if (S.vidPanelEl) S.vidPanelEl.style.display = 'none'; return; }   // 控制面板只在點眼睛觀看時出現
   const pn = vidPanel(), B = S.vidB, rc = canvas.getBoundingClientRect(), k = rc.width / canvas.width, r = propRect(pr);
-  const x = rc.left + (r.x + (r.w - SCR_W) / 2 - S.cam.x) * k, y = rc.top + (r.y + r.h - S.cam.y) * k + 8, w = SCR_W * k;   // 螢幕外框下緣再往下 8px：不擋畫面
-  pn.style.display = y + 32 > rc.bottom ? 'none' : 'flex'; pn.style.left = x + 'px'; pn.style.top = y + 'px'; pn.style.width = w + 'px'; pn.style.height = '32px';
-  B.play.textContent = el.paused ? '▶' : '⏸'; B.mute.textContent = S.vidMuted || el.muted ? '🔇' : '🔊';
+  const x = rc.left + (r.x + (r.w - SCR_W) / 2 - S.cam.x) * k, y = rc.top + (r.y + 8 - S.cam.y) * k;   // 螢幕畫面的左上角；面板放在它的左邊（使用者定：做成直的放左邊，不擋畫面）
+  const pw = 118, left = x - pw - 12;
+  pn.style.display = left < rc.left || y + 170 > rc.bottom ? 'none' : 'flex'; pn.style.left = left + 'px'; pn.style.top = y + 'px';
+  B.play.textContent = el.paused ? '▶' : '⏸'; B.mute.textContent = S.vidMuted || el.muted ? '🔇 開聲音' : '🔊 靜音';
+  const dur = el.duration || v.def.duration || 1;
+  if (document.activeElement !== B.seek) B.seek.value = Math.round(el.currentTime / dur * 1000);   // 拖曳時不被覆蓋
   if (document.activeElement !== B.vol) B.vol.value = Math.round((S.vidVol ?? .6) * 100);
-  B.time.textContent = `${vidFmt(el.currentTime)} / ${vidFmt(el.duration || v.def.duration)}`;
+  B.time.textContent = `${vidFmt(el.currentTime)} / ${vidFmt(dur)}`; B.volTxt.textContent = `${Math.round((S.vidVol ?? .6) * 100)}%`;
 }
 function onNetScrCd(msg) { toast(`大螢幕剛切換過，${Math.ceil(msg.left / 1000)} 秒後才能再切`, 1800); }
 function onNetScrList(msg) {
