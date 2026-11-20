@@ -2125,7 +2125,7 @@ def table_breakout():
     return cv
 
 def table_planet(vs=False):
-    """（vs＝True：第 2 台，紅色機身、側板中間一條線）星球合成機台（32×48，畫 scale 2＝2×3 格）：**側面、面向左邊**的街機（靠東牆擺，放在 2048 底下）——深藍紫色機身，左上是往前伸的發光招牌、
+    """（vs＝True：第 2 台，只換紅色機身，側板圖案與第 1 台相同）星球合成機台（32×48，畫 scale 2＝2×3 格）：**側面、面向左邊**的街機（靠東牆擺，放在 2048 底下）——深藍紫色機身，左上是往前伸的發光招牌、
     下面一道往內斜的發光螢幕、往左突出的操作台（搖桿與按鈕），側板上畫著星空、堆在一起的幾顆星球和一顆待落下的小隕石。"""
     cv = Canvas(32, 48)
     c = hx("#b8465a" if vs else "#5a4cb0"); dark = shade(c, .6); lite = shade(c, 1.3)
@@ -2156,8 +2156,6 @@ def table_planet(vs=False):
     cv.ellipse(23, 25, 1.7, 1.7, hx("#4a8ae8")); cv.set(22, 24, hx("#a8d0ff"))          # 地球
     cv.ellipse(20, 22, 1.2, 1.2, hx("#c85a3a"))                                         # 火星
     cv.set(21, 15, hx("#a09890")); cv.set(22, 15, hx("#a09890")); cv.set(21, 16, hx("#706860"))   # 待落下的小隕石
-    if vs:   # 對戰機台：側板中間一條線，左右各一個盤面（右邊多一顆太陽）
-        cv.vline(20, 11, 27, hx("#ffd0d0")); cv.ellipse(23, 14, 1.6, 1.6, hx("#ffd040")); cv.set(22, 13, hx("#fff4b0"))
     for y in (34, 37, 40):
         cv.hline(18, 25, y, dark)                                                     # 下半身的散熱孔
     cv.hline(7, 29, 46, dark); cv.hline(7, 29, 47, dark)
@@ -2226,9 +2224,9 @@ def table_g2048():
     cv.hline(3, 12, 23, lite); cv.hline(3, 12, 27, dark); cv.vline(3, 23, 27, lite)   # 操作台
     for dx, dy in ((5, 24), (3, 25), (7, 25), (5, 26)):                   # 四個方向鍵（十字）
         cv.rect(dx, dy, dx + 1, dy + 1, hx("#fff0b0"))
-    cv.rect(14, 10, 26, 28, hx("#2a2018")); cv.rect(15, 11, 25, 27, hx("#bbada0"))   # 側板上的圖：棋盤底
-    tiles = (("eee4da", "ede0c8", "f2b179", "f59563"), ("f67c5f", "f65e3b", "edcf72", "edc22e"),
-             ("eee4da", "f2b179", "f67c5f", "cdc1b4"), ("cdc1b4", "cdc1b4", "ede0c8", "cdc1b4"))
+    cv.rect(14, 10, 26, 28, hx("#182034")); cv.rect(15, 11, 25, 27, hx("#222c48"))   # 側板上的圖：棋盤底（用遊戲裡實際的深藍配色，同 main.js 的 TF_COL）
+    tiles = (("5b7fb8", "4f9fc0", "3fb0a0", "5cba7a"), ("a8c860", "e0c050", "f0a840", "f08850"),
+             ("e86a6a", "c860b0", "9a5ad8", "2c3552"), ("2c3552", "2c3552", "5b7fb8", "2c3552"))   # 2、4、8…2048 的色階；2c3552＝空格
     for r, row in enumerate(tiles):                                                   # 4×4 的方塊（每格 2×2 像素、留 1 格縫）
         for k, col in enumerate(row):
             x = 16 + k * 3; y = 12 + r * 4; cv.rect(x, y, x + 1, y + 2, hx("#" + col))
