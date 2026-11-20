@@ -261,6 +261,8 @@
   {
    "id": "t24",
    "game": "planet",
+   "cab": 0,
+   "img": "table_planet.png",
    "cell": [
     83,
     38
@@ -269,8 +271,10 @@
    "h": 3
   },
   {
-   "id": "t25",
-   "game": "planetvs",
+   "id": "t24",
+   "game": "planet",
+   "cab": 1,
+   "img": "table_planet2.png",
    "cell": [
     83,
     42

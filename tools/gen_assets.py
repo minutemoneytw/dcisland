@@ -1631,10 +1631,10 @@ TABLES_BY_TERRAIN = {
               dict(id="t20", game="breakout", cell=[83, 22], w=2, h=3),
               dict(id="t22", game="bubble", cell=[83, 30], w=2, h=3),
               dict(id="t23", game="g2048", cell=[83, 34], w=2, h=3),
-              # 星球合成（2026-11-20，使用者要求：做一款類似西瓜遊戲的）：貼東牆、面向左，在 2048 下面隔 1 格；單人、分數進排行榜
-              dict(id="t24", game="planet", cell=[83, 38], w=2, h=3),
-              # 星球合成對戰（2026-11-20，使用者要求：下面再加一台、可對戰）：貼東牆、面向左，在星球合成下面隔 1 格；單人或 2 人對戰
-              dict(id="t25", game="planetvs", cell=[83, 42], w=2, h=3)],   # 2048（2026-11-17，使用者要求：泡泡射手下方再放一台）：貼東牆、面向左，在泡泡射手下面隔 1 格；單人、分數進排行榜
+              # 星球合成（2026-11-20，使用者要求：做一款類似西瓜遊戲的；再要求「兩台單人機台＋邀請對戰」）：兩台機台共用邏輯桌 t24（同俄羅斯方塊 t13 的做法，cab＝第幾台），
+              # 貼東牆、面向左，在 2048 下面隔 1 格，兩台之間也隔 1 格；單人模式分數進排行榜，邀請對戰＝先合成出黑洞或對手先死就贏
+              dict(id="t24", game="planet", cab=0, img="table_planet.png", cell=[83, 38], w=2, h=3),
+              dict(id="t24", game="planet", cab=1, img="table_planet2.png", cell=[83, 42], w=2, h=3)],   # 2048（2026-11-17，使用者要求：泡泡射手下方再放一台）：貼東牆、面向左，在泡泡射手下面隔 1 格；單人、分數進排行榜
 #   # 泡泡射手（2026-11-17，使用者要求：彈珠台下方放一台）：貼東牆、面向左，在彈珠台下面隔 1 格；單人、分數進排行榜    # 彈珠台（2026-11-15，使用者要求：俄羅斯方塊機台左邊）：同樣 2×3 格、靠北牆，跟機台隔 1 格；單人、分數進排行榜,   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
 }
 
@@ -2125,7 +2125,7 @@ def table_breakout():
     return cv
 
 def table_planet(vs=False):
-    """（vs＝True：星球合成對戰機台 t25，紅色機身、側板上兩邊各一顆星球中間隔一條線）星球合成機台（32×48，畫 scale 2＝2×3 格）：**側面、面向左邊**的街機（靠東牆擺，放在 2048 底下）——深藍紫色機身，左上是往前伸的發光招牌、
+    """（vs＝True：第 2 台，紅色機身、側板中間一條線）星球合成機台（32×48，畫 scale 2＝2×3 格）：**側面、面向左邊**的街機（靠東牆擺，放在 2048 底下）——深藍紫色機身，左上是往前伸的發光招牌、
     下面一道往內斜的發光螢幕、往左突出的操作台（搖桿與按鈕），側板上畫著星空、堆在一起的幾顆星球和一顆待落下的小隕石。"""
     cv = Canvas(32, 48)
     c = hx("#b8465a" if vs else "#5a4cb0"); dark = shade(c, .6); lite = shade(c, 1.3)
@@ -4297,7 +4297,7 @@ def main():
     save(table_bubble(), "table_bubble.png", "games")
     save(table_g2048(), "table_g2048.png", "games")
     save(table_planet(), "table_planet.png", "games")
-    save(table_planet(True), "table_planetvs.png", "games")
+    save(table_planet(True), "table_planet2.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")
