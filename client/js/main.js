@@ -8725,12 +8725,12 @@ function plColor(k, u, v, lit, x, y) {
   switch (k) {
     case 1: c = n < .12 || (Math.abs(u + .3) < .22 && Math.abs(v - .2) < .2) ? [92, 86, 80] : [150, 142, 132]; if (r2 > .75) c = [118, 110, 102]; break;   // 隕石：灰褐、坑洞
     case 2: c = (Math.hypot(u - .1, v - .1) < .4 && v < .1 + Math.abs(u - .1) * -.1 + .15) ? [236, 214, 190] : (n < .3 ? [150, 118, 96] : [190, 156, 126]); break;   // 冥王星：米白的心形區
-    case 3: c = Math.hypot(u + .3, v + .1) < .22 || Math.hypot(u - .35, v - .3) < .28 || Math.hypot(u - .1, v + .5) < .15 ? [150, 150, 158] : [208, 208, 214]; break;   // 月球：灰白、環形山
-    case 4: c = v < -.78 ? [244, 240, 236] : (n < .2 ? [160, 62, 38] : [206, 92, 56]); break;   // 火星：紅橘、極冠
-    case 5: { const land = Math.sin(u * 4 + 1) * Math.cos(v * 5) + Math.sin(v * 3 - u * 2) > .55; c = land ? [74, 160, 84] : [52, 112, 212]; if (v < -.82 || v > .86) c = [238, 244, 250]; break; }   // 地球
+    case 3: c = Math.hypot(u + .3, v + .1) < .22 || Math.hypot(u - .35, v - .3) < .28 || Math.hypot(u - .1, v + .5) < .15 ? [132, 132, 142] : [186, 186, 194]; break;   // 月球：灰、環形山
+    case 4: c = n < .2 ? [160, 62, 38] : [206, 92, 56]; break;   // 火星：紅橘（不畫白色極冠，會像白邊）
+    case 5: { const land = Math.sin(u * 4 + 1) * Math.cos(v * 5) + Math.sin(v * 3 - u * 2) > .55; c = land ? [74, 160, 84] : [52, 112, 212]; break; }   // 地球（不畫白色極冠）
     case 6: c = Math.abs(v - .15) < .12 ? [120, 160, 255] : (n < .1 ? [60, 90, 190] : [48, 78, 200]); break;   // 海王星：深藍、亮帶
     case 7: { const b = Math.sin(v * 9); c = b > .2 ? [232, 206, 140] : [204, 172, 108]; break; }   // 土星（環另外畫）
-    case 8: { const b = Math.sin(v * 7 + Math.sin(u * 3) * .6); c = b > .35 ? [236, 224, 200] : b > -.3 ? [214, 150, 90] : [172, 108, 66]; if (Math.hypot(u - .3, v - .35) < .2) c = [190, 70, 50]; break; }   // 木星：橫紋、大紅斑
+    case 8: { const b = Math.sin(v * 7 + Math.sin(u * 3) * .6); c = b > .35 ? [224, 206, 172] : b > -.3 ? [214, 150, 90] : [172, 108, 66]; if (Math.hypot(u - .3, v - .35) < .2) c = [190, 70, 50]; break; }   // 木星：橫紋、大紅斑
     case 9: c = n < .15 ? [255, 250, 190] : (r2 > .6 ? [255, 190, 50] : [255, 224, 90]); return c;   // 太陽：自己發亮，不打光
     case 10: c = n < .16 ? [120, 20, 20] : (r2 > .55 ? [200, 50, 30] : [232, 84, 44]); return sh(c).map((a, i) => a * .5 + c[i] * .5);   // 紅巨星
     case 11: { const rim = Math.sqrt(r2); c = rim > .8 ? [150, 90, 230] : rim > .62 ? [60, 30, 110] : [4, 2, 10]; return c; }   // 黑洞：黑心＋紫色邊
@@ -8739,10 +8739,10 @@ function plColor(k, u, v, lit, x, y) {
   return sh(c);
 }
 const PL_CACHE = {};
-function plSprite(k) {   // 第 k 級的點陣圖（畫一次快取）：回傳 {cv, size（含光暈／環的邊長，像素）}
+function plSprite(k) {   // 第 k 級的點陣圖（畫一次快取）：cv＝底圖（會跟著星體轉）、ov＝陰影／高光層（不轉，光永遠從左上來）、size＝含光暈／環的邊長（像素）
   if (PL_CACHE[k]) return PL_CACHE[k];
-  const r = PL_RAD[k], pad = k === 7 ? Math.round(r * .55) : k >= 9 ? Math.round(r * .3) : 0, n = Math.ceil((r + pad) * 2 / PL_PX), cv = document.createElement('canvas');
-  cv.width = cv.height = n; const g = cv.getContext('2d'), c0 = (n - 1) / 2, rr = r / PL_PX;
+  const r = PL_RAD[k], pad = k === 7 ? Math.round(r * .55) : k >= 9 ? Math.round(r * .3) : 0, n = Math.ceil((r + pad) * 2 / PL_PX), cv = document.createElement('canvas'), ov = document.createElement('canvas');
+  cv.width = cv.height = ov.width = ov.height = n; const g = cv.getContext('2d'), go = ov.getContext('2d'), c0 = (n - 1) / 2, rr = r / PL_PX;
   const put = (x, y, c) => { g.fillStyle = `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`; g.fillRect(x, y, 1, 1); };
   if (k >= 9) {   // 太陽／紅巨星／黑洞：外圍一圈光暈
     for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
@@ -8757,10 +8757,14 @@ function plSprite(k) {   // 第 k 級的點陣圖（畫一次快取）：回傳 
       if (d > .82 && d < 1 && (y - c0) < 0) put(x, y, [210, 184, 120]);
     }
   }
+  const lit0 = .75, m0 = .55 + lit0 * .65;
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
     const u = (x - c0) / rr, v = (y - c0) / rr; if (u * u + v * v > 1) continue;
-    const lit = Math.max(0, Math.min(1, .5 + (-u * .5 - v * .55) * .6));
-    put(x, y, plColor(k, u, v, lit, x, y));
+    put(x, y, plColor(k, u, v, lit0, x, y));
+    if (k >= 9) continue;
+    const lit = Math.max(0, Math.min(1, .5 + (-u * .5 - v * .55) * .6)), f = (.55 + lit * .65) / m0;   // 左上亮、右下暗
+    const r2 = u * u + v * v, rim = r2 > .7 ? (r2 - .7) / .3 * .38 : 0;   // 邊緣加一圈暗色（淺色的星體才不會像有白邊）
+    go.fillStyle = f < 1 || rim ? `rgba(0,0,0,${Math.min(.85, Math.max(0, 1 - f) + rim).toFixed(3)})` : `rgba(255,255,255,${((f - 1) * .6).toFixed(3)})`; go.fillRect(x, y, 1, 1);
   }
   if (k === 7) {   // 環的前半
     for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
@@ -8768,7 +8772,7 @@ function plSprite(k) {   // 第 k 級的點陣圖（畫一次快取）：回傳 
       if (d > .82 && d < 1 && (y - c0) >= 0) put(x, y, [232, 204, 140]);
     }
   }
-  return (PL_CACHE[k] = { cv, size: n * PL_PX });
+  return (PL_CACHE[k] = { cv, ov, size: n * PL_PX });
 }
 function plRoll(B) { const w = [0, 5, 5, 4, 3, 2], t = w.reduce((a, b) => a + b, 0); let x = B.rnd() * t, k = 1; for (; k < 5; k++) { x -= w[k]; if (x < 0) break; } return k; }   // 掉下來的只有前 5 級，小的比較常出現
 function plMake(v) {
@@ -8787,7 +8791,7 @@ function plNote(B, t) { B.note = { t, until: performance.now() + 1600 }; }
 function plDrop(B) {   // 放下手上這顆（冷卻中、倒數中、結束後不能放）
   if (B.role !== 'seat' || B.over || plNow(B) < 0 || B.cd > 0) return;
   const k = B.cur, r = PL_RAD[k], x = Math.max(PL_L + r, Math.min(PL_R - r, B.cx));
-  B.bodies.push({ k, x, y: PL_DROP_Y, vx: 0, vy: 40, age: 0, pop: 1 });
+  B.bodies.push({ k, x, y: PL_DROP_Y, vx: 0, vy: 40, a: Math.random() * Math.PI * 2, w: 0, age: 0, pop: 1 });   // 角度用 Math.random（不影響 seed 決定的掉落順序）
   B.cur = B.nx; B.nx = plRoll(B); B.cd = PL_CD;
 }
 function plKey(e, down) {   // 星球合成的按鍵：← A／→ D 移動，空白 ↓ S 放下（回 true＝已處理）
@@ -8798,23 +8802,37 @@ function plKey(e, down) {   // 星球合成的按鍵：← A／→ D 移動，�
   if (l) B.keys.l = down ? 1 : 0; if (r) B.keys.r = down ? 1 : 0; if (go && down && !e.repeat) plDrop(B);
   return true;
 }
-function plMerge(B, a, b) {   // 兩顆同級碰在一起：合成下一級（黑洞＝一起消失加大量分數）
+function plBlast(B, x, y, R, power, skip) {   // 合成瞬間的衝力：把附近的星體往外彈開（小的被彈得比較遠），順便讓它們轉一下
+  for (const o of B.bodies) {
+    if (o === skip) continue;
+    const ro = PL_RAD[o.k], dx = o.x - x, dy = o.y - y, d = Math.hypot(dx, dy) || 1, gap = Math.max(0, d - R - ro), reach = R * .9;   // gap＝兩者表面的距離（貼著＝0）
+    if (gap >= reach) continue;
+    const f = 1 - gap / reach, s = f * power * Math.min(1, R / ro);
+    o.vx += dx / d * s; o.vy += dy / d * s * .8; o.w += (Math.random() - .5) * 6 * f;
+  }
+}
+function plMerge(B, a, b) {   // 兩顆同級碰在一起：合成下一級（黑洞＝一起消失、變回一顆隕石、加大量分數）
   const ra = PL_RAD[a.k] ** 2, rb = PL_RAD[b.k] ** 2, x = (a.x * ra + b.x * rb) / (ra + rb), y = (a.y * ra + b.y * rb) / (ra + rb);
   B.bodies = B.bodies.filter(o => o !== a && o !== b);
-  if (a.k >= 11) { B.score += PL_BH_BONUS; B.fx.push({ x, y, k: 11, t: 0, big: 1 }); plNote(B, `黑洞互相吞噬！＋${PL_BH_BONUS}`); return; }
+  if (a.k >= 11) {
+    B.score += PL_BH_BONUS; B.fx.push({ x, y, k: 11, t: 0, big: 1 }); plNote(B, `黑洞互相吞噬，變回隕石！＋${PL_BH_BONUS}`);
+    const m = { k: 1, x, y, vx: 0, vy: 0, a: Math.random() * Math.PI * 2, w: 0, age: Math.max(a.age, b.age), pop: 1 };
+    B.bodies.push(m); plBlast(B, x, y, PL_RAD[11], 520, m); return;
+  }
   const k = a.k + 1; B.score += PL_PTS[k]; B.mx = Math.max(B.mx, k);
-  B.bodies.push({ k, x, y, vx: (a.vx + b.vx) / 2, vy: (a.vy + b.vy) / 2, age: Math.max(a.age, b.age), pop: 1 });
-  B.fx.push({ x, y, k, t: 0 });
+  const m = { k, x, y, vx: (a.vx + b.vx) / 2, vy: (a.vy + b.vy) / 2, a: a.a, w: (a.w + b.w) / 2, age: Math.max(a.age, b.age), pop: 1 };
+  B.bodies.push(m); B.fx.push({ x, y, k, t: 0 });
+  plBlast(B, x, y, PL_RAD[k], 200 + k * 15, m);
 }
 function plStep(B, dt) {   // 往前模擬 dt 秒（只有自己的局）
   const bs = B.bodies;
-  for (const b of bs) { b.vy += PL_G * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.age += dt; if (b.pop > 0) b.pop = Math.max(0, b.pop - dt * 5); }
+  for (const b of bs) { b.vy += PL_G * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.a += b.w * dt; b.w *= 1 - .5 * dt; b.age += dt; if (b.pop > 0) b.pop = Math.max(0, b.pop - dt * 5); }
   for (let it = 0; it < 3; it++) {
     for (const b of bs) {   // 牆與地板
       const r = PL_RAD[b.k];
       if (b.x - r < PL_L) { b.x = PL_L + r; if (b.vx < 0) b.vx *= -.2; }
       if (b.x + r > PL_R) { b.x = PL_R - r; if (b.vx > 0) b.vx *= -.2; }
-      if (b.y + r > PL_FLOOR) { b.y = PL_FLOOR - r; if (b.vy > 0) b.vy *= -.15; b.vx *= .985; }
+      if (b.y + r > PL_FLOOR) { b.y = PL_FLOOR - r; if (b.vy > 0) b.vy *= -.15; const slip = b.vx - b.w * r; b.vx -= slip * .5 / 3; b.w += 2 * slip * .5 / (3 * r); }   // 地板：滾動摩擦（不打滑時 w＝vx／r）
     }
     let pair = null;
     for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) {
@@ -8826,8 +8844,11 @@ function plStep(B, dt) {   // 往前模擬 dt 秒（只有自己的局）
       a.x -= nx * push * mb / (ma + mb); a.y -= ny * push * mb / (ma + mb); b.x += nx * push * ma / (ma + mb); b.y += ny * push * ma / (ma + mb);
       const vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
       if (vn < 0) {
-        const j2 = -(1 + .1) * vn / (1 / ma + 1 / mb), tx = -ny, ty = nx, vt = (b.vx - a.vx) * tx + (b.vy - a.vy) * ty, jt = Math.max(-.3 * j2, Math.min(.3 * j2, -vt / (1 / ma + 1 / mb) * .4));
+        const inv = 1 / ma + 1 / mb, j2 = -(1 + .1) * vn / inv, tx = -ny, ty = nx, ra2 = PL_RAD[a.k], rb2 = PL_RAD[b.k];
+        const vt = (b.vx - a.vx) * tx + (b.vy - a.vy) * ty - b.w * rb2 - a.w * ra2;   // 接觸點的相對切向速度（含自轉）
+        const jt = Math.max(-.4 * j2, Math.min(.4 * j2, -vt / (3 * inv)));   // 摩擦衝量：同時改變移動與自轉（實心圓盤，轉動慣量 ½mr²）
         a.vx -= (nx * j2 + tx * jt) / ma; a.vy -= (ny * j2 + ty * jt) / ma; b.vx += (nx * j2 + tx * jt) / mb; b.vy += (ny * j2 + ty * jt) / mb;
+        a.w -= 2 * jt / (ma * ra2); b.w -= 2 * jt / (mb * rb2);
       }
     }
     if (pair) { plMerge(B, pair[0], pair[1]); break; }
@@ -8843,15 +8864,15 @@ function plSnap(B, force) {   // 自己的局：快照給觀戰者
   const now = performance.now();
   if (!force && now - B.snapAt < PL_SNAP_MS) return;
   B.snapAt = now;
-  const b = []; for (const o of B.bodies.slice(0, PL_BODIES_MAX)) b.push(o.k, Math.round(o.x), Math.round(o.y));
+  const b = []; for (const o of B.bodies.slice(0, PL_BODIES_MAX)) b.push(o.k, Math.round(o.x), Math.round(o.y), Math.round((((o.a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) * 180 / Math.PI) % 360);   // [編號, x, y, 角度（度）]
   S.net?.tbl?.({ a: 'pls', b, cur: B.cur, nx: B.nx, cx: Math.round(B.cx), sc: Math.min(PL_SCORE_MAX_C, Math.round(B.score)), mx: Math.max(0, Math.min(11, B.mx)) });
 }
 function plApplySnap(B, m) {   // 觀戰者：套用快照（同級的星體平滑追過去，不同級就直接換）
   B.snap = m; B.score = m.sc; B.mx = m.mx; B.cur = m.cur; B.nx = m.nx; B.cx = m.cx;
-  const n = m.b.length / 3;
-  while (B.bodies.length < n) B.bodies.push({ k: m.b[B.bodies.length * 3], x: m.b[B.bodies.length * 3 + 1], y: m.b[B.bodies.length * 3 + 2], pop: 0 });
+  const n = m.b.length / 4, d2r = Math.PI / 180;
+  while (B.bodies.length < n) { const i = B.bodies.length * 4; B.bodies.push({ k: m.b[i], x: m.b[i + 1], y: m.b[i + 2], a: m.b[i + 3] * d2r, pop: 0 }); }
   B.bodies.length = n;
-  for (let i = 0; i < n; i++) { const o = B.bodies[i]; if (o.k !== m.b[i * 3]) { o.k = m.b[i * 3]; o.x = m.b[i * 3 + 1]; o.y = m.b[i * 3 + 2]; o.pop = 1; } }
+  for (let i = 0; i < n; i++) { const o = B.bodies[i]; if (o.k !== m.b[i * 4]) { o.k = m.b[i * 4]; o.x = m.b[i * 4 + 1]; o.y = m.b[i * 4 + 2]; o.a = m.b[i * 4 + 3] * d2r; o.pop = 1; } }
 }
 function plAdvance(B, dt) {   // 每一幀：自己的局跑物理＋送快照；旁觀的局讓星體追上最新快照
   if (B.role === 'seat') {
@@ -8864,7 +8885,7 @@ function plAdvance(B, dt) {   // 每一幀：自己的局跑物理＋送快照�
     } else B.acc = 0;
   } else if (B.snap) {
     const a = 1 - Math.exp(-dt * 18), m = B.snap;
-    B.bodies.forEach((o, i) => { o.x += (m.b[i * 3 + 1] - o.x) * a; o.y += (m.b[i * 3 + 2] - o.y) * a; if (o.pop > 0) o.pop = Math.max(0, o.pop - dt * 5); });
+    B.bodies.forEach((o, i) => { o.x += (m.b[i * 4 + 1] - o.x) * a; o.y += (m.b[i * 4 + 2] - o.y) * a; let da = m.b[i * 4 + 3] * Math.PI / 180 - o.a; da -= Math.round(da / (Math.PI * 2)) * Math.PI * 2; o.a += da * a; if (o.pop > 0) o.pop = Math.max(0, o.pop - dt * 5); });
   }
 }
 function plFrame() {
@@ -8875,8 +8896,13 @@ function plFrame() {
   plAdvance(B, dt);
   plDraw(B, $('plCanvas'), plNow(B));
 }
-function plIcon(g, k, x, y, diam) {   // 在 (x, y) 為中心畫第 k 級星體，直徑約 diam 像素
-  const sp = plSprite(k), w = sp.size * diam / (PL_RAD[k] * 2); g.imageSmoothingEnabled = false; g.drawImage(sp.cv, x - w / 2, y - w / 2, w, w);
+function plIcon(g, k, x, y, diam, ang) {   // 在 (x, y) 為中心畫第 k 級星體，直徑約 diam 像素、轉 ang 弧度（陰影層不轉）
+  const sp = plSprite(k), w = sp.size * diam / (PL_RAD[k] * 2); g.imageSmoothingEnabled = false;
+  if (ang) {   // 轉動時，沒有光暈／環的星體用圓形裁一下，免得點陣轉一個角度後邊緣一格一格的
+    g.save(); g.translate(x, y); if (k !== 7 && k < 9) { g.beginPath(); g.arc(0, 0, diam / 2 - 1, 0, Math.PI * 2); g.clip(); }
+    g.rotate(ang); g.drawImage(sp.cv, -w / 2, -w / 2, w, w); g.restore();
+  } else g.drawImage(sp.cv, x - w / 2, y - w / 2, w, w);
+  if (k < 9) g.drawImage(sp.ov, x - w / 2, y - w / 2, w, w);
 }
 function plDraw(B, cv, t) {
   if (!cv) return;
@@ -8896,7 +8922,7 @@ function plDraw(B, cv, t) {
     plIcon(g, k, x, PL_DROP_Y, r * 2);
   } else if (B.role !== 'seat' && B.cur) { const r = PL_RAD[B.cur], x = Math.max(PL_L + r, Math.min(PL_R - r, B.cx)); plIcon(g, B.cur, x, PL_DROP_Y, r * 2); }
   for (const b of B.bodies) {
-    const k = b.k, r = PL_RAD[k] * (1 + (b.pop || 0) * .18); plIcon(g, k, b.x, b.y, r * 2);
+    const k = b.k, r = PL_RAD[k] * (1 + (b.pop || 0) * .18); plIcon(g, k, b.x, b.y, r * 2, b.a);
   }
   for (const f of B.fx) {   // 合成的光環
     g.strokeStyle = `rgba(255,255,255,${.7 * (1 - f.t / .5)})`; g.lineWidth = 3; g.beginPath(); g.arc(f.x, f.y, PL_RAD[f.k] * (1 + f.t * 1.2), 0, Math.PI * 2); g.stroke();

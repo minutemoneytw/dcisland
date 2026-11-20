@@ -5604,7 +5604,7 @@ def br_relay(t, cid, msg):
 
 # ---- 星球合成（第二十四桌 t24，2026-11-20，使用者要求：做一款類似西瓜遊戲的，隕石→冥王星→月球→火星→地球→海王星→土星→木星→太陽→紅巨星→黑洞）：單人、分數進排行榜；
 # 跟打磚塊同一套做法：物理全在客戶端跑，伺服器只開局、收結算（分數、合成出的最大星體編號，限幅）、把進行中的快照 pls 只轉給觀戰者（tpl，沒有大螢幕轉播）。
-# 快照：b＝[星體編號, x, y, …]（最多 PL_BODIES_MAX 顆）、cur／nx＝手上與下一顆的編號、cx＝落點的 x、sc 分數、mx 最大編號。有人離開＝這一局不算（一般桌子的規則）。
+# 快照：b＝[星體編號, x, y, 角度（度，0～359）, …]（最多 PL_BODIES_MAX 顆）、cur／nx＝手上與下一顆的編號、cx＝落點的 x、sc 分數、mx 最大編號。有人離開＝這一局不算（一般桌子的規則）。
 # 與 worker/src/index.js 的 pl* 同一套，改規則兩邊一起改。
 PL_COUNTDOWN_MS, PL_XP, PL_XP_MIN, PL_SCORE_MAX, PL_TIER_MAX, PL_BODIES_MAX = 1500, 4, 1500, 99999999, 11, 150
 
@@ -5641,14 +5641,14 @@ def pl_relay(t, cid, msg):
     def num(v, lo, hi):
         return type(v) in (int, float) and not isinstance(v, bool) and math.isfinite(v) and lo <= v <= hi
     b, cur, nx, cx, sc, mx = (msg.get(k) for k in ("b", "cur", "nx", "cx", "sc", "mx"))
-    if not isinstance(b, list) or len(b) > PL_BODIES_MAX * 3 or len(b) % 3:
+    if not isinstance(b, list) or len(b) > PL_BODIES_MAX * 4 or len(b) % 4:
         return []
     for k, n in enumerate(b):
-        if not (_mz_int(n, 1, PL_TIER_MAX) if k % 3 == 0 else num(n, -100, 1000)):
+        if not (_mz_int(n, 1, PL_TIER_MAX) if k % 4 == 0 else _mz_int(n, 0, 359) if k % 4 == 3 else num(n, -100, 1000)):
             return []
     if not (_mz_int(cur, 1, PL_TIER_MAX) and _mz_int(nx, 1, PL_TIER_MAX) and num(cx, -100, 1000) and _mz_int(sc, 0, PL_SCORE_MAX) and _mz_int(mx, 0, PL_TIER_MAX)):
         return []
-    data = {"t": "tpl", "b": [n if k % 3 == 0 else round(n) for k, n in enumerate(b)], "cur": cur, "nx": nx, "cx": round(cx), "sc": sc, "mx": mx}
+    data = {"t": "tpl", "b": [n if k % 4 in (0, 3) else round(n) for k, n in enumerate(b)], "cur": cur, "nx": nx, "cx": round(cx), "sc": sc, "mx": mx}
     t["seats"][i]["sc"] = sc
     return [(c["cid"], data) for c in t["specs"] if c["cid"] is not None]
 

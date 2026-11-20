@@ -3796,7 +3796,7 @@ function tfRelay(t, cid, msg, scrOut) {
 }
 // ---- 星球合成（第二十四桌 t24，2026-11-20，使用者要求：做一款類似西瓜遊戲的，隕石→冥王星→月球→火星→地球→海王星→土星→木星→太陽→紅巨星→黑洞）：單人、分數進排行榜；
 // 跟打磚塊同一套做法：物理全在客戶端跑，伺服器只開局、收結算（分數、合成出的最大星體編號，限幅）、把進行中的快照 pls 只轉給觀戰者（tpl，沒有大螢幕轉播）。
-// 快照：b＝[星體編號, x, y, …]（最多 PL_BODIES_MAX 顆）、cur／nx＝手上與下一顆的編號、cx＝落點的 x、sc 分數、mx 最大編號。有人離開＝這一局不算（一般桌子的規則）。與 tools/dev_server.py 的 pl_* 同一套，改規則兩邊一起改。
+// 快照：b＝[星體編號, x, y, 角度（度，0～359）, …]（最多 PL_BODIES_MAX 顆）、cur／nx＝手上與下一顆的編號、cx＝落點的 x、sc 分數、mx 最大編號。有人離開＝這一局不算（一般桌子的規則）。與 tools/dev_server.py 的 pl_* 同一套，改規則兩邊一起改。
 const PL_COUNTDOWN_MS = 1500, PL_XP = 4, PL_XP_MIN = 1500, PL_SCORE_MAX = 99999999, PL_TIER_MAX = 11, PL_BODIES_MAX = 150;
 function plStart(t) {
   t.g = { seed: Math.floor(Math.random() * 2147483648), t0: Date.now() + PL_COUNTDOWN_MS };
@@ -3820,9 +3820,9 @@ function plRelay(t, cid, msg) {
   if (t.game !== "planet" || role !== "seat" || t.phase !== "playing" || !t.g) return [];
   const num = (v, lo, hi) => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
   const b = msg.b;
-  if (!Array.isArray(b) || b.length > PL_BODIES_MAX * 3 || b.length % 3 || !b.every((n, k) => k % 3 === 0 ? mzInt(n, 1, PL_TIER_MAX) : num(n, -100, 1000))) return [];
+  if (!Array.isArray(b) || b.length > PL_BODIES_MAX * 4 || b.length % 4 || !b.every((n, k) => k % 4 === 0 ? mzInt(n, 1, PL_TIER_MAX) : k % 4 === 3 ? mzInt(n, 0, 359) : num(n, -100, 1000))) return [];
   if (!(mzInt(msg.cur, 1, PL_TIER_MAX) && mzInt(msg.nx, 1, PL_TIER_MAX) && num(msg.cx, -100, 1000) && mzInt(msg.sc, 0, PL_SCORE_MAX) && mzInt(msg.mx, 0, PL_TIER_MAX))) return [];
-  const data = { t: "tpl", b: b.map((n, k) => k % 3 === 0 ? n : Math.round(n)), cur: msg.cur, nx: msg.nx, cx: Math.round(msg.cx), sc: msg.sc, mx: msg.mx };
+  const data = { t: "tpl", b: b.map((n, k) => k % 4 === 0 || k % 4 === 3 ? n : Math.round(n)), cur: msg.cur, nx: msg.nx, cx: Math.round(msg.cx), sc: msg.sc, mx: msg.mx };
   t.seats[i].sc = msg.sc;
   return t.specs.filter(m => m.cid != null).map(m => [m.cid, data]);
 }
