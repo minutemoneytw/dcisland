@@ -1,5 +1,5 @@
 {
- "_comment": "和平島遊戲桌的遊戲定義（手寫，不由 gen_assets.py 產生）。key＝遊戲 id（terrain.json 的 tables[].game、兩份伺服器的 TABLE_DEFS／GAME_LIMITS 要一致）。kind＝\"machine\"（靠牆的街機／機台：俄羅斯方塊、打磚塊、2048、泡泡射手、彈珠台）或沒寫＝桌子（稱號「牌桌常客」「小遊戲常客」依它分類、自動算新增的遊戲；**新增機台類的遊戲要記得寫 kind: \"machine\"**）；name＝顯示名稱；min／max＝開局最少人數／入座上限（改了要同步兩份伺服器的 GAME_LIMITS）；sprite＝桌子圖（gen_assets.py 的 table_*）；guide＝規則說明（{title, sections:[{h 小標, li [條列，可用 **粗體**]}]}，每個遊戲都要有；舊的 rules 整段文字已刪，只在沒有 guide 時才會被拿來拆句備用）。words＝英文打字競賽的單字表（小寫英文字母；客戶端用伺服器給的 seed 從這裡抽題，改了不用動伺服器）。story＝開局前顯示的故事背景（選填）。",
+ "_comment": "和平島遊戲桌的遊戲定義（手寫，不由 gen_assets.py 產生）。key＝遊戲 id（terrain.json 的 tables[].game、兩份伺服器的 TABLE_DEFS／GAME_LIMITS 要一致）。kind＝\"machine\"（靠牆的街機／機台：俄羅斯方塊、打磚塊、2048、泡泡射手、彈珠台）或沒寫＝桌子（稱號「牌桌常客」「機台常客」依它分類、自動算新增的遊戲；**新增機台類的遊戲要記得寫 kind: \"machine\"**）；name＝顯示名稱；min／max＝開局最少人數／入座上限（改了要同步兩份伺服器的 GAME_LIMITS）；sprite＝桌子圖（gen_assets.py 的 table_*）；guide＝規則說明（{title, sections:[{h 小標, li [條列，可用 **粗體**]}]}，每個遊戲都要有；舊的 rules 整段文字已刪，只在沒有 guide 時才會被拿來拆句備用）。words＝英文打字競賽的單字表（小寫英文字母；客戶端用伺服器給的 seed 從這裡抽題，改了不用動伺服器）。story＝開局前顯示的故事背景（選填）。",
  "games": {
   "oldmaid": {
    "name": "抽鬼牌",
