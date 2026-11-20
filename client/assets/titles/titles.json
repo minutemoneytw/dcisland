@@ -1051,6 +1051,30 @@
     "n": 10
    },
    "cat": "game"
+  },
+  {
+   "id": "pl_first",
+   "name": "星際初勝",
+   "desc": "星球合成對戰獲勝 1 場",
+   "cond": {
+    "type": "stat",
+    "game": "planet",
+    "key": "w",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "pl_ace",
+   "name": "黑洞主宰",
+   "desc": "星球合成對戰獲勝 10 場",
+   "cond": {
+    "type": "stat",
+    "game": "planet",
+    "key": "w",
+    "n": 10
+   },
+   "cat": "game"
   }
  ]
 }
