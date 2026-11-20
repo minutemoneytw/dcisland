@@ -4989,7 +4989,7 @@ function openTable(tb) {
 function closeTable(sendLeave = true) {
   if (sendLeave) S.net?.tbl?.({ a: 'leave' });
   S.pgSeen = null; S.tableOpen = false; S.tableId = null; S.tableView = null; S.tableChoice = false; S.tblFinal = null; brkStop(); bubStop(); tfStop(); plStop(); dodgeStop(); mageStop(); typingStop(); arStop(); mzStop(); pbStop(); hkStop(); unStopTimer(); bkStopTimer(); kgStopTimer(); btStopTimer(); itStopTimer(); S.unPick = null; S.itSel = -1; S.itMode = null;
-  rulesShow(false); leaveAsk(false);
+  rulesShow(false); leaveAsk(false); settleHide();
   $('tableBox').classList.add('hidden');
 }
 // 使用者主動離開（離開按鈕／Esc）：我是入座玩家而且牌局進行中 → 先跳確認（離開會直接中斷這一局或放棄成績）；觀戰、還沒開局就直接離開
@@ -5012,7 +5012,25 @@ function leaveAsk(on) {
   if (on) { const v = S.tableView, sub = box.querySelector('.leave-sub'); if (sub) { if (!sub.dataset.def) sub.dataset.def = sub.textContent; sub.textContent = v && QUIT_SCORE_GAMES.includes(v.game) && !(isPlGame(v.game) && S.pl?.vs) ? '離開會用你目前的分數結算這一局（還沒得分就不算）。' : sub.dataset.def; } }
   if (on) $('leaveStay').focus();   // 預設停在「繼續遊戲」，連點空白鍵也不會誤退出
 }
+// 結算畫面（2026-11-20，使用者要求「所有遊戲都有個結算畫面，而不是直接跳回等待大廳」）：我坐著打完一局（result 新的 rid、不是作廢）就蓋一層，
+// 內容複製自大廳剛畫好的結算區（`.table-result` 結算文字、`.dodge-rank`／`.table-ranking` 名次、`.table-board` 排行榜），所以各遊戲原本的結算文字不用再寫一份。
+// 剛結算 0.7 秒內按鈕不能按（免得還在連按空白／方向鍵的人一下就關掉）；按「回到大廳」或 Esc 關閉。
+let settleTimer = 0;
+function showSettle(v, xp) {
+  const box = $('settleBox'), body = $('settleBody'), src = $('tableBody');
+  body.textContent = '';
+  const keep = [...src.querySelectorAll('.table-result, .dodge-rank, .table-ranking, .table-board')];
+  if (!keep.length) return;   // 這個遊戲的大廳沒有任何結算區（理論上不會）：不蓋
+  $('settleTitle').textContent = `${gameDef(v.game)?.name || '遊戲'}　結算`;
+  for (const el of keep) body.appendChild(el.cloneNode(true));
+  if (xp > 0) { const x = document.createElement('div'); x.className = 'settle-xp'; x.textContent = `獲得 ${xp} XP`; body.insertBefore(x, body.querySelector('.table-board')); }
+  const ok = $('settleOk'); ok.disabled = true;
+  clearTimeout(settleTimer); settleTimer = setTimeout(() => { ok.disabled = false; ok.focus(); }, 700);
+  box.classList.remove('hidden');
+}
+function settleHide() { clearTimeout(settleTimer); $('settleBox').classList.add('hidden'); }
 function leaveTable() {
+  if (!$('settleBox').classList.contains('hidden')) { if (!$('settleOk').disabled) settleHide(); return; }   // 結算畫面開著：Esc 先關結算（剛結算 0.7 秒內不理）
   const box = $('leaveBox');
   if (!box.classList.contains('hidden')) { leaveAsk(false); return; }   // Esc 再按一次＝取消確認，繼續遊戲
   const v = S.tableView;
@@ -5123,13 +5141,17 @@ function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已
   if (m.v.phase === 'playing') S.tableLocalLog = [];   // 新的一局開始：清掉上一局的 XP 提示
   if (m.v.phase === 'playing' && m.v.role === 'seat') S.gamePlayed = true;
   const rs = m.v.result;
+  let settle = null;
   if (S.gamePlayed && rs && rs.rid && rs.rid !== S.gameXpSeen && m.v.phase !== 'playing') {
     S.gameXpSeen = rs.rid; S.gamePlayed = false;
     const n = rs.xp?.[m.v.me] || 0, gs = rs.gs?.[m.v.me];
     if (gs && !xpServer()) gstatsLocalApply(m.v.game, gs);   // 訪客：戰績（稱號用）本機累加；登入者由伺服器記並送 gstats
     if (n > 0 && !xpServer()) { const p0 = S.players[0]; grantExp(n, p0.x, p0.y - 60, 'game'); tableXpLine(n); }   // 訪客：本機補發，提示放進牌桌下方的系統訊息
+    settle = !rs.aborted ? { n: xpServer() ? 0 : n } : null;   // 結算畫面（中途作廢的局不跳）；登入者的 XP 由伺服器另外飄字，這裡不重複寫
   }
   S.tableView = m.v; buildTable();
+  if (settle) showSettle(m.v, settle.n);
+  else if (m.v.phase === 'playing') settleHide();
 }
 // 牌桌下方的系統訊息：伺服器的紀錄（新的在上）＋本機加的「你獲得 N XP」（放最上面；新的一局開始就清掉）
 function tableXpLine(n) { (S.tableLocalLog ||= []).unshift(`你獲得 ${n} XP`); if (S.tableOpen && S.tableView) buildTable(); }
@@ -13540,6 +13562,7 @@ $('btnAvatar').onclick = () => { if ($('avatarPanel').classList.contains('hidden
 $('avatarClose').onclick = closeAvatar;
 $('tableClose').onclick = () => leaveTable();
 $('leaveStay').onclick = () => leaveAsk(false);
+$('settleOk').onclick = settleHide;
 $('leaveGo').onclick = () => {
   leaveAsk(false);
   // 伺服器對每條連線的牌桌操作有 100 ms 的最短間隔（TBL_CD）：結算 over 後馬上送 leave 會被丟掉（座位卡在「入座中」），所以結算有送出就等 0.4 秒再關桌子（2026-11-20 修正）

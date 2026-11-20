@@ -358,6 +358,15 @@ body {
 .table-head-btns { display: flex; gap: 8px; }
 #leaveBox { position: absolute; inset: 0; z-index: 30; background: rgba(8, 12, 20, .75); display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box; }
 #leaveBox.hidden { display: none !important; }
+/* 結算畫面（2026-11-20，使用者要求：打完不要直接跳回大廳）：蓋在牌桌上，內容複製自大廳剛畫好的結算區（各遊戲原本的結算文字／名次），按「回到大廳」或 Esc 才關 */
+#settleBox { position: absolute; inset: 0; z-index: 25; background: rgba(8, 12, 20, .82); display: flex; align-items: center; justify-content: center; padding: 12px; box-sizing: border-box; }
+#settleBox.hidden { display: none !important; }
+.settle-panel { text-align: center; padding: 18px 26px; min-width: 300px; max-width: 460px; max-height: 90%; overflow-y: auto; }
+.settle-title { font-size: 20px; font-weight: bold; color: #ffe08a; letter-spacing: 2px; margin-bottom: 10px; }
+.settle-panel .table-result { font-size: 16px; margin: 8px 0; }
+.settle-panel .dodge-rank, .settle-panel .table-ranking { text-align: left; display: inline-block; margin: 6px 0; }
+.settle-xp { margin: 8px 0; color: #8be08b; font-weight: bold; }
+.settle-panel .table-board { margin-top: 10px; }
 .leave-panel { text-align: center; padding: 18px 24px; max-width: 360px; }
 .leave-msg { font-size: 16px; color: var(--text); margin-bottom: 6px; }
 .leave-sub { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
