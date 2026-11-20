@@ -9109,6 +9109,7 @@ function bubNbrs(B, r, c) {   // 相鄰的六格（只回有效的格子）
   return out;
 }
 function bubLevel(B, seed, lv) {   // 第 lv 關的起始盤面（排數、顏色數隨關卡增加）；回傳顏色數
+  B.bag = []; B.dry = {};   // 新的一關：顏色組成變了，洗牌袋與「多久沒出」的計數清掉重來
   const R = mulberry32((seed + lv * 104729) >>> 0), rows = Math.min(9, 5 + Math.floor((lv - 1) / 2)), nc = Math.min(6, 3 + Math.floor((lv + 1) / 2));
   B.g = new Uint8Array(BUB_ROWS * BUB_COLS); B.par = 0;
   for (let r = 0; r < rows; r++) for (let c = 0; c < BUB_COLS - (r & 1); c++) {
@@ -9122,7 +9123,22 @@ function bubColors(B) {   // 盤面上現有的顏色（新泡泡只會從這裡
   const has = new Set(); for (const v of B.g) if (v) has.add(v);
   return has.size ? [...has] : [1, 2, 3, 4];
 }
-const bubPick = B => { const cs = bubColors(B); return cs[Math.floor(B.rnd() * cs.length)]; };
+// 下一顆的顏色用「洗牌袋」（2026-11-21 使用者要求：第 8 關起只剩 3 發就垂下一排，純隨機連 10 顆不出某個顏色〔6 色時約 16%〕就只能白白多三排）：
+// 袋子裡盤面上現有的每個顏色各一顆、洗牌後依序抽，抽完再裝一袋，所以每個顏色最多隔 2 袋（約 2×顏色數 − 1 顆）一定會出現；袋子裡的顏色已經從盤面消失就跳過。
+function bubPick(B) {
+  const cs = bubColors(B), bag = (B.bag ||= []);
+  for (;;) {
+    if (!bag.length) { const a = cs.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(B.rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } bag.push(...a); }
+    const c = bag.pop();
+    if (!cs.includes(c)) continue;
+    // 再加一道保險：某個顏色已經連續 cs.length 顆沒出了（袋子洗牌剛好把它排在兩袋的最前最後）就硬插它，最多等 cs.length＋1 顆左右
+    const dry = (B.dry ||= {}), need = cs.filter(k => (dry[k] || 0) >= cs.length).sort((x, y) => dry[y] - dry[x])[0];
+    const pick = need ?? c;
+    if (pick !== c) bag.push(c);
+    for (const k of cs) dry[k] = k === pick ? 0 : (dry[k] || 0) + 1;
+    return pick;
+  }
+}
 function bubMake(v) {
   const z = v.bu, me = v.role === 'seat';
   const B = {
@@ -9186,7 +9202,7 @@ function bubPlace(B, r, c, col) {   // 放下泡泡 → 結算：爆掉、掉落
     for (let c2 = 0; c2 < BUB_COLS; c2++) B.g[c2] = bubOk(B, 0, c2) ? cs[Math.floor(B.rnd() * cs.length)] : 0;
     bubNote(B, '天花板下降！');
   }
-  const cs = bubColors(B); if (!cs.includes(B.cur)) B.cur = cs[Math.floor(B.rnd() * cs.length)]; if (!cs.includes(B.nx)) B.nx = cs[Math.floor(B.rnd() * cs.length)];   // 手上那兩顆的顏色已經沒有了就換掉
+  const cs = bubColors(B); if (!cs.includes(B.cur)) B.cur = bubPick(B); if (!cs.includes(B.nx)) B.nx = bubPick(B);   // 手上那兩顆的顏色已經沒有了就換掉
   for (let k = BUB_LOSE * BUB_COLS; k < B.g.length; k++) if (B.g[k]) {   // 垂到底線：結束
     B.over = true; B.fly = null; bubSnap(B, true); tblFinal({ a: 'over', sc: Math.min(99999999, Math.round(B.score)), lv: Math.min(999, B.lv) }); return;
   }
