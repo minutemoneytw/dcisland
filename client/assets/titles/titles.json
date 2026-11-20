@@ -897,6 +897,150 @@
     "n": 20
    },
    "cat": "game"
+  },
+  {
+   "id": "kg_first",
+   "name": "初建家園",
+   "desc": "列島建國獲勝 1 場",
+   "cond": {
+    "type": "stat",
+    "game": "kingdom",
+    "key": "w",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "kg_five",
+   "name": "開國君主",
+   "desc": "列島建國獲勝 5 場",
+   "cond": {
+    "type": "stat",
+    "game": "kingdom",
+    "key": "w",
+    "n": 5
+   },
+   "cat": "game"
+  },
+  {
+   "id": "kg_twenty",
+   "name": "列島共主",
+   "desc": "列島建國獲勝 20 場",
+   "cond": {
+    "type": "stat",
+    "game": "kingdom",
+    "key": "w",
+    "n": 20
+   },
+   "cat": "game"
+  },
+  {
+   "id": "kg_wonder",
+   "name": "奇觀締造者",
+   "desc": "列島建國蓋出奇觀 1 次",
+   "cond": {
+    "type": "stat",
+    "game": "kingdom",
+    "key": "wond",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "kg_wonder5",
+   "name": "千秋偉業",
+   "desc": "列島建國累計蓋出奇觀 5 次",
+   "cond": {
+    "type": "stat",
+    "game": "kingdom",
+    "key": "wond",
+    "n": 5
+   },
+   "cat": "game"
+  },
+  {
+   "id": "kg_grand",
+   "name": "威震四島",
+   "desc": "列島建國單局分數達 35 分",
+   "cond": {
+    "type": "stat",
+    "game": "kingdom",
+    "key": "vp",
+    "n": 35
+   },
+   "cat": "game"
+  },
+  {
+   "id": "kg_regular",
+   "name": "建國常客",
+   "desc": "列島建國累計玩 10 局",
+   "cond": {
+    "type": "stat",
+    "game": "kingdom",
+    "key": "p",
+    "n": 10
+   },
+   "cat": "game"
+  },
+  {
+   "id": "pu_first",
+   "name": "淨土新兵",
+   "desc": "淨土守護戰獲勝 1 場",
+   "cond": {
+    "type": "stat",
+    "game": "purify",
+    "key": "w",
+    "n": 1
+   },
+   "cat": "game"
+  },
+  {
+   "id": "pu_five",
+   "name": "淨土守護者",
+   "desc": "淨土守護戰獲勝 5 場",
+   "cond": {
+    "type": "stat",
+    "game": "purify",
+    "key": "w",
+    "n": 5
+   },
+   "cat": "game"
+  },
+  {
+   "id": "pu_twenty",
+   "name": "淨土之光",
+   "desc": "淨土守護戰獲勝 20 場",
+   "cond": {
+    "type": "stat",
+    "game": "purify",
+    "key": "w",
+    "n": 20
+   },
+   "cat": "game"
+  },
+  {
+   "id": "pu_lose5",
+   "name": "屢敗屢戰",
+   "desc": "淨土守護戰累計輸 5 場",
+   "cond": {
+    "type": "stat",
+    "game": "purify",
+    "key": "l",
+    "n": 5
+   },
+   "cat": "game"
+  },
+  {
+   "id": "pu_regular",
+   "name": "並肩作戰",
+   "desc": "淨土守護戰累計玩 10 局",
+   "cond": {
+    "type": "stat",
+    "game": "purify",
+    "key": "p",
+    "n": 10
+   },
+   "cat": "game"
   }
  ]
 }
