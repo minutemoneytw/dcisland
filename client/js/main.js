@@ -11103,6 +11103,10 @@ function checkTitles(silent) {
     lsSet('dcisland.m0.titles', S.titleBook);
     if (!silent) setTimeout(() => toast(`獲得稱號 ${fresh.map(titleText).join('')}！可在「角色」的稱號設定中使用`, 3600), 2000);
   }
+  // 新增遊戲後被收回的「常客」稱號：戴著的卸下（只在戰績已載入、遊戲清單已讀到時判斷，免得開機時資料還沒到就誤卸）
+  if (S.me.title && ['table_regular', 'arcade_regular'].includes(S.me.title) && S.gstats && S.gamesDB?.games && !got.has(S.me.title)) {
+    S.me.title = null; saveAvatar(); if (!silent) toast('新增了遊戲，「常客」稱號需要補玩才算，已自動卸下', 3600);
+  }
   // 外觀：解鎖條件與稱號同一套（avatar.json 各件的 unlock）；剛解鎖的跳提示（比稱號晚一點，不要疊在一起）
   const gk = new Set(S.titleBook.glams || []), gFresh = allGlams().filter(it => it.unlock && glamUnlocked(it) && !gk.has(it.id));
   if (gFresh.length) {
