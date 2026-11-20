@@ -3822,6 +3822,7 @@ function plFinish(t) {
   const enough = g.end.why !== "left" && Date.now() - g.t0 >= PL_XP_MIN_MS;
   const text = g.end.why === "bh" ? `${nm(w)} 先合成出黑洞，獲勝！` : g.end.why === "dead" ? `${nm(lo)} 的星球堆過頂線，${nm(w)} 獲勝！` : `${nm(lo)} 離開了，${nm(w)} 獲勝！`;
   t.result = { link: true, winner: w, cabs: [...g.mem], text, rid: Math.floor(Math.random() * 4294967296),
+    vsWin: enough ? { name: nm(w), uid: (g.uids || {})[w] || null } : null,   // 對戰排行榜（planetvs）加一勝：跟給 XP 同條件（撐過 PL_XP_MIN_MS、不是對手離開），擋互刷
     xp: t.seats.map(s => (enough && g.mem.includes(s.cab) ? (s.cab === w ? PL_XP_WIN : PL_XP_LOSE) : 0)),
     gs: t.seats.map(s => (enough && g.mem.includes(s.cab) ? gsMk(s.cab === w ? { w: 1 } : { l: 1 }, { tier: s.mx || 1 }) : null)) };
   for (const s of t.seats) if (s.st === "link") { s.st = "idle"; s.dead = false; }
@@ -3887,7 +3888,7 @@ function plMsg(t, cid, msg, now) {
   if (a === "lstart") {
     if (g && g.phase === "invite" && g.host === s.cab && g.mem.length >= 2) {
       Object.assign(g, { phase: "playing", seed: Math.floor(Math.random() * 2147483648), t0: now + PL_LINK_COUNTDOWN_MS, no: [], end: null });
-      for (const c of g.mem) { const m = arSeat(t, c)[1]; Object.assign(m, { sc: 0, mx: 0, dead: false }); g.names[c] = m.name; }
+      for (const c of g.mem) { const m = arSeat(t, c)[1]; Object.assign(m, { sc: 0, mx: 0, dead: false }); g.names[c] = m.name; (g.uids ||= {})[c] = m.uid || null; }
       t.result = null;
       tblLog(t, `對戰開始！${g.mem.map(c => g.names[c]).join(" 對 ")}`);
       return [true, []];
@@ -3919,7 +3920,7 @@ function plView(t, cid, v) {
   return v;
 }
 // 進行中的快照：轉給觀戰者與同桌另一位（對手；自己這邊不用管畫不畫）。回 [[cid, msg]…]
-function plRelay(t, cid, msg) {
+function plRelay(t, cid, msg, scrOut) {   // scrOut 傳進來的話，快照也放一份進去給大螢幕（2026-11-20，使用者要求星球合成能轉播）
   const [role, i] = tblFind(t, cid);
   if (t.game !== "planet" || role !== "seat") return [];
   const s = t.seats[i], g = t.g;
@@ -3930,6 +3931,7 @@ function plRelay(t, cid, msg) {
   if (!(arInt(msg.cur, 1, PL_TIER_MAX) && arInt(msg.nx, 1, PL_TIER_MAX) && num(msg.cx, -100, 1000) && arInt(msg.sc, 0, PL_SCORE_MAX) && arInt(msg.mx, 0, PL_TIER_MAX))) return [];
   const data = { t: "tpl", cab: s.cab, b: b.map((n, k) => k % 4 === 0 || k % 4 === 3 ? n : Math.round(n)), cur: msg.cur, nx: msg.nx, cx: Math.round(msg.cx), sc: msg.sc, mx: msg.mx };
   s.sc = msg.sc;
+  if (scrOut) scrOut.push(data);
   return [...t.specs, ...t.seats.filter(x => x !== s)].filter(m => m.cid != null).map(m => [m.cid, data]);
 }
 // 豆豆那台回報結束：單人＝命用完（帶 lvl）；對抗＝win（豆子吃光）或沒有（命用完／tu 時間到），ct＝各幽靈位置抓到幾次
@@ -4011,7 +4013,7 @@ const SCR_CID = "__screen__";   // 大螢幕轉播用的虛擬連線編號（tbl
 function tblView(t, cid) {
   const [role, i] = cid === SCR_CID ? ["spec", -1] : tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
   const v = {
-    id: t.id, game: t.game, phase: t.phase, min: mn, max: mx, role, me: role === "seat" ? i : -1, board: t.board || null,
+    id: t.id, game: t.game, phase: t.phase, min: mn, max: mx, role, me: role === "seat" ? i : -1, board: t.board || null, board2: t.board2 || null,
     seats: t.seats.map((s, k) => ({ name: s.name, n: playing ? s.hand.length : 0, ready: s.ready, out: playing ? s.out : false, you: role === "seat" && k === i })),
     specs: t.specs.length, turn: playing ? t.turn : -1, target: playing ? tblNextActive(t, t.turn) : -1, result: t.result, log: [...t.log],
   };
@@ -4577,6 +4579,7 @@ export class Island {
     if (game === "kingdom" && !(await this.kgLoad())) return null;   // 列島建國的牌庫要先從 assets 讀進來（載入失敗＝這張桌開不了，其他遊戲不受影響）
     t = (await this.state.storage.get("table:" + tid)) || tblNew(tid, game);
     if (BOARD_GAMES.has(game)) t.board = (await this.getBoards())[boardKey(game)] || [];   // 排行榜（前三名）
+    if (game === "planet") t.board2 = ((await this.getBoards()).planetvs || []).slice(0, BOARD_N);   // 星球合成的對戰排行榜（勝場數前三名）
     const alive = this.liveIds(), nowH = Date.now();
     let held = false;
     for (const m of [...t.seats, ...t.specs]) if (!alive.has(m.cid)) {
@@ -4759,11 +4762,23 @@ export class Island {
     for (const list of Object.values(boards)) for (const e of list) if (e.uid === uid && e.name !== name) { e.name = name; changed = true; }
     if (!changed) return;
     await this.state.storage.put("boards", boards);
-    for (const t of this.tables.values()) if (BOARD_GAMES.has(t.game)) { t.board = boards[boardKey(t.game)] || []; this.tableNotify(t); }
+    for (const t of this.tables.values()) if (BOARD_GAMES.has(t.game)) { t.board = boards[boardKey(t.game)] || []; if (t.game === "planet") t.board2 = (boards.planetvs || []).slice(0, BOARD_N); this.tableNotify(t); }
+  }
+  // 星球合成的對戰排行榜（2026-11-20，使用者要求）：記每個人的對戰勝場數（boards.planetvs，不截前三名，才能一直累加；畫面只帶前三名 board2）
+  async vsBoardWin(t, w) {
+    const boards = await this.getBoards(), list = boards.planetvs || [], key = x => (x.uid ? "u:" + x.uid : "n:" + x.name), k = key(w), ts = Date.now();
+    const e = list.find(x => key(x) === k);
+    if (e) { e.score++; e.name = w.name; e.ts = ts; } else list.push({ name: w.name, uid: w.uid, score: 1, ts });
+    list.sort((a, b) => b.score - a.score || a.ts - b.ts);
+    boards.planetvs = list.slice(0, 200);
+    await this.state.storage.put("boards", boards);
+    t.board2 = boards.planetvs.slice(0, BOARD_N);
+    await this.saveTable(t); this.tableNotify(t);
   }
   // 這個操作結束了一局：更新排行榜（沒離開、成績 > 0 的入座者；有變動才存檔並通知畫面）
   async tableBoard(t, resBefore) {
     const r = t.result;
+    if (t.game === "planet" && r && r !== resBefore && !r.aborted && r.link && r.vsWin) { await this.vsBoardWin(t, r.vsWin); return; }   // 星球合成對戰：贏家勝場 +1
     if (!BOARD_GAMES.has(t.game) || !r || r === resBefore || r.aborted || !r.ranking) return;
     if ((t.game === "arcade" || t.game === "maze" || t.game === "planet") && !r.solo) return;   // 俄羅斯方塊／豆豆迷宮：聯機／對抗分數不進排行榜（使用者定）
     const ts = Date.now(), entries = t.game === "mage" ? (r.win && r.solo ? [{ name: r.ranking[0].name, uid: r.ranking[0].uid, score: r.score, ts }] : []) : r.ranking.filter(x => !x.left).map(x => ({ name: x.name, uid: x.uid, score: x.score, ts })).filter(e => e.score > 0);   // 見習驅魔師：只有單人勝利進排行榜
@@ -4927,7 +4942,9 @@ export class Island {
       return;
     }
     if (t.game === "planet" && a === "pls") {   // 星球合成：進行中的快照，只轉發給觀戰者（不存檔、不通知畫面）
-      for (const [cid, m] of plRelay(t, att.id, msg)) this.sendToId(cid, m);
+      const scrOut = [];
+      for (const [cid, m] of plRelay(t, att.id, msg, scrOut)) this.sendToId(cid, m);
+      for (const d of scrOut) this.scrFwd(terr, t, { ...d, w: "tpl", t: "sttm" });   // 大螢幕轉播：帶 cab（哪一台）
       return;
     }
     if (t.game === "breakout" && a === "brs") {   // 打磚塊：進行中的快照，只轉發給觀戰者（不存檔、不通知畫面）

@@ -6270,6 +6270,7 @@ function onNetScrMz(m) {   // 大螢幕轉播豆豆迷宮／彈珠台：套到�
   if (m.w === 'tpb') { onNetScrPb(m); return; }
   if (m.w === 'ttf') { if (S.scrTf) { tfApplySnap(S.scrTf, m); S.scrDirty = true; } return; }
   if (m.w === 'tbu') { if (S.scrBub) { bubApplySnap(S.scrBub, m); S.scrDirty = true; } return; }
+  if (m.w === 'tpl') { if (S.scr?.game === 'planet' && Number.isInteger(m.cab)) { const sp = ((S.scrPl ||= {})[m.cab] ||= plMakeSpec()); if (!sp.frozen) plApplySnap(sp, m); S.scrDirty = true; } return; }
   const M = S.scrMz; if (!M) return;
   if (m.w === 'tms') mzApplyTms(M, m); else if (m.w === 'tmp') mzApplyTmp(M, m);
   S.scrDirty = true;
@@ -6608,6 +6609,7 @@ function scrHands(g, v, x, y, w, rowH, kind) {
   });
 }
 function scrSeatTag(v, s, k) {
+  if (v.game === 'planet') return s.play ? `${Math.max(s.sc ?? 0, S.scrPl?.[s.cab]?.score ?? 0)} 分` : s.st === 'link' ? '對戰等待中' : '閒置';   // 星球合成：旁觀者的 phase 永遠是 lobby，改看這台有沒有在玩
   if (v.phase !== 'playing') return s.ready ? '已準備' : '未準備';
   const gm = v.game;
   if (s.left) return '離開';
@@ -6622,7 +6624,8 @@ function scrSeatTag(v, s, k) {
   if (gm === 'pinball') return `${Math.max(s.sc ?? 0, S.scrPb?.score ?? 0)} 分`;
   if (gm === 'g2048') return `${Math.max(s.sc ?? 0, S.scrTf?.score ?? 0)} 分`;
   if (gm === 'bubble') return `${Math.max(s.sc ?? 0, S.scrBub?.score ?? 0)} 分`;
-  if (gm === 'breakout' || isPlGame(gm)) return `${s.sc ?? 0} 分`;
+  if (isPlGame(gm)) return `${Math.max(s.sc ?? 0, S.scrPl?.[s.cab]?.score ?? 0)} 分`;   // 星球合成：大螢幕上最新的快照分數
+  if (gm === 'breakout') return `${s.sc ?? 0} 分`;
   if (gm === 'intel') return s.out ? '出局' : '';
   return '';
 }
@@ -6638,7 +6641,7 @@ function scrRender() {
     return;
   }
   const v = { ...sc.v, game: sc.game }, gd = gameDef(sc.game), isAr = sc.game === 'arcade';
-  const playing = isAr ? v.seats.some(s => s.play) : v.phase === 'playing';
+  const playing = isAr || sc.game === 'planet' ? v.seats.some(s => s.play) : v.phase === 'playing';   // 星球合成：兩台機台，有任何一台在玩就算進行中（旁觀者的 phase 永遠是 lobby）
   // 標題列
   g.fillStyle = '#16224a'; g.fillRect(0, 0, SCR_W, 26);
   g.fillStyle = '#ffe08a'; g.font = `bold 15px ${SCR_FONT}`; g.textAlign = 'left'; g.fillText(`${gd?.name || '遊戲'}　${v.id ? '' : ''}`, 10, 19);
@@ -6687,6 +6690,7 @@ function scrRender() {
     else if (sc.game === 'pinball' && playing && v.pb) { scrPinball(g, v, MX, MY, MW, MH); drew = true; }
     else if (sc.game === 'g2048' && playing && v.tf) { scrG2048(g, v, MX, MY, MW, MH); drew = true; }
     else if (sc.game === 'bubble' && playing && v.bu) { scrBubble(g, v, MX, MY, MW, MH); drew = true; }
+    else if (sc.game === 'planet' && playing) { scrPlanet(g, v, MX, MY, MW, MH); drew = true; }
     else if (wideIntel) { scrIntel(g, v, MX, MY, SCR_W - MX * 2); drew = true; }
     else if ((sc.game === 'typing' || sc.game === 'zhtyping') && playing && v.ty) { scrTyping(g, v, MX, MY, MW); drew = true; }
     } catch (e) { drew = false; }
@@ -6742,7 +6746,7 @@ function buildScrPick() {
 }
 // 島上的螢幕物件：外框＋離屏 canvas 的內容（沒收到過畫面時先畫成關閉的樣子）
 function drawScreenProp(pr, r) {
-  if (!S.scrCv || S.scrDirty || (S.scr && (S.scr.v?.ty || S.scr.game === 'maze' || S.scr.game === 'pinball' || S.scr.game === 'bubble' || S.scr.game === 'g2048') && S.scr.v.phase === 'playing')) { S.scrDirty = false; scrRender(); }   // 打字競賽進行中：每幀重畫（倒數的秒數會動）
+  if (!S.scrCv || S.scrDirty || (S.scr && (S.scr.v?.ty || S.scr.game === 'maze' || S.scr.game === 'pinball' || S.scr.game === 'bubble' || S.scr.game === 'g2048') && S.scr.v.phase === 'playing') || (S.scr?.game === 'planet' && S.scr.v?.seats?.some(x => x.play))) { S.scrDirty = false; scrRender(); }   // 打字競賽進行中：每幀重畫（倒數的秒數會動）
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#12141c'; ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.fillStyle = '#2a2e3c'; ctx.fillRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
@@ -7217,9 +7221,9 @@ function dodgeDraw(t, mySeat) {
   if (mySeat?.out && v.role === 'seat') { g.fillStyle = 'rgba(8,10,20,.5)'; g.fillRect(0, DG_H / 2 - 36, DG_W, 72); g.fillStyle = '#ffb347'; g.font = 'bold 24px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillText(`你出局了：${Math.max(0, Math.floor(mySeat.died ?? 0) + (mySeat.bonus || 0))} 分（存活 ${mySeat.died ?? '—'} 秒）`, DG_W / 2, DG_H / 2 + 8); }
 }
 // 排行榜（前三名；英文打字競賽、中文打字競賽、躲彈幕）：伺服器每次結算後更新，table 畫面帶 board（[{name, score, ts}]）；只在大廳與結算畫面顯示
-function boardBlock(box, v, mk, fmt) {
-  const b = v.board || [], el = mk('div', 'table-board');
-  el.appendChild(mk('div', 'table-board-title', '🏆 排行榜（前三名）'));
+function boardBlock(box, v, mk, fmt, key = 'board', title = '🏆 排行榜（前三名）') {   // key／title：星球合成另有「對戰排行榜」（v.board2）
+  const b = v[key] || [], el = mk('div', 'table-board');
+  el.appendChild(mk('div', 'table-board-title', title));
   if (!b.length) el.appendChild(mk('div', 'table-board-row empty', '還沒有紀錄'));
   b.forEach((e, i) => el.appendChild(mk('div', 'table-board-row', `${['🥇', '🥈', '🥉'][i] || i + 1 + '.'} ${e.name}　${fmt(e.score)}`)));
   box.appendChild(el);
@@ -9001,7 +9005,7 @@ function buildPlanet(box, v, mk, gd) {
   const r = v.result;
   if (r && !playing && r.link && (me ? r.cabs?.includes(me.cab) : true)) box.appendChild(mk('div', 'table-result', r.text));
   if (me && !playing && me.last && me.st === 'idle' && !(r?.link && r.cabs?.includes(me.cab))) box.appendChild(mk('div', 'table-result', `上一局（單人）：${me.last.sc} 分`));
-  if (!playing) boardBlock(box, v, mk, sc => `${sc} 分`);
+  if (!playing) { boardBlock(box, v, mk, sc => `${sc} 分`); boardBlock(box, v, mk, sc => `${sc} 勝`, 'board2', '⚔ 對戰排行榜（勝場數前三名）'); }
   // 邀請：我閒置中、有人在等對戰、還有位子、我沒拒絕過
   if (me && me.st === 'idle' && lk?.phase === 'invite' && lk.mem.length < 2 && !lk.no.includes(me.cab)) {
     const inv = mk('div', 'ar-invite');
@@ -9450,6 +9454,22 @@ function scrG2048(g, v, MX, MY, MW, MH) {
   const k = Math.min(MW / TF_W, MH / TF_H), FW = SCR_W - MX * 2;   // 盤面窄，置中在整個螢幕寬度（不是只有左半邊；右邊座位欄不會被蓋到）
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
   g.drawImage(cv, MX + (FW - TF_W * k) / 2, MY + (MH - TF_H * k) / 2, TF_W * k, TF_H * k);
+}
+// 大螢幕：星球合成（2026-11-20，使用者要求）——正在玩的每一台各畫一個縮小盤面並排（單人＝兩台各玩各的、對戰＝兩邊對打；對戰分出勝負後停住並標「勝利／落敗」），
+// 吃快照（sttm w:'tpl'，帶 cab），跟牌桌觀戰同一份 plDraw／plAdvance
+function scrPlanet(g, v, MX, MY, MW, MH) {
+  const cabs = v.seats.filter(x => x.play).map(x => x.cab).sort(), end = v.link?.end, now = performance.now();
+  const sp0 = (S.scrPl ||= {}), cvs = (S.scrPlCv ||= {});
+  for (const c of Object.keys(sp0)) if (!cabs.includes(Number(c))) { delete sp0[c]; delete cvs[c]; }
+  const n = Math.max(1, cabs.length), gap = 10, k = Math.min((MW - gap * (n - 1)) / n / PL_W, MH / PL_H), w = PL_W * k, h = PL_H * k, x0 = MX + (MW - (w * n + gap * (n - 1))) / 2;
+  cabs.forEach((c, i) => {
+    const sp = (sp0[c] ||= plMakeSpec()), cv = (cvs[c] ||= Object.assign(document.createElement('canvas'), { width: PL_W, height: PL_H }));
+    sp.label = v.seats.find(x => x.cab === c)?.name || `${c + 1} 號機`;
+    sp.frozen = !!end && !!v.link?.mem?.includes(c); sp.banner = sp.frozen ? { small: true, mark: end.w === c ? '勝利' : '落敗' } : null;
+    const dt = Math.max(0, Math.min(.05, (now - sp.last) / 1000)); sp.last = now; plAdvance(sp, dt); plDraw(sp, cv, 1);
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.drawImage(cv, x0 + i * (w + gap), MY + (MH - h) / 2, w, h);
+  });
 }
 function buildMaze(box, v, mk, gd) {
   const playing = v.phase === 'playing', z = v.mz;

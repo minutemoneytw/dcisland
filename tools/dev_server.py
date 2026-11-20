@@ -3015,6 +3015,21 @@ def board_record(t, entries):
             best[k] = e
     BOARDS[t["game"]] = sorted(best.values(), key=lambda e: (-e["score"], e["ts"]))[:BOARD_N]
 
+def board_vs_win(w):
+    """星球合成對戰排行榜（2026-11-20，使用者要求）：記每個人的對戰勝場數（BOARDS["planetvs"]，不截前三名，才能一直累加；畫面只帶前三名 board2）。與 worker 的 vsBoardWin 同一套。"""
+    lst = BOARDS.setdefault("planetvs", [])
+    key = lambda x: ("u", x["uid"]) if x.get("uid") else ("n", x["name"])
+    k, ts = key(w), int(time.time() * 1000)
+    e = next((x for x in lst if key(x) == k), None)
+    if e:
+        e["score"] += 1
+        e["name"] = w["name"]
+        e["ts"] = ts
+    else:
+        lst.append({"name": w["name"], "uid": w.get("uid"), "score": 1, "ts": ts})
+    lst.sort(key=lambda x: (-x["score"], x["ts"]))
+    del lst[200:]
+
 def board_rename(uid, name):
     """暱稱改了：排行榜裡有這個 uid 的項目改成新的顯示名稱。"""
     for lst in BOARDS.values():
@@ -5641,6 +5656,7 @@ def pl_finish(t):
     why = g["end"]["why"]
     text = f"{nm(w)} 先合成出黑洞，獲勝！" if why == "bh" else f"{nm(lo)} 的星球堆過頂線，{nm(w)} 獲勝！" if why == "dead" else f"{nm(lo)} 離開了，{nm(w)} 獲勝！"
     t["result"] = {"link": True, "winner": w, "cabs": list(g["mem"]), "text": text, "rid": random.getrandbits(32),
+                   "vsWin": {"name": nm(w), "uid": g.get("uids", {}).get(w)} if enough else None,   # 對戰排行榜（planetvs）加一勝：跟給 XP 同條件，擋互刷
                    "xp": [(PL_XP_WIN if s["cab"] == w else PL_XP_LOSE) if enough and s["cab"] in g["mem"] else 0 for s in t["seats"]],
                    "gs": [gs_mk({"w": 1} if s["cab"] == w else {"l": 1}, {"tier": s.get("mx") or 1}) if enough and s["cab"] in g["mem"] else None for s in t["seats"]]}
     for s in t["seats"]:
@@ -5648,6 +5664,8 @@ def pl_finish(t):
             s["st"], s["dead"] = "idle", False
     t["g"] = None
     tbl_log(t, text)
+    if t["result"].get("vsWin"):
+        board_vs_win(t["result"]["vsWin"])
 
 def pl_timeout(t, now):
     g = t.get("g")
@@ -5728,6 +5746,7 @@ def pl_msg(t, cid, msg, now):
                 m = ar_seat(t, c)[1]
                 m.update(sc=0, mx=0, dead=False)
                 g["names"][c] = m["name"]
+                g.setdefault("uids", {})[c] = m.get("uid")
             t["result"] = None
             tbl_log(t, "對戰開始！" + " 對 ".join(g["names"][c] for c in g["mem"]))
             return True, []
@@ -5766,7 +5785,7 @@ def pl_view(t, cid, v):
     v["link"] = {"host": g["host"], "phase": g["phase"], "mem": list(g["mem"]), "no": list(g["no"]), "end": end} if g else None
     return v
 
-def pl_relay(t, cid, msg):
+def pl_relay(t, cid, msg, scr=None):
     """進行中的快照：轉給觀戰者與同桌另一位（對手；自己這邊不用管畫不畫）。回 [(cid, msg)]。"""
     role, i = tbl_find(t, cid)
     if t["game"] != "planet" or role != "seat":
@@ -5786,6 +5805,8 @@ def pl_relay(t, cid, msg):
         return []
     data = {"t": "tpl", "cab": s["cab"], "b": [n if k % 4 in (0, 3) else round(n) for k, n in enumerate(b)], "cur": cur, "nx": nx, "cx": round(cx), "sc": sc, "mx": mx}
     s["sc"] = sc
+    if scr is not None:
+        scr.append(data)   # 大螢幕轉播（2026-11-20，使用者要求星球合成能轉播）
     return [(c["cid"], data) for c in t["specs"] + [x for x in t["seats"] if x is not s] if c["cid"] is not None]
 
 # ---- 泡泡射手（第二十二桌 t22，2026-11-17，使用者要求：東牆邊、彈珠台下方放一台面向左的機台）：單人、一條命、一關接一關、分數進排行榜；
@@ -5987,6 +6008,7 @@ def tbl_view(t, cid):
     v = {"id": t["id"], "game": t["game"], "phase": t["phase"], "min": mn, "max": mx, "role": role,
          "me": i if role == "seat" else -1, "seats": seats, "specs": len(t["specs"]),
          "board": list(BOARDS.get(t["game"], [])) if t["game"] in BOARD_GAMES else None,
+         "board2": BOARDS.get("planetvs", [])[:BOARD_N] if t["game"] == "planet" else None,   # 星球合成的對戰排行榜（勝場數前三名）
          "turn": t["turn"] if playing else -1, "target": tbl_next_active(t, t["turn"]) if playing else -1,
          "result": t["result"], "log": list(t["log"])}
     g = t.get("g")
@@ -7620,8 +7642,12 @@ class Room:
                     for d in scr:
                         self._scr_fwd(terr, t, {**d, "w": "tbu", "t": "sttm"}, out)
                     return out, None, None
-                if t["game"] == "planet" and a == "pls":   # 星球合成：進行中的快照，只轉發給觀戰者（不存檔、不通知畫面）
-                    return pl_relay(t, cid, msg), None, None
+                if t["game"] == "planet" and a == "pls":   # 星球合成：進行中的快照，只轉發給觀戰者與大螢幕（不存檔、不通知畫面）
+                    scr = []
+                    out = pl_relay(t, cid, msg, scr)
+                    for d in scr:
+                        self._scr_fwd(terr, t, {**d, "w": "tpl", "t": "sttm"}, out)
+                    return out, None, None
                 if t["game"] == "breakout" and a == "brs":   # 打磚塊：進行中的快照，只轉發給觀戰者（不存檔、不通知畫面）
                     return br_relay(t, cid, msg), None, None
                 if t["game"] == "pinball" and a == "pbs":   # 彈珠台：進行中的快照，只轉發給觀戰者與大螢幕（不存檔、不通知畫面）
