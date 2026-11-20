@@ -43,6 +43,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 | `client/js/main.js` | 遊戲本體：世界生成、移動/跳躍、繪圖、戰鬥、動物、裝飾、造型（裝備／外觀／換色）、職能與職業技能、UI |
 | `client/js/net.js` | 多人同步客戶端（WebSocket）。介面保持穩定 |
 | `client/js/discord.js` | Discord Embedded App SDK 接線（本機 / mock / 真 DC 三模式） |
+| `client/js/gacha.js`／`pets.js`／`claw.js` | 和平島的扭蛋機（抽獎畫面與動畫）、跟隨寵物（串火車、增益圖示、摸寵物）、夾娃娃機（畫面與簡單物理）；各自用 `main.js` 傳進來的掛鉤（`gachaCanPull`／`gachaGrant`／`clawCanPlay`／`clawGrant`）接玩的條件與發獎，資料在 `client/assets/gacha／pets／claw/*.json` |
 | `client/vendor/` | 自託管的 SDK 單檔 bundle（不依賴外部 CDN，勿手改） |
 | `worker/src/index.js` | **正式環境伺服器**：`/api/token`、`/api/config`、`/api/log`、`/ws` → Durable Object `Island`（一座島一個實例）；全域 Durable Object `Registry`（跨島、跟著 Discord 帳號的玩家資料：魚類圖鑑、腳色 XP、合成解鎖、擊倒島主紀錄） |
 | `worker/wrangler.toml` | Worker 設定（assets 指向 `../client`、DO 綁定、`DISCORD_CLIENT_ID`） |
@@ -78,6 +79,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 | `mobs.json`、動物游泳、**新增怪物規範（方向網格／調色 tint／fixed／footDy／noBounce）**、**反擊型野怪（`retaliate`）／道德性怪物**、動物重生、捕捉/牧養規劃、釣上來的敵對怪物（lurker） | 野外動物 |
 | 裝飾模式、地板、看板、坐下/睡覺、家具碰撞 | 裝飾、家具、地板、看板 |
 | 採集工具、釣魚與圖鑑、稱號（含擊倒島主紀錄）、NPC、操作說明、**合成（素材圖鑑／配方筆記／合成家具）** | 玩法：採集、釣魚、合成、稱號、NPC |
+| **扭蛋機（`gachaCanPull`／`gachaGrant`）、跟隨寵物（`pets.js`、`state.pets`）、夾娃娃機（`claw.js`）、大螢幕影片頻道與關閉按鈕（`scr_vid`／`scr_close`／`scr_ctl`、`vidTick`）** | 和平島與遊戲桌（「扭蛋機」「夾娃娃機」「大螢幕播放影片與關閉按鈕」各一段）；同步協定那一段有新訊息的指標 |
 | **地圖尺寸（`COLS`／`ROWS`）、和平島、遊戲桌（抽鬼牌／五子棋／躲彈幕／UNO／英文打字競賽／中文打字競賽／秘藥情報戰／見習驅魔師／Blokus／Blokus Trigon／俄羅斯方塊（t13，4 台機台共用一張桌）／豆豆迷宮（t14，豆豆那台是權威）／空氣曲棍球（t15／t16，桌主那台算物理、非桌主的擊球由自己那台回報）／列島建國（t17，3～4 人引擎構築，牌庫在 `kingdom/cards.json`，規格 `docs/kingdom-spec.md`）／大老二（t18，2～4 人單局）／淨土守護戰（t21，2～4 人合作、牌庫與擴散在伺服器、5×5 污染島）／彈珠台（t19，單人、客戶端算物理、進排行榜）／打磚塊（t20，單人、同彈珠台的做法、東牆邊面向左的機台）；**餐飲區（`props`、吃喝的增減益 `FOOD_FX`、`#buffBar`）**；`tbl`／`table`／`tblinfo` 訊息、`TABLE_DEFS`、`games.json`）** | 和平島與遊戲桌 |
 | `makeSpr`／`drawSpr`、`anim`、人物分層 sheet、`avatar.json` 的 `frames`、**裝備／外觀／換色（`dye`、`glam`、`wardrobe`）** | 美術：多幀動畫與人物分層 |
 | 天氣（色罩／粒子、`WEATHER_SLOT_MIN` 時刻槽、`weatherSlot` 接遊戲時間、之後 `spawnIf`／植物生長） | 天氣（純客戶端畫面） |

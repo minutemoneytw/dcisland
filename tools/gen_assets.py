@@ -1644,8 +1644,8 @@ PROPS_BY_TERRAIN = {
               dict(id="dine_wall", kind="deco", img="dine_partition.png", cell=[75, 14.5], w=1, h=5.5),   # 西側一道矮隔板，從北牆伸到 y＝20（南邊開口當入口）
               dict(id="dine_rug", kind="rug", img="dine_rug.png", cell=[76, 16], w=9, h=5),                # 地毯鋪滿隔板右邊到東牆
               # 夾娃娃機與扭蛋機（2026-11-14，使用者要求）：俄羅斯方塊機台右側、靠北牆；底邊要跟俄羅斯方塊機台對齊（y＋h＝17.5，所以夾娃娃機比較高、y 從 14 開始）。先只做外觀框架（kind=deco：擋路、沒有名稱、不能互動），
-              # 獎勵怎麼處理還沒決定，之後要開放時把 kind 改成新的互動種類（客戶端 propUse／useProp）
-              # 扭蛋機（2026-11-19）已開放：kind＝gacha，走近按 F 開抽獎畫面（client/js/gacha.js，資料 assets/gacha/gacha.json，id 要對得上）
+              # 獎勵怎麼處理還沒決定，之後要開放時把 kind 改成新的互動種類（客戶端 propUse／useProp）。**2026-11-19 起扭蛋機（kind=gacha）與夾娃娃機（kind=claw）都已開放互動**（見下面兩筆）
+              # 扭蛋機（2026-11-19）已開放：kind＝gacha，走近按 F 開抽獎畫面（client/js/gacha.js，資料 assets/gacha/gacha.json，id 要對得上）；夾娃娃機（kind＝claw，client/js/claw.js，資料 assets/claw/claw.json）同理
               dict(id="claw", kind="claw", name="夾娃娃機", img="claw_machine.png", cell=[61, 14], w=3, h=3.5),
               dict(id="gacha", kind="gacha", name="扭蛋機", img="gacha_machine.png", cell=[65, 14.5], w=2, h=3),
               # 圍觀休息區（2026-11-14，使用者要求）：房間左上角。大螢幕＝水池水面（8×6）的 2 倍寬、1.5 倍高＝16×9 格（512×288 px，16:9），畫面由客戶端即時畫（kind＝screen，沒有圖）；
