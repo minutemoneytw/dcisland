@@ -8412,17 +8412,25 @@ function pbDraw(P, cv, t) {   // 畫整台（牌桌、螢幕共用）：cv 是 P
     const pull = P.power * 20;
     g.fillStyle = '#9a9aa8'; g.fillRect(PB_LANE_X - 3, PB_LANE_Y + PB_R + pull, 6, 22); g.fillStyle = '#d84a4a'; g.fillRect(PB_LANE_X - 6, PB_LANE_Y + PB_R + 20 + pull, 12, 4);
   }
-  // 隧道出口的洞：球掉出來前 0.4 秒張開（0～0.4 s 放大、0.4～0.7 s 球掉出來、0.7～1.0 s 闔上）
-  if (P.hole) {
-    const h = P.hole.h;
-    {
-      const k = h < .4 ? h / .4 : h < .7 ? 1 : Math.max(0, 1 - (h - .7) / .3), [hx, hy] = PB_TUN.out, rx = 13 * k, ry = 9 * k;
-      if (k > 0) {
-        g.save(); g.shadowColor = '#ffd060'; g.shadowBlur = 10 * k;
-        g.beginPath(); g.ellipse(hx, hy, rx, ry, 0, 0, TAU); g.fillStyle = '#05060f'; g.fill(); g.strokeStyle = '#ffd060'; g.lineWidth = 2.5; g.stroke(); g.restore();
-        g.beginPath(); g.ellipse(hx, hy, rx * .55, ry * .55, 0, 0, TAU); g.strokeStyle = 'rgba(255,208,96,.35)'; g.lineWidth = 1; g.stroke();
-      }
+  // 隧道出口的艙門（2026-11-21 使用者要求更像機械，不要虛空冒出一個洞）：平常就是機台上一個關著的金屬艙口（兩片門板中間一道縫）；
+  // 球要出來前 0.4 秒兩片門板往左右滑開、露出下面黑黑的洞（洞口透出暖光）、球掉出來、約 0.3 秒後門板滑回關上（0～0.4 s 開、0.4～0.7 s 全開、0.7～1.0 s 關）。觀戰者／大螢幕只看得到關著的艙口
+  {
+    const [hx, hy] = PB_TUN.out, hw = 15, hh = 8, h = P.hole ? P.hole.h : -1;
+    const k = h < 0 ? 0 : h < .4 ? h / .4 : h < .7 ? 1 : h < 1 ? 1 - (h - .7) / .3 : 0;   // 開口程度：0＝關、1＝全開
+    g.save();
+    pbRR(g, hx - hw - 2.5, hy - hh - 2.5, hw * 2 + 5, hh * 2 + 5, 4); g.fillStyle = '#2a3a70'; g.fill(); g.strokeStyle = '#9db4f4'; g.lineWidth = 1.5; g.stroke();   // 外框（凹槽）
+    g.beginPath(); g.rect(hx - hw, hy - hh, hw * 2, hh * 2); g.clip();
+    g.fillStyle = '#05060f'; g.fillRect(hx - hw, hy - hh, hw * 2, hh * 2);   // 洞
+    if (k > 0) { const gl = g.createRadialGradient(hx, hy, 1, hx, hy, hw); gl.addColorStop(0, `rgba(255,208,96,${.55 * k})`); gl.addColorStop(1, 'rgba(255,208,96,0)'); g.fillStyle = gl; g.fillRect(hx - hw, hy - hh, hw * 2, hh * 2); }
+    for (const dir of [-1, 1]) {   // 左右兩片門板：各蓋一半，往外滑 k×半寬
+      const x0 = dir < 0 ? hx - hw - k * hw : hx + k * hw;
+      g.fillStyle = '#6f82b8'; g.fillRect(x0, hy - hh, hw, hh * 2);
+      g.fillStyle = '#9fb2e0'; g.fillRect(x0, hy - hh, hw, 2);                        // 上緣反光
+      g.fillStyle = '#4a5a90'; g.fillRect(x0, hy + hh - 2, hw, 2);                    // 下緣陰影
+      g.fillStyle = '#c8d4f4'; g.fillRect(x0 + (dir < 0 ? hw - 2 : 0), hy - hh, 2, hh * 2);   // 合縫那一側的邊
+      g.fillStyle = '#2a3560'; g.fillRect(x0 + (dir < 0 ? 3 : hw - 5), hy - 1, 2, 2); g.fillRect(x0 + (dir < 0 ? 8 : hw - 10), hy - 1, 2, 2);   // 鉚釘
     }
+    g.restore();
   }
   // 球
   if (P.st !== 3 && t >= -1 && !P.cap) {
