@@ -130,6 +130,7 @@ export function connectNet(S, opts = {}) {
       case 'scrcd': if (opts.onScrCd) opts.onScrCd(msg); break;   // 大螢幕切台冷卻中：left＝還要幾毫秒
       case 'ttf': if (opts.onTtf) opts.onTtf(msg); break;   // 2048（觀戰者才收到）：玩家那台每一步的盤面（m 16 字元、sc 分數、mx 最大方塊指數）
       case 'tbu': if (opts.onTbu) opts.onTbu(msg); break;   // 泡泡射手（觀戰者才收到）：玩家那台的快照（m 盤面、par 排列奇偶、cur／nx 手上與下一顆、an 瞄準角度〔十分之一度〕、bx／by 飛行中的泡泡、sc 分數、lv 關卡、f 離下一排還有幾發）
+      case 'tpl': if (opts.onTpl) opts.onTpl(msg); break;   // 星球合成（觀戰者才收到）：玩家那台的快照
       case 'tbr': if (opts.onTbr) opts.onTbr(msg); break;   // 打磚塊（觀戰者才收到）：玩家那台的快照（bl 球、p／pw 板子、sc 分數、b 剩幾條命、lv 關卡、m 磚塊）
       case 'tpb': if (opts.onTpb) opts.onTpb(msg); break;   // 彈珠台（觀戰者才收到）：玩家那台的快照（x／y 球、sc 分數、b 剩球、st 狀態、l／r 擋板、f 彈跳器閃光）
       case 'sttm': if (opts.onScrMz) opts.onScrMz(msg); break;   // 大螢幕轉播豆豆迷宮：豆豆快照（w＝'tms'）或幽靈玩家位置（w＝'tmp'），其餘欄位同原訊息
