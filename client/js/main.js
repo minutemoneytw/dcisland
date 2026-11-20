@@ -8078,7 +8078,7 @@ const PB_RESCUE = [135.5, 579, 7], PB_RESCUE_S = 12;               // 救援柱�
 const PB_SLOW = .7;                                                 // 整台的時間倍率（2026-11-16 使用者說球太快看不到就死了）：物理照原本的數值算，只是每秒只前進 0.7 秒，軌跡不變、整體慢動作
 const PB_ZOOM = 1.4;                                                // 牌桌上的顯示倍率（2026-11-16 使用者要求放大，先 1.2 後再加大到 1.4；物理座標不變，pbDraw 依 canvas 寬度自己縮放）
 const PB_LGATE = [260, 109, 271.2, 78];                             // 發球道出口的擋板：球射出、離開出口後關上（球不會再掉回發球道），回到等拉桿時打開
-const PB_PEARL_S = 4;                                                 // 珍珠燈號亮著的秒數（2026-11-18 使用者說太好拿：原本亮到這顆球結束，改成 4 秒內三顆都要打亮，超過就熄；到最後 1 秒會閃）
+const PB_PEARL_S = 2.5;                                                 // 珍珠燈號亮著的秒數（2026-11-18 使用者說太好拿：原本亮到這顆球結束，改成 4 秒內三顆都要打亮，超過就熄；到最後 1 秒會閃）
 const PB_JACK_MS = 3200;                                             // 深海寶藏（隧道滿 3 次）的全場燈效長度：場上所有會亮的東西輪流閃（老機台那種「能用的燈都拿來閃」）
 const PB_TUN = { x: 30, y: 285, r: 17, t: 1, n: 3, out: [135.5, 46, 25, 60], pts: 1000, jack: 5000 };   // 海底隧道（主要目標）：左牆的洞口，在右擋板自然出球的路線上，球碰到洞口就算、任何角度（2026-11-16 使用者要求，判定範圍＝畫出來的半橢圓加球半徑；原本要往上衝才算）；1 秒後從上方掉進水母群。每次 1000 分，集滿 3 次＝深海寶藏 +5000（跨球保留）
 const PB_TRIS = [[[50.5, 428], [78.5, 510], [50.5, 494]], [[220.5, 428], [192.5, 510], [220.5, 494]]];   // 珊瑚彈弓（三角形）的三個頂點：第一點→第二點那條是朝場內的踢球邊，其他兩條只是實心牆
@@ -8494,7 +8494,9 @@ const BRK_W = 480, BRK_H = 540, BRK_HUD = 32, BRK_COLS = 12, BRK_ROWS = 9, BRK_B
 const BRK_PAD_Y = 500, BRK_PAD_H = 10, BRK_PAD_W = 76, BRK_PAD_WIDE = 118, BRK_R = 6, BRK_LIVES = 3, BRK_LIVES_MAX = 5, BRK_KEY_SPD = 560, BRK_DT = 1 / 240, BRK_SNAP_MS = 120, BRK_BALLS_MAX = 27;   // 場上最多幾顆球（快照的 bl 也是這個上限，兩份伺服器的 BR_BALLS_MAX 要一致）
 const BRK_ROW_COL = ['#e04848', '#f08030', '#f0c020', '#3cb45a', '#40c8e0', '#3b78e8', '#9a5ad8', '#e868a8', '#b8c4dc'];
 const BRK_DROPS = { W: ['寬', '#3b78e8'], M: ['多', '#e08a20'], S: ['慢', '#3cb45a'], L: ['命', '#e04848'] };
-const brkSpeed = lv => Math.min(520, 290 + 22 * (lv - 1));   // 第 lv 關的球速（px／秒）
+const brkSpeed = lv => Math.min(640, 330 + 28 * (lv - 1));   // 第 lv 關的球速（px／秒）（2026-11-21 使用者說沒難度：原本 290＋22／關、上限 520）
+const brkPadW = lv => Math.max(48, BRK_PAD_W - 4 * (lv - 1));   // 第 lv 關的板子寬度：每關窄 4px、最窄 48（寬板道具是它的 1.5 倍）
+const brkRally = B => 1 + Math.min(.3, (B.rally || 0) * .015);   // 這顆球發出後板子每接一次，球速 +1.5%、最多 +30%（掉球換新球就歸零）
 function brkLevel(seed, lv) {   // 第 lv 關的磚塊（每格的耐打次數 0～3）：五種版面輪流，左右對稱；關卡越後面排數越多、越硬
   const R = mulberry32((seed + lv * 7919) >>> 0), m = new Uint8Array(BRK_COLS * BRK_ROWS), rows = Math.min(BRK_ROWS, 6 + Math.floor(lv / 3)), kind = (lv - 1) % 5;
   for (let r = 0; r < rows; r++) for (let c = 0; c < BRK_COLS / 2; c++) {
@@ -8512,13 +8514,13 @@ function brkLevel(seed, lv) {   // 第 lv 關的磚塊（每格的耐打次數 0
 }
 function brkNewBall(B) {   // 一顆黏在板子上的新球；板子、道具效果歸零
   B.balls = [{ x: B.pad.x, y: BRK_PAD_Y - BRK_R, vx: 0, vy: 0, stuck: true }];
-  B.drops = []; B.wideT = 0; B.slowT = 0; B.combo = 0; B.pad.w = BRK_PAD_W;
+  B.drops = []; B.wideT = 0; B.slowT = 0; B.combo = 0; B.pad.w = brkPadW(B.lv || 1); B.rally = 0;
 }
 function brkMake(v) {
   const z = v.br, me = v.role === 'seat';
   const B = {
     key: z.seed + ':' + z.t0, t0: z.t0, off: z.sn - Date.now(), seed: z.seed, role: me ? 'seat' : 'spec', over: false,
-    lives: BRK_LIVES, score: 0, lv: 1, bricks: brkLevel(z.seed, 1), pad: { x: BRK_W / 2, w: BRK_PAD_W }, balls: [], drops: [], wideT: 0, slowT: 0, combo: 0,
+    lives: BRK_LIVES, score: 0, lv: 1, bricks: brkLevel(z.seed, 1), pad: { x: BRK_W / 2, w: brkPadW(1) }, balls: [], drops: [], wideT: 0, slowT: 0, combo: 0,
     mx: null, keys: { l: 0, r: 0 }, note: null, snap: null, snapAt: 0, last: performance.now(), acc: 0, rnd: mulberry32((z.seed ^ 0x5bd1e995) >>> 0),
   };
   brkNewBall(B); return B;
@@ -8539,14 +8541,14 @@ function brkKey(e, down) {   // 打磚塊的按鍵：← A／→ D 移動板子�
   return true;
 }
 function brkNote(B, t) { B.note = { t, until: performance.now() + 1600 }; }
-function brkDrop(B, x, y) {   // 打掉磚塊：12% 掉道具（命比較少見，滿命時不掉）
-  if (B.rnd() >= .12) return;
+function brkDrop(B, x, y) {   // 打掉磚塊：8% 掉道具（2026-11-21 使用者說沒難度：原本 12%；命比較少見，滿命時不掉）
+  if (B.rnd() >= .08) return;
   const r = B.rnd(), k = r < .35 ? 'W' : r < .65 ? 'M' : r < .9 ? 'S' : 'L';
   if (k === 'L' && B.lives >= BRK_LIVES_MAX) return;
   B.drops.push({ x, y, k });
 }
 function brkTake(B, k) {   // 板子接到道具
-  if (k === 'W') { B.wideT = 12; B.pad.w = BRK_PAD_WIDE; brkNote(B, '板子變寬！'); }
+  if (k === 'W') { B.wideT = 12; B.pad.w = Math.round(brkPadW(B.lv) * 1.5); brkNote(B, '板子變寬！'); }
   else if (k === 'S') { B.slowT = 8; brkNote(B, '球變慢！'); }
   else if (k === 'L') { B.lives = Math.min(BRK_LIVES_MAX, B.lives + 1); brkNote(B, '多一條命！'); }
   else if (k === 'M') {
@@ -8586,10 +8588,10 @@ function brkHitBricks(B, b) {   // 球撞磚塊（一小步最多撞一塊）：
 function brkStep(B, dt) {   // 往前模擬 dt 秒（只有自己的局）
   const pad = B.pad, kx = B.keys.r - B.keys.l;
   if (kx) { pad.x += kx * BRK_KEY_SPD * dt; B.mx = null; } else if (B.mx != null) pad.x = B.mx;
-  if (B.wideT > 0 && (B.wideT -= dt) <= 0) pad.w = BRK_PAD_W;
+  if (B.wideT > 0 && (B.wideT -= dt) <= 0) pad.w = brkPadW(B.lv);
   if (B.slowT > 0) B.slowT -= dt;
   pad.x = Math.max(pad.w / 2, Math.min(BRK_W - pad.w / 2, pad.x));
-  const s = brkSpeed(B.lv) * (B.slowT > 0 ? .65 : 1);
+  const s = brkSpeed(B.lv) * brkRally(B) * (B.slowT > 0 ? .65 : 1);
   for (const b of B.balls) {
     if (b.stuck) { b.x = pad.x; b.y = BRK_PAD_Y - BRK_R; continue; }
     const sp = Math.hypot(b.vx, b.vy) || 1; b.vx *= s / sp; b.vy *= s / sp;
@@ -8600,7 +8602,7 @@ function brkStep(B, dt) {   // 往前模擬 dt 秒（只有自己的局）
     if (b.y < BRK_HUD + BRK_R) { b.y = BRK_HUD + BRK_R; b.vy = Math.abs(b.vy); }
     if (b.vy > 0 && b.y + BRK_R >= BRK_PAD_Y && b.y - BRK_R <= BRK_PAD_Y + BRK_PAD_H && Math.abs(b.x - pad.x) <= pad.w / 2 + BRK_R) {   // 板子：打到越旁邊彈得越斜
       const a = Math.max(-1, Math.min(1, (b.x - pad.x) / (pad.w / 2))) * 1.05;
-      b.y = BRK_PAD_Y - BRK_R; b.vx = Math.sin(a) * s; b.vy = -Math.cos(a) * s; B.combo = 0;
+      b.y = BRK_PAD_Y - BRK_R; b.vx = Math.sin(a) * s; b.vy = -Math.cos(a) * s; B.combo = 0; B.rally = (B.rally || 0) + 1;
     }
     brkHitBricks(B, b);
   }
@@ -9097,7 +9099,7 @@ function onNetTpl(m) {   // 快照：另一台（對戰的對手、或觀戰時�
 const BUB_W = 384, BUB_H = 560, BUB_HUD = 32, BUB_R = 16, BUB_DX = 32, BUB_DY = 28, BUB_COLS = 12, BUB_ROWS = 14, BUB_X0 = 16, BUB_Y0 = 48, BUB_LOSE = 12;
 const BUB_SX = BUB_W / 2, BUB_SY = 518, BUB_SPD = 900, BUB_DT = 1 / 240, BUB_SNAP_MS = 120, BUB_ANG_MAX = 1.35, BUB_KEY_SPD = 1.7;
 const BUB_COL = ['', '#e04848', '#f0c020', '#3cb45a', '#3b78e8', '#9a5ad8', '#40c8e0'];
-const bubLim = lv => Math.max(4, 7 - Math.ceil(lv / 2));   // 連續幾發沒爆掉，天花板就垂下一排（第 1 關 6 發，第 5 關起 4 發）
+const bubLim = lv => Math.max(2, 7 - Math.floor((lv + 1) / 2));   // 連續幾發沒爆掉，天花板就垂下一排（2026-11-21 使用者說關卡越後面難度不變：每兩關少一發，第 1～2 關 6 發、第 3～4 關 5 發、第 5～6 關 4 發、第 7～8 關 3 發、第 9 關起 2 發）
 const bubOff = (B, r) => ((r + B.par) & 1) * BUB_R;
 const bubOk = (B, r, c) => r >= 0 && r < BUB_ROWS && c >= 0 && c < BUB_COLS - ((r + B.par) & 1);
 const bubXY = (B, r, c) => [BUB_X0 + c * BUB_DX + bubOff(B, r), BUB_Y0 + r * BUB_DY];
