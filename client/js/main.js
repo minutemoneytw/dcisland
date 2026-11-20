@@ -11376,6 +11376,7 @@ function tableDrawEntries(list) {
         else { ctx.fillStyle = '#2f8a5a'; ctx.fillRect(r.x, r.y, r.w, r.h); }
         const inf = S.tblInfo?.[tb.id], p = S.players[0];
         if (tb.cab != null) { arcadeLabel(tb, r, inf, p); return; }   // 機台類（俄羅斯方塊、星球合成）：每台頭上一行
+        if (gd?.kind === 'machine') { machineLabel(tb, r, inf, p, gd); return; }   // 單人機台（彈珠台、打磚塊、泡泡射手、2048）：空著寫「空機台」，不寫 0/1（2026-11-20 使用者要求）
         const txt = `${gd?.name || '遊戲桌'} ${inf ? `${inf.n}/${inf.max}${inf.play ? ' 遊戲中' : ''}${inf.s ? ` · ${inf.s} 人觀戰` : ''}` : ''}`;
         ctx.save(); ctx.font = 'bold 12px "Microsoft JhengHei"'; ctx.textAlign = 'center';
         ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#ffe08a';
@@ -11398,6 +11399,15 @@ function arcadeLabel(tb, r, inf, p) {
   lines.push([gameDef(tb.game)?.name || '街機', '#ffe08a', 'bold 12px']);   // 遊戲名稱（同其他桌子的標籤）
   if (inf?.inv && (!c || c.st === 'idle')) lines.push([tb.game === 'planet' ? '對戰邀請中！' : '聯機邀請中！', '#ff9ad0', 'bold 11px']);
   if (!S.tableOpen && tableDist(tb, p.x, p.y) < TABLE_RANGE && !tableNearOther(tb, p)) lines.push([c ? '按 F 觀戰' : '按 F 開始玩', '#fff6e0', '11px']);
+  ctx.save(); ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)';
+  lines.forEach(([t, col, font], k) => { ctx.font = `${font} "Microsoft JhengHei"`; ctx.fillStyle = col; const y = r.y - 6 - k * 14; ctx.strokeText(t, cx, y); ctx.fillText(t, cx, y); });
+  ctx.restore();
+}
+function machineLabel(tb, r, inf, p, gd) {
+  const cx = r.x + r.w / 2, busy = !!inf?.n, lines = [];
+  lines.push([busy ? `${inf.play ? '遊戲中' : '入座中'}${inf.s ? ` · ${inf.s} 人觀戰` : ''}` : inf?.s ? `空機台 · ${inf.s} 人觀戰` : '空機台', busy ? '#fff6e0' : '#b8c4dc', '11px']);
+  lines.push([gd.name, '#ffe08a', 'bold 12px']);
+  if (!S.tableOpen && tableDist(tb, p.x, p.y) < TABLE_RANGE) lines.push([busy ? '按 F 觀戰' : '按 F 開始玩', '#fff6e0', '11px']);
   ctx.save(); ctx.textAlign = 'center'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)';
   lines.forEach(([t, col, font], k) => { ctx.font = `${font} "Microsoft JhengHei"`; ctx.fillStyle = col; const y = r.y - 6 - k * 14; ctx.strokeText(t, cx, y); ctx.fillText(t, cx, y); });
   ctx.restore();
