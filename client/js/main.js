@@ -11075,12 +11075,12 @@ function titleProgress(c, depth = 0) {
       if (c.op === 'le') return { cur: val !== undefined && val <= c.n ? 1 : 0, need: 1 };
       return { cur: val || 0, need: c.n || 1 };
     }
-    case 'played': {   // 玩過幾種小遊戲。group＝'table'（桌上遊戲）／'machine'（機台，games.json 的 kind）：need 自動＝該類現有遊戲數（新增遊戲會自動變多）；keep＝這顆稱號自己的 id，得到過就不會因為新增遊戲被收回
+    case 'played': {   // 玩過幾種小遊戲。group＝'table'（桌上遊戲）／'machine'（機台，games.json 的 kind）：need 自動＝該類現有遊戲數（新增遊戲會自動變多）；新增遊戲後已得到的稱號也會被收回（使用者說可以）
       const G = S.gstats || S.gstatsLocal || {};
       if (c.group) {
         const ids = Object.entries(S.gamesDB?.games || {}).filter(([, v]) => (v.kind || 'table') === c.group).map(([k]) => k);
         const cur = ids.filter(k => (G[k]?.p || 0) >= 1).length, need = Math.max(1, ids.length);
-        return { cur: c.keep && (S.titleBook.known || []).includes(c.keep) ? need : cur, need };
+        return { cur, need };
       }
       return { cur: Object.values(G).filter(m => (m.p || 0) >= 1).length, need: c.n || 1 };
     }

@@ -297,22 +297,20 @@
   {
    "id": "table_regular",
    "name": "牌桌常客",
-   "desc": "和平島所有的桌上遊戲都玩過至少一局（之後新增的桌上遊戲也算；已經得到的不會被收回）",
+   "desc": "和平島所有的桌上遊戲都玩過至少一局（之後新增的桌上遊戲也算，新增後要補玩才算）",
    "cond": {
     "type": "played",
-    "group": "table",
-    "keep": "table_regular"
+    "group": "table"
    },
    "cat": "game"
   },
   {
    "id": "arcade_regular",
    "name": "小遊戲常客",
-   "desc": "和平島所有的小遊戲機台（俄羅斯方塊、打磚塊、2048、泡泡射手、彈珠台…）都玩過至少一局（之後新增的機台也算；已經得到的不會被收回）",
+   "desc": "和平島所有的小遊戲機台（俄羅斯方塊、打磚塊、2048、泡泡射手、彈珠台…）都玩過至少一局（之後新增的機台也算，新增後要補玩才算）",
    "cond": {
     "type": "played",
-    "group": "machine",
-    "keep": "arcade_regular"
+    "group": "machine"
    },
    "cat": "game"
   },
