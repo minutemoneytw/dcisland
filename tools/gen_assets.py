@@ -1632,7 +1632,9 @@ TABLES_BY_TERRAIN = {
               dict(id="t22", game="bubble", cell=[83, 30], w=2, h=3),
               dict(id="t23", game="g2048", cell=[83, 34], w=2, h=3),
               # 星球合成（2026-11-20，使用者要求：做一款類似西瓜遊戲的）：貼東牆、面向左，在 2048 下面隔 1 格；單人、分數進排行榜
-              dict(id="t24", game="planet", cell=[83, 38], w=2, h=3)],   # 2048（2026-11-17，使用者要求：泡泡射手下方再放一台）：貼東牆、面向左，在泡泡射手下面隔 1 格；單人、分數進排行榜
+              dict(id="t24", game="planet", cell=[83, 38], w=2, h=3),
+              # 星球合成對戰（2026-11-20，使用者要求：下面再加一台、可對戰）：貼東牆、面向左，在星球合成下面隔 1 格；單人或 2 人對戰
+              dict(id="t25", game="planetvs", cell=[83, 42], w=2, h=3)],   # 2048（2026-11-17，使用者要求：泡泡射手下方再放一台）：貼東牆、面向左，在泡泡射手下面隔 1 格；單人、分數進排行榜
 #   # 泡泡射手（2026-11-17，使用者要求：彈珠台下方放一台）：貼東牆、面向左，在彈珠台下面隔 1 格；單人、分數進排行榜    # 彈珠台（2026-11-15，使用者要求：俄羅斯方塊機台左邊）：同樣 2×3 格、靠北牆，跟機台隔 1 格；單人、分數進排行榜,   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
 }
 
@@ -2122,11 +2124,11 @@ def table_breakout():
     cv.outline()
     return cv
 
-def table_planet():
-    """星球合成機台（32×48，畫 scale 2＝2×3 格）：**側面、面向左邊**的街機（靠東牆擺，放在 2048 底下）——深藍紫色機身，左上是往前伸的發光招牌、
+def table_planet(vs=False):
+    """（vs＝True：星球合成對戰機台 t25，紅色機身、側板上兩邊各一顆星球中間隔一條線）星球合成機台（32×48，畫 scale 2＝2×3 格）：**側面、面向左邊**的街機（靠東牆擺，放在 2048 底下）——深藍紫色機身，左上是往前伸的發光招牌、
     下面一道往內斜的發光螢幕、往左突出的操作台（搖桿與按鈕），側板上畫著星空、堆在一起的幾顆星球和一顆待落下的小隕石。"""
     cv = Canvas(32, 48)
-    c = hx("#5a4cb0"); dark = shade(c, .6); lite = shade(c, 1.3)
+    c = hx("#b8465a" if vs else "#5a4cb0"); dark = shade(c, .6); lite = shade(c, 1.3)
     def left(y):   # 每一列機身的左緣（側面輪廓）
         if y <= 1: return 10
         if y <= 8: return 7                                   # 招牌往前伸
@@ -2144,7 +2146,7 @@ def table_planet():
         cv.set(7, y, hx("#fffbe0")); cv.set(8, y, hx("#fff0b0"))
     cv.hline(9, 26, 8, dark)
     for y in range(11, 23):                                               # 螢幕（從側面只看得到一道發亮的面）
-        x = left(y); cv.set(x, y, hx("#e0d8ff")); cv.set(x + 1, y, hx("#8a7ae8")); cv.set(x + 2, y, hx("#0a0820"))
+        x = left(y); cv.set(x, y, hx("#ffe0d8" if vs else "#e0d8ff")); cv.set(x + 1, y, hx("#e8707a" if vs else "#8a7ae8")); cv.set(x + 2, y, hx("#0a0820"))
     cv.hline(3, 12, 23, lite); cv.hline(3, 12, 27, dark); cv.vline(3, 23, 27, lite)   # 操作台
     cv.vline(5, 20, 22, hx("#2a2a30")); cv.rect(4, 18, 6, 19, hx("#f0c040")); cv.set(4, 18, hx("#fff0b0"))   # 搖桿（金色）
     cv.rect(14, 10, 26, 28, hx("#0a0820")); cv.rect(15, 11, 25, 27, hx("#14103a"))    # 側板上的圖：星空底
@@ -2154,6 +2156,8 @@ def table_planet():
     cv.ellipse(23, 25, 1.7, 1.7, hx("#4a8ae8")); cv.set(22, 24, hx("#a8d0ff"))          # 地球
     cv.ellipse(20, 22, 1.2, 1.2, hx("#c85a3a"))                                         # 火星
     cv.set(21, 15, hx("#a09890")); cv.set(22, 15, hx("#a09890")); cv.set(21, 16, hx("#706860"))   # 待落下的小隕石
+    if vs:   # 對戰機台：側板中間一條線，左右各一個盤面（右邊多一顆太陽）
+        cv.vline(20, 11, 27, hx("#ffd0d0")); cv.ellipse(23, 14, 1.6, 1.6, hx("#ffd040")); cv.set(22, 13, hx("#fff4b0"))
     for y in (34, 37, 40):
         cv.hline(18, 25, y, dark)                                                     # 下半身的散熱孔
     cv.hline(7, 29, 46, dark); cv.hline(7, 29, 47, dark)
@@ -4293,6 +4297,7 @@ def main():
     save(table_bubble(), "table_bubble.png", "games")
     save(table_g2048(), "table_g2048.png", "games")
     save(table_planet(), "table_planet.png", "games")
+    save(table_planet(True), "table_planetvs.png", "games")
     print("== 合成素材圖示 ==")
     for mid, (fn, col) in MATERIAL_ICONS.items():
         save(fn(hx(col)), mid + ".png", "craft")

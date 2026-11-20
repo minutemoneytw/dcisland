@@ -4995,7 +4995,7 @@ function closeTable(sendLeave = true) {
 // 使用者主動離開（離開按鈕／Esc）：我是入座玩家而且牌局進行中 → 先跳確認（離開會直接中斷這一局或放棄成績）；觀戰、還沒開局就直接離開
 // 主動中途退出機台小遊戲＝用當下的分數結算（2026-11-19 使用者要求：有的遊戲死不掉）：彈珠台／打磚塊／泡泡射手／2048 的玩法都在客戶端算，
 // 所以離開前補送一個 over（跟打完一樣的結算；伺服器不用改）。分數是 0（倒數中、還沒得分）就不結算，照一般規則這一局不算。
-const QUIT_SCORE_GAMES = ['pinball', 'breakout', 'bubble', 'g2048', 'planet'];
+const QUIT_SCORE_GAMES = ['pinball', 'breakout', 'bubble', 'g2048', 'planet', 'planetvs'];
 function quitScoreNow() {
   const v = S.tableView;
   if (!v || v.phase !== 'playing' || v.role !== 'seat' || !QUIT_SCORE_GAMES.includes(v.game)) return false;
@@ -5003,13 +5003,13 @@ function quitScoreNow() {
   if (v.game === 'pinball') { const P = S.pb; if (P && P.role === 'seat' && !P.over && P.score > 0) { P.over = true; P.st = 3; tblFinal({ a: 'over', sc: cap(P.score) }); pbSnap(P, true); return true; } }
   else if (v.game === 'breakout') { const B = S.brk; if (B && B.role === 'seat' && !B.over && B.score > 0) { B.over = true; brkSnap(B, true); tblFinal({ a: 'over', sc: cap(B.score), lv: B.lv }); return true; } }
   else if (v.game === 'bubble') { const B = S.bub; if (B && B.role === 'seat' && !B.over && B.score > 0) { B.over = true; B.fly = null; bubSnap(B, true); tblFinal({ a: 'over', sc: cap(B.score), lv: Math.min(999, B.lv) }); return true; } }
-  else if (v.game === 'planet') { const B = S.pl; if (B && B.role === 'seat' && !B.over && B.score > 0) { B.over = true; plSnap(B, true); tblFinal({ a: 'over', sc: cap(B.score), mx: Math.max(1, Math.min(11, B.mx)) }); return true; } }
+  else if (isPlGame(v.game)) { const B = S.pl; if (B && B.role === 'seat' && !B.over && !B.vs && B.score > 0) { B.over = true; plSnap(B, true); tblFinal({ a: 'over', sc: cap(B.score), mx: Math.max(1, Math.min(11, B.mx)) }); return true; } }
   else if (v.game === 'g2048') { const B = S.tf; if (B && B.role === 'seat' && !B.over && B.score > 0) { B.over = true; tfSnap(B, true); tblFinal({ a: 'over', sc: Math.min(TF_SCORE_MAX_C, Math.round(B.score)), mx: Math.min(17, B.mx) }); return true; } }
   return false;
 }
 function leaveAsk(on) {
   const box = $('leaveBox'); box.classList.toggle('hidden', !on);
-  if (on) { const v = S.tableView, sub = box.querySelector('.leave-sub'); if (sub) { if (!sub.dataset.def) sub.dataset.def = sub.textContent; sub.textContent = v && QUIT_SCORE_GAMES.includes(v.game) ? '離開會用你目前的分數結算這一局（還沒得分就不算）。' : sub.dataset.def; } }
+  if (on) { const v = S.tableView, sub = box.querySelector('.leave-sub'); if (sub) { if (!sub.dataset.def) sub.dataset.def = sub.textContent; sub.textContent = v && QUIT_SCORE_GAMES.includes(v.game) && !(isPlGame(v.game) && S.pl?.vs) ? '離開會用你目前的分數結算這一局（還沒得分就不算）。' : sub.dataset.def; } }
   if (on) $('leaveStay').focus();   // 預設停在「繼續遊戲」，連點空白鍵也不會誤退出
 }
 function leaveTable() {
@@ -5188,7 +5188,7 @@ function buildTable() {
   if (tb?.game === 'blokus') { buildBlokus(box, v, mk, gd); return; }   // Blokus有自己的畫面（棋盤＋方塊托盤）
   if (tb?.game === 'mage') { buildMage(box, v, mk, gd); return; }   // 見習驅魔師有自己的畫面（畫符號的場地）
   if (tb?.game === 'dodge') { buildDodge(box, v, mk, gd); return; }   // 躲彈幕有自己的畫面（即時場地）
-  if (tb?.game === 'planet') { buildPlanet(box, v, mk, gd); return; }   // 星球合成有自己的畫面
+  if (isPlGame(tb?.game)) { buildPlanet(box, v, mk, gd); return; }   // 星球合成有自己的畫面
   if (tb?.game === 'breakout') { buildBreakout(box, v, mk, gd); return; }   // 打磚塊有自己的畫面
   if (tb?.game === 'g2048') { buildG2048(box, v, mk, gd); return; }   // 2048 有自己的畫面
   if (tb?.game === 'bubble') { buildBubble(box, v, mk, gd); return; }   // 泡泡射手有自己的畫面
@@ -6622,7 +6622,7 @@ function scrSeatTag(v, s, k) {
   if (gm === 'pinball') return `${Math.max(s.sc ?? 0, S.scrPb?.score ?? 0)} 分`;
   if (gm === 'g2048') return `${Math.max(s.sc ?? 0, S.scrTf?.score ?? 0)} 分`;
   if (gm === 'bubble') return `${Math.max(s.sc ?? 0, S.scrBub?.score ?? 0)} 分`;
-  if (gm === 'breakout' || gm === 'planet') return `${s.sc ?? 0} 分`;
+  if (gm === 'breakout' || isPlGame(gm)) return `${s.sc ?? 0} 分`;
   if (gm === 'intel') return s.out ? '出局' : '';
   return '';
 }
@@ -8711,6 +8711,7 @@ function onNetTbr(m) { const B = S.brk; if (B && B.role === 'spec') brkApplySnap
 // 跟打磚塊同一套做法：**物理全在自己這台算**，伺服器只開局、收結算分數；進行中約 8 次／秒送快照 pls（伺服器轉成 tpl）給觀戰者（沒有大螢幕轉播）。
 // 玩法：從上方左右移動、放下手上的星體；兩顆相同的星體碰在一起就合成下一級（兩顆黑洞碰在一起會一起消失、得大量分數）。
 // 星體堆過頂線超過 PL_OVER_S 秒＝結束。掉下來的只會是前 5 級（隕石～地球），順序由 seed 決定。協定與欄位見 notes「和平島與遊戲桌」。
+const isPlGame = g => g === 'planet' || g === 'planetvs';   // 星球合成（t24）與星球合成對戰（t25）共用同一套畫面與物理
 const PL_W = 360, PL_H = 600, PL_HUD = 44, PL_L = 20, PL_R = 340, PL_FLOOR = 536, PL_LINE = 104, PL_DROP_Y = 66;
 const PL_NAMES = ['', '隕石', '冥王星', '月球', '火星', '地球', '海王星', '土星', '木星', '太陽', '紅巨星', '黑洞'];
 const PL_RAD = [0, 12, 17, 22, 27, 33, 39, 46, 53, 61, 69, 78];
@@ -8781,21 +8782,27 @@ function plMake(v) {
     key: z.seed + ':' + z.t0, t0: z.t0, off: z.sn - Date.now(), seed: z.seed, role: me ? 'seat' : 'spec', over: false, score: 0, mx: 1,
     bodies: [], cx: (PL_L + PL_R) / 2, cur: 1, nx: 1, cd: 0, danger: 0, mxT: null, keys: { l: 0, r: 0 }, fx: [], note: null,
     snap: null, snapAt: 0, last: performance.now(), acc: 0, rnd: mulberry32((z.seed ^ 0x7f4a7c15) >>> 0),
+    vs: !!z.vs, end: z.end || null, frozen: false, bh: false, endTimer: 0, banner: null, label: '', opp: null,
   };
-  B.cur = plRoll(B); B.nx = plRoll(B); return B;
+  B.cur = plRoll(B); B.nx = plRoll(B);
+  if (B.vs) B.opp = plMakeSpec(z);   // 對戰：另一格是對手（觀戰者＝另一位玩家）的盤面，靠快照 tpl 更新
+  return B;
+}
+function plMakeSpec(z) {   // 只靠快照更新的盤面（觀戰者看的、對戰時對手的）
+  return { key: '', t0: z.t0, off: z.sn - Date.now(), role: 'spec', over: false, score: 0, mx: 1, bodies: [], cx: (PL_L + PL_R) / 2, cur: 1, nx: 1, cd: 0, danger: 0, fx: [], note: null, snap: null, last: performance.now(), acc: 0, banner: null, label: '', vs: true, end: null, frozen: false, opp: null };
 }
 function plStart(v) { plStop(); S.pl = plMake(v); S.plRaf = requestAnimationFrame(plFrame); }
-function plStop() { S.pl = null; if (S.plRaf) { cancelAnimationFrame(S.plRaf); S.plRaf = 0; } }
+function plStop() { if (S.pl?.endTimer) clearInterval(S.pl.endTimer); S.pl = null; if (S.plRaf) { cancelAnimationFrame(S.plRaf); S.plRaf = 0; } }
 const plNow = B => (Date.now() + B.off - B.t0) / 1000;   // 開局後的秒數（開局前是負的＝倒數）
 function plNote(B, t) { B.note = { t, until: performance.now() + 1600 }; }
 function plDrop(B) {   // 放下手上這顆（冷卻中、倒數中、結束後不能放）
-  if (B.role !== 'seat' || B.over || plNow(B) < 0 || B.cd > 0) return;
+  if (B.role !== 'seat' || B.over || B.frozen || plNow(B) < 0 || B.cd > 0) return;
   const k = B.cur, r = PL_RAD[k], x = Math.max(PL_L + r, Math.min(PL_R - r, B.cx));
   B.bodies.push({ k, x, y: PL_DROP_Y, vx: 0, vy: 40, a: Math.random() * Math.PI * 2, w: 0, age: 0, pop: 1 });   // 角度用 Math.random（不影響 seed 決定的掉落順序）
   B.cur = B.nx; B.nx = plRoll(B); B.cd = PL_CD;
 }
 function plKey(e, down) {   // 星球合成的按鍵：← A／→ D 移動，空白 ↓ S 放下（回 true＝已處理）
-  const B = S.pl, v = S.tableView; if (!B || !v || v.game !== 'planet' || B.role !== 'seat') return false;
+  const B = S.pl, v = S.tableView; if (!B || !v || !isPlGame(v.game) || B.role !== 'seat' || B.frozen) return false;
   const k = e.key.toLowerCase(), l = k === 'arrowleft' || k === 'a', r = k === 'arrowright' || k === 'd', go = k === ' ' || k === 'arrowdown' || k === 's';
   if (!l && !r && !go) return false;
   e.preventDefault();
@@ -8820,6 +8827,7 @@ function plMerge(B, a, b) {   // 兩顆同級碰在一起：合成下一級（�
     B.bodies.push(m); plBlast(B, x, y, PL_RAD[11], 520, m); return;
   }
   const k = a.k + 1; B.score += PL_PTS[k]; B.mx = Math.max(B.mx, k);
+  if (k >= 11 && B.vs && B.role === 'seat') B.bh = true;   // 對戰：先合成出黑洞的人獲勝（這一步結束時回報，畫面停在黑洞出現的當下）
   const m = { k, x, y, vx: (a.vx + b.vx) / 2, vy: (a.vy + b.vy) / 2, a: a.a, w: (a.w + b.w) / 2, age: Math.max(a.age, b.age), pop: 1 };
   B.bodies.push(m); B.fx.push({ x, y, k, t: 0 });
   plBlast(B, x, y, PL_RAD[k], 200 + k * 15, m);
@@ -8858,6 +8866,7 @@ function plStep(B, dt) {   // 往前模擬 dt 秒（只有自己的局）
   let top = false; for (const b of bs) if (b.age > 1.3 && b.y - PL_RAD[b.k] < PL_LINE) { top = true; break; }
   B.danger = top ? B.danger + dt : Math.max(0, B.danger - dt * 2);
   for (const f of B.fx) f.t += dt; B.fx = B.fx.filter(f => f.t < .5);
+  if (B.bh && !B.over) { B.over = true; plSnap(B, true); tblFinal({ a: 'over', sc: Math.min(PL_SCORE_MAX_C, Math.round(B.score)), mx: 11, bh: true }); return; }   // 對戰：我合成出黑洞了
   if (B.danger >= PL_OVER_S) { B.over = true; plSnap(B, true); tblFinal({ a: 'over', sc: Math.min(PL_SCORE_MAX_C, Math.round(B.score)), mx: Math.max(1, Math.min(11, B.mx)) }); }
 }
 function plSnap(B, force) {   // 自己的局：快照給觀戰者
@@ -8876,25 +8885,38 @@ function plApplySnap(B, m) {   // 觀戰者：套用快照（同級的星體平�
 }
 function plAdvance(B, dt) {   // 每一幀：自己的局跑物理＋送快照；旁觀的局讓星體追上最新快照
   if (B.role === 'seat') {
-    if (plNow(B) >= 0 && !B.over) {
+    if (plNow(B) >= 0 && !B.over && !B.frozen) {
       const kx = (B.keys.r - B.keys.l) * PL_KEY_SPD * dt;
       if (kx) { B.cx += kx; B.mx0 = null; } else if (B.mx0 != null) B.cx = B.mx0;
       B.cx = Math.max(PL_L, Math.min(PL_R, B.cx));
       B.acc += dt; let n = 0; while (B.acc >= PL_DT && n++ < 10 && !B.over) { plStep(B, PL_DT); B.acc -= PL_DT; } if (n >= 10) B.acc = 0;
       if (!B.over) plSnap(B, false);
     } else B.acc = 0;
-  } else if (B.snap) {
+  } else if (B.snap && !B.frozen) {
     const a = 1 - Math.exp(-dt * 18), m = B.snap;
     B.bodies.forEach((o, i) => { o.x += (m.b[i * 4 + 1] - o.x) * a; o.y += (m.b[i * 4 + 2] - o.y) * a; let da = m.b[i * 4 + 3] * Math.PI / 180 - o.a; da -= Math.round(da / (Math.PI * 2)) * Math.PI * 2; o.a += da * a; if (o.pop > 0) o.pop = Math.max(0, o.pop - dt * 5); });
   }
 }
 function plFrame() {
   const B = S.pl, v = S.tableView;
-  if (!B || !S.tableOpen || !v || v.game !== 'planet') { S.plRaf = 0; return; }
+  if (!B || !S.tableOpen || !v || !isPlGame(v.game)) { S.plRaf = 0; return; }
   S.plRaf = requestAnimationFrame(plFrame);
   const now = performance.now(), dt = Math.max(0, Math.min(.05, (now - B.last) / 1000)); B.last = now;
   plAdvance(B, dt);
+  if (B.opp) plAdvance(B.opp, dt);
+  plBanners(B, v);
   plDraw(B, $('plCanvas'), plNow(B));
+  if (B.opp) plDraw(B.opp, $('plCanvas2'), plNow(B));
+}
+function plBanners(B, v) {   // 對戰分出勝負後：兩邊盤面都停住，主盤面跳出勝負訊息與 10 秒倒數；倒數到了就通知伺服器結算（伺服器核對時鐘）
+  const en = B.end;
+  if (!en) return;
+  const nm = i => v.seats[i]?.name || '?', me = v.role === 'seat' ? v.me : -1;
+  const left = Math.max(0, Math.ceil((en.at - (Date.now() + B.off)) / 1000));
+  const title = me < 0 ? `${nm(en.w)} 獲勝！` : en.w === me ? '你獲勝！' : '你輸了…';
+  const sub = en.why === 'bh' ? `${nm(en.w)} 先合成出黑洞` : `${nm(1 - en.w)} 的星球堆過頂線了`;
+  B.banner = { title, sub, left, win: me >= 0 && en.w === me };
+  if (B.opp) B.opp.banner = { small: true, mark: (me < 0 ? en.w === 1 : en.w !== me) ? '勝利' : '落敗' };
 }
 function plIcon(g, k, x, y, diam, ang) {   // 在 (x, y) 為中心畫第 k 級星體，直徑約 diam 像素、轉 ang 弧度（陰影層不轉）
   const sp = plSprite(k), w = sp.size * diam / (PL_RAD[k] * 2); g.imageSmoothingEnabled = false;
@@ -8911,6 +8933,7 @@ function plDraw(B, cv, t) {
   for (let i = 0; i < 70; i++) { const sx = plHash(i, 1, 3) * PL_W, sy = plHash(i, 2, 3) * PL_H; g.fillStyle = plHash(i, 3, 3) < .2 ? '#8a94d0' : '#3a4270'; g.fillRect(Math.round(sx), Math.round(sy), 2, 2); }   // 星空
   g.fillStyle = '#10163a'; g.fillRect(0, 0, PL_W, PL_HUD);
   g.font = 'bold 16px "Microsoft JhengHei"'; g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillStyle = '#ffe08a'; g.fillText(`${Math.round(B.score)} 分`, 10, PL_HUD / 2);
+  if (B.label) { g.textAlign = 'center'; g.fillStyle = '#9fb0e8'; g.font = 'bold 13px "Microsoft JhengHei"'; g.fillText(B.label, PL_W / 2 - 14, PL_HUD / 2); }
   g.textAlign = 'right'; g.fillStyle = '#b8c4dc'; g.font = '12px "Microsoft JhengHei"'; g.fillText('下一顆', PL_W - 58, PL_HUD / 2); plIcon(g, B.nx, PL_W - 30, PL_HUD / 2, Math.min(30, PL_RAD[B.nx] * 2));
   g.fillStyle = '#141a40'; g.fillRect(PL_L, PL_HUD, PL_R - PL_L, PL_FLOOR - PL_HUD);   // 容器
   g.fillStyle = '#6a78c8'; g.fillRect(PL_L - 4, PL_HUD, 4, PL_FLOOR - PL_HUD + 4); g.fillRect(PL_R, PL_HUD, 4, PL_FLOOR - PL_HUD + 4); g.fillRect(PL_L - 4, PL_FLOOR, PL_R - PL_L + 8, 4);
@@ -8930,9 +8953,22 @@ function plDraw(B, cv, t) {
   g.fillStyle = '#10163a'; g.fillRect(0, PL_FLOOR + 6, PL_W, PL_H - PL_FLOOR - 6);   // 底下的進化順序
   for (let k = 1; k <= 11; k++) { const x = 18 + (k - 1) * 32.4; plIcon(g, k, x, PL_FLOOR + 30, Math.min(24, 8 + k * 2)); if (k < 11) { g.fillStyle = '#4a5490'; g.fillRect(x + 15, PL_FLOOR + 29, 3, 2); } }
   g.font = '12px "Microsoft JhengHei"'; g.textAlign = 'center'; g.fillStyle = B.mx >= 1 ? '#8a94d0' : '#5a6490'; g.fillText(B.mx >= 2 ? `目前最大：${PL_NAMES[B.mx]}` : '隕石→冥王星→月球→…→黑洞', PL_W / 2, PL_FLOOR + 56);
+  const bn = B.banner;
+  if (bn) {   // 對戰分出勝負：停在最後的畫面，蓋上勝負訊息與倒數
+    g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(0, 170, PL_W, bn.small ? 110 : 190);
+    g.textAlign = 'center'; g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,.9)';
+    if (bn.small) { g.font = 'bold 34px "Microsoft JhengHei"'; g.fillStyle = bn.mark === '勝利' ? '#ffe08a' : '#9aa4c8'; g.strokeText(bn.mark, PL_W / 2, 230); g.fillText(bn.mark, PL_W / 2, 230); }
+    else {
+      g.font = 'bold 34px "Microsoft JhengHei"'; g.fillStyle = bn.win ? '#ffe08a' : '#ff9a9a'; g.strokeText(bn.title, PL_W / 2, 215); g.fillText(bn.title, PL_W / 2, 215);
+      g.font = 'bold 16px "Microsoft JhengHei"'; g.fillStyle = '#e8eeff'; g.strokeText(bn.sub, PL_W / 2, 255); g.fillText(bn.sub, PL_W / 2, 255);
+      g.font = '15px "Microsoft JhengHei"'; g.fillStyle = '#b8c4dc'; g.fillText(`${bn.left} 秒後回到大廳`, PL_W / 2, 295);
+    }
+    g.textBaseline = 'alphabetic'; g.textAlign = 'left';
+    return;
+  }
   let msg = null;
   if (t < 0) msg = String(Math.ceil(-t));
-  else if (B.over) msg = '遊戲結束';
+  else if (B.over) msg = B.vs ? '等待結果…' : '遊戲結束';
   else if (B.note && B.note.until > now) msg = B.note.t;
   else if (B.role === 'seat' && B.bodies.length === 0) msg = '滑鼠移動、點一下放下';
   if (msg) { g.font = 'bold 22px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 5; g.strokeStyle = 'rgba(0,0,0,.85)'; g.fillStyle = '#ffe08a'; g.strokeText(msg, PL_W / 2, 250); g.fillText(msg, PL_W / 2, 250); }
@@ -8943,8 +8979,19 @@ function buildPlanet(box, v, mk, gd) {
   if (playing && z && (!S.pl || S.pl.key !== z.seed + ':' + z.t0)) plStart(v);
   if (!playing) plStop();
   const B = S.pl;
+  if (playing && B && z) {   // 對戰：伺服器分出勝負了＝兩邊都停住（本機先回報的那邊早就停了）；標上名字
+    if (z.end && !B.end) {
+      B.end = z.end; B.frozen = true; if (B.opp) B.opp.frozen = true;
+      B.endTimer = setInterval(() => { if (S.pl !== B) { clearInterval(B.endTimer); return; } if (Date.now() + B.off >= B.end.at) S.net?.tbl?.({ a: 'timeout' }); }, 1000);   // 10 秒到了就通知伺服器結算（不靠畫面的動畫迴圈；到了之後每秒補送，直到畫面離開對戰）
+    }
+    if (B.vs && B.opp) {
+      const me = v.role === 'seat' ? v.me : 0, oi = v.role === 'seat' ? 1 - v.me : 1;
+      B.label = v.role === 'seat' ? `${v.seats[me]?.name || ''}（你）` : v.seats[0]?.name || ''; B.opp.label = v.seats[oi]?.name || '';
+    }
+  }
   let status;
-  if (playing && B) status = B.role === 'seat' ? '星球合成：滑鼠（或 ← →／A D）移動，空白鍵／點一下放下；兩顆相同的會合成下一級' : '觀戰中';
+  if (playing && B) status = B.role === 'seat' ? (B.vs ? '星球合成對戰：先合成出黑洞的人獲勝，先堆過頂線的人落敗！' : '星球合成：滑鼠（或 ← →／A D）移動，空白鍵／點一下放下；兩顆相同的會合成下一級') : '觀戰中';
+  else if (v.game === 'planetvs') status = v.seats.length < 2 ? '一個人按「準備」＝單人模式；想對戰就等第二位玩家入座，兩人都按「準備」才開始' : '兩位玩家都按「準備」就開始對戰（先合成出黑洞的人獲勝）';
   else status = v.seats.length < v.min ? '等待玩家入座（單人）' : '按「準備」就開始（星體堆過頂線就結束，分數進排行榜）';
   box.appendChild(mk('div', 'table-status' + (playing && B?.role === 'seat' ? ' mine' : ''), status));
   const r = v.result;
@@ -8962,10 +9009,15 @@ function buildPlanet(box, v, mk, gd) {
     box.appendChild(row);
   } else {
     const wrap = mk('div', 'pb-wrap'), cv = document.createElement('canvas');
-    cv.id = 'plCanvas'; cv.width = PL_W; cv.height = PL_H; cv.className = 'pl-canvas';
+    cv.id = 'plCanvas'; cv.width = PL_W; cv.height = PL_H; cv.className = 'pl-canvas' + (B?.vs ? ' pl-half' : '');
     cv.onmousemove = e => { const b = cv.getBoundingClientRect(); if (S.pl?.role === 'seat') S.pl.mx0 = (e.clientX - b.left) * cv.width / b.width; };
     cv.onmousedown = e => { if (S.pl) { e.preventDefault(); const b = cv.getBoundingClientRect(); if (S.pl.role === 'seat') S.pl.mx0 = (e.clientX - b.left) * cv.width / b.width; plDrop(S.pl); } };
-    wrap.appendChild(cv); box.appendChild(wrap);
+    wrap.appendChild(cv);
+    if (B?.vs) {   // 對戰：右邊是對手（觀戰者：右邊是第二位玩家）的盤面
+      const c2 = document.createElement('canvas'); c2.id = 'plCanvas2'; c2.width = PL_W; c2.height = PL_H; c2.className = 'pl-canvas pl-half' + (B.role === 'seat' ? ' pl-opp' : '');
+      wrap.classList.add('pl-vs'); wrap.appendChild(c2);
+    }
+    box.appendChild(wrap);
   }
   const btns = mk('div', 'table-btns');
   if (v.role === 'seat' && !playing) {
@@ -8981,7 +9033,11 @@ function buildPlanet(box, v, mk, gd) {
   for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
   box.appendChild(log);
 }
-function onNetTpl(m) { const B = S.pl; if (B && B.role === 'spec') plApplySnap(B, m); }   // 觀戰者：玩家那台的快照
+function onNetTpl(m) {   // 快照：觀戰者收到玩家那台的；對戰時玩家收到對手的（m.i＝座位）
+  const B = S.pl; if (!B || B.end) return;
+  if (B.role === 'seat') { if (B.opp) plApplySnap(B.opp, m); }
+  else plApplySnap(m.i === 1 && B.opp ? B.opp : B, m);
+}
 // ---- 泡泡射手（第二十二桌 t22，2026-11-17，使用者要求：畫面右側牆邊、彈珠台下方放一台面向左的機台）：單人、一條命、一關接一關、分數進排行榜 ----
 // 跟彈珠台／打磚塊同一套做法：**物理全在自己這台算**（沒有要跟別人即時共用的東西，延遲不影響手感），伺服器只開局、收結算分數；進行中約 8 次／秒送快照 bus（伺服器轉成 tbu）給觀戰者。
 // 玩法（原創規則，常見的「泡泡龍」類型）：蜂巢排列的彩色泡泡從上方垂下來，滑鼠（或 ← →）瞄準、空白／↑／W／點一下發射；泡泡碰到牆會反彈，碰到別的泡泡或天花板就黏住；

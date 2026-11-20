@@ -121,7 +121,7 @@ NAME_MAX = 24
 # 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號（Worker 存 Registry 的 gstats:<uid>，這裡只存記憶體 GSTATS）。各遊戲結算時在 result["gs"]
 # （依「結算後留下的座位」順序，與 result["xp"] 同；None＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器照著記進 GSTATS 並把整份送給本人；
 # result["gs"] 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）。與 worker 的 gsMk／tableStats 同一套
-GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo", "pinball", "breakout", "bubble", "g2048", "planet", "purify"}
+GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo", "pinball", "breakout", "bubble", "g2048", "planet", "planetvs", "purify"}
 GS_CAP, GS_KEYS_MAX = 1000000, 24
 GSTATS = {}
 
@@ -690,8 +690,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey", "t17": "kingdom", "t18": "bigtwo", "t19": "pinball", "t20": "breakout", "t21": "purify", "t22": "bubble", "t23": "g2048", "t24": "planet"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4), "kingdom": (2, 4), "bigtwo": (2, 4), "pinball": (1, 1), "breakout": (1, 1), "bubble": (1, 1), "g2048": (1, 1), "planet": (1, 1), "purify": (2, 4)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey", "t17": "kingdom", "t18": "bigtwo", "t19": "pinball", "t20": "breakout", "t21": "purify", "t22": "bubble", "t23": "g2048", "t24": "planet", "t25": "planetvs"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4), "kingdom": (2, 4), "bigtwo": (2, 4), "pinball": (1, 1), "breakout": (1, 1), "bubble": (1, 1), "g2048": (1, 1), "planet": (1, 1), "planetvs": (1, 2), "purify": (2, 4)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -792,6 +792,8 @@ def tbl_leave(t, cid):
         if t["game"] == "arcade":   # 俄羅斯方塊：單人局作廢、聯機照當時分數排名，不中斷其他人
             ar_leave(t, i)
             return
+        if t["phase"] == "playing" and t["game"] == "planetvs" and t.get("g") and t["g"].get("end"):   # 星球合成對戰：勝負已定、停在結果畫面時有人離開，照勝負結算（之後走一般的離座）
+            pv_finish(t)
         if t["phase"] == "playing" and t["game"] == "trigon":   # Blokus Trigon：離開不中斷，棋子留在棋盤上、之後跳過
             tg_leave(t, i, int(time.time() * 1000))
             return
@@ -2997,7 +2999,7 @@ def ty_unit(t):
 
 # 排行榜（2026-11-12，使用者要求）：英文打字競賽、中文打字競賽、躲彈幕各記前三名（打字＝分數、躲彈幕＝存活秒數）；同一個人只留最好的一筆；
 # 這裡記在記憶體（重啟就清掉），Worker 版記在島的 storage；table 畫面帶 board 給客戶端顯示。與 worker 的 boardMerge 同一套
-BOARD_GAMES = {"typing", "zhtyping", "dodge", "mage", "arcade", "maze", "pinball", "breakout", "bubble", "g2048", "planet"}   # 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
+BOARD_GAMES = {"typing", "zhtyping", "dodge", "mage", "arcade", "maze", "pinball", "breakout", "bubble", "g2048", "planet", "planetvs"}   # 俄羅斯方塊／豆豆迷宮：只記單人模式（使用者定）
 BOARD_N = 3
 BOARDS = {}
 
@@ -5636,7 +5638,7 @@ def pl_over(t, cid, msg):
 def pl_relay(t, cid, msg):
     """進行中的快照：只轉給觀戰者。回 [(cid, msg)]。"""
     role, i = tbl_find(t, cid)
-    if t["game"] != "planet" or role != "seat" or t["phase"] != "playing" or not t.get("g"):
+    if t["game"] not in ("planet", "planetvs") or role != "seat" or t["phase"] != "playing" or not t.get("g") or t["g"].get("end"):
         return []
     def num(v, lo, hi):
         return type(v) in (int, float) and not isinstance(v, bool) and math.isfinite(v) and lo <= v <= hi
@@ -5648,9 +5650,65 @@ def pl_relay(t, cid, msg):
             return []
     if not (_mz_int(cur, 1, PL_TIER_MAX) and _mz_int(nx, 1, PL_TIER_MAX) and num(cx, -100, 1000) and _mz_int(sc, 0, PL_SCORE_MAX) and _mz_int(mx, 0, PL_TIER_MAX)):
         return []
-    data = {"t": "tpl", "b": [n if k % 4 in (0, 3) else round(n) for k, n in enumerate(b)], "cur": cur, "nx": nx, "cx": round(cx), "sc": sc, "mx": mx}
+    data = {"t": "tpl", "i": i, "b": [n if k % 4 in (0, 3) else round(n) for k, n in enumerate(b)], "cur": cur, "nx": nx, "cx": round(cx), "sc": sc, "mx": mx}
     t["seats"][i]["sc"] = sc
-    return [(c["cid"], data) for c in t["specs"] if c["cid"] is not None]
+    return [(c["cid"], data) for c in t["specs"] + [x for x in t["seats"] if x is not t["seats"][i]] if c["cid"] is not None]   # 觀戰者＋同桌另一位（對戰的對手；單人時沒有）
+
+# ---- 星球合成對戰（第二十五桌 t25，2026-11-20，使用者要求：下面再加一台，跟俄羅斯方塊一樣可單人也可聯機；對戰＝誰先合成出黑洞誰贏，或一方先死另一方贏）：
+# 一個人入座準備＝單人（同星球合成，分數進排行榜）；兩人都入座、都準備＝對戰（g.vs）。兩人用同一個 seed，進行中互傳快照 pls → tpl（帶 i＝座位）。
+# 勝負由客戶端回報 over：bh＝True 是「我合成出黑洞了」（我贏）、沒有 bh 是「我死了」（對手贏）；先到的算。勝負出來 → g.end，兩邊畫面停住顯示勝利訊息，
+# PV_END_MS（10 秒）後客戶端送 timeout（或下一個訊息順便檢查）→ pv_finish 結算。與 worker/src/index.js 的 pv* 同一套，改規則兩邊一起改。
+PV_END_MS, PV_XP_WIN, PV_XP_LOSE, PV_XP_MIN_MS = 10000, 6, 2, 20000
+
+def pv_start(t):
+    now = int(time.time() * 1000)
+    t["g"] = {"seed": random.getrandbits(31), "t0": now + PL_COUNTDOWN_MS, "vs": len(t["seats"]) >= 2, "end": None}
+    t["result"], t["phase"] = None, "playing"
+    for s in t["seats"]:
+        s.update(ready=False, left=False, sc=0, mx=0)
+    tbl_log(t, f"{t['seats'][0]['name']} 與 {t['seats'][1]['name']} 開始星球合成對戰" if t["g"]["vs"] else f"{t['seats'][0]['name']} 開始玩星球合成")
+
+def pv_over(t, cid, msg, now):
+    role, i = tbl_find(t, cid)
+    g, sc, mx = t.get("g"), msg.get("sc"), msg.get("mx")
+    if (t["game"] != "planetvs" or role != "seat" or t["phase"] != "playing" or not g
+            or not _mz_int(sc, 0, PL_SCORE_MAX) or not _mz_int(mx, 1, PL_TIER_MAX)):
+        return
+    s = t["seats"][i]
+    s["sc"], s["mx"] = sc, mx
+    if not g["vs"]:   # 單人：跟星球合成一樣
+        t["result"] = {"solo": True, "text": f"遊戲結束！{s['name']} {sc} 分", "rid": random.getrandbits(32),
+                       "ranking": [{"name": s["name"], "uid": s.get("uid"), "score": sc, "left": False}],
+                       "xp": [PL_XP if sc >= PL_XP_MIN else 0], "gs": [gs_mk({}, {"best": sc, "tier": mx})]}
+        if sc > 0:
+            board_record(t, [(s["name"], sc, s.get("uid"))])
+        tbl_log(t, t["result"]["text"])
+        tbl_reset_seats(t)
+        return
+    if g.get("end") or len(t["seats"]) < 2:   # 對戰：先到的算
+        return
+    bh = msg.get("bh") is True and mx >= PL_TIER_MAX
+    g["end"] = {"w": i if bh else 1 - i, "why": "bh" if bh else "dead", "at": now + PV_END_MS}
+    tbl_log(t, f"{s['name']} 合成出黑洞！" if bh else f"{s['name']} 的星球堆過頂線了")
+
+def pv_finish(t):
+    g = t.get("g")
+    if t["game"] != "planetvs" or t["phase"] != "playing" or not g or not g.get("vs") or not g.get("end") or len(t["seats"]) < 2:
+        return
+    w = g["end"]["w"]
+    name, loser = t["seats"][w]["name"], t["seats"][1 - w]["name"]
+    enough = int(time.time() * 1000) - g["t0"] >= PV_XP_MIN_MS
+    text = f"{name} 先合成出黑洞，獲勝！" if g["end"]["why"] == "bh" else f"{loser} 的星球堆過頂線，{name} 獲勝！"
+    t["result"] = {"winner": w, "name": name, "text": text, "rid": random.getrandbits(32),
+                   "xp": [(PV_XP_WIN if k == w else PV_XP_LOSE) if enough else 0 for k in range(2)],
+                   "gs": [gs_mk({"w": 1} if k == w else {"l": 1}, {"tier": t["seats"][k].get("mx") or 1}) if enough else None for k in range(2)]}
+    tbl_log(t, text)
+    tbl_reset_seats(t)
+
+def pv_timeout(t, now):
+    g = t.get("g")
+    if t["game"] == "planetvs" and t["phase"] == "playing" and g and g.get("end") and now >= g["end"]["at"] - 300:
+        pv_finish(t)
 
 # ---- 泡泡射手（第二十二桌 t22，2026-11-17，使用者要求：東牆邊、彈珠台下方放一台面向左的機台）：單人、一條命、一關接一關、分數進排行榜；
 # 跟彈珠台／打磚塊同一套做法：物理全在客戶端跑，伺服器只開局、收結算分數（限幅）、把進行中的快照 bus 轉給觀戰者與大螢幕（tbu／sttm）。
@@ -5835,7 +5893,7 @@ def hk_end(t, cid, msg):
         return
     hk_finish(t, sa, sb, "" if sa >= HK_GOALS or sb >= HK_GOALS else "時間到")
 
-GAME_START = {"purify": pg_start, "planet": pl_start, "g2048": tf_start, "bubble": bu_start, "breakout": br_start, "pinball": pb_start, "bigtwo": bt_start, "kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+GAME_START = {"purify": pg_start, "planet": pl_start, "planetvs": pv_start, "g2048": tf_start, "bubble": bu_start, "breakout": br_start, "pinball": pb_start, "bigtwo": bt_start, "kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 SCR_CID = "__screen__"   # 大螢幕轉播用的虛擬連線編號（tbl_view 把它當觀戰者）
 SCR_CTL_CD_MS = 5000       # 大螢幕影片的暫停／繼續／跳轉冷卻（全島共用；2026-11-19 使用者定：任何人都能控制，每次操作 5 秒冷卻）
@@ -5873,11 +5931,13 @@ def tbl_view(t, cid):
             seats[k].update(sc=s.get("sc", 0), left=bool(s.get("left")))
         if g and playing:
             v["br"] = {"seed": g["seed"], "t0": g["t0"], "sn": int(time.time() * 1000)}
-    elif t["game"] == "planet":   # 星球合成：分數／離開；進行中附上 seed（隕石順序用）、開始時間與伺服器時間
+    elif t["game"] in ("planet", "planetvs"):   # 星球合成（含對戰）：分數／離開；進行中附上 seed（隕石順序用）、開始時間與伺服器時間；對戰另帶 vs 與勝負（end）
         for k, s in enumerate(t["seats"]):
             seats[k].update(sc=s.get("sc", 0), left=bool(s.get("left")))
         if g and playing:
-            v["pl"] = {"seed": g["seed"], "t0": g["t0"], "sn": int(time.time() * 1000)}
+            e = g.get("end")
+            v["pl"] = {"seed": g["seed"], "t0": g["t0"], "sn": int(time.time() * 1000), "vs": bool(g.get("vs")),
+                       "end": {"w": e["w"], "why": e["why"], "at": e["at"]} if e else None}
     elif t["game"] == "g2048":   # 2048：分數／離開；進行中附上 seed（新方塊用）、開始時間與伺服器時間
         for k, s in enumerate(t["seats"]):
             seats[k].update(sc=s.get("sc", 0), left=bool(s.get("left")))
@@ -7487,7 +7547,7 @@ class Room:
                     for d in scr:
                         self._scr_fwd(terr, t, {**d, "w": "tbu", "t": "sttm"}, out)
                     return out, None, None
-                if t["game"] == "planet" and a == "pls":   # 星球合成：進行中的快照，只轉發給觀戰者（不存檔、不通知畫面）
+                if t["game"] in ("planet", "planetvs") and a == "pls":   # 星球合成：進行中的快照，只轉發給觀戰者（不存檔、不通知畫面）
                     return pl_relay(t, cid, msg), None, None
                 if t["game"] == "breakout" and a == "brs":   # 打磚塊：進行中的快照，只轉發給觀戰者（不存檔、不通知畫面）
                     return br_relay(t, cid, msg), None, None
@@ -7556,6 +7616,7 @@ class Room:
                     it_tick(t, now_ms)   # 秘藥情報戰：識破時間過了就生效、逾時自動處理
                     mg_changed = mg_tick(t, now_ms)   # 見習驅魔師：沒被消除的幽靈扣血、勝負
                     mz_tick(t, now_ms)   # 豆豆迷宮：對抗超過時間上限還沒結算
+                    pv_timeout(t, now_ms)   # 星球合成對戰：勝負出來後 10 秒到了
                     hk_tick(t, now_ms)   # 空氣曲棍球：超過時間上限還沒結算
                     if t["game"] == "intel" and a in IT_MSGS:   # 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
                         it_msg(t, cid, msg, now_ms)
@@ -7608,6 +7669,8 @@ class Room:
                             bk_timeout(t, now_ms)
                         elif t["game"] == "trigon":
                             tg_timeout(t, now_ms)
+                        elif t["game"] == "planetvs":
+                            pv_timeout(t, now_ms)
                         else:
                             un_timeout(t, now_ms)
                     elif a == "place":   # Blokus：放方塊 {p 第幾塊, c 佔用的格子座標}
@@ -7631,6 +7694,8 @@ class Room:
                         tf_over(t, cid, msg)
                     elif a == "over" and t["game"] == "bubble":   # 泡泡射手：客戶端回報結束（最終分數、關卡）
                         bu_over(t, cid, msg)
+                    elif a == "over" and t["game"] == "planetvs":   # 星球合成對戰：單人＝結算分數；對戰＝先合成出黑洞（bh）或先死掉的人決定勝負
+                        pv_over(t, cid, msg, now_ms)
                     elif a == "over" and t["game"] == "planet":   # 星球合成：客戶端回報結束（最終分數、最大星體）
                         pl_over(t, cid, msg)
                     elif a == "over" and t["game"] == "breakout":   # 打磚塊：客戶端回報結束（最終分數、關卡）
