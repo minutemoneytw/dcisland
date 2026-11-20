@@ -2075,11 +2075,29 @@ def table_pinball():
         x = left(y); cv.set(x, y, hx("#bfd4ff")); cv.set(x + 1, y, hx("#4f78e8")); cv.set(x + 2, y, hx("#12102a"))
     cv.hline(3, 12, 23, lite); cv.hline(3, 12, 27, dark); cv.vline(3, 23, 27, lite)   # 操作台
     cv.rect(4, 20, 6, 22, hx("#e8e8f0")); cv.set(4, 20, hx("#ffffff"))    # 擋板按鈕
-    cv.rect(14, 10, 26, 28, hx("#12102a")); cv.rect(15, 11, 25, 27, hx("#1d2a5c"))    # 側板上的圖：深藍底
-    cv.ellipse(20, 15, 3, 2.4, hx("#f06060")); cv.vline(18, 17, 20, hx("#f06060")); cv.vline(20, 17, 21, hx("#f06060")); cv.vline(22, 17, 20, hx("#f06060"))   # 水母
-    cv.set(19, 14, hx("#ffffff"))
-    cv.ellipse(18, 24, 1.2, 1.2, hx("#f4f4f8"))                           # 球
-    cv.hline(20, 24, 26, hx("#e8e8f0"))                                   # 擋板
+    cv.rect(14, 10, 26, 28, hx("#12102a"))                                # 側板上的海報（2026-11-20 使用者要求更像彈珠台）：遊戲畫面縮小版——拱形頂、水母彈跳器、海膽、珊瑚彈弓、擋板、右邊發球道
+    poster = ("xxwwwwwwwxx",   # 11×17，配色取自遊戲裡實際的畫面（pbDraw）
+              "xw.y.y.y.wx",   # y＝入口燈
+              "w.WW.WW...w",   # W／p＝水母（白底、粉紅中心）
+              "w.Wp.Wp.w.w",
+              "w...WW..w.w",
+              "w...Wp..w.w",
+              "w.v....vw.w",   # v＝海膽
+              "w.......w.w",
+              "w.c...c.wbw",   # c＝珊瑚彈弓；b＝發球道上的球
+              "w.cc.cc.w.w",
+              "w.cc.cc.w.w",
+              "w.......w.w",
+              "w.......w.w",
+              "wffF.Fffw.w",   # f／F＝擋板
+              "w.......wrw",   # r＝發球拉桿的彈簧
+              "w.......wRw",   # R＝拉桿握把
+              "xwwwwwwwwwx")
+    pal = {"x": "#12102a", "w": "#9db4f4", ".": "#1b2f5e", "y": "#ffd060", "W": "#d4f1e8", "p": "#f4a090", "v": "#dcd8ff", "c": "#e8805e",
+           "b": "#ffffff", "f": "#2c5cb0", "F": "#9ec0f4", "r": "#9a9aa8", "R": "#d84a4a"}
+    for ry, row in enumerate(poster):
+        for rx, ch in enumerate(row):
+            cv.set(15 + rx, 11 + ry, hx(pal[ch]))
     for y in (34, 37, 40):
         cv.hline(18, 25, y, dark)                                         # 下半身的散熱孔
     cv.hline(7, 29, 46, dark); cv.hline(7, 29, 47, dark)
