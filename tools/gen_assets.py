@@ -127,6 +127,11 @@ class Canvas:
     def get(self, x, y):
         return self.buf[y][x]
 
+def save_chibi_layer(im, name, sub):
+    """gen_chibi 的圖層（chibi_pilot.Img：像素是 (r,g,b) 或 None）→ PNG。"""
+    path = os.path.join(ASSETS, sub, name)
+    write_png(path, im.w, im.h, lambda x, y: (*im.px[y][x], 255) if im.px[y][x] else (0, 0, 0, 0))
+
 def save(cv, name, sub=""):
     path = os.path.join(ASSETS, sub, name) if sub else os.path.join(ASSETS, name)
     write_png(path, cv.w, cv.h, lambda x, y: cv.get(x, y))
@@ -603,6 +608,10 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
          earFur=LPC_CAT_FUR, earInner="#f5b8ad"),   # 貓耳：毛色跟髮色（earFur）、耳內白眼底＝粉肉色（earInner）、深色輪廓保留原色
     dict(id="lalafell", name="拉拉肥", scale=0.5),    # LPC 沒有小人體型 → 人類模組縮小
     dict(id="giant", name="巨人", scale=1.5),         # LPC 沒有巨人體型 → 人類模組放大
+    # 新風格（2026-11-21，使用者定案整套換成自製 Q 版像素風格；階段 1）：整個人（身體／下身／靴子／上身／後髮／臉／前髮／護目鏡）都是自己的圖層，
+    # 不吃外貌頁的髮型／服裝／臉型選項；引擎看到 own 就改用這組 sheet、合成後統一畫一圈 outline 色的外框；攻擊／釣魚等動作沒有圖，退回待機幀
+    dict(id="chibi", name="新風格", scale=1.0, own=dict(
+        sheets={n: f"chibi_{n}.png" for n in ("body", "bottom", "shoes", "top", "hairbg", "face", "hair", "hat")}, outline="#1e0c1e")),
 ]
 
 def kidol_main_hex(cid):
@@ -4367,6 +4376,11 @@ def main():
         save(lpc_face_sheet(rel), f"char_face_{fid}.png", sub)
     for eid, rel in LPC_EARS:                        # 種族耳朵（精靈／貓）
         save(lpc_layer_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{eid}.png", sub)
+    # 新風格人物（2026-11-21，使用者定案整套換成自製風格；階段 1：分層 sheet，只有走路列）：tools/gen_chibi.py 畫，
+    # 8 個圖層 chibi_<body|bottom|shoes|top|hairbg|face|hair|hat>.png，由「新風格」種族（LPC_RACES 的 chibi，own）整套套用
+    import gen_chibi
+    for lname, lim in gen_chibi.build_sheets().items():
+        save_chibi_layer(lim, f"chibi_{lname}.png", sub)
     # 基本服裝（LPC 原檔，走路列）
     for cid, rel in LPC_CLOTHES:
         save(lpc_cloth_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{cid}.png", sub)

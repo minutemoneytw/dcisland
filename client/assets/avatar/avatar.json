@@ -3530,6 +3530,24 @@
    "id": "giant",
    "name": "巨人",
    "scale": 1.5
+  },
+  {
+   "id": "chibi",
+   "name": "新風格",
+   "scale": 1.0,
+   "own": {
+    "sheets": {
+     "body": "chibi_body.png",
+     "bottom": "chibi_bottom.png",
+     "shoes": "chibi_shoes.png",
+     "top": "chibi_top.png",
+     "hairbg": "chibi_hairbg.png",
+     "face": "chibi_face.png",
+     "hair": "chibi_hair.png",
+     "hat": "chibi_hat.png"
+    },
+    "outline": "#1e0c1e"
+   }
   }
  ],
  "hair": [
