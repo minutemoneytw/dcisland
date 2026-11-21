@@ -2872,6 +2872,7 @@ function dyeSheet(img, dye, hex) {  const key = img.src + '|' + dye.join(',') + 
     if (o) { p[i] = o[0]; p[i + 1] = o[1]; p[i + 2] = o[2]; }
   }
   g.putImageData(d, 0, 0);
+  cv.src = key;   // 換過色的畫布再被換色（新風格同一層依序多條規則）時，recolorCache 的 key 才不會撞
   S.recolorCache.set(key, cv);
   return cv;
 }
@@ -2936,8 +2937,11 @@ function sheetCellHas(img, sx, sy, w, h) {
 // 新風格（整套自製圖層）的種族定義；不是新風格回 null。掛點（背／腰／手）因為身形不同，用 own.anchors 覆寫（依面向 down／up／side 各給一組）
 const ownRaceOf = id => { const r = id && S.avatar?.races?.find(r => r.id === id); return r?.own ? r : null; };
 const CHIBI_ORDER = ['body', 'bottom', 'shoes', 'top', 'hairbg', 'face', 'hair', 'hat'];
-function chibiSprite(race, fi) {
-  const k = 'chibi:' + fi;
+// 新風格的換色：own.dye＝[{slot, layers, colors}]（slot 對應 look 的 hair／top／bottom／shoe／hat 的色碼；colors 第一個是主色，其餘依明暗比例跟著變，見 dyeSheet）
+const CHIBI_DYE_FIELD = { hair: 'hairC', top: 'topC', bottom: 'botC', shoe: 'shoeC', hat: 'hatC' };
+function chibiSprite(race, look, fi) {
+  const rules = (race.own.dye || []).map(r => ({ ...r, hex: look?.[CHIBI_DYE_FIELD[r.slot]] || null }));
+  const k = 'chibi:' + fi + '|' + rules.map(r => r.hex || '').join(',');
   let cv = S.charCache.get(k);
   if (cv) return cv;
   const F = S.avatar.frames, own = race.own;
@@ -2948,8 +2952,9 @@ function chibiSprite(race, fi) {
   cv = document.createElement('canvas'); cv.width = F.w; cv.height = F.h; cv.pad = 0; cv.layerMiss = false;
   const g = cv.getContext('2d');
   for (const n of CHIBI_ORDER) {
-    const img = S.charImgs[own.sheets[n]];
+    let img = S.charImgs[own.sheets[n]];
     if (!img || sx + F.w > img.width || sy + F.h > img.height) continue;
+    for (const r of rules) if (r.hex && r.layers.includes(n)) img = dyeSheet(img, r.colors, r.hex);   // 同一張圖可以被多條規則依序換色（例如 bottom 層：圍裙下擺跟上衣、褲子跟褲子）
     g.drawImage(img, sx, sy, F.w, F.h, 0, 0, F.w, F.h);
   }
   outlineCanvas(cv, own.outline);
@@ -2983,7 +2988,7 @@ function charSprite(look, fi) {
   const hairIt = look.hairC && hair.dyeFrom ? { ...hair, sheet: hair.dyeFrom } : hair;
   const eyesIt = look.eyeC && eyes?.dyeFrom ? { ...eyes, sheet: eyes.dyeFrom } : eyes;
   const race = lookItem(A.races, look.race) || A.races?.[0] || { id: 'human', scale: 1 };
-  if (race.own) return chibiSprite(race, fi);   // 新風格人物（整套自製圖層，不吃髮型／服裝選項）
+  if (race.own) return chibiSprite(race, look, fi);   // 新風格人物（整套自製圖層，不吃髮型／服裝選項）
   // 服裝男女共用一個 id：女角改用 sheetF（沒有就用 sheet）
   const byGender = it => it && look.gender === 'female' && it.sheetF ? { ...it, sheet: it.sheetF } : it;
   const topG = byGender(top), bottomG = byGender(bottom), shoeG = byGender(shoe); hat = byGender(hat);

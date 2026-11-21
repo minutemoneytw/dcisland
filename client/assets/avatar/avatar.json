@@ -3547,6 +3547,66 @@
      "hat": "chibi_hat.png"
     },
     "outline": "#1e0c1e",
+    "dye": [
+     {
+      "slot": "hair",
+      "layers": [
+       "hairbg",
+       "hair"
+      ],
+      "colors": [
+       "#3c1e44",
+       "#523464",
+       "#28122e",
+       "#587aa8",
+       "#7066ac"
+      ]
+     },
+     {
+      "slot": "top",
+      "layers": [
+       "top",
+       "bottom"
+      ],
+      "colors": [
+       "#f6e8c8",
+       "#a89888",
+       "#8a2c50",
+       "#5c203a",
+       "#b0466c"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#3a224a"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#7a4c2c",
+       "#aa7446",
+       "#422212"
+      ]
+     },
+     {
+      "slot": "hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#eab242",
+       "#82522c"
+      ]
+     }
+    ],
     "anchors": {
      "back": [
       24,
