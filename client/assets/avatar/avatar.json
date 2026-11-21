@@ -3605,6 +3605,20 @@
        "sheets": {
         "face": "chibi_face_plain_droop_face.png"
        }
+      },
+      {
+       "id": "chibi_half",
+       "name": "折衷垂眼",
+       "sheets": {
+        "face": "chibi_face_half_face.png"
+       }
+      },
+      {
+       "id": "chibi_plain_half",
+       "name": "折衷垂眼無紋面",
+       "sheets": {
+        "face": "chibi_face_plain_half_face.png"
+       }
       }
      ]
     },

@@ -603,7 +603,7 @@ LPC_EARS = [                     # 種族耳朵圖層：(遊戲檔名, external 
 # 種族：人類＝無耳朵；精靈＝精靈耳（跟膚色）；貓族＝貓耳（bg+fg）；拉拉肥/巨人＝找人類模組縮放（LPC 沒有專用體型）
 # 新風格人物的款式（第一個＝預設，圖層用 chibi_<層>.png；其他款式只換指定的圖層，檔名 chibi_hair_<款>_<層>.png／chibi_outfit_<款>_<層>.png）。id 前面加 chibi_ 進 look.hair／look.top（同步不用改伺服器）
 CHIBI_HAIR_STYLES = [("ponytail", "高馬尾", ()), ("bob", "鮑伯短髮", ("hairbg", "hair"))]
-CHIBI_FACE_STYLES = [("blush", "腮紅", ()), ("plain", "無紋面", ("face",)), ("droop", "垂眼", ("face",)), ("plain_droop", "垂眼無紋面", ("face",))]
+CHIBI_FACE_STYLES = [("blush", "腮紅", ()), ("plain", "無紋面", ("face",)), ("droop", "垂眼", ("face",)), ("plain_droop", "垂眼無紋面", ("face",)), ("half", "折衷垂眼", ("face",)), ("plain_half", "折衷垂眼無紋面", ("face",))]
 CHIBI_OUTFIT_STYLES = [("apron", "工匠圍裙", ()), ("casual", "便服", ("body", "bottom", "top"))]
 
 def chibi_styles():
