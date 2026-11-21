@@ -20,6 +20,7 @@ from chibi_pilot import Img, write_png
 from chibi_pilot2 import W, H, TOP, CX, trap, trap_side
 
 # 款式（2026-11-22）：build_sheets(hair, outfit) 會設定這兩個全域，畫的函式照它分支
+EYE_DROOP = False                        # 眼睫毛尾巴（外側那端）往下垂；False＝外側上翹（原本）。由 build_sheets 的 face 款式決定
 EYE_H = True                             # 眼睛高一格（瞳孔直條兩格；2026-11-22 使用者選定）
 FACE = 'blush'                            # 臉型：blush 有腮紅（原本）／plain 沒有紋面（腮紅）
 HAIR, OUTFIT = 'ponytail', 'apron'        # 髮型：ponytail 高馬尾（原本）／bob 鮑伯短髮；服裝：apron 工匠圍裙（原本）／casual 便服（T 恤＋短褲）
@@ -259,9 +260,9 @@ def draw_front(step=0, pose=None):
         if flip:
             xs = xs[::-1]
         if not flip:
-            im.hline(ex, ex + 2, 18 + dy, 'la'); im.hline(ex + 1, ex + 3, 19 + dy, 'la')
+            im.hline(ex + EYE_DROOP, ex + 2 + EYE_DROOP, 18 + dy, 'la'); im.hline(ex + 1 - EYE_DROOP, ex + 3 - EYE_DROOP, 19 + dy, 'la')
         else:
-            im.hline(ex + 1, ex + 3, 18 + dy, 'la'); im.hline(ex, ex + 2, 19 + dy, 'la')
+            im.hline(ex + 1 - EYE_DROOP, ex + 3 - EYE_DROOP, 18 + dy, 'la'); im.hline(ex + EYE_DROOP, ex + 2 + EYE_DROOP, 19 + dy, 'la')
         row1 = ['lb', 'ir', 'pu', 'ir']
         row2 = ['ew', 'ir_l', 'ir_l', 'ir']
         for k, x in enumerate(xs):
@@ -269,7 +270,10 @@ def draw_front(step=0, pose=None):
                 im.set(x, 20 + dy, row1[k]); im.set(x, 21 + dy, ['ew', 'ir', 'pu', 'ir'][k]); im.set(x, 22 + dy, row2[k])
             else:
                 im.set(x, 20 + dy, row1[k]); im.set(x, 21 + dy, row2[k])
-    im.set(14, 19 + dy, 'ew'); im.set(25, 19 + dy, 'ew')
+    if not EYE_DROOP:
+        im.set(14, 19 + dy, 'ew'); im.set(25, 19 + dy, 'ew')
+    else:   # 睫毛尾巴往下垂：外側那一欄多垂一格（蓋掉眼角的高光）
+        im.set(14, 20 + dy, 'la'); im.set(25, 20 + dy, 'la')
     for bx in (15, 16, 17, 22, 23, 24):
         im.set(bx, (17 if bx in (17, 22) else 16) + dy, 'brow')
     if FACE == 'blush':
@@ -455,13 +459,16 @@ def draw_side(step=0, pose=None):
     for y, (a, b) in face.items():
         im.hline(a, b, y + dy, 'sk')
     ex = 14
-    im.hline(ex + 1, ex + 3, 18 + dy, 'la'); im.hline(ex, ex + 2, 19 + dy, 'la')
+    im.hline(ex + 1 - EYE_DROOP, ex + 3 - EYE_DROOP, 18 + dy, 'la'); im.hline(ex + EYE_DROOP, ex + 2 + EYE_DROOP, 19 + dy, 'la')
     for k, (r1, r2) in enumerate((('ir', 'ir'), ('pu', 'ir_l'), ('ir', 'ir_l'), ('lb', 'ew'))):
         if EYE_H:
             im.set(ex + k, 20 + dy, r1); im.set(ex + k, 21 + dy, ('ir', 'pu', 'ir', 'ew')[k]); im.set(ex + k, 22 + dy, r2)
         else:
             im.set(ex + k, 20 + dy, r1); im.set(ex + k, 21 + dy, r2)
-    im.set(ex + 3, 19 + dy, 'ew')
+    if not EYE_DROOP:
+        im.set(ex + 3, 19 + dy, 'ew')
+    else:
+        im.set(ex + 3, 20 + dy, 'la')
     for (bx, by) in ((14, 17), (15, 16), (16, 16), (17, 16), (18, 17)):
         im.set(bx, by + dy, 'brow')
     if FACE == 'blush':
@@ -572,8 +579,10 @@ def put(sheets, fr, col, row):
 
 def build_sheets(hair='ponytail', outfit='apron', face='blush'):
     """回傳 {圖層名: Img(832×1856)}：每個圖層一張 LPC 格式的 sheet（走路列＋攻擊列）。hair／outfit＝款式（見全域 HAIR、OUTFIT）。"""
-    global HAIR, OUTFIT, FACE
-    HAIR, OUTFIT, FACE = hair, outfit, face
+    global HAIR, OUTFIT, FACE, EYE_DROOP
+    HAIR, OUTFIT = hair, outfit
+    FACE = 'plain' if face.startswith('plain') else 'blush'      # 臉型款式：blush／plain（無紋面）／droop（垂眼）／plain_droop（無紋面垂眼）
+    EYE_DROOP = face.endswith('droop')
     sheets = {n: Img(SHEET_W, SHEET_H) for n in LAYERS}
     for d, row in WALK_ROW.items():
         cache = {s: frame(d, s) for s in (0, 1, 2)}

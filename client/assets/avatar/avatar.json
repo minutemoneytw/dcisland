@@ -3591,6 +3591,20 @@
        "sheets": {
         "face": "chibi_face_plain_face.png"
        }
+      },
+      {
+       "id": "chibi_droop",
+       "name": "垂眼",
+       "sheets": {
+        "face": "chibi_face_droop_face.png"
+       }
+      },
+      {
+       "id": "chibi_plain_droop",
+       "name": "垂眼無紋面",
+       "sheets": {
+        "face": "chibi_face_plain_droop_face.png"
+       }
       }
      ]
     },
