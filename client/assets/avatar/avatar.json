@@ -3578,6 +3578,20 @@
         "top": "chibi_outfit_casual_top.png"
        }
       }
+     ],
+     "face": [
+      {
+       "id": "chibi_blush",
+       "name": "腮紅",
+       "sheets": {}
+      },
+      {
+       "id": "chibi_plain",
+       "name": "無紋面",
+       "sheets": {
+        "face": "chibi_face_plain_face.png"
+       }
+      }
      ]
     },
     "dye": [

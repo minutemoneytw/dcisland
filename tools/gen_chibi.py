@@ -20,6 +20,7 @@ from chibi_pilot import Img, write_png
 from chibi_pilot2 import W, H, TOP, CX, trap, trap_side
 
 # 款式（2026-11-22）：build_sheets(hair, outfit) 會設定這兩個全域，畫的函式照它分支
+FACE = 'blush'                            # 臉型：blush 有腮紅（原本）／plain 沒有紋面（腮紅）
 HAIR, OUTFIT = 'ponytail', 'apron'        # 髮型：ponytail 高馬尾（原本）／bob 鮑伯短髮；服裝：apron 工匠圍裙（原本）／casual 便服（T 恤＋短褲）
 cp.P.update({'tee': (232, 240, 244), 'tee_d': (168, 184, 196), 'tee_l': (255, 255, 255),   # T 恤
              'sh': (58, 90, 138), 'sh_d': (36, 56, 90), 'sh_l': (84, 120, 168)})          # 短褲（牛仔藍）
@@ -267,8 +268,9 @@ def draw_front(step=0, pose=None):
     im.set(14, 19 + dy, 'ew'); im.set(25, 19 + dy, 'ew')
     for bx in (15, 16, 17, 22, 23, 24):
         im.set(bx, (17 if bx in (17, 22) else 16) + dy, 'brow')
-    im.hline(13, 15, 22 + dy, 'bl'); im.hline(24, 26, 22 + dy, 'bl')
-    im.hline(13, 14, 23 + dy, 'bl'); im.hline(25, 26, 23 + dy, 'bl')
+    if FACE == 'blush':
+        im.hline(13, 15, 22 + dy, 'bl'); im.hline(24, 26, 22 + dy, 'bl')
+        im.hline(13, 14, 23 + dy, 'bl'); im.hline(25, 26, 23 + dy, 'bl')
     im.set(19, 24 + dy, 'mo'); im.set(20, 24 + dy, 'bl')
     # 前髮（臉的上面）：瀏海、臉旁髮束
     im.L('hair')
@@ -454,7 +456,9 @@ def draw_side(step=0, pose=None):
     im.set(ex + 3, 19 + dy, 'ew')
     for (bx, by) in ((14, 17), (15, 16), (16, 16), (17, 16), (18, 17)):
         im.set(bx, by + dy, 'brow')
-    im.hline(15, 19, 22 + dy, 'bl'); im.hline(17, 19, 23 + dy, 'bl'); im.hline(14, 15, 24 + dy, 'mo')
+    if FACE == 'blush':
+        im.hline(15, 19, 22 + dy, 'bl'); im.hline(17, 19, 23 + dy, 'bl')
+    im.hline(14, 15, 24 + dy, 'mo')
     # 前髮：瀏海與臉旁髮束
     im.L('hair')
     for y in range(13 + dy, 17 + dy):
@@ -557,10 +561,10 @@ def put(sheets, fr, col, row):
                     dst.px[row * CELL + OY + y][col * CELL + OX + x] = v
 
 
-def build_sheets(hair='ponytail', outfit='apron'):
+def build_sheets(hair='ponytail', outfit='apron', face='blush'):
     """回傳 {圖層名: Img(832×1856)}：每個圖層一張 LPC 格式的 sheet（走路列＋攻擊列）。hair／outfit＝款式（見全域 HAIR、OUTFIT）。"""
-    global HAIR, OUTFIT
-    HAIR, OUTFIT = hair, outfit
+    global HAIR, OUTFIT, FACE
+    HAIR, OUTFIT, FACE = hair, outfit, face
     sheets = {n: Img(SHEET_W, SHEET_H) for n in LAYERS}
     for d, row in WALK_ROW.items():
         cache = {s: frame(d, s) for s in (0, 1, 2)}

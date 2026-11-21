@@ -603,12 +603,14 @@ LPC_EARS = [                     # 種族耳朵圖層：(遊戲檔名, external 
 # 種族：人類＝無耳朵；精靈＝精靈耳（跟膚色）；貓族＝貓耳（bg+fg）；拉拉肥/巨人＝找人類模組縮放（LPC 沒有專用體型）
 # 新風格人物的款式（第一個＝預設，圖層用 chibi_<層>.png；其他款式只換指定的圖層，檔名 chibi_hair_<款>_<層>.png／chibi_outfit_<款>_<層>.png）。id 前面加 chibi_ 進 look.hair／look.top（同步不用改伺服器）
 CHIBI_HAIR_STYLES = [("ponytail", "高馬尾", ()), ("bob", "鮑伯短髮", ("hairbg", "hair"))]
+CHIBI_FACE_STYLES = [("blush", "腮紅", ()), ("plain", "無紋面", ("face",))]
 CHIBI_OUTFIT_STYLES = [("apron", "工匠圍裙", ()), ("casual", "便服", ("body", "bottom", "top"))]
 
 def chibi_styles():
     return dict(
         hair=[dict(id=f"chibi_{i}", name=n, sheets={l: f"chibi_hair_{i}_{l}.png" for l in ls}) for i, n, ls in CHIBI_HAIR_STYLES],
-        top=[dict(id=f"chibi_{i}", name=n, sheets={l: f"chibi_outfit_{i}_{l}.png" for l in ls}) for i, n, ls in CHIBI_OUTFIT_STYLES])
+        top=[dict(id=f"chibi_{i}", name=n, sheets={l: f"chibi_outfit_{i}_{l}.png" for l in ls}) for i, n, ls in CHIBI_OUTFIT_STYLES],
+        face=[dict(id=f"chibi_{i}", name=n, sheets={l: f"chibi_face_{i}_{l}.png" for l in ls}) for i, n, ls in CHIBI_FACE_STYLES])
 
 LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ears）；scale＝人類模組整體縮放倍率
     dict(id="human", name="人類", scale=1.0),
@@ -4405,6 +4407,8 @@ def main():
         for lname, lim in gen_chibi.build_sheets(hair=hid[0]).items():
             if lname in ("hairbg", "hair"):
                 save_chibi_layer(lim, f"chibi_hair_{hid[0]}_{lname}.png", sub)
+    for fid in CHIBI_FACE_STYLES[1:]:
+        save_chibi_layer(gen_chibi.build_sheets(face=fid[0])["face"], f"chibi_face_{fid[0]}_face.png", sub)
     for oid in CHIBI_OUTFIT_STYLES[1:]:
         for lname, lim in gen_chibi.build_sheets(outfit=oid[0]).items():
             if lname in ("body", "bottom", "top"):
