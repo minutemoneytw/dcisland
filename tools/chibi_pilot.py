@@ -20,7 +20,7 @@ CX = 22
 P = {
     'hair': (176, 138, 106), 'hair_d': (146, 108, 82), 'hair_dd': (118, 84, 64), 'hair_l': (206, 168, 138),
     'skin': (253, 240, 230), 'skin_d': (244, 214, 202), 'blush': (241, 166, 166), 'mouth': (190, 100, 108),
-    'eye': (78, 120, 190), 'eye_d': (40, 56, 110), 'eye_l': (150, 190, 235), 'white': (255, 255, 255), 'eye_w': (222, 230, 246),
+    'eye': (78, 120, 190), 'eye_d': (40, 56, 110), 'eye_l': (150, 190, 235), 'white': (255, 255, 255), 'eye_w': (222, 230, 246), 'lash': (74, 50, 48),
     'blouse': (246, 240, 228), 'blouse_d': (216, 202, 192),
     'dress': (122, 54, 76), 'dress_d': (90, 38, 58), 'dress_l': (160, 84, 102),
     'gold': (216, 176, 88), 'gold_d': (176, 136, 60),
@@ -103,19 +103,23 @@ def wave(y, k=1.0, ph=0.0):
 
 
 # ================= 前面 =================
-def eye(im, ex, ey):
-    """正面的眼睛（2026-11-21 使用者要求照設定圖）：4 格寬、2 格高——左右各 1 格眼白、中間 2 格眼瞳（上深下淺藍）；上面隔一排畫 3 格的眉毛。"""
-    im.hline(ex, ex + 2, ey - 2, 'hair_dd')                                    # 眉毛
-    im.set(ex, ey, 'eye_w'); im.set(ex + 3, ey, 'eye_w'); im.set(ex, ey + 1, 'eye_w'); im.set(ex + 3, ey + 1, 'eye_w')
-    im.set(ex + 1, ey, 'eye_d'); im.set(ex + 2, ey, 'eye_d')
-    im.set(ex + 1, ey + 1, 'eye'); im.set(ex + 2, ey + 1, 'eye_l')
+def eye_l(im, wx, ey):
+    """左眼（畫面左邊那隻；2026-11-21 使用者定）：2 格寬、2 格高——外側（左）1×2 眼白、內側（右）1×2 眼瞳（上深下藍），正上方一排眼睫毛（往外多出 1 格）。"""
+    im.hline(wx - 1, wx + 1, ey - 1, 'lash')
+    im.set(wx, ey, 'eye_w'); im.set(wx, ey + 1, 'eye_w')
+    im.set(wx + 1, ey, 'eye_d'); im.set(wx + 1, ey + 1, 'eye')
 
 
-def eye_side(im, ex, ey):
-    """側面（臉朝左）的眼睛：前面（左）2 格眼瞳、後面 1 格眼白，一樣上面一排眉毛。"""
-    im.hline(ex, ex + 2, ey - 2, 'hair_dd')
-    im.set(ex, ey, 'eye_d'); im.set(ex + 1, ey, 'eye_d'); im.set(ex + 2, ey, 'eye_w')
-    im.set(ex, ey + 1, 'eye'); im.set(ex + 1, ey + 1, 'eye_l'); im.set(ex + 2, ey + 1, 'eye_w')
+def eye_r(im, px, ey):
+    """右眼：跟左眼左右對稱——內側（左）眼瞳、外側（右）眼白，睫毛往外（右）多 1 格。"""
+    im.hline(px, px + 2, ey - 1, 'lash')
+    im.set(px, ey, 'eye_d'); im.set(px, ey + 1, 'eye')
+    im.set(px + 1, ey, 'eye_w'); im.set(px + 1, ey + 1, 'eye_w')
+
+
+def eye_side(im, px, ey):
+    """側面（臉朝左）只看得到一隻眼：前面（左）眼瞳、後面（右）眼白，睫毛往後多 1 格。"""
+    eye_r(im, px, ey)
 
 
 def flower(im, fx, fy):
@@ -168,7 +172,7 @@ def draw_front(step):
     # 臉
     im.ellipse(CX, 18 + dy, 9.6, 8.2, 'skin')
     im.hline(14, 30, 25 + dy, 'skin_d')
-    eye(im, 16, 19 + dy); eye(im, 24, 19 + dy)
+    eye_l(im, 18, 19 + dy); eye_r(im, 24, 19 + dy)
     im.hline(14, 16, 22 + dy, 'blush'); im.hline(28, 30, 22 + dy, 'blush')
     im.set(21, 23 + dy, 'mouth'); im.set(22, 23 + dy, 'mouth')
     # 瀏海：中分，髮尾一撮一撮的（尖尖的）
@@ -279,7 +283,7 @@ def draw_side(step):
             if ((x - 23) / 13.0) ** 2 + ((y - (13 + dy)) / 11.0) ** 2 <= 1.1 or y > 17 + dy:
                 im.set(x, y, 'hair')
     im.rect(21, 20 + dy, 22, 22 + dy, 'skin_d')                                                              # 耳朵
-    eye_side(im, 13, 19 + dy)
+    eye_side(im, 14, 19 + dy)
     im.hline(12, 14, 22 + dy, 'blush'); im.set(11, 23 + dy, 'mouth')
     # 瀏海（臉朝左：往前垂）
     for x in range(11, 30):
