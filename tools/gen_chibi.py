@@ -20,6 +20,7 @@ from chibi_pilot import Img, write_png
 from chibi_pilot2 import W, H, TOP, CX, trap, trap_side
 
 # 款式（2026-11-22）：build_sheets(hair, outfit) 會設定這兩個全域，畫的函式照它分支
+EYE_H = True                             # 眼睛高一格（瞳孔直條兩格；2026-11-22 使用者選定）
 FACE = 'blush'                            # 臉型：blush 有腮紅（原本）／plain 沒有紋面（腮紅）
 HAIR, OUTFIT = 'ponytail', 'apron'        # 髮型：ponytail 高馬尾（原本）／bob 鮑伯短髮；服裝：apron 工匠圍裙（原本）／casual 便服（T 恤＋短褲）
 cp.P.update({'tee': (232, 240, 244), 'tee_d': (168, 184, 196), 'tee_l': (255, 255, 255),   # T 恤
@@ -264,13 +265,17 @@ def draw_front(step=0, pose=None):
         row1 = ['lb', 'ir', 'pu', 'ir']
         row2 = ['ew', 'ir_l', 'ir_l', 'ir']
         for k, x in enumerate(xs):
-            im.set(x, 20 + dy, row1[k]); im.set(x, 21 + dy, row2[k])
+            if EYE_H:
+                im.set(x, 20 + dy, row1[k]); im.set(x, 21 + dy, ['ew', 'ir', 'pu', 'ir'][k]); im.set(x, 22 + dy, row2[k])
+            else:
+                im.set(x, 20 + dy, row1[k]); im.set(x, 21 + dy, row2[k])
     im.set(14, 19 + dy, 'ew'); im.set(25, 19 + dy, 'ew')
     for bx in (15, 16, 17, 22, 23, 24):
         im.set(bx, (17 if bx in (17, 22) else 16) + dy, 'brow')
     if FACE == 'blush':
-        im.hline(13, 15, 22 + dy, 'bl'); im.hline(24, 26, 22 + dy, 'bl')
-        im.hline(13, 14, 23 + dy, 'bl'); im.hline(25, 26, 23 + dy, 'bl')
+        by0 = 22 + (1 if EYE_H else 0)
+        im.hline(13, 15, by0 + dy, 'bl'); im.hline(24, 26, by0 + dy, 'bl')
+        im.hline(13, 14, by0 + 1 + dy, 'bl'); im.hline(25, 26, by0 + 1 + dy, 'bl')
     im.set(19, 24 + dy, 'mo'); im.set(20, 24 + dy, 'bl')
     # 前髮（臉的上面）：瀏海、臉旁髮束
     im.L('hair')
@@ -452,12 +457,16 @@ def draw_side(step=0, pose=None):
     ex = 14
     im.hline(ex + 1, ex + 3, 18 + dy, 'la'); im.hline(ex, ex + 2, 19 + dy, 'la')
     for k, (r1, r2) in enumerate((('ir', 'ir'), ('pu', 'ir_l'), ('ir', 'ir_l'), ('lb', 'ew'))):
-        im.set(ex + k, 20 + dy, r1); im.set(ex + k, 21 + dy, r2)
+        if EYE_H:
+            im.set(ex + k, 20 + dy, r1); im.set(ex + k, 21 + dy, ('ir', 'pu', 'ir', 'ew')[k]); im.set(ex + k, 22 + dy, r2)
+        else:
+            im.set(ex + k, 20 + dy, r1); im.set(ex + k, 21 + dy, r2)
     im.set(ex + 3, 19 + dy, 'ew')
     for (bx, by) in ((14, 17), (15, 16), (16, 16), (17, 16), (18, 17)):
         im.set(bx, by + dy, 'brow')
     if FACE == 'blush':
-        im.hline(15, 19, 22 + dy, 'bl'); im.hline(17, 19, 23 + dy, 'bl')
+        by0 = 22 + (1 if EYE_H else 0)
+        im.hline(15, 19, by0 + dy, 'bl'); im.hline(17, 19, by0 + 1 + dy, 'bl')
     im.hline(14, 15, 24 + dy, 'mo')
     # 前髮：瀏海與臉旁髮束
     im.L('hair')
