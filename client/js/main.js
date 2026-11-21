@@ -2930,6 +2930,38 @@ function sheetCellHas(img, sx, sy, w, h) {
   }
   return v;
 }
+// 新風格人物（2026-11-21，使用者定案整套換成自製 Q 版像素風格；階段 1）：種族的 own.sheets＝8 個圖層（跟 LPC 同格式的 sheet，只填走路列），
+// 由下往上疊；**描邊不在圖層裡**，合成後整個人統一畫一圈 own.outline 色的外框（每層各自描邊，層與層之間會多出不該有的線）。
+// 沒有這一格（攻擊、釣魚、坐姿以外的動作）就用 map 條目的退回幀（待機）。武器、服裝選項、換色都還沒做（之後階段）。
+const CHIBI_ORDER = ['body', 'bottom', 'shoes', 'top', 'hairbg', 'face', 'hair', 'hat'];
+function chibiSprite(race, fi) {
+  const k = 'chibi:' + fi;
+  let cv = S.charCache.get(k);
+  if (cv) return cv;
+  const F = S.avatar.frames, own = race.own;
+  let ent = F.map ? F.map[fi] : [fi, 0];
+  const body = S.charImgs[own.sheets.body];
+  if (ent?.[2] != null && !sheetCellHas(body, ent[0] * F.w, ent[1] * F.h, F.w, F.h)) ent = F.map[ent[2]];
+  const [cc, cr] = ent, sx = cc * F.w, sy = cr * F.h;
+  cv = document.createElement('canvas'); cv.width = F.w; cv.height = F.h; cv.pad = 0; cv.layerMiss = false;
+  const g = cv.getContext('2d');
+  for (const n of CHIBI_ORDER) {
+    const img = S.charImgs[own.sheets[n]];
+    if (!img || sx + F.w > img.width || sy + F.h > img.height) continue;
+    g.drawImage(img, sx, sy, F.w, F.h, 0, 0, F.w, F.h);
+  }
+  outlineCanvas(cv, own.outline);
+  S.charCache.set(k, cv);
+  return cv;
+}
+function outlineCanvas(cv, color) {   // 貼著透明、上下左右有不透明像素的透明格，畫成 color（#rrggbb）
+  const w = cv.width, h = cv.height, g = cv.getContext('2d'), id = g.getImageData(0, 0, w, h), d = id.data;
+  const r = parseInt(color.slice(1, 3), 16), gg = parseInt(color.slice(3, 5), 16), b = parseInt(color.slice(5, 7), 16), mark = [];
+  const solid = (x, y) => x >= 0 && y >= 0 && x < w && y < h && d[(y * w + x) * 4 + 3] > 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (!solid(x, y) && (solid(x + 1, y) || solid(x - 1, y) || solid(x, y + 1) || solid(x, y - 1))) mark.push((y * w + x) * 4);
+  for (const i of mark) { d[i] = r; d[i + 1] = gg; d[i + 2] = b; d[i + 3] = 255; }
+  g.putImageData(id, 0, 0);
+}
 function charSprite(look, fi) {
   const A = S.avatar, F = A.frames;
   const legacy = (key, idx, list) => key in look ? (look[key] || null) : (list[idx || 0] ?? list[0]);
@@ -2949,6 +2981,7 @@ function charSprite(look, fi) {
   const hairIt = look.hairC && hair.dyeFrom ? { ...hair, sheet: hair.dyeFrom } : hair;
   const eyesIt = look.eyeC && eyes?.dyeFrom ? { ...eyes, sheet: eyes.dyeFrom } : eyes;
   const race = lookItem(A.races, look.race) || A.races?.[0] || { id: 'human', scale: 1 };
+  if (race.own) return chibiSprite(race, fi);   // 新風格人物（整套自製圖層，不吃髮型／服裝選項）
   // 服裝男女共用一個 id：女角改用 sheetF（沒有就用 sheet）
   const byGender = it => it && look.gender === 'female' && it.sheetF ? { ...it, sheet: it.sheetF } : it;
   const topG = byGender(top), bottomG = byGender(bottom), shoeG = byGender(shoe); hat = byGender(hat);
@@ -13709,7 +13742,7 @@ async function boot() {
       .map(async f => S.charImgs[f] = await optImg(`assets/avatar/${f}`)),
     ...S.avatar.weapons.filter(w => w.lpc).flatMap(w => [w.lpc.bg, w.lpc.fg, ...Object.values(w.lpc.over || {}).flatMap(o => [o.bg, o.fg])])   // LPC 武器圖層
       .filter(Boolean).map(async f => S.charImgs[f] = await optImg(`assets/avatar/${f}`)),
-    ...(S.avatar.races || []).flatMap(r => [r.ear, r.earBg, r.earFg]).filter(Boolean)   // 種族耳朵圖層（精靈耳／貓耳前後層）
+    ...(S.avatar.races || []).flatMap(r => [r.ear, r.earBg, r.earFg, ...Object.values(r.own?.sheets || {})]).filter(Boolean)   // 種族耳朵圖層（精靈耳／貓耳前後層）、新風格人物的圖層
       .map(async f => S.charImgs[f] = await loadImg(`assets/avatar/${f}`)),
     ...S.avatar.weapons.filter(w => w.sprite).map(async w => {
       const im = await optImg(`assets/avatar/${w.sprite}`);
