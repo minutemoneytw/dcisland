@@ -20,6 +20,8 @@ from chibi_pilot import Img, write_png
 from chibi_pilot2 import W, H, TOP, CX, trap, trap_side
 
 # 款式（2026-11-22）：build_sheets(hair, outfit) 會設定這兩個全域，畫的函式照它分支
+cp.P['la_s'] = (122, 72, 72)               # 淺褐睫毛（原本的近黑睫毛縮到遊戲大小像眼線、眼神太銳利）
+LASH, LASH_TOP, BROW, BROW_DY = 'la_s', False, 'brow', 0   # 眼睫毛顏色／上面那一列要不要畫（False＝只留外側一格）／眉毛顏色／眉毛上移幾格
 FACE = 'blush'                            # 臉型：blush 有腮紅（原本）／plain 沒有紋面（腮紅）
 HAIR, OUTFIT = 'ponytail', 'apron'        # 髮型：ponytail 高馬尾（原本）／bob 鮑伯短髮；服裝：apron 工匠圍裙（原本）／casual 便服（T 恤＋短褲）
 cp.P.update({'tee': (232, 240, 244), 'tee_d': (168, 184, 196), 'tee_l': (255, 255, 255),   # T 恤
@@ -258,16 +260,20 @@ def draw_front(step=0, pose=None):
         if flip:
             xs = xs[::-1]
         if not flip:
-            im.hline(ex, ex + 2, 18 + dy, 'la'); im.hline(ex + 1, ex + 3, 19 + dy, 'la')
+            if LASH_TOP: im.hline(ex, ex + 2, 18 + dy, LASH)
+            else: im.set(ex, 18 + dy, LASH)
+            im.hline(ex + 1, ex + 3, 19 + dy, LASH)
         else:
-            im.hline(ex + 1, ex + 3, 18 + dy, 'la'); im.hline(ex, ex + 2, 19 + dy, 'la')
+            if LASH_TOP: im.hline(ex + 1, ex + 3, 18 + dy, LASH)
+            else: im.set(ex + 3, 18 + dy, LASH)
+            im.hline(ex, ex + 2, 19 + dy, LASH)
         row1 = ['lb', 'ir', 'pu', 'ir']
         row2 = ['ew', 'ir_l', 'ir_l', 'ir']
         for k, x in enumerate(xs):
             im.set(x, 20 + dy, row1[k]); im.set(x, 21 + dy, row2[k])
     im.set(14, 19 + dy, 'ew'); im.set(25, 19 + dy, 'ew')
     for bx in (15, 16, 17, 22, 23, 24):
-        im.set(bx, (17 if bx in (17, 22) else 16) + dy, 'brow')
+        im.set(bx, (17 if bx in (17, 22) else 16) - BROW_DY + dy, BROW)
     if FACE == 'blush':
         im.hline(13, 15, 22 + dy, 'bl'); im.hline(24, 26, 22 + dy, 'bl')
         im.hline(13, 14, 23 + dy, 'bl'); im.hline(25, 26, 23 + dy, 'bl')
@@ -450,12 +456,14 @@ def draw_side(step=0, pose=None):
     for y, (a, b) in face.items():
         im.hline(a, b, y + dy, 'sk')
     ex = 14
-    im.hline(ex + 1, ex + 3, 18 + dy, 'la'); im.hline(ex, ex + 2, 19 + dy, 'la')
+    if LASH_TOP: im.hline(ex + 1, ex + 3, 18 + dy, LASH)
+    else: im.set(ex, 18 + dy, LASH)
+    im.hline(ex, ex + 2, 19 + dy, LASH)
     for k, (r1, r2) in enumerate((('ir', 'ir'), ('pu', 'ir_l'), ('ir', 'ir_l'), ('lb', 'ew'))):
         im.set(ex + k, 20 + dy, r1); im.set(ex + k, 21 + dy, r2)
     im.set(ex + 3, 19 + dy, 'ew')
     for (bx, by) in ((14, 17), (15, 16), (16, 16), (17, 16), (18, 17)):
-        im.set(bx, by + dy, 'brow')
+        im.set(bx, by - BROW_DY + dy, BROW)
     if FACE == 'blush':
         im.hline(15, 19, 22 + dy, 'bl'); im.hline(17, 19, 23 + dy, 'bl')
     im.hline(14, 15, 24 + dy, 'mo')
