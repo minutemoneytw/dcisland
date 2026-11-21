@@ -601,6 +601,15 @@ LPC_EARS = [                     # 種族耳朵圖層：(遊戲檔名, external 
     ("ears_elven", "ear_elven.png"), ("ears_cat_bg", "ear_cat_bg.png"), ("ears_cat_fg", "ear_cat_fg.png"),
 ]
 # 種族：人類＝無耳朵；精靈＝精靈耳（跟膚色）；貓族＝貓耳（bg+fg）；拉拉肥/巨人＝找人類模組縮放（LPC 沒有專用體型）
+# 新風格人物的款式（第一個＝預設，圖層用 chibi_<層>.png；其他款式只換指定的圖層，檔名 chibi_hair_<款>_<層>.png／chibi_outfit_<款>_<層>.png）。id 前面加 chibi_ 進 look.hair／look.top（同步不用改伺服器）
+CHIBI_HAIR_STYLES = [("ponytail", "高馬尾", ()), ("bob", "鮑伯短髮", ("hairbg", "hair"))]
+CHIBI_OUTFIT_STYLES = [("apron", "工匠圍裙", ()), ("casual", "便服", ("body", "bottom", "top"))]
+
+def chibi_styles():
+    return dict(
+        hair=[dict(id=f"chibi_{i}", name=n, sheets={l: f"chibi_hair_{i}_{l}.png" for l in ls}) for i, n, ls in CHIBI_HAIR_STYLES],
+        top=[dict(id=f"chibi_{i}", name=n, sheets={l: f"chibi_outfit_{i}_{l}.png" for l in ls}) for i, n, ls in CHIBI_OUTFIT_STYLES])
+
 LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ears）；scale＝人類模組整體縮放倍率
     dict(id="human", name="人類", scale=1.0),
     dict(id="elf", name="精靈", scale=1.0, ear="char_ears_elven.png", earDye=LPC_SKIN_DYE),   # 精靈耳跟膚色
@@ -611,11 +620,13 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
     # 新風格（2026-11-21，使用者定案整套換成自製 Q 版像素風格；階段 1）：整個人（身體／下身／靴子／上身／後髮／臉／前髮／護目鏡）都是自己的圖層，
     # 不吃外貌頁的髮型／服裝／臉型選項；引擎看到 own 就改用這組 sheet、合成後統一畫一圈 outline 色的外框；攻擊／釣魚等動作沒有圖，退回待機幀
     dict(id="chibi", name="新風格", scale=1.0, own=dict(
-        sheets={n: f"chibi_{n}.png" for n in ("body", "bottom", "shoes", "top", "hairbg", "face", "hair", "hat")}, outline="#1e0c1e",
+        sheets={n: f"chibi_{n}.png" for n in ("body", "bottom", "shoes", "top", "hairbg", "face", "hair", "hat")}, outline="#1e0c1e", styles=chibi_styles(),
         # 換色規則（slot 對應外貌／造型的換色鈕：hair＝髮色、top＝上衣、bottom＝褲子、shoe＝鞋、hat＝帽子；colors＝要被換掉的原色，第一個是主色）
         dye=[dict(slot="hair", layers=["hairbg", "hair"], colors=["#3c1e44", "#523464", "#28122e", "#587aa8", "#7066ac"]),
-             dict(slot="top", layers=["top", "bottom"], colors=["#f6e8c8", "#a89888", "#8a2c50", "#5c203a", "#b0466c"]),
-             dict(slot="bottom", layers=["bottom"], colors=["#3a224a"]),
+             dict(slot="top", style="chibi_apron", layers=["top", "bottom"], colors=["#f6e8c8", "#a89888", "#8a2c50", "#5c203a", "#b0466c"]),
+             dict(slot="bottom", style="chibi_apron", layers=["bottom"], colors=["#3a224a"]),
+             dict(slot="top", style="chibi_casual", layers=["top"], colors=["#e8f0f4", "#a8b8c4", "#ffffff"]),
+             dict(slot="bottom", style="chibi_casual", layers=["bottom"], colors=["#3a5a8a", "#24385a", "#5478a8"]),
              dict(slot="shoe", layers=["shoes"], colors=["#7a4c2c", "#aa7446", "#422212"]),
              dict(slot="hat", layers=["hat"], colors=["#eab242", "#82522c"])],
         # 武器掛點（64×64 格子座標；LPC 的是 back 23,32／backView 41,32／waist 23,48／hand 40,40，照 LPC 身形不適用）：手＝拿武器那隻手（正面／背面＝螢幕右手，側面＝往前伸的位置）
@@ -4389,6 +4400,15 @@ def main():
     import gen_chibi
     for lname, lim in gen_chibi.build_sheets().items():
         save_chibi_layer(lim, f"chibi_{lname}.png", sub)
+    # 款式（髮型只換 hairbg／hair，服裝只換 body／bottom／top；預設款＝上面那組基本圖）
+    for hid in CHIBI_HAIR_STYLES[1:]:
+        for lname, lim in gen_chibi.build_sheets(hair=hid[0]).items():
+            if lname in ("hairbg", "hair"):
+                save_chibi_layer(lim, f"chibi_hair_{hid[0]}_{lname}.png", sub)
+    for oid in CHIBI_OUTFIT_STYLES[1:]:
+        for lname, lim in gen_chibi.build_sheets(outfit=oid[0]).items():
+            if lname in ("body", "bottom", "top"):
+                save_chibi_layer(lim, f"chibi_outfit_{oid[0]}_{lname}.png", sub)
     # 基本服裝（LPC 原檔，走路列）
     for cid, rel in LPC_CLOTHES:
         save(lpc_cloth_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{cid}.png", sub)

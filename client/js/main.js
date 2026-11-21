@@ -2939,9 +2939,12 @@ const ownRaceOf = id => { const r = id && S.avatar?.races?.find(r => r.id === id
 const CHIBI_ORDER = ['body', 'bottom', 'shoes', 'top', 'hairbg', 'face', 'hair', 'hat'];
 // 新風格的換色：own.dye＝[{slot, layers, colors}]（slot 對應 look 的 hair／top／bottom／shoe／hat 的色碼；colors 第一個是主色，其餘依明暗比例跟著變，見 dyeSheet）
 const CHIBI_DYE_FIELD = { hair: 'hairC', top: 'topC', bottom: 'botC', shoe: 'shoeC', hat: 'hatC' };
+// 款式：own.styles.hair／top＝[{id, name, sheets:{圖層: 檔名}}]（第一個是預設，sheets 空＝用基本圖層）；look.hair／look.top 是款式 id 才算，否則用預設
+const chibiStyleOf = (own, kind, id) => (own.styles?.[kind] || []).find(x => x.id === id) || own.styles?.[kind]?.[0] || null;
 function chibiSprite(race, look, fi) {
-  const rules = (race.own.dye || []).map(r => ({ ...r, hex: look?.[CHIBI_DYE_FIELD[r.slot]] || null }));
-  const k = 'chibi:' + fi + '|' + rules.map(r => r.hex || '').join(',');
+  const hs = chibiStyleOf(race.own, 'hair', look?.hair), ts = chibiStyleOf(race.own, 'top', look?.top);
+  const rules = (race.own.dye || []).filter(r => !r.style || r.style === ts?.id).map(r => ({ ...r, hex: look?.[CHIBI_DYE_FIELD[r.slot]] || null }));
+  const k = 'chibi:' + fi + '|' + (hs?.id || '') + '|' + (ts?.id || '') + '|' + rules.map(r => r.hex || '').join(',');
   let cv = S.charCache.get(k);
   if (cv) return cv;
   const F = S.avatar.frames, own = race.own;
@@ -2952,7 +2955,7 @@ function chibiSprite(race, look, fi) {
   cv = document.createElement('canvas'); cv.width = F.w; cv.height = F.h; cv.pad = 0; cv.layerMiss = false;
   const g = cv.getContext('2d');
   for (const n of CHIBI_ORDER) {
-    let img = S.charImgs[own.sheets[n]];
+    let img = S.charImgs[hs?.sheets?.[n] || ts?.sheets?.[n] || own.sheets[n]];
     if (!img || sx + F.w > img.width || sy + F.h > img.height) continue;
     for (const r of rules) if (r.hex && r.layers.includes(n)) img = dyeSheet(img, r.colors, r.hex);   // 同一張圖可以被多條規則依序換色（例如 bottom 層：圍裙下擺跟上衣、褲子跟褲子）
     g.drawImage(img, sx, sy, F.w, F.h, 0, 0, F.w, F.h);
@@ -12995,8 +12998,10 @@ function shownItem(slot, job = S.me.job) {
 // 自己的顯示造型（畫自己、送給同島的人都用這個；外觀與裝備在這裡就決定好，別人只看結果）
 function myLook() {
   const c = wardrobe().color, w = shownItem('weapon');
-  return { skin: S.me.skin, hair: S.me.hair, gender: S.me.gender || 'male', race: S.me.race || 'human',
-           hat: shownItem('hat')?.id || null, top: shownItem('top')?.id || null, bottom: shownItem('bottom')?.id || null,
+  const own = ownRaceOf(S.me.race);   // 新風格：髮型／服裝款式放進 look.hair／look.top（款式 id，同步不用改伺服器）
+  const ownHair = own && chibiStyleOf(own.own, 'hair', S.me.cHair)?.id, ownTop = own && chibiStyleOf(own.own, 'top', S.me.cTop)?.id;
+  return { skin: S.me.skin, hair: ownHair || S.me.hair, gender: S.me.gender || 'male', race: S.me.race || 'human',
+           hat: shownItem('hat')?.id || null, top: ownTop || shownItem('top')?.id || null, bottom: shownItem('bottom')?.id || null,
            shoe: shownItem('shoe')?.id || null,
            face: S.me.face || 'normal', eyes: lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown',
            hairC: S.me.hairC || null, eyeC: S.me.eyeC || null,   // 調色盤自訂的髮色／眼睛顏色（null＝用選的那一色）
@@ -13081,12 +13086,28 @@ function buildAvatarPanel() {
   $('titleCur').textContent = titleText(S.me.title) || '無';   // 稱號：按「稱號設定」開稱號一覽選
   lookSwatches($('skinOpts'), S.avatar.skins.map(s2 => ({ id: s2.id, name: s2.name, hex: s2.base })), S.me.skin, v => { S.me.skin = v; });
   // 髮型／髮色、臉型、眼神／眼睛顏色
-  twoLevel(S.avatar.hair, S.me.hair, 'hair', $('hairOpts'), 'hairC');
+  const ownRace = ownRaceOf(S.me.race);
+  if (ownRace?.own.styles?.hair) {   // 新風格：髮型款式（自己畫的），髮色用同一個換色鈕
+    const hairHost = $('hairOpts');
+    lookChips(hairHost, ownRace.own.styles.hair, chibiStyleOf(ownRace.own, 'hair', S.me.cHair)?.id, v => { S.me.cHair = v; });
+    const hb = document.createElement('button'); hb.className = 'ff-btn small dye-btn'; hb.title = LOOK_COLOR.hairC;
+    const hsw = document.createElement('span'); hsw.className = 'dye-sw'; hsw.style.background = S.me.hairC || ownRace.own.dye.find(r => r.slot === 'hair').colors[0];
+    hb.append(hsw, document.createTextNode('換色'));
+    hb.onclick = () => toggleColor('hairC', { name: '髮色', hex: ownRace.own.dye.find(r => r.slot === 'hair').colors[0], dye: ownRace.own.dye.find(r => r.slot === 'hair').colors });
+    hairHost.appendChild(hb);
+  } else twoLevel(S.avatar.hair, S.me.hair, 'hair', $('hairOpts'), 'hairC');
   lookChips($('faceOpts'), S.avatar.faces || [], S.me.face || 'normal', v => { S.me.face = v; });
   twoLevel(S.avatar.eyes || [], lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown', 'eyes', $('eyesOpts'), 'eyeC');
   // 裝備與外觀：每個部位一列——顯示中的那件（裝備，或套了外觀時的外觀名）＋「外觀」鈕（開外觀一覽選）＋換色鈕
   const box = $('gearRows'); box.innerHTML = '';
   const wr = wardrobe();
+  if (ownRace?.own.styles?.top) {   // 新風格：服裝款式一列（上衣／褲子的顏色照下面的換色鈕）
+    const row = document.createElement('div'); row.className = 'gear-row';
+    const lb = document.createElement('div'); lb.className = 'gear-lb'; lb.textContent = '服裝'; row.appendChild(lb);
+    const host = document.createElement('div'); host.className = 'look-row'; row.appendChild(host);
+    lookChips(host, ownRace.own.styles.top, chibiStyleOf(ownRace.own, 'top', S.me.cTop)?.id, v => { S.me.cTop = v; });
+    box.appendChild(row);
+  }
   for (const [slot, label] of SLOTS) {
     const row = document.createElement('div'); row.className = 'gear-row';
     const lb = document.createElement('div'); lb.className = 'gear-lb'; lb.textContent = label; row.appendChild(lb);
@@ -13758,7 +13779,7 @@ async function boot() {
       .map(async f => S.charImgs[f] = await optImg(`assets/avatar/${f}`)),
     ...S.avatar.weapons.filter(w => w.lpc).flatMap(w => [w.lpc.bg, w.lpc.fg, ...Object.values(w.lpc.over || {}).flatMap(o => [o.bg, o.fg])])   // LPC 武器圖層
       .filter(Boolean).map(async f => S.charImgs[f] = await optImg(`assets/avatar/${f}`)),
-    ...(S.avatar.races || []).flatMap(r => [r.ear, r.earBg, r.earFg, ...Object.values(r.own?.sheets || {})]).filter(Boolean)   // 種族耳朵圖層（精靈耳／貓耳前後層）、新風格人物的圖層
+    ...(S.avatar.races || []).flatMap(r => [r.ear, r.earBg, r.earFg, ...Object.values(r.own?.sheets || {}), ...Object.values(r.own?.styles || {}).flat().flatMap(x => Object.values(x.sheets || {}))]).filter(Boolean)   // 種族耳朵圖層（精靈耳／貓耳前後層）、新風格人物的圖層
       .map(async f => S.charImgs[f] = await loadImg(`assets/avatar/${f}`)),
     ...S.avatar.weapons.filter(w => w.sprite).map(async w => {
       const im = await optImg(`assets/avatar/${w.sprite}`);

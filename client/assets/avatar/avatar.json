@@ -3547,6 +3547,39 @@
      "hat": "chibi_hat.png"
     },
     "outline": "#1e0c1e",
+    "styles": {
+     "hair": [
+      {
+       "id": "chibi_ponytail",
+       "name": "高馬尾",
+       "sheets": {}
+      },
+      {
+       "id": "chibi_bob",
+       "name": "鮑伯短髮",
+       "sheets": {
+        "hairbg": "chibi_hair_bob_hairbg.png",
+        "hair": "chibi_hair_bob_hair.png"
+       }
+      }
+     ],
+     "top": [
+      {
+       "id": "chibi_apron",
+       "name": "工匠圍裙",
+       "sheets": {}
+      },
+      {
+       "id": "chibi_casual",
+       "name": "便服",
+       "sheets": {
+        "body": "chibi_outfit_casual_body.png",
+        "bottom": "chibi_outfit_casual_bottom.png",
+        "top": "chibi_outfit_casual_top.png"
+       }
+      }
+     ]
+    },
     "dye": [
      {
       "slot": "hair",
@@ -3564,6 +3597,7 @@
      },
      {
       "slot": "top",
+      "style": "chibi_apron",
       "layers": [
        "top",
        "bottom"
@@ -3578,11 +3612,36 @@
      },
      {
       "slot": "bottom",
+      "style": "chibi_apron",
       "layers": [
        "bottom"
       ],
       "colors": [
        "#3a224a"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "chibi_casual",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#e8f0f4",
+       "#a8b8c4",
+       "#ffffff"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "chibi_casual",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#3a5a8a",
+       "#24385a",
+       "#5478a8"
       ]
      },
      {
