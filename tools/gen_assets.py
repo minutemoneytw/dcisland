@@ -611,7 +611,9 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
     # 新風格（2026-11-21，使用者定案整套換成自製 Q 版像素風格；階段 1）：整個人（身體／下身／靴子／上身／後髮／臉／前髮／護目鏡）都是自己的圖層，
     # 不吃外貌頁的髮型／服裝／臉型選項；引擎看到 own 就改用這組 sheet、合成後統一畫一圈 outline 色的外框；攻擊／釣魚等動作沒有圖，退回待機幀
     dict(id="chibi", name="新風格", scale=1.0, own=dict(
-        sheets={n: f"chibi_{n}.png" for n in ("body", "bottom", "shoes", "top", "hairbg", "face", "hair", "hat")}, outline="#1e0c1e")),
+        sheets={n: f"chibi_{n}.png" for n in ("body", "bottom", "shoes", "top", "hairbg", "face", "hair", "hat")}, outline="#1e0c1e",
+        # 武器掛點（64×64 格子座標；LPC 的是 back 23,32／backView 41,32／waist 23,48／hand 40,40，照 LPC 身形不適用）：手＝拿武器那隻手（正面／背面＝螢幕右手，側面＝往前伸的位置）
+        anchors=dict(back=[24, 42], backView=[40, 42], waist=[25, 53], hand=dict(down=[43, 50], up=[43, 50], side=[35, 50])))),
 ]
 
 def kidol_main_hex(cid):

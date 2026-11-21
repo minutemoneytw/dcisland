@@ -3546,7 +3546,35 @@
      "hair": "chibi_hair.png",
      "hat": "chibi_hat.png"
     },
-    "outline": "#1e0c1e"
+    "outline": "#1e0c1e",
+    "anchors": {
+     "back": [
+      24,
+      42
+     ],
+     "backView": [
+      40,
+      42
+     ],
+     "waist": [
+      25,
+      53
+     ],
+     "hand": {
+      "down": [
+       43,
+       50
+      ],
+      "up": [
+       43,
+       50
+      ],
+      "side": [
+       35,
+       50
+      ]
+     }
+    }
    }
   }
  ],

@@ -2933,6 +2933,8 @@ function sheetCellHas(img, sx, sy, w, h) {
 // 新風格人物（2026-11-21，使用者定案整套換成自製 Q 版像素風格；階段 1）：種族的 own.sheets＝8 個圖層（跟 LPC 同格式的 sheet，只填走路列），
 // 由下往上疊；**描邊不在圖層裡**，合成後整個人統一畫一圈 own.outline 色的外框（每層各自描邊，層與層之間會多出不該有的線）。
 // 沒有這一格（攻擊、釣魚、坐姿以外的動作）就用 map 條目的退回幀（待機）。武器、服裝選項、換色都還沒做（之後階段）。
+// 新風格（整套自製圖層）的種族定義；不是新風格回 null。掛點（背／腰／手）因為身形不同，用 own.anchors 覆寫（依面向 down／up／side 各給一組）
+const ownRaceOf = id => { const r = id && S.avatar?.races?.find(r => r.id === id); return r?.own ? r : null; };
 const CHIBI_ORDER = ['body', 'bottom', 'shoes', 'top', 'hairbg', 'face', 'hair', 'hat'];
 function chibiSprite(race, fi) {
   const k = 'chibi:' + fi;
@@ -3183,14 +3185,15 @@ function playerSpriteDiv(p, fi) {
   // LPC 武器（avatar.json 武器條目有 lpc）是人物的一層：帶 wpn（武器 id）給 charSprite 一起合成
   if (p.npc) return charSprite(p.look || myLook(), fi);
   const me = p === S.players[0], look = p.look || myLook();
-  let wd = me ? (p.tool ? null : lpcWeaponFor(S.me.weapon, look.wlook)) : lpcWeaponFor(p.weapon, look.wlook);
+  let wd = me ? (p.tool ? null : lpcWeaponFor(S.me.weapon, look.wlook, look.race)) : lpcWeaponFor(p.weapon, look.wlook, look.race);
   if (wd?.lpc.fishOnly && !p.fish) wd = null;
   if (p.pose === 'sit' && !p.fish) wd = null;   // 坐著不拿武器（LPC 武器圖層沒有 sit 幀，會害整個造型退回舊畫法）   // LPC 釣竿只在釣魚時畫（四方向的拋竿／持竿／收線動作），平常照舊背著小圖
   return charSprite(wd ? { ...look, wpn: wd.id } : look, fi);
 }
 // 拿著的武器有沒有 LPC 圖層：有就回該武器條目（武器外觀有 LPC 圖就用外觀的，外觀沒有 LPC 圖就退回舊的小圖畫法）
-function lpcWeaponFor(wid, wlook) {
+function lpcWeaponFor(wid, wlook, raceId) {
   const ws = S.avatar?.weapons; if (!ws || !wid) return null;
+  if (ownRaceOf(raceId)) return null;   // 新風格人物：LPC 武器圖層是照 LPC 身形畫的，不能用；改畫小圖武器（掛背上／腰間、揮擊、詠唱舉杖）
   const base = ws.find(w => w.id === wid);
   if (wlook && wlook !== wid) {
     const g = ws.find(w => w.id === wlook);
@@ -3199,9 +3202,9 @@ function lpcWeaponFor(wid, wlook) {
   return base?.lpc ? base : null;
 }
 // 武器的圖：拿著職業武器且有選同類型的武器外觀（glam）時畫外觀的圖；玩法（射程、詠唱等）照拿著的武器
-function weaponImgFor(wid, wlook) {
+function weaponImgFor(wid, wlook, raceId) {
   if (!wid || wid === 'hands') return null;
-  if (lpcWeaponFor(wid, wlook) && !lpcWeaponFor(wid, wlook).lpc.fishOnly) return null;   // LPC 武器畫在人物圖層裡（charSprite），不另外畫小圖（釣竿例外：沒在釣魚時背小圖）
+  if (lpcWeaponFor(wid, wlook, raceId) && !lpcWeaponFor(wid, wlook, raceId).lpc.fishOnly) return null;   // LPC 武器畫在人物圖層裡（charSprite），不另外畫小圖（釣竿例外：沒在釣魚時背小圖）
   if (wlook && wlook !== wid) {
     const ws = S.avatar.weapons, g = ws.find(w => w.id === wlook), base = ws.find(w => w.id === wid);
     if (g?.glam && base && g.type === base.type && S.weaponImgs[wlook]) return S.weaponImgs[wlook];
@@ -3938,6 +3941,14 @@ function drawPersonBase(p, wi, nameColor) {
     }
     const cf = charFrame(p), img = playerSpriteDiv(p, cf.fi), F = S.avatar.frames;   // 方向已畫在幀裡，只有借用另一邊的幀時才左右翻轉
     charAnch = { back: charAnchor(cf.fi, 'back'), backView: charAnchor(cf.fi, 'backView'), waist: charAnchor(cf.fi, 'waist'), hand: charAnchor(cf.fi, 'hand') };
+    const ownA = ownRaceOf(race)?.own.anchors;
+    if (ownA) {   // 新風格：掛點照新身形（每個值可以是 [x,y]，或依面向分 down／up／side 的物件）
+      const dd = d8Of(p), fk = dd.startsWith('up') ? 'up' : dd.startsWith('down') && dd !== 'down_left' && dd !== 'down_right' ? 'down' : 'side';
+      for (const [kind, a0] of Object.entries(ownA)) {
+        const a = Array.isArray(a0) ? a0 : (a0[fk] || a0.down);
+        charAnch[kind] = [(a[0] - F.w / 2) * (F.scale || 2), (a[1] - F.h + (F.footDy || 0)) * (F.scale || 2)];
+      }
+    }
     const pet = S.t < (p.petUntil ?? 0);   // 石化：身體灰階（自己的石化即時同步；遠端玩家的石化由光束事件就地推斷，純演出）
     if (pet) { ctx.save(); ctx.filter = 'grayscale(1) brightness(.92)'; }
     const ghost = ffx?.includes('fghost');   // 吃喝的透明化：整個人半透明
@@ -12393,7 +12404,7 @@ function draw() {
       draw: () => {
         const wid = p.tool || S.me.weapon;      // 打石頭/樹木時暫時換成鎬子/斧頭
         // 賢具不畫手持/腰間的武器圖（腰間那座看起來像殘影）：待機的四座漂浮賢具就是它的樣子（drawNoulithIdle）
-        const wi = !p.npc && wid !== 'tome' ? weaponImgFor(wid, p.tool ? null : myLook().wlook) : null;
+        const wi = !p.npc && wid !== 'tome' ? weaponImgFor(wid, p.tool ? null : myLook().wlook, S.me.race) : null;
         drawNoulithIdle(p, p.npc ? null : wid, 'back');
         drawPerson(p, wi, p.npc ? (p.guide ? '#ffd86b' : '#bcd8e8') : '#ffffff');
         drawNoulithIdle(p, p.npc ? null : wid, 'front');
@@ -12408,7 +12419,7 @@ function draw() {
       y: r.y + (r.pose ? 2 : 0),
       draw: () => {   // 同島的人用暖金色名牌區分；賢具同樣不畫腰間武器圖
         drawNoulithIdle(r, r.weapon, 'back');
-        drawPerson(r, r.weapon === 'tome' ? null : weaponImgFor(r.weapon, r.look?.wlook), '#ffe9a8');
+        drawPerson(r, r.weapon === 'tome' ? null : weaponImgFor(r.weapon, r.look?.wlook, r.look?.race), '#ffe9a8');
         drawNoulithIdle(r, r.weapon, 'front');
       }
     });

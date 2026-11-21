@@ -82,13 +82,33 @@ def shade_hair(im):
                     g[y][x] = cp.P['h_m'] if (x + y - im.top) % 2 else cp.P['h_d']
 
 
-def arms(im, dy, side_hand_layer='body'):
-    """手臂（酒紅袖子，從肩膀到手腕一條斜線）與手；正面／背面用。"""
+def limb(im, sx, sy, hx, hy):
+    """姿勢用的手臂：從肩膀 (sx,sy) 到手 (hx,hy) 的一條 3 格寬袖子（下緣較暗）＋手（3×2）；手舉高時畫在最上層 hat、否則畫在 top 層（蓋在圍裙上）。"""
+    im.L('hat' if hy < 30 else 'top')   # 舉到胸口以上：畫在最上層（不然側面時會被頭髮蓋住）
+    n = max(abs(hx - sx), abs(hy - sy), 1)
+    cells = set()
+    for t in range(n + 1):
+        x, y = round(sx + (hx - sx) * t / n), round(sy + (hy - sy) * t / n)
+        for yy in range(y - 1, y + 2):
+            for xx in range(x - 1, x + 2):
+                cells.add((xx, yy))
+    for (x, y) in cells:
+        im.set(x, y, 'mr_d' if (x, y + 1) not in cells else 'mr')
+    for (x, y) in cells:
+        if (x - 1, y) not in cells and (x, y - 1) in cells and (x + 1, y) in cells:
+            im.set(x, y, 'mr_l')
+    im.rect(hx - 1, hy, hx + 1, hy + 1, 'sk')
+
+
+def arms(im, dy, side_hand_layer='body', pose=None):
+    """手臂（酒紅袖子，從肩膀到手腕一條斜線）與手；正面／背面用。pose＝攻擊動作的手位置（'l'／'r' 各自是螢幕左／右手要到哪裡，沒給的那隻用預設垂手）。"""
     im.L('top')
     for y in range(28, 38):
         L = int(13 - (y - 28) * .45)
         R = min(14, L + 4)
         for side in (0, 1):
+            if pose and pose.get('lr'[side]):
+                continue
             xa, xb = (L, R) if side == 0 else (39 - R, 39 - L)
             im.hline(xa, xb, y + dy, 'mr')
             outer = xa if side == 0 else xb
@@ -96,7 +116,15 @@ def arms(im, dy, side_hand_layer='body'):
             if 31 <= y <= 34:
                 im.set(outer + (2 if side == 0 else -2), y + dy, 'mr_l')
     im.L(side_hand_layer)
-    im.rect(7, 38 + dy, 9, 39 + dy, 'sk'); im.rect(30, 38 + dy, 32, 39 + dy, 'sk')
+    if not (pose and pose.get('l')):
+        im.rect(7, 38 + dy, 9, 39 + dy, 'sk')
+    if not (pose and pose.get('r')):
+        im.rect(30, 38 + dy, 32, 39 + dy, 'sk')
+    if pose:
+        if pose.get('l'):
+            limb(im, 13, 29 + dy, pose['l'][0], pose['l'][1] + dy)
+        if pose.get('r'):
+            limb(im, 26, 29 + dy, pose['r'][0], pose['r'][1] + dy)
 
 
 def boots(im, lift_l, lift_r, side=False):
@@ -114,7 +142,7 @@ def hem(im, dy, fn):
 
 
 # ================= 正面 =================
-def draw_front(step=0):
+def draw_front(step=0, pose=None):
     im = LImg()
     dy = -1 if step else 0
     lift_l, lift_r = (1 if step == 1 else 0), (1 if step == 2 else 0)
@@ -126,7 +154,7 @@ def draw_front(step=0):
         for y in range(44, 49):
             im.set(xb, y - lift, 'br_d')
     hem(im, dy, trap)
-    arms(im, dy)
+    arms(im, dy, pose=pose)
     # 圍裙上半
     im.L('top')
     span = {y: trap(y) for y in range(28, 39)}
@@ -213,7 +241,7 @@ def draw_front(step=0):
 
 
 # ================= 背面 =================
-def draw_back(step=0):
+def draw_back(step=0, pose=None):
     im = LImg()
     dy = -1 if step else 0
     lift_l, lift_r = (1 if step == 1 else 0), (1 if step == 2 else 0)
@@ -225,7 +253,7 @@ def draw_back(step=0):
         for y in range(44, 49):
             im.set(xb, y - lift, 'br_d')
     hem(im, dy, trap)
-    arms(im, dy)
+    arms(im, dy, pose=pose)
     im.L('top')
     for y in range(28, 39):
         a, b = trap(y)
@@ -276,7 +304,7 @@ def draw_back(step=0):
 
 
 # ================= 側面（臉朝左）=================
-def draw_side(step=0):
+def draw_side(step=0, pose=None):
     im = LImg()
     dy = -1 if step else 0
     sh = {0: (0, 0), 1: (-2, 2), 2: (2, -2)}[step]
@@ -302,12 +330,15 @@ def draw_side(step=0):
     im.hline(a35, b35, 35 + dy, 'br'); im.hline(a35, b35, 36 + dy, 'br_d')
     im.rect(16, 37 + dy, 17, 38 + dy, 'gem'); im.set(16, 37 + dy, 'ew')
     im.rect(17, 27 + dy, 24, 28 + dy, 'mr'); im.hline(17, 24, 28 + dy, 'mr_d')
-    for y in range(28, 38):                                                                            # 靠近我們的手臂（往前微微斜下）
-        L = int(19 - (y - 28) * .25)
-        im.hline(L, L + 4, y + dy, 'mr'); im.set(L, y + dy, 'mr_d')
-        if 31 <= y <= 34:
-            im.set(L + 2, y + dy, 'mr_l')
-    im.rect(16, 38 + dy, 18, 39 + dy, 'sk')                                                            # 手（跟袖子同層：會蓋在圍裙下擺前面）
+    if pose and pose.get('s'):
+        limb(im, 21, 29 + dy, pose['s'][0], pose['s'][1] + dy)
+    else:
+        for y in range(28, 38):                                                                            # 靠近我們的手臂（往前微微斜下）
+            L = int(19 - (y - 28) * .25)
+            im.hline(L, L + 4, y + dy, 'mr'); im.set(L, y + dy, 'mr_d')
+            if 31 <= y <= 34:
+                im.set(L + 2, y + dy, 'mr_l')
+        im.rect(16, 38 + dy, 18, 39 + dy, 'sk')                                                            # 手（跟袖子同層：會蓋在圍裙下擺前面）
     im.L('body'); im.rect(19, 27 + dy, 20, 27 + dy, 'sk_d')
     # 後髮：頭頂、後腦、馬尾（垂在腦後）
     im.L('hairbg')
@@ -369,20 +400,84 @@ def frame(direction, step):
     return im.mirrored() if direction == 'right' else im
 
 
+# ================= 攻擊動作（階段 3） =================
+# 每個動作一串姿勢：r／l＝正面與背面時螢幕右／左手的位置（拿武器的是右手；沒寫的那隻用預設垂手），s＝側面（臉朝左）靠近我們那隻手，
+# bx／by＝上半身（除了靴子、褲子）整個平移幾格（出手時身體前傾、跳一下）。座標都是畫布座標（肩膀大約在 y＝28、正面右肩 x＝26、側面肩 x＝21）。
+# 武器本身還是遊戲引擎另外畫的小圖（揮擊弧線、詠唱的舉杖…），這裡只負責身體跟著動
+ATTACKS = {
+    # 揮砍（6 格）：舉起 → 過頭 → 劈下
+    'slash': [dict(r=(33, 24), s=(23, 24), bx=0, by=0), dict(r=(35, 16), s=(24, 16), bx=0, by=0), dict(r=(34, 9), s=(22, 9), bx=0, by=-1),
+              dict(r=(35, 22), s=(14, 20), bx=1, by=0), dict(r=(33, 32), s=(11, 31), bx=1, by=1), dict(r=(32, 36), s=(13, 36), bx=0, by=0)],
+    # 突刺（8 格）：收手 → 往前一刺 → 收回
+    'thrust': [dict(r=(31, 36), s=(18, 36), bx=0, by=0), dict(r=(30, 35), s=(20, 35), bx=0, by=0), dict(r=(29, 34), s=(22, 34), bx=0, by=0),
+               dict(r=(31, 31), s=(16, 32), bx=0, by=0), dict(r=(33, 29), s=(10, 30), bx=1, by=0), dict(r=(34, 29), s=(8, 30), bx=1, by=0),
+               dict(r=(33, 31), s=(11, 31), bx=0, by=0), dict(r=(31, 35), s=(16, 35), bx=0, by=0)],
+    # 施法（7 格）：兩手慢慢舉起，最後往前推
+    'spellcast': [dict(r=(31, 34), l=(8, 34), s=(15, 34), bx=0, by=0), dict(r=(32, 29), l=(7, 29), s=(12, 30), bx=0, by=0),
+                  dict(r=(33, 24), l=(6, 24), s=(10, 26), bx=0, by=0), dict(r=(34, 18), l=(5, 18), s=(9, 21), bx=0, by=-1),
+                  dict(r=(34, 17), l=(5, 17), s=(8, 20), bx=0, by=-1), dict(r=(33, 21), l=(6, 21), s=(9, 24), bx=0, by=0),
+                  dict(r=(32, 27), l=(7, 27), s=(11, 28), bx=0, by=0)],
+    # 射擊（13 格）：左手持弓往前伸、右手拉弦（拉滿停一下再放）
+    'shoot': [dict(r=(24, 33), l=(8, 31), s=(13, 32), bx=0, by=0)] * 2 + [dict(r=(25 + i, 32), l=(7, 30), s=(12 - (i > 2), 31), bx=0, by=0) for i in range(0, 5)]
+             + [dict(r=(30, 31), l=(7, 30), s=(10, 30), bx=0, by=0)] * 3 + [dict(r=(27, 33), l=(7, 31), s=(11, 31), bx=0, by=0), dict(r=(25, 34), l=(8, 33), s=(13, 33), bx=0, by=0),
+                                                                          dict(r=(25, 35), l=(8, 35), s=(15, 35), bx=0, by=0)],
+    # 半揮（6 格）：橫著揮
+    'halfslash': [dict(r=(33, 30), s=(22, 30), bx=0, by=0), dict(r=(35, 26), s=(23, 26), bx=0, by=0), dict(r=(35, 22), s=(21, 23), bx=0, by=0),
+                  dict(r=(35, 26), s=(14, 26), bx=1, by=0), dict(r=(33, 31), s=(11, 31), bx=1, by=0), dict(r=(32, 35), s=(13, 35), bx=0, by=0)],
+}
+ATTACK_ROW = {'spellcast': 0, 'thrust': 4, 'slash': 12, 'shoot': 16, 'halfslash': 21}   # 跟 avatar.json 的 frames.attacks 一致；每動作 4 列（上、左、下、右）
+DIR_ORDER = ['up', 'left', 'down', 'right']
+KEEP_LAYERS = ('shoes', 'bottom')   # 出手時不跟著上半身平移的圖層（腳站在原地）
+
+
+def shifted(im, bx, by):
+    """上半身平移：除了靴子、褲子以外的圖層整個移動 (bx, by)（bx 往右為正；側面朝左時一律往前＝畫面左邊，所以呼叫端自己處理方向）。"""
+    if not bx and not by:
+        return im
+    for n in LAYERS:
+        if n in KEEP_LAYERS:
+            continue
+        g = im.lay[n]
+        new = [[None] * im.w for _ in range(im.h)]
+        for y in range(im.h):
+            for x in range(im.w):
+                v = g[y][x]
+                if v is not None and 0 <= x + bx < im.w and 0 <= y + by < im.h:
+                    new[y + by][x + bx] = v
+        im.lay[n] = new
+    return im
+
+
+def attack_frame(direction, pose):
+    if direction == 'down':
+        return shifted(draw_front(0, pose), pose['bx'], pose['by'])
+    if direction == 'up':
+        return shifted(draw_back(0, pose), pose['bx'], pose['by'])
+    im = shifted(draw_side(0, pose), -pose['bx'], pose['by'])   # 側面（臉朝左）：往前＝往左
+    return im.mirrored() if direction == 'right' else im
+
+
+def put(sheets, fr, col, row):
+    for n in LAYERS:
+        dst, src = sheets[n], fr.lay[n]
+        for y in range(fr.h):
+            for x in range(fr.w):
+                v = src[y][x]
+                if v is not None:
+                    dst.px[row * CELL + OY + y][col * CELL + OX + x] = v
+
+
 def build_sheets():
-    """回傳 {圖層名: Img(832×1856)}：每個圖層一張 LPC 格式的 sheet（只填走路列）。"""
+    """回傳 {圖層名: Img(832×1856)}：每個圖層一張 LPC 格式的 sheet（走路列＋攻擊列）。"""
     sheets = {n: Img(SHEET_W, SHEET_H) for n in LAYERS}
     for d, row in WALK_ROW.items():
         cache = {s: frame(d, s) for s in (0, 1, 2)}
         for col, st in enumerate(WALK_FRAMES):
-            fr = cache[st]
-            for n in LAYERS:
-                dst, src = sheets[n], fr.lay[n]
-                for y in range(fr.h):
-                    for x in range(fr.w):
-                        v = src[y][x]
-                        if v is not None:
-                            dst.px[row * CELL + OY + y][col * CELL + OX + x] = v
+            put(sheets, cache[st], col, row)
+    for kind, poses in ATTACKS.items():
+        for k, d in enumerate(DIR_ORDER):
+            for col, pose in enumerate(poses):
+                put(sheets, attack_frame(d, pose), col, ATTACK_ROW[kind] + k)
     return sheets
 
 
