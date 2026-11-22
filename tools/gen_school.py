@@ -872,8 +872,44 @@ def all_frames():
             'back': [girl_back(k).layers for k in (0, 1, 2)]}
 
 
-def build_sheets():
-    """回傳 {圖層名: Img(832×1856)}：每個圖層一張 LPC 格式的 sheet（只填走路列）。右＝左的鏡像。"""
+EAR_EX = 7                            # 耳朵圖層比角色寬：左右各多 7 欄（耳尖伸出髮球外面）
+# 妖精耳朵（朝外上方的尖耳）：{排: [欄...]}，欄是角色座標（髮球左緣＝欄 1），負數＝伸出髮球左邊；右耳＝左右鏡射（欄 27-x）
+EAR_FRONT = {10: [-6], 11: [-6, -5], 12: [-6, -5, -4], 13: [-6, -5, -4, -3], 14: [-5, -4, -3, -2, -1],
+             15: [-4, -3, -2, -1, 0, 1], 16: [-3, -2, -1, 0, 1, 2], 17: [-2, -1, 0, 1, 2], 18: [-1, 0, 1, 2]}
+# 側面（臉朝左）看到的那隻耳朵：畫在頭髮上面，從耳根（欄 13）往後上方斜出
+EAR_SIDE = {16: [19, 20], 17: [17, 18, 19, 20], 18: [16, 17, 18, 19, 20], 19: [14, 15, 16, 17, 18, 19],
+            20: [13, 14, 15, 16, 17, 18], 21: [13, 14, 15, 16], 22: [13, 14]}
+EAR_DY = {'front': {0: 0, 1: -1, 2: -1}, 'back': {0: 0, 1: -1, 2: -1}, 'side': {0: -1, 1: 0, 2: 0}}   # 跟頭一起上下（見 girl_walk／girl_side／girl_back 的上抬）
+
+
+def _ear_img(rows, dy, both):
+    """耳朵畫成 Img(28+2*EAR_EX, 62)：外圈（跟外面空白相鄰的格子）棕色 fb，裡面皮膚 sk，下緣一格 fk；both＝左右各一隻。"""
+    img = Img(28 + 2 * EAR_EX, 62)
+    cells = set()
+    for y, xs in rows.items():
+        for x in xs:
+            cells.add((x, y + dy))
+            if both:
+                cells.add((27 - x, y + dy))
+    for x, y in cells:
+        edge = any((x + a, y + b) not in cells for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1)))
+        col = C['fb'] if edge else (C['fk'] if (x, y + 1) not in cells else C['sk'])
+        img.px[y][x + EAR_EX] = col
+    return img
+
+
+def ear_frames():
+    """{'front': [3 格], 'side': [...], 'back': [...]}：每格是 {'hairbg': Img} 或 {'hat': Img}（寬 28+2*EAR_EX）。
+    正面／背面的耳朵畫在後髮層（在頭髮下面，只有耳尖伸出髮球外）；側面的耳朵畫在帽子層（蓋在頭髮上面）。"""
+    out = {}
+    for key, layer, rows, both in (('front', 'hairbg', EAR_FRONT, True), ('back', 'hairbg', EAR_FRONT, True), ('side', 'hat', EAR_SIDE, False)):
+        out[key] = [{layer: _ear_img(rows, EAR_DY[key][st], both)} for st in (0, 1, 2)]
+    return out
+
+
+def build_sheets(ears=False):
+    """回傳 {圖層名: Img(832×1856)}：每個圖層一張 LPC 格式的 sheet（只填走路列）。右＝左的鏡像。
+    ears＝True：多畫妖精耳朵（hairbg／hat 兩層才有內容）。"""
     fr = all_frames()
     sheets = {n: Img(SHEET_W, SHEET_H) for n in LAYERS}
     src = {'down': ('front', False), 'up': ('back', False), 'left': ('side', False), 'right': ('side', True)}
@@ -888,6 +924,20 @@ def build_sheets():
                         c = img.px[y][x]
                         if c is not None:
                             dst.px[row * CELL + OY + y][col * CELL + OX + x] = c
+    if ears:
+        ef = ear_frames()
+        for d, row in WALK_ROW.items():
+            key, mir = src[d]
+            for col, st in enumerate(WALK_FRAMES):
+                for n, img in ef[key][st].items():
+                    if mir:
+                        img = mirror_layers({n: img}, w=img.w)[n]
+                    dst = sheets[n]
+                    for y in range(img.h):
+                        for x in range(img.w):
+                            c = img.px[y][x]
+                            if c is not None and dst.px[row * CELL + OY + y][col * CELL + OX - EAR_EX + x] is None:
+                                dst.px[row * CELL + OY + y][col * CELL + OX - EAR_EX + x] = c
     return sheets
 
 
