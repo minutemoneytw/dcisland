@@ -2952,7 +2952,7 @@ function sheetCellHas(img, sx, sy, w, h) {
 const ownRaceOf = id => { const r = id && S.avatar?.races?.find(r => r.id === id); return r?.own ? r : null; };
 const CHIBI_ORDER = ['body', 'bottom', 'shoes', 'top', 'hairbg', 'face', 'hair', 'hat'];
 // 新風格的換色：own.dye＝[{slot, layers, colors}]（slot 對應 look 的 hair／top／bottom／shoe／hat 的色碼；colors 第一個是主色，其餘依明暗比例跟著變，見 dyeSheet）
-const CHIBI_DYE_FIELD = { hair: 'hairC', top: 'topC', bottom: 'botC', shoe: 'shoeC', hat: 'hatC' };
+const CHIBI_DYE_FIELD = { hair: 'hairC', top: 'topC', bottom: 'botC', shoe: 'shoeC', hat: 'hatC', eye: 'eyeC' };   // eye＝眼睛顏色（外貌頁的眼睛換色鈕，存在 S.me.eyeC）
 // 款式：own.styles.hair／top＝[{id, name, sheets:{圖層: 檔名}}]（第一個是預設，sheets 空＝用基本圖層）；look.hair／look.top 是款式 id 才算，否則用預設
 const chibiStyleOf = (own, kind, id) => (own.styles?.[kind] || []).find(x => x.id === id) || own.styles?.[kind]?.[0] || null;
 function chibiSprite(race, look, fi) {
@@ -13601,7 +13601,15 @@ function buildAvatarPanel() {
   } else twoLevel(S.avatar.hair, S.me.hair, 'hair', $('hairOpts'), 'hairC');
   if (ownRace?.own.styles?.face) lookChips($('faceOpts'), ownRace.own.styles.face, chibiStyleOf(ownRace.own, 'face', S.me.cFace)?.id, v => { S.me.cFace = v; });   // 新風格：臉型款式（有／無腮紅）
   else lookChips($('faceOpts'), S.avatar.faces || [], S.me.face || 'normal', v => { S.me.face = v; });
-  twoLevel(S.avatar.eyes || [], lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown', 'eyes', $('eyesOpts'), 'eyeC');
+  const eyeDye = ownRace?.own.dye?.find(r => r.slot === 'eye');
+  if (eyeDye) {   // 自己畫眼睛的種族（新人類）：LPC 的眼神樣式用不到，只留一個換色鈕（換眼珠的灰色）
+    const eh = $('eyesOpts'); eh.innerHTML = '';
+    const eb = document.createElement('button'); eb.className = 'ff-btn small dye-btn'; eb.title = LOOK_COLOR.eyeC;
+    const esw = document.createElement('span'); esw.className = 'dye-sw'; esw.style.background = S.me.eyeC || eyeDye.colors[0];
+    eb.append(esw, document.createTextNode('換色'));
+    eb.onclick = () => toggleColor('eyeC', { name: '眼睛顏色', hex: eyeDye.colors[0], dye: eyeDye.colors });
+    eh.appendChild(eb);
+  } else twoLevel(S.avatar.eyes || [], lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown', 'eyes', $('eyesOpts'), 'eyeC');
   // 裝備與外觀：每個部位一列——顯示中的那件（裝備，或套了外觀時的外觀名）＋「外觀」鈕（開外觀一覽選）＋換色鈕
   const box = $('gearRows'); box.innerHTML = '';
   const wr = wardrobe();

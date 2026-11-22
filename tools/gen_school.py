@@ -849,12 +849,13 @@ def _with_dark(cols):
     return out
 
 
-# 換色欄位：引擎的 look 欄位 → (圖層, 該層裡要換的顏色集合或 None＝整層, 基準色)。皮膚、襯衫、眼睛目前不開放換色
+# 換色欄位：引擎的 look 欄位 → (圖層, 該層裡要換的顏色集合或 None＝整層, 基準色)。皮膚、襯衫目前不開放換色
 DYE_SLOTS = {
     'hair':   {'layer': 'hair',   'only': None, 'main': 'hm'},
     'top':    {'layer': 'top',    'only': _with_dark(['k', 'k_l', 'k_d']), 'main': 'k'},
     'bottom': {'layer': 'bottom', 'only': None, 'main': 'k'},
     'shoe':   {'layer': 'shoes',  'only': None, 'main': 'shoe_k'},
+    'eye':    {'layer': 'face',   'only': _with_dark(['eg1', 'eg2', 'eg3', 'eg4']), 'main': 'eg2'},   # 眼珠的 4 階灰（睫毛／瞳孔的黑、高光不換）
 }
 CELL = 64
 SHEET_W, SHEET_H = 832, 1856          # 跟 LPC 一樣：13 欄 × 29 列、每格 64×64
