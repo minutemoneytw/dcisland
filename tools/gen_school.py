@@ -872,16 +872,16 @@ def all_frames():
             'back': [girl_back(k).layers for k in (0, 1, 2)]}
 
 
-EAR_EX = 5                            # 耳朵圖層比角色寬：左右各多 5 欄（耳尖伸出髮球外面）
-# 妖精耳朵（朝外上方的尖耳）：{排: [欄...]}，欄是角色座標（髮球左緣＝欄 1），負數＝伸出髮球左邊；右耳＝左右鏡射（欄 27-x）
-EAR_FRONT = {12: [-2], 13: [-2, -1], 14: [-2, -1, 0], 15: [-1, 0, 1], 16: [0, 1]}   # 最外面是尖，往裡面（髮球那邊）變粗；露出髮球外只有 3 欄
-# 側面（臉朝左）看到的那隻耳朵：畫在頭髮上面，尖在最外面（後上方），往耳根（欄 13）變粗，形狀跟正面一致
+EAR_EX = 0                            # 耳朵圖層比角色多的欄數（現在耳朵都在髮球裡面，不用多）
+# 妖精耳朵（使用者標的位置：臉兩側的鬢髮上、眼睛外側偏上，尖在外上方、往裡面變粗）：{排: [欄...]}，欄是角色座標；右耳＝左右鏡射（欄 27-x）
+EAR_FRONT = {16: [5], 17: [5, 6], 18: [5, 6, 7]}
+# 側面（臉朝左）看到的那隻耳朵：蓋在頭髮上面，尖在最外面（後上方），往耳根（欄 13）變粗，形狀跟正面一致
 EAR_SIDE = {19: [16], 20: [15, 16], 21: [14, 15, 16], 22: [13, 14, 15], 23: [13, 14]}
-EAR_DY = {'front': {0: 0, 1: -1, 2: -1}, 'back': {0: 0, 1: -1, 2: -1}, 'side': {0: -1, 1: 0, 2: 0}}   # 跟頭一起上下（見 girl_walk／girl_side／girl_back 的上抬）
+EAR_DY = {'front': {0: 0, 1: -1, 2: -1}, 'side': {0: -1, 1: 0, 2: 0}}   # 跟頭一起上下（見 girl_walk／girl_side 的上抬）；背面的髮型把耳朵蓋住，不畫
 
 
 def _ear_img(rows, dy, both):
-    """耳朵畫成 Img(28+2*EAR_EX, 62)：外圈（跟外面空白相鄰的格子）棕色 fb，裡面皮膚 sk，下緣一格 fk；both＝左右各一隻。"""
+    """耳朵畫成 Img(28+2*EAR_EX, 62)：皮膚色 sk，最下面一格 fk（陰影）；both＝左右各一隻。"""
     img = Img(28 + 2 * EAR_EX, 62)
     cells = set()
     for y, xs in rows.items():
@@ -890,18 +890,15 @@ def _ear_img(rows, dy, both):
             if both:
                 cells.add((27 - x, y + dy))
     for x, y in cells:
-        edge = any((x + a, y + b) not in cells for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1)))
-        col = C['fb'] if edge else (C['fk'] if (x, y + 1) not in cells else C['sk'])
-        img.px[y][x + EAR_EX] = col
+        img.px[y][x + EAR_EX] = C['fk'] if (x, y + 1) not in cells else C['sk']
     return img
 
 
 def ear_frames():
-    """{'front': [3 格], 'side': [...], 'back': [...]}：每格是 {'hairbg': Img} 或 {'hat': Img}（寬 28+2*EAR_EX）。
-    正面／背面的耳朵畫在後髮層（在頭髮下面，只有耳尖伸出髮球外）；側面的耳朵畫在帽子層（蓋在頭髮上面）。"""
+    """{'front': [3 格], 'side': [...]}：每格是 {'hat': Img}（蓋在頭髮上面）。背面沒有（髮型蓋住耳朵）。"""
     out = {}
-    for key, layer, rows, both in (('front', 'hairbg', EAR_FRONT, True), ('back', 'hairbg', EAR_FRONT, True), ('side', 'hat', EAR_SIDE, False)):
-        out[key] = [{layer: _ear_img(rows, EAR_DY[key][st], both)} for st in (0, 1, 2)]
+    for key, rows, both in (('front', EAR_FRONT, True), ('side', EAR_SIDE, False)):
+        out[key] = [{'hat': _ear_img(rows, EAR_DY[key][st], both)} for st in (0, 1, 2)]
     return out
 
 
@@ -927,7 +924,7 @@ def build_sheets(ears=False):
         for d, row in WALK_ROW.items():
             key, mir = src[d]
             for col, st in enumerate(WALK_FRAMES):
-                for n, img in ef[key][st].items():
+                for n, img in ef.get(key, [{}, {}, {}])[st].items():
                     if mir:
                         img = mirror_layers({n: img}, w=img.w)[n]
                     dst = sheets[n]
