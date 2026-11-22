@@ -121,7 +121,7 @@ NAME_MAX = 24
 # 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號（Worker 存 Registry 的 gstats:<uid>，這裡只存記憶體 GSTATS）。各遊戲結算時在 result["gs"]
 # （依「結算後留下的座位」順序，與 result["xp"] 同；None＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器照著記進 GSTATS 並把整份送給本人；
 # result["gs"] 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）。與 worker 的 gsMk／tableStats 同一套
-GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo", "pinball", "breakout", "bubble", "g2048", "planet", "purify"}
+GS_GAMES = {"oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo", "pinball", "breakout", "bubble", "g2048", "planet", "purify", "mary"}
 GS_CAP, GS_KEYS_MAX = 1000000, 24
 GSTATS = {}
 
@@ -354,22 +354,59 @@ def player_lvl_of(c):
 XP_DB = {}               # Discord 使用者 ID -> 總 XP（本機版存記憶體，重開就清空；正式站存在 Registry 的 xp:<uid>）
 XP_DB_LOCK = threading.Lock()
 
+# 籌碼經濟（2026-11-16，使用者定；與 worker/src/index.js 的 CHIPS_PER_XP／CHIPS_MAX／Registry chips:<uid> 同一套，改記得兩邊一起改）：
+# 從事所有有經驗值的事情都會送籌碼，籌碼＝經驗值×100；賭博系列遊戲（小瑪莉…）拿它下注。負 XP 不追溯扣籌碼。
+CHIPS_PER_XP = 100
+CHIPS_MAX = XP_MAX * CHIPS_PER_XP
+CHIPS_DB = {}            # Discord 使用者 ID -> 籌碼（本機版存記憶體，重開就清空；正式站存在 Registry 的 chips:<uid>）
+CHIPS_LOCK = threading.RLock()   # RLock：chips_get 在 chips_change 裡重複進去不會死鎖
 
-def xp_grant(c, d, k):
-    """記一次 XP（登入者）：累加進 XP_DB、更新連線的 xp／state.lvl、回給本人（不廣播）。"""
+
+def chips_get(uid):
+    """籌碼餘額；沒有紀錄時按現有 XP 一次性補發（老玩家遷移：籌碼＝經驗值×100；沒有 XP 紀錄就是 0）。"""
+    with CHIPS_LOCK:
+        if uid not in CHIPS_DB:
+            with XP_DB_LOCK:
+                xp = XP_DB.get(uid)
+            CHIPS_DB[uid] = min(CHIPS_MAX, int(xp) * CHIPS_PER_XP) if xp is not None else 0
+        return CHIPS_DB[uid]
+
+
+def chips_change(uid, add=0, spend=0):
+    """籌碼記帳（賭博遊戲用）：spend＝原子扣款（餘額不足回 None、不寫入）、add＝入帳。回最新餘額。"""
+    with CHIPS_LOCK:
+        chips = chips_get(uid)
+        if spend > 0:
+            if chips < spend:
+                return None
+            chips -= spend
+        chips = min(CHIPS_MAX, chips + max(0, int(add)))
+        CHIPS_DB[uid] = chips
+        return chips
+
+
+def xp_grant(c, d, k, nochips=False):
+    """記一次 XP（登入者）：累加進 XP_DB、更新連線的 xp／state.lvl、回給本人（不廣播）。d>0 時同步加碼籌碼（加到多少送多少）。
+    nochips＝這筆 XP 不回饋籌碼（小瑪莉的「兌換」：真把籌碼換成 XP，不然兌換＝領出＋免費 XP）。"""
     user = c.get("user")
     if not user or not isinstance(d, int) or d == 0:
         return False
     with XP_DB_LOCK:
-        nv = max(0, min(XP_MAX, XP_DB.get(user["id"], 0) + d))
-        if nv != XP_DB.get(user["id"]):
+        old = XP_DB.get(user["id"], 0)
+        nv = max(0, min(XP_MAX, old + d))
+        gain = nv - old if d > 0 and not nochips else 0   # 實際加到的 XP（已被 XP_MAX 夾住就不送籌碼；負的不追溯扣籌碼）
+        if nv != old:
             XP_DB[user["id"]] = nv
     c["xp"] = nv
     c["xp_known"] = True
+    if gain > 0:
+        chips_change(user["id"], add=gain * CHIPS_PER_XP)
     if c.get("state"):
         c["state"]["lvl"] = xp_info(nv)["lv"]   # 自己的名牌與之後的 p 廣播即時跟上
     with c.get("send") or threading.Lock():
         ws_send(c["sock"], json.dumps({"t": "xp", "xp": nv, "d": d, "k": k}))
+        if gain > 0:
+            ws_send(c["sock"], json.dumps({"t": "chips", "chips": chips_get(user["id"]), "k": k}))   # 籌碼同步加碼的結果（client 的 onNetChips）
     return True
 
 
@@ -690,8 +727,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey", "t17": "kingdom", "t18": "bigtwo", "t19": "pinball", "t20": "breakout", "t21": "purify", "t22": "bubble", "t23": "g2048", "t24": "planet"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4), "kingdom": (2, 4), "bigtwo": (2, 4), "pinball": (1, 1), "breakout": (1, 1), "bubble": (1, 1), "g2048": (1, 1), "planet": (1, 2), "purify": (2, 4)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey", "t17": "kingdom", "t18": "bigtwo", "t19": "pinball", "t20": "breakout", "t21": "purify", "t22": "bubble", "t23": "g2048", "t24": "planet", "t99": "mary"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）；小瑪莉用 t99：t21/t22/t23 連續兩輪被遠端的新機台撞號（2026-11-18 使用者定，低號留給遠端）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4), "kingdom": (2, 4), "bigtwo": (2, 4), "pinball": (1, 1), "breakout": (1, 1), "bubble": (1, 1), "g2048": (1, 1), "planet": (1, 2), "purify": (2, 4), "mary": (1, 1)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -769,7 +806,7 @@ def tbl_rk(v):
     return v if isinstance(v, str) and _TBL_RK_RE.match(v) else None
 
 def tbl_can_hold(t, s):
-    return t["phase"] == "playing" and t["game"] not in CAB_GAMES and bool(s.get("rk")) and not s.get("left") and s.get("cid") is not None and any(x is s for x in t["seats"])
+    return t["phase"] == "playing" and t["game"] not in CAB_GAMES and t["game"] != "mary" and bool(s.get("rk")) and not s.get("left") and s.get("cid") is not None and any(x is s for x in t["seats"])   # 街機機台與小瑪莉不保留：斷線就照離開處理（小瑪莉的獎池會自動領回）
 
 def tbl_join(t, cid, name, want="seat", uid=None, rk=None):
     """want＝'seat'（有空位且還沒開局才會入座，否則自動觀戰）或 'spec'（使用者自己選觀戰：沒滿人也可以）。rk＝回座代碼（斷線保留座位用）。"""
@@ -795,6 +832,8 @@ def tbl_leave(t, cid):
         if t["game"] == "arcade":   # 俄羅斯方塊：單人局作廢、聯機照當時分數排名，不中斷其他人
             ar_leave(t, i)
             return
+        if t["game"] == "mary":   # 小瑪莉：獎池自動領回（回傳值由呼叫端入帳），最後一人離開就回大廳
+            return ma_leave(t, i)
         if t["phase"] == "playing" and t["game"] == "trigon":   # Blokus Trigon：離開不中斷，棋子留在棋盤上、之後跳過
             tg_leave(t, i, int(time.time() * 1000))
             return
@@ -5622,6 +5661,114 @@ def br_relay(t, cid, msg):
     t["seats"][i]["sc"] = sc
     return [(c["cid"], data) for c in t["specs"] if c["cid"] is not None]
 
+# ---- 小瑪莉（第九十九桌 t99，2026-11-16，使用者要求：北牆最左邊的經典水果盤賭博機台，籌碼經濟的第一個客人；2026-11-18 撞號改編 t99——t21／t22／t23 連續被遠端的新機台用掉，使用者定低號留給遠端）----
+# 單人機台、第二人自動觀戰。押注與開獎伺服器權威（防跨裝置重複消費、防重抽）：mspin 先原子扣總注，加權 RNG 開獎
+# （機率與外圈的視覺分布脫鉤，權重表好調），贏額進獎池（不直接入帳）；mcol「領出」把獎池入帳、mdbl「猜大小」抽
+# 1～13 押大（8～13）或小（1～6），猜對獎池翻倍、猜錯歸零（7＝莊家贏）。離座（含斷線）獎池自動退回籌碼。
+# 不進排行榜；戰績記 p（局數）與 best（最大單次贏得）。
+# 2026-11-16 使用者再定：開局隨機抽一位島主當莊家（中間藍色區）；獎池可以「兌換」成角色經驗值（1 經驗值＝100 籌碼，
+# **這筆 XP 不回饋籌碼**——真兌換，不然兌換＝領出＋免費 XP）；離座時的虧損（總注 − 領回／兌換）按同樣比值換成
+# 「入座時抽到的島主」的經驗值（記到該地形島主的 XP，島主等級跟著長）。
+# 與 worker/src/index.js 的 ma* 同一套，改規則兩邊一起改。
+# 2026-11-17 使用者定（照台灣經典機台範例圖重排，只換成自家素材）：大獎（黃金肥龍）在頂排中間、殭屍在底排中間、
+# 左右兩側中間各一格 ONCE MORE——開到＝送燈：押注維持、隨機免費多開 1～5 次（本注不退，燈就是獎勵；
+# 2026-11-18 使用者定，取代原本的「退回總注、免費再轉一次」）；同符號多格時隨機停在其中一格。
+MA_COLS = ["chicken", "bunny", "frog", "slime_grass", "goblin_grass", "zombie_night", "dragon_volcano", "gold_dragon"]   # 押注列（左→右）：從最常見（低賠）到最稀有（高賠）
+MA_RING = ["chicken", "frog", "chicken", "dragon_volcano", "gold_dragon", "chicken", "frog", "chicken", "bunny", "bunny", "slime_grass", "more", "bunny", "frog", "chicken", "bunny", "chicken", "dragon_volcano", "zombie_night", "chicken", "slime_grass", "goblin_grass", "chicken", "slime_grass", "bunny", "more", "goblin_grass", "chicken"]   # 外圈 28 格（9×7，2026-11-22 使用者定：左右各多一格、ONCE MORE 下面 3 格；k4 頂排正中央＝大獎、k18 底排正中央＝殭屍、k11／k25 左右正中間＝ONCE MORE；機率看 MA_WEIGHT，兩者脫鉤）
+MA_NAME = {"chicken": "咕咕雞", "bunny": "跳跳兔", "frog": "大肚蛙", "slime_grass": "史萊姆", "goblin_grass": "哥布林", "zombie_night": "殭屍", "dragon_volcano": "飛龍", "gold_dragon": "黃金肥龍", "more": "ONCE MORE"}
+MA_PAY = {"chicken": 2, "bunny": 2, "frog": 5, "slime_grass": 10, "goblin_grass": 20, "zombie_night": 25, "dragon_volcano": 50, "gold_dragon": 100}   # 賠率（倍數；照範例圖可見的 2/5/10/50 與大獎 100，哥布林 20／殭屍 25 是內插，之後可調）
+MA_WEIGHT = {"chicken": 150, "bunny": 150, "frog": 60, "slime_grass": 30, "goblin_grass": 15, "zombie_night": 12, "dragon_volcano": 6, "gold_dragon": 3, "more": 30}   # 開獎權重（Σ456；各圖案 賠率×權重 都＝300，回收率均一約 66%、把 ONCE MORE 的免費重轉算進去約 70%，之後依試玩調）
+# 2026-11-19 使用者定：勇者挑戰島主→拉霸（三格拉霸）→累積獎池；與開到黃金肥龍的「全中獎」。數值都可調
+MA_HERO_CHANCE = 0.1      # 每次付費開獎：勇者現身挑戰島主的機率（中；送燈的免費開獎不出勇者）
+MA_HERO_WIN = 0.4         # 勇者出現時打倒島主的機率（中偏低）——打倒才啟動拉霸
+MA_SLOT_MUL = 10          # 拉霸三同 m 的獎金＝總注 × 賠率[m] × 10
+MA_SLOT_ODDS = {"chicken": 90, "bunny": 150, "frog": 250, "slime_grass": 400, "goblin_grass": 700, "zombie_night": 1200, "dragon_volcano": 2000, "gold_dragon": 4000}   # 拉霸三同的出現機率（1/N，照賠率偏低到低）；三個黃金肥龍＝獨得累積獎池全額
+MA_JP_RATE = 0.1          # 每次付費開獎的總注有 10% 累積進獎池（送燈的免費開獎不累積）
+MA_JP_SEED = 10000        # 累積獎池的種子（初次與被獨得後回補到這個值）
+MA_ALLWIN_CHANCE = 0.1    # 開到黃金肥龍時觸發「全中獎」（另外 7 種怪物也照賠率全中）的機率（低）
+MARY_JP = None            # 累積獎池（module global；**本機重啟會歸零**——正式站 Worker 存 DO storage 才持久）
+MA_MAX_BET = 10000   # 每種圖案的單注上限
+MA_OWNERS = [   # 開局隨機抽一位當莊家（中間藍色區）；虧損換成的經驗值記到牠（地形要與 OWNER_TERRAINS 的攻擊樣式對上）
+    {"id": "gold_dragon", "terrain": "grass", "name": "黃金肥龍"},
+    {"id": "snake_queen", "terrain": "night", "name": "笨蛋蛇女"},
+    {"id": "ultima_weapon", "terrain": "volcano", "name": "蓋老師"},
+    {"id": "alexander", "terrain": "machine", "name": "壓力山大"},
+]
+
+def ma_start(t):
+    o = random.choice(MA_OWNERS)
+    t["g"] = {"pot": 0, "bets": [0] * len(MA_COLS), "last": -1, "dcard": -1, "seq": 0, "rseq": -1, "lights": 0, "owner": o["id"], "spent": 0, "paid": 0, "lastWin": 0, "allwin": False, "show": None, "jp": 0}
+    t["result"], t["phase"], t["turn"] = None, "playing", 0
+    for s in t["seats"]:
+        s.update(ready=False, left=False)
+    tbl_log(t, f"{t['seats'][0]['name']} 開始小瑪莉（莊家：{o['name']}）")
+
+def ma_roll():
+    """加權抽一個圖案（照 MA_WEIGHT 走一遍，不是照外圈格子數）。"""
+    r = random.random() * sum(MA_WEIGHT.values())
+    for sym, w in MA_WEIGHT.items():
+        r -= w
+        if r < 0:
+            return sym
+    return "chicken"
+
+def ma_slot_roll():
+    """拉霸三格的結果：照 MA_SLOT_ODDS 決定三同（各怪物 1/N，照賠率偏低到低），沒中就排個近 miss（避免沒中卻排出三同）。"""
+    r = random.random() * sum(1 / n for n in MA_SLOT_ODDS.values())
+    for sym, n in MA_SLOT_ODDS.items():
+        r -= 1 / n
+        if r < 0:
+            return [sym, sym, sym]
+    a = random.choice(MA_COLS)
+    b = random.choice(MA_COLS)
+    c = random.choice(MA_COLS)
+    if a == b == c:
+        c = MA_COLS[(MA_COLS.index(c) + 1 + random.randrange(len(MA_COLS) - 1)) % len(MA_COLS)]
+    return [a, b, c]
+
+def mary_jp_add(n):
+    """累積獎池加碼（module global；本機重啟歸零，正式站 Worker 存 DO storage）。"""
+    global MARY_JP
+    if MARY_JP is None:
+        MARY_JP = MA_JP_SEED
+    MARY_JP += n
+    return MARY_JP
+
+def mary_jp_set(v):
+    global MARY_JP
+    MARY_JP = v
+    return v
+
+def ma_dbl(t, i, msg):
+    """猜大小：抽 1～13，8～13 大、1～6 小，猜對獎池翻倍、猜錯歸零（7 兩邊都不算＝莊家贏）。回 [changed, err文字]。"""
+    s, g = t["seats"][i], t["g"]
+    if t["phase"] != "playing" or not g or g["pot"] <= 0:
+        return False, "沒有可比倍的獎金"
+    card = random.randint(1, 13)
+    big = msg.get("big") == 1
+    win = card >= 8 if big else card <= 6
+    if win:
+        g["pot"] *= 2
+        tbl_log(t, f"{s['name']} 猜{'大' if big else '小'}（開 {card}）猜對，獎池翻倍到 {g['pot']}")
+    else:
+        lost = g["pot"]
+        tbl_log(t, f"{s['name']} 猜{'大' if big else '小'}（開 {card}）猜錯，獎池 {lost} 籌碼歸零（進入累積獎池）")
+        g["jp"] = mary_jp_add(lost)   # 輸掉的獎池全額進入累積獎池（2026-11-19 使用者定：三同 40 萬賭輸了，池裡要多 40 萬）
+        g["pot"] = 0
+    g["dcard"], g["seq"] = card, g["seq"] + 1
+    return True, None
+
+def ma_leave(t, i):
+    """小瑪莉離座：回 {"uid", "pot", "owner", "loss"} 給呼叫端入帳（登入者的獎池；虧損→島主經驗值）。訪客的獎池由 client 自己收回去。最後一人離開就回大廳。"""
+    s, g = t["seats"][i], t["g"] or {}
+    pot = g.get("pot", 0)
+    loss, owner = max(0, g.get("spent", 0) - g.get("paid", 0)), g.get("owner")   # 先記下來：最後一人離開會把 g 清掉
+    if pot > 0:
+        tbl_log(t, f"{s['name']} 離座，獎池 {pot} 籌碼自動領回")
+    t["seats"].pop(i)
+    if not t["seats"]:
+        tbl_reset_seats(t)
+    return {"uid": s.get("uid"), "pot": pot, "owner": owner, "loss": loss}
 # ---- 星球合成（第二十四桌 t24，2026-11-20，使用者要求：做一款類似西瓜遊戲的，隕石→冥王星→月球→火星→地球→海王星→土星→木星→太陽→紅巨星→黑洞）：兩台機台共用這一張邏輯桌 ----
 # 跟俄羅斯方塊同一套做法（使用者要求：「應該要一樣是兩台單人機台，然後可以用邀請進行對戰」）：場上兩台機台（cab 0、1；同一台只能坐一個人），每台都是單人遊玩：
 #   單人模式（solo）：各自獨立的一局，結束分數進排行榜（≥ PL_XP_MIN 分得 PL_XP XP）；
@@ -5992,7 +6139,7 @@ def hk_end(t, cid, msg):
         return
     hk_finish(t, sa, sb, "" if sa >= HK_GOALS or sb >= HK_GOALS else "時間到")
 
-GAME_START = {"purify": pg_start, "planet": lambda t: None, "g2048": tf_start, "bubble": bu_start, "breakout": br_start, "pinball": pb_start, "bigtwo": bt_start, "kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+GAME_START = {"purify": pg_start, "planet": lambda t: None, "g2048": tf_start, "bubble": bu_start, "breakout": br_start, "pinball": pb_start, "bigtwo": bt_start, "kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start, "mary": ma_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 SCR_CID = "__screen__"   # 大螢幕轉播用的虛擬連線編號（tbl_view 把它當觀戰者）
 SCR_CTL_CD_MS = 5000       # 大螢幕影片的暫停／繼續／跳轉冷卻（全島共用；2026-11-19 使用者定：任何人都能控制，每次操作 5 秒冷卻）
@@ -6046,6 +6193,12 @@ def tbl_view(t, cid):
             seats[k].update(sc=s.get("sc", 0), left=bool(s.get("left")))
         if g and playing:
             v["pb"] = {"seed": g["seed"], "t0": g["t0"], "sn": int(time.time() * 1000)}
+    elif t["game"] == "mary":   # 小瑪莉：獎池／開獎格／押注／比倍開的牌／座位上的籌碼（只有本人看得到自己的餘額）；外圈、押注列與賠率表一起送（單一真相在伺服器）
+        g = t.get("g")
+        v["ma"] = {"ring": MA_RING, "cols": MA_COLS, "pay": MA_PAY, "nm": MA_NAME, "owner": g.get("owner") if g else None, "pot": g["pot"] if g else 0, "bets": list(g["bets"]) if g else None, "last": g["last"] if g else -1,
+                   "dcard": g["dcard"] if g else -1, "seq": g["seq"] if g else 0, "rseq": g["rseq"] if g else -1, "lights": (g.get("lights") or 0) if g else 0,
+                   "win": (g.get("lastWin") or 0) if g else 0, "allwin": bool(g and g.get("allwin")), "show": g.get("show") if g else None, "jp": MARY_JP if MARY_JP is not None else MA_JP_SEED,
+                   "chips": t["seats"][i].get("chips", 0) if role == "seat" else None, "maxBet": MA_MAX_BET}
     elif t["game"] == "mage":   # 見習驅魔師：血量／擊殺數／倒下／離開；進行中附上 seed、難度、人數、已擊殺的幽靈編號、Boss 血量與被打中的次數
         v["diff"] = t.get("diff", 0)
         for k, s in enumerate(t["seats"]):
@@ -7491,17 +7644,165 @@ class Room:
         if not t:
             return
         before = t.get("result")
-        tbl_leave(t, cid)
+        cr = tbl_leave(t, cid)
+        if cr and cr.get("pot", 0) > 0 and cr.get("uid"):
+            chips_change(cr["uid"], add=cr["pot"])   # 小瑪莉：離座／斷線過期，獎池自動領回（登入者）
         self._table_collect_xp(t, before)
         out.append((cid, {"t": "table", "id": tid, "v": None}))
         terr = next((k for k, d in TABLE_DEFS.items() if tid in d), None)
         if terr and c and c.get("scr_watch"):
             out.append((cid, self._scr_msg(terr)))   # 離開牌桌的人（還在看螢幕的話）：補上現在大螢幕的畫面（在牌桌裡時沒有收）
+        self._ma_owner_xp(t, cr, out)   # 小瑪莉：虧損換成入座抽到的島主的經驗值
         if not t["seats"] and not t["specs"]:
             self.tables.pop(tid, None)   # 沒人了：整桌重來
             self._scr_after(tid, out)
         else:
             self._table_notify_locked(t, out)
+
+    # ---- 小瑪莉（押注與結算伺服器權威）----
+    def ma_init_chips(self, t, cid, local_chips):
+        """入座就把籌碼餘額帶上機台：登入者讀 CHIPS_DB；訪客用 client 帶上來的本機餘額（session 內以機台為準）。"""
+        s = next((x for x in t["seats"] if x.get("cid") == cid), None)
+        if not s or s.get("chips") is not None:
+            return
+        if s.get("uid"):
+            s["chips"] = chips_get(s["uid"])
+        else:
+            v = local_chips
+            s["chips"] = max(0, min(CHIPS_MAX, int(v))) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else 0
+
+    def _ma_owner_xp(self, t, cr, out):
+        """小瑪莉：這次座位 session 的虧損（總注 − 領出／兌換）按 1 經驗值＝100 籌碼，換成「入座時抽到的島主」的經驗值
+        （記到該地形島主的 XP；島主還沒在這座島出現過也照記——dragon_state 懶初始化，像那座地形本來就有隻帶著這些 XP 的島主）。
+        等級上升上限血量跟著長：現值 hp 不變，廣播 hp 事件讓在該地形的人看到新等級。呼叫端必須持有 self.lock（out 由鎖外發送）。"""
+        if not cr or not (cr.get("loss") or 0) > 0 or not cr.get("owner"):
+            return
+        o = next((x for x in MA_OWNERS if x["id"] == cr["owner"]), None)
+        xp = int(cr["loss"] // CHIPS_PER_XP)
+        if not o or xp <= 0:
+            return
+        d = self.dragon_state(o["terrain"])
+        d["xp"] = max(0, d.get("xp", 0)) + xp
+        lvl = dl_lv(d["xp"])
+        tbl_log(t, f"{o['name']} 收下 {cr['loss']} 籌碼虧損，換成 {xp} 經驗值（Lv {lvl}）")
+        msg = {"t": "dragon", "ev": "hp", "hp": d["hp"], "lvl": lvl, "max": dragon_max_hp(d)}
+        for ccid, cc in self.clients.items():   # 持鎖中，只 append 給 out（鎖外發送）；該地形的每個人都更新島主等級
+            if cc.get("terrain") == o["terrain"]:
+                out.append((ccid, msg))
+
+    def ma_spin(self, t, i, msg):
+        """押注開獎。付費開獎先原子扣總注（登入者走 CHIPS_DB、訪客扣座位上的 session 餘額），加權 RNG 開獎、贏額進獎池；
+        開到 ONCE MORE（'more'，不在 MA_COLS）＝**送燈**：押注維持、隨機免費多開 1～5 次（本注不退，燈就是獎勵；
+        燈中再開到會再加送）。戰績 p（局數）／best（最大單次贏得）只記付費開獎。回 [changed, err文字]。"""
+        s, g = t["seats"][i], t["g"]
+        if t["phase"] != "playing" or not g or (g["pot"] > 0 and not g.get("lights")):
+            return False, None   # 獎池有錢要先領出或比倍（經典機台規矩）；送燈期間例外：燈的獎金先累積在獎池，開完燈再一次結算
+        bets = msg.get("bets")
+        if not isinstance(bets, list) or len(bets) != len(MA_COLS) or not all(type(b) is int and 0 <= b <= MA_MAX_BET for b in bets):
+            return False, "押注格式不對"
+        if msg.get("light") == 1 and not g.get("lights"):
+            return False, None   # 自動送燈的開獎：燈已被手動開獎用完就安靜略過（絕不能變成扣款開獎）
+        total = sum(bets)
+        pending = g.get("lights") or 0
+        if pending > 0:   # 送燈中：押注維持（不能改注）、免費多開
+            if total <= 0 or any(b != g["bets"][x] for x, b in enumerate(bets)):
+                return False, "送燈期間不能改押注"
+        else:
+            if total <= 0:
+                return False, "先押注再開始"
+            if s.get("uid"):   # 登入者：原子扣款（chips_change 內部 RLock）
+                after = chips_change(s["uid"], spend=total)
+                if after is None:
+                    return False, "籌碼不足"
+                s["chips"] = after
+            else:   # 訪客：機台上的 session 餘額
+                if (s.get("chips") or 0) < total:
+                    return False, "籌碼不足"
+                s["chips"] -= total
+            g["spent"] += total   # 付費開獎：總注記進虧損帳（送燈的免費開獎不記）
+        sym = ma_roll()   # 加權抽圖案
+        ks = [x for x, v in enumerate(MA_RING) if v == sym]   # 同符號多格：隨機挑一格停（照機台手感，不然每次都停第一格）
+        g["bets"], g["last"] = list(bets), random.choice(ks)
+        g["seq"] += 1
+        g["rseq"] = g["seq"]   # rseq＝最後一次開獎的 seq（client 判「這一輪是開獎」用，開到同一格也不會漏亮結果）
+        g["dcard"] = -1   # 新的一注開獎：清掉上一場比倍的開牌——猜錯歸零後沒有領出可清，卡著會讓 client 不跑跑馬燈（2026-11-19 使用者回饋）
+        if sym == "more":   # ONCE MORE＝送燈：押注維持、隨機免費多開 1～5 次（燈中再開到＝再加送；本注不退，燈就是獎勵）
+            add = random.randint(1, 5)
+            g["lights"] = pending + add
+            tbl_log(t, f"{s['name']} 的燈開出 ONCE MORE！再加送 {add} 個燈（剩 {g['lights']} 個）" if pending > 0
+                    else f"{s['name']} 開出 ONCE MORE！送 {add} 個燈（免費多開 {add} 次）")
+            return True, None
+        if pending > 0:
+            g["lights"] = pending - 1   # 這一個燈開掉了
+        col = MA_COLS.index(sym)
+        win, allwin = bets[col] * MA_PAY[sym], False
+        if sym == "gold_dragon" and random.random() < MA_ALLWIN_CHANCE:   # 全中獎（低機率）：另外 7 種怪物也照賠率全中
+            allwin = True
+            win = sum(bets[x] * MA_PAY[c] for x, c in enumerate(MA_COLS))
+        g["pot"] += win
+        g["lastWin"], g["allwin"] = win, allwin
+        tail = f"（燈剩 {g['lights']}）" if pending > 0 else ""
+        tbl_log(t, (f"{s['name']} 開出 {MA_NAME[sym]}！全中獎！七種怪物全中，共贏 {win}" if allwin else
+                    f"{s['name']} 開出 {MA_NAME[sym]}，{bets[col]} 注贏 {win}" if win > 0 else
+                    f"{s['name']} 開出 {MA_NAME[sym]}，沒押中") + tail)
+        if pending <= 0:   # 送燈的免費開獎：不累積獎池、不出勇者、不記戰績
+            g["jp"] = mary_jp_add(math.floor(total * MA_JP_RATE))   # 總注 10% 累積進獎池（沒中不歸零、換玩家不歸零）
+            if random.random() < MA_HERO_CHANCE:   # 勇者挑戰島主（中機率）
+                owner_nm = next((o["name"] for o in MA_OWNERS if o["id"] == g["owner"]), "島主")
+                if random.random() < MA_HERO_WIN:   # 打倒島主（中偏低）→ 拉霸啟動
+                    reels = ma_slot_roll()
+                    triple = reels[0] if reels[0] == reels[1] == reels[2] else None
+                    prize = 0
+                    if triple == "gold_dragon":   # 三個黃金肥龍：獨得累積獎池全額，回補種子
+                        prize = g["jp"]
+                        g["jp"] = mary_jp_set(MA_JP_SEED)
+                        g["pot"] += prize
+                        tbl_log(t, f"勇者打倒了{owner_nm}！拉霸三個黃金肥龍！獨得累積獎池 {prize} 籌碼！")
+                    elif triple:
+                        prize = total * MA_PAY[triple] * MA_SLOT_MUL
+                        g["pot"] += prize
+                        tbl_log(t, f"勇者打倒了{owner_nm}！拉霸三同 {MA_NAME[triple]}！贏 {prize} 籌碼")
+                    else:
+                        tbl_log(t, f"勇者打倒了{owner_nm}！拉霸沒有中…")
+                    g["show"] = {"seq": g["seq"], "heroWin": True, "reels": reels, "triple": triple, "prize": prize}
+                else:
+                    g["show"] = {"seq": g["seq"], "heroWin": False, "reels": None, "triple": None, "prize": 0}
+                    tbl_log(t, f"勇者現身挑戰{owner_nm}，戰敗消失…")
+            if s.get("uid"):   # 戰績（稱號用）：只記付費開獎（送燈是免費加開）
+                self._gs_pending.append((s["cid"], "mary", gs_mk({"p": 1}, {"best": win})))
+        return True, None
+
+    def ma_collect(self, t, i):
+        """領出（獎池 → 籌碼）。回 [changed, err文字]。"""
+        s, g = t["seats"][i], t["g"]
+        if t["phase"] != "playing" or not g or g["pot"] <= 0:
+            return False, None
+        pot = g["pot"]
+        if s.get("uid"):
+            s["chips"] = chips_change(s["uid"], add=pot)
+        else:
+            s["chips"] = min(CHIPS_MAX, (s.get("chips") or 0) + pot)
+        g["pot"], g["dcard"], g["seq"] = 0, -1, g["seq"] + 1
+        g["paid"] = g.get("paid", 0) + pot
+        tbl_log(t, f"{s['name']} 領出 {pot} 籌碼")
+        return True, None
+
+    def ma_exchange(self, t, i, c):
+        """兌換（獎池 → 角色經驗值，1 經驗值＝CHIPS_PER_XP 籌碼）。**這筆 XP 不回饋籌碼**（真兌換，不然兌換＝領出＋免費 XP）：
+        登入者走 xp_grant 的 nochips；訪客的 XP 在本機，獎池直接燒掉、由 client 自己加 XP。回 [changed, err文字]。"""
+        s, g = t["seats"][i], t["g"]
+        if t["phase"] != "playing" or not g or g["pot"] <= 0:
+            return False, None
+        pot = g["pot"]
+        xp = int(pot // CHIPS_PER_XP)
+        if xp <= 0:
+            return False, f"獎池 {pot} 籌碼不足 {CHIPS_PER_XP}，不能兌換"
+        g["pot"], g["dcard"], g["seq"] = 0, -1, g["seq"] + 1
+        g["paid"] = g.get("paid", 0) + pot   # 兌換＝把獎金拿走（變成 XP），不算虧損
+        tbl_log(t, f"{s['name']} 把獎池 {pot} 籌碼兌換成 {xp} 經驗值")
+        if s.get("uid"):
+            xp_grant(c, xp, "mary", nochips=True)   # XP 記進帳號（不回饋籌碼）、回 xp 訊息演出
+        return True, None
 
     def table_do(self, cid, msg):
         out = []
@@ -7615,6 +7916,8 @@ class Room:
                     ar_join(t, cid, name, "spec" if msg.get("role") == "spec" else "seat", (c.get("user") or {}).get("id"), msg.get("cab"))
                 else:
                     tbl_join(t, cid, name, "spec" if msg.get("role") == "spec" else "seat", (c.get("user") or {}).get("id"), tbl_rk(msg.get("rk")))
+                if game == "mary":
+                    self.ma_init_chips(t, cid, msg.get("chips"))   # 小瑪莉：入座就把籌碼餘額帶上機台（登入者讀 CHIPS_DB；訪客用 client 帶的本機餘額）
                 c["table"], c["table_terr"] = tid, terr
                 self._table_notify_locked(t, out)
             else:
@@ -7734,6 +8037,8 @@ class Room:
                         tbl_ready(t, cid, msg.get("v"))
                     elif a == "sit":
                         tbl_sit(t, cid)
+                        if t["game"] == "mary":
+                            self.ma_init_chips(t, cid, msg.get("chips"))   # 小瑪莉：觀戰轉入座也要補上籌碼
                     elif a == "stand":
                         tbl_stand(t, cid)
                     elif a == "draw":
@@ -7802,6 +8107,18 @@ class Room:
                         br_over(t, cid, msg)
                     elif a == "over" and t["game"] == "pinball":   # 彈珠台：客戶端回報結束（最終分數）
                         pb_over(t, cid, msg)
+                    elif t["game"] == "mary" and a in ("mspin", "mcol", "mxp", "mdbl"):   # 小瑪莉：押注開獎／領出／兌換經驗值／猜大小（押注與結果都是伺服器權威）
+                        role, i = tbl_find(t, cid)
+                        if role != "seat":
+                            return [], None, None
+                        changed, err = (self.ma_spin(t, i, msg) if a == "mspin"
+                                        else self.ma_collect(t, i) if a == "mcol"
+                                        else self.ma_exchange(t, i, c) if a == "mxp" else ma_dbl(t, i, msg))
+                        if err:   # 錯誤只回給本人（tblerr）
+                            out.append((cid, {"t": "tblerr", "id": t["id"], "text": err}))
+                            return out, None, None
+                        if not changed:
+                            return out, None, None
                     elif a == "over" and t["game"] == "maze":   # 豆豆迷宮：豆豆那台回報結束
                         mz_over(t, cid, msg)
                     elif a == "mdiff":   # 見習驅魔師：桌主選難度
@@ -7830,7 +8147,10 @@ class Room:
                 return [], None, None   # 已經連回來了，或這一局已經結束
             s.pop("gone", None)
             before = t.get("result")
-            tbl_leave(t, cid)
+            cr = tbl_leave(t, cid)
+            if cr and cr.get("pot", 0) > 0 and cr.get("uid"):
+                chips_change(cr["uid"], add=cr["pot"])   # 小瑪莉：斷線保留過期，獎池自動領回（登入者）
+            self._ma_owner_xp(t, cr, out)   # 小瑪莉：虧損換成入座抽到的島主的經驗值
             self._table_collect_xp(t, before)
             terr = next((k for k, d in TABLE_DEFS.items() if tid in d), None)
             if not t["seats"] and not t["specs"]:
@@ -8131,6 +8451,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 ws_send(sock, json.dumps({"t": "gstats", "gstats": gstats_apply(c["user"]["id"], "", None)}))   # 遊戲戰績（稱號用）
                                 if xp_known:   # XP 只在「伺服器有紀錄」時送 init；沒有就等 xpsync 上繳
                                     ws_send(sock, json.dumps({"t": "xp", "xp": c.get("xp", 0), "d": 0, "k": "init"}))
+                                ws_send(sock, json.dumps({"t": "chips", "chips": chips_get(c["user"]["id"]), "k": "init"}))   # 籌碼餘額（老玩家第一次會按現有 XP 一次性補發）
                 elif t == "state":
                     c = room.clients.get(cid)
                     st = sanitize_state(msg.get("s") if isinstance(msg.get("s"), dict) else {}, c.get("state") if c else None)
@@ -8193,14 +8514,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     if user:
                         v = max(0, min(XP_MAX, int(_num(msg.get("v"), 0, XP_MAX, 0))))
                         with XP_DB_LOCK:
-                            if user["id"] not in XP_DB:
+                            created = user["id"] not in XP_DB
+                            if created:
                                 XP_DB[user["id"]] = v
                             nv = XP_DB[user["id"]]
+                        if created:
+                            chips_get(user["id"])   # 上繳建立紀錄：籌碼也按它一次性補發
                         c["xp"], c["xp_known"] = nv, True
                         if c.get("state"):
                             c["state"]["lvl"] = xp_info(nv)["lv"]
                         with c.get("send") or threading.Lock():
                             ws_send(sock, json.dumps({"t": "xp", "xp": nv, "d": 0, "k": "init"}))
+                            ws_send(sock, json.dumps({"t": "chips", "chips": chips_get(user["id"]), "k": "init"}))
                 elif t == "craft":   # 合成解鎖一筆（素材／家具／配方；客戶端自判，伺服器只存，不驗證 id 是否存在；訪客略過）
                     c = room.clients.get(cid)
                     if c and c.get("user") and msg.get("k") in CRAFT_KINDS:

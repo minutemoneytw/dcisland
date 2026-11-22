@@ -344,6 +344,10 @@ const CRAFT_SYNC_MAX = 100;               // craftsync 每類一次最多收幾�
 // 只有伺服器親眼看到的擊倒才算：島主倒下時 30 秒內的參與者由伺服器記帳（本機舊紀錄不上傳，使用者定：重打就重打）。客戶端用 terrain.json 的 owner 換成島主 id
 const isOwnerTerrain = t => Object.prototype.hasOwnProperty.call(OWNER_TERRAINS, String(t));
 const XP_MAX = 200000;                  // XP 總量上限（防灌分的保險；等級無上限是設計，這裡只是存檔安全閥）
+// 籌碼經濟（2026-11-16，使用者定）：從事所有有經驗值的事情都會送籌碼，籌碼＝經驗值×100；賭博系列遊戲（小瑪莉…）拿它下注。
+// 存 Registry 的 chips:<uid>；負 XP 不追溯扣籌碼（已送的不收回）。
+const CHIPS_PER_XP = 100;
+const CHIPS_MAX = XP_MAX * CHIPS_PER_XP;   // 籌碼上限（跟著 XP 上限走，防灌分的保險）
 const XP_MOB_CD_MS = 1000;              // 擊倒非主動怪的 XP 冷卻（每條連線；每來源每秒最多 1 次）
 const XP_XPE_MAX = 25;                  // 擊倒非主動怪單次事件的 XP 上限（防亂報；2026-11-09 事件帶 n：會反擊的野怪＝島主經驗 1/10，使用者同意延伸）
 const DEATH_CREDIT_MIN_MS = 25000;      // 同一條連線的「倒地記帳」（餵島主 XP／魚人升級）最短間隔：復活要 30 秒，正常玩法不會更密；擋住反覆切 state.dead 灌島主等級
@@ -504,8 +508,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey", t17: "kingdom", t18: "bigtwo", t19: "pinball", t20: "breakout", t21: "purify", t22: "bubble", t23: "g2048", t24: "planet" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 4], kingdom: [2, 4], bigtwo: [2, 4], pinball: [1, 1], breakout: [1, 1], bubble: [1, 1], g2048: [1, 1], planet: [1, 2], purify: [2, 4] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey", t17: "kingdom", t18: "bigtwo", t19: "pinball", t20: "breakout", t21: "purify", t22: "bubble", t23: "g2048", t24: "planet", t99: "mary" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）；小瑪莉用 t99：t21/t22/t23 連續兩輪被遠端的新機台撞號（2026-11-18 使用者定，低號留給遠端）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 4], kingdom: [2, 4], bigtwo: [2, 4], pinball: [1, 1], breakout: [1, 1], bubble: [1, 1], g2048: [1, 1], planet: [1, 2], purify: [2, 4], mary: [1, 1] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -519,7 +523,7 @@ const GM_XP_MIN_MOVES = 10;
 // 遊戲戰績（2026-11-13，使用者要求「幫小遊戲設計稱號」）：跟著 Discord 帳號存在 Registry 的 gstats:<uid> = {遊戲 id: {鍵: 數字}}；各遊戲結算時在 result.gs
 // （依「結算後留下的座位」順序，與 result.xp 同；null＝這一局不記）帶每位入座者的戰績增量 {add: 累加, max: 取較大, min: 取較小}，伺服器（tableStats）照著寫進 Registry，
 // 再把整份 gstats 送給本人；result.gs 不含 uid，訪客由客戶端本機套用。每局都有 p（局數）；其餘鍵見 docs/notes.md「小遊戲戰績與稱號」。與 tools/dev_server.py 的 gs_mk 同一套
-const GS_GAMES = new Set(["oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo", "pinball", "breakout", "bubble", "g2048", "planet", "purify"]), GS_KEY_RE = /^[a-z0-9_]{1,12}$/, GS_CAP = 1000000, GS_KEYS_MAX = 24;
+const GS_GAMES = new Set(["oldmaid", "gomoku", "dodge", "uno", "typing", "zhtyping", "intel", "mage", "blokus", "trigon", "arcade", "maze", "hockey", "kingdom", "bigtwo", "pinball", "breakout", "bubble", "g2048", "planet", "purify", "mary"]), GS_KEY_RE = /^[a-z0-9_]{1,12}$/, GS_CAP = 1000000, GS_KEYS_MAX = 24;
 const gsMk = (add, mx, mn) => ({ add: { p: 1, ...(add || {}) }, max: mx || {}, min: mn || {} });
 const OM_SYM = { S: "♠", H: "♥", D: "♦", C: "♣" };
 const omRank = c => (c === "JK" ? null : Number(c.slice(1)));
@@ -567,7 +571,7 @@ function tblResetSeats(t) {
 // 與 tools/dev_server.py 的同名邏輯同一套，改規則兩邊一起改。
 const TBL_HOLD_MS = 20000, TBL_RK_RE = /^[A-Za-z0-9_-]{16,48}$/;
 const tblRk = v => (typeof v === "string" && TBL_RK_RE.test(v) ? v : null);
-const tblCanHold = (t, s) => t.phase === "playing" && !CAB_GAMES[t.game] && !!s.rk && !s.left && s.cid != null && t.seats.includes(s);
+const tblCanHold = (t, s) => t.phase === "playing" && !CAB_GAMES[t.game] && t.game !== "mary" && !!s.rk && !s.left && s.cid != null && t.seats.includes(s);   // 街機機台與小瑪莉不保留：斷線就照離開處理（小瑪莉的獎池會自動領回）
 function tblJoin(t, cid, name, want, uid, rk) {
   if (tblFind(t, cid)[0]) return;
   const mx = GAME_LIMITS[t.game][1];
@@ -581,6 +585,7 @@ function tblLeave(t, cid) {
     const name = t.seats[i].name;
     if (t.game === "planet") { plLeave(t, i); return; }   // 星球合成：單人局作廢、對戰中離開＝對手獲勝
     if (t.game === "arcade") { arLeave(t, i); return; }   // 俄羅斯方塊：單人局作廢、聯機照當時分數排名，不中斷其他人
+    if (t.game === "mary") return maLeave(t, i);   // 小瑪莉：獎池自動領回（回傳值由呼叫端入帳），最後一人離開就回大廳
     if (t.phase === "playing" && t.game === "trigon") { tgLeave(t, i, Date.now()); return; }   // Blokus Trigon：離開不中斷，棋子留在棋盤上、之後跳過
     if (t.phase === "playing" && t.game === "purify") { pgLeave(t, i, Date.now()); return; }   // 淨土守護戰：離開者手牌收回、人偶移出，其餘人繼續（沒人了就清桌）
     if (t.phase === "playing" && t.game === "bigtwo") { btLeave(t, i, Date.now()); return; }   // 大老二：離開者手牌作廢，其餘人繼續（剩不到 2 人就結束）
@@ -3733,6 +3738,79 @@ function brRelay(t, cid, msg) {
   t.seats[i].sc = msg.sc;
   return t.specs.filter(m => m.cid != null).map(m => [m.cid, data]);
 }
+// ---- 小瑪莉（第九十九桌 t99，2026-11-16，使用者要求：北牆最左邊的經典水果盤賭博機台，籌碼經濟的第一個客人；2026-11-18 撞號改編 t99——t21／t22／t23 連續被遠端的新機台用掉，使用者定低號留給遠端）----
+// 單人機台、第二人自動觀戰。押注與開獎伺服器權威（防跨裝置重複消費、防重抽）：mspin 先原子扣總注，
+// 加權 RNG 開獎（機率與外圈的視覺分布脫鉤，權重表好調），贏額進獎池（不直接入帳）；mcol「領出」把獎池入帳、
+// mdbl「猜大小」抽 1～13 押大（8～K）或小（1～6），猜對獎池翻倍、猜錯歸零（7＝莊家贏）。離座（含斷線）獎池自動退回籌碼。
+// 不進排行榜、戰績記 p（局數）與 best（最大單次贏得）。
+// 2026-11-16 使用者定：圖案改成「伺服器現有的怪物」（越稀有賠率越高，最大獎是島主），外圈 24 格只是跑馬燈顯示；
+// 押注改成**一種圖案一注**（8 注，MARY_COLS 的順序），賠率看 MARY_PAY、真正的中獎機率看 MARY_WEIGHT。
+// 2026-11-16 使用者再定：開局隨機抽一位島主當莊家（中間藍色區）；獎池可以「兌換」成角色經驗值（1 經驗值＝100 籌碼，
+// **這筆 XP 不回饋籌碼**——真兌換，不然兌換＝領出＋免費 XP）；離座時的虧損（總注 − 領回／兌換）按同樣比值換成
+// 「入座時抽到的島主」的經驗值（記到該地形島主的 dragon:<terrain> XP，島主等級跟著長）。
+// 與 tools/dev_server.py 的 ma_* 同一套，改規則兩邊一起改。
+// 2026-11-17 使用者定（照台灣經典機台範例圖重排，只換成自家素材）：大獎（黃金肥龍）在頂排中間、殭屍在底排中間、
+// 左右兩側中間各一格 ONCE MORE——開到＝送燈：押注維持、隨機免費多開 1～5 次（本注不退，燈就是獎勵；
+// 2026-11-18 使用者定，取代原本的「退回總注、免費再轉一次」）；同符號多格時隨機停在其中一格。
+const MARY_COLS = ["chicken", "bunny", "frog", "slime_grass", "goblin_grass", "zombie_night", "dragon_volcano", "gold_dragon"];   // 押注列（左→右）：從最常見（低賠）到最稀有（高賠）
+const MARY_RING = ["chicken", "frog", "chicken", "dragon_volcano", "gold_dragon", "chicken", "frog", "chicken", "bunny", "bunny", "slime_grass", "more", "bunny", "frog", "chicken", "bunny", "chicken", "dragon_volcano", "zombie_night", "chicken", "slime_grass", "goblin_grass", "chicken", "slime_grass", "bunny", "more", "goblin_grass", "chicken"];   // 外圈 28 格（9×7，2026-11-22 使用者定：左右各多一格、ONCE MORE 下面 3 格；k4 頂排正中央＝大獎、k18 底排正中央＝殭屍、k11／k25 左右正中間＝ONCE MORE；機率看 MARY_WEIGHT，兩者脫鉤）
+const MARY_NAME = { chicken: "咕咕雞", bunny: "跳跳兔", frog: "大肚蛙", slime_grass: "史萊姆", goblin_grass: "哥布林", zombie_night: "殭屍", dragon_volcano: "飛龍", gold_dragon: "黃金肥龍", more: "ONCE MORE" };
+const MARY_PAY = { chicken: 2, bunny: 2, frog: 5, slime_grass: 10, goblin_grass: 20, zombie_night: 25, dragon_volcano: 50, gold_dragon: 100 };   // 賠率（倍數；照範例圖可見的 2/5/10/50 與大獎 100，哥布林 20／殭屍 25 是內插，之後可調）
+const MARY_WEIGHT = { chicken: 150, bunny: 150, frog: 60, slime_grass: 30, goblin_grass: 15, zombie_night: 12, dragon_volcano: 6, gold_dragon: 3, more: 30 };   // 開獎權重（Σ456；各圖案 賠率×權重 都＝300，回收率均一約 66%、把 ONCE MORE 的免費重轉算進去約 70%，之後依試玩調）
+// 2026-11-19 使用者定：勇者挑戰島主→拉霸（三格拉霸）→累積獎池；與開到黃金肥龍的「全中獎」。數值都可調
+const MARY_HERO_CHANCE = 0.1;      // 每次付費開獎：勇者現身挑戰島主的機率（中；送燈的免費開獎不出勇者）
+const MARY_HERO_WIN = 0.4;         // 勇者出現時打倒島主的機率（中偏低）——打倒才啟動拉霸
+const MARY_SLOT_MUL = 10;          // 拉霸三同 m 的獎金＝總注 × 賠率[m] × 10
+const MARY_SLOT_ODDS = { chicken: 90, bunny: 150, frog: 250, slime_grass: 400, goblin_grass: 700, zombie_night: 1200, dragon_volcano: 2000, gold_dragon: 4000 };   // 拉霸三同的出現機率（1/N，照賠率偏低到低）；三個黃金肥龍＝獨得累積獎池全額
+const MARY_JP_RATE = 0.1;          // 每次付費開獎的總注有 10% 累積進獎池（送燈的免費開獎不累積）
+const MARY_JP_SEED = 10000;        // 累積獎池的種子（初次與被獨得後回補到這個值）
+const MARY_ALLWIN_CHANCE = 0.1;    // 開到黃金肥龍時觸發「全中獎」（另外 7 種怪物也照賠率全中）的機率（低）
+const MARY_MAX_BET = 10000;   // 每種圖案的單注上限
+const MARY_OWNERS = [   // 開局隨機抽一位當莊家（中間藍色區）；虧損換成的經驗值記到牠（地形要與 OWNER_TERRAINS 的攻擊樣式對上）
+  { id: "gold_dragon", terrain: "grass", name: "黃金肥龍" },
+  { id: "snake_queen", terrain: "night", name: "笨蛋蛇女" },
+  { id: "ultima_weapon", terrain: "volcano", name: "蓋老師" },
+  { id: "alexander", terrain: "machine", name: "壓力山大" },
+];
+function maStart(t) {
+  const o = MARY_OWNERS[Math.floor(Math.random() * MARY_OWNERS.length)];
+  t.g = { pot: 0, bets: MARY_COLS.map(() => 0), last: -1, dcard: -1, seq: 0, rseq: -1, lights: 0, owner: o.id, spent: 0, paid: 0, lastWin: 0, allwin: false, show: null, jp: 0 };
+  t.result = null; t.phase = "playing"; t.turn = 0;
+  for (const s of t.seats) { s.ready = false; s.left = false; }
+  tblLog(t, `${t.seats[0].name} 開始小瑪莉（莊家：${o.name}）`);
+}
+function maRoll() {   // 加權抽一個圖案（照 MARY_WEIGHT 走一遍，不是照外圈格子數；總權重動態算，改權重表不用記得改這裡）
+  let r = Math.random() * Object.values(MARY_WEIGHT).reduce((a, w) => a + w, 0);
+  for (const [sym, w] of Object.entries(MARY_WEIGHT)) { r -= w; if (r < 0) return sym; }
+  return "chicken";
+}
+function maSlotRoll() {   // 拉霸三格的結果：照 MARY_SLOT_ODDS 決定三同（各怪物 1/N，照賠率偏低到低），沒中就排個近 miss（避免沒中卻排出三同）
+  let r = Math.random() * Object.values(MARY_SLOT_ODDS).reduce((a, n) => a + 1 / n, 0);
+  for (const [sym, n] of Object.entries(MARY_SLOT_ODDS)) { r -= 1 / n; if (r < 0) return [sym, sym, sym]; }
+  const a = MARY_COLS[(Math.random() * MARY_COLS.length) | 0], b = MARY_COLS[(Math.random() * MARY_COLS.length) | 0];
+  let c = MARY_COLS[(Math.random() * MARY_COLS.length) | 0];
+  if (a === b && b === c) c = MARY_COLS[(MARY_COLS.indexOf(c) + 1 + ((Math.random() * (MARY_COLS.length - 1)) | 0)) % MARY_COLS.length];
+  return [a, b, c];
+}
+function maDbl(t, i, msg) {   // 猜大小：抽 1～13，8～13 大、1～6 小，猜對獎池翻倍、猜錯歸零（7 兩邊都不算＝莊家贏）。回 [changed, err文字, 輸掉的獎池（進累積獎池用）]
+  const s = t.seats[i], g = t.g;
+  if (t.phase !== "playing" || !g || g.pot <= 0) return [false, "沒有可比倍的獎金", 0];
+  const card = 1 + Math.floor(Math.random() * 13), big = msg.big === 1;
+  const win = big ? card >= 8 : card <= 6;
+  let lost = 0;
+  if (win) { g.pot *= 2; tblLog(t, `${s.name} 猜${big ? "大" : "小"}（開 ${card}）猜對，獎池翻倍到 ${g.pot}`); }
+  else { lost = g.pot; tblLog(t, `${s.name} 猜${big ? "大" : "小"}（開 ${card}）猜錯，獎池 ${lost} 籌碼歸零（進入累積獎池）`); g.pot = 0; }
+  g.dcard = card; g.seq++;
+  return [true, null, lost];
+}
+function maLeave(t, i) {   // 小瑪莉離座：回 {uid, pot, owner, loss} 給呼叫端入帳（登入者的獎池；虧損→島主經驗值）。最後一人離開就回大廳
+  const s = t.seats[i], g = t.g, pot = g ? g.pot : 0;
+  const loss = Math.max(0, (g ? (g.spent || 0) : 0) - (g ? (g.paid || 0) : 0)), owner = g ? g.owner : null;   // 先記下來：最後一人離開會把 g 清掉
+  if (pot > 0) tblLog(t, `${s.name} 離座，獎池 ${pot} 籌碼自動領回`);
+  t.seats.splice(i, 1);
+  if (!t.seats.length) tblResetSeats(t);
+  return { uid: s.uid || null, pot, owner, loss };
+}
 // ---- 泡泡射手（第二十二桌 t22，2026-11-17，使用者要求：東牆邊、彈珠台下方放一台面向左的機台）：單人、一條命、一關接一關、分數進排行榜；
 // 跟彈珠台／打磚塊同一套做法：物理全在客戶端跑，伺服器只開局、收結算分數（限幅）、把進行中的快照 bus 轉給觀戰者與大螢幕（tbu／sttm）。
 // 有人離開＝這一局不算（一般桌子的規則）。與 tools/dev_server.py 的 bu_* 同一套，改規則兩邊一起改。
@@ -4005,7 +4083,7 @@ function hkEnd(t, cid, msg) {   // 桌主那台回報結束（有一隊到 HK_GO
   if (!Number.isInteger(msg.sa) || !Number.isInteger(msg.sb) || msg.sa < 0 || msg.sb < 0 || msg.sa > 99 || msg.sb > 99) return;
   hkFinish(t, msg.sa, msg.sb, msg.sa >= HK_GOALS || msg.sb >= HK_GOALS ? "" : "時間到");
 }
-const GAME_START = { purify: pgStart, planet: () => {}, g2048: tfStart, bubble: buStart, breakout: brStart, pinball: pbStart, bigtwo: btStart, kingdom: kgStart, arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+const GAME_START = { purify: pgStart, planet: () => {}, g2048: tfStart, bubble: buStart, breakout: brStart, pinball: pbStart, bigtwo: btStart, kingdom: kgStart, arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart, mary: maStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 const SCR_CTL_CD_MS = 5000;   // 大螢幕影片的暫停／繼續／跳轉冷卻（全島共用；2026-11-19 使用者定：任何人都能控制，每次操作 5 秒冷卻）
 const SCR_CD_MS = 5000;   // 大螢幕手動切台的冷卻（全島共用；2026-11-14 使用者要求）
@@ -4047,6 +4125,13 @@ function tblView(t, cid) {
   if (t.game === "pinball") {   // 彈珠台：分數／離開；進行中附上開始時間與伺服器時間（客戶端倒數用）
     t.seats.forEach((s, k) => Object.assign(v.seats[k], { sc: s.sc || 0, left: !!s.left }));
     if (t.g && playing) v.pb = { seed: t.g.seed, t0: t.g.t0, sn: Date.now() };
+    return v;
+  }
+  if (t.game === "mary") {   // 小瑪莉：獎池／開獎格／押注／比倍開的牌／座位上的籌碼（只有本人看得到自己的餘額）；外圈與賠率表一起送（單一真相在伺服器）
+    const g = t.g;
+    v.ma = { ring: MARY_RING, cols: MARY_COLS, pay: MARY_PAY, nm: MARY_NAME, owner: g ? g.owner : null, pot: g ? g.pot : 0, bets: g ? [...g.bets] : null, last: g ? g.last : -1, dcard: g ? g.dcard : -1, seq: g ? g.seq : 0, rseq: g ? (g.rseq || -1) : -1, lights: g ? (g.lights || 0) : 0,
+             win: g ? (g.lastWin || 0) : 0, allwin: !!(g && g.allwin), show: g?.show || null, jp: this.maryJp ?? MARY_JP_SEED,
+             chips: role === "seat" ? Math.max(0, Math.floor(t.seats[i].chips || 0)) : null, maxBet: MARY_MAX_BET };
     return v;
   }
   if (t.game === "mage") {   // 見習驅魔師：血量／擊殺數／倒下／離開；進行中附上 seed、難度、人數、已擊殺的幽靈編號、Boss 血量與被打中的次數
@@ -4160,6 +4245,8 @@ export class Island {
     this.lastXpMob = new Map();      // ws → 上次擊倒非主動怪的時間（XP 夾頻；2026-11-07）
     this.lastDeathCredit = new Map();   // ws → 上次倒地記帳的時間（DEATH_CREDIT_MIN_MS）
     this.tables = new Map();         // 桌 id → 牌桌狀態（和平島遊戲桌；懶載入 storage，每次變動都寫回）
+    this.maryJp = null;              // 小瑪莉的累積獎池（storage key `maryjp`；獨立於牌桌——最後一人離桌會刪掉整張桌，獎池不能跟著消失）
+    this.maryJpReady = state.storage.get("maryjp").then(v => { this.maryJp = v ?? MARY_JP_SEED; }).catch(() => { this.maryJp = MARY_JP_SEED; });   // 建構時先非同步載入（tblView 同步讀取，最多在最初幾毫秒顯示種子值）
     this.lastTbl = new Map();        // ws → 上次牌桌操作的時間（TBL_CD_MS）
     this.screen = new Map();         // 地形 → 大螢幕目前轉播的桌 id（null／沒有＝關閉；2026-11-14，所有人共用；只放記憶體）
     this.scrLast = new Map();        // 地形 → 上一次送出的螢幕訊息（內容一樣就不重送）
@@ -4360,11 +4447,12 @@ export class Island {
   }
 
   // 記一次 XP（登入者）：經 Registry 累加、更新這條連線的 att.xp／state.lvl、回給本人（不廣播）。
+  // nochips＝這筆 XP 不回饋籌碼（小瑪莉的「兌換」：真把籌碼換成 XP，不然兌換＝領出＋免費 XP）。
   // await 之後要重讀 attachment（hello／state 可能在等 Registry 的期間先到，與 hello 處理同一慣例）
-  async grantXp(ws, d, k) {
+  async grantXp(ws, d, k, nochips = false) {
     const att = ws.deserializeAttachment() || {};
     if (!att.user || !Number.isInteger(d) || d === 0) return;
-    const r = await this.registryCall("/addxp", { uid: att.user.id, d });
+    const r = await this.registryCall("/addxp", nochips ? { uid: att.user.id, d, nochips: 1 } : { uid: att.user.id, d });
     if (!r || typeof r.xp !== "number") return;   // Registry 掛了：這次不記不回，等下次事件再算
     const cur = ws.deserializeAttachment() || {};
     cur.xp = r.xp;
@@ -4372,6 +4460,7 @@ export class Island {
     if (cur.state) cur.state.lvl = xpInfo(r.xp).lv;   // 自己的名牌與之後的 p 廣播即時跟上
     ws.serializeAttachment(cur);
     try { ws.send(JSON.stringify({ t: "xp", xp: r.xp, d, k })); } catch { /* 對方已斷線 */ }
+    if (typeof r.chips === "number") try { ws.send(JSON.stringify({ t: "chips", chips: r.chips, k })); } catch { /* 對方已斷線 */ }   // 籌碼同步加碼的結果（client 的 onNetChips）
   }
   // 擊倒島主：獎勵 XP 給 D_DROPOUT（30 秒）內打過牠、還在線沒死的所有連線（與擊倒稱號「參與擊倒」同一批人）。
   // 訪客不進 Registry：grantXp 自然跳過，由各客戶端在 dead 事件本機補發
@@ -4709,10 +4798,25 @@ export class Island {
     if (keep.length) await this.state.storage.put("holds", keep); else await this.state.storage.delete("holds");
     return next;
   }
+  // 小瑪莉：這次座位 session 的虧損（總注 − 領出／兌換）按 1 經驗值＝100 籌碼，換成「入座時抽到的島主」的經驗值
+  // （記到該地形島主的 dragon:<terrain> XP；島主還沒在這座島出現過也照記——getDragon 懶初始化，像那座地形本來就有隻帶著這些 XP 的島主）。
+  // 等級上升上限血量跟著長：現值不變，廣播 hp 事件讓在該地形的人看到新等級
+  async maOwnerXp(t, cr) {
+    if (!cr || !(cr.loss > 0) || !cr.owner) return;
+    const o = MARY_OWNERS.find(x => x.id === cr.owner), xp = Math.floor(cr.loss / CHIPS_PER_XP);
+    if (!o || xp <= 0) return;
+    const d = await this.getDragon(o.terrain);
+    d.xp = Math.max(0, (d.xp ?? 0)) + xp;
+    tblLog(t, `${o.name} 收下 ${cr.loss} 籌碼虧損，換成 ${xp} 經驗值（Lv ${dlLv(d.xp)}）`);
+    await this.saveDragon(o.terrain);
+    this.broadcast({ t: "dragon", ev: "hp", hp: d.hp, lvl: dlLv(d.xp), max: dragonMaxHp(d) }, null, o.terrain);
+  }
   // 某個座位（或觀戰者）離桌之後的收尾：存檔、通知同桌、更新島上的桌況、結算 XP／戰績／排行榜
   async tableKick(t, cid) {
     const resBefore = t.result;
-    tblLeave(t, cid);
+    const cr = tblLeave(t, cid);
+    if (cr && cr.pot > 0 && cr.uid) await this.registryCall("/chips", { uid: cr.uid, add: cr.pot });   // 小瑪莉：離座／斷線過期，獎池自動領回
+    await this.maOwnerXp(t, cr);   // 小瑪莉：虧損換成入座抽到的島主的經驗值
     await this.saveTable(t);
     this.tableNotify(t);
     for (const [terr, defs] of Object.entries(TABLE_DEFS)) if (defs[t.id]) await this.tableBroadcastInfo(terr);
@@ -4740,7 +4844,9 @@ export class Island {
       }
     }
     const resBefore = t.result;
-    tblLeave(t, att.id);
+    const cr = tblLeave(t, att.id);
+    if (cr && cr.pot > 0 && cr.uid) await this.registryCall("/chips", { uid: cr.uid, add: cr.pot });   // 小瑪莉：主動離座，獎池自動領回
+    await this.maOwnerXp(t, cr);   // 小瑪莉：虧損換成入座抽到的島主的經驗值
     try { ws.send(JSON.stringify({ t: "table", id: tid, v: null })); } catch { /* 已斷線 */ }
     if (att.scrWatch) for (const [terr, defs] of Object.entries(TABLE_DEFS)) if (defs[tid]) { try { ws.send(JSON.stringify(this.scrMsg(terr))); } catch { /* 已斷線 */ } }   // 離開牌桌的人（還在看螢幕的話）：補上現在大螢幕的畫面（在牌桌裡時沒有收）
     await this.saveTable(t);
@@ -4814,6 +4920,125 @@ export class Island {
       this.lastGameXp.set(user.id, nowMs);
       await this.grantXp(ws2, n, "game");
     }
+  }
+  // 小瑪莉：座位補上籌碼餘額（登入者讀 Registry；訪客用 client 帶上來的本機餘額，session 內以機台為準）
+  async maInitChips(t, cid, localChips) {
+    const i = t.seats.findIndex(s => s.cid === cid);
+    if (i < 0 || t.seats[i].chips != null) return;
+    const s = t.seats[i];
+    if (s.uid) { const r = await this.registryCall("/chips", { uid: s.uid }); if (r) s.chips = r.chips; }
+    else s.chips = Math.max(0, Math.min(CHIPS_MAX, Math.floor(Number(localChips) || 0)));
+  }
+  // 小瑪莉：押注開獎（回 [changed, err文字]）。付費開獎先原子扣總注（登入者走 Registry、訪客扣座位上的 session 餘額），
+  // 加權 RNG 開獎、贏額進獎池；開到 ONCE MORE（'more'，不在 MARY_COLS）＝**送燈**：押注維持、隨機免費多開 1～5 次
+  // （本注不退，燈就是獎勵；燈中再開到會再加送）。戰績 p（局數）／best（最大單次贏得）只記付費開獎。
+  // 小瑪莉累積獎池：storage key `maryjp`（跨玩家、跨局、跨島主經驗；最後一人離桌刪桌也不會消失）。記憶體快取，建構時非同步載入
+  async maryJpAdd(n) {
+    await this.maryJpReady;
+    this.maryJp += n;
+    await this.state.storage.put("maryjp", this.maryJp);
+    return this.maryJp;
+  }
+  async maryJpSet(v) {
+    await this.maryJpReady;
+    this.maryJp = v;
+    await this.state.storage.put("maryjp", v);
+    return v;
+  }
+  async maSpin(t, i, msg) {
+    const s = t.seats[i], g = t.g;
+    if (t.phase !== "playing" || !g || (g.pot > 0 && !(g.lights > 0))) return [false, null];   // 獎池有錢要先領出或比倍（經典機台規矩）；送燈期間例外：燈的獎金先累積在獎池，開完燈再一次結算
+    const bets = Array.isArray(msg.bets) ? msg.bets : null;
+    if (!bets || bets.length !== MARY_COLS.length || bets.some(b => !Number.isInteger(b) || b < 0 || b > MARY_MAX_BET)) return [false, "押注格式不對"];
+    if (msg.light === 1 && !(g.lights > 0)) return [false, null];   // 自動送燈的開獎：燈已被手動開獎用完就安靜略過（絕不能變成扣款開獎）
+    const total = bets.reduce((a, b) => a + b, 0), pending = g.lights || 0;
+    if (pending > 0) {   // 送燈中：押注維持（不能改注）、免費多開
+      if (total <= 0 || g.bets.some((b, x) => b !== bets[x])) return [false, "送燈期間不能改押注"];
+    } else {
+      if (total <= 0) return [false, "先押注再開始"];
+      if (s.uid) {   // 登入者：Registry 原子扣款
+        const r = await this.registryCall("/chips", { uid: s.uid, spend: total });
+        if (!r || r.ok === false) return [false, "籌碼不足"];
+        s.chips = r.chips;
+      } else {   // 訪客：機台上的 session 餘額
+        if ((s.chips || 0) < total) return [false, "籌碼不足"];
+        s.chips -= total;
+      }
+      g.spent += total;   // 付費開獎：總注記進虧損帳（送燈的免費開獎不記）
+    }
+    const sym = maRoll(), ks = [];
+    for (let x = 0; x < MARY_RING.length; x++) if (MARY_RING[x] === sym) ks.push(x);   // 同符號多格：隨機挑一格停（照機台手感，不然每次都停第一格）
+    g.bets = bets; g.last = ks[(Math.random() * ks.length) | 0]; g.seq++; g.rseq = g.seq; g.dcard = -1;   // rseq＝最後一次開獎的 seq（client 判「這一輪是開獎」用，開到同一格也不會漏亮結果）；dcard 清掉——猜錯歸零後沒有領出可清，卡著會讓 client 不跑跑馬燈（2026-11-19 使用者回饋）
+    if (sym === "more") {   // ONCE MORE＝送燈：押注維持、隨機免費多開 1～5 次（燈中再開到＝再加送；本注不退，燈就是獎勵）
+      const add = 1 + Math.floor(Math.random() * 5);
+      g.lights = pending + add;
+      tblLog(t, pending > 0 ? `${s.name} 的燈開出 ONCE MORE！再加送 ${add} 個燈（剩 ${g.lights} 個）` : `${s.name} 開出 ONCE MORE！送 ${add} 個燈（免費多開 ${add} 次）`);
+      return [true, null];
+    }
+    if (pending > 0) g.lights = pending - 1;   // 這一個燈開掉了
+    const col = MARY_COLS.indexOf(sym);
+    let win = bets[col] * MARY_PAY[sym], allwin = false;
+    if (sym === "gold_dragon" && Math.random() < MARY_ALLWIN_CHANCE) {   // 全中獎（低機率）：另外 7 種怪物也照賠率全中
+      allwin = true;
+      win = MARY_COLS.reduce((a, c, x) => a + bets[x] * MARY_PAY[c], 0);
+    }
+    g.pot += win; g.lastWin = win; g.allwin = allwin;
+    tblLog(t, (allwin ? `${s.name} 開出 ${MARY_NAME[sym]}！全中獎！七種怪物全中，共贏 ${win}` : win > 0 ? `${s.name} 開出 ${MARY_NAME[sym]}，${bets[col]} 注贏 ${win}` : `${s.name} 開出 ${MARY_NAME[sym]}，沒押中`) + (pending > 0 ? `（燈剩 ${g.lights}）` : ""));
+    if (pending <= 0) {   // 送燈的免費開獎：不累積獎池、不出勇者、不記戰績
+      g.jp = await this.maryJpAdd(Math.floor(total * MARY_JP_RATE));   // 總注 10% 累積進獎池（沒中不歸零、換玩家不歸零）
+      if (Math.random() < MARY_HERO_CHANCE) {   // 勇者挑戰島主（中機率）
+        const ownerNm = (MARY_OWNERS.find(o => o.id === g.owner) || {}).name || "島主";
+        if (Math.random() < MARY_HERO_WIN) {   // 打倒島主（中偏低）→ 拉霸啟動
+          const reels = maSlotRoll(), triple = reels[0] === reels[1] && reels[1] === reels[2] ? reels[0] : null;
+          let prize = 0;
+          if (triple === "gold_dragon") {   // 三個黃金肥龍：獨得累積獎池全額，回補種子
+            prize = g.jp; await this.maryJpSet(MARY_JP_SEED); g.jp = MARY_JP_SEED;
+            g.pot += prize;
+            tblLog(t, `勇者打倒了${ownerNm}！拉霸三個黃金肥龍！獨得累積獎池 ${prize} 籌碼！`);
+          } else if (triple) {
+            prize = total * MARY_PAY[triple] * MARY_SLOT_MUL;
+            g.pot += prize;
+            tblLog(t, `勇者打倒了${ownerNm}！拉霸三同 ${MARY_NAME[triple]}！贏 ${prize} 籌碼`);
+          } else tblLog(t, `勇者打倒了${ownerNm}！拉霸沒有中…`);
+          g.show = { seq: g.seq, heroWin: true, reels, triple, prize };
+        } else {
+          g.show = { seq: g.seq, heroWin: false, reels: null, triple: null, prize: 0 };
+          tblLog(t, `勇者現身挑戰${ownerNm}，戰敗消失…`);
+        }
+      }
+      if (s.uid) {
+        const gr = await this.registryCall("/gstats", { uid: s.uid, game: "mary", add: { p: 1 }, max: { best: win } });
+        const w2 = gr && this.state.getWebSockets().find(w => (w.deserializeAttachment() || {}).id === s.cid);
+        if (w2) try { w2.send(JSON.stringify({ t: "gstats", gstats: gr.gstats || {} })); } catch { /* 對方已斷線 */ }
+      }
+    }
+    return [true, null];
+  }
+  // 小瑪莉：領出（獎池 → 籌碼）。回 [changed, err文字]
+  async maCollect(t, i) {
+    const s = t.seats[i], g = t.g;
+    if (t.phase !== "playing" || !g || g.pot <= 0) return [false, null];
+    const pot = g.pot;
+    if (s.uid) {
+      const r = await this.registryCall("/chips", { uid: s.uid, add: pot });
+      if (!r) return [false, null];
+      s.chips = r.chips;
+    } else s.chips = Math.min(CHIPS_MAX, (s.chips || 0) + pot);
+    g.pot = 0; g.dcard = -1; g.seq++; g.paid += pot;
+    tblLog(t, `${s.name} 領出 ${pot} 籌碼`);
+    return [true, null];
+  }
+  // 小瑪莉：兌換（獎池 → 角色經驗值，1 經驗值＝CHIPS_PER_XP 籌碼）。**這筆 XP 不回饋籌碼**（真兌換，不然兌換＝領出＋免費 XP）：
+  // 登入者走 Registry /addxp 的 nochips；訪客的 XP 在本機，獎池直接燒掉、由 client 自己加 XP。回 [changed, err文字]
+  async maExchange(t, i, ws) {
+    const s = t.seats[i], g = t.g;
+    if (t.phase !== "playing" || !g || g.pot <= 0) return [false, null];
+    const pot = g.pot, xp = Math.floor(pot / CHIPS_PER_XP);
+    if (xp <= 0) return [false, `獎池 ${pot} 籌碼不足 ${CHIPS_PER_XP}，不能兌換`];
+    g.pot = 0; g.dcard = -1; g.seq++; g.paid += pot;   // 兌換＝把獎金拿走（變成 XP），不算虧損
+    tblLog(t, `${s.name} 把獎池 ${pot} 籌碼兌換成 ${xp} 經驗值`);
+    if (s.uid) await this.grantXp(ws, xp, "mary", true);   // XP 記進 Registry（不回饋籌碼）、回 xp 訊息演出
+    return [true, null];
   }
   async tableMsg(ws, att, msg) {
     const now = Date.now(), a = msg.a;
@@ -4908,6 +5133,7 @@ export class Island {
       const pname = String((att.state && att.state.name) || (att.user && att.user.name) || `玩家${att.id}`).slice(0, 12);
       if (CAB_GAMES[game]) arJoin(t, att.id, pname, msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null, msg.cab);   // 俄羅斯方塊：坐哪一台由 cab 決定
       else tblJoin(t, att.id, pname, msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null, tblRk(msg.rk));
+      if (game === "mary") await this.maInitChips(t, att.id, msg.chips);   // 小瑪莉：入座就把籌碼餘額帶上機台（登入者讀 Registry；訪客用 client 帶的本機餘額）
       cur.table = tid; ws.serializeAttachment(cur);
       await this.saveTable(t);
       this.tableNotify(t);
@@ -5035,13 +5261,21 @@ export class Island {
     else if (t.game === "bubble" && a === "over") buOver(t, att.id, msg);   // 泡泡射手：客戶端回報結束（最終分數、關卡）
     else if (t.game === "breakout" && a === "over") brOver(t, att.id, msg);   // 打磚塊：客戶端回報結束（最終分數、關卡）
     else if (t.game === "pinball" && a === "over") pbOver(t, att.id, msg);   // 彈珠台：客戶端回報結束（最終分數）
+    else if (t.game === "mary" && (a === "mspin" || a === "mcol" || a === "mxp" || a === "mdbl")) {   // 小瑪莉：押注開獎／領出／兌換經驗值／猜大小（押注與結果都是伺服器權威）
+      const [role, i] = tblFind(t, att.id);
+      if (role !== "seat") return;
+      const [changed, err, lost] = a === "mspin" ? await this.maSpin(t, i, msg) : a === "mcol" ? await this.maCollect(t, i) : a === "mxp" ? await this.maExchange(t, i, ws) : maDbl(t, i, msg);
+      if (err) { try { ws.send(JSON.stringify({ t: "tblerr", id: t.id, text: err })); } catch { /* 對方已斷線 */ } return; }
+      if (!changed) return;
+      if (lost > 0) g.jp = await this.maryJpAdd(lost);   // 比大小輸掉的獎池全額進入累積獎池（2026-11-19 使用者定：三同 40 萬賭輸了，池裡要多 40 萬）
+    }
     else if (t.game === "maze" && MZ_MSGS.has(a)) { if (a === "mpac") mzSetPac(t, att.id, msg.v); else mzOver(t, att.id, msg); }   // 豆豆迷宮：桌主指定豆豆／豆豆那台回報結束
     else if (t.game === "bigtwo" && BT_MSGS.has(a)) { if (!(a === "bplay" ? btPlay(t, att.id, msg.cs, now) : btPass(t, att.id, now))) return; }   // 大老二：出牌 {cs: [牌]}／pass
     else if (t.game === "purify" && PG_MSGS.has(a)) { if (!pgAct(t, att.id, msg, now)) return; }   // 淨土守護戰：移動／清潔／給牌／取素材／合成／道具／丟牌／結束行動
     else if (t.game === "kingdom" && KG_MSGS.has(a)) { if (!kgAct(t, att.id, msg, now)) return; }   // 列島建國：拿資源／保留／建造／交易／封鎖／跳過
     else if (t.game === "intel" && IT_MSGS.has(a)) itMsg(t, att.id, msg, now);   // 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
     else if (a === "ready") tblReady(t, att.id, msg.v);
-    else if (a === "sit") tblSit(t, att.id);
+    else if (a === "sit") { tblSit(t, att.id); if (t.game === "mary") await this.maInitChips(t, att.id, msg.chips); }   // 小瑪莉：觀戰轉入座也要補上籌碼
     else if (a === "stand") tblStand(t, att.id);
     else if (a === "draw") { if (t.game === "uno") unDraw(t, att.id, now); else omDraw(t, att.id, msg.idx); }   // UNO：抽牌；抽鬼牌：抽對方的牌
     else if (a === "shuffle") omShuffle(t, att.id);
@@ -5105,6 +5339,7 @@ export class Island {
           cur.xp = Math.max(0, Math.min(XP_MAX, Math.floor(r.xp)));
           cur.xpKnown = xpKnown = !!r.has;
           if (cur.state) cur.state.lvl = xpInfo(cur.xp).lv;
+          if (typeof r.chips === "number") try { ws.send(JSON.stringify({ t: "chips", chips: r.chips, k: "init" })); } catch { /* 對方已斷線 */ }   // 籌碼餘額（老玩家第一次會在 Registry 按現有 XP 一次性補發）
         }
       }
       if (user) {   // 暱稱：存在 Registry，登入時讀回來（顯示名稱＝暱稱，沒設就是 Discord 名稱）
@@ -5175,6 +5410,7 @@ export class Island {
           if (cur.state) cur.state.lvl = xpInfo(r.xp).lv;
           ws.serializeAttachment(cur);
           try { ws.send(JSON.stringify({ t: "xp", xp: r.xp, d: 0, k: "init" })); } catch { /* 對方已斷線 */ }
+          if (typeof r.chips === "number") try { ws.send(JSON.stringify({ t: "chips", chips: r.chips, k: "init" })); } catch { /* 對方已斷線 */ }   // 上繳建立的紀錄：籌碼也一次性補發
         }
       }
     } else if (msg.t === "tbl") {   // 和平島遊戲桌（join／leave／ready／sit／draw）；牌局邏輯全在伺服器
@@ -6162,6 +6398,16 @@ export class Registry {
     this.state = state;
   }
 
+  // 籌碼餘額（chips:<uid>）：沒有紀錄時按現有 XP 一次性補發（老玩家遷移：籌碼＝經驗值×100；沒有 XP 紀錄就是 0）
+  async chipsOf(uid) {
+    const ck = "chips:" + uid, cur = await this.state.storage.get(ck);
+    if (cur !== undefined) return cur;
+    const xp = await this.state.storage.get("xp:" + uid);
+    const nv = xp === undefined ? 0 : Math.min(CHIPS_MAX, Math.floor(xp) * CHIPS_PER_XP);
+    if (nv > 0) await this.state.storage.put(ck, nv);
+    return nv;
+  }
+
   async fetch(request) {
     const url = new URL(request.url);
     let body = {};
@@ -6229,21 +6475,45 @@ export class Registry {
     }
     // ---- 腳色等級 XP（與 Island 的 grantXp／hello／xpsync 搭配）----
     if (url.pathname === "/profile") {
-      const xp = await this.state.storage.get("xp:" + uid);
-      return json({ xp: xp === undefined ? 0 : xp, has: xp !== undefined });
+      const xk = "xp:" + uid, xp = await this.state.storage.get(xk);
+      return json({ xp: xp === undefined ? 0 : xp, has: xp !== undefined, chips: await this.chipsOf(uid) });
     }
     if (url.pathname === "/deposit") {   // 舊存檔一次性上繳：已經有紀錄就不覆蓋（冪等；兩台裝置同時上繳也不會疊加）
       const v = Math.max(0, Math.min(XP_MAX, Math.floor(Number(body.v) || 0)));
       const xk = "xp:" + uid, cur = await this.state.storage.get(xk);
-      if (cur === undefined) { await this.state.storage.put(xk, v); return json({ xp: v }); }
-      return json({ xp: cur });
+      if (cur === undefined) {
+        await this.state.storage.put(xk, v);
+        await this.chipsOf(uid);   // 第一次有 XP 紀錄：籌碼也按它一次性補發
+        return json({ xp: v, chips: Math.min(CHIPS_MAX, v * CHIPS_PER_XP) });
+      }
+      return json({ xp: cur, chips: await this.chipsOf(uid) });
     }
-    if (url.pathname === "/addxp") {     // 累加（可負＝死亡扣款）：夾在 0..XP_MAX，沒變就不寫 storage
+    if (url.pathname === "/addxp") {     // 累加（可負＝死亡扣款）：夾在 0..XP_MAX；d>0 時同步加碼籌碼（加到多少送多少；負的不追溯扣）。
       const d = Math.max(-100000, Math.min(100000, Math.floor(Number(body.d) || 0)));
-      const xk = "xp:" + uid, cur = await this.state.storage.get(xk);
+      const nochips = body.nochips === 1 || body.nochips === true;   // 小瑪莉「兌換」用：這筆 XP 不回饋籌碼（真把籌碼換成 XP）
+      const xk = "xp:" + uid, ck = "chips:" + uid;
+      let chips = await this.chipsOf(uid);   // 先取餘額（老玩家的遷移用的是「舊」XP，不然會跟下面的 gain 算兩次）
+      const cur = await this.state.storage.get(xk);
       const nv = Math.max(0, Math.min(XP_MAX, (cur === undefined ? 0 : cur) + d));
       if (nv !== cur) await this.state.storage.put(xk, nv);
-      return json({ xp: nv });
+      const gain = d > 0 && !nochips ? nv - (cur === undefined ? 0 : cur) : 0;   // 實際加到的 XP（已被 XP_MAX 夾住就不送籌碼）
+      if (gain > 0) {
+        chips = Math.min(CHIPS_MAX, chips + gain * CHIPS_PER_XP);
+        await this.state.storage.put(ck, chips);
+      }
+      return json(nochips ? { xp: nv } : { xp: nv, chips });
+    }
+    if (url.pathname === "/chips") {     // 籌碼記帳（賭博遊戲用）：add＝入帳（領出／離座退回）、spend＝原子扣款（下注；餘額不足回 ok:false 且不寫入）
+      const add = Math.max(0, Math.min(CHIPS_MAX, Math.floor(Number(body.add) || 0)));
+      const spend = Math.max(0, Math.min(CHIPS_MAX, Math.floor(Number(body.spend) || 0)));
+      let chips = await this.chipsOf(uid);
+      if (spend > 0) {
+        if (chips < spend) return json({ chips, ok: false });
+        chips -= spend;
+      }
+      chips = Math.min(CHIPS_MAX, chips + add);
+      if (spend > 0 || add > 0) await this.state.storage.put("chips:" + uid, chips);
+      return json({ chips, ok: true });
     }
     return json({ error: "not found" }, 404);
   }

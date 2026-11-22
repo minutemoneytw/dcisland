@@ -115,6 +115,7 @@ body {
 #lvRow { display: flex; align-items: center; gap: 8px; font: bold 12px "Microsoft JhengHei", "PingFang TC", sans-serif; color: var(--gold); }
 #lvBar { flex: 1; height: 7px; background: rgba(8, 10, 14, .6); border-radius: 4px; overflow: hidden; }
 #lvFill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ffd86b, #f0a63a); border-radius: 4px; transition: width .3s; }
+#chipsRow { font: bold 12px "Microsoft JhengHei", "PingFang TC", sans-serif; color: var(--gold); }   /* 籌碼（賭博遊戲的下注貨幣，跟著等級一起放角色頁） */
 .optrow { display: flex; gap: 6px; flex-wrap: wrap; }
 .opt {
   width: 26px; height: 26px; border: 1px solid #3a3f4e;
@@ -384,6 +385,7 @@ body {
 .pb-wrap { display: flex; justify-content: center; margin: 8px auto; }
 .pb-canvas { display: block; height: min(844px, calc(100vh - 210px)); width: auto; aspect-ratio: 1 / 2; border: 2px solid #8aa0e0; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
 .brk-canvas { display: block; max-width: 100%; max-height: calc(100vh - 290px); width: auto; height: auto; border: 2px solid #1f9a8a; box-shadow: 0 4px 16px rgba(0,0,0,.5); cursor: none; }
+.mary-canvas { display: block; margin: 10px auto; max-width: 100%; height: auto; border: 2px solid #c04878; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
 .pl-canvas { display: block; max-width: 100%; max-height: calc(100vh - 290px); width: auto; height: auto; border: 2px solid #6a78c8; box-shadow: 0 4px 16px rgba(0,0,0,.5); cursor: none; }
 .pl-vs { gap: 12px; align-items: flex-start; }   /* 星球合成對戰：兩個盤面並排（自己大、對手小；觀戰者兩邊一樣大） */
 .pl-half { max-height: calc((100vh - 290px) * .8); }

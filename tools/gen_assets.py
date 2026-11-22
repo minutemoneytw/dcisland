@@ -1626,16 +1626,18 @@ TABLES_BY_TERRAIN = {
               # 俄羅斯方塊（2026-11-13，使用者要求）：場地上方一排 4 台，造型一樣、配色不同，間距約一個人（1 格）。
               # 4 台共用同一張邏輯桌 t13（伺服器的 TABLE_DEFS 只有 t13），cab＝第幾台（0～3），img＝這台的圖（配色）
               *[dict(id="t13", game="arcade", cab=k, img=f"arcade_{k}.png", cell=[48 + k * 3, 14.5], w=2, h=3) for k in range(4)],
-              dict(id="t19", game="pinball", cell=[83, 26], w=2, h=3),   # 彈珠台（2026-11-17 使用者要求：轉到側面、放到打磚塊底下）：貼東牆、面向左，在打磚塊下面隔 1 格
+              # 彈珠台（2026-11-17 使用者要求：轉到側面、放到打磚塊底下）：貼東牆、面向左，在打磚塊下面隔 1 格
+              dict(id="t19", game="pinball", cell=[83, 26], w=2, h=3),
+              # 小瑪莉機台（2026-11-16，使用者要求：北牆最左邊的經典水果盤賭博機台，籌碼經濟的第一個客人；2026-11-18 撞號改編 t99——t21/t22/t23 連續被遠端的新機台用掉，使用者定低號留給遠端、小瑪莉跳 t99）：2×3 格、靠北牆，街機群左邊
+              dict(id="t99", game="mary", cell=[42, 14.5], w=2, h=3),
               # 打磚塊機台（2026-11-16，使用者要求：畫面右側牆邊、餐飲區的下方，機台面向左邊，先放一台）：貼著東牆（房間最右兩欄 x＝83、84），餐飲區地毯（y 16～20）下面隔 1 格
               dict(id="t20", game="breakout", cell=[83, 22], w=2, h=3),
-              dict(id="t22", game="bubble", cell=[83, 30], w=2, h=3),
-              dict(id="t23", game="g2048", cell=[83, 34], w=2, h=3),
+              dict(id="t22", game="bubble", cell=[83, 30], w=2, h=3),   # 泡泡射手（2026-11-17，使用者要求：彈珠台下方放一台）：貼東牆、面向左，在彈珠台下面隔 1 格；單人、分數進排行榜
+              dict(id="t23", game="g2048", cell=[83, 34], w=2, h=3),   # 2048（2026-11-17，使用者要求：泡泡射手下方再放一台）：貼東牆、面向左，在泡泡射手下面隔 1 格；單人、分數進排行榜
               # 星球合成（2026-11-20，使用者要求：做一款類似西瓜遊戲的；再要求「兩台單人機台＋邀請對戰」）：兩台機台共用邏輯桌 t24（同俄羅斯方塊 t13 的做法，cab＝第幾台），
               # 貼東牆、面向左，在 2048 下面隔 1 格，兩台之間也隔 1 格；單人模式分數進排行榜，邀請對戰＝先合成出黑洞或對手先死就贏
               dict(id="t24", game="planet", cab=0, img="table_planet.png", cell=[83, 38], w=2, h=3),
-              dict(id="t24", game="planet", cab=1, img="table_planet2.png", cell=[83, 42], w=2, h=3)],   # 2048（2026-11-17，使用者要求：泡泡射手下方再放一台）：貼東牆、面向左，在泡泡射手下面隔 1 格；單人、分數進排行榜
-#   # 泡泡射手（2026-11-17，使用者要求：彈珠台下方放一台）：貼東牆、面向左，在彈珠台下面隔 1 格；單人、分數進排行榜    # 彈珠台（2026-11-15，使用者要求：俄羅斯方塊機台左邊）：同樣 2×3 格、靠北牆，跟機台隔 1 格；單人、分數進排行榜,   # y＝14.5：機台上半截疊在北牆前（靠牆），一半在房間外（2026-11-13 使用者要求）
+              dict(id="t24", game="planet", cab=1, img="table_planet2.png", cell=[83, 42], w=2, h=3)],
 }
 
 # 和平島的固定小物件（不是遊戲桌、不是可擺設的家具）：地形 → [物件]。kind＝互動種類（drink 喝飲料／food 吃點心，客戶端 useProp）、
@@ -2101,6 +2103,36 @@ def table_pinball():
     for y in (34, 37, 40):
         cv.hline(18, 25, y, dark)                                         # 下半身的散熱孔
     cv.hline(7, 29, 46, dark); cv.hline(7, 29, 47, dark)
+    cv.outline()
+    return cv
+
+def table_mary():
+    """小瑪莉機台（32×48，畫 scale 2＝2×3 格）：桃紅機身、上方發光的招牌（兩顆櫻桃）、中間跑馬燈轉盤示意（上下兩排彩格＋中間的開獎顯示窗＋紅色指針）、
+    下面一排押注鈕、右下投幣口。"""
+    cv = Canvas(32, 48)
+    body = hx("#c04878"); dark = shade(body, .6); lite = shade(body, 1.35)
+    cv.rect(2, 0, 29, 47, body)
+    cv.rect(2, 0, 4, 47, dark); cv.rect(27, 0, 29, 47, dark)
+    cv.rect(5, 1, 26, 10, hx("#ffe0ee")); cv.hline(5, 26, 1, hx("#fff4f9")); cv.hline(5, 26, 10, hx("#e89ab8"))   # 上方招牌（發光）
+    cv.ellipse(12, 6, 1.7, 1.7, hx("#e03048")); cv.ellipse(16, 5, 1.7, 1.7, hx("#e03048"))   # 招牌上的兩顆櫻桃
+    cv.set(12, 5, hx("#ffffff")); cv.set(16, 4, hx("#ffffff"))
+    cv.vline(14, 2, 5, hx("#3c9a48")); cv.vline(17, 2, 4, hx("#3c9a48")); cv.hline(14, 18, 2, hx("#3c9a48"))   # 櫻桃梗
+    cv.rect(5, 10, 26, 11, hx("#8a2850"))                        # 招牌下緣
+    cv.rect(5, 12, 26, 31, hx("#26102a"))                        # 跑馬燈轉盤外框
+    cols = ["#e04848", "#f0c020", "#3cb45a", "#3b78e8", "#f07830", "#b060e0"]
+    for k in range(9):                                           # 轉盤的彩格（上下兩排，示意外圈 24 格的跑馬燈）
+        c = cols[k % len(cols)]
+        cv.rect(7 + k * 2, 14, 8 + k * 2, 17, hx(c))
+        cv.rect(7 + k * 2, 26, 8 + k * 2, 29, hx(cols[(k + 3) % len(cols)]))
+    cv.rect(9, 19, 22, 24, hx("#10101c")); cv.hline(9, 22, 19, hx("#3a3050"))   # 中間的開獎顯示窗
+    cv.rect(11, 20, 14, 23, hx("#f0c020")); cv.set(12, 21, hx("#fff0a0"))       # 顯示窗裡的獎（金色）
+    cv.rect(17, 20, 20, 23, hx("#e04848")); cv.set(18, 21, hx("#ff9090"))       # 顯示窗裡的獎（紅色）
+    cv.rect(15, 17, 16, 18, hx("#e02040"))                       # 頂上的紅色指針（開獎位置）
+    cv.rect(5, 32, 26, 33, dark)
+    for k, bc in enumerate(["#f0c020", "#3cb45a", "#e04848", "#3b78e8"]):   # 下面一排押注鈕（四色）
+        cv.ellipse(9 + k * 5, 37, 1.7, 1.7, hx(bc)); cv.set(9 + k * 5 - 1, 36, shade(hx(bc), 1.4))
+    cv.rect(5, 41, 26, 42, dark)
+    cv.rect(8, 44, 23, 46, shade(body, .8)); cv.rect(11, 44, 20, 46, hx("#1a1a22")); cv.vline(20, 44, 46, hx("#e8c060")); cv.vline(21, 44, 46, hx("#e8c060"))   # 下方投幣口
     cv.outline()
     return cv
 
@@ -4309,6 +4341,7 @@ def main():
     for k, col in enumerate(ARCADE_COLORS):
         save(arcade_cabinet(col), f"arcade_{k}.png", "games")
     save(table_pinball(), "table_pinball.png", "games")
+    save(table_mary(), "table_mary.png", "games")
     save(table_breakout(), "table_breakout.png", "games")
     save(table_bubble(), "table_bubble.png", "games")
     save(table_g2048(), "table_g2048.png", "games")
