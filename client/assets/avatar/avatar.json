@@ -3741,7 +3741,7 @@
   {
    "id": "human2",
    "name": "新人類",
-   "scale": 0.77,
+   "scale": 1.0,
    "own": {
     "sheets": {
      "body": "human2_body.png",

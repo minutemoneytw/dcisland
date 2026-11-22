@@ -640,7 +640,7 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
     # 新人類（2026-11-22，使用者定案：先定義為新的人類，之後再加其他種族與動作）：藍髮、黑色女式西裝（外套＋襯衫＋短裙）。
     # tools/gen_school.py 畫，圖層 human2_<圖層>.png；外框已經畫在每層裡（不設 own.outline，引擎不再統一畫外框）；
     # 本體 62 排高，scale 0.77 縮成跟原本人物（約 46px）一樣大；只有 4 方向走路（待機＝雙腳併攏／站姿），攻擊、坐姿、釣魚還沒畫，退回待機幀。
-    dict(id="human2", name="新人類", scale=0.77, own=dict(
+    dict(id="human2", name="新人類", scale=1.0, own=dict(
         sheets={n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
         dye=gen_school.dye_rules(SCHOOL_SHEETS),
         # 武器掛點（64×64 格子座標；本體在格子 x 18～45、y 2～62）：暫時估的，之後逐把校正
