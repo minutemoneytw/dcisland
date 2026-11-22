@@ -4088,7 +4088,7 @@ const GAME_START = { purify: pgStart, planet: () => {}, g2048: tfStart, bubble: 
 const SCR_CTL_CD_MS = 5000;   // 大螢幕影片的暫停／繼續／跳轉冷卻（全島共用；2026-11-19 使用者定：任何人都能控制，每次操作 5 秒冷卻）
 const SCR_CD_MS = 5000;   // 大螢幕手動切台的冷卻（全島共用；2026-11-14 使用者要求）
 const SCR_CID = "__screen__";   // 大螢幕轉播用的虛擬連線編號（tblView 把它當觀戰者：手牌全翻開）
-function tblView(t, cid) {
+function tblView(t, cid, jp = MARY_JP_SEED) {
   const [role, i] = cid === SCR_CID ? ["spec", -1] : tblFind(t, cid), [mn, mx] = GAME_LIMITS[t.game], playing = t.phase === "playing";
   const v = {
     id: t.id, game: t.game, phase: t.phase, min: mn, max: mx, role, me: role === "seat" ? i : -1, board: t.board || null, board2: t.board2 || null,
@@ -4130,7 +4130,7 @@ function tblView(t, cid) {
   if (t.game === "mary") {   // 小瑪莉：獎池／開獎格／押注／比倍開的牌／座位上的籌碼（只有本人看得到自己的餘額）；外圈與賠率表一起送（單一真相在伺服器）
     const g = t.g;
     v.ma = { ring: MARY_RING, cols: MARY_COLS, pay: MARY_PAY, nm: MARY_NAME, owner: g ? g.owner : null, pot: g ? g.pot : 0, bets: g ? [...g.bets] : null, last: g ? g.last : -1, dcard: g ? g.dcard : -1, seq: g ? g.seq : 0, rseq: g ? (g.rseq || -1) : -1, lights: g ? (g.lights || 0) : 0,
-             win: g ? (g.lastWin || 0) : 0, allwin: !!(g && g.allwin), show: g?.show || null, jp: this.maryJp ?? MARY_JP_SEED,
+             win: g ? (g.lastWin || 0) : 0, allwin: !!(g && g.allwin), show: g?.show || null, jp: jp ?? MARY_JP_SEED,
              chips: role === "seat" ? Math.max(0, Math.floor(t.seats[i].chips || 0)) : null, maxBet: MARY_MAX_BET };
     return v;
   }
@@ -4689,7 +4689,7 @@ export class Island {
       if ((w.deserializeAttachment() || {}).id === cid) { try { w.send(data); } catch { /* 對方已斷線 */ } }
     }
   }
-  tableNotify(t) { for (const m of [...t.seats, ...t.specs]) this.sendToId(m.cid, { t: "table", id: t.id, v: tblView(t, m.cid) }); }
+  tableNotify(t) { for (const m of [...t.seats, ...t.specs]) this.sendToId(m.cid, { t: "table", id: t.id, v: tblView(t, m.cid, this.maryJp ?? MARY_JP_SEED) }); }   // tblView 是模組函式沒有 this：JP 由這裡帶進去（2026-11-22 修：原本在 tblView 裡用 this.maryJp 會 throw，join 後的 table 訊息永遠送不出＝DC 裡一直「連線中」）
   // ---- 大螢幕（和平島左上角的圍觀休息區；2026-11-14，使用者要求；規則與 tools/dev_server.py 的 _scr_* 同一套）----
   // 全島共用一個頻道，轉播某一桌（觀戰者視角）。可轉播的桌：進行中、或有人入座但還沒開始；一局結束後畫面停在結算，
   // 直到那桌沒人入座才自動換成別的進行中的桌（沒有就關閉）。螢幕訊息 {t:'scr', id, game, v} 送給同地形、而且不在牌桌裡的連線。
@@ -4731,7 +4731,7 @@ export class Island {
       return sv ? { t: "scr", id: tid, game: "video", vid: sv, now: Date.now() } : { t: "scr", id: null };
     }
     const t = tid ? this.tables.get(tid) : null;
-    return t ? { t: "scr", id: tid, game: t.game, v: tblView(t, SCR_CID) } : { t: "scr", id: null };
+    return t ? { t: "scr", id: tid, game: t.game, v: tblView(t, SCR_CID, this.maryJp ?? MARY_JP_SEED) } : { t: "scr", id: null };
   }
   scrResolve(terr) {
     const tid = this.screen.get(terr);
