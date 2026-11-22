@@ -612,6 +612,10 @@ def chibi_styles():
         top=[dict(id=f"chibi_{i}", name=n, sheets={l: f"chibi_outfit_{i}_{l}.png" for l in ls}) for i, n, ls in CHIBI_OUTFIT_STYLES],
         face=[dict(id=f"chibi_{i}", name=n, sheets={l: f"chibi_face_{i}_{l}.png" for l in ls}) for i, n, ls in CHIBI_FACE_STYLES])
 
+import gen_school   # 「新人類」分層 sheet（2026-11-22）：tools/gen_school.py；sheet 在這裡先畫好，換色規則要看實際用到的顏色
+SCHOOL_SHEETS = gen_school.build_sheets()
+SCHOOL_LAYERS = [n for n, im in SCHOOL_SHEETS.items() if any(c is not None for row in im.px for c in row)]   # hairbg／hat 目前是空的，不輸出
+
 LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ears）；scale＝人類模組整體縮放倍率
     dict(id="human", name="人類", scale=1.0),
     dict(id="elf", name="精靈", scale=1.0, ear="char_ears_elven.png", earDye=LPC_SKIN_DYE),   # 精靈耳跟膚色
@@ -633,6 +637,14 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
              dict(slot="hat", layers=["hat"], colors=["#eab242", "#82522c"])],
         # 武器掛點（64×64 格子座標；LPC 的是 back 23,32／backView 41,32／waist 23,48／hand 40,40，照 LPC 身形不適用）：手＝拿武器那隻手（正面／背面＝螢幕右手，側面＝往前伸的位置）
         anchors=dict(back=[24, 42], backView=[40, 42], waist=[25, 53], hand=dict(down=[43, 50], up=[43, 50], side=[35, 50])))),
+    # 新人類（2026-11-22，使用者定案：先定義為新的人類，之後再加其他種族與動作）：藍髮、黑色女式西裝（外套＋襯衫＋短裙）。
+    # tools/gen_school.py 畫，圖層 human2_<圖層>.png；外框已經畫在每層裡（不設 own.outline，引擎不再統一畫外框）；
+    # 本體 62 排高，scale 0.77 縮成跟原本人物（約 46px）一樣大；只有 4 方向走路（待機＝雙腳併攏／站姿），攻擊、坐姿、釣魚還沒畫，退回待機幀。
+    dict(id="human2", name="新人類", scale=0.77, own=dict(
+        sheets={n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
+        dye=gen_school.dye_rules(SCHOOL_SHEETS),
+        # 武器掛點（64×64 格子座標；本體在格子 x 18～45、y 2～62）：暫時估的，之後逐把校正
+        anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 48], hand=dict(down=[42, 45], up=[42, 45], side=[31, 45])))),
 ]
 
 def kidol_main_hex(cid):
@@ -4435,6 +4447,9 @@ def main():
     import gen_chibi
     for lname, lim in gen_chibi.build_sheets().items():
         save_chibi_layer(lim, f"chibi_{lname}.png", sub)
+    # 新人類（tools/gen_school.py）：圖層 human2_<圖層>.png（hairbg／hat 目前是空的，不輸出）
+    for lname in SCHOOL_LAYERS:
+        save_chibi_layer(SCHOOL_SHEETS[lname], f"human2_{lname}.png", sub)
     # 款式（髮型只換 hairbg／hair，服裝只換 body／bottom／top；預設款＝上面那組基本圖）
     for hid in CHIBI_HAIR_STYLES[1:]:
         for lname, lim in gen_chibi.build_sheets(hair=hid[0]).items():

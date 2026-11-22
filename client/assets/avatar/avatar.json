@@ -3737,6 +3737,116 @@
      }
     }
    }
+  },
+  {
+   "id": "human2",
+   "name": "新人類",
+   "scale": 0.77,
+   "own": {
+    "sheets": {
+     "body": "human2_body.png",
+     "bottom": "human2_bottom.png",
+     "shoes": "human2_shoes.png",
+     "top": "human2_top.png",
+     "face": "human2_face.png",
+     "hair": "human2_hair.png"
+    },
+    "outline": null,
+    "dye": [
+     {
+      "slot": "hair",
+      "layers": [
+       "hair"
+      ],
+      "colors": [
+       "#7482b2",
+       "#c8d4f8",
+       "#8494c0",
+       "#8c7aac",
+       "#6472a2",
+       "#444c63",
+       "#3c4a7c",
+       "#3c435c",
+       "#343b54",
+       "#222846",
+       "#1f2640",
+       "#3a190f",
+       "#111424",
+       "#1e0d07"
+      ]
+     },
+     {
+      "slot": "top",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#282424",
+       "#221c1c",
+       "#1f1b1b",
+       "#110e0e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#4a3c37",
+       "#282424",
+       "#3a190f",
+       "#221c1c",
+       "#1f1b1b",
+       "#110e0e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2e201e",
+       "#5c5458",
+       "#2f2b2d",
+       "#17100f"
+      ]
+     }
+    ],
+    "anchors": {
+     "back": [
+      27,
+      36
+     ],
+     "backView": [
+      37,
+      36
+     ],
+     "waist": [
+      28,
+      48
+     ],
+     "hand": {
+      "down": [
+       42,
+       45
+      ],
+      "up": [
+       42,
+       45
+      ],
+      "side": [
+       31,
+       45
+      ]
+     }
+    }
+   }
   }
  ],
  "hair": [

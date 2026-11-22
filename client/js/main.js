@@ -2974,7 +2974,7 @@ function chibiSprite(race, look, fi) {
     for (const r of rules) if (r.hex && r.layers.includes(n)) img = dyeSheet(img, r.colors, r.hex);   // 同一張圖可以被多條規則依序換色（例如 bottom 層：圍裙下擺跟上衣、褲子跟褲子）
     g.drawImage(img, sx, sy, F.w, F.h, 0, 0, F.w, F.h);
   }
-  outlineCanvas(cv, own.outline);
+  if (own.outline) outlineCanvas(cv, own.outline);   // 外框已經畫在圖層裡的種族（新人類）不設 outline，不再統一畫一圈
   S.charCache.set(k, cv);
   return cv;
 }
