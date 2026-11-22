@@ -8768,7 +8768,9 @@ function marySpinTo(to, win, more) {   // 開獎：跑馬燈從目前位置多�
 function maryFrame() {
   const M = S.mary; if (!M) { S.maryRaf = 0; return; }
   const now = performance.now();
-  if (M.lastFrame && now - M.lastFrame > 250) {   // 分頁切走／rAF 停擺後回來：把動畫起點往後推，跑馬燈與演出把看得見的部分完整跑完（不然會一次跳到終點＝「不跑燈直接開結果」，2026-11-19 使用者回饋）
+  if (M.lastFrame && now - M.lastFrame > 2000) {   // 真的切走（分頁隱藏、rAF 整個停了）回來才補償：把動畫起點往後推，跑馬燈與演出把看得見的部分完整跑完（不然會一次跳到終點＝「不跑燈直接開結果」，2026-11-19 使用者回饋）。
+    // 門檻 250ms 太低（2026-11-22 使用者回報 DC 送完燈卡死）：DC 的 iframe 掉幀／節流時每幀間隔都 >250ms，t0 每幀被往後推同樣的間隔＝動畫進度永不前進（now - t0 恆等於上一幀的值）＝機台永久鎖死。
+    // 改 2 秒：切走回來補一次完整 gap；只是變慢的每照常推進真實經過的時間，動畫會慢慢跑完、不會凍結。
     const gap = now - M.lastFrame;
     if (M.spin) M.spin.t0 += gap;
     if (M.showPlay) M.showPlay.t0 += gap;
