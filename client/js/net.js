@@ -112,10 +112,12 @@ export function connectNet(S, opts = {}) {
         if (S.session && msg.auth === false) S.reauth?.();
         break;
       case 'xp': if (opts.onXp) opts.onXp(msg); break;   // 自己的 XP 記帳結果（伺服器權威；不廣播）
+      case 'chips': if (opts.onChips) opts.onChips(msg); break;   // 自己的籌碼記帳結果（init／XP 加碼；賭博桌的下注與結算也走這裡；不廣播）
       case 'commit_result': if (opts.onCommitResult) opts.onCommitResult(msg); break;
       case 'fish_result': if (opts.onFishResult) opts.onFishResult(msg); break;   // 釣魚結果（伺服器抽）
       case 'fish_hook': if (opts.onFishHook) opts.onFishHook(msg); break;       // 這一竿的稀有度（拋竿時伺服器就抽好了）
       case 'table': if (opts.onTable) opts.onTable(msg); break;           // 和平島遊戲桌：我這桌的畫面（v＝null＝我已離開）
+      case 'tblerr': if (opts.onTblErr) opts.onTblErr(msg); break;        // 和平島遊戲桌：我的操作被拒（小瑪莉的籌碼不足／沒押注等，只回給本人）
       case 'tpos': if (opts.onTpos) opts.onTpos(msg); break;   // 躲彈幕：其他玩家的位置（i＝座位編號）
       case 'tpg': if (opts.onTpg) opts.onTpg(msg); break;      // 英文打字競賽（觀戰者才收到）：其他玩家的打字進度（i＝座位編號、n＝第幾個字、p＝已打對幾個字母、e＝剛打錯）
       case 'tsc': if (opts.onTsc) opts.onTsc(msg); break;      // 英文打字競賽：其他玩家的分數（i＝座位編號、n＝分數）
