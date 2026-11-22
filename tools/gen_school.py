@@ -874,23 +874,31 @@ def all_frames():
 
 EAR_EX = 0                            # 耳朵圖層比角色多的欄數（現在耳朵都在髮球裡面，不用多）
 # 妖精耳朵（使用者標的位置：臉兩側的鬢髮上、眼睛外側偏上，尖在外上方、往裡面變粗）：{排: [欄...]}，欄是角色座標；右耳＝左右鏡射（欄 27-x）
-EAR_FRONT = {16: [5], 17: [5, 6], 18: [5, 6, 7]}
-# 側面（臉朝左）看到的那隻耳朵：蓋在頭髮上面，尖在最外面（後上方），往耳根（欄 13）變粗，形狀跟正面一致
+# 正面（使用者逐格標的）：左耳＝棕色外圈 b＋皮膚 s，從左上角的尖往右下斜到耳根（欄 3～5、排 17～21），右耳左右鏡射（欄 27-x）；蓋在頭髮上面
+EAR_FRONT = ['3,17,b', '3,18,b', '4,18,b', '3,19,b', '4,19,s', '5,19,b', '4,20,b', '5,20,s', '5,21,b']
+# 側面（臉朝左）看到的那隻耳朵：蓋在頭髮上面，尖在最外面（後上方），往耳根（欄 13）變粗
 EAR_SIDE = {19: [16], 20: [15, 16], 21: [14, 15, 16], 22: [13, 14, 15], 23: [13, 14]}
 EAR_DY = {'front': {0: 0, 1: -1, 2: -1}, 'side': {0: -1, 1: 0, 2: 0}}   # 跟頭一起上下（見 girl_walk／girl_side 的上抬）；背面的髮型把耳朵蓋住，不畫
 
 
 def _ear_img(rows, dy, both):
-    """耳朵畫成 Img(28+2*EAR_EX, 62)：皮膚色 sk，最下面一格 fk（陰影）；both＝左右各一隻。"""
+    """耳朵畫成 Img(28+2*EAR_EX, 62)。rows 是字串清單 'x,y,b|s'（逐格上色：b＝棕色外圈 fb、s＝皮膚 sk）時照格子畫；
+    是 {排: [欄]} 字典時畫成皮膚色 sk、最下面一格 fk。both＝左右各一隻（右耳鏡射）。"""
     img = Img(28 + 2 * EAR_EX, 62)
-    cells = set()
-    for y, xs in rows.items():
-        for x in xs:
-            cells.add((x, y + dy))
-            if both:
-                cells.add((27 - x, y + dy))
-    for x, y in cells:
-        img.px[y][x + EAR_EX] = C['fk'] if (x, y + 1) not in cells else C['sk']
+    cells = {}
+    if isinstance(rows, dict):
+        for y, xs in rows.items():
+            for x in xs:
+                cells[(x, y)] = None
+    else:
+        for t in rows:
+            x, y, k = t.split(',')
+            cells[(int(x), int(y))] = C['fb'] if k == 'b' else C['sk']
+    for (x, y), col in cells.items():
+        if col is None:
+            col = C['fk'] if (x, y + 1) not in cells else C['sk']
+        for xx in ((x, 27 - x) if both else (x,)):
+            img.px[y + dy][xx + EAR_EX] = col
     return img
 
 
