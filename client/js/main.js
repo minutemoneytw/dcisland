@@ -3950,8 +3950,9 @@ function drawPersonBase(p, wi, nameColor) {
   const pose = p.pose === 'sit' || p.pose === 'sleep' ? p.pose : null;
   const race = (p === S.players[0] ? S.me.race : p.look?.race) || 'human';
   const ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);   // 吃喝的效果（巨大化／縮小／透明／暈眩／中毒）
-  const raceScale = ((S.avatar.races?.find(r => r.id === race)?.scale) || 1) * foodScaleOf(ffx);   // 種族倍率：拉拉肥 0.5／巨人 1.5（整個模組一起縮）；吃喝的巨大化／縮小再乘上去
-  let nameY = p.y - p.z - Math.round(52 * raceScale);   // 名牌跟著身高（種族倍率）移
+  const raceDef = S.avatar.races?.find(r => r.id === race);
+  const raceScale = (raceDef?.scale || 1) * foodScaleOf(ffx);   // 種族倍率：拉拉肥 0.5／巨人 1.5（整個模組一起縮）；吃喝的巨大化／縮小再乘上去
+  let nameY = p.y - p.z - Math.round((raceDef?.nameH || 52) * raceScale);   // 名牌跟著身高（種族倍率）移；種族可以用 nameH 指定名牌離腳底多高（新人類系列頭頂有耳朵，要再高一點）
   if (pose === 'sleep') {
     drawSleeper(p);
     nameY = p.y - Math.round(46 * raceScale);
