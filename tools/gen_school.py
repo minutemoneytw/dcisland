@@ -31,6 +31,7 @@ C = {
     'k': (60, 52, 52), 'k_l': (78, 70, 70), 'k_d': (34, 28, 28), 'shirt': (214, 200, 202), 'shirt_d': (170, 156, 160), 'shoe_k': (46, 32, 30), 'shoe_kl': (92, 84, 88),
     'hs': (100, 114, 162), 'fb': (143, 117, 106), 'fk': (179, 152, 148), 'fc': (116, 74, 60), 'hv': (140, 122, 172), 'eg1': (85, 82, 100), 'eg2': (120, 119, 128), 'eg3': (74, 66, 66), 'eg4': (56, 46, 47), 'hp': (240, 226, 236), 'sdk': (58, 25, 15),
     'ol': (0, 0, 0), 'ho': (0xb6, 0xa2, 0x99), 'hand': (0xf8, 0xe1, 0xdb),
+    'ci': (236, 160, 172),
     'sock': (240, 242, 248), 'sock_d': (198, 204, 220), 'shoe': (100, 66, 50), 'shoe_l': (140, 98, 74),
 }
 
@@ -872,7 +873,8 @@ def all_frames():
             'back': [girl_back(k).layers for k in (0, 1, 2)]}
 
 
-EAR_EX = 0                            # 耳朵圖層比角色多的欄數（現在耳朵都在髮球裡面，不用多）
+EAR_TOP = 2                           # 耳朵圖層上方多留的排數（貓耳的尖在頭頂上面）；貼到 sheet 時往上偏 EAR_TOP
+EAR_EX = 4                            # 耳朵／尾巴圖層比角色多的欄數（尾巴尖會伸出角色外面）
 # 妖精耳朵（使用者標的位置：臉兩側的鬢髮上、眼睛外側偏上，尖在外上方、往裡面變粗）：{排: [欄...]}，欄是角色座標；右耳＝左右鏡射（欄 27-x）
 # 正面（使用者逐格標的）：左耳＝棕色外圈 b＋皮膚 s，從左上角的尖往右下斜到耳根（欄 3～5、排 17～21），右耳左右鏡射（欄 27-x）；蓋在頭髮上面
 EAR_FRONT = ['3,17,b', '3,18,b', '4,18,b', '3,19,b', '4,19,s', '5,19,b', '4,20,b', '5,20,s', '5,21,b']
@@ -884,7 +886,7 @@ EAR_DY = {'front': {0: 0, 1: -1, 2: -1}, 'side': {0: -1, 1: 0, 2: 0}}   # 跟頭
 def _ear_img(rows, dy, both):
     """耳朵畫成 Img(28+2*EAR_EX, 62)。rows 是字串清單 'x,y,b|s'（逐格上色：b＝棕色外圈 fb、s＝皮膚 sk）時照格子畫；
     是 {排: [欄]} 字典時畫成皮膚色 sk、最下面一格 fk。both＝左右各一隻（右耳鏡射）。"""
-    img = Img(28 + 2 * EAR_EX, 62)
+    img = Img(28 + 2 * EAR_EX, 62 + EAR_TOP)
     cells = {}
     if isinstance(rows, dict):
         for y, xs in rows.items():
@@ -898,19 +900,91 @@ def _ear_img(rows, dy, both):
         if col is None:
             col = C['fk'] if (x, y + 1) not in cells else C['sk']
         for xx in ((x, 27 - x) if both else (x,)):
-            img.px[y + dy][xx + EAR_EX] = col
+            img.px[y + dy + EAR_TOP][xx + EAR_EX] = col
     return img
 
 
-def ear_frames():
-    """{'front': [3 格], 'side': [...]}：每格是 {'hat': Img}（蓋在頭髮上面）。背面沒有（髮型蓋住耳朵）。"""
+# 貓耳（2026-11-23，參考 LPC 貓耳：頭頂兩側的三角形耳朵、深色外圈、內側粉紅）：模板以耳尖為 (0,0)，(dx, kind)：o 外圈、f 毛、i 內側
+CAT_EAR = {0: [(0, 'o')], 1: [(-1, 'o'), (0, 'f'), (1, 'o')], 2: [(-1, 'o'), (0, 'f'), (1, 'f'), (2, 'o')],
+           3: [(-2, 'o'), (-1, 'f'), (0, 'i'), (1, 'f'), (2, 'f'), (3, 'o')],
+           4: [(-2, 'o'), (-1, 'f'), (0, 'i'), (1, 'i'), (2, 'f'), (3, 'f'), (4, 'o')],
+           5: [(-2, 'o'), (-1, 'f'), (0, 'f'), (1, 'i'), (2, 'f'), (3, 'f'), (4, 'f'), (5, 'o')]}
+# 側面的貓耳（使用者照我的第三版改的）：形狀一樣，內側粉紅往外側（前面）偏一欄
+CAT_EAR_SIDE = {0: [(0, 'o')], 1: [(-1, 'o'), (0, 'f'), (1, 'o')], 2: [(-1, 'o'), (0, 'f'), (1, 'f'), (2, 'o')],
+                3: [(-2, 'o'), (-1, 'i'), (0, 'f'), (1, 'f'), (2, 'f'), (3, 'o')],
+                4: [(-2, 'o'), (-1, 'i'), (0, 'i'), (1, 'f'), (2, 'f'), (3, 'f'), (4, 'o')],
+                5: [(-2, 'o'), (-1, 'f'), (0, 'i'), (1, 'f'), (2, 'f'), (3, 'f'), (4, 'f'), (5, 'o')]}
+CAT_COLOR = {'o': 'hn', 'f': 'hm', 'i': 'ci'}   # 外圈／毛用頭髮的顏色（跟髮色一起換色），內側粉紅不換
+
+
+def _cat_img(tips, mirror_tips, dy, inner=True, tpl=None):
+    """tips＝[(尖的欄, 尖的排)]（照順序疊，後面的蓋住前面）；mirror_tips＝True 時每隻另外畫一隻左右鏡射（欄 27-x）的耳朵。"""
+    img = Img(28 + 2 * EAR_EX, 62 + EAR_TOP)   # inner＝False：背面看不到耳朵內側，粉紅的部分改成毛
+    for tx, ty in tips:
+        for r, cells in (tpl or CAT_EAR).items():
+            for dx, k in cells:
+                for x in ((tx + dx, 27 - (tx + dx)) if mirror_tips else (tx + dx,)):
+                    img.px[ty + r + dy + EAR_TOP][x + EAR_EX] = C[CAT_COLOR['f' if (k == 'i' and not inner) else k]]
+    return img
+
+
+# 貓尾巴（2026-11-23）：側面的形狀是使用者在圖上逐格畫的（待機格座標，下面 +1 換成基準座標），1 格寬的毛 hm＋兩側外圈 hn，
+# 從腰後往後、往上，豎直到胸部高度，尖端往右（後）勾。在 hairbg 層（蓋在外套／裙子上面、頭髮下面）。正面藏在身體後面，不畫。
+_TAIL_SIDE_IDLE = {
+    32: 'hn:23,24,25', 33: 'hn:22,26 hm:23,24,25', 34: 'hn:22,24,25,27 hm:23,26', 35: 'hn:22,24,26,27 hm:23',
+    36: 'hn:22,24 hm:23', 37: 'hn:22,24 hm:23', 38: 'hn:22,24 hm:23', 39: 'hn:22,24 hm:23',
+    40: 'hn:21,24 hm:22,23', 41: 'hn:19,20,23 hm:21,22', 42: 'hn:18,22 hm:19,20,21', 43: 'hn:20,21 hm:19'}
+
+
+def _parse_tail(rows, dy=1):
+    cells = {}
+    for y, t in rows.items():
+        for part in t.split():
+            k, xs = part.split(':')
+            for x in xs.split(','):
+                cells[(int(x), y + dy)] = k
+    return cells
+
+
+TAIL_SIDE = _parse_tail(_TAIL_SIDE_IDLE)
+# 背面（使用者逐格畫的，待機格座標；全部在身體範圍內，所以正面看不到）：形狀跟側面一樣（1 格寬的毛＋外圈，上端往右勾），
+# 但整條只有短短一段，沿著背從左下往右上斜到胸部高度
+_TAIL_BACK_ROWS = {
+    33: 'hn:17,18,19', 34: 'hn:16,20 hm:17,18,19', 35: 'hn:16,18,19,21 hm:17,20', 36: 'hn:16,18,20,21 hm:17',
+    37: 'hn:16,18 hm:17', 38: 'hn:16,18 hm:17', 39: 'hn:16,18 hm:17', 40: 'hn:16,18 hm:17',
+    41: 'hn:15,18 hm:16,17', 42: 'hn:17 hm:15,16', 43: 'hn:13,14,16 hm:15', 44: 'hn:15 hm:13,14', 45: 'hn:13,14'}
+TAIL_BACK = _parse_tail(_TAIL_BACK_ROWS, dy=0)
+TAIL_SWAY = {'side': {0: 0, 1: 2, 2: -2}, 'back': {0: 0, 1: 2, 2: -2}}   # 走路時尾巴尖左右擺（越高擺越多）
+TAIL_DY = {'back': {0: 0, 1: -1, 2: -1}, 'side': {0: -1, 1: 0, 2: 0}}   # 跟身體一起上下（跟 EAR_DY 的頭一樣的規則）
+
+
+def _tail_img(cells, dy, sway):
+    img = Img(28 + 2 * EAR_EX, 62 + EAR_TOP)
+    for (x, y), k in cells.items():
+        t = max(0, min(1, (44 - y) / 10))          # 越高擺越多
+        xx = x + round(sway * t)
+        img.px[y + dy + EAR_TOP][xx + EAR_EX] = C[k]
+    return img
+
+
+def ear_frames(kind='elf'):
+    """{'front': [3 格], 'side': [...], 'back': [...]}：每格是 {'hat': Img}（蓋在頭髮上面）。
+    kind＝'elf'：妖精耳朵（背面沒有，髮型蓋住）；kind＝'cat'：貓耳（四個方向都有；側面是前後兩隻）。"""
     out = {}
+    if kind == 'cat':
+        dyk = {'front': EAR_DY['front'], 'back': EAR_DY['front'], 'side': EAR_DY['side']}
+        out['front'] = [{'hat': _cat_img([(5, -1)], True, dyk['front'][st])} for st in (0, 1, 2)]
+        out['back'] = [{'hat': _cat_img([(5, -1)], True, dyk['back'][st], inner=False),
+                        'hairbg': _tail_img(TAIL_BACK, TAIL_DY['back'][st], TAIL_SWAY['back'][st])} for st in (0, 1, 2)]
+        out['side'] = [{'hat': _cat_img([(12, 2), (5, 0)], False, dyk['side'][st], tpl=CAT_EAR_SIDE),
+                       'hairbg': _tail_img(TAIL_SIDE, TAIL_DY['side'][st], TAIL_SWAY['side'][st])} for st in (0, 1, 2)]   # 一前一後（使用者標的位置）：前面（臉那邊）的耳朵尖在 (5,0)，後面那隻低 2 排、往後 7 欄，尖在 (12,2)
+        return out
     for key, rows, both in (('front', EAR_FRONT, True), ('side', EAR_SIDE, False)):
         out[key] = [{'hat': _ear_img(rows, EAR_DY[key][st], both)} for st in (0, 1, 2)]
     return out
 
 
-def build_sheets(ears=False):
+def build_sheets(ears=False):   # ears：False／True（＝'elf'）／'cat'
     """回傳 {圖層名: Img(832×1856)}：每個圖層一張 LPC 格式的 sheet（只填走路列）。右＝左的鏡像。
     ears＝True：多畫妖精耳朵（hairbg／hat 兩層才有內容）。"""
     fr = all_frames()
@@ -928,7 +1002,7 @@ def build_sheets(ears=False):
                         if c is not None:
                             dst.px[row * CELL + OY + y][col * CELL + OX + x] = c
     if ears:
-        ef = ear_frames()
+        ef = ear_frames('cat' if ears == 'cat' else 'elf')
         for d, row in WALK_ROW.items():
             key, mir = src[d]
             for col, st in enumerate(WALK_FRAMES):
@@ -939,8 +1013,8 @@ def build_sheets(ears=False):
                     for y in range(img.h):
                         for x in range(img.w):
                             c = img.px[y][x]
-                            if c is not None and dst.px[row * CELL + OY + y][col * CELL + OX - EAR_EX + x] is None:
-                                dst.px[row * CELL + OY + y][col * CELL + OX - EAR_EX + x] = c
+                            if c is not None and 0 <= row * CELL + OY - EAR_TOP + y and dst.px[row * CELL + OY - EAR_TOP + y][col * CELL + OX - EAR_EX + x] is None:
+                                dst.px[row * CELL + OY - EAR_TOP + y][col * CELL + OX - EAR_EX + x] = c
     return sheets
 
 

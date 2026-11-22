@@ -615,6 +615,7 @@ def chibi_styles():
 import gen_school   # 「新人類」分層 sheet（2026-11-22）：tools/gen_school.py；sheet 在這裡先畫好，換色規則要看實際用到的顏色
 SCHOOL_SHEETS = gen_school.build_sheets()
 SCHOOL_LAYERS = [n for n, im in SCHOOL_SHEETS.items() if any(c is not None for row in im.px for c in row)]   # hairbg／hat 目前是空的，不輸出
+SCHOOL_CAT_SHEETS = gen_school.build_sheets(ears='cat')   # 新貓族：同一個人，多一層 hat（四個方向的貓耳，蓋在頭髮上面）
 SCHOOL_EAR_SHEETS = gen_school.build_sheets(ears=True)   # 新妖精：同一個人，多一層 hat（正面、側面的尖耳，蓋在頭髮上面）
 
 LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ears）；scale＝人類模組整體縮放倍率
@@ -640,16 +641,22 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
         anchors=dict(back=[24, 42], backView=[40, 42], waist=[25, 53], hand=dict(down=[43, 50], up=[43, 50], side=[35, 50])))),
     # 新人類（2026-11-22，使用者定案：先定義為新的人類，之後再加其他種族與動作）：藍髮、黑色女式西裝（外套＋襯衫＋短裙）。
     # tools/gen_school.py 畫，圖層 human2_<圖層>.png；外框已經畫在每層裡（不設 own.outline，引擎不再統一畫外框）；
-    # 本體 62 排高，scale 0.77 縮成跟原本人物（約 46px）一樣大；只有 4 方向走路（待機＝雙腳併攏／站姿），攻擊、坐姿、釣魚還沒畫，退回待機幀。
-    dict(id="human2", name="新人類", scale=1.0, own=dict(
+    # 本體 60 排高（維持 64×64，scale 1.0；nameH＝名牌離腳底的高度，頭頂有耳朵所以比預設的 52 高）；只有 4 方向走路（待機＝雙腳併攏／站姿），攻擊、坐姿、釣魚還沒畫，退回待機幀。
+    dict(id="human2", name="新人類", scale=1.0, nameH=66, own=dict(
         sheets={n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
         dye=gen_school.dye_rules(SCHOOL_SHEETS),
         # 武器掛點（64×64 格子座標；本體在格子 x 18～45、y 2～62）：暫時估的，之後逐把校正
         anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 48], hand=dict(down=[42, 45], up=[42, 45], side=[31, 45])))),
     # 新妖精（2026-11-22，使用者定案：以新人類加上妖精耳朵）：圖層共用 human2_*，另加 elf2_hat 一層尖耳（正面、側面；背面的髮型蓋住耳朵）
-    dict(id="elf2", name="新妖精", scale=1.0, own=dict(
+    dict(id="elf2", name="新妖精", scale=1.0, nameH=66, own=dict(
         sheets={**{n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, "hat": "elf2_hat.png"}, outline=None,
         dye=gen_school.dye_rules(SCHOOL_SHEETS),
+        anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 48], hand=dict(down=[42, 45], up=[42, 45], side=[31, 45])))),
+    # 新貓族（2026-11-23）：同一個人加貓耳（參考 LPC 貓耳；四個方向都有，背面沒有內側粉紅）。圖層共用 human2_*，另加 cat2_hat；
+    # 耳朵、尾巴的外圈和毛用頭髮的顏色，所以髮色換色規則也套到 hat、hairbg 層（內側粉紅不在顏色表裡，不變）；尾巴在 hairbg 層
+    dict(id="cat2", name="新貓族", scale=1.0, nameH=66, own=dict(
+        sheets={**{n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, "hat": "cat2_hat.png", "hairbg": "cat2_hairbg.png"}, outline=None,
+        dye=[dict(r, layers=["hair", "hat", "hairbg"]) if r["slot"] == "hair" else r for r in gen_school.dye_rules(SCHOOL_SHEETS)],
         anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 48], hand=dict(down=[42, 45], up=[42, 45], side=[31, 45])))),
 ]
 
@@ -4456,7 +4463,9 @@ def main():
     # 新人類（tools/gen_school.py）：圖層 human2_<圖層>.png（hairbg／hat 目前是空的，不輸出）
     for lname in SCHOOL_LAYERS:
         save_chibi_layer(SCHOOL_SHEETS[lname], f"human2_{lname}.png", sub)
-    save_chibi_layer(SCHOOL_EAR_SHEETS["hat"], "elf2_hat.png", sub)   # 新妖精的尖耳（正面、側面；背面的髮型蓋住耳朵，沒有）
+    save_chibi_layer(SCHOOL_EAR_SHEETS["hat"], "elf2_hat.png", sub)
+    save_chibi_layer(SCHOOL_CAT_SHEETS["hat"], "cat2_hat.png", sub)   # 新貓族的貓耳
+    save_chibi_layer(SCHOOL_CAT_SHEETS["hairbg"], "cat2_hairbg.png", sub)   # 新貓族的尾巴（側面、背面；正面藏在身體後面）   # 新妖精的尖耳（正面、側面；背面的髮型蓋住耳朵，沒有）
     # 款式（髮型只換 hairbg／hair，服裝只換 body／bottom／top；預設款＝上面那組基本圖）
     for hid in CHIBI_HAIR_STYLES[1:]:
         for lname, lim in gen_chibi.build_sheets(hair=hid[0]).items():
