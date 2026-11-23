@@ -8763,7 +8763,25 @@ function marySpinTo(to, win, more) {   // 開獎：跑馬燈從目前位置多�
   const from = M.pos, laps = 2 * 28 + ((to - from) % 28 + 28) % 28;
   M.spin = { from, to: from + laps, t0: performance.now(), dur: 4800, end: to, win, more: !!more };
   M.lastFrame = performance.now();   // 動畫起點：避免上一段動畫的舊 lastFrame 把這段往後推
+  maryArmWatchdog(M.spin.dur + 6000);
   if (!S.maryRaf) S.maryRaf = requestAnimationFrame(maryFrame);
+}
+function maryArmWatchdog(ms) {   // 看門狗（2026-11-22 使用者回報 DC 贏了就卡死）：rAF 整個停掉的話動畫永遠不會結束＝機台永久鎖死，
+  const M = S.mary; if (!M) return;   // 這裡用 setTimeout（計時器在 DC 的 iframe 裡不會被節流到完全停擺）時間一到就強制收尾，機台絕不卡死。
+  clearTimeout(M.watchdog); M.watchdog = setTimeout(() => {
+    const M2 = S.mary; if (!M2) return;
+    if (M2.spin && performance.now() - M2.spin.t0 >= M2.spin.dur) { M2.lastFrame = performance.now(); marySkip(); maryArmWatchdog(8000); }
+    else if (M2.showPlay && performance.now() - M2.showPlay.t0 > MARY_SHOW_MS) { M2.showSeq = M2.showPlay.seq; M2.showPlay = null; M2.potShown = S.tableView?.ma?.pot || M2.potShown; maryLightsNext(); maryArmWatchdog(8000); }
+    else if (M2.dbl && !M2.dbl.done && performance.now() - M2.dbl.t0 >= MARY_DBL_S * 1000 + 1000) { M2.lastFrame = performance.now(); maryDblReveal(); maryPaint(); }
+  }, ms);
+}
+function maryDblReveal() {   // 比倍開牌（燈效結束）：金額跟上＋音效＋狀態行重建（原本在 maryFrame 裡，看門狗也要叫）
+  const M = S.mary; if (!M?.dbl || M.dbl.done) return;
+  M.dbl.done = true;
+  const ma2 = S.tableView?.ma;
+  if (ma2) { M.potShown = ma2.pot || 0; M.jpShown = ma2.jp || 0; M.jpSeen = ma2.jp || 0; }
+  sfxTones(M.dbl.card >= 8 || M.dbl.card <= 6 ? [[700, 0, .07], [980, .07, .12]] : [[240, 0, .26]]);   // 開大／開小＝升音；7＝莊家贏的低音
+  buildTable();   // 狀態行在面板重建時才會更新：開牌瞬間重建一次，「比倍轉燈中…」換成開牌後的提示（不然燈停了還寫著轉燈中）
 }
 function maryFrame() {
   const M = S.mary; if (!M) { S.maryRaf = 0; return; }
@@ -8777,18 +8795,12 @@ function maryFrame() {
     if (M.dbl) M.dbl.t0 += gap;   // 比倍轉燈同理：切回來也要把 2 秒完整跑完
   }
   M.lastFrame = now;
-  if (M.dbl) {   // 猜大小的轉燈：2 秒一到才把獎池／JP 的金額跟上（燈效停止後才扣錢／發籌碼，2026-11-22 使用者定）
+  if (M.dbl) {   // 猜大小的轉燈：2 秒一到才把獎池／JP 的金額跟上（燈效停止後才扣錢／發籌碼，2026-11-22 使用者定；maryDblReveal＝開牌收尾，看門狗也會叫）
     const t = (performance.now() - M.dbl.t0) / 1000;
     if (t < MARY_DBL_S) {
       const side = Math.floor(t / .2) % 2;   // 左右輪流閃的答答聲
       if (M.dbl.side !== side) { M.dbl.side = side; sfxTones([[side ? 640 : 520, 0, .03]]); }
-    } else if (!M.dbl.done) {
-      M.dbl.done = true;
-      const ma2 = S.tableView?.ma;
-      if (ma2) { M.potShown = ma2.pot || 0; M.jpShown = ma2.jp || 0; M.jpSeen = ma2.jp || 0; }
-      sfxTones(M.dbl.card >= 8 || M.dbl.card <= 6 ? [[700, 0, .07], [980, .07, .12]] : [[240, 0, .26]]);   // 開大／開小＝升音；7＝莊家贏的低音
-      buildTable();   // 狀態行在面板重建時才會更新：開牌瞬間重建一次，「比倍轉燈中…」換成開牌後的提示（不然燈停了還寫著轉燈中）
-    }
+    } else if (!M.dbl.done) maryDblReveal();
   }
   if (M.showPlay && performance.now() - M.showPlay.t0 > MARY_SHOW_MS) {   // 勇者／拉霸演出結束：WIN 亮出總獎、解除鎖定
     const ma2 = S.tableView?.ma;
@@ -8806,7 +8818,7 @@ function maryFrame() {
       M.spin = null; M.pos = sp.end;
       sfxTones(sp.more ? [[520, 0, .08], [780, .08, .08], [1040, .16, .14]] : sp.win ? [[660, 0, .09], [880, .09, .09], [1180, .18, .2]] : [[220, 0, .28]]);   // ONCE MORE＝輕快三連音；開出獎＝三連升音；沒中＝低音
       const ma2 = S.tableView?.ma;
-      if (M.showPending && ma2) { M.showPlay = { ...M.showPending, t0: performance.now() }; M.showPending = null; M.lastFrame = performance.now(); }   // 勇者／拉霸演出接著播
+      if (M.showPending && ma2) { M.showPlay = { ...M.showPending, t0: performance.now() }; M.showPending = null; M.lastFrame = performance.now(); maryArmWatchdog(MARY_SHOW_MS + 8000); }   // 勇者／拉霸演出接著播
       else if (ma2) M.potShown = ma2.pot || 0;   // 動畫停格：WIN 才跟上這一注的結果
       if (M.chainHold && ma2 && !(ma2.lights > 0)) { M.chainHold = false; M.chainEnd = ma2.seq; }   // 燈全部跑完：解除凍結、記下要顯示「送燈結束」的 seq
       maryLightsNext();   // 送燈：動畫跑完自動免費多開下一個燈
@@ -8816,7 +8828,7 @@ function maryFrame() {
   const dblRun = !!(S.mary?.dbl && performance.now() - S.mary.dbl.t0 < (MARY_DBL_S + MARY_DBL_TAIL) * 1000);
   if (S.mary?.spin || S.mary?.showPlay || dblRun) S.maryRaf = requestAnimationFrame(maryFrame); else S.maryRaf = 0;   // 演出播放中也要連續重畫
 }
-function maryStop() { if (S.maryRaf) { cancelAnimationFrame(S.maryRaf); S.maryRaf = 0; } if (maryGlowTimer) { clearTimeout(maryGlowTimer); maryGlowTimer = 0; } S.mary = null; }
+function maryStop() { if (S.maryRaf) { cancelAnimationFrame(S.maryRaf); S.maryRaf = 0; } if (maryGlowTimer) { clearTimeout(maryGlowTimer); maryGlowTimer = 0; } if (S.mary?.watchdog) clearTimeout(S.mary.watchdog); S.mary = null; }
 function marySkip() {   // 「停止」：直接把跑馬燈跳到伺服器開出的那一格（動畫只是表演，結果早就是伺服器定的）
   const M = S.mary; if (!M?.spin) return;
   const sp = M.spin;
@@ -8824,7 +8836,7 @@ function marySkip() {   // 「停止」：直接把跑馬燈跳到伺服器開�
   sfxTones(sp.more ? [[520, 0, .08], [780, .08, .08], [1040, .16, .14]] : sp.win ? [[660, 0, .09], [880, .09, .09], [1180, .18, .2]] : [[220, 0, .28]]);
   if (S.maryRaf) { cancelAnimationFrame(S.maryRaf); S.maryRaf = 0; }
   const ma2 = S.tableView?.ma;
-  if (M.showPending && ma2) { M.showPlay = { ...M.showPending, t0: performance.now() }; M.showPending = null; M.lastFrame = performance.now(); }
+  if (M.showPending && ma2) { M.showPlay = { ...M.showPending, t0: performance.now() }; M.showPending = null; M.lastFrame = performance.now(); maryArmWatchdog(MARY_SHOW_MS + 8000); }
   else if (ma2) M.potShown = ma2.pot || 0;
   if (M.chainHold && ma2 && !(ma2.lights > 0)) { M.chainHold = false; M.chainEnd = ma2.seq; }   // 燈全部跑完：解除凍結
   maryPaint();
@@ -8949,6 +8961,7 @@ function buildMary(box, v, mk, gd) {
       if (spun) S.mary.dbl = null;   // 新一注：上一場比倍的亮燈收掉
       else if (gambled) {   // 比倍：先跑 2 秒左右轉燈，燈停了才更新金額（2026-11-22 使用者定）
         S.mary.dbl = { t0: performance.now(), card: ma.dcard, seq: ma.seq, done: false, side: -1 };
+        maryArmWatchdog(MARY_DBL_S * 1000 + 8000);   // 轉燈開牌也上看門狗：rAF 停掉照樣會開牌
         S.mary.jpShown = S.mary.jpSeen;   // JP 也凍結在比倍前的值
         S.mary.lastFrame = performance.now();
         if (!S.maryRaf) S.maryRaf = requestAnimationFrame(maryFrame);
