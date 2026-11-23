@@ -7265,7 +7265,12 @@ function boardBlock(box, v, mk, fmt, key = 'board', title = '🏆 排行榜（�
   const b = v[key] || [], el = mk('div', 'table-board');
   el.appendChild(mk('div', 'table-board-title', title));
   if (!b.length) el.appendChild(mk('div', 'table-board-row empty', '還沒有紀錄'));
-  b.forEach((e, i) => el.appendChild(mk('div', 'table-board-row', `${['🥇', '🥈', '🥉'][i] || i + 1 + '.'} ${e.name}　${fmt(e.score)}`)));
+  b.forEach((e, i) => {   // 兩欄對齊：名字（含名次圖示）靠右、分數靠左，中間留一條對齊的空隙
+    const row = mk('div', 'table-board-row pair');
+    row.appendChild(mk('span', 'tb-name', `${['🥇', '🥈', '🥉'][i] || i + 1 + '.'} ${e.name}`));
+    row.appendChild(mk('span', 'tb-score', fmt(e.score)));
+    el.appendChild(row);
+  });
   box.appendChild(el);
 }
 function buildDodge(box, v, mk, gd) {
