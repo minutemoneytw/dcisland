@@ -4033,7 +4033,8 @@ function drawPersonBase(p, wi, nameColor) {
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#9ff0b4';
     ctx.strokeText(txt, p.x, ty); ctx.fillText(txt, p.x, ty);
   }
-  if (p.say && S.t < p.say.until) drawBubble(p.x, headY - 14, p.say.text, Math.min(1, (p.say.until - S.t) / .4));
+  if (p.emote && S.t < p.emote.until && emoteDraw(p.x, headY - 14, p.emote)) { /* 表情符號：頭上冒出（優先於說話泡泡） */ }
+  else if (p.say && S.t < p.say.until) drawBubble(p.x, headY - 14, p.say.text, Math.min(1, (p.say.until - S.t) / .4));
   else if (p.fish?.ph === 'bite') {   // 魚上鉤：頭上跳動的「!」（同地形的人也看得到）
     ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
     const yy = headY - 14 - Math.abs(Math.sin(S.t * 10)) * 4;
@@ -4372,6 +4373,37 @@ function drawOwnerLineBanner() {
   ctx.font = 'bold 16px "Microsoft JhengHei"'; ctx.fillStyle = '#fff6e0';
   rows.forEach((r, i) => ctx.fillText(r, canvas.width / 2, y + 20 + (i + 1) * lh - 6));
   ctx.restore();
+}
+// ── 表情符號（2026-11-23，使用者要求）：素材 DibbelGames「16x16 Emotes Pack」（授權記錄見 docs/assets-license.md），資料 assets/emotes/emotes.json。
+// 右上「表情」按鈕開選單，選了之後 p.emote＝{id, until, t0, n} 在頭上冒出 3 秒；狀態欄位 state.emote＝{id, n}（n 每用一次加一，對方靠它分辨「又發了一次」）。
+const EMOTE_MS = 3, EMOTE_CD = .6;
+const EMO = { def: null, img: new Image() };
+fetch('assets/emotes/emotes.json').then(r => r.json()).then(d => { EMO.def = d; EMO.img.src = 'assets/emotes/emotes.png'; EMO.img.onload = () => buildEmoteMenu(); }).catch(() => {});
+const emoteIdx = id => EMO.def ? EMO.def.list.findIndex(e => e.id === id) : -1;
+function emoteDraw(x, y, em) {   // x,y＝泡泡尾巴要指的點（頭上）；回 false＝素材還沒載好，交給後面的畫法
+  const i = emoteIdx(em.id); if (i < 0 || !EMO.img.complete || !EMO.img.naturalWidth) return false;
+  const cell = EMO.def.cell, k = Math.min(1, (S.t - em.t0) / .18), left = em.until - S.t;
+  const sc = 2 * (k < 1 ? .4 + .6 * (1 - Math.pow(1 - k, 3)) : 1), sz = cell * sc;   // 冒出來：由小彈到 2 倍
+  ctx.save(); ctx.globalAlpha = Math.min(1, left / .3); ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(EMO.img, (i % EMO.def.cols) * cell, Math.floor(i / EMO.def.cols) * cell, cell, cell, Math.round(x - sz / 2), Math.round(y + 3 - sz - Math.sin(Math.min(1, (S.t - em.t0) / 1.2) * 3.14) * 0), sz, sz);
+  ctx.restore(); return true;
+}
+function emoteSay(id) {   // 我自己發一個表情
+  const me = S.players[0]; if (!me || emoteIdx(id) < 0 || S.t < (S.emoteNext ?? 0)) return;
+  S.emoteNext = S.t + EMOTE_CD; S.emoteN = (S.emoteN || 0) + 1;
+  me.emote = { id, t0: S.t, until: S.t + EMOTE_MS, n: S.emoteN };
+}
+S.myEmote = () => { const e = S.players[0]?.emote; return e && S.t < e.until ? { id: e.id, n: e.n } : null; };
+function buildEmoteMenu() {
+  const m = $('emoteMenu'); if (!m || !EMO.def || m.childElementCount) return;
+  const c = EMO.def.cell * 2;
+  EMO.def.list.forEach((e, i) => {
+    const b = document.createElement('button'); b.className = 'emote-item'; b.title = e.name;
+    b.style.backgroundImage = 'url(assets/emotes/emotes.png)'; b.style.backgroundSize = `${EMO.def.cols * c}px auto`;
+    b.style.backgroundPosition = `${-(i % EMO.def.cols) * c}px ${-Math.floor(i / EMO.def.cols) * c}px`;
+    b.onclick = () => { emoteSay(e.id); m.classList.add('hidden'); };
+    m.appendChild(b);
+  });
 }
 function drawBubble(x, y, text, alpha) {
   ctx.save(); ctx.globalAlpha = alpha;
@@ -6672,6 +6704,7 @@ function scrRender() {
   g.imageSmoothingEnabled = false; g.textBaseline = 'alphabetic';
   g.fillStyle = '#0b1020'; g.fillRect(0, 0, SCR_W, SCR_H);
   const sc = S.scr;
+  if (sc?.game !== 'mary') S.scrMary = null;   // 小瑪莉轉播的動畫狀態：換台就丟掉
   if (!sc) {   // 關閉：暗底＋掃描線，提示怎麼打開
     g.fillStyle = 'rgba(120,150,220,.08)'; for (let y = 0; y < SCR_H; y += 4) g.fillRect(0, y, SCR_W, 1);
     g.fillStyle = '#6f7ea8'; g.textAlign = 'center'; g.font = `bold 22px ${SCR_FONT}`; g.fillText('大螢幕', SCR_W / 2, 118);
@@ -6728,6 +6761,7 @@ function scrRender() {
     else if (sc.game === 'pinball' && playing && v.pb) { scrPinball(g, v, MX, MY, MW, MH); drew = true; }
     else if (sc.game === 'g2048' && playing && v.tf) { scrG2048(g, v, MX, MY, MW, MH); drew = true; }
     else if (sc.game === 'bubble' && playing && v.bu) { scrBubble(g, v, MX, MY, MW, MH); drew = true; }
+    else if (sc.game === 'mary' && playing && v.ma) { scrMary(g, v, MX, MY, MW, MH); drew = true; }
     else if (sc.game === 'planet' && playing) { scrPlanet(g, v, MX, MY, MW, MH); drew = true; }
     else if (wideIntel) { scrIntel(g, v, MX, MY, SCR_W - MX * 2); drew = true; }
     else if ((sc.game === 'typing' || sc.game === 'zhtyping') && playing && v.ty) { scrTyping(g, v, MX, MY, MW); drew = true; }
@@ -6784,7 +6818,7 @@ function buildScrPick() {
 }
 // 島上的螢幕物件：外框＋離屏 canvas 的內容（沒收到過畫面時先畫成關閉的樣子）
 function drawScreenProp(pr, r) {
-  if (!S.scrCv || S.scrDirty || (S.scr && (S.scr.v?.ty || S.scr.game === 'maze' || S.scr.game === 'pinball' || S.scr.game === 'bubble' || S.scr.game === 'g2048') && S.scr.v.phase === 'playing') || (S.scr?.game === 'planet' && S.scr.v?.seats?.some(x => x.play))) { S.scrDirty = false; scrRender(); }   // 打字競賽進行中：每幀重畫（倒數的秒數會動）
+  if (!S.scrCv || S.scrDirty || (S.scr && (S.scr.v?.ty || S.scr.game === 'maze' || S.scr.game === 'pinball' || S.scr.game === 'bubble' || S.scr.game === 'g2048') && S.scr.v.phase === 'playing') || (S.scr?.game === 'planet' && S.scr.v?.seats?.some(x => x.play)) || (S.scr?.game === 'mary' && S.scr.v?.phase === 'playing' && (S.scrMary?.spin || S.scrMary?.showPlay))) { S.scrDirty = false; scrRender(); }   // 小瑪莉：跑馬燈／勇者演出播放中每幀重畫   // 打字競賽進行中：每幀重畫（倒數的秒數會動）
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = '#12141c'; ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.fillStyle = '#2a2e3c'; ctx.fillRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
@@ -7263,7 +7297,12 @@ function boardBlock(box, v, mk, fmt, key = 'board', title = '🏆 排行榜（�
   const b = v[key] || [], el = mk('div', 'table-board');
   el.appendChild(mk('div', 'table-board-title', title));
   if (!b.length) el.appendChild(mk('div', 'table-board-row empty', '還沒有紀錄'));
-  b.forEach((e, i) => el.appendChild(mk('div', 'table-board-row', `${['🥇', '🥈', '🥉'][i] || i + 1 + '.'} ${e.name}　${fmt(e.score)}`)));
+  b.forEach((e, i) => {   // 兩欄對齊：名字（含名次圖示）靠右、分數靠左，中間留一條對齊的空隙
+    const row = mk('div', 'table-board-row pair');
+    row.appendChild(mk('span', 'tb-name', `${['🥇', '🥈', '🥉'][i] || i + 1 + '.'} ${e.name}`));
+    row.appendChild(mk('span', 'tb-score', fmt(e.score)));
+    el.appendChild(row);
+  });
   box.appendChild(el);
 }
 function buildDodge(box, v, mk, gd) {
@@ -8568,8 +8607,8 @@ function maryMob(g, id, cx, cy, size, frame = 0) {   // 用現成的怪物素材
   g.imageSmoothingEnabled = false;
   g.drawImage(img, sx, sy, sw, sh, cx - w / 2, cy - h / 2, w, h);
 }
-function maryPaint() {   // 畫整台小瑪莉（靜態重建與開獎動畫的每一格都用這個）
-  const cv = document.getElementById('maryCanvas'); if (!cv) return;
+function maryPaint(cvIn) {   // 畫整台小瑪莉（靜態重建與開獎動畫的每一格都用這個；cvIn＝指定畫到別張畫布，大螢幕轉播用）
+  const cv = cvIn || document.getElementById('maryCanvas'); if (!cv) return;
   const v = S.tableView, ma = v?.ma; if (!ma) return;
   const g = cv.getContext('2d');
   g.setTransform(1, 0, 0, 1, 0, 0);
@@ -8578,7 +8617,8 @@ function maryPaint() {   // 畫整台小瑪莉（靜態重建與開獎動畫的�
   g.textBaseline = 'alphabetic';
   const M = S.mary, spin = !!M?.spin, cur = M ? Math.floor(M.pos) % 28 : -1;
   const seat = v.role === 'seat', cols = ma.cols || [], nm = ma.nm || {};
-  const bets = S.maryBets || ma.bets || [];
+  const seat0 = v.role === 'seat', who = v.seats[0]?.name || '';   // 觀戰者看玩家的押注（ma.bets）與名字；只有玩家自己用本機的 S.maryBets（觀戰者自己以前押過的不能混進來）
+  const bets = seat0 ? (S.maryBets || ma.bets || []) : (ma.bets || []);
   const owner = ma.owner || 'gold_dragon', ownerNm = MARY_OWNERS_NM[owner] || '島主';   // 開局時伺服器隨機抽的莊家
   // 猜大小的轉燈（2026-11-22 使用者定）：左右兩個 ONCE MORE 輪流閃紅燈 2 秒（紅＝跳到的位置），開大左邊紅、開小右邊紅；燈效結束前不扣錢也不發籌碼
   const dbl = M?.dbl, dblT = dbl ? (performance.now() - dbl.t0) / 1000 : 0;
@@ -8594,13 +8634,13 @@ function maryPaint() {   // 畫整台小瑪莉（靜態重建與開獎動畫的�
   g.fillStyle = jpGrad; g.fillRect(8, 8, 304, 28);
   g.strokeStyle = jpBlink ? '#ffd24a' : '#b8862a'; g.lineWidth = 2; g.strokeRect(9.5, 9.5, 301, 25);
   g.fillStyle = jpBlink ? '#ffe9a0' : '#ffd24a';
-  for (const [sx, sy] of [[22, 22], [298, 22]]) { g.beginPath(); g.arc(sx, sy, 3.5, 0, 7); g.fill(); }   // 兩側閃爍的獎池燈
+  for (const [sx, sy] of [[22, 22], [302, 22]]) { g.beginPath(); g.arc(sx, sy, 3.5, 0, 7); g.fill(); }   // 兩側閃爍的獎池燈
   g.fillStyle = '#ffd24a'; g.font = 'bold 15px "Microsoft JhengHei"'; g.textAlign = 'left';
   g.fillText('JP', 34, 29);
   g.fillStyle = '#e8c060'; g.font = 'bold 8px "Microsoft JhengHei"';
   g.fillText('累積獎池', 62, 19);
   const jpVal = Math.floor(dblHold ? (M.jpShown ?? ma.jp ?? 0) : (ma.jp || 0));   // 轉燈中先不亮新的 JP（不然一閃就知道輸了）
-  marySeg(g, 300, 13, 18, String(Math.min(jpVal, 99999999)), '#ffe14a', 'right');
+  marySeg(g, 291, 13, 18, String(Math.min(jpVal, 99999999)), '#ffe14a', 'right');   // 右緣留給右邊的獎池燈（2026-11-23：數字會跟燈重疊）
   // 上方橘色顯示板：WIN（獎池）／CREDIT（籌碼）
   g.fillStyle = '#e8781e'; g.fillRect(10, 37, 300, 38);
   g.fillStyle = '#f89840'; g.fillRect(10, 37, 300, 4);
@@ -8609,12 +8649,15 @@ function maryPaint() {   // 畫整台小瑪莉（靜態重建與開獎動畫的�
   const showHold = !!(S.mary?.showPlay || S.mary?.showPending);   // 拉霸有演出排隊或播放中：WIN 凍結（跑馬燈轉動的 4.8 秒也涵蓋——不然獎金會先亮出來、演出開始又消失，2026-11-19 使用者回饋）
   const spinHold = !!spin;   // 一般開獎：跑馬燈停格才亮 WIN（經典機台行為）
   const win = Math.floor(dblHold ? (M.potShown || 0) : chainRun ? (S.mary.chainPot || 0) : showHold || spinHold ? (S.mary.potShown || 0) : (ma.pot || 0)), cred = Math.floor(seat ? (ma.chips || 0) : (S.chips || 0));
-  for (const [bx, label, val] of [[30, 'WIN', win], [172, 'CREDIT', cred]]) {
+  for (const [bx, label, val] of [[30, 'WIN', win], [172, seat ? 'CREDIT' : 'PLAYER', cred]]) {
     g.fillStyle = '#140a08'; g.fillRect(bx, 42, 118, 30);
     g.strokeStyle = '#3a2018'; g.lineWidth = 1; g.strokeRect(bx + .5, 42.5, 117, 29);
     g.fillStyle = '#f0a060'; g.font = 'bold 9px "Microsoft JhengHei"'; g.textAlign = 'left';
     g.fillText(label, bx + 7, 53);
-    marySeg(g, bx + 112, 50, 16, String(Math.min(val, 99999999)), '#ff3020', 'right');
+    if (label === 'PLAYER') {   // 觀戰：玩家的籌碼餘額只有本人看得到（伺服器不送），這格改顯示玩家名字
+      g.fillStyle = '#ffd8a0'; g.font = 'bold 13px "Microsoft JhengHei"'; g.textAlign = 'right';
+      g.fillText((who || '（無人）').slice(0, 9), bx + 112, 66);
+    } else marySeg(g, bx + 112, 50, 16, String(Math.min(val, 99999999)), '#ff3020', 'right');
   }
   // 外圈跑馬燈底盤
   g.fillStyle = '#e8dcc0'; g.fillRect(28, 78, 264, 208);
@@ -8680,7 +8723,7 @@ function maryPaint() {   // 畫整台小瑪莉（靜態重建與開獎動畫的�
     }
   } else if (!spin && seat && ma.lights > 0) note = `送燈中：免費多開 ${ma.lights} 次`;
   else if (!spin && seat && ma.pot <= 0) note = S.maryBets ? '按「開始」轉跑馬燈' : '點下面的圖案押注';
-  else if (!spin && !seat) note = '觀戰中';
+  else if (!spin && !seat) note = who ? `${who} 遊玩中` : '觀戰中';
   if (note) { g.font = 'bold 11px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.72)'; g.strokeText(note, ix + iw / 2, iy + ih - 8); g.fillStyle = noteCol; g.fillText(note, ix + iw / 2, iy + ih - 8); }
   // 外圈 28 格（怪物圖案；大獎格外框是靜態金框、ONCE MORE 是綠底白字格；開到 ONCE MORE 的瞬間全部的燈一起閃）
   const flashAll = !!S.mary?.chainFlash, blink = Math.floor(S.t * 6) % 2 === 1;
@@ -8750,7 +8793,7 @@ function maryPaint() {   // 畫整台小瑪莉（靜態重建與開獎動畫的�
     press(b, label, on, b.id === 'spin');
   });
   // 資訊列：總注／提示
-  const total = (S.maryBets || []).reduce((a, b) => a + b, 0);
+  const total = (seat ? (S.maryBets || []) : (ma.bets || [])).reduce((a, b) => a + b, 0);   // 觀戰者看到的是玩家的總注
   g.font = 'bold 11px "Microsoft JhengHei"'; g.textAlign = 'left'; g.fillStyle = '#3a1a08';
   g.fillText(`本注 ${total.toLocaleString('en-US')}`, 22, 436);
   g.textAlign = 'right'; g.fillStyle = '#5a2a10';
@@ -8976,7 +9019,7 @@ function buildMary(box, v, mk, gd) {
   if (!playing) maryStop();
   let status;
   if (playing && v.role === 'seat') status = ma?.lights > 0 ? `送燈中：押注維持，機台自動免費多開 ${ma.lights} 次` : ma?.pot > 0 ? (S.mary?.dbl && !S.mary.dbl.done ? '比倍轉燈中…（燈停才開牌）' : ma.dcard >= 0 ? '比倍中：猜大（8～13）或猜小（1～6），7 是莊家贏' : '有獎金在獎池：先「領出」入袋，或玩「猜大小」比倍') : '點下面的圖案押注，按「開始」轉跑馬燈';
-  else if (playing) status = '觀戰中';
+  else if (playing) status = `觀戰中：${v.seats[0]?.name || '玩家'} 正在玩（看得到他的押注與開獎，籌碼餘額只有本人看得到）`;
   else status = v.seats.length < v.min ? '等待玩家入座（單人機台）' : '按「準備」就開始（用籌碼下注）';
   box.appendChild(mk('div', 'table-status' + (playing && v.role === 'seat' ? ' mine' : ''), status));
   // 整台機台都畫在同一張大畫布上（上方 WIN／CREDIT 七段顯示、外圈跑馬燈、中間島主、下方賠率列與控制盤）；點擊用同一套座標判定
@@ -10015,6 +10058,76 @@ function scrG2048(g, v, MX, MY, MW, MH) {
   const k = Math.min(MW / TF_W, MH / TF_H), FW = SCR_W - MX * 2;   // 盤面窄，置中在整個螢幕寬度（不是只有左半邊；右邊座位欄不會被蓋到）
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
   g.drawImage(cv, MX + (FW - TF_W * k) / 2, MY + (MH - TF_H * k) / 2, TF_W * k, TF_H * k);
+}
+// 大螢幕：小瑪莉（2026-11-23，使用者要求）——不用改伺服器：螢幕收到的 scr 畫面（tblView 的 SCR_CID 版）本來就帶 v.ma（獎池／押注／開獎格／勇者演出，只有籌碼餘額不送）。
+// 機台畫面直接重用 maryPaint（暫時把 S.mary／S.tableView／S.maryBets 換成螢幕自己的，畫完換回來）畫到離屏畫布再縮小；
+// 跑馬燈與勇者演出的動畫狀態是螢幕自己維護的一份（scrMaryTick，簡化版的 maryFrame：不出聲音、不處理比倍轉燈與送燈鏈，比倍只直接顯示結果）。
+function scrMaryTick(M, ma) {
+  const now = performance.now();
+  if (M.seq == null || ma.seq < M.seq) {   // 剛開螢幕、或換了一場（seq 重來）：直接停在目前狀態，不補播
+    Object.assign(M, { seq: ma.seq, pos: ma.last >= 0 ? ma.last : 0, spin: null, showPlay: null, showPending: null, showSeq: ma.show ? ma.show.seq : 0, res: ma.rseq === ma.seq ? ma.seq : -1, last: ma.last,
+      potShown: ma.pot || 0, jpShown: ma.jp || 0, jpSeen: ma.jp || 0, chainHold: false, chainFlash: false, chainEnd: 0, chainPot: 0, dbl: null, lastFrame: now });
+  } else if (ma.seq !== M.seq) {
+    const spun = ma.last >= 0 && ma.dcard < 0 && ma.rseq === ma.seq;   // 同牌桌的判斷：只有真的開獎才跑跑馬燈（領出／兌換／比倍不跑）
+    M.seq = ma.seq; M.last = ma.last;
+    if (spun) {
+      M.res = ma.seq; M.dbl = null;
+      const from = ((M.pos % 28) + 28) % 28, laps = 2 * 28 + ((ma.last - from) % 28 + 28) % 28;
+      M.spin = { from, to: from + laps, t0: now, dur: 4800, end: ma.last, win: ma.pot > 0, more: ma.ring[ma.last] === 'more' };
+      if (M.spin.more) { M.chainHold = true; M.chainPot = M.potShown; }
+      M.chainFlash = M.spin.more;
+      if (ma.show && ma.show.seq !== M.showSeq) M.showPending = ma.show;
+    } else { M.dbl = null; M.potShown = ma.pot || 0; M.jpShown = ma.jp || 0; }
+  }
+  if (!M.spin) { M.jpSeen = ma.jp || 0; M.jpShown = ma.jp || 0; }
+  if (M.showPlay && now - M.showPlay.t0 > MARY_SHOW_MS) { M.potShown = ma.pot || 0; M.showSeq = M.showPlay.seq; M.showPlay = null; }   // 勇者／拉霸演出結束
+  if (M.spin) {
+    const sp = M.spin, t = Math.min(1, (now - sp.t0) / sp.dur), e = 1 - Math.pow(1 - t, 3);
+    M.pos = sp.from + (sp.to - sp.from) * e;
+    if (t >= 1) {
+      M.spin = null; M.pos = sp.end;
+      if (M.showPending) { M.showPlay = { ...M.showPending, t0: now }; M.showPending = null; } else M.potShown = ma.pot || 0;
+      if (M.chainHold && !(ma.lights > 0)) { M.chainHold = false; M.chainEnd = ma.seq; }
+    }
+  }
+  if (M.chainHold && !M.spin && !(ma.lights > 0)) { M.chainHold = false; M.chainEnd = ma.seq; }
+  M.lastFrame = now;
+}
+function scrMary(g, v, MX, MY, MW, MH) {
+  const ma = v.ma; if (!ma || !ma.ring) return;
+  const M = (S.scrMary ||= { seq: null });
+  scrMaryTick(M, ma);
+  const cvm = (S.scrMaryCv ||= Object.assign(document.createElement('canvas'), { width: MARY_W * 2, height: MARY_H * 2 })), sv = [S.mary, S.tableView, S.maryBets];
+  S.mary = M; S.tableView = { ...v, role: 'spec' }; S.maryBets = null;
+  try { maryPaint(cvm); } finally { [S.mary, S.tableView, S.maryBets] = sv; }
+  const k = MH / 352, dw = MARY_W * k;   // 只取機台上半部（到押注列，控制盤對觀眾沒用），縮到主畫面的高度
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  g.drawImage(cvm, 0, 0, MARY_W * 2, 352 * 2, MX, MY, dw, MH);
+  g.imageSmoothingEnabled = false;
+  // 右邊：玩家、獎池、本注、這一注的結果（機台上的字太小，在這裡用大字再寫一次）
+  const x0 = MX + dw + 10, w = MW - dw - 10, nm = ma.nm || {}, cols = ma.cols || [];
+  const who = v.seats[0]?.name || '', bets = ma.bets || [], total = bets.reduce((a, b) => a + b, 0);
+  const spin = !!M.spin, hold = spin || !!M.showPlay || !!M.showPending, win = Math.floor(hold ? (M.potShown || 0) : (ma.pot || 0));
+  g.textAlign = 'left';
+  g.fillStyle = '#9fb0d8'; g.font = `12px ${SCR_FONT}`; g.fillText('玩家', x0, MY + 14);
+  g.fillStyle = '#e8ecf8'; g.font = `bold 15px ${SCR_FONT}`; g.fillText(who.slice(0, 8), x0, MY + 33, w);
+  g.fillStyle = '#9fb0d8'; g.font = `12px ${SCR_FONT}`; g.fillText('獎池 WIN', x0, MY + 58);
+  g.fillStyle = '#ff6a50'; g.font = `bold 20px ${SCR_FONT}`; g.fillText(win.toLocaleString('en-US'), x0, MY + 80, w);
+  g.fillStyle = '#9fb0d8'; g.font = `12px ${SCR_FONT}`; g.fillText('本注', x0, MY + 104);
+  g.fillStyle = '#ffd24a'; g.font = `bold 16px ${SCR_FONT}`; g.fillText(total.toLocaleString('en-US'), x0, MY + 124, w);
+  let note = '', col = '#ffe08a';
+  if (spin) note = '開獎中…';
+  else if (M.showPlay) { note = maryShowNote(M.showPlay, nm); col = '#a8f0b8'; }
+  else if (ma.dcard >= 0) { note = `比倍開牌 ${ma.dcard}${ma.dcard >= 8 ? '（大）' : ma.dcard <= 6 ? '（小）' : '（莊家贏）'}`; col = '#ffb0b0'; }
+  else if (ma.lights > 0) { note = `送燈中：剩 ${ma.lights} 個`; col = '#a8f0b8'; }
+  else if (ma.last >= 0 && M.res === ma.seq) {
+    const sym = ma.ring[ma.last], b = bets[cols.indexOf(sym)] || 0, wn = ma.win || b * (ma.pay[sym] || 1);
+    if (ma.allwin) { note = `全中獎！贏 ${(ma.win || 0).toLocaleString('en-US')}`; col = '#ffd24a'; }
+    else if (sym === 'more') { note = 'ONCE MORE！送燈'; col = '#a8f0b8'; }
+    else { note = wn > 0 ? `${nm[sym] || sym} 贏 ${wn.toLocaleString('en-US')}` : `${nm[sym] || sym} 沒押中`; col = wn > 0 ? '#a8f0b8' : '#e8ecf8'; }
+  } else note = ma.pot > 0 ? '獎池待領出／比倍' : '等待下注開獎';
+  g.fillStyle = col; g.font = `bold 13px ${SCR_FONT}`; g.fillText(note, x0, MY + 152, w);
+  g.fillStyle = '#9fb0d8'; g.font = `11px ${SCR_FONT}`; g.fillText(`累積獎池 JP ${Math.floor(ma.jp || 0).toLocaleString('en-US')}`, x0, MY + 178, w);
 }
 // 大螢幕：星球合成（2026-11-20，使用者要求）——正在玩的每一台各畫一個縮小盤面並排（單人＝兩台各玩各的、對戰＝兩邊對打；對戰分出勝負後停住並標「勝利／落敗」），
 // 吃快照（sttm w:'tpl'，帶 cab），跟牌桌觀戰同一份 plDraw／plAdvance
@@ -14112,6 +14225,8 @@ $('leaveGo').onclick = () => {
 $('tableRulesBtn').onclick = () => rulesToggle('rules');   // 再點一下關閉
 $('tableCharsBtn').onclick = () => rulesToggle('chars');
 $('rulesClose').onclick = () => rulesShow(false);
+$('btnEmote').onclick = e => { e.stopPropagation(); $('emoteMenu').classList.toggle('hidden'); $('settingsMenu').classList.add('hidden'); };
+addEventListener('pointerdown', e => { const m = $('emoteMenu'); if (!m.classList.contains('hidden') && !m.contains(e.target) && e.target.id !== 'btnEmote') m.classList.add('hidden'); });
 $('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑＋素材圖鑑／合成／配方筆記
 $('dexClose').onclick = closeDex;
 $('btnTitles').onclick = () => { if (S.titleOpen) closeTitles(); else openTitles(); };   // 造型面板的「稱號設定」：稱號一覽

@@ -1,0 +1,107 @@
+{
+ "_credit": "16x16 Emotes Pack by DibbelGames (https://dibbelgames.itch.io/16x16-emotes-pack)，由 tools/import_emotes.py 縮回 16×16 拼成 emotes.png；list 順序＝emotes.png 由左到右、由上到下（＝Emotes.zip 檔名順序 emote_08～32）",
+ "cols": 5,
+ "cell": 16,
+ "list": [
+  {
+   "id": "smile",
+   "name": "微笑"
+  },
+  {
+   "id": "sad",
+   "name": "難過"
+  },
+  {
+   "id": "angry",
+   "name": "生氣"
+  },
+  {
+   "id": "yes",
+   "name": "是"
+  },
+  {
+   "id": "thx",
+   "name": "謝謝"
+  },
+  {
+   "id": "lol",
+   "name": "哈哈"
+  },
+  {
+   "id": "sos",
+   "name": "求救"
+  },
+  {
+   "id": "rip",
+   "name": "安息"
+  },
+  {
+   "id": "no",
+   "name": "不行"
+  },
+  {
+   "id": "ok",
+   "name": "好"
+  },
+  {
+   "id": "rage",
+   "name": "暴怒"
+  },
+  {
+   "id": "q",
+   "name": "疑問"
+  },
+  {
+   "id": "q2",
+   "name": "好奇"
+  },
+  {
+   "id": "ex",
+   "name": "驚嘆"
+  },
+  {
+   "id": "ex2",
+   "name": "警告"
+  },
+  {
+   "id": "heart",
+   "name": "愛心"
+  },
+  {
+   "id": "broken",
+   "name": "心碎"
+  },
+  {
+   "id": "coin",
+   "name": "金幣"
+  },
+  {
+   "id": "star",
+   "name": "星星"
+  },
+  {
+   "id": "clock",
+   "name": "時間"
+  },
+  {
+   "id": "hourglass",
+   "name": "等待"
+  },
+  {
+   "id": "up",
+   "name": "上"
+  },
+  {
+   "id": "down",
+   "name": "下"
+  },
+  {
+   "id": "right",
+   "name": "右"
+  },
+  {
+   "id": "left",
+   "name": "左"
+  }
+ ]
+}
