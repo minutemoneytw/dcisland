@@ -2421,6 +2421,13 @@
        "erase": {
         "body": "human2_mask_hands.png"
        }
+      },
+      {
+       "id": "tshirt",
+       "name": "T恤",
+       "sheets": {
+        "top": "human2_c_top.png"
+       }
       }
      ],
      "bottom": [
@@ -2438,6 +2445,16 @@
        "erase": {
         "body": "human2_mask_legs.png"
        }
+      },
+      {
+       "id": "pants",
+       "name": "長褲",
+       "sheets": {
+        "bottom": "human2_c_bottom.png"
+       },
+       "erase": {
+        "body": "human2_mask_legs.png"
+       }
       }
      ],
      "shoe": [
@@ -2451,6 +2468,13 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "human2_m_shoes.png"
+       }
+      },
+      {
+       "id": "shoes",
+       "name": "鞋子",
+       "sheets": {
+        "shoes": "human2_c_shoes.png"
        }
       }
      ]
@@ -2600,6 +2624,45 @@
        "#61575a",
        "#716466"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "tshirt",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ced4e2",
+       "#60667c",
+       "#a8b0c6",
+       "#e8ecf4"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#526486",
+       "#262e44",
+       "#3c4a68",
+       "#6a7ea0"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "shoes",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#ced2de",
+       "#303242",
+       "#68727c",
+       "#eef0f6"
+      ]
      }
     ],
     "anchors": {
@@ -2713,6 +2776,13 @@
        "erase": {
         "body": "human2_mask_hands.png"
        }
+      },
+      {
+       "id": "tshirt",
+       "name": "T恤",
+       "sheets": {
+        "top": "human2_c_top.png"
+       }
       }
      ],
      "bottom": [
@@ -2730,6 +2800,16 @@
        "erase": {
         "body": "human2_mask_legs.png"
        }
+      },
+      {
+       "id": "pants",
+       "name": "長褲",
+       "sheets": {
+        "bottom": "human2_c_bottom.png"
+       },
+       "erase": {
+        "body": "human2_mask_legs.png"
+       }
       }
      ],
      "shoe": [
@@ -2743,6 +2823,13 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "human2_m_shoes.png"
+       }
+      },
+      {
+       "id": "shoes",
+       "name": "鞋子",
+       "sheets": {
+        "shoes": "human2_c_shoes.png"
        }
       }
      ]
@@ -2893,6 +2980,45 @@
        "#61575a",
        "#716466"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "tshirt",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ced4e2",
+       "#60667c",
+       "#a8b0c6",
+       "#e8ecf4"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#526486",
+       "#262e44",
+       "#3c4a68",
+       "#6a7ea0"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "shoes",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#ced2de",
+       "#303242",
+       "#68727c",
+       "#eef0f6"
+      ]
      }
     ],
     "anchors": {
@@ -3007,6 +3133,13 @@
        "erase": {
         "body": "human2_mask_hands.png"
        }
+      },
+      {
+       "id": "tshirt",
+       "name": "T恤",
+       "sheets": {
+        "top": "human2_c_top.png"
+       }
       }
      ],
      "bottom": [
@@ -3024,6 +3157,16 @@
        "erase": {
         "body": "human2_mask_legs.png"
        }
+      },
+      {
+       "id": "pants",
+       "name": "長褲",
+       "sheets": {
+        "bottom": "human2_c_bottom.png"
+       },
+       "erase": {
+        "body": "human2_mask_legs.png"
+       }
       }
      ],
      "shoe": [
@@ -3037,6 +3180,13 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "human2_m_shoes.png"
+       }
+      },
+      {
+       "id": "shoes",
+       "name": "鞋子",
+       "sheets": {
+        "shoes": "human2_c_shoes.png"
        }
       }
      ]
@@ -3188,6 +3338,45 @@
        "#61575a",
        "#716466"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "tshirt",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ced4e2",
+       "#60667c",
+       "#a8b0c6",
+       "#e8ecf4"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#526486",
+       "#262e44",
+       "#3c4a68",
+       "#6a7ea0"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "shoes",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#ced2de",
+       "#303242",
+       "#68727c",
+       "#eef0f6"
+      ]
      }
     ],
     "anchors": {
@@ -3300,6 +3489,13 @@
        "erase": {
         "body": "dwarf2_mask_hands.png"
        }
+      },
+      {
+       "id": "tshirt",
+       "name": "T恤",
+       "sheets": {
+        "top": "dwarf2_c_top.png"
+       }
       }
      ],
      "bottom": [
@@ -3317,6 +3513,16 @@
        "erase": {
         "body": "dwarf2_mask_legs.png"
        }
+      },
+      {
+       "id": "pants",
+       "name": "長褲",
+       "sheets": {
+        "bottom": "dwarf2_c_bottom.png"
+       },
+       "erase": {
+        "body": "dwarf2_mask_legs.png"
+       }
       }
      ],
      "shoe": [
@@ -3330,6 +3536,13 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "dwarf2_m_shoes.png"
+       }
+      },
+      {
+       "id": "shoes",
+       "name": "鞋子",
+       "sheets": {
+        "shoes": "dwarf2_c_shoes.png"
        }
       }
      ]
@@ -3478,6 +3691,45 @@
        "#524443",
        "#61575a",
        "#716466"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "tshirt",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ced4e2",
+       "#60667c",
+       "#a8b0c6",
+       "#e8ecf4"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#526486",
+       "#262e44",
+       "#3c4a68",
+       "#6a7ea0"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "shoes",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#ced2de",
+       "#303242",
+       "#68727c",
+       "#eef0f6"
       ]
      }
     ],
@@ -3594,6 +3846,13 @@
        "erase": {
         "body": "giant2_mask_hands.png"
        }
+      },
+      {
+       "id": "tshirt",
+       "name": "T恤",
+       "sheets": {
+        "top": "giant2_c_top.png"
+       }
       }
      ],
      "bottom": [
@@ -3611,6 +3870,16 @@
        "erase": {
         "body": "giant2_mask_legs.png"
        }
+      },
+      {
+       "id": "pants",
+       "name": "長褲",
+       "sheets": {
+        "bottom": "giant2_c_bottom.png"
+       },
+       "erase": {
+        "body": "giant2_mask_legs.png"
+       }
       }
      ],
      "shoe": [
@@ -3624,6 +3893,13 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "giant2_m_shoes.png"
+       }
+      },
+      {
+       "id": "shoes",
+       "name": "鞋子",
+       "sheets": {
+        "shoes": "giant2_c_shoes.png"
        }
       }
      ]
@@ -3773,6 +4049,45 @@
        "#61575a",
        "#716466"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "tshirt",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ced4e2",
+       "#60667c",
+       "#a8b0c6",
+       "#e8ecf4"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#526486",
+       "#262e44",
+       "#3c4a68",
+       "#6a7ea0"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "shoes",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#ced2de",
+       "#303242",
+       "#68727c",
+       "#eef0f6"
+      ]
      }
     ],
     "anchors": {
@@ -3835,16 +4150,13 @@
   {
    "id": "tshirt",
    "name": "T恤",
-   "sheet": "char_top_tshirt_m.png",
-   "sheetF": "char_top_tshirt_f.png",
+   "glam": true,
    "dye": [
-    "#e5e6c7",
-    "#c4b59f",
-    "#958080",
-    "#4d4a5d",
-    "#ffffff"
-   ],
-   "glam": true
+    "#ced4e2",
+    "#60667c",
+    "#a8b0c6",
+    "#e8ecf4"
+   ]
   },
   {
    "id": "plate",
@@ -3996,15 +4308,13 @@
   {
    "id": "pants",
    "name": "長褲",
-   "sheet": "char_bottom_pants_m.png",
-   "sheetF": "char_bottom_pants_f.png",
+   "glam": true,
    "dye": [
-    "#c4b59f",
-    "#e5e6c7",
-    "#958080",
-    "#4d4a5d"
-   ],
-   "glam": true
+    "#526486",
+    "#262e44",
+    "#3c4a68",
+    "#6a7ea0"
+   ]
   },
   {
    "id": "plate_legs",
@@ -4088,16 +4398,13 @@
   {
    "id": "shoes",
    "name": "鞋子",
-   "sheet": "char_shoes_m.png",
-   "sheetF": "char_shoes_f.png",
+   "glam": true,
    "dye": [
-    "#c4b59f",
-    "#e5e6c7",
-    "#ffffff",
-    "#958080",
-    "#4d4a5d"
-   ],
-   "glam": true
+    "#ced2de",
+    "#303242",
+    "#68727c",
+    "#eef0f6"
+   ]
   },
   {
    "id": "plate_boots",
