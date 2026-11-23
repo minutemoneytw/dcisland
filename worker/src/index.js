@@ -321,6 +321,8 @@ function sanitizeState(s, prev) {
     seat: idOr(s.seat, null),
     job: jobOr(s.job),                     // 職業：白名單（JOB_ROLE），舊客戶端的 tank/healer/dps 轉成騎士/白魔法師/忍者，不合法＝忍者（挑釁等職能驗證靠這欄）
     pets: Array.isArray(s.pets) ? s.pets.filter(v => typeof v === "string" && ID_RE.test(v)).slice(0, PETS_MAX) : [],   // 跟隨寵物 id 清單：只轉發（別人的畫面各自模擬跟隨，不傳座標）
+    emote: s.emote && typeof s.emote === "object" && typeof s.emote.id === "string" && ID_RE.test(s.emote.id)   // 頭上的表情符號 {id, n}：只轉發（n＝第幾次發，對方靠它分辨又發了一次）
+      ? { id: s.emote.id, n: Math.round(num(s.emote.n, 0, 1e9, 0)) } : null,
     fx: Array.isArray(s.fx) ? s.fx.filter(v => typeof v === "string" && ID_RE.test(v)).slice(0, FX_MAX) : [],   // 持續型技能效果（翅膀、護盾…）：只轉發
     circle: s.circle && typeof s.circle === "object"   // 黑魔法師的魔法陣位置（只轉發）
       ? { x: num(s.circle.x, 0, COLS * CELL, 0), y: num(s.circle.y, 0, ROWS * CELL, 0) } : null,
