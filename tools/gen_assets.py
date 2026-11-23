@@ -631,51 +631,32 @@ def school_hair_styles(prefix):
 SCHOOL_EAR_SHEETS = gen_school.build_sheets(ears=True)   # 新妖精：同一個人，多一層 hat（正面、側面的尖耳，蓋在頭髮上面）
 
 LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ears）；scale＝人類模組整體縮放倍率
-    dict(id="human", name="人類", scale=1.0),
-    dict(id="elf", name="精靈", scale=1.0, ear="char_ears_elven.png", earDye=LPC_SKIN_DYE),   # 精靈耳跟膚色
-    dict(id="cat", name="貓族", scale=1.0, earBg="char_ears_cat_bg.png", earFg="char_ears_cat_fg.png",
-         earFur=LPC_CAT_FUR, earInner="#f5b8ad"),   # 貓耳：毛色跟髮色（earFur）、耳內白眼底＝粉肉色（earInner）、深色輪廓保留原色
-    dict(id="lalafell", name="拉拉肥", scale=0.5),    # LPC 沒有小人體型 → 人類模組縮小
-    dict(id="giant", name="巨人", scale=1.5),         # LPC 沒有巨人體型 → 人類模組放大
-    # 新風格（2026-11-21，使用者定案整套換成自製 Q 版像素風格；階段 1）：整個人（身體／下身／靴子／上身／後髮／臉／前髮／護目鏡）都是自己的圖層，
-    # 不吃外貌頁的髮型／服裝／臉型選項；引擎看到 own 就改用這組 sheet、合成後統一畫一圈 outline 色的外框；攻擊／釣魚等動作沒有圖，退回待機幀
-    dict(id="chibi", name="新風格", scale=1.0, own=dict(
-        sheets={n: f"chibi_{n}.png" for n in ("body", "bottom", "shoes", "top", "hairbg", "face", "hair", "hat")}, outline="#1e0c1e", styles=chibi_styles(),
-        # 換色規則（slot 對應外貌／造型的換色鈕：hair＝髮色、top＝上衣、bottom＝褲子、shoe＝鞋、hat＝帽子；colors＝要被換掉的原色，第一個是主色）
-        dye=[dict(slot="hair", layers=["hairbg", "hair"], colors=["#3c1e44", "#523464", "#28122e", "#587aa8", "#7066ac"]),
-             dict(slot="top", style="chibi_apron", layers=["top", "bottom"], colors=["#f6e8c8", "#a89888", "#8a2c50", "#5c203a", "#b0466c"]),
-             dict(slot="bottom", style="chibi_apron", layers=["bottom"], colors=["#3a224a"]),
-             dict(slot="top", style="chibi_casual", layers=["top"], colors=["#e8f0f4", "#a8b8c4", "#ffffff"]),
-             dict(slot="bottom", style="chibi_casual", layers=["bottom"], colors=["#3a5a8a", "#24385a", "#5478a8"]),
-             dict(slot="shoe", layers=["shoes"], colors=["#7a4c2c", "#aa7446", "#422212"]),
-             dict(slot="hat", layers=["hat"], colors=["#eab242", "#82522c"])],
-        # 武器掛點（64×64 格子座標；LPC 的是 back 23,32／backView 41,32／waist 23,48／hand 40,40，照 LPC 身形不適用）：手＝拿武器那隻手（正面／背面＝螢幕右手，側面＝往前伸的位置）
-        anchors=dict(back=[24, 42], backView=[40, 42], waist=[25, 53], hand=dict(down=[43, 50], up=[43, 50], side=[35, 50])))),
+    # 舊的 LPC 種族（人類／精靈／貓族／拉拉肥／巨人）與「新風格」chibi 已於 2026-11-23 刪除（使用者要求：只留新人類系列，名稱去掉「新」字；id 維持 human2／elf2／cat2／dwarf2／giant2）。
     # 新人類（2026-11-22，使用者定案：先定義為新的人類，之後再加其他種族與動作）：藍髮、黑色女式西裝（外套＋襯衫＋短裙）。
     # tools/gen_school.py 畫，圖層 human2_<圖層>.png；外框已經畫在每層裡（不設 own.outline，引擎不再統一畫外框）；
     # 本體 60 排高（維持 64×64，scale 1.0；nameH＝名牌離腳底的高度，頭頂有耳朵所以比預設的 52 高）；只有 4 方向走路（待機＝雙腳併攏／站姿），攻擊、坐姿、釣魚還沒畫，退回待機幀。
-    dict(id="human2", name="新人類", scale=1.0, nameH=66, own=dict(
+    dict(id="human2", name="人類", scale=1.0, nameH=66, own=dict(
         sheets={n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
         styles=dict(hair=school_hair_styles("human2")),
         dye=gen_school.dye_rules(SCHOOL_SHEETS),
         # 武器掛點（64×64 格子座標；本體在格子 x 18～45、y 2～62）：暫時估的，之後逐把校正
         anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 48], hand=dict(down=[42, 45], up=[42, 45], side=[31, 45])))),
     # 新妖精（2026-11-22，使用者定案：以新人類加上妖精耳朵）：圖層共用 human2_*，另加 elf2_hat 一層尖耳（正面、側面；背面的髮型蓋住耳朵）
-    dict(id="elf2", name="新妖精", scale=1.0, nameH=66, own=dict(
+    dict(id="elf2", name="妖精", scale=1.0, nameH=66, own=dict(
         sheets={**{n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, "hat": "elf2_hat.png"}, outline=None,
         styles=dict(hair=school_hair_styles("human2")),
         dye=gen_school.dye_rules(SCHOOL_SHEETS),
         anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 48], hand=dict(down=[42, 45], up=[42, 45], side=[31, 45])))),
     # 新貓族（2026-11-23）：同一個人加貓耳（參考 LPC 貓耳；四個方向都有，背面沒有內側粉紅）。圖層共用 human2_*，另加 cat2_hat；
     # 耳朵、尾巴的外圈和毛用頭髮的顏色，所以髮色換色規則也套到 hat、hairbg 層（內側粉紅不在顏色表裡，不變）；尾巴在 hairbg 層
-    dict(id="cat2", name="新貓族", scale=1.0, nameH=66, own=dict(
+    dict(id="cat2", name="貓族", scale=1.0, nameH=66, own=dict(
         sheets={**{n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, "hat": "cat2_hat.png", "hairbg": "cat2_hairbg.png"}, outline=None,
         styles=dict(hair=school_hair_styles("human2")),
         dye=[dict(r, layers=["hair", "hat", "hairbg"]) if r["slot"] == "hair" else r for r in gen_school.dye_rules(SCHOOL_SHEETS)],
         anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 48], hand=dict(down=[42, 45], up=[42, 45], side=[31, 45])))),
     # 新矮人（2026-11-23，使用者要求：偏小孩體型）：新人類拿掉軀幹 4 排、小腿 4 排（gen_school.DWARF_DROP），頭不變，身高 52 排；圖層 dwarf2_<圖層>.png。
     # 武器掛點＝新人類的位置往下移（拿掉的排數在掛點下面的那幾排，4 排），暫時估的
-    dict(id="dwarf2", name="新矮人", scale=1.0, nameH=58, own=dict(
+    dict(id="dwarf2", name="矮人", scale=1.0, nameH=58, own=dict(
         sheets={n: f"dwarf2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
         styles=dict(hair=school_hair_styles("dwarf2")),
         dye=gen_school.dye_rules(SCHOOL_SHEETS),
@@ -683,7 +664,7 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
     # 新巨人（2026-11-23，使用者要求：比新人類壯又高）：新人類每格軀幹 +4 排、小腿 +4 排（身高 68 排＝比新人類高的量跟矮人比新人類矮的量一樣）、脖子以下加寬（gen_school.giant_sheets），頭不變；
     # 格子 96×96（own.cell），邏輯上的 64×64 格放在格子的 (ox, oy)＝(16, 32)（腳底在格子第 94 列＝邏輯格第 62 列，引擎照邏輯格對腳底，影子不用改）。
     # 掛點是邏輯格座標：新人類的掛點依拉長的排數往上移（原 36→28、48→44、45→41），x 暫用新人類的（身體加寬了，之後再逐把校正）
-    dict(id="giant2", name="新巨人", scale=1.0, nameH=74, own=dict(
+    dict(id="giant2", name="巨人", scale=1.0, nameH=74, own=dict(
         cell=gen_school.GIANT_CELL, ox=gen_school.GIANT_OX, oy=gen_school.GIANT_OY,
         sheets={n: f"giant2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
         styles=dict(hair=school_hair_styles("giant2")),

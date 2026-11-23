@@ -3490,257 +3490,8 @@
  ],
  "races": [
   {
-   "id": "human",
-   "name": "人類",
-   "scale": 1.0
-  },
-  {
-   "id": "elf",
-   "name": "精靈",
-   "scale": 1.0,
-   "ear": "char_ears_elven.png",
-   "earDye": [
-    "#f9d5ba",
-    "#e4a47c",
-    "#cc8665",
-    "#99423c",
-    "#faecd7"
-   ]
-  },
-  {
-   "id": "cat",
-   "name": "貓族",
-   "scale": 1.0,
-   "earBg": "char_ears_cat_bg.png",
-   "earFg": "char_ears_cat_fg.png",
-   "earFur": [
-    "#ff8a00",
-    "#e55600",
-    "#bf4000",
-    "#a42600"
-   ],
-   "earInner": "#f5b8ad"
-  },
-  {
-   "id": "lalafell",
-   "name": "拉拉肥",
-   "scale": 0.5
-  },
-  {
-   "id": "giant",
-   "name": "巨人",
-   "scale": 1.5
-  },
-  {
-   "id": "chibi",
-   "name": "新風格",
-   "scale": 1.0,
-   "own": {
-    "sheets": {
-     "body": "chibi_body.png",
-     "bottom": "chibi_bottom.png",
-     "shoes": "chibi_shoes.png",
-     "top": "chibi_top.png",
-     "hairbg": "chibi_hairbg.png",
-     "face": "chibi_face.png",
-     "hair": "chibi_hair.png",
-     "hat": "chibi_hat.png"
-    },
-    "outline": "#1e0c1e",
-    "styles": {
-     "hair": [
-      {
-       "id": "chibi_ponytail",
-       "name": "高馬尾",
-       "sheets": {}
-      },
-      {
-       "id": "chibi_bob",
-       "name": "鮑伯短髮",
-       "sheets": {
-        "hairbg": "chibi_hair_bob_hairbg.png",
-        "hair": "chibi_hair_bob_hair.png"
-       }
-      }
-     ],
-     "top": [
-      {
-       "id": "chibi_apron",
-       "name": "工匠圍裙",
-       "sheets": {}
-      },
-      {
-       "id": "chibi_casual",
-       "name": "便服",
-       "sheets": {
-        "body": "chibi_outfit_casual_body.png",
-        "bottom": "chibi_outfit_casual_bottom.png",
-        "top": "chibi_outfit_casual_top.png"
-       }
-      }
-     ],
-     "face": [
-      {
-       "id": "chibi_blush",
-       "name": "腮紅",
-       "sheets": {}
-      },
-      {
-       "id": "chibi_plain",
-       "name": "無紋面",
-       "sheets": {
-        "face": "chibi_face_plain_face.png"
-       }
-      },
-      {
-       "id": "chibi_droop",
-       "name": "垂眼",
-       "sheets": {
-        "face": "chibi_face_droop_face.png"
-       }
-      },
-      {
-       "id": "chibi_plain_droop",
-       "name": "垂眼無紋面",
-       "sheets": {
-        "face": "chibi_face_plain_droop_face.png"
-       }
-      },
-      {
-       "id": "chibi_half",
-       "name": "折衷垂眼",
-       "sheets": {
-        "face": "chibi_face_half_face.png"
-       }
-      },
-      {
-       "id": "chibi_plain_half",
-       "name": "折衷垂眼無紋面",
-       "sheets": {
-        "face": "chibi_face_plain_half_face.png"
-       }
-      }
-     ]
-    },
-    "dye": [
-     {
-      "slot": "hair",
-      "layers": [
-       "hairbg",
-       "hair"
-      ],
-      "colors": [
-       "#3c1e44",
-       "#523464",
-       "#28122e",
-       "#587aa8",
-       "#7066ac"
-      ]
-     },
-     {
-      "slot": "top",
-      "style": "chibi_apron",
-      "layers": [
-       "top",
-       "bottom"
-      ],
-      "colors": [
-       "#f6e8c8",
-       "#a89888",
-       "#8a2c50",
-       "#5c203a",
-       "#b0466c"
-      ]
-     },
-     {
-      "slot": "bottom",
-      "style": "chibi_apron",
-      "layers": [
-       "bottom"
-      ],
-      "colors": [
-       "#3a224a"
-      ]
-     },
-     {
-      "slot": "top",
-      "style": "chibi_casual",
-      "layers": [
-       "top"
-      ],
-      "colors": [
-       "#e8f0f4",
-       "#a8b8c4",
-       "#ffffff"
-      ]
-     },
-     {
-      "slot": "bottom",
-      "style": "chibi_casual",
-      "layers": [
-       "bottom"
-      ],
-      "colors": [
-       "#3a5a8a",
-       "#24385a",
-       "#5478a8"
-      ]
-     },
-     {
-      "slot": "shoe",
-      "layers": [
-       "shoes"
-      ],
-      "colors": [
-       "#7a4c2c",
-       "#aa7446",
-       "#422212"
-      ]
-     },
-     {
-      "slot": "hat",
-      "layers": [
-       "hat"
-      ],
-      "colors": [
-       "#eab242",
-       "#82522c"
-      ]
-     }
-    ],
-    "anchors": {
-     "back": [
-      24,
-      42
-     ],
-     "backView": [
-      40,
-      42
-     ],
-     "waist": [
-      25,
-      53
-     ],
-     "hand": {
-      "down": [
-       43,
-       50
-      ],
-      "up": [
-       43,
-       50
-      ],
-      "side": [
-       35,
-       50
-      ]
-     }
-    }
-   }
-  },
-  {
    "id": "human2",
-   "name": "新人類",
+   "name": "人類",
    "scale": 1.0,
    "nameH": 66,
    "own": {
@@ -3886,7 +3637,7 @@
   },
   {
    "id": "elf2",
-   "name": "新妖精",
+   "name": "妖精",
    "scale": 1.0,
    "nameH": 66,
    "own": {
@@ -4033,7 +3784,7 @@
   },
   {
    "id": "cat2",
-   "name": "新貓族",
+   "name": "貓族",
    "scale": 1.0,
    "nameH": 66,
    "own": {
@@ -4183,7 +3934,7 @@
   },
   {
    "id": "dwarf2",
-   "name": "新矮人",
+   "name": "矮人",
    "scale": 1.0,
    "nameH": 58,
    "own": {
@@ -4329,7 +4080,7 @@
   },
   {
    "id": "giant2",
-   "name": "新巨人",
+   "name": "巨人",
    "scale": 1.0,
    "nameH": 74,
    "own": {

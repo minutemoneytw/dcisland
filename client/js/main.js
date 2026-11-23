@@ -65,7 +65,7 @@ const S = {
   charImgs: {},                 // 人物分層 sheet：檔名 -> Image（軀幹／頭髮／衣服／褲子／帽子）
   charCache: new Map(),         // (造型, 幀號) -> 合成好的一幀
   recolorCache: new Map(),      // (sheet, 顏色) -> 換好色的整張 sheet
-  me: lsObj('dcisland.m0.avatar', null) || { skin: 'light', hair: 'hair1', race: 'human', gender: 'male', shirt: 0, weapon: 'sword' },
+  me: lsObj('dcisland.m0.avatar', null) || { skin: 'light', hair: 'hair1', race: 'human2', shirt: 0, weapon: 'sword' },
   profile: lsObj('dcisland.m0.profile', null) || { xp: 0, showLv: true },   // 等級等個人資料（跟著人走，換職業繼承；key＝dcisland.m0.profile）
   world: null,                  // {types: Uint8Array, decos: []}
   furnItems: [],                // [{type, cell:[x,y]}]
@@ -2949,7 +2949,7 @@ function sheetCellHas(img, sx, sy, w, h) {
 // 由下往上疊；**描邊不在圖層裡**，合成後整個人統一畫一圈 own.outline 色的外框（每層各自描邊，層與層之間會多出不該有的線）。
 // 沒有這一格（攻擊、釣魚、坐姿以外的動作）就用 map 條目的退回幀（待機）。武器、服裝選項、換色都還沒做（之後階段）。
 // 新風格（整套自製圖層）的種族定義；不是新風格回 null。掛點（背／腰／手）因為身形不同，用 own.anchors 覆寫（依面向 down／up／side 各給一組）
-const ownRaceOf = id => { const r = id && S.avatar?.races?.find(r => r.id === id); return r?.own ? r : null; };
+const ownRaceOf = id => { const rs = S.avatar?.races, r = (id && rs?.find(r => r.id === id)) || rs?.[0]; return r?.own ? r : null; };   // 舊種族（human／elf／cat／lalafell／giant／chibi）已刪除：找不到的 id 一律當第一個種族（人類）
 const CHIBI_ORDER = ['body', 'bottom', 'shoes', 'top', 'hairbg', 'face', 'hair', 'hat'];
 // 新風格的換色：own.dye＝[{slot, layers, colors}]（slot 對應 look 的 hair／top／bottom／shoe／hat 的色碼；colors 第一個是主色，其餘依明暗比例跟著變，見 dyeSheet）
 const CHIBI_DYE_FIELD = { hair: 'hairC', top: 'topC', bottom: 'botC', shoe: 'shoeC', hat: 'hatC', eye: 'eyeC' };   // eye＝眼睛顏色（外貌頁的眼睛換色鈕，存在 S.me.eyeC）
@@ -3950,7 +3950,7 @@ function drawPerson(p, wi, nameColor) {
 }
 function drawPersonBase(p, wi, nameColor) {
   const pose = p.pose === 'sit' || p.pose === 'sleep' ? p.pose : null;
-  const race = (p === S.players[0] ? S.me.race : p.look?.race) || 'human';
+  const race = ownRaceOf(p === S.players[0] ? S.me.race : p.look?.race)?.id || 'human2';
   const ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);   // 吃喝的效果（巨大化／縮小／透明／暈眩／中毒）
   const raceDef = S.avatar.races?.find(r => r.id === race);
   const raceScale = (raceDef?.scale || 1) * foodScaleOf(ffx);   // 種族倍率：拉拉肥 0.5／巨人 1.5（整個模組一起縮）；吃喝的巨大化／縮小再乘上去
@@ -4137,7 +4137,7 @@ function drawSleeper(p) {
   const F = S.avatar.frames, s = F.scale || 2, img = playerSpriteDiv(p, (F.states.down_idle || [0])[0]);   // 用正面待機的第 1 幀切出頭與肩膀
   const it = seatItemOf(p), sdir = it?.dir || 0;
   // 體型：依種族倍率（拉拉肥 0.5／巨人 1.5…）與吃喝的巨大化／縮小縮放，床放不下太大的所以上限 1.2；側面的床再縮 0.85（頭枕在窄窄的枕頭上）
-  const race = (p === S.players[0] ? S.me.race : p.look?.race) || 'human', ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);
+  const race = ownRaceOf(p === S.players[0] ? S.me.race : p.look?.race)?.id || 'human2', ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);
   const rs = Math.min(1.2, ((S.avatar.races?.find(r => r.id === race)?.scale) || 1) * foodScaleOf(ffx));
   if (sdir === 2) { drawZzz(p); return; }   // 背面（從床頭看）：人在床頭板後面，只留 Zzz
   if (sdir === 1 || sdir === 3) {   // 側面的床（2026-11-15）：人側躺在床上——把「頭到腰」那段轉 90 度，頭枕在枕頭上，其餘由棉被蓋住
@@ -13504,7 +13504,7 @@ function myLook() {
   const c = wardrobe().color, w = shownItem('weapon');
   const own = ownRaceOf(S.me.race);   // 新風格：髮型／服裝款式放進 look.hair／look.top（款式 id，同步不用改伺服器）
   const ownHair = own && chibiStyleOf(own.own, 'hair', S.me.cHair)?.id, ownTop = own && chibiStyleOf(own.own, 'top', S.me.cTop)?.id;
-  return { skin: S.me.skin, hair: ownHair || S.me.hair, gender: S.me.gender || 'male', race: S.me.race || 'human',
+  return { skin: S.me.skin, hair: ownHair || S.me.hair, race: own?.id || 'human2',
            hat: shownItem('hat')?.id || null, top: ownTop || shownItem('top')?.id || null, bottom: shownItem('bottom')?.id || null,
            shoe: shownItem('shoe')?.id || null,
            face: (own && chibiStyleOf(own.own, 'face', S.me.cFace)?.id) || S.me.face || 'normal', eyes: lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown',
@@ -13565,9 +13565,7 @@ function buildAvatarPanel() {
     styleHost.appendChild(b);
   };
   lookChips($('raceOpts'), (S.avatar.races || []).map(r => ({ id: r.id, name: r.name, title: r.scale && r.scale !== 1 ? `體型 ×${r.scale}` : '' })),
-            S.me.race || 'human', v => { S.me.race = v; });
-  // 性別（男／女）：換素體與對應性別的服裝
-  lookChips($('genderOpts'), [{ id: 'male', name: '男' }, { id: 'female', name: '女' }], S.me.gender || 'male', v => { S.me.gender = v; });
+            ownRaceOf(S.me.race)?.id, v => { S.me.race = v; });
   // 等級：XP 進度條（無上限，每級需求 10 + 5×(Lv−1)；來源＝怪物／釣竿／首捕／採集，2026-11-06）
   const li = lvInfo(S.profile.xp);
   $('lvCur').textContent = `Lv.${li.lv}`;
@@ -13602,8 +13600,6 @@ function buildAvatarPanel() {
     hb.onclick = () => toggleColor('hairC', { name: '髮色', hex: ownRace.own.dye.find(r => r.slot === 'hair').colors[0], dye: ownRace.own.dye.find(r => r.slot === 'hair').colors });
     hairHost.appendChild(hb);
   } else twoLevel(S.avatar.hair, S.me.hair, 'hair', $('hairOpts'), 'hairC');
-  if (ownRace?.own.styles?.face) lookChips($('faceOpts'), ownRace.own.styles.face, chibiStyleOf(ownRace.own, 'face', S.me.cFace)?.id, v => { S.me.cFace = v; });   // 新風格：臉型款式（有／無腮紅）
-  else lookChips($('faceOpts'), S.avatar.faces || [], S.me.face || 'normal', v => { S.me.face = v; });
   const eyeDye = ownRace?.own.dye?.find(r => r.slot === 'eye');
   if (eyeDye) {   // 自己畫眼睛的種族（新人類）：LPC 的眼神樣式用不到，只留一個換色鈕（換眼珠的灰色）
     const eh = $('eyesOpts'); eh.innerHTML = '';
@@ -13612,7 +13608,7 @@ function buildAvatarPanel() {
     eb.append(esw, document.createTextNode('換色'));
     eb.onclick = () => toggleColor('eyeC', { name: '眼睛顏色', hex: eyeDye.colors[0], dye: eyeDye.colors });
     eh.appendChild(eb);
-  } else twoLevel(S.avatar.eyes || [], lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown', 'eyes', $('eyesOpts'), 'eyeC');
+  }
   // 裝備與外觀：每個部位一列——顯示中的那件（裝備，或套了外觀時的外觀名）＋「外觀」鈕（開外觀一覽選）＋換色鈕
   const box = $('gearRows'); box.innerHTML = '';
   const wr = wardrobe();
