@@ -2376,6 +2376,13 @@
        "sheets": {
         "hair": "human2_hair_puff.png"
        }
+      },
+      {
+       "id": "h2_flip",
+       "name": "外翹髮",
+       "sheets": {
+        "hair": "human2_hair_flip.png"
+       }
       }
      ]
     },
@@ -2524,6 +2531,13 @@
        "name": "蓬蓬短髮",
        "sheets": {
         "hair": "human2_hair_puff.png"
+       }
+      },
+      {
+       "id": "h2_flip",
+       "name": "外翹髮",
+       "sheets": {
+        "hair": "human2_hair_flip.png"
        }
       }
      ]
@@ -2675,6 +2689,13 @@
        "sheets": {
         "hair": "human2_hair_puff.png"
        }
+      },
+      {
+       "id": "h2_flip",
+       "name": "外翹髮",
+       "sheets": {
+        "hair": "human2_hair_flip.png"
+       }
       }
      ]
     },
@@ -2824,6 +2845,13 @@
        "name": "蓬蓬短髮",
        "sheets": {
         "hair": "dwarf2_hair_puff.png"
+       }
+      },
+      {
+       "id": "h2_flip",
+       "name": "外翹髮",
+       "sheets": {
+        "hair": "dwarf2_hair_flip.png"
        }
       }
      ]
@@ -2975,6 +3003,13 @@
        "name": "蓬蓬短髮",
        "sheets": {
         "hair": "giant2_hair_puff.png"
+       }
+      },
+      {
+       "id": "h2_flip",
+       "name": "外翹髮",
+       "sheets": {
+        "hair": "giant2_hair_flip.png"
        }
       }
      ]
