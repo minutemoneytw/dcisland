@@ -1,0 +1,474 @@
+"""男式西裝（男式西裝外套／西裝褲／皮鞋）的像素資料（2026-11-23，使用者給的參考圖 23.png，使用者再手改過位置與顏色〔24.png〕）。
+
+來源：參考圖的 12 格（4 方向×3 格）量化、去背後，依排數拆成 top（外套＋襯衫＋手）／bottom（褲子）／shoes（鞋子）三層；
+待機與步 A 取使用者手改過的版本（位置、缺色、手），步 B 用自己抽的圖層加上同樣的對位規則（外套重心對齊女生外套重心）、手畫成同樣的樣式。
+座標是「預覽座標」：x＝sheet 格內的 x−16、y＝sheet 格內的 y（格 64×64）；每個條目＝(x0, y0, 列字串)，'.'＝透明，字母＝PAL 的第幾個顏色。
+右面向＝左面向鏡像（跟其他圖層一樣）。想改某一格的某個像素，直接改這裡的字母。
+"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from chibi_pilot import Img
+import gen_school as gs
+
+PAL = [
+    (34, 25, 24),
+    (47, 33, 30),
+    (56, 42, 39),
+    (70, 58, 57),
+    (82, 68, 67),
+    (97, 87, 90),
+    (113, 100, 102),
+    (140, 126, 127),
+    (160, 142, 143),
+    (198, 182, 186),
+    (227, 211, 208),
+    (255, 232, 210),
+    (222, 178, 160),
+    (179, 152, 148),
+]
+CH = 'abcdefghijklmn'
+
+DATA = {
+    ('back', 0): {
+        'top': (5, 28, [
+            '.......aaddddaa.......',
+            '....babddddddddbab....',
+            '...abdddddbbdddddba...',
+            '...abddddddddddddba...',
+            '...abbddddddddddbba...',
+            '...abbddddddddddbba...',
+            '...bccddddddddddccb...',
+            '..aabddddddddddddbaa..',
+            '..adccddddddddddcbda..',
+            '..babbddddddddddbbbb..',
+            '.bbbcacddddddddcacbbb.',
+            '.bbccabccccccccbaccbb.',
+            'bbbcbaccccccccccabcbbb',
+            'aaabcaccccbbccccacbaaa',
+            '.nlcbbccccccccccbbcln.',
+            '.nllcbccccccccccbclln.',
+            '..nnaccccccccccccann..',
+            '...aacccccccbbcccaa...',
+            '...aabbbcbccbbaabaa...',
+        ]),
+        'bottom': (9, 47, [
+            'abbeeddddeebba',
+            'adehfddddfheda',
+            'addhgecdeghdda',
+            'aeehfdbbdfheea',
+            '.edhfdaadehde.',
+            '.ddhgdbcdfhdd.',
+            '.dfhfdbbdfhfd.',
+            '.eghgecceghge.',
+            '.dghfdbbdfhgd.',
+            '.efhfebbefhfe.',
+            '.dghgdbbdghgd.',
+        ]),
+        'shoes': (9, 58, [
+            'aceeecaaceeeca',
+            'aaaaccccccaaaa',
+            '.cccccccccccc.',
+            '.ccfccccccfcc.',
+            '..acac..caca..',
+        ]),
+    },
+    ('back', 1): {
+        'top': (6, 28, [
+            '.....dddddddddd......',
+            '......addddddd.......',
+            '....abdccdddddaa.....',
+            '...addbcddddcddda....',
+            '...cddddddddddddca...',
+            '..abcdddddddddddcab..',
+            '..bccccddddddddabbab.',
+            '..dcccccdddddddbbaaa.',
+            '.cddccbbdddddddbbaac.',
+            '.cdddbbbdddddddbbaiin',
+            '.ddddbbadddddddbbbii.',
+            'cddddcbbddddddccdiii.',
+            'cddddbbbddddcccciii..',
+            'bddccbbabcbccccbb....',
+            'bdbaabbbabcccccba....',
+            '.nlllabbbbcccccbc....',
+            '.nlllebbbbcccccba....',
+            '.nnllfbbbbbbbbbba....',
+            '..nnncacabbcbbbba....',
+        ]),
+        'bottom': (10, 47, [
+            'bbabcbcbdddcc',
+            'bbdecddeeeeda',
+            'bdffddeeeeedb',
+            'aeffcaeeehdda',
+            'ddffabcfdhefa',
+            'adfebbeffhdf.',
+            'acfdbbefghdf.',
+            'bdfdabdghgdg.',
+            'acfdcaeghfde.',
+            'acfdbbefhfdc.',
+            'baddbadfhgda.',
+        ]),
+        'shoes': (10, 58, [
+            'aaaaaaefffca',
+            'kaaaaacfffea',
+            '.aaaaaaffaca',
+            '.caaaaaaaacc',
+            '.....aaceeca',
+            '.....ccfffc.',
+        ]),
+    },
+    ('back', 2): {
+        'top': (6, 28, [
+            '.....dddddddddd.....',
+            '......ddddddda......',
+            '....aadddddccdba....',
+            '...adddcddddcbdda...',
+            '..acddddddddddddc...',
+            '.bacdddddddddddcba..',
+            'babbaddddddddccccb..',
+            'aaabbdddddddcccccd..',
+            'caabbdddddddbbccddc.',
+            'ddabbdddddddbbbdddc.',
+            'ddbbbdddddddbbcdddd.',
+            'iiidccddddddbbcddddc',
+            '.ii.ccccddddbbbddddc',
+            '...bbccccbcbabbccddb',
+            '...abcccccbaabbaabdb',
+            '...cbcccccbbbballnd.',
+            '...abcccccbbbbdllnd.',
+            '...abbbbbbbbbb.nndd.',
+            '...abbbbcbbacacd.d..',
+        ]),
+        'bottom': (9, 47, [
+            'ccdddbbbcbabb',
+            'adeeeeddcedbb',
+            'bdeeeeeddffdb',
+            'addheeeacffea',
+            'afehdfcbaffdd',
+            '.fdhffeaaefda',
+            '.fdhgfeabdfd.',
+            '.gdghgdabdfc.',
+            '.edfhgeabdfc.',
+            '.cdfhfeabdec.',
+            '.adghfdabddb.',
+        ]),
+        'shoes': (10, 58, [
+            'acfffeaacca',
+            'aefffcaaaaa',
+            'acaffaaaaaa',
+            'ccaaaaaaaac',
+            'aceecca....',
+            '.cffccc....',
+            '.aacca.....',
+        ]),
+    },
+    ('front', 0): {
+        'top': (4, 28, [
+            '........bbd..dbb........',
+            '.....cacbiaccaibcac.....',
+            '....bcddc.iaai.cddcb....',
+            '....bcdddakddkadddcb....',
+            '....abccbbkkkkbbccba....',
+            '....bbcbbbbkkbbbbbbb....',
+            '....bbcbbbakkabbbcbb....',
+            '...bbccddddkkddddccbb...',
+            '...acccdddbkkbdddccca...',
+            '...cccccddbkkaddccccc...',
+            '..bbbbbcccakkaccbaccbb..',
+            '..bbbbabccckkabbbbbbbb..',
+            '.abbbcacccakkcbbbbbbbba.',
+            '.bbabcbccdkkkkccbbbbbbb.',
+            'nlllabbbcakkkkabbbballln',
+            'nllllabbbbaaabacbbblllln',
+            'nllldcbbbcddddccdbbdllln',
+            'nnnnbabbcddddddcbbabnnnn',
+            '.....abbddddddddbba.....',
+        ]),
+        'bottom': (9, 47, [
+            'aedhfeddefhdea',
+            'bedhgeddeghdeb',
+            'bedhfeccefhdeb',
+            '.dehgdaadghed.',
+            '.echfdccdfhce.',
+            '.dghfebbefhgd.',
+            '.efhfeaaefhfe.',
+            '.dgffdbbdffgd.',
+            'bdfffebbefffdb',
+            'bdfffdaadfffdb',
+            'aeedfdccdfdeea',
+        ]),
+        'shoes': (0, 58, [
+            '.........aaaaaaaaaaaaaa',
+            '.........aaccccccccccaa',
+            '.........afccccccccccfa',
+            '.........acccccaaccccca',
+            '.........acaaca..acaaca',
+            'c......................',
+        ]),
+    },
+    ('front', 1): {
+        'top': (7, 28, [
+            '.....ba..k.aa......',
+            '..aabaiabbaiaaa....',
+            '.aaddakiaaikcdda...',
+            '.aadddakddjadddab..',
+            '.aaadabkjjkccdabaa.',
+            '.abcaaaakkkaaaccaaa',
+            'bbbbcbaakkjbbbccaaa',
+            'abbccdddkkkaddbbbaa',
+            'accccdddbkkaddbbaii',
+            'acccbbddakkadcaabii',
+            'bdddcbbbbkkaccaiiii',
+            'bdddbabbakkbcccdii.',
+            'bdddcabbakkaccbb...',
+            'cdcbaabbkkkkacbb...',
+            'cbllbbbakkkkcbbb...',
+            'clllnbcbbbbabbbb...',
+            '.nnnndccdddbbbcc...',
+            '...dhdddddddccaa...',
+        ]),
+        'bottom': (9, 46, [
+            'abcefdeefddbaa',
+            '.ccegccdfdhddc',
+            '.adgebbdfeheda',
+            '.bdffbbdfehcfb',
+            '.adfebbeffheg.',
+            '..bfdbaefghdf.',
+            '..dfeabdghgdg.',
+            '..cfdbaefhfdf.',
+            '..cfebaefffdc.',
+            '..bddbadfhgda.',
+            '..acabaeghgda.',
+        ]),
+        'shoes': (10, 57, [
+            '.aaaaaefffea',
+            'aaaaaaaffaac',
+            'aaaaaaaafaaa',
+            'caaacaafffac',
+            '.....aacfcaa',
+            '.....cefffaa',
+        ]),
+    },
+    ('front', 2): {
+        'top': (4, 27, [
+            '..........k..........',
+            '........aa.d.dab.....',
+            '......aaaiabbaiabaa..',
+            '.....addckiaaikaddaa.',
+            '....badddajddkadddaa.',
+            '...aabadccijjibadaaa.',
+            '..aaaccaaaiiiaaaacba.',
+            '..aaaccbbbjiiaabcbbbb',
+            '..aabbbddakkidddccbba',
+            '..ddabbddakkbdddcccca',
+            '..idbaacdaijaddbbccca',
+            'nllddnaccanlbbbbcdddb',
+            '.nnnldcccbnlabbabdddb',
+            '....nbbccanlabbacdddb',
+            '..nnlbbcanllnbaaabcdc',
+            '....nbbbcnnnnaabllnbc',
+            '.....bbbbabbabc.lllnc',
+            '.....ccbbbdddccdnnndd',
+            '.....aaccddddddddd...',
+        ]),
+        'bottom': (9, 46, [
+            'aabddfeedfebba',
+            'cddhdfdccgecc.',
+            'adehefdbbegda.',
+            'bfchefdbbffdb.',
+            '.gehffebbdfda.',
+            '.fdhgfeabdfb..',
+            '.gdghgdbaefd..',
+            '.fdfhfeabdfc..',
+            '.cdfffeabefc..',
+            '.adghfdabddb..',
+            '.adghgeabbca..',
+        ]),
+        'shoes': (10, 57, [
+            'aefffeaaaaa.',
+            'caaffaaaaaaa',
+            'aaafaaaaaaaa',
+            'cafffaacaaac',
+            'aacfcaa.....',
+            'aafffec.....',
+            '.aaaac......',
+        ]),
+    },
+    ('left', 0): {
+        'top': (9, 28, [
+            '.m...d..m.id',
+            '..m..abaaba.',
+            '...cbddcca..',
+            '..ijaddccda.',
+            '..diddddddd.',
+            '.ccadddddddb',
+            '.aicbbdddddd',
+            '.cjacbdddddb',
+            '.ikbdabbcddc',
+            '.kkacbbccddc',
+            '.kkaacbccddb',
+            '.kkaabccccdc',
+            '.kkaabbccccd',
+            '.kkaaabaaabb',
+            '.bjaaanllbbb',
+            'acicaanllncd',
+            '.adbbbnnncba',
+            '..addebbccbb',
+            '..addcccbcba',
+        ]),
+        'bottom': (11, 47, [
+            'befedcccbb',
+            'adgdfecbac',
+            '.dfhfgeda.',
+            '.cfhgfeda.',
+            '.afhegde..',
+            '.affffed..',
+            '.bffffed..',
+            '.eehffdb..',
+            '.ffhffda..',
+            'adfdffda..',
+            'aefehgeb..',
+        ]),
+        'shoes': (9, 58, [
+            '..acffffca',
+            '.bceffffcc',
+            'cffffcccca',
+            'acffecccca',
+            'caacaaacac',
+        ]),
+    },
+    ('left', 1): {
+        'top': (9, 28, [
+            '.........k.idd..',
+            '.m......m.i.....',
+            '..m..bbbba......',
+            '...bcdddba......',
+            '..ijbddddda.....',
+            '..diddddddd.....',
+            '.aaadbddddda....',
+            '.aaacbaddddc....',
+            '.cjacccdddddb...',
+            '.jkadddddddddc..',
+            '.jkaddddddddddd.',
+            '.kkadddaabcccda.',
+            '.kkadddbbcccccd.',
+            '.kkbcddbbaaaaaa.',
+            '.kjabcddcaaalla.',
+            '.ajbccdddaalllln',
+            'aaaaccccbcalllln',
+            '.baabccccaanlln.',
+            '..bddbbbccacnn..',
+        ]),
+        'bottom': (3, 47, [
+            '........eeddbcbbba.....',
+            '........efhedbbbba.....',
+            '........dfhefccbaa.....',
+            '.......bdfhefdaaaa.....',
+            '.......gdhfdfbaaaa.....',
+            '.......fdhfbdbaaaaa....',
+            '......fghfca.baaaaa....',
+            '.....deegcaa..aaaaaa...',
+            '.....dfgfea...aaaaaaa..',
+            '....adfffdc....aaaaaab.',
+            'abbabaefeda.....aaaaaab',
+        ]),
+        'shoes': (3, 58, [
+            'acefacccaa......aaaaaaa',
+            'cccfccccaa......aaaaaac',
+            '.aacccccaa......aaccaa.',
+            '.....ccaa......aaacc...',
+            '......aaa......caac....',
+        ]),
+    },
+    ('left', 2): {
+        'top': (10, 28, [
+            '.......k.idd',
+            '........i...',
+            '...ibbbcb...',
+            '..bcddbba...',
+            '.ijbddbbda..',
+            '.diddccdda..',
+            'aaadabdddab.',
+            'aaacbddddba.',
+            'cjacbddddca.',
+            'jkaabcdddba.',
+            'jkbaccddbbb.',
+            'nlbaccbbbbd.',
+            'nnbbaccbbbc.',
+            'nanlnabbbcc.',
+            'nllllnbbbcc.',
+            'nllllnabbcc.',
+            'bnlllnbabbc.',
+            'abnnnccbcbb.',
+            'aacaacbcdca.',
+        ]),
+        'bottom': (3, 47, [
+            '.......aaaaaaccbbc.....',
+            '.......aaaaaccbbcb.....',
+            '.......aaaaeeccaaa.....',
+            '.......aaaaeeeedda.....',
+            '.......aaaaceeeedb.....',
+            '.......aaaaadegfeca....',
+            '......baaaaa.egheca....',
+            '.....baaaaaa..ehdedd...',
+            '.....aaaaaa...cfheeed..',
+            '....aaaaaab....ddffeee.',
+            'acbabaaaaaa.....adddccc',
+        ]),
+        'shoes': (3, 58, [
+            'ccccaaaaaa......aaaaaaa',
+            'acccccaaaa......aaaaaaa',
+            '..acccaaaa......acccca.',
+            '.....caaa......fffcc...',
+            '......aaa......ccce....',
+        ]),
+    },
+}
+
+WALK_COLS = {0: (0, 3, 4, 7, 8), 1: (1, 2), 2: (5, 6)}   # 步 0（待機）／1／2 用在 sheet 的哪幾欄（gs.WALK_FRAMES）
+ROW = {'down': 'front', 'up': 'back', 'left': 'left'}
+
+
+def male_sheets():
+    """回傳 {'top': Img, 'bottom': Img, 'shoes': Img}（832×1856，只填走路列；右＝左的鏡像）。"""
+    out = {n: Img(gs.SHEET_W, gs.SHEET_H) for n in ('top', 'bottom', 'shoes')}
+    for d, row in gs.WALK_ROW.items():
+        kind = ROW['left' if d == 'right' else d]
+        for step, cols in WALK_COLS.items():
+            for nm, (x0, y0, rows) in ((n, DATA[(kind, step)][n]) for n in ('top', 'bottom', 'shoes')):
+                for yy, line in enumerate(rows):
+                    for xx, ch in enumerate(line):
+                        if ch == '.':
+                            continue
+                        px = x0 + xx + 16                 # 預覽座標 → 格內 x
+                        if d == 'right':
+                            px = 63 - px                  # 鏡像（同其他髮型）
+                        for col in cols:
+                            out[nm].px[row * gs.CELL + y0 + yy][col * gs.CELL + px] = PAL[CH.index(ch)]
+    return out
+
+
+def body_masks(body):
+    """男式衣服要遮掉我們身體層的手／腿：回傳 {'hands': Img, 'legs': Img}（sheet 大小，要擦掉的格子有不透明像素）。
+    做法：每格 body 層 y>=38 的像素分成連通區，碰到第 56 排以下的是腿、其餘是手。"""
+    from collections import deque
+    hands = Img(gs.SHEET_W, gs.SHEET_H); legs = Img(gs.SHEET_W, gs.SHEET_H)
+    for row in gs.WALK_ROW.values():
+        for col in range(9):
+            x0, y0 = col * gs.CELL, row * gs.CELL
+            cells = {(x, y) for y in range(38, gs.CELL) for x in range(gs.CELL) if body.px[y0 + y][x0 + x] is not None}
+            seen = set()
+            for p in cells:
+                if p in seen:
+                    continue
+                comp = []; dq = deque([p]); seen.add(p)
+                while dq:
+                    x, y = dq.popleft(); comp.append((x, y))
+                    for dx in (-1, 0, 1):
+                        for dy in (-1, 0, 1):
+                            n = (x + dx, y + dy)
+                            if n in cells and n not in seen:
+                                seen.add(n); dq.append(n)
+                target = legs if max(y for _, y in comp) >= 56 else hands
+                for (x, y) in comp:
+                    target.px[y0 + y][x0 + x] = (0, 0, 0)
+    return {'hands': hands, 'legs': legs}

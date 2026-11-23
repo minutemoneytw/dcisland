@@ -2405,6 +2405,54 @@
         "hair": "human2_hair_oil.png"
        }
       }
+     ],
+     "top": [
+      {
+       "id": "suit_jacket",
+       "name": "女式西裝外套",
+       "sheets": {}
+      },
+      {
+       "id": "suit_jacket_m",
+       "name": "男式西裝外套",
+       "sheets": {
+        "top": "human2_m_top.png"
+       },
+       "erase": {
+        "body": "human2_mask_hands.png"
+       }
+      }
+     ],
+     "bottom": [
+      {
+       "id": "suit_skirt",
+       "name": "西裝短裙",
+       "sheets": {}
+      },
+      {
+       "id": "suit_pants_m",
+       "name": "西裝褲",
+       "sheets": {
+        "bottom": "human2_m_bottom.png"
+       },
+       "erase": {
+        "body": "human2_mask_legs.png"
+       }
+      }
+     ],
+     "shoe": [
+      {
+       "id": "pointed_shoes",
+       "name": "尖皮鞋",
+       "sheets": {}
+      },
+      {
+       "id": "leather_shoes_m",
+       "name": "皮鞋",
+       "sheets": {
+        "shoes": "human2_m_shoes.png"
+       }
+      }
      ]
     },
     "dye": [
@@ -2476,7 +2524,8 @@
       "slot": "skin",
       "layers": [
        "body",
-       "hair"
+       "hair",
+       "top"
       ],
       "colors": [
        "#ffe8d2",
@@ -2504,6 +2553,52 @@
        "#3e3d42",
        "#382e2f",
        "#262222"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "suit_jacket_m",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#463a39",
+       "#524443"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "suit_pants_m",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#463a39",
+       "#221918",
+       "#2f211e",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466",
+       "#8c7e7f"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "leather_shoes_m",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466"
       ]
      }
     ],
@@ -2602,6 +2697,54 @@
         "hair": "human2_hair_oil.png"
        }
       }
+     ],
+     "top": [
+      {
+       "id": "suit_jacket",
+       "name": "女式西裝外套",
+       "sheets": {}
+      },
+      {
+       "id": "suit_jacket_m",
+       "name": "男式西裝外套",
+       "sheets": {
+        "top": "human2_m_top.png"
+       },
+       "erase": {
+        "body": "human2_mask_hands.png"
+       }
+      }
+     ],
+     "bottom": [
+      {
+       "id": "suit_skirt",
+       "name": "西裝短裙",
+       "sheets": {}
+      },
+      {
+       "id": "suit_pants_m",
+       "name": "西裝褲",
+       "sheets": {
+        "bottom": "human2_m_bottom.png"
+       },
+       "erase": {
+        "body": "human2_mask_legs.png"
+       }
+      }
+     ],
+     "shoe": [
+      {
+       "id": "pointed_shoes",
+       "name": "尖皮鞋",
+       "sheets": {}
+      },
+      {
+       "id": "leather_shoes_m",
+       "name": "皮鞋",
+       "sheets": {
+        "shoes": "human2_m_shoes.png"
+       }
+      }
      ]
     },
     "dye": [
@@ -2674,6 +2817,7 @@
       "layers": [
        "body",
        "hair",
+       "top",
        "hat"
       ],
       "colors": [
@@ -2702,6 +2846,52 @@
        "#3e3d42",
        "#382e2f",
        "#262222"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "suit_jacket_m",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#463a39",
+       "#524443"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "suit_pants_m",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#463a39",
+       "#221918",
+       "#2f211e",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466",
+       "#8c7e7f"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "leather_shoes_m",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466"
       ]
      }
     ],
@@ -2801,6 +2991,54 @@
         "hair": "human2_hair_oil.png"
        }
       }
+     ],
+     "top": [
+      {
+       "id": "suit_jacket",
+       "name": "女式西裝外套",
+       "sheets": {}
+      },
+      {
+       "id": "suit_jacket_m",
+       "name": "男式西裝外套",
+       "sheets": {
+        "top": "human2_m_top.png"
+       },
+       "erase": {
+        "body": "human2_mask_hands.png"
+       }
+      }
+     ],
+     "bottom": [
+      {
+       "id": "suit_skirt",
+       "name": "西裝短裙",
+       "sheets": {}
+      },
+      {
+       "id": "suit_pants_m",
+       "name": "西裝褲",
+       "sheets": {
+        "bottom": "human2_m_bottom.png"
+       },
+       "erase": {
+        "body": "human2_mask_legs.png"
+       }
+      }
+     ],
+     "shoe": [
+      {
+       "id": "pointed_shoes",
+       "name": "尖皮鞋",
+       "sheets": {}
+      },
+      {
+       "id": "leather_shoes_m",
+       "name": "皮鞋",
+       "sheets": {
+        "shoes": "human2_m_shoes.png"
+       }
+      }
      ]
     },
     "dye": [
@@ -2874,7 +3112,8 @@
       "slot": "skin",
       "layers": [
        "body",
-       "hair"
+       "hair",
+       "top"
       ],
       "colors": [
        "#ffe8d2",
@@ -2902,6 +3141,52 @@
        "#3e3d42",
        "#382e2f",
        "#262222"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "suit_jacket_m",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#463a39",
+       "#524443"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "suit_pants_m",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#463a39",
+       "#221918",
+       "#2f211e",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466",
+       "#8c7e7f"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "leather_shoes_m",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466"
       ]
      }
     ],
@@ -2999,6 +3284,54 @@
         "hair": "dwarf2_hair_oil.png"
        }
       }
+     ],
+     "top": [
+      {
+       "id": "suit_jacket",
+       "name": "女式西裝外套",
+       "sheets": {}
+      },
+      {
+       "id": "suit_jacket_m",
+       "name": "男式西裝外套",
+       "sheets": {
+        "top": "dwarf2_m_top.png"
+       },
+       "erase": {
+        "body": "dwarf2_mask_hands.png"
+       }
+      }
+     ],
+     "bottom": [
+      {
+       "id": "suit_skirt",
+       "name": "西裝短裙",
+       "sheets": {}
+      },
+      {
+       "id": "suit_pants_m",
+       "name": "西裝褲",
+       "sheets": {
+        "bottom": "dwarf2_m_bottom.png"
+       },
+       "erase": {
+        "body": "dwarf2_mask_legs.png"
+       }
+      }
+     ],
+     "shoe": [
+      {
+       "id": "pointed_shoes",
+       "name": "尖皮鞋",
+       "sheets": {}
+      },
+      {
+       "id": "leather_shoes_m",
+       "name": "皮鞋",
+       "sheets": {
+        "shoes": "dwarf2_m_shoes.png"
+       }
+      }
      ]
     },
     "dye": [
@@ -3070,7 +3403,8 @@
       "slot": "skin",
       "layers": [
        "body",
-       "hair"
+       "hair",
+       "top"
       ],
       "colors": [
        "#ffe8d2",
@@ -3098,6 +3432,52 @@
        "#3e3d42",
        "#382e2f",
        "#262222"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "suit_jacket_m",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#463a39",
+       "#524443"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "suit_pants_m",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#463a39",
+       "#221918",
+       "#2f211e",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466",
+       "#8c7e7f"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "leather_shoes_m",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466"
       ]
      }
     ],
@@ -3198,6 +3578,54 @@
         "hair": "giant2_hair_oil.png"
        }
       }
+     ],
+     "top": [
+      {
+       "id": "suit_jacket",
+       "name": "女式西裝外套",
+       "sheets": {}
+      },
+      {
+       "id": "suit_jacket_m",
+       "name": "男式西裝外套",
+       "sheets": {
+        "top": "giant2_m_top.png"
+       },
+       "erase": {
+        "body": "giant2_mask_hands.png"
+       }
+      }
+     ],
+     "bottom": [
+      {
+       "id": "suit_skirt",
+       "name": "西裝短裙",
+       "sheets": {}
+      },
+      {
+       "id": "suit_pants_m",
+       "name": "西裝褲",
+       "sheets": {
+        "bottom": "giant2_m_bottom.png"
+       },
+       "erase": {
+        "body": "giant2_mask_legs.png"
+       }
+      }
+     ],
+     "shoe": [
+      {
+       "id": "pointed_shoes",
+       "name": "尖皮鞋",
+       "sheets": {}
+      },
+      {
+       "id": "leather_shoes_m",
+       "name": "皮鞋",
+       "sheets": {
+        "shoes": "giant2_m_shoes.png"
+       }
+      }
      ]
     },
     "dye": [
@@ -3269,7 +3697,8 @@
       "slot": "skin",
       "layers": [
        "body",
-       "hair"
+       "hair",
+       "top"
       ],
       "colors": [
        "#ffe8d2",
@@ -3297,6 +3726,52 @@
        "#3e3d42",
        "#382e2f",
        "#262222"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "suit_jacket_m",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#463a39",
+       "#524443"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "suit_pants_m",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#463a39",
+       "#221918",
+       "#2f211e",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466",
+       "#8c7e7f"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "leather_shoes_m",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466"
       ]
      }
     ],
@@ -3343,6 +3818,18 @@
     "#221c1c",
     "#1f1b1b",
     "#110e0e"
+   ]
+  },
+  {
+   "id": "suit_jacket_m",
+   "name": "男式西裝外套",
+   "glam": true,
+   "dye": [
+    "#2f211e",
+    "#221918",
+    "#382a27",
+    "#463a39",
+    "#524443"
    ]
   },
   {
@@ -3492,6 +3979,21 @@
    ]
   },
   {
+   "id": "suit_pants_m",
+   "name": "西裝褲",
+   "glam": true,
+   "dye": [
+    "#463a39",
+    "#221918",
+    "#2f211e",
+    "#382a27",
+    "#524443",
+    "#61575a",
+    "#716466",
+    "#8c7e7f"
+   ]
+  },
+  {
    "id": "pants",
    "name": "長褲",
    "sheet": "char_bottom_pants_m.png",
@@ -3568,6 +4070,19 @@
     "#5c5458",
     "#2f2b2d",
     "#17100f"
+   ]
+  },
+  {
+   "id": "leather_shoes_m",
+   "name": "皮鞋",
+   "glam": true,
+   "dye": [
+    "#2f211e",
+    "#221918",
+    "#382a27",
+    "#524443",
+    "#61575a",
+    "#716466"
    ]
   },
   {
