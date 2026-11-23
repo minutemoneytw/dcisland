@@ -30,6 +30,7 @@ PAL = [
     (255, 232, 210),
 ]
 CH = 'abcdefghijklmno'
+SKIN_LETTERS = 'iol'   # PAL 裡的皮膚色（fk／sk／sk_d）：T恤的前臂
 
 DATA = {
     ('back', 0): {
@@ -423,6 +424,76 @@ DATA = {
 }
 
 
+def hoodie(kind, x0, rows):
+    """T恤的上衣資料 → 帽T：長袖（前臂的皮膚字母換成袖子色＋袖口一圈）、正面加袋鼠口袋與帽繩、背面加帽子堆在後頸。"""
+    g = [list(r) for r in rows]
+    W = max(len(r) for r in g)
+    for r in g:
+        r.extend('.' * (W - len(r)))
+    # 長袖：i（外框）→e、o（袖面）→k、l（內側陰影）→h
+    last = {}
+    for y, r in enumerate(g):
+        for x, ch in enumerate(r):
+            if ch in SKIN_LETTERS:
+                r[x] = {'i': 'e', 'o': 'k', 'l': 'h'}[ch]
+                last.setdefault(x, y)
+                last[x] = y
+    # 袖口：每欄袖子的最後一格換成袖口色（h），再往下補一格外框
+    for x, y in last.items():
+        g[y][x] = 'h'
+        if y + 1 >= len(g):
+            g.append(['.'] * W)
+        if g[y + 1][x] == '.':
+            g[y + 1][x] = 'e'
+    # 袖口兩旁的外框
+    for x, y in list(last.items()):
+        pass
+    if kind == 'front':
+        # 袋鼠口袋：腰上方一道橫線，兩端往下各一格
+        ys = [y for y, r in enumerate(g) if 'k' in r and 12 <= y <= 15]
+        for i, y in enumerate(ys):
+            r = g[y]
+            xs = [x for x, c in enumerate(r) if c == 'k']
+            a, b = xs[0] + 2, xs[-1] - 2
+            if i == 0:
+                for x in range(a, b + 1):
+                    r[x] = 'h'
+            elif i == 1:
+                r[a] = 'h'; r[b] = 'h'
+        # 帽子：領口一圈厚的帽緣（兩排），中間留脖子，帽繩兩條垂下
+        r0 = g[0]
+        gap = [x for x, c in enumerate(r0) if c == '.' and 4 < x < W - 4]
+        if gap:
+            cx = (gap[0] + gap[-1]) // 2
+            lo, hi = cx - 1, cx + 2          # 脖子的洞
+            for x in range(lo - 3, hi + 4):
+                if lo <= x < hi:
+                    continue
+                g[0][x] = 'e' if x in (lo - 3, hi + 3) else 'h'
+                if g[1][x] != '.':
+                    g[1][x] = 'm' if x not in (lo - 3, hi + 3) else 'e'
+            for y in (2, 3, 4, 5):
+                for x in (lo - 1, hi + 1 - 1):
+                    if g[y][x] == 'k':
+                        g[y][x] = 'm'
+                if y == 5:
+                    for x in (lo - 1, hi):
+                        g[y][x] = 'e'
+    elif kind == 'back':
+        # 帽子堆在後頸：領口下一個 U 形
+        xs = [x for x, c in enumerate(g[2]) if c == 'k']
+        a, b = xs[0] + 3, xs[-1] - 3
+        for x in range(a, b + 1):
+            g[1][x] = 'm'
+        for y, (aa, bb) in ((2, (a, b)), (3, (a + 1, b - 1)), (4, (a + 2, b - 2))):
+            g[y][aa] = 'e'; g[y][bb] = 'e'
+            for x in range(aa + 1, bb):
+                g[y][x] = 'h' if y == 4 else 'm'
+        for x in range(a + 3, b - 2):
+            g[4][x] = 'e' if g[4][x] != 'h' else g[4][x]
+    return x0, [''.join(r) for r in g]
+
+
 def casual_sheets():
     """回傳 {'top': Img, 'bottom': Img, 'shoes': Img}（832×1856，只填走路列；右＝左的鏡像）。"""
     out = {n: Img(gs.SHEET_W, gs.SHEET_H) for n in ('top', 'bottom', 'shoes')}
@@ -430,10 +501,12 @@ def casual_sheets():
         kind = ROW['left' if d == 'right' else d]
         for step, cols in WALK_COLS.items():
             for nm, (x0, y0, rows) in ((n, DATA[(kind, step)][n]) for n in ('top', 'bottom', 'shoes')):
+                if nm == 'top' and kind in ('front', 'back', 'left'):
+                    x0, rows = hoodie(kind, x0, rows)
                 for yy, line in enumerate(rows):
                     for xx, ch in enumerate(line):
                         if ch == '.':
-                            continue
+                            continue   # T恤不畫前臂（素體自己的手臂會從袖口露出來；之前畫了一份對不上素體的前臂，會變成雙層手）
                         px = x0 + xx + 16
                         if d == 'right':
                             px = 63 - px
