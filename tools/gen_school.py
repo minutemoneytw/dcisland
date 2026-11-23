@@ -1278,11 +1278,11 @@ LONG_HAIR_BACK = [
 LONG_HAIR_KEY = {'n': 'hn', 'd': 'hd', 'm': 'hm', 'l': 'hl', 'h': 'hh'}
 
 
-def hair_style_sheet(sheets, maps, center=False, side_dx=0, top_row=0):
+def hair_style_sheet(sheets, maps, center=False, side_dx=0, top_row=0, side_dy=0):
     """回傳 Img(832×1856)：某個髮型的 hair 層（只填走路列；右＝左的鏡像）。sheets＝新人類的各層 sheet（用原本髮型的位置對齊）。
     maps＝{'down': 正面, 'up': 背面, 'left': 側面（臉朝左）}，各是字串列（見 LONG_HAIR_*）；
     center＝True：正面／背面依原本髮型的左右中心置中（髮型比頭寬時用），否則圖的左緣對齊原本髮型的左緣；side_dx＝側面再往右偏幾欄；
-    top_row＝圖的第幾排（從 0 算）對齊原本髮型的頭頂（圖頂端有一小撮翹毛時用）。"""
+    top_row＝圖的第幾排（從 0 算）對齊原本髮型的頭頂（圖頂端有一小撮翹毛時用）；side_dy＝側面再往下偏幾排（側面頭頂與前髮的相對位置跟正面不同時用）。"""
     hair = sheets['hair']
     out = Img(SHEET_W, SHEET_H)
     for d, row in WALK_ROW.items():
@@ -1299,6 +1299,8 @@ def hair_style_sheet(sheets, maps, center=False, side_dx=0, top_row=0):
             if not ys:
                 continue
             top, left = ys[0] - top_row, min(xs)
+            if src_d == 'left':
+                top += side_dy
             if center and src_d != 'left':
                 left = (min(xs) + max(xs) + 1) // 2 - len(mp[0]) // 2
             elif src_d == 'left':
@@ -1612,6 +1614,118 @@ PONY_HAIR_BACK = [
 
 def pony_hair_sheet(sheets):
     return hair_style_sheet(sheets, {'down': PONY_HAIR_FRONT, 'up': PONY_HAIR_BACK, 'left': PONY_HAIR_SIDE}, center=True, side_dx=-1, top_row=0)
+
+
+# 雙馬尾（2026-11-23，使用者給的第五個參考圖：綠色；正面頭兩側各一條馬尾垂到肩膀以下、側面頭後一條（另一條被擋住）、背面頭兩側兩條；
+# 取輪廓與明暗，重新對應成髮色代號）。分界線的暗色（亮度 < 58）→ n、陰影（< 100）→ d，其餘規則同外翹髮（只去掉孤立單格，不平滑）。
+# 圖第 2 排是頭頂（上面 2 排是兩條馬尾綁點的小撮）；比頭寬（30 欄），正面／背面置中。
+TWIN_HAIR_FRONT = [
+    '....nnnn..............nnnn....',
+    '...ndmmmn............nmmmdn...',
+    '..nmmmmmmn.nnnnnnnn.nmmmmmmn..',
+    '..nmmmmmmnnmmmnnmmmnmmmmmmmn..',
+    '.nmmmmmnnmmmmmndmmmmmmmmmmmmn.',
+    '.nmmmmmmmmmnnmmdmmmmmmmmmmmmn.',
+    '.nmmdmmmmmmmmmnnmmmmmmmmmdmmn.',
+    'nmmmdmmmmmmmmmmmmmmmmmmmmdmmmn',
+    'nmmmmmmmmmmmmmmmmmmmmmmmmmmmmn',
+    'nmmmmmmmmmmmmmmmmmmmmmmmmmmmmn',
+    'nmmmmmhhmmmmmmmmmmmmmmhhmmnmmn',
+    'nmnmmmhhmhhmmhhhhmmhhmhhmmnmmn',
+    'nmnmmmmmmhhmmhhhhmmhhmmmmmddmn',
+    'nmnmmmmmmmmmmmmmmmmmmmmmmmnnmn',
+    'nmnmmmnmmmmmmmmmmmmmmmmmmmnnmn',
+    'nmnmmmnmmmmnmmmmmmnmmmmnmmnnmn',
+    'nmnmmmmmmmmnmmmmmmnmmmmnmmnmmn',
+    'nmnmmmnmmnmnnmmmmnnmnmmnmmnnmn',
+    'nmnnmmnmnnn..nnnn..nnnmnmmnnmn',
+    'nmnnmmmnn............nnmmmnnmn',
+    'nmnnmmmnn............nnmmmnnmn',
+    'nmnmmdmn..............nmmmmnmn',
+    'nnnmmdn................nnmmnnn',
+    'n.nmmnn................nnmmn.n',
+    '..ndnn..................nndn..',
+    '..nmnn..................nnmn..',
+    '..nmnn..................nnmn..',
+    '..nmnn..................nnmn..',
+    '..nn.n..................n.nn..',
+    '..nn.n..................n.nn..',
+    '..nn......................nn..',
+    '...n......................n...',
+    '...n......................n...',
+]
+TWIN_HAIR_SIDE = [
+    '...........nnnnnn...nn.....',
+    '.........nnmmmnmmn.nmmn....',
+    '......nnnmmnnnmnnmnnnmmn...',
+    '....nnmmmmmmmmmmmmnmmmmmn..',
+    '...nmmmmmmmmmmmmmmnmmmmmn..',
+    '..nmmmmmmmmmmmmmmddmmmmmmn.',
+    '..nmmmmmmmmmmmmmmmnmmmmmmn.',
+    '.nmmmmmmmmmmmmmmmmnmmhhmmmn',
+    '.nmmmhhmmmmmmmmmmmnmmhhmmmn',
+    '.nmmmhhmhhhmmhhmmmnmmmmmmmn',
+    'nmmmmmmmhhhmmhhmmmnmmmmmmmn',
+    'nmmmmmmmmmmmmmmmmmnmmmmmmmn',
+    'nmmmmmmmmmmmmmmmmmnmmmmmmmn',
+    'nmmmmmnmmmmmmmmmmmnmmmmmmmn',
+    '.nmmmmnmmmmmmmmmmmnmmmmmmmn',
+    '.nmddmnnmmmnmmmmmddmmmmmmmn',
+    '..nmnn..nmmnmmmmmmmnmmmmdmn',
+    '...n.....nnnndmnmmmnmmmmdmn',
+    '.............nmnmmdddmmmmmn',
+    '.............nmnmmmnmmmmmmn',
+    '..............nnmmmnmmmmmn.',
+    '..............nnmmmnmnmmmn.',
+    '................nmnnmnmmmn.',
+    '................nmmnnmmnmn.',
+    '................nmn.nnmnmn.',
+    '................nn..nmmnnn.',
+    '....................nnmn.n.',
+    '.....................nmn...',
+    '.....................nnn...',
+    '.....................n.n...',
+    '.....................n.....',
+]
+TWIN_HAIR_BACK = [
+    '....nnnn..............nnnn....',
+    '...nmmmmn............nmmmmn...',
+    '..nnnnnmdn.nnnnnnnn.ndmnnnnn..',
+    '..nmmmmmdmnmmmnnmmmnmdmmmmmn..',
+    '.nmmmmmmmmnmmnnnnmmnmmmmmmmmn.',
+    '.nmmmmmmmmnddmmmmddnmmmmmmmmn.',
+    '.nmmmmmmmmmmmmnnmmmmmmmmmmmmn.',
+    'nmmmmmmnnnnmmmddmmmnnnnmmmmmmn',
+    'nmmmmmmmnnmmmmmmmmmmnnmmmmmmmn',
+    'nmmmmmmmnnmmmmmmmmmmnnmmmmmmmn',
+    'nmmmhhmmnmmmmmmmmmmmmnmmhhmmmn',
+    'nmmmhhmmnmmmmhhhhmmmmnmmhhmmmn',
+    'nmmmmmmmnmmmmhhhhmmmmnmmmmmmmn',
+    'nmmmmmmmnmmmmmmmmmmmmnmmmmmmmn',
+    'nmnmmmmmnmmmmmmmmmmmmnmmmmmnmn',
+    'nmnmmmmmndmmmmmmmmmmdnmmmmmnmn',
+    'nmmmmmmmndmmmmmmmmmmdnmmmmmmmn',
+    'nmnmmmmmnmmmmmmmmmmmmnmmmmmnmn',
+    'nmnmmmmmnmmmmmmmmmmmmnmmmmmnmn',
+    'nmnmmmmmnmmmmmmmmmmmmnmmmmmnmn',
+    'nmnmmmmmnmmmmmmmmmmmmnmmmmmnmn',
+    'nmnmmmmmndmmmmmmmmmmdnmmmmmnmn',
+    'nnnmmmmmndmmmmmmmmmmdnmmmmmnnn',
+    'n.ndmmmmnnmmmmmmmmmmnnmmmmdn.n',
+    '..nmmnmmnndmmmmmmmmdnnmmnmmn..',
+    '..ndmnmmnddmmmmmmmmddnmmnmdn..',
+    '..nmmnmmnmnmmmmmmmmnmnmmnmmn..',
+    '..nmnnnnnnnnnmmmmnnnnnnnnnmn..',
+    '..nn.nn...nn.nnnn.nn...nn.nn..',
+    '..nn.n..................n.nn..',
+    '..nn......................nn..',
+    '...n......................n...',
+    '...n......................n...',
+]
+
+
+def twin_hair_sheet(sheets):
+    return hair_style_sheet(sheets, {'down': TWIN_HAIR_FRONT, 'up': TWIN_HAIR_BACK, 'left': TWIN_HAIR_SIDE}, center=True, side_dx=0, top_row=2, side_dy=3)   # 側面（臉朝左）再往右 1 欄、往下 1 排＝比對齊頭頂的位置右 0 欄、下 3 排（2026-11-23 使用者：側面頭髮太高，先下 2 排、再要求往右 1、往下 1 看看）
 
 
 def _hex(c):
