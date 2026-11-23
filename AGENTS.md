@@ -20,6 +20,9 @@ Discord Activity 小遊戲：2D 點陣島，**同一個語音頻道＝同一座�
 正式站跑在 Cloudflare（`https://dcisland.less78518.workers.dev`）。
 里程碑（詳見 `docs/spec.md`）：M0 本機 demo、M1 Discord 串接、M2 多人同步 已完成；M3（個人島/參觀/鎖島/審核 bot）、M4（公測）未開始。
 
+## 進行中的大工程
+- **新人類系列身體換成「素體」**（使用者 2026-11-23 決定）：計畫、已量好的對位數字、踩過的坑、各階段驗收都在 **`docs/handoff-body-v2.md`**，動人物／髮型／服裝前先讀。腳本 `tools/wip_body_v2.py`，參考圖在 `docs/ref/`。
+
 ## 部署
 - **推到 `main` 且改到 `client/**`、`worker/**` 或 `.github/workflows/deploy.yml`，GitHub Actions 會自動部署到正式站**（只改 `docs/` 不會）。
 - `DISCORD_CLIENT_SECRET` 存在 Cloudflare Worker secrets，CI 與 repo 都不應出現它。
