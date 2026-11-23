@@ -3742,6 +3742,7 @@
    "id": "human2",
    "name": "新人類",
    "scale": 1.0,
+   "nameH": 66,
    "own": {
     "sheets": {
      "body": "human2_body.png",
@@ -3864,6 +3865,7 @@
    "id": "elf2",
    "name": "新妖精",
    "scale": 1.0,
+   "nameH": 66,
    "own": {
     "sheets": {
      "body": "human2_body.png",
@@ -3987,6 +3989,7 @@
    "id": "cat2",
    "name": "新貓族",
    "scale": 1.0,
+   "nameH": 66,
    "own": {
     "sheets": {
      "body": "human2_body.png",
@@ -4104,6 +4107,129 @@
       "side": [
        31,
        45
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "dwarf2",
+   "name": "新矮人",
+   "scale": 1.0,
+   "nameH": 58,
+   "own": {
+    "sheets": {
+     "body": "dwarf2_body.png",
+     "bottom": "dwarf2_bottom.png",
+     "shoes": "dwarf2_shoes.png",
+     "top": "dwarf2_top.png",
+     "face": "dwarf2_face.png",
+     "hair": "dwarf2_hair.png"
+    },
+    "outline": null,
+    "dye": [
+     {
+      "slot": "hair",
+      "layers": [
+       "hair"
+      ],
+      "colors": [
+       "#7482b2",
+       "#c8d4f8",
+       "#8494c0",
+       "#8c7aac",
+       "#6472a2",
+       "#444c63",
+       "#3c4a7c",
+       "#3c435c",
+       "#343b54",
+       "#222846",
+       "#1f2640",
+       "#3a190f",
+       "#111424",
+       "#1e0d07"
+      ]
+     },
+     {
+      "slot": "top",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#282424",
+       "#221c1c",
+       "#1f1b1b",
+       "#110e0e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#4a3c37",
+       "#282424",
+       "#3a190f",
+       "#221c1c",
+       "#1f1b1b",
+       "#110e0e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2e201e",
+       "#5c5458",
+       "#2f2b2d",
+       "#17100f"
+      ]
+     },
+     {
+      "slot": "eye",
+      "layers": [
+       "face"
+      ],
+      "colors": [
+       "#787780",
+       "#555264",
+       "#4a4242",
+       "#382e2f"
+      ]
+     }
+    ],
+    "anchors": {
+     "back": [
+      27,
+      40
+     ],
+     "backView": [
+      37,
+      40
+     ],
+     "waist": [
+      28,
+      52
+     ],
+     "hand": {
+      "down": [
+       42,
+       49
+      ],
+      "up": [
+       42,
+       49
+      ],
+      "side": [
+       31,
+       49
       ]
      }
     }

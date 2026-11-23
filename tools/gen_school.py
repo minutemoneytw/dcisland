@@ -1020,6 +1020,26 @@ def build_sheets(ears=False):   # ears：False／True（＝'elf'）／'cat'
     return sheets
 
 
+# 矮人（2026-11-23，使用者要求：偏小孩體型）：把新人類每格的軀幹、小腿各拿掉幾排（格子座標，0～63），上半身整段往下移，腳底仍在第 62 列。
+# 頭不變（頭身比變大）；軀幹 32～35 是外套中段、小腿 54～57 是襪子／小腿，這幾排各方向、各步伐都是一樣寬的直條，拿掉不會斷肢。
+DWARF_DROP = (32, 33, 34, 35, 54, 55, 56, 57)
+
+
+def shrink_sheets(sheets, drop=DWARF_DROP):
+    """每個格子拿掉 drop 的那幾排，上面的排往下補（只處理走路列）。回傳新的 {圖層名: Img}。"""
+    out = {n: Img(SHEET_W, SHEET_H) for n in sheets}
+    for n, src in sheets.items():
+        for row in WALK_ROW.values():
+            for y in range(CELL):
+                if y in drop:
+                    continue
+                ny = y + sum(1 for d in drop if d > y)
+                if ny >= CELL:
+                    continue
+                out[n].px[row * CELL + ny][:] = src.px[row * CELL + y]
+    return out
+
+
 def complete_head(sheets):
     """完整素體（頭）：body 層原本只有被瀏海露出來的下半臉、手、腿，換成別的髮型（短髮、馬尾…）會露出空洞。這裡每一格在 body 層補一顆完整的頭（橢圓頭骨，
     大小跟著該格頭髮的輪廓：寬＝頭髮最寬處−6、高 25 排、頭頂在髮頂下 2 排）＋脖子，外框用皮膚陰影色（跟其他皮膚外框一樣畫在輪廓內側）。只補 body 層還是空的像素。

@@ -616,6 +616,7 @@ import gen_school   # 「新人類」分層 sheet（2026-11-22）：tools/gen_sc
 SCHOOL_SHEETS = gen_school.build_sheets()
 SCHOOL_LAYERS = [n for n, im in SCHOOL_SHEETS.items() if any(c is not None for row in im.px for c in row)]   # hairbg／hat 目前是空的，不輸出
 SCHOOL_CAT_SHEETS = gen_school.build_sheets(ears='cat')   # 新貓族：同一個人，多一層 hat（四個方向的貓耳，蓋在頭髮上面）
+SCHOOL_DWARF_SHEETS = gen_school.shrink_sheets(SCHOOL_SHEETS)   # 新矮人：新人類拿掉軀幹、小腿幾排的小孩體型
 SCHOOL_EAR_SHEETS = gen_school.build_sheets(ears=True)   # 新妖精：同一個人，多一層 hat（正面、側面的尖耳，蓋在頭髮上面）
 
 LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ears）；scale＝人類模組整體縮放倍率
@@ -658,6 +659,12 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
         sheets={**{n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, "hat": "cat2_hat.png", "hairbg": "cat2_hairbg.png"}, outline=None,
         dye=[dict(r, layers=["hair", "hat", "hairbg"]) if r["slot"] == "hair" else r for r in gen_school.dye_rules(SCHOOL_SHEETS)],
         anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 48], hand=dict(down=[42, 45], up=[42, 45], side=[31, 45])))),
+    # 新矮人（2026-11-23，使用者要求：偏小孩體型）：新人類拿掉軀幹 4 排、小腿 4 排（gen_school.DWARF_DROP），頭不變，身高 52 排；圖層 dwarf2_<圖層>.png。
+    # 武器掛點＝新人類的位置往下移（拿掉的排數在掛點下面的那幾排，4 排），暫時估的
+    dict(id="dwarf2", name="新矮人", scale=1.0, nameH=58, own=dict(
+        sheets={n: f"dwarf2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
+        dye=gen_school.dye_rules(SCHOOL_SHEETS),
+        anchors=dict(back=[27, 40], backView=[37, 40], waist=[28, 52], hand=dict(down=[42, 49], up=[42, 49], side=[31, 49])))),
 ]
 
 def kidol_main_hex(cid):
@@ -4463,6 +4470,8 @@ def main():
     # 新人類（tools/gen_school.py）：圖層 human2_<圖層>.png（hairbg／hat 目前是空的，不輸出）
     for lname in SCHOOL_LAYERS:
         save_chibi_layer(SCHOOL_SHEETS[lname], f"human2_{lname}.png", sub)
+    for lname in SCHOOL_LAYERS:                       # 新矮人
+        save_chibi_layer(SCHOOL_DWARF_SHEETS[lname], f"dwarf2_{lname}.png", sub)
     save_chibi_layer(SCHOOL_EAR_SHEETS["hat"], "elf2_hat.png", sub)
     save_chibi_layer(SCHOOL_CAT_SHEETS["hat"], "cat2_hat.png", sub)   # 新貓族的貓耳
     save_chibi_layer(SCHOOL_CAT_SHEETS["hairbg"], "cat2_hairbg.png", sub)   # 新貓族的尾巴（側面、背面；正面藏在身體後面）   # 新妖精的尖耳（正面、側面；背面的髮型蓋住耳朵，沒有）
