@@ -8813,17 +8813,6 @@ function maryArmWatchdog(ms) {   // 看門狗（2026-11-22 使用者回報 DC �
   const M = S.mary; if (!M) return;   // 這裡用 setTimeout（計時器在 DC 的 iframe 裡不會被節流到完全停擺）時間一到就強制收尾，機台絕不卡死。
   clearTimeout(M.watchdog); M.watchdog = setTimeout(() => {
     const M2 = S.mary; if (!M2) return;
-    const ma3 = S.tableView?.ma;
-    // 送燈鏈卡住（2026-11-23 使用者回報「卡在中獎、不能領出也不能猜大小」）：某個開燈請求被伺服器丟掉後，
-    // 防雙發標記（lightsSeq）會讓 maryLightsNext 永远不再重送＝燈數卡 >0＝chainHold 全鎖。這裡偵測 seq 停滯就重送；
-    // 重送幾次還不動就強制解除鏈鎖，讓玩家至少能領出／比大小，絕不永久卡死。
-    if (ma3 && ma3.lights > 0 && !M2.spin && !M2.showPlay && !(M2.dbl && !M2.dbl.done)) {   // 伺服器還有燈但客戶端沒在跑＝鏈卡住（chainHold 可能已被清掉，不能只靠它判斷）
-      if (M2.chainSeq === ma3.seq) M2.chainStall = (M2.chainStall || 0) + 1; else { M2.chainSeq = ma3.seq; M2.chainStall = 0; }
-      if (M2.chainStall >= 5) { M2.chainHold = false; M2.chainEnd = ma3.seq; M2.chainStall = 0; maryPaint(); buildTable(); }   // 重送無效就解鏈鎖，至少能領出／比大小
-      else if (M2.chainStall >= 1) { M2.lightsSeq = -1; M2.chainHold = true; maryLightsNext(); }   // 清掉防雙發標記重送下一個燈
-      maryArmWatchdog(4000);
-      return;
-    }
     if (M2.spin && performance.now() - M2.spin.t0 >= M2.spin.dur) { M2.lastFrame = performance.now(); marySkip(); maryArmWatchdog(8000); }
     else if (M2.showPlay && performance.now() - M2.showPlay.t0 > MARY_SHOW_MS) { M2.showSeq = M2.showPlay.seq; M2.showPlay = null; M2.potShown = S.tableView?.ma?.pot || M2.potShown; maryLightsNext(); maryArmWatchdog(8000); }
     else if (M2.dbl && !M2.dbl.done && performance.now() - M2.dbl.t0 >= MARY_DBL_S * 1000 + 1000) { M2.lastFrame = performance.now(); maryDblReveal(); maryPaint(); }
@@ -8885,7 +8874,7 @@ function maryFrame() {
   const dblRun = !!(S.mary?.dbl && performance.now() - S.mary.dbl.t0 < (MARY_DBL_S + MARY_DBL_TAIL) * 1000);
   if (S.mary?.spin || S.mary?.showPlay || dblRun) S.maryRaf = requestAnimationFrame(maryFrame); else S.maryRaf = 0;   // 演出播放中也要連續重畫
 }
-function maryStop() { if (S.maryRaf) { cancelAnimationFrame(S.maryRaf); S.maryRaf = 0; } if (maryGlowTimer) { clearTimeout(maryGlowTimer); maryGlowTimer = 0; } if (S.mary?.watchdog) clearTimeout(S.mary.watchdog); S.mary = null; }
+function maryStop() { if (S.maryRaf) { cancelAnimationFrame(S.maryRaf); S.maryRaf = 0; } if (maryGlowTimer) { clearTimeout(maryGlowTimer); maryGlowTimer = 0; } if (S.mary?.watchdog) clearTimeout(S.mary.watchdog); if (S.mary?.chainTick) clearInterval(S.mary.chainTick); S.mary = null; }
 function marySkip() {   // 「停止」：直接把跑馬燈跳到伺服器開出的那一格（動畫只是表演，結果早就是伺服器定的）
   const M = S.mary; if (!M?.spin) return;
   const sp = M.spin;
@@ -8900,17 +8889,24 @@ function marySkip() {   // 「停止」：直接把跑馬燈跳到伺服器開�
   if (M.showPlay) S.maryRaf = requestAnimationFrame(maryFrame);   // 演出接著播
   maryLightsNext();   // 送燈：跳到結果也照樣接著自動多開（演出中會自動等）
 }
-function maryLightsNext() {   // 送燈：這次開獎的動畫結束後，自動免費多開下一個燈（押注維持、不能改注）。700ms 停頓讓玩家看到每個燈的結果；
+function maryLightsNext(delay = 700) {   // 送燈：這次開獎的動畫結束後，自動免費多開下一個燈（押注維持、不能改注）。700ms 停頓讓玩家看到每個燈的結果；
   const v = S.tableView, ma = v?.ma;   // 伺服器對 light:1 的開獎在燈已用完時會安靜略過（手動開獎搶先消掉最後一個燈也不會誤扣款）
   if (v?.game !== 'mary' || v.phase !== 'playing' || v.role !== 'seat' || !S.mary || !ma || !(ma.lights > 0)) return;
   setTimeout(() => {
     const v2 = S.tableView, ma2 = v2?.ma;
     if (v2?.game !== 'mary' || v2.phase !== 'playing' || v2.role !== 'seat' || !S.mary || S.mary?.spin || !ma2 || !(ma2.lights > 0)) return;
-    if (S.mary.lightsSeq === ma2.seq) return;   // 這一格已經自動開過（防雙發）
     if (S.mary?.showPlay) return;   // 勇者／拉霸演出中先不送（演出結束的 maryLightsNext 會再叫一次）
-    S.mary.lightsSeq = ma2.seq;
+    // 防雙發改成「時間窗」（2026-11-23）：同一格 2.5 秒內不重送；超過 2.5 秒 seq 還沒動＝上次請求可能被伺服器丟掉，允許重送（鏈自愈）。
+    // 舊版「記下 seq 就永遠不重送」會讓丟包後整條鏈永久卡死＝機台全鎖。
+    if (S.mary.lightsSeq === ma2.seq && performance.now() - (S.mary.lightsSentAt || 0) < 2500) return;
+    S.mary.lightsSeq = ma2.seq; S.mary.lightsSentAt = performance.now();
     S.net?.tbl?.({ a: 'mspin', bets: S.maryBets, light: 1 });
-  }, 700);
+  }, delay);
+}
+function maryChainTick(on) {   // 送燈鏈巡檢（2026-11-23）：每 2 秒叫一次 maryLightsNext(0)——丟包時靠它重送；燈跑完自動停。
+  const M = S.mary; if (!M) return;   // 不用看門狗強制解鎖（那會讓燈沒跑完就亮總獎）；chainHold 只在燈真的跑完時解除。
+  if (on) { if (!M.chainTick) M.chainTick = setInterval(() => { const v = S.tableView; if (!v?.ma || !(v.ma.lights > 0)) { maryChainTick(false); return; } maryLightsNext(0); }, 2000); }
+  else if (M.chainTick) { clearInterval(M.chainTick); M.chainTick = 0; }
 }
 let maryGlowTimer = 0;
 function maryGlow() {   // JP 橫幅的閃爍：桌面開著時每 0.5 秒重畫（spin／演出中由 maryFrame 自己畫，這裡跳過）；面板關了就不再排
@@ -9015,7 +9011,8 @@ function buildMary(box, v, mk, gd) {
       S.mary.seq = ma.seq; S.mary.last = ma.last;
       if (spun) S.mary.res = ma.seq;
       if (spun) marySpinTo(ma.last, ma.pot > 0, ma.ring[ma.last] === 'more');   // 只有真的開獎才跑跑馬燈（領出／兌換／比倍不再自動多跑一次：2026-11-19 使用者回饋）
-      if (spun && ma.lights > 0) maryArmWatchdog(8000);   // 還有燈＝鏈進行中：看門狗盯著，卡住會重送／解鎖（2026-11-23）
+      if (spun && ma.lights > 0) maryChainTick(true);   // 還有燈＝鏈進行中：巡檢每 2 秒確認鏈有在跑，丟包會重送（2026-11-23）
+      if (spun && !(ma.lights > 0)) maryChainTick(false);
       if (spun) S.mary.dbl = null;   // 新一注：上一場比倍的亮燈收掉
       else if (gambled) {   // 比倍：先跑 2 秒左右轉燈，燈停了才更新金額（2026-11-22 使用者定）
         S.mary.dbl = { t0: performance.now(), card: ma.dcard, seq: ma.seq, done: false, side: -1 };
