@@ -2397,6 +2397,13 @@
        "sheets": {
         "hair": "human2_hair_twin.png"
        }
+      },
+      {
+       "id": "h2_oil",
+       "name": "油頭",
+       "sheets": {
+        "hair": "human2_hair_oil.png"
+       }
       }
      ]
     },
@@ -2585,6 +2592,13 @@
        "name": "雙馬尾",
        "sheets": {
         "hair": "human2_hair_twin.png"
+       }
+      },
+      {
+       "id": "h2_oil",
+       "name": "油頭",
+       "sheets": {
+        "hair": "human2_hair_oil.png"
        }
       }
      ]
@@ -2777,6 +2791,13 @@
        "sheets": {
         "hair": "human2_hair_twin.png"
        }
+      },
+      {
+       "id": "h2_oil",
+       "name": "油頭",
+       "sheets": {
+        "hair": "human2_hair_oil.png"
+       }
       }
      ]
     },
@@ -2966,6 +2987,13 @@
        "name": "雙馬尾",
        "sheets": {
         "hair": "dwarf2_hair_twin.png"
+       }
+      },
+      {
+       "id": "h2_oil",
+       "name": "油頭",
+       "sheets": {
+        "hair": "dwarf2_hair_oil.png"
        }
       }
      ]
@@ -3157,6 +3185,13 @@
        "name": "雙馬尾",
        "sheets": {
         "hair": "giant2_hair_twin.png"
+       }
+      },
+      {
+       "id": "h2_oil",
+       "name": "油頭",
+       "sheets": {
+        "hair": "giant2_hair_oil.png"
        }
       }
      ]

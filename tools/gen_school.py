@@ -1728,6 +1728,93 @@ def twin_hair_sheet(sheets):
     return hair_style_sheet(sheets, {'down': TWIN_HAIR_FRONT, 'up': TWIN_HAIR_BACK, 'left': TWIN_HAIR_SIDE}, center=True, side_dx=0, top_row=2, side_dy=3)   # 側面（臉朝左）再往右 1 欄、往下 1 排＝比對齊頭頂的位置右 0 欄、下 3 排（2026-11-23 使用者：側面頭髮太高，先下 2 排、再要求往右 1、往下 1 看看）
 
 
+# 油頭（2026-11-23，使用者給的第六個參考圖：灰髮、頭髮往後梳、額頭整個露出來、兩側髮束垂到耳朵一帶；正面／側面／背面各一張，
+# 第四張是頭髮跟頭的對應位置參考，量得髮線（瀏海下緣）到眼睛約 5～7 排，跟「頭頂對齊」的結果一致）。取輪廓與明暗，重新對應成髮色代號；
+# 髮際線下緣的棕紅色（頭皮的陰影）不畫，露出臉層的皮膚。暗色（亮度 100～150）→ d、<100 → n，其餘規則同外翹髮（只去掉孤立單格，不平滑）。
+OIL_HAIR_FRONT = [
+    '........nnnnnnnn........',
+    '......nnmmmnnmmmnn......',
+    '....nnmmddmmmmddmmnn....',
+    '..nnmmmmmmmddmmmmmmmnn..',
+    '.nmmmmmmmmmddmmmmmmmmmn.',
+    '.nmmmmmmmmmmmmmmmmmmmmn.',
+    '.nmmmmmmmmmmmmmmmmmmmmn.',
+    '.nmmmmmmmdmddmdmmmmmmmn.',
+    'ndmhhmdmmdmddmdmmdmhhmdn',
+    'nddhhmdmmdmddmdmmdmhhddn',
+    'ndmmmmmdmdmddmdmdmmmmmdn',
+    'nmmmdmmdmnnnnnnmdmmdmmmn',
+    'ndmddmmnnn....nnnmmddmdn',
+    'ndmndmn..........nmdnmdn',
+    '.nmnmn............nmnmn.',
+    '.nmnn..............nnmn.',
+    '.ndn................ndn.',
+    '.ndn................ndn.',
+    '..nn................nn..',
+    '..nn................nn..',
+    '..nn................nn..',
+    '...n................n...',
+]
+OIL_HAIR_SIDE = [
+    '........nnnnnnnnnn........',
+    '....nnnnmddmmmmmmmnnn.....',
+    '...nddmmmmmmmmdddmmmmn....',
+    '..nmmmmmmmmmmmmmmmmmmmnn..',
+    '.nddmmmmmmmmmmmmmmmdddmn..',
+    '.nmmmmmmmmmmddmmmddmmmnnn.',
+    'nnnmmmdmmmmddmmmmmmmmmmdn.',
+    'nmmmmmdmmmmdmmmddmmmmmmdn.',
+    'nmdhhmdmmmmmmmmmmmhhhmmdn.',
+    'nmdhhmhhhmdmmmmhmmhhmmmmdn',
+    'nmdmmdhhhmdmllmhhmmmmmdddn',
+    '.ndmmdmmnmmmmmmmmmmmmmmddn',
+    '.ndnnnnn.nnnnnmmmdmmmmmddn',
+    '.nn...........nmmdmlmmmddn',
+    '.n............nmmdmlmmmddn',
+    '...............nmmmmdmdddn',
+    '...............nmnmmdmdddn',
+    '................nndmddddn.',
+    '................nnddddddn.',
+    '................nndddddn..',
+    '.................ndddddn..',
+    '..................ndnnnn..',
+    '..................nnn..n..',
+    '..................n.n.....',
+]
+OIL_HAIR_BACK = [
+    '........nnnnnnnn........',
+    '......nnmddnnddmnn......',
+    '....nnmmmmdmmdmmmmnn....',
+    '..nnmmmmmmmddmmmmmmmnn..',
+    '.ndllmmmmmmddmmmmmmlldn.',
+    '.nmmmmmmmmmddmmmmmmmmmn.',
+    '.nmmmmmmmmmllmmmmmmmmmn.',
+    'nnmlmmmmmmmddmmmmmmmlmnn',
+    'ndmlhmdmmmmddmmmmdmhlmdn',
+    'nddhhmdmmmmddmmmmdmhhddn',
+    'ndmmmmdmmmmmmmmmmdmmmmdn',
+    'ndmmdmdmmmmllmmmmdmdmmdn',
+    'nmmndmdmmmmmmmmmmdmdnmmn',
+    'ndmndmdmmmmmmmmmmdmdnmdn',
+    '.nmnmmdmmmlmmlmmmdmmnmn.',
+    '.nmnmmdmmmlmmlmmmdmmnmn.',
+    '.ndnmmddmdmmmmdmddmmndn.',
+    '.nddmmddmdmmmmdmddmmddn.',
+    '..ndmmdnmdmmmmdmndmmdn..',
+    '..ndmmdndmmmmmmdndmmdn..',
+    '..ndmdmnddmllmddnmdmdn..',
+    '...nddddddddddddddddn...',
+    '....nndnmdmmmmdmndnn....',
+    '......nnddnddnddnn......',
+    '.......nnnnddnnnn.......',
+    '..........nnnn..........',
+]
+
+
+def oil_hair_sheet(sheets):
+    return hair_style_sheet(sheets, {'down': OIL_HAIR_FRONT, 'up': OIL_HAIR_BACK, 'left': OIL_HAIR_SIDE}, center=True, side_dx=0, top_row=0)
+
+
 def _hex(c):
     return '#%02x%02x%02x' % tuple(c[:3])
 
