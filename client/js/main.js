@@ -8602,13 +8602,13 @@ function maryPaint(cvIn) {   // 畫整台小瑪莉（靜態重建與開獎動畫
   g.fillStyle = jpGrad; g.fillRect(8, 8, 304, 28);
   g.strokeStyle = jpBlink ? '#ffd24a' : '#b8862a'; g.lineWidth = 2; g.strokeRect(9.5, 9.5, 301, 25);
   g.fillStyle = jpBlink ? '#ffe9a0' : '#ffd24a';
-  for (const [sx, sy] of [[22, 22], [298, 22]]) { g.beginPath(); g.arc(sx, sy, 3.5, 0, 7); g.fill(); }   // 兩側閃爍的獎池燈
+  for (const [sx, sy] of [[22, 22], [302, 22]]) { g.beginPath(); g.arc(sx, sy, 3.5, 0, 7); g.fill(); }   // 兩側閃爍的獎池燈
   g.fillStyle = '#ffd24a'; g.font = 'bold 15px "Microsoft JhengHei"'; g.textAlign = 'left';
   g.fillText('JP', 34, 29);
   g.fillStyle = '#e8c060'; g.font = 'bold 8px "Microsoft JhengHei"';
   g.fillText('累積獎池', 62, 19);
   const jpVal = Math.floor(dblHold ? (M.jpShown ?? ma.jp ?? 0) : (ma.jp || 0));   // 轉燈中先不亮新的 JP（不然一閃就知道輸了）
-  marySeg(g, 300, 13, 18, String(Math.min(jpVal, 99999999)), '#ffe14a', 'right');
+  marySeg(g, 291, 13, 18, String(Math.min(jpVal, 99999999)), '#ffe14a', 'right');   // 右緣留給右邊的獎池燈（2026-11-23：數字會跟燈重疊）
   // 上方橘色顯示板：WIN（獎池）／CREDIT（籌碼）
   g.fillStyle = '#e8781e'; g.fillRect(10, 37, 300, 38);
   g.fillStyle = '#f89840'; g.fillRect(10, 37, 300, 4);
