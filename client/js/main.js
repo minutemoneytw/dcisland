@@ -2929,7 +2929,8 @@ const CHIBI_DYE_FIELD = { hair: 'hairC', top: 'topC', bottom: 'botC', shoe: 'sho
 const chibiStyleOf = (own, kind, id) => (own.styles?.[kind] || []).find(x => x.id === id) || own.styles?.[kind]?.[0] || null;
 function chibiSprite(race, look, fi) {
   const fs = chibiStyleOf(race.own, 'face', look?.face), hs = chibiStyleOf(race.own, 'hair', look?.hair), ts = chibiStyleOf(race.own, 'top', look?.top);
-  const rules = (race.own.dye || []).filter(r => !r.style || r.style === ts?.id).map(r => ({ ...r, hex: look?.[CHIBI_DYE_FIELD[r.slot]] || null }));
+  const skinHex = S.avatar.skins?.find(s2 => s2.id === look?.skin)?.base || null;   // 膚色：look.skin 是 avatar.json skins 的 id，換成它的 base 色碼
+  const rules = (race.own.dye || []).filter(r => !r.style || r.style === ts?.id).map(r => ({ ...r, hex: (r.slot === 'skin' ? (skinHex && skinHex.toLowerCase() !== r.colors[0].toLowerCase() ? skinHex : null) : look?.[CHIBI_DYE_FIELD[r.slot]]) || null }));   // 膚色跟原色一樣（預設的「自然」）就不換
   const k = 'chibi:' + fi + '|' + (hs?.id || '') + '|' + (ts?.id || '') + '|' + (fs?.id || '') + '|' + rules.map(r => r.hex || '').join(',');
   let cv = S.charCache.get(k);
   if (cv) return cv;

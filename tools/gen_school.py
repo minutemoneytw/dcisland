@@ -856,12 +856,13 @@ def _with_dark(cols):
     return out
 
 
-# 換色欄位：引擎的 look 欄位 → (圖層, 該層裡要換的顏色集合或 None＝整層, 基準色)。皮膚、襯衫目前不開放換色
+# 換色欄位：引擎的 look 欄位 → (圖層, 該層裡要換的顏色集合或 None＝整層, 基準色)。襯衫不開放換色；膚色（skin）看 look.skin 的色塊（見 main.js 的 chibiSprite）
 DYE_SLOTS = {
     'hair':   {'layer': 'hair',   'only': None, 'main': 'hm'},
     'top':    {'layer': 'top',    'only': _with_dark(['k', 'k_l', 'k_d']), 'main': 'k'},
     'bottom': {'layer': 'bottom', 'only': None, 'main': 'k'},
     'shoe':   {'layer': 'shoes',  'only': None, 'main': 'shoe_k'},
+    'skin':   {'layer': 'body',   'only': None, 'main': 'sk'},   # 膚色（2026-11-23 開放換色）：body 層整層（皮膚＋外框陰影色）；elf2 的耳朵（hat 層）另外加進這條規則（gen_assets）
     'eye':    {'layer': 'face',   'only': _with_dark(['eg1', 'eg2', 'eg3', 'eg4']), 'main': 'eg2'},   # 眼珠的 4 階灰（睫毛／瞳孔的黑、高光不換）
 }
 CELL = 64

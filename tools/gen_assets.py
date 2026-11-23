@@ -493,11 +493,11 @@ def volcanic():
     return cv
 
 # ---------------- 角色 (16x24) ----------------
-SKINS = {
-    "pale":  ("#f7ddbf", "#dcb992"),
-    "light": ("#f0c8a0", "#d4a37c"),
-    "tan":   ("#d9a06a", "#b27e4f"),
-    "deep":  ("#9c6238", "#7a4a2a"),
+SKINS = {   # 外貌頁的膚色色塊；light＝新人類系列原本的皮膚色（#ffe8d2，預設、不換色），其他是 chibiSprite 的 skin 換色目標（base）
+    "pale":  ("#fff3e8", "#e8c8b4"),
+    "light": ("#ffe8d2", "#deb2a0"),
+    "tan":   ("#e8b88c", "#c08c64"),
+    "deep":  ("#a86f4a", "#80502f"),
 }
 # ---------------- 人物幀表（8 方向 ×［待機 4 幀＋走路 4 幀］＋坐姿；素材一律用 LPC，見下面「LPC 通用格式」）----------------
 # 幀表由 avatar.json 輸出（frames 的 w/h＝CHAR_FW/CHAR_FH、scale＝CHAR_SCALE）。
@@ -592,6 +592,16 @@ SCHOOL_PUFF_HAIR_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, 'hair': SCHOO
 SCHOOL_FLIP_HAIR = gen_school.flip_hair_sheet(SCHOOL_SHEETS)   # 外翹髮（橘色參考圖）
 SCHOOL_FLIP_HAIR_DWARF = gen_school.shrink_sheets({'hair': SCHOOL_FLIP_HAIR})['hair']
 SCHOOL_FLIP_HAIR_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, 'hair': SCHOOL_FLIP_HAIR})['hair']
+def school_dye_elf():
+    """妖精的換色規則：膚色那條連耳朵（hat 層，皮膚色＋棕色外圈）一起換。"""
+    out = []
+    ear = {tuple(c[:3]) for row in SCHOOL_EAR_SHEETS["hat"].px for c in row if c is not None}
+    for r in gen_school.dye_rules(SCHOOL_SHEETS):
+        if r["slot"] == "skin":
+            extra = ["#%02x%02x%02x" % c for c in sorted(ear) if "#%02x%02x%02x" % c not in r["colors"]]
+            r = dict(r, layers=["body", "hat"], colors=r["colors"] + extra)
+        out.append(r)
+    return out
 def school_hair_styles(prefix):
     return [dict(id="h2_bob", name="鮑伯", sheets={}), dict(id="h2_long", name="中長髮", sheets={"hair": f"{prefix}_hair_long.png"}),
             dict(id="h2_puff", name="蓬蓬短髮", sheets={"hair": f"{prefix}_hair_puff.png"}),
@@ -613,7 +623,7 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
     dict(id="elf2", name="妖精", scale=1.0, nameH=66, own=dict(
         sheets={**{n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, "hat": "elf2_hat.png"}, outline=None,
         styles=dict(hair=school_hair_styles("human2")),
-        dye=gen_school.dye_rules(SCHOOL_SHEETS),
+        dye=school_dye_elf(),
         anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 48], hand=dict(down=[42, 45], up=[42, 45], side=[31, 45])))),
     # 新貓族（2026-11-23）：同一個人加貓耳（參考 LPC 貓耳；四個方向都有，背面沒有內側粉紅）。圖層共用 human2_*，另加 cat2_hat；
     # 耳朵、尾巴的外圈和毛用頭髮的顏色，所以髮色換色規則也套到 hat、hairbg 層（內側粉紅不在顏色表裡，不變）；尾巴在 hairbg 層
