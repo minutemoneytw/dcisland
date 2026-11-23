@@ -1509,6 +1509,111 @@ def flip_hair_sheet(sheets):
     return hair_style_sheet(sheets, {'down': FLIP_HAIR_FRONT, 'up': FLIP_HAIR_BACK, 'left': FLIP_HAIR_SIDE}, center=True, side_dx=-1, top_row=0)
 
 
+# 馬尾（2026-11-23，使用者給的第四個參考圖：粉色；正面是頭兩側各垂一束、側面是頭後面一條馬尾＋前面一束、背面是頭後面一整條馬尾；
+# 取輪廓與明暗，重新對應成髮色代號）。分界線／陰影的暗色（亮度約 85～150）→ d，其餘規則同外翹髮（只去掉孤立單格，不平滑）。
+# 側面圖 33 欄寬（頭 26 欄＋後面的馬尾），圖第 0 排就是頭頂。
+PONY_HAIR_FRONT = [
+    '.........nnnnnnnn.........',
+    '.......nnddddddddnn.......',
+    '.....nnmmddnnnnddmmnn.....',
+    '....nmmmmnnmddmnnmmmmn....',
+    '...nmmmmmlllnnlllmmmmmn...',
+    '..nmmmmmmmmmddmmmmmmmmmn..',
+    '..nmmmmmmmmmmmmmmmmmmmmn..',
+    '.nmmllmmmmmmllmmmmmmllmmn.',
+    '.nmmhhdmmmmhmmhmmmmdhhmmn.',
+    'nmmmhhdhhmmhhhhmmhhdhhmmmn',
+    'nmmlldmhhmmhhhhmmhhmdmmmmn',
+    'nmmmmdmmmmdmmmmdmmmmdmmmmn',
+    'nmmmmmmmmmdmmmmdmmmmmnmmmn',
+    'nmmmnmmdmmnmmmmnmmdmmnmmmn',
+    'ndmmnmmdmmnmmmmnmmdmmnmmdn',
+    '.nmmdmdnnnnmmmmnnnndmddmn.',
+    '.ndndmdn...nnnn...ndmdndn.',
+    '.nnnmmn............nmmnnn.',
+    '.ndnmmn............nmmndn.',
+    '.ndnmmn............nmmndn.',
+    '.nddmmn............nmmddn.',
+    '..nnlln............nllnn..',
+    '...nmmn............nmmn...',
+    '...nmmn............nmmn...',
+    '....nmnn..........nnmn....',
+    '....nmmn..........nmmn....',
+    '.....nmdn........ndmn.....',
+    '......ndn........ndn......',
+    '......nnn........nnn......',
+]
+PONY_HAIR_SIDE = [
+    '...........nnnnnnnn.......nnn....',
+    '.........nndddnmmmlnn....nmmmn...',
+    '......nnnmmnnndnnmlmmn..nmmhhmn..',
+    '....nnmmmmmmmmdllmmllmnnnmmhhmn..',
+    '...nmmmmmmmmmmdmmmmmmmmdddmmllln.',
+    '..nmmlmmmmmmmmdmmlmmmmmmdmmmmmmn.',
+    '..nmmlmmmmlmmmmmllmmmmmmddmmllmn.',
+    '.nmmmmmmmmlmmmmmmmmmmmmmmdddlmmmn',
+    '.nmmmhhmmmmmmmmmmmmmhhhmmdddmmmmn',
+    '.nmmmhhmhhhmmhhmmhhmhhhmmdddmmmmn',
+    'nllmmlldhhhmmhhmmhhmmmmmmmdddmmmn',
+    'nmmmmmmdmmmmmmmmmmdmmmmmmddddmmmn',
+    'nmmllmmmmmmmmmmmmmdmmmmmdndddmmmn',
+    'ndmmmlnmmmmmmmmmmmdmmmmmdnmddmmmn',
+    'ndmmllnmmmmmmmdmmmdllmmddndddmmmn',
+    'ndddddnmmmmmmmdmmmdmmmmmdddddmmmn',
+    '.nmddnnnmmnmmmdmmmnmmdmddnddddmmn',
+    '.nnnn...nnnnnmdmmmnmdddddndnddmmn',
+    '....n........ndllmdddmdddddnddmmn',
+    '..............nmmmddmmdddddnndmmn',
+    '..............nmmmnddddddnndddmmn',
+    '..............nmdlndddddn.nnndmn.',
+    '..............nmdlddmddn...nndmn.',
+    '..............nmdmdndnn....nndmn.',
+    '..............nmdmnnn......nnddn.',
+    '..............nmdmn.........nnn..',
+    '..............nmdn..........nnn..',
+    '..............nmdn..........nn...',
+    '..............nddn..........n....',
+    '...............nn................',
+    '...............n.................',
+]
+PONY_HAIR_BACK = [
+    '.........nnnnnnnn.........',
+    '.......nnddddddddnn.......',
+    '.....nnmmddmddmddmmnn.....',
+    '....nmmddnnddddnnddmmn....',
+    '...nmmmmmmdnnnndmmmmmmn...',
+    '..nmmmmmmmdmmmmdmmmmmmmn..',
+    '..nmllmmmdmmmmmmdmmmllmn..',
+    '.nmmmmmlldmmllmmdllmmmmmn.',
+    '.nmmhhmmdmmmmmmmmdmmhhmmn.',
+    'nmmmhhmmdmmhhhhmmdmmhhmmmn',
+    'nmmmmmmddmmhhhhmmddmmmmmmn',
+    'ndmmmmdddmmmmmmmmdddmmmmdn',
+    'nmmmmdmdmmmmmmmmmmdmdmmmmn',
+    'ndmmmdmddmmmmmmmmddmddmmdn',
+    'nddddmddmddmmmmddmddmddmmn',
+    '.ndmmddddddddddddddddmmdn.',
+    '.nddddddnddddddddnddddddn.',
+    '.nmdmdddnddddddddndddmdmn.',
+    '..ndddmdnddddddddndmdddn..',
+    '..ndddmdnmmmmmmmmndmdddn..',
+    '..nnnndddmmmmmmmmdddnnnn..',
+    '..nnndddnmmmmmmmmndddnnn..',
+    '..nn.ndmnmmmllmmmnmdn.nn..',
+    '..nn..nnmmmmmmmmmmnn..nn..',
+    '..nn....ndmmddmmdn....nn..',
+    '...nn...nddddddddn...nn...',
+    '.....n..nnddddddnn..n.....',
+    '.........nddddddn.........',
+    '..........nnddnn..........',
+    '............nn............',
+]
+
+
+def pony_hair_sheet(sheets):
+    return hair_style_sheet(sheets, {'down': PONY_HAIR_FRONT, 'up': PONY_HAIR_BACK, 'left': PONY_HAIR_SIDE}, center=True, side_dx=-1, top_row=0)
+
+
 def _hex(c):
     return '#%02x%02x%02x' % tuple(c[:3])
 

@@ -592,6 +592,9 @@ SCHOOL_PUFF_HAIR_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, 'hair': SCHOO
 SCHOOL_FLIP_HAIR = gen_school.flip_hair_sheet(SCHOOL_SHEETS)   # 外翹髮（橘色參考圖）
 SCHOOL_FLIP_HAIR_DWARF = gen_school.shrink_sheets({'hair': SCHOOL_FLIP_HAIR})['hair']
 SCHOOL_FLIP_HAIR_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, 'hair': SCHOOL_FLIP_HAIR})['hair']
+SCHOOL_PONY_HAIR = gen_school.pony_hair_sheet(SCHOOL_SHEETS)   # 馬尾（粉色參考圖）
+SCHOOL_PONY_HAIR_DWARF = gen_school.shrink_sheets({'hair': SCHOOL_PONY_HAIR})['hair']
+SCHOOL_PONY_HAIR_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, 'hair': SCHOOL_PONY_HAIR})['hair']
 def school_dye_elf():
     """妖精的換色規則：膚色那條連耳朵（hat 層，皮膚色＋棕色外圈）一起換。"""
     out = []
@@ -605,7 +608,8 @@ def school_dye_elf():
 def school_hair_styles(prefix):
     return [dict(id="h2_bob", name="鮑伯", sheets={}), dict(id="h2_long", name="中長髮", sheets={"hair": f"{prefix}_hair_long.png"}),
             dict(id="h2_puff", name="蓬蓬短髮", sheets={"hair": f"{prefix}_hair_puff.png"}),
-            dict(id="h2_flip", name="外翹髮", sheets={"hair": f"{prefix}_hair_flip.png"})]
+            dict(id="h2_flip", name="外翹髮", sheets={"hair": f"{prefix}_hair_flip.png"}),
+            dict(id="h2_pony", name="馬尾", sheets={"hair": f"{prefix}_hair_pony.png"})]
 SCHOOL_EAR_SHEETS = gen_school.build_sheets(ears=True)   # 新妖精：同一個人，多一層 hat（正面、側面的尖耳，蓋在頭髮上面）
 
 LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ears）；scale＝人類模組整體縮放倍率
@@ -4319,6 +4323,9 @@ def main():
     save_chibi_layer(SCHOOL_FLIP_HAIR, "human2_hair_flip.png", sub)   # 外翹髮
     save_chibi_layer(SCHOOL_FLIP_HAIR_DWARF, "dwarf2_hair_flip.png", sub)
     save_chibi_layer(SCHOOL_FLIP_HAIR_GIANT, "giant2_hair_flip.png", sub)
+    save_chibi_layer(SCHOOL_PONY_HAIR, "human2_hair_pony.png", sub)   # 馬尾
+    save_chibi_layer(SCHOOL_PONY_HAIR_DWARF, "dwarf2_hair_pony.png", sub)
+    save_chibi_layer(SCHOOL_PONY_HAIR_GIANT, "giant2_hair_pony.png", sub)
     for lname in SCHOOL_LAYERS:                       # 新矮人
         save_chibi_layer(SCHOOL_DWARF_SHEETS[lname], f"dwarf2_{lname}.png", sub)
     for lname in SCHOOL_LAYERS:                       # 新巨人（96×96 格）
