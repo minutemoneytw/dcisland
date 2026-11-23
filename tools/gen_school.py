@@ -1015,7 +1015,40 @@ def build_sheets(ears=False):   # ears：False／True（＝'elf'）／'cat'
                             c = img.px[y][x]
                             if c is not None and 0 <= row * CELL + OY - EAR_TOP + y and dst.px[row * CELL + OY - EAR_TOP + y][col * CELL + OX - EAR_EX + x] is None:
                                 dst.px[row * CELL + OY - EAR_TOP + y][col * CELL + OX - EAR_EX + x] = c
+    if not ears:
+        complete_head(sheets)
     return sheets
+
+
+def complete_head(sheets):
+    """完整素體（頭）：body 層原本只有被瀏海露出來的下半臉、手、腿，換成別的髮型（短髮、馬尾…）會露出空洞。這裡每一格在 body 層補一顆完整的頭（橢圓頭骨，
+    大小跟著該格頭髮的輪廓：寬＝頭髮最寬處−6、高 25 排、頭頂在髮頂下 2 排）＋脖子，外框用皮膚陰影色（跟其他皮膚外框一樣畫在輪廓內側）。只補 body 層還是空的像素。
+    就地修改 sheets（build_sheets 最後呼叫）。"""
+    body, hair = sheets['body'], sheets['hair']
+    for row in WALK_ROW.values():
+        for col in range(9):
+            x0, y0 = col * CELL, row * CELL
+            hrows = [y for y in range(CELL) if any(hair.px[y0 + y][x0 + x] is not None for x in range(CELL))]
+            if not hrows:
+                continue
+            ht = hrows[0]
+            band = [x for y in range(ht + 5, ht + 13) for x in range(CELL) if hair.px[y0 + y][x0 + x] is not None]
+            cx, rx = (min(band) + max(band) + 1) / 2, (max(band) - min(band) + 1) / 2 - 3
+            ry, cy = 12.0, ht + 14.0
+            cells = set()
+            for y in range(int(cy - ry) - 1, int(cy + ry) + 2):
+                for x in range(int(cx - rx) - 1, int(cx + rx) + 2):
+                    if ((x + .5 - cx) / rx) ** 2 + ((y + .5 - cy) / ry) ** 2 <= 1:
+                        cells.add((x, y))
+            for y in range(ht + 23, ht + 28):          # 脖子：6 欄，在頭下面
+                for x in range(int(cx - 3), int(cx + 3)):
+                    cells.add((x, y))
+            old = {(x, y) for y in range(CELL) for x in range(CELL) if body.px[y0 + y][x0 + x] is not None and y < ht + 28}
+            allc = cells | old
+            for (x, y) in cells:
+                if body.px[y0 + y][x0 + x] is None:
+                    edge = any((xx, yy) not in allc for xx, yy in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
+                    body.px[y0 + y][x0 + x] = C['sk_d'] if edge else C['sk']
 
 
 def _hex(c):
