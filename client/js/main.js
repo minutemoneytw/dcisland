@@ -4033,7 +4033,8 @@ function drawPersonBase(p, wi, nameColor) {
     ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(8,10,14,.85)'; ctx.fillStyle = '#9ff0b4';
     ctx.strokeText(txt, p.x, ty); ctx.fillText(txt, p.x, ty);
   }
-  if (p.say && S.t < p.say.until) drawBubble(p.x, headY - 14, p.say.text, Math.min(1, (p.say.until - S.t) / .4));
+  if (p.emote && S.t < p.emote.until && emoteDraw(p.x, headY - 14, p.emote)) { /* 表情符號：頭上冒出（優先於說話泡泡） */ }
+  else if (p.say && S.t < p.say.until) drawBubble(p.x, headY - 14, p.say.text, Math.min(1, (p.say.until - S.t) / .4));
   else if (p.fish?.ph === 'bite') {   // 魚上鉤：頭上跳動的「!」（同地形的人也看得到）
     ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
     const yy = headY - 14 - Math.abs(Math.sin(S.t * 10)) * 4;
@@ -4372,6 +4373,37 @@ function drawOwnerLineBanner() {
   ctx.font = 'bold 16px "Microsoft JhengHei"'; ctx.fillStyle = '#fff6e0';
   rows.forEach((r, i) => ctx.fillText(r, canvas.width / 2, y + 20 + (i + 1) * lh - 6));
   ctx.restore();
+}
+// ── 表情符號（2026-11-23，使用者要求）：素材 DibbelGames「16x16 Emotes Pack」（授權記錄見 docs/assets-license.md），資料 assets/emotes/emotes.json。
+// 右上「表情」按鈕開選單，選了之後 p.emote＝{id, until, t0, n} 在頭上冒出 3 秒；狀態欄位 state.emote＝{id, n}（n 每用一次加一，對方靠它分辨「又發了一次」）。
+const EMOTE_MS = 3, EMOTE_CD = .6;
+const EMO = { def: null, img: new Image() };
+fetch('assets/emotes/emotes.json').then(r => r.json()).then(d => { EMO.def = d; EMO.img.src = 'assets/emotes/emotes.png'; EMO.img.onload = () => buildEmoteMenu(); }).catch(() => {});
+const emoteIdx = id => EMO.def ? EMO.def.list.findIndex(e => e.id === id) : -1;
+function emoteDraw(x, y, em) {   // x,y＝泡泡尾巴要指的點（頭上）；回 false＝素材還沒載好，交給後面的畫法
+  const i = emoteIdx(em.id); if (i < 0 || !EMO.img.complete || !EMO.img.naturalWidth) return false;
+  const cell = EMO.def.cell, k = Math.min(1, (S.t - em.t0) / .18), left = em.until - S.t;
+  const sc = 2 * (k < 1 ? .4 + .6 * (1 - Math.pow(1 - k, 3)) : 1), sz = cell * sc;   // 冒出來：由小彈到 2 倍
+  ctx.save(); ctx.globalAlpha = Math.min(1, left / .3); ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(EMO.img, (i % EMO.def.cols) * cell, Math.floor(i / EMO.def.cols) * cell, cell, cell, Math.round(x - sz / 2), Math.round(y + 3 - sz - Math.sin(Math.min(1, (S.t - em.t0) / 1.2) * 3.14) * 0), sz, sz);
+  ctx.restore(); return true;
+}
+function emoteSay(id) {   // 我自己發一個表情
+  const me = S.players[0]; if (!me || emoteIdx(id) < 0 || S.t < (S.emoteNext ?? 0)) return;
+  S.emoteNext = S.t + EMOTE_CD; S.emoteN = (S.emoteN || 0) + 1;
+  me.emote = { id, t0: S.t, until: S.t + EMOTE_MS, n: S.emoteN };
+}
+S.myEmote = () => { const e = S.players[0]?.emote; return e && S.t < e.until ? { id: e.id, n: e.n } : null; };
+function buildEmoteMenu() {
+  const m = $('emoteMenu'); if (!m || !EMO.def || m.childElementCount) return;
+  const c = EMO.def.cell * 2;
+  EMO.def.list.forEach((e, i) => {
+    const b = document.createElement('button'); b.className = 'emote-item'; b.title = e.name;
+    b.style.backgroundImage = 'url(assets/emotes/emotes.png)'; b.style.backgroundSize = `${EMO.def.cols * c}px auto`;
+    b.style.backgroundPosition = `${-(i % EMO.def.cols) * c}px ${-Math.floor(i / EMO.def.cols) * c}px`;
+    b.onclick = () => { emoteSay(e.id); m.classList.add('hidden'); };
+    m.appendChild(b);
+  });
 }
 function drawBubble(x, y, text, alpha) {
   ctx.save(); ctx.globalAlpha = alpha;
@@ -14180,6 +14212,8 @@ $('leaveGo').onclick = () => {
 $('tableRulesBtn').onclick = () => rulesToggle('rules');   // 再點一下關閉
 $('tableCharsBtn').onclick = () => rulesToggle('chars');
 $('rulesClose').onclick = () => rulesShow(false);
+$('btnEmote').onclick = e => { e.stopPropagation(); $('emoteMenu').classList.toggle('hidden'); $('settingsMenu').classList.add('hidden'); };
+addEventListener('pointerdown', e => { const m = $('emoteMenu'); if (!m.classList.contains('hidden') && !m.contains(e.target) && e.target.id !== 'btnEmote') m.classList.add('hidden'); });
 $('btnDex').onclick = () => { if (S.dexOpen) closeDex(); else if (S.fishDB) openDex(); };   // 右上「圖鑑」：魚類圖鑑＋素材圖鑑／合成／配方筆記
 $('dexClose').onclick = closeDex;
 $('btnTitles').onclick = () => { if (S.titleOpen) closeTitles(); else openTitles(); };   // 造型面板的「稱號設定」：稱號一覽
