@@ -1163,6 +1163,153 @@ def complete_head(sheets):
                     body.px[y0 + y][x0 + x] = C['sk_d'] if edge else C['sk']
 
 
+# 中長髮（2026-11-23，使用者給的參考圖：正面／側面／背面各一張；參考圖是縮放過的雜色圖，這裡只取輪廓與明暗，重新對應成髮色代號——
+# n 外框、d 深、m 基本、l 淺、h 高光，對應 C 的 hn／hd／hm／hl／hh，所以換髮色（dye）照常運作）。'.' ＝透明。側面是臉朝左（朝右＝左右鏡射）。
+# 位置：每格把圖的左上角放在該格原本髮型（鮑伯）的左上角（隨走路頭上下起伏），見 long_hair_sheet。
+LONG_HAIR_FRONT = [
+    '.........nnnnnnnn.........',
+    '.......nnddddddddnn.......',
+    '.....nnddddddddddddnn.....',
+    '....nmmddddddddddddmmn....',
+    '...nmmmddmmddddmmddmmmn...',
+    '..nmmmddmmmmddmmmmmmmmmn..',
+    '..nmmmmmmmmmmmmmmmmmmmmn..',
+    '.nmmmmmmmmmmmmmmmmmmmmmmn.',
+    '.nmmhhmmmmmmmmmmmmmmhhmmn.',
+    '.nmmhhdhhmdhhhhdmhhdhhmmn.',
+    '.nmmmmdhhmdhhhhdmhhdmmmmn.',
+    'ndmmmdmmmmmmddmmmmmmdmmddn',
+    'ndmmmdmmmmddmmddmmmmdmmddn',
+    'ndmmmdmlmmddllddmmlmdmmddn',
+    'ndmmmddlmmddddddmmlddmmmdn',
+    'ndmmmdddmmnnmmnnmmdddmmmdn',
+    'ndmmmddnnn..nn..nnnddmmmdn',
+    'nddmmdn............ndmmddn',
+    'ndddddn............ndddddn',
+    'ndddddn............ndddddn',
+    'ndddddn............ndddddn',
+    'ndddddn............ndddddn',
+    'ndddddn............ndddddn',
+    'ndddddn............ndddddn',
+    '.ndddddn..........ndddddn.',
+    '..ndddddnn......nndddddn..',
+    '...ndddnn........nndddn...',
+    '....ndn............ndn....',
+    '.....nn............nn.....',
+    '....................n.....',
+]
+LONG_HAIR_SIDE = [   # 側面紋路（照參考圖：大致平滑，只有頭頂髮旋縫、一排高光、後面下半 3 條長的深色細線、尖端分隔線，其餘是疏疏的 1～3 格細點）
+    '...........nnnnnnnn........',
+    '.........nnmmmdmmmmnn......',
+    '......nnnmmmmdddmmmmmn.....',
+    '....nnmmmmmmddddmmmmmmn....',
+    '...nmmmmlmmmdlldmmmmmmmn...',
+    '..nmdmmmmmmmdmmmmmmmmmmmn..',
+    '..nmmmmmmmmmmlmmmmmdmmmmn..',
+    '.nmmhmmmmmmmmlmmmmmmmmmhmn.',
+    '.nmmmhhmmmmmmmmmmmmmhhhmmn.',
+    '.nmmmhhmhhhmmhmmmmmmhhhmmmn',
+    'nmmmmmmmhhhmmmmmmmmmmmmmmmn',
+    'nmlmmmmmmmlmmdmmmmmmmdmmlmn',
+    'nmlmmmmmmmmmmmmmmmmmddmmmmn',
+    'nmdmmmmmmmmlmmmmmdmmmdmmmmn',
+    'nddmdmmmmmlmmmmmmmlmdlmmmdn',
+    'nddmmmmmmmlmmmmmmdlldllmmdn',
+    '.ndmmnnnmmmmmmmdmdmddmlmmdn',
+    '.nnnn...nnmmmmmdmdmddmdmmdn',
+    '..........nnnnmmmdmdmmdmmdn',
+    '..............ndmdmdmmdmldn',
+    '..............ndmdmdmldddn.',
+    '..............ndmdddmmdddn.',
+    '..............ndmdmdmmdddn.',
+    '..............ndmdmdmdldn..',
+    '..............ndmdddmdddn..',
+    '...............nddddmdddn..',
+    '...............nddddmdddn..',
+    '...............nddddmldn...',
+    '................ndddnddn...',
+    '.................ndn.nn....',
+    '.................nn..n.....',
+    '..................n..n.....',
+]
+LONG_HAIR_BACK = [
+    '.........nnnnnnnn.........',
+    '.......nnddddddddnn.......',
+    '.....nnddddddddddddnn.....',
+    '....nmmmddddddddddmmmn....',
+    '...nmmmdmmmddddmmmdmmmn...',
+    '..nmmmddlmmmddmmmlddmmmn..',
+    '..nmmmmmlmmmmmmmmllmmmmn..',
+    '.nmmmllmmmmmmmmmmddllmmmn.',
+    '.nmmhhmmmmmmddmmmmmmhhmmn.',
+    '.nmmhhmhhmmmhhmmmhhmhhmmn.',
+    'nmmmmmmhhmmmhhmmmhhmmmmmmn',
+    'nmmmmmmmmmmmmmmmmmmmmmmmmn',
+    'nmmmmmmmmmmmmmmmmmmmmmmmmn',
+    'nmmmdmmmmmmmmmmmmmmdddmmmn',
+    'nmmddmmmmmmmmmmmmmmmmddmmn',
+    'ndmmdmmmddmmmmmmddmmmdmmdn',
+    'ndddddmmddmmmmmmddmmdddddn',
+    'ndddddddddmmmmmmdddddddddn',
+    'nddddddddddddddddddddddddn',
+    'nddddddddddddddddddddddddn',
+    '.nddddddddddddddddddddddn.',
+    '.nddddddddddddddddddddddn.',
+    '.ndddddddmddddddmdddddddn.',
+    '.nddddddmmmdmmmmmmddddddn.',
+    '..nddddddmmdmmmmlddddddn..',
+    '..nddddddmmdmmmmlddddddn..',
+    '..nddddddlmdlldmdddddddn..',
+    '..nddddddlmmmmdmdddddddn..',
+    '..nddndddmmmmmdmmddddddn..',
+    '..ndn.ndddmmmmdddddddddn..',
+    '..nn..nddnddmmddnddddddn..',
+    '......ndn.nnmmnn.nddddn...',
+    '......nn....nn....nddnn...',
+    '..................nnn.....',
+]
+LONG_HAIR_KEY = {'n': 'hn', 'd': 'hd', 'm': 'hm', 'l': 'hl', 'h': 'hh'}
+
+
+def hair_style_sheet(sheets, maps, center=False, side_dx=0, top_row=0):
+    """回傳 Img(832×1856)：某個髮型的 hair 層（只填走路列；右＝左的鏡像）。sheets＝新人類的各層 sheet（用原本髮型的位置對齊）。
+    maps＝{'down': 正面, 'up': 背面, 'left': 側面（臉朝左）}，各是字串列（見 LONG_HAIR_*）；
+    center＝True：正面／背面依原本髮型的左右中心置中（髮型比頭寬時用），否則圖的左緣對齊原本髮型的左緣；side_dx＝側面再往右偏幾欄；
+    top_row＝圖的第幾排（從 0 算）對齊原本髮型的頭頂（圖頂端有一小撮翹毛時用）。"""
+    hair = sheets['hair']
+    out = Img(SHEET_W, SHEET_H)
+    for d, row in WALK_ROW.items():
+        src_d = 'left' if d == 'right' else d
+        mp = maps[src_d]
+        for col in range(9):
+            x0, y0 = col * CELL, row * CELL
+            if d == 'right':                       # 右＝左那一格鏡像（原圖的 row 9）
+                hx0, hy0 = col * CELL, WALK_ROW['left'] * CELL
+            else:
+                hx0, hy0 = x0, y0
+            ys = [y for y in range(CELL) if any(hair.px[hy0 + y][hx0 + x] is not None for x in range(CELL))]
+            xs = [x for y in ys for x in range(CELL) if hair.px[hy0 + y][hx0 + x] is not None]
+            if not ys:
+                continue
+            top, left = ys[0] - top_row, min(xs)
+            if center and src_d != 'left':
+                left = (min(xs) + max(xs) + 1) // 2 - len(mp[0]) // 2
+            elif src_d == 'left':
+                left += side_dx
+            for y, line in enumerate(mp):
+                for x, ch in enumerate(line):
+                    if ch != '.':
+                        px = left + x
+                        if d == 'right':
+                            px = 63 - px           # 鏡像：左面向的格 x → 63-x（OX=18、框寬 28）
+                        out.px[y0 + top + y][x0 + px] = C[LONG_HAIR_KEY[ch]]
+    return out
+
+
+def long_hair_sheet(sheets):
+    return hair_style_sheet(sheets, {'down': LONG_HAIR_FRONT, 'up': LONG_HAIR_BACK, 'left': LONG_HAIR_SIDE})
+
+
 def _hex(c):
     return '#%02x%02x%02x' % tuple(c[:3])
 

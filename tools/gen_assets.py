@@ -618,6 +618,12 @@ SCHOOL_LAYERS = [n for n, im in SCHOOL_SHEETS.items() if any(c is not None for r
 SCHOOL_CAT_SHEETS = gen_school.build_sheets(ears='cat')   # 新貓族：同一個人，多一層 hat（四個方向的貓耳，蓋在頭髮上面）
 SCHOOL_DWARF_SHEETS = gen_school.shrink_sheets(SCHOOL_SHEETS)   # 新矮人：新人類拿掉軀幹、小腿幾排的小孩體型
 SCHOOL_GIANT_SHEETS = gen_school.giant_sheets(SCHOOL_SHEETS)   # 新巨人：新人類拉長＋加寬，96×96 格
+# 新人類系列的髮型款式（2026-11-23）：第一個是預設（鮑伯，用基本圖層），其他款式只換 hair 層。中長髮：人類／妖精／貓族共用，矮人、巨人各自照體型縮短／拉長
+SCHOOL_LONG_HAIR = gen_school.long_hair_sheet(SCHOOL_SHEETS)
+SCHOOL_LONG_HAIR_DWARF = gen_school.shrink_sheets({'hair': SCHOOL_LONG_HAIR})['hair']
+SCHOOL_LONG_HAIR_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, 'hair': SCHOOL_LONG_HAIR})['hair']
+def school_hair_styles(prefix):
+    return [dict(id="h2_bob", name="鮑伯", sheets={}), dict(id="h2_long", name="中長髮", sheets={"hair": f"{prefix}_hair_long.png"})]
 SCHOOL_EAR_SHEETS = gen_school.build_sheets(ears=True)   # 新妖精：同一個人，多一層 hat（正面、側面的尖耳，蓋在頭髮上面）
 
 LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ears）；scale＝人類模組整體縮放倍率
@@ -646,24 +652,28 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
     # 本體 60 排高（維持 64×64，scale 1.0；nameH＝名牌離腳底的高度，頭頂有耳朵所以比預設的 52 高）；只有 4 方向走路（待機＝雙腳併攏／站姿），攻擊、坐姿、釣魚還沒畫，退回待機幀。
     dict(id="human2", name="新人類", scale=1.0, nameH=66, own=dict(
         sheets={n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
+        styles=dict(hair=school_hair_styles("human2")),
         dye=gen_school.dye_rules(SCHOOL_SHEETS),
         # 武器掛點（64×64 格子座標；本體在格子 x 18～45、y 2～62）：暫時估的，之後逐把校正
         anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 48], hand=dict(down=[42, 45], up=[42, 45], side=[31, 45])))),
     # 新妖精（2026-11-22，使用者定案：以新人類加上妖精耳朵）：圖層共用 human2_*，另加 elf2_hat 一層尖耳（正面、側面；背面的髮型蓋住耳朵）
     dict(id="elf2", name="新妖精", scale=1.0, nameH=66, own=dict(
         sheets={**{n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, "hat": "elf2_hat.png"}, outline=None,
+        styles=dict(hair=school_hair_styles("human2")),
         dye=gen_school.dye_rules(SCHOOL_SHEETS),
         anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 48], hand=dict(down=[42, 45], up=[42, 45], side=[31, 45])))),
     # 新貓族（2026-11-23）：同一個人加貓耳（參考 LPC 貓耳；四個方向都有，背面沒有內側粉紅）。圖層共用 human2_*，另加 cat2_hat；
     # 耳朵、尾巴的外圈和毛用頭髮的顏色，所以髮色換色規則也套到 hat、hairbg 層（內側粉紅不在顏色表裡，不變）；尾巴在 hairbg 層
     dict(id="cat2", name="新貓族", scale=1.0, nameH=66, own=dict(
         sheets={**{n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, "hat": "cat2_hat.png", "hairbg": "cat2_hairbg.png"}, outline=None,
+        styles=dict(hair=school_hair_styles("human2")),
         dye=[dict(r, layers=["hair", "hat", "hairbg"]) if r["slot"] == "hair" else r for r in gen_school.dye_rules(SCHOOL_SHEETS)],
         anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 48], hand=dict(down=[42, 45], up=[42, 45], side=[31, 45])))),
     # 新矮人（2026-11-23，使用者要求：偏小孩體型）：新人類拿掉軀幹 4 排、小腿 4 排（gen_school.DWARF_DROP），頭不變，身高 52 排；圖層 dwarf2_<圖層>.png。
     # 武器掛點＝新人類的位置往下移（拿掉的排數在掛點下面的那幾排，4 排），暫時估的
     dict(id="dwarf2", name="新矮人", scale=1.0, nameH=58, own=dict(
         sheets={n: f"dwarf2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
+        styles=dict(hair=school_hair_styles("dwarf2")),
         dye=gen_school.dye_rules(SCHOOL_SHEETS),
         anchors=dict(back=[27, 40], backView=[37, 40], waist=[28, 52], hand=dict(down=[42, 49], up=[42, 49], side=[31, 49])))),
     # 新巨人（2026-11-23，使用者要求：比新人類壯又高）：新人類每格軀幹 +4 排、小腿 +4 排（身高 68 排＝比新人類高的量跟矮人比新人類矮的量一樣）、脖子以下加寬（gen_school.giant_sheets），頭不變；
@@ -672,6 +682,7 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
     dict(id="giant2", name="新巨人", scale=1.0, nameH=74, own=dict(
         cell=gen_school.GIANT_CELL, ox=gen_school.GIANT_OX, oy=gen_school.GIANT_OY,
         sheets={n: f"giant2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
+        styles=dict(hair=school_hair_styles("giant2")),
         dye=gen_school.dye_rules(SCHOOL_SHEETS),
         anchors=dict(back=[27, 28], backView=[37, 28], waist=[28, 44], hand=dict(down=[42, 41], up=[42, 41], side=[31, 41])))),
 ]
@@ -4479,6 +4490,9 @@ def main():
     # 新人類（tools/gen_school.py）：圖層 human2_<圖層>.png（hairbg／hat 目前是空的，不輸出）
     for lname in SCHOOL_LAYERS:
         save_chibi_layer(SCHOOL_SHEETS[lname], f"human2_{lname}.png", sub)
+    save_chibi_layer(SCHOOL_LONG_HAIR, "human2_hair_long.png", sub)   # 中長髮（人類／妖精／貓族共用）
+    save_chibi_layer(SCHOOL_LONG_HAIR_DWARF, "dwarf2_hair_long.png", sub)
+    save_chibi_layer(SCHOOL_LONG_HAIR_GIANT, "giant2_hair_long.png", sub)
     for lname in SCHOOL_LAYERS:                       # 新矮人
         save_chibi_layer(SCHOOL_DWARF_SHEETS[lname], f"dwarf2_{lname}.png", sub)
     for lname in SCHOOL_LAYERS:                       # 新巨人（96×96 格）

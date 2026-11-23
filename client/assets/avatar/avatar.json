@@ -3753,6 +3753,22 @@
      "hair": "human2_hair.png"
     },
     "outline": null,
+    "styles": {
+     "hair": [
+      {
+       "id": "h2_bob",
+       "name": "鮑伯",
+       "sheets": {}
+      },
+      {
+       "id": "h2_long",
+       "name": "中長髮",
+       "sheets": {
+        "hair": "human2_hair_long.png"
+       }
+      }
+     ]
+    },
     "dye": [
      {
       "slot": "hair",
@@ -3877,6 +3893,22 @@
      "hat": "elf2_hat.png"
     },
     "outline": null,
+    "styles": {
+     "hair": [
+      {
+       "id": "h2_bob",
+       "name": "鮑伯",
+       "sheets": {}
+      },
+      {
+       "id": "h2_long",
+       "name": "中長髮",
+       "sheets": {
+        "hair": "human2_hair_long.png"
+       }
+      }
+     ]
+    },
     "dye": [
      {
       "slot": "hair",
@@ -4002,6 +4034,22 @@
      "hairbg": "cat2_hairbg.png"
     },
     "outline": null,
+    "styles": {
+     "hair": [
+      {
+       "id": "h2_bob",
+       "name": "鮑伯",
+       "sheets": {}
+      },
+      {
+       "id": "h2_long",
+       "name": "中長髮",
+       "sheets": {
+        "hair": "human2_hair_long.png"
+       }
+      }
+     ]
+    },
     "dye": [
      {
       "slot": "hair",
@@ -4127,6 +4175,22 @@
      "hair": "dwarf2_hair.png"
     },
     "outline": null,
+    "styles": {
+     "hair": [
+      {
+       "id": "h2_bob",
+       "name": "鮑伯",
+       "sheets": {}
+      },
+      {
+       "id": "h2_long",
+       "name": "中長髮",
+       "sheets": {
+        "hair": "dwarf2_hair_long.png"
+       }
+      }
+     ]
+    },
     "dye": [
      {
       "slot": "hair",
@@ -4253,6 +4317,22 @@
      "hair": "giant2_hair.png"
     },
     "outline": null,
+    "styles": {
+     "hair": [
+      {
+       "id": "h2_bob",
+       "name": "鮑伯",
+       "sheets": {}
+      },
+      {
+       "id": "h2_long",
+       "name": "中長髮",
+       "sheets": {
+        "hair": "giant2_hair_long.png"
+       }
+      }
+     ]
+    },
     "dye": [
      {
       "slot": "hair",
