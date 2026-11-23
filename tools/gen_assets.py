@@ -711,7 +711,7 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
         sheets={n: f"dwarf2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
         styles=dict(hair=school_hair_styles("dwarf2"), **school_outfit_styles("dwarf2")),
         dye=gen_school.dye_rules(SCHOOL_SHEETS) + school_male_dye(),
-        anchors=dict(back=[27, 40], backView=[37, 40], waist=[28, 52], hand=dict(down=[42, 49], up=[42, 49], side=[31, 49])))),
+        anchors=dict(back=[27, 41], backView=[37, 41], waist=[28, 49], hand=dict(down=[42, 47], up=[42, 47], side=[31, 47])))),   # 2026-11-24 階段 D：人類的掛點（背 36／腰 46／手 44）依新的 DWARF_DROP 往下移（掛點下面被拿掉的排數：5／3／3）
     # 新巨人（2026-11-23，使用者要求：比新人類壯又高）：新人類每格軀幹 +4 排、小腿 +4 排（身高 68 排＝比新人類高的量跟矮人比新人類矮的量一樣）、脖子以下加寬（gen_school.giant_sheets），頭不變；
     # 格子 96×96（own.cell），邏輯上的 64×64 格放在格子的 (ox, oy)＝(16, 32)（腳底在格子第 94 列＝邏輯格第 62 列，引擎照邏輯格對腳底，影子不用改）。
     # 掛點是邏輯格座標：新人類的掛點依拉長的排數往上移（原 36→28、48→44、45→41），x 暫用新人類的（身體加寬了，之後再逐把校正）
@@ -720,7 +720,7 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
         sheets={n: f"giant2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
         styles=dict(hair=school_hair_styles("giant2"), **school_outfit_styles("giant2")),
         dye=gen_school.dye_rules(SCHOOL_SHEETS) + school_male_dye(),
-        anchors=dict(back=[27, 28], backView=[37, 28], waist=[28, 44], hand=dict(down=[42, 41], up=[42, 41], side=[31, 41])))),
+        anchors=dict(back=[27, 30], backView=[37, 30], waist=[28, 42], hand=dict(down=[42, 40], up=[42, 40], side=[31, 40])))),   # 2026-11-24 階段 D：依新的 GIANT_TORSO／GIANT_LEGS 往上移（掛點下面多出的排數：6／4／4）
 ]
 
 # ---------------- LPC 通用格式（2026-11-08 大改：角色整個改用 LPC 通用格式）----------------

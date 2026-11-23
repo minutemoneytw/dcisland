@@ -887,7 +887,9 @@ EAR_EX = 4                            # 耳朵／尾巴圖層比角色多的欄�
 EAR_FRONT = ['3,17,b', '3,18,b', '4,18,b', '3,19,b', '4,19,s', '5,19,b', '4,20,b', '5,20,s', '5,21,b']
 # 側面（臉朝左）看到的那隻耳朵：蓋在頭髮上面，尖在最外面（後上方），往耳根（欄 13）變粗
 EAR_SIDE = {19: [16], 20: [15, 16], 21: [14, 15, 16], 22: [13, 14, 15], 23: [13, 14]}
-EAR_DY = {'front': {0: 0, 1: -1, 2: -1}, 'side': {0: -1, 1: 0, 2: 0}}   # 跟頭一起上下（見 girl_walk／girl_side 的上抬）；背面的髮型把耳朵蓋住，不畫
+# 妖精耳的上下起伏沿用舊身體的（2026-11-24 使用者要求：妖精耳先放原本的位置，之後再重畫）
+ELF_EAR_DY = {'front': {0: 0, 1: -1, 2: -1}, 'side': {0: -1, 1: 0, 2: 0}}
+EAR_DY = {'front': {0: 0, 1: 0, 2: 0}, 'side': {0: 0, 1: 1, 2: 1}}   # 貓耳跟頭一起上下：素體的頭只有側面走路格往下 1 排；正面／背面不動；背面的髮型把耳朵蓋住，妖精耳不畫
 
 
 def _ear_img(rows, dy, both):
@@ -962,7 +964,7 @@ _TAIL_BACK_ROWS = {
     41: 'hn:15,18 hm:16,17', 42: 'hn:17 hm:15,16', 43: 'hn:13,14,16 hm:15', 44: 'hn:15 hm:13,14', 45: 'hn:13,14'}
 TAIL_BACK = _parse_tail(_TAIL_BACK_ROWS, dy=0)
 TAIL_SWAY = {'side': {0: 0, 1: 2, 2: -2}, 'back': {0: 0, 1: 2, 2: -2}}   # 走路時尾巴尖左右擺（越高擺越多）
-TAIL_DY = {'back': {0: 0, 1: -1, 2: -1}, 'side': {0: -1, 1: 0, 2: 0}}   # 跟身體一起上下（跟 EAR_DY 的頭一樣的規則）
+TAIL_DY = {'back': {0: 0, 1: 0, 2: 0}, 'side': {0: -1, 1: -1, 2: -1}}   # 跟身體一起上下（跟 EAR_DY 的頭一樣的規則）
 
 
 def _tail_img(cells, dy, sway):
@@ -987,7 +989,7 @@ def ear_frames(kind='elf'):
                        'hairbg': _tail_img(TAIL_SIDE, TAIL_DY['side'][st], TAIL_SWAY['side'][st])} for st in (0, 1, 2)]   # 一前一後（使用者標的位置）：前面（臉那邊）的耳朵尖在 (5,0)，後面那隻低 2 排、往後 7 欄，尖在 (12,2)
         return out
     for key, rows, both in (('front', EAR_FRONT, True), ('side', EAR_SIDE, False)):
-        out[key] = [{'hat': _ear_img(rows, EAR_DY[key][st], both)} for st in (0, 1, 2)]
+        out[key] = [{'hat': _ear_img(rows, ELF_EAR_DY[key][st], both)} for st in (0, 1, 2)]
     return out
 
 
@@ -1023,14 +1025,16 @@ def build_sheets(ears=False):   # ears：False／True（＝'elf'）／'cat'
                             if c is not None and 0 <= row * CELL + OY - EAR_TOP + y and dst.px[row * CELL + OY - EAR_TOP + y][col * CELL + OX - EAR_EX + x] is None:
                                 dst.px[row * CELL + OY - EAR_TOP + y][col * CELL + OX - EAR_EX + x] = c
     if not ears:
-        import gen_body
-        gen_body.apply(sheets)   # body／face 兩層換成素體（2026-11-23，階段 A；舊身體＋complete_head／fix_back_step_neck 的補丁拿掉了）
+        import gen_body, gen_girl
+        gen_body.apply(sheets)
+        gen_girl.apply(sheets)   # 女式西裝（外套／短裙／尖皮鞋）照素體重畫（階段 C，見 gen_girl.py）
+        sheets['hair'] = bob_hair_sheet(sheets)   # 預設鮑伯髮型：擦掉原本的皮膚部分、套到素體的頭上（見 bob_hair_sheet）   # body／face 兩層換成素體（2026-11-23，階段 A；舊身體＋complete_head／fix_back_step_neck 的補丁拿掉了）
     return sheets
 
 
 # 矮人（2026-11-23，使用者要求：偏小孩體型）：把新人類每格的軀幹、小腿各拿掉幾排（格子座標，0～63），上半身整段往下移，腳底仍在第 62 列。
 # 頭不變（頭身比變大）；軀幹 32～35 是外套中段、小腿 54～57 是襪子／小腿，這幾排各方向、各步伐都是一樣寬的直條，拿掉不會斷肢。
-DWARF_DROP = (32, 33, 34, 35, 54, 55, 56, 57)
+DWARF_DROP = (32, 35, 36, 38, 39, 48, 49, 54)   # 2026-11-24 階段 D：照素體重挑——逐排比「這排跟下一排差幾個像素（9 格全部圖層疊起來）」，挑差最小的：外套 32／35／36／38／39、裙子中段 48／49、小腿 54
 
 
 def shrink_sheets(sheets, drop=DWARF_DROP):
@@ -1052,8 +1056,8 @@ def shrink_sheets(sheets, drop=DWARF_DROP):
 # 巨人比人類高多少＝矮人比人類矮多少（8 排）：軀幹 +4、小腿 +4。軀幹複製外套中段 37～40 排（走路時身體會上下動 1 排，複製的排數要跟著動，見 giant_sheets 的 dy，
 # 不然領口／領帶每一格被複製的位置不一樣，往下走時領口會跳）；小腿只複製沒有膝蓋陰影點的排（正面 53、55 排各有兩個陰影點，複製會變成一條條直線），
 # 兩腿中間的暗縫（kk 兩欄）本來就是直的，拉長沒關係
-GIANT_TORSO = (37, 38, 39, 40)
-GIANT_LEGS = (54, 56, 57, 58)
+GIANT_TORSO = (35, 36, 38, 39)   # 2026-11-24 階段 D：照素體重挑（同 DWARF_DROP 的挑法）：外套 4 排；
+GIANT_LEGS = (48, 49, 54, 55)    # 裙子中段 2 排＋小腿 2 排（名字沿用，現在含裙子）
 GIANT_DUP = GIANT_TORSO + GIANT_LEGS
 
 
@@ -1121,7 +1125,7 @@ def giant_sheets(sheets):
     foot = CELL - 1 - 1                     # 邏輯格裡腳底那一排（第 62 排）
     for row in WALK_ROW.values():
         for col in range(9):
-            top = lambda c: min((y for y in range(CELL) if any(v is not None for v in sheets['hair'].px[row * CELL + y][c * CELL:(c + 1) * CELL])), default=0)
+            top = lambda c: min((y for y in range(CELL) if any(v is not None for v in sheets['top'].px[row * CELL + y][c * CELL:(c + 1) * CELL])), default=0)
             dy_bob = top(col) - top(0)       # 這一格的身體比這個方向的待機格高／低幾排（走路的上下起伏）：軀幹複製的排跟著動
             dup = tuple(d + dy_bob for d in GIANT_TORSO) + GIANT_LEGS
             cl = widen_cell(grow_cell(sheets, row, col, dup))
@@ -1248,33 +1252,45 @@ LONG_HAIR_BACK = [
 LONG_HAIR_KEY = {'n': 'hn', 'd': 'hd', 'm': 'hm', 'l': 'hl', 'h': 'hh', 'k': 'sk_d', 'f': 'fk', 'c': 'fc'}   # k／f＝頭髮投在額頭上的陰影（皮膚的陰影色；只有油頭用）、c＝臉前緣的輪廓（深棕，跟下半臉的輪廓同色），皮膚換色時一起換
 
 
-def hair_style_sheet(sheets, maps, center=False, side_dx=0, top_row=0, side_dy=0, side_shadow_dy=0):
-    """回傳 Img(832×1856)：某個髮型的 hair 層（只填走路列；右＝左的鏡像）。sheets＝新人類的各層 sheet（用原本髮型的位置對齊）。
-    maps＝{'down': 正面, 'up': 背面, 'left': 側面（臉朝左）}，各是字串列（見 LONG_HAIR_*）；
-    center＝True：正面／背面依原本髮型的左右中心置中（髮型比頭寬時用），否則圖的左緣對齊原本髮型的左緣；side_dx＝側面再往右偏幾欄；
-    top_row＝圖的第幾排（從 0 算）對齊原本髮型的頭頂（圖頂端有一小撮翹毛時用）；side_dy＝側面再往下偏幾排（側面頭頂與前髮的相對位置跟正面不同時用）。side_shadow_dy＝側面的額頭陰影（k／f／c）相對於頭髮再偏幾排（陰影要留在原位、頭髮往下時用，負數＝往上）；陰影先畫、頭髮蓋在上面。"""
-    hair = sheets['hair']
+HAIR_ABOVE = 5          # 髮頂比頭頂高幾排（使用者的髮型參考圖畫在素體上：髮團比頭高約 5～6 排）
+
+
+def head_metrics(body, hx0, hy0):
+    """素體（body 層）某一格的頭：回傳 (頭頂 y, 頭中心 x, 頭前緣 x, 頭後緣 x)（格內座標；前緣＝最左、後緣＝最右，中段幾排量）。找不到回 None。"""
+    ys = [y for y in range(CELL) if any(body.px[hy0 + y][hx0 + x] is not None for x in range(CELL))]
+    if not ys:
+        return None
+    top = ys[0]
+    xs = [x for y in range(top + 6, top + 13) for x in range(CELL) if body.px[hy0 + y][hx0 + x] is not None]
+    return top, (min(xs) + max(xs) + 1) / 2, min(xs), max(xs)
+
+
+def hair_style_sheet(sheets, maps, center=True, side_dx=0, top_row=0, side_dy=0, side_shadow_dy=0, above=HAIR_ABOVE, dx=0, dy=0):
+    """回傳 Img(832×1856)：某個髮型的 hair 層（只填走路列；右＝左的鏡像）。sheets＝新人類的各層 sheet（用素體的頭對位，2026-11-24 階段 B）。
+    maps＝{'down': 正面, 'up': 背面, 'left': 側面（臉朝左）}，各是字串列（見 LONG_HAIR_*）。
+    對位：圖的「髮頂」（第 top_row 排）放在頭頂上方 above 排（預設 5）；正面／背面左右置中在頭中心（dx 再偏）；側面圖的左緣放在頭前緣（side_dx 再偏）、side_dy 再往下偏幾排。
+    side_shadow_dy＝側面的額頭陰影（k／f／c）相對於頭髮再偏幾排（陰影要留在原位、頭髮往下時用，負數＝往上）；陰影先畫、頭髮蓋在上面。center 參數留著只是相容（現在一律置中）。"""
+    body = sheets['body']
     out = Img(SHEET_W, SHEET_H)
     for d, row in WALK_ROW.items():
         src_d = 'left' if d == 'right' else d
         mp = maps[src_d]
         for col in range(9):
             x0, y0 = col * CELL, row * CELL
-            if d == 'right':                       # 右＝左那一格鏡像（原圖的 row 9）
+            if d == 'right':                       # 右＝左那一格鏡像（頭的位置用左面向那一格量）
                 hx0, hy0 = col * CELL, WALK_ROW['left'] * CELL
             else:
                 hx0, hy0 = x0, y0
-            ys = [y for y in range(CELL) if any(hair.px[hy0 + y][hx0 + x] is not None for x in range(CELL))]
-            xs = [x for y in ys for x in range(CELL) if hair.px[hy0 + y][hx0 + x] is not None]
-            if not ys:
+            hm = head_metrics(body, hx0, hy0)
+            if hm is None:
                 continue
-            top, left = ys[0] - top_row, min(xs)
+            htop, hcx, hfront, hback = hm
+            top = htop - above - top_row + dy
             if src_d == 'left':
                 top += side_dy
-            if center and src_d != 'left':
-                left = (min(xs) + max(xs) + 1) // 2 - len(mp[0]) // 2
-            elif src_d == 'left':
-                left += side_dx
+                left = hfront + side_dx
+            else:
+                left = int(hcx - len(mp[0]) / 2 + .5) + dx
             sdy = side_shadow_dy if src_d == 'left' else 0
             for shadow_pass in (True, False):          # 先畫陰影（k／f／c），再畫頭髮（蓋在陰影上面）
                 for y, line in enumerate(mp):
@@ -1283,16 +1299,315 @@ def hair_style_sheet(sheets, maps, center=False, side_dx=0, top_row=0, side_dy=0
                             continue
                         px = left + x
                         if d == 'right':
-                            px = 63 - px           # 鏡像：左面向的格 x → 63-x（OX=18、框寬 28）
+                            px = 63 - px           # 鏡像：左面向的格 x → 63-x（鏡像軸是格子中線）
                         yy = y0 + top + y + (sdy if shadow_pass else 0)
+                        if not (0 <= yy < SHEET_H and 0 <= px < CELL):
+                            continue
                         if shadow_pass and sheets['face'].px[yy][x0 + px] is not None:
                             continue   # 額頭陰影不蓋住眼睛：這一格臉層有眼睛就不畫
                         out.px[yy][x0 + px] = C[LONG_HAIR_KEY[ch]]
     return out
 
 
+BOB_MAPS = {   # 使用者手改的舊鮑伯（擦掉皮膚部分；2026-11-24 的 38.png）：每格一塊字母地圖（只取頭髮色；外框烤進去的變暗色對成 n／d），(x0, y0) 是它在使用者圖那一格裡的左上角（只用來保留各步伐之間的相對位置，擺到素體的頭上時會重新對位）
+    ('down', 0): (1, 1, [
+        '.........nnnnnnnn.........',
+        '.......nndssnnssdnn.......',
+        '.....nnlmssnnnnssmlnn.....',
+        '....nmlmdnnmddmnndmlmn....',
+        '...dmmmdllmmddmmlldmmmd...',
+        '..dmmllmmmllddllmmmllmmd..',
+        '..dmmmlmllmllllmllmlmmmd..',
+        '.nlmmdmllllmmmmllllmdmmln.',
+        '.nlmhhmllmmlmmlmmllmhhmln.',
+        'nllmhhmhhmmhhhhmmhhmhhmlln',
+        'nlmmdmlhhlmhhhhmlhhlmdmmln',
+        'nlmmdmllmlmmmmmmlmllmdmmln',
+        'nlmmdmllmllmmmmllmllmdmmln',
+        'nmmdmllmmmdmmmmdmmmllmdmmn',
+        'nmmdmllmmmdmmmmdmmmllmdmmn',
+        'nmmdmllmmddvvvvddmmllmdmmn',
+        'nmdmldmmn.ddvvdd.nmmdlmdmn',
+        'nmdmd.dd....dd....dd.dmdmn',
+        'nmdml................lmdmn',
+        'ndmll................llmdn',
+        'nsmll................llmsn',
+        '.nmll................llmn.',
+        '.nslmd..............dmlsn.',
+        '..dmln..............nlmd..',
+        '...dmn..............nmd...',
+        '....dn..............nd....',
+    ]),
+    ('down', 1): (1, 0, [
+        '.........nnnnnnnn.........',
+        '.......nndssnnssdnn.......',
+        '.....nnlmssnnnnssmlnn.....',
+        '....nmlmdnnmddmnndmlmn....',
+        '...dmmmdllmmddmmlldmmmd...',
+        '..dmmllmmmllddllmmmllmmd..',
+        '..dmmmlmllmllllmllmlmmmd..',
+        '.nlmmdmllllmmmmllllmdmmln.',
+        '.nlmhhmllmmlmmlmmllmhhmln.',
+        'nllmhhmhhmmhhhhmmhhmhhmlln',
+        'nlmmdmlhhlmhhhhmlhhlmdmmln',
+        'nlmmdmllmlmmmmmmlmllmdmmln',
+        'nlmmdmllmllmmmmllmllmdmmln',
+        'nmmdmllmmmdmmmmdmmmllmdmmn',
+        'nmmdmllmmmdmmmmdmmmllmdmmn',
+        'nmmdmllmmddvvvvddmmllmdmmn',
+        'nmdmldmmn.ddvvdd.nmmdlmdmn',
+        'nmdmd.dd....dd....dd.dmdmn',
+        'nmdml................lmdmn',
+        'ndmll................llmdn',
+        'nsmll................llmsn',
+        '.nmll................llmn.',
+        '.nslmd..............dmlsn.',
+        '..dmln..............nlmd..',
+        '...dmn..............nmd...',
+        '....dn..............nd....',
+    ]),
+    ('down', 2): (1, 0, [
+        '.........nnnnnnnn.........',
+        '.......nndssnnssdnn.......',
+        '.....nnlmssnnnnssmlnn.....',
+        '....nmlmdnnmddmnndmlmn....',
+        '...dmmmdllmmddmmlldmmmd...',
+        '..dmmllmmmllddllmmmllmmd..',
+        '..dmmmlmllmllllmllmlmmmd..',
+        '.nlmmdmllllmmmmllllmdmmln.',
+        '.nlmhhmllmmlmmlmmllmhhmln.',
+        'nllmhhmhhmmhhhhmmhhmhhmlln',
+        'nlmmdmlhhlmhhhhmlhhlmdmmln',
+        'nlmmdmllmlmmmmmmlmllmdmmln',
+        'nlmmdmllmllmmmmllmllmdmmln',
+        'nmmdmllmmmdmmmmdmmmllmdmmn',
+        'nmmdmllmmmdmmmmdmmmllmdmmn',
+        'nmmdmllmmddvvvvddmmllmdmmn',
+        'nmdmldmmn.ddvvdd.nmmdlmdmn',
+        'nmdmd.dd....dd....dd.dmdmn',
+        'nmdml................lmdmn',
+        'ndmll................llmdn',
+        'nsmll................llmsn',
+        '.nmll................llmn.',
+        '.nslmd..............dmlsn.',
+        '..dmln..............nlmd..',
+        '...dmn..............nmd...',
+        '....dn..............nd....',
+    ]),
+    ('left', 0): (0, 0, [
+        '...........nnnnnndd........',
+        '.........ndsnnssddddd......',
+        '......nddssnnnnssmlnnd.....',
+        '....ndlmdnnmddmnndmlmnd....',
+        '...dmmmdllmmddmmlldmmmsd...',
+        '..dmmllmmmllddllmmmllmmsd..',
+        '..dmmmlmllmllllmllmlmmmsd..',
+        '.nmmmmmmmllmmmmllmmmmmmmnd.',
+        '.nmlhhmmmmmlmmlmmmmmhhlmnd.',
+        '.dmmhhdhhmmhhhhmmhhdhhmmmnd',
+        'nmmmlldhhlmhhhhmlhhdllmmmnd',
+        'nmmmmdlmmlmmmmmmlmmldmmmmnd',
+        'nmmlldmlmllmmmmllmlmdllmmnd',
+        'nmmlmdmmlmdmmmmdmlmmdmlmmnd',
+        'nmmldmllmmdmmmmdmmllmdlmmnd',
+        'ndmmllmmdmmmmmmmmmmmldmmmnd',
+        'nddlldmmddlllmldlmmndmlmmdn',
+        'nddmddmld.dmmmmdmmmndmmmmdn',
+        '.ndddddmd.ddmnndmmmndllmldn',
+        '.ndn.ddmd....nndmlmndmldmdn',
+        '.nn..d.dd.....ndmmmndlmdmdn',
+        '.n............ndmlmnddldmdn',
+        '..............ndmmmnddldddn',
+        '..............ndmmmndddddn.',
+        '..............ddmmnndnddn..',
+        '..............nndn.ndndn...',
+        '...................nn.n....',
+        '...................n.......',
+    ]),
+    ('left', 1): (0, 1, [
+        '...........nnnnnndd........',
+        '.........ndsnnssddddd......',
+        '......nddssnnnnssmlnnd.....',
+        '....ndlmdnnmddmnndmlmnd....',
+        '...dmmmdllmmddmmlldmmmsd...',
+        '..dmmllmmmllddllmmmllmmsd..',
+        '..dmmmlmllmllllmllmlmmmsd..',
+        '.nmmmmmmmllmmmmllmmmmmmmnd.',
+        '.nmlhhmmmmmlmmlmmmmmhhlmnd.',
+        '.dmmhhdhhmmhhhhmmhhdhhmmmnd',
+        'nmmmlldhhlmhhhhmlhhdllmmmnd',
+        'nmmmmdlmmlmmmmmmlmmldmmmmnd',
+        'nmmlldmlmllmmmmllmlmdllmmnd',
+        'nmmlmdmmlmdmmmmdmlmmdmlmmnd',
+        'nmmldmllmmdmmmmdmmllmdlmmnd',
+        'ndmmllmmdmmmmmmmmmmmldmmmnd',
+        'nddlldmmddlllmldlmmndmlmmdn',
+        'nddmddmld.dmmmmdmmmndmmmmdn',
+        '.ndddddmd.ddmnndmmmndllmldn',
+        '.ndn.ddmd....nndmlmndmldmdn',
+        '.nn..d.dd.....ndmmmndlmdmdn',
+        '.n............ndmlmnddldmdn',
+        '..............ndmmmnddldddn',
+        '..............ndmmmndddddn.',
+        '..............ddmmnndnddn..',
+        '..............nndn.ndndn...',
+        '...................nn.n....',
+        '...................n.......',
+    ]),
+    ('left', 2): (0, 1, [
+        '...........nnnnnndd........',
+        '.........ndsnnssddddd......',
+        '......nddssnnnnssmlnnd.....',
+        '....ndlmdnnmddmnndmlmnd....',
+        '...dmmmdllmmddmmlldmmmsd...',
+        '..dmmllmmmllddllmmmllmmsd..',
+        '..dmmmlmllmllllmllmlmmmsd..',
+        '.nmmmmmmmllmmmmllmmmmmmmnd.',
+        '.nmlhhmmmmmlmmlmmmmmhhlmnd.',
+        '.dmmhhdhhmmhhhhmmhhdhhmmmnd',
+        'nmmmlldhhlmhhhhmlhhdllmmmnd',
+        'nmmmmdlmmlmmmmmmlmmldmmmmnd',
+        'nmmlldmlmllmmmmllmlmdllmmnd',
+        'nmmlmdmmlmdmmmmdmlmmdmlmmnd',
+        'nmmldmllmmdmmmmdmmllmdlmmnd',
+        'ndmmllmmdmmmmmmmmmmmldmmmnd',
+        'nddlldmmddlllmldlmmndmlmmdn',
+        'nddmddmld.dmmmmdmmmndmmmmdn',
+        '.ndddddmd.ddmnndmmmndllmldn',
+        '.ndn.ddmd....nndmlmndmldmdn',
+        '.nn..d.dd.....ndmmmndlmdmdn',
+        '.n............ndmlmnddldmdn',
+        '..............ndmmmnddldddn',
+        '..............ndmmmndddddn.',
+        '..............ddmmnndnddn..',
+        '..............nndn.ndndn...',
+        '...................nn.n....',
+        '...................n.......',
+    ]),
+    ('up', 0): (1, 1, [
+        '.........nddddddn.........',
+        '.......dddddddddddd.......',
+        '.....ddlmddddddddmldd.....',
+        '....dmlmddddddddddmlmd....',
+        '...dmmmdmlmmddmmlmdmmmd...',
+        '..dmlmmmlmlmddmlmlmmmlmd..',
+        '..dmmlmlmmlmmmmlmmlmlmmd..',
+        '.dlhlmmmmlmmllmmlmmmmllld.',
+        '.dmlhhlmlmmlmmlmmlmlhhlmd.',
+        'ddlmhhmhhmmhhhhmmhhmhhmldd',
+        'dmmllmlhhlllhhlllhhlmllmmd',
+        'dmmllmmmlmmllllmmlmmmllmmd',
+        'dmmllmlmmllllllllmmlmllmmd',
+        'dmmllmmdmlllmmlmlmdmmllmmd',
+        'dmmllmmdmmlllllllmdmmllmmd',
+        'dmmmlmmdlmlllllmmldmmlmmmd',
+        'dmmmlmldlllllllllldlmlmmmd',
+        'dmmdlmldmllllllllmdlmldmmd',
+        'dlddmmmdlmmmllmmmldmmmddld',
+        'dmddmmmdmmlmmmmlmmdmmmddmd',
+        'dlddlmmdmlmllllmlmdmmlddld',
+        'ddddmdmddmmmlllmmddmdmdddd',
+        'ddddldmddlmmmmmmlddmdldddd',
+        'ddddldmdddmdmmdmdddmdldddd',
+        'dddddddddddddddddddddddddd',
+        '..dddd..dddddddddd..dddd..',
+        '........dddddddddd........',
+    ]),
+    ('up', 1): (1, 0, [
+        '.........dddddddd.........',
+        '.......dddddddddddd.......',
+        '.....ddmmddddddddmmdd.....',
+        '....dlmmddddddddddmmld....',
+        '...dmmmmmlmmddmmlmmmmmd...',
+        '..dmlllllmllddllmlllllmd..',
+        '..dmlmllllllllllllllmlmd..',
+        '.dlhlmmmmlmmllmmlmmmmlhld.',
+        '.dmlhhmlmmmlmmlmmmlmhhlmd.',
+        'ddmlhhmhhmmhhhhmmhhmhhlmdd',
+        'dmmllmmhhmmhhhhmmhhmmllmmd',
+        'dmllllmmmllmmmmllmmmllllmd',
+        'dmmllllllllllllmlllllllmmd',
+        'dmmlllmdmllllllllmdmlllmmd',
+        'dlmlllldlllllllllldllllmld',
+        'dlmmlmmdmmmmmmmmmmdmmlmmld',
+        'dmmmlmldmmmmmmmmmmdlmlmmmd',
+        'dlldlmmdmllllllllmdmmldlld',
+        'dmddlmmdmllllllllmdmmlddmd',
+        'dlddlmmdlllllllllldmmlddld',
+        'dmddmlmdmmllllllmmdmlmddmd',
+        'ddddldmddlmmllmmlddmdldddd',
+        'ddddldlddmldmmdlmddldldddd',
+        'ddddmdmdddldlldldddmdmdddd',
+        'dddddddddddddddddddddddddd',
+        '..dddd..dddddddddd..dddd..',
+    ]),
+    ('up', 2): (1, 0, [
+        '.........dddddddd.........',
+        '.......dddddddddddd.......',
+        '.....ddmmddddddddmmdd.....',
+        '....dlmmddddddddddmmld....',
+        '...dmmmmmlmmddmmlmmmmmd...',
+        '..dmlllllmllddllmlllllmd..',
+        '..dmlmllllllllllllllmlmd..',
+        '.dlhlmmmmlmmllmmlmmmmlhld.',
+        '.dmlhhmlmmmlmmlmmmlmhhlmd.',
+        'ddmlhhmhhmmhhhhmmhhmhhlmdd',
+        'dmmllmmhhmmhhhhmmhhmmllmmd',
+        'dmllllmmmllmmmmllmmmllllmd',
+        'dmmllllllllllllmlllllllmmd',
+        'dmmlllmdmllllllllmdmlllmmd',
+        'dlmlllldlllllllllldllllmld',
+        'dlmmlmmdmmmmmmmmmmdmmlmmld',
+        'dmmmlmldmmmmmmmmmmdlmlmmmd',
+        'dlldlmmdmllllllllmdmmldlld',
+        'dmddlmmdmllllllllmdmmlddmd',
+        'dlddlmmdlllllllllldmmlddld',
+        'dmddmlmdmmllllllmmdmlmddmd',
+        'ddddldmddlmmllmmlddmdldddd',
+        'ddddldlddmldmmdlmddldldddd',
+        'ddddmdmdddldlldldddmdmdddd',
+        'dddddddddddddddddddddddddd',
+        '..dddd..dddddddddd..dddd..',
+    ]),
+}
+BOB_KEY = {'n': 'hn', 'd': 'hd', 'm': 'hm', 'l': 'hl', 'h': 'hh', 's': 'hs', 'v': 'hv'}
+
+
+def bob_hair_sheet(sheets, above=7, dx=0, dy=0, side_dx=-3, side_dy=0):
+    """預設鮑伯髮型（BOB_MAPS）：每個步伐一塊地圖，整塊套到素體的頭上：
+    髮頂放在頭頂上方 above 排（預設 7，瀏海下緣剛好停在眼睛上面）；正面／背面左右置中在頭中心；
+    側面的左緣放在頭前緣（side_dx、side_dy 再偏）。右面向＝左面向的鏡像。回傳新的 hair 層。"""
+    body = sheets['body']
+    out = Img(SHEET_W, SHEET_H)
+    for d, row in WALK_ROW.items():
+        src_d = 'left' if d == 'right' else d
+        srow = WALK_ROW[src_d]
+        for col, st in enumerate(WALK_FRAMES):
+            mp = BOB_MAPS[({'down': 'down', 'up': 'up', 'left': 'left'})[src_d], st][2]
+            hm = head_metrics(body, col * CELL, srow * CELL)
+            if hm is None:
+                continue
+            htop, hcx, hfront, hback = hm
+            sy = htop - above + dy
+            if src_d == 'left':
+                sx = hfront + side_dx
+                sy += side_dy
+            else:
+                sx = int(hcx - len(mp[0]) / 2 + .5) + dx
+            for y, line in enumerate(mp):
+                for x, ch in enumerate(line):
+                    if ch == '.':
+                        continue
+                    px = x + sx
+                    if d == 'right':
+                        px = CELL - 1 - px
+                    if 0 <= px < CELL and 0 <= y + sy < CELL:
+                        out.px[row * CELL + y + sy][col * CELL + px] = C[BOB_KEY[ch]]
+    return out
+
+
 def long_hair_sheet(sheets):
-    return hair_style_sheet(sheets, {'down': LONG_HAIR_FRONT, 'up': LONG_HAIR_BACK, 'left': LONG_HAIR_SIDE})
+    return hair_style_sheet(sheets, {'down': LONG_HAIR_FRONT, 'up': LONG_HAIR_BACK, 'left': LONG_HAIR_SIDE}, dy=-1, side_dx=-2)   # 2026-11-24 使用者微調：全部往上 1、側面往左 2
 
 
 # 蓬蓬短髮（2026-11-23，使用者給的第二個參考圖：綠色、蘑菇頭帶尖尖的鬢角；正面／側面／背面並排在同一張圖，這裡取輪廓與明暗，重新對應成髮色代號）。
@@ -1388,7 +1703,7 @@ PUFF_HAIR_BACK = [
 
 
 def puff_hair_sheet(sheets):
-    return hair_style_sheet(sheets, {'down': PUFF_HAIR_FRONT, 'up': PUFF_HAIR_BACK, 'left': PUFF_HAIR_SIDE}, center=True, side_dx=-1, top_row=2)
+    return hair_style_sheet(sheets, {'down': PUFF_HAIR_FRONT, 'up': PUFF_HAIR_BACK, 'left': PUFF_HAIR_SIDE}, center=True, top_row=2, dy=-2, side_dx=-4)   # 2026-11-24 使用者微調：全部往上 1、側面往左 2
 
 
 # 外翹髮（2026-11-23，使用者給的第三個參考圖：橘色、中短髮、髮尾往外翹；正面／側面／背面各一張，這裡取輪廓與明暗，重新對應成髮色代號）。
@@ -1484,7 +1799,7 @@ FLIP_HAIR_BACK = [
 
 
 def flip_hair_sheet(sheets):
-    return hair_style_sheet(sheets, {'down': FLIP_HAIR_FRONT, 'up': FLIP_HAIR_BACK, 'left': FLIP_HAIR_SIDE}, center=True, side_dx=-1, top_row=0)
+    return hair_style_sheet(sheets, {'down': FLIP_HAIR_FRONT, 'up': FLIP_HAIR_BACK, 'left': FLIP_HAIR_SIDE}, center=True, top_row=0, dy=-1, side_dx=-2)   # 2026-11-24 使用者微調：全部往上 1、側面往左 1
 
 
 # 馬尾（2026-11-23，使用者給的第四個參考圖：粉色；正面是頭兩側各垂一束、側面是頭後面一條馬尾＋前面一束、背面是頭後面一整條馬尾；
@@ -1589,7 +1904,7 @@ PONY_HAIR_BACK = [
 
 
 def pony_hair_sheet(sheets):
-    return hair_style_sheet(sheets, {'down': PONY_HAIR_FRONT, 'up': PONY_HAIR_BACK, 'left': PONY_HAIR_SIDE}, center=True, side_dx=-1, top_row=0)
+    return hair_style_sheet(sheets, {'down': PONY_HAIR_FRONT, 'up': PONY_HAIR_BACK, 'left': PONY_HAIR_SIDE}, center=True, top_row=0, dy=-1, side_dx=-3)   # 2026-11-24 使用者微調：全部往上 1、側面往左 2
 
 
 # 雙馬尾（2026-11-23，使用者給的第五個參考圖：綠色；正面頭兩側各一條馬尾垂到肩膀以下、側面頭後一條（另一條被擋住）、背面頭兩側兩條；
@@ -1701,7 +2016,7 @@ TWIN_HAIR_BACK = [
 
 
 def twin_hair_sheet(sheets):
-    return hair_style_sheet(sheets, {'down': TWIN_HAIR_FRONT, 'up': TWIN_HAIR_BACK, 'left': TWIN_HAIR_SIDE}, center=True, side_dx=0, top_row=2, side_dy=3)   # 側面（臉朝左）再往右 1 欄、往下 1 排＝比對齊頭頂的位置右 0 欄、下 3 排（2026-11-23 使用者：側面頭髮太高，先下 2 排、再要求往右 1、往下 1 看看）
+    return hair_style_sheet(sheets, {'down': TWIN_HAIR_FRONT, 'up': TWIN_HAIR_BACK, 'left': TWIN_HAIR_SIDE}, center=True, top_row=2, dy=-1, side_dx=-2)   # 2026-11-24 階段 B：改用素體的頭對位，舊身體的 side_dx／side_dy 微調歸零，等使用者重新微調
 
 
 # 油頭（2026-11-23，使用者給的第六個參考圖：灰髮、頭髮往後梳、額頭整個露出來、兩側髮束垂到耳朵一帶；正面／側面／背面各一張，
@@ -1790,7 +2105,7 @@ OIL_HAIR_BACK = [
 
 
 def oil_hair_sheet(sheets):
-    return hair_style_sheet(sheets, {'down': OIL_HAIR_FRONT, 'up': OIL_HAIR_BACK, 'left': OIL_HAIR_SIDE}, center=True, side_dx=0, top_row=0, side_dy=2, side_shadow_dy=-1)   # 側面：頭頂往下 2 排；地圖第 3 排多複製一排所以下面的髮際線再往下 1 排，額頭陰影（k／f／c）用 side_shadow_dy 抵回去留在原位（2026-11-23 使用者：油頭側面太高；陰影維持原位、頭髮再往下一格）
+    return hair_style_sheet(sheets, {'down': OIL_HAIR_FRONT, 'up': OIL_HAIR_BACK, 'left': OIL_HAIR_SIDE}, center=True, top_row=0, dy=-1, side_dx=-2)   # 2026-11-24 階段 B：改用素體的頭對位，舊身體的 side_dy／side_shadow_dy 微調歸零（油頭側面的地圖第 3 排多複製了一排，額頭陰影 k／f／c 的位置之後再看）
 
 
 def _hex(c):
