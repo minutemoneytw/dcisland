@@ -617,6 +617,7 @@ SCHOOL_SHEETS = gen_school.build_sheets()
 SCHOOL_LAYERS = [n for n, im in SCHOOL_SHEETS.items() if any(c is not None for row in im.px for c in row)]   # hairbg／hat 目前是空的，不輸出
 SCHOOL_CAT_SHEETS = gen_school.build_sheets(ears='cat')   # 新貓族：同一個人，多一層 hat（四個方向的貓耳，蓋在頭髮上面）
 SCHOOL_DWARF_SHEETS = gen_school.shrink_sheets(SCHOOL_SHEETS)   # 新矮人：新人類拿掉軀幹、小腿幾排的小孩體型
+SCHOOL_GIANT_SHEETS = gen_school.giant_sheets(SCHOOL_SHEETS)   # 新巨人：新人類拉長＋加寬，96×96 格
 SCHOOL_EAR_SHEETS = gen_school.build_sheets(ears=True)   # 新妖精：同一個人，多一層 hat（正面、側面的尖耳，蓋在頭髮上面）
 
 LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ears）；scale＝人類模組整體縮放倍率
@@ -665,6 +666,14 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
         sheets={n: f"dwarf2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
         dye=gen_school.dye_rules(SCHOOL_SHEETS),
         anchors=dict(back=[27, 40], backView=[37, 40], waist=[28, 52], hand=dict(down=[42, 49], up=[42, 49], side=[31, 49])))),
+    # 新巨人（2026-11-23，使用者要求：比新人類壯又高）：新人類每格軀幹 +4 排、小腿 +4 排（身高 68 排＝比新人類高的量跟矮人比新人類矮的量一樣）、脖子以下加寬（gen_school.giant_sheets），頭不變；
+    # 格子 96×96（own.cell），邏輯上的 64×64 格放在格子的 (ox, oy)＝(16, 32)（腳底在格子第 94 列＝邏輯格第 62 列，引擎照邏輯格對腳底，影子不用改）。
+    # 掛點是邏輯格座標：新人類的掛點依拉長的排數往上移（原 36→28、48→44、45→41），x 暫用新人類的（身體加寬了，之後再逐把校正）
+    dict(id="giant2", name="新巨人", scale=1.0, nameH=74, own=dict(
+        cell=gen_school.GIANT_CELL, ox=gen_school.GIANT_OX, oy=gen_school.GIANT_OY,
+        sheets={n: f"giant2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
+        dye=gen_school.dye_rules(SCHOOL_SHEETS),
+        anchors=dict(back=[27, 28], backView=[37, 28], waist=[28, 44], hand=dict(down=[42, 41], up=[42, 41], side=[31, 41])))),
 ]
 
 def kidol_main_hex(cid):
@@ -4472,6 +4481,8 @@ def main():
         save_chibi_layer(SCHOOL_SHEETS[lname], f"human2_{lname}.png", sub)
     for lname in SCHOOL_LAYERS:                       # 新矮人
         save_chibi_layer(SCHOOL_DWARF_SHEETS[lname], f"dwarf2_{lname}.png", sub)
+    for lname in SCHOOL_LAYERS:                       # 新巨人（96×96 格）
+        save_chibi_layer(SCHOOL_GIANT_SHEETS[lname], f"giant2_{lname}.png", sub)
     save_chibi_layer(SCHOOL_EAR_SHEETS["hat"], "elf2_hat.png", sub)
     save_chibi_layer(SCHOOL_CAT_SHEETS["hat"], "cat2_hat.png", sub)   # 新貓族的貓耳
     save_chibi_layer(SCHOOL_CAT_SHEETS["hairbg"], "cat2_hairbg.png", sub)   # 新貓族的尾巴（側面、背面；正面藏在身體後面）   # 新妖精的尖耳（正面、側面；背面的髮型蓋住耳朵，沒有）

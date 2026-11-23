@@ -1040,6 +1040,98 @@ def shrink_sheets(sheets, drop=DWARF_DROP):
     return out
 
 
+# 巨人（預覽用）：新人類每格的軀幹、小腿各複製幾排（格子座標，各複製一次），頭不變；格子變高（原本 64 排放不下，所以不能直接貼回 64×64 的 sheet）
+# 巨人比人類高多少＝矮人比人類矮多少（8 排）：軀幹 +4、小腿 +4。軀幹複製外套中段 37～40 排（走路時身體會上下動 1 排，複製的排數要跟著動，見 giant_sheets 的 dy，
+# 不然領口／領帶每一格被複製的位置不一樣，往下走時領口會跳）；小腿只複製沒有膝蓋陰影點的排（正面 53、55 排各有兩個陰影點，複製會變成一條條直線），
+# 兩腿中間的暗縫（kk 兩欄）本來就是直的，拉長沒關係
+GIANT_TORSO = (37, 38, 39, 40)
+GIANT_LEGS = (54, 56, 57, 58)
+GIANT_DUP = GIANT_TORSO + GIANT_LEGS
+
+
+def grow_cell(sheets, row, col, dup=GIANT_DUP):
+    """回傳 {圖層名: [每排的像素列]}：該格複製 dup 的排數後的樣子，高度 CELL+len(dup)，腳底仍貼著底部。"""
+    out = {}
+    for n, src in sheets.items():
+        rows = []
+        for y in range(CELL):
+            line = src.px[row * CELL + y][col * CELL:(col + 1) * CELL]
+            rows.append(line)
+            rows.extend([line] * dup.count(y))
+        out[n] = rows
+    return out
+
+
+def widen_cell(cl, y0=30, big=4, small=2):
+    """壯一點（巨人預覽用）：從第 y0 排（脖子以下，頭不動）起，每排把各圖層合起來的連續色塊（run）加寬——寬 ≥ 12 的（軀幹＋手臂）加 big 欄、
+    寬 4～11 的（腿、單隻手臂）加 small 欄，加寬的方式是在 run 內均分的位置複製欄；所有圖層共用同一份對應（對齊不會跑掉），整排再左右置中。"""
+    layers = list(cl)
+    n = len(cl[layers[0]])
+    W = CELL
+    for y in range(y0, n):
+        occ = [any(cl[l][y][x] is not None for l in layers) for x in range(W)]
+        runs, x = [], 0
+        while x < W:
+            if occ[x]:
+                a = x
+                while x < W and occ[x]:
+                    x += 1
+                runs.append((a, x - 1))
+            else:
+                x += 1
+        dup = {}   # 舊 x → 要多複製幾次
+        for a, b in runs:
+            w = b - a + 1
+            k = big if w >= 12 else small if w >= 4 else 0
+            for i in range(k):
+                xx = a + (i + 1) * w // (k + 1)
+                dup[xx] = dup.get(xx, 0) + 1
+        add = sum(dup.values())
+        if not add:
+            continue
+        for l in layers:
+            src = cl[l][y]
+            out = []
+            for x in range(W):
+                out.append(src[x])
+                out.extend([src[x]] * dup.get(x, 0))
+            sh = add // 2
+            out = out[sh:] + [None] * sh
+            cl[l][y] = (out + [None] * W)[:W]
+    return cl
+
+
+GIANT_CELL = 96                        # 巨人的格子 96×96（身高 86 排放不進 64×64）
+GIANT_OX, GIANT_OY = 16, 32            # 原本 64×64 的格子（引擎的「邏輯格」）放在 96×96 格子裡的位置（左右置中、貼底）：引擎用它對腳底與掛點
+
+
+def giant_sheets(sheets):
+    """新人類的 sheet → 巨人的 96×96 格 sheet（13 欄 × 29 列，只填走路列）：每格拉長（grow_cell）、加寬（widen_cell），腳底落在格子第 94 列
+    （＝邏輯格第 62 列，所以引擎的腳底對齊、影子都不用改），左右置中。"""
+    W, H = 13 * GIANT_CELL, 29 * GIANT_CELL
+    out = {n: Img(W, H) for n in sheets}
+    foot = CELL - 1 - 1                     # 邏輯格裡腳底那一排（第 62 排）
+    for row in WALK_ROW.values():
+        for col in range(9):
+            top = lambda c: min((y for y in range(CELL) if any(v is not None for v in sheets['hair'].px[row * CELL + y][c * CELL:(c + 1) * CELL])), default=0)
+            dy_bob = top(col) - top(0)       # 這一格的身體比這個方向的待機格高／低幾排（走路的上下起伏）：軀幹複製的排跟著動
+            dup = tuple(d + dy_bob for d in GIANT_TORSO) + GIANT_LEGS
+            cl = widen_cell(grow_cell(sheets, row, col, dup))
+            for n, rows in cl.items():
+                # rows 共 CELL+len(GIANT_DUP) 排，腳底那排（原第 62 排）在新排號 foot + 軀幹／小腿複製的排數
+                foot_new = foot + sum(1 for d in GIANT_DUP if d <= foot)
+                dy = GIANT_OY + foot - foot_new          # 新排 r → 格子第 r + dy 列
+                for r, line in enumerate(rows):
+                    y = r + dy
+                    if not 0 <= y < GIANT_CELL:
+                        assert all(v is None for v in line), 'giant: row out of cell'
+                        continue
+                    for x, v in enumerate(line):
+                        if v is not None:
+                            out[n].px[row * GIANT_CELL + y][col * GIANT_CELL + GIANT_OX + x] = v
+    return out
+
+
 def complete_head(sheets):
     """完整素體（頭）：body 層原本只有被瀏海露出來的下半臉、手、腿，換成別的髮型（短髮、馬尾…）會露出空洞。這裡每一格在 body 層補一顆完整的頭（橢圓頭骨，
     大小跟著該格頭髮的輪廓：寬＝頭髮最寬處−6、高 25 排、頭頂在髮頂下 2 排）＋脖子，外框用皮膚陰影色（跟其他皮膚外框一樣畫在輪廓內側）。只補 body 層還是空的像素。

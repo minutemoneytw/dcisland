@@ -4234,6 +4234,132 @@
      }
     }
    }
+  },
+  {
+   "id": "giant2",
+   "name": "新巨人",
+   "scale": 1.0,
+   "nameH": 74,
+   "own": {
+    "cell": 96,
+    "ox": 16,
+    "oy": 32,
+    "sheets": {
+     "body": "giant2_body.png",
+     "bottom": "giant2_bottom.png",
+     "shoes": "giant2_shoes.png",
+     "top": "giant2_top.png",
+     "face": "giant2_face.png",
+     "hair": "giant2_hair.png"
+    },
+    "outline": null,
+    "dye": [
+     {
+      "slot": "hair",
+      "layers": [
+       "hair"
+      ],
+      "colors": [
+       "#7482b2",
+       "#c8d4f8",
+       "#8494c0",
+       "#8c7aac",
+       "#6472a2",
+       "#444c63",
+       "#3c4a7c",
+       "#3c435c",
+       "#343b54",
+       "#222846",
+       "#1f2640",
+       "#3a190f",
+       "#111424",
+       "#1e0d07"
+      ]
+     },
+     {
+      "slot": "top",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#282424",
+       "#221c1c",
+       "#1f1b1b",
+       "#110e0e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#4a3c37",
+       "#282424",
+       "#3a190f",
+       "#221c1c",
+       "#1f1b1b",
+       "#110e0e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2e201e",
+       "#5c5458",
+       "#2f2b2d",
+       "#17100f"
+      ]
+     },
+     {
+      "slot": "eye",
+      "layers": [
+       "face"
+      ],
+      "colors": [
+       "#787780",
+       "#555264",
+       "#4a4242",
+       "#382e2f"
+      ]
+     }
+    ],
+    "anchors": {
+     "back": [
+      27,
+      28
+     ],
+     "backView": [
+      37,
+      28
+     ],
+     "waist": [
+      28,
+      44
+     ],
+     "hand": {
+      "down": [
+       42,
+       41
+      ],
+      "up": [
+       42,
+       41
+      ],
+      "side": [
+       31,
+       41
+      ]
+     }
+    }
+   }
   }
  ],
  "hair": [

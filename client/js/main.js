@@ -2962,17 +2962,18 @@ function chibiSprite(race, look, fi) {
   let cv = S.charCache.get(k);
   if (cv) return cv;
   const F = S.avatar.frames, own = race.own;
+  const cw = own.cell || F.w, ch = own.cell || F.h;   // 種族自己的格子大小（新巨人 96×96；預設跟 frames 一樣）。邏輯格（F.w×F.h）放在格子的 (ox, oy)，畫的時候 pad／padTop 補回去
   let ent = F.map ? F.map[fi] : [fi, 0];
   const body = S.charImgs[own.sheets.body];
-  if (ent?.[2] != null && !sheetCellHas(body, ent[0] * F.w, ent[1] * F.h, F.w, F.h)) ent = F.map[ent[2]];
-  const [cc, cr] = ent, sx = cc * F.w, sy = cr * F.h;
-  cv = document.createElement('canvas'); cv.width = F.w; cv.height = F.h; cv.pad = 0; cv.layerMiss = false;
+  if (ent?.[2] != null && !sheetCellHas(body, ent[0] * cw, ent[1] * ch, cw, ch)) ent = F.map[ent[2]];
+  const [cc, cr] = ent, sx = cc * cw, sy = cr * ch;
+  cv = document.createElement('canvas'); cv.width = cw; cv.height = ch; cv.pad = own.ox || 0; cv.padTop = own.oy || 0; cv.layerMiss = false;
   const g = cv.getContext('2d');
   for (const n of CHIBI_ORDER) {
     let img = S.charImgs[hs?.sheets?.[n] || ts?.sheets?.[n] || fs?.sheets?.[n] || own.sheets[n]];
-    if (!img || sx + F.w > img.width || sy + F.h > img.height) continue;
+    if (!img || sx + cw > img.width || sy + ch > img.height) continue;
     for (const r of rules) if (r.hex && r.layers.includes(n)) img = dyeSheet(img, r.colors, r.hex);   // 同一張圖可以被多條規則依序換色（例如 bottom 層：圍裙下擺跟上衣、褲子跟褲子）
-    g.drawImage(img, sx, sy, F.w, F.h, 0, 0, F.w, F.h);
+    g.drawImage(img, sx, sy, cw, ch, 0, 0, cw, ch);
   }
   if (own.outline) outlineCanvas(cv, own.outline);   // 外框已經畫在圖層裡的種族（新人類）不設 outline，不再統一畫一圈
   S.charCache.set(k, cv);
@@ -3839,7 +3840,8 @@ function drawFxFloater(f) {
     case 'after': {   // 縮地殘影：自己的身影淡淡留在原地
       const F = S.avatar.frames, fi = (F.states[`${f.d8}_idle`] || F.states.down_idle)[0], cs = F.scale || 2;
       ctx.globalAlpha = .4 * al; ctx.filter = 'brightness(1.6) saturate(.3)';
-      ctx.drawImage(charSprite(myLook(), fi), f.x - F.w * cs / 2, f.y - (F.h - (F.footDy || 0)) * cs, F.w * cs, F.h * cs);
+      const im = charSprite(myLook(), fi), pd = im.pad || 0, pt = im.padTop ?? pd;
+      ctx.drawImage(im, f.x - (F.w / 2 + pd) * cs, f.y - (F.h + pt - (F.footDy || 0)) * cs, im.width * cs, im.height * cs);
       break;
     }
     case 'firebomb': {   // 火遁：前 30% 火球飛向落點，之後橘紅色火焰爆開（範圍圈＋往上竄的火舌）
@@ -3992,11 +3994,11 @@ function drawPersonBase(p, wi, nameColor) {
     ctx.save();
     if (cf.mirror) ctx.scale(-1, 1);
     const cs = (F.scale || 2) * raceScale;   // 錨點＝腳底中央；放大＝frames.scale × 種族倍率
-    const pad = img.pad || 0;   // 超大格（LPC 武器揮砍）：畫布四周多出 pad，人物仍以腳底中央對齊
+    const pad = img.pad || 0, padTop = img.padTop ?? pad;   // 超大格（LPC 武器揮砍）：畫布四周多出 pad，人物仍以腳底中央對齊；padTop＝上方多出的（新巨人的格子只往上、左右加大，下面沒有）
     // footDy：LPC 的腳底在格子第 60～62 列，不往下挪的話腳和影子之間有空隙（看起來像飄在空中）
     const hyb = sitFishBody(p);
     if (hyb) {   // 坐著釣魚：下半身＝sit 幀（不帶竿），上半身＝釣魚幀往下挪
-      const wy = -SIT_FISH_WAIST * cs, dy = SIT_FISH_DY * cs, x0 = (-F.w / 2 - pad) * cs, y0 = (-F.h - pad + (F.footDy || 0)) * cs;
+      const wy = -SIT_FISH_WAIST * cs, dy = SIT_FISH_DY * cs, x0 = (-F.w / 2 - pad) * cs, y0 = (-F.h - padTop + (F.footDy || 0)) * cs;
       ctx.save(); ctx.beginPath(); ctx.rect(-300, wy, 600, 300); ctx.clip();
       ctx.drawImage(hyb.img, (-F.w / 2) * cs, (-F.h + (F.footDy || 0)) * cs, hyb.img.width * cs, hyb.img.height * cs);
       ctx.restore();
@@ -4004,7 +4006,7 @@ function drawPersonBase(p, wi, nameColor) {
       ctx.drawImage(img, x0, y0 + dy, img.width * cs, img.height * cs);
       ctx.restore();
     } else
-    ctx.drawImage(img, (-F.w / 2 - pad) * cs, (-F.h - pad + (F.footDy || 0)) * cs, img.width * cs, img.height * cs);
+    ctx.drawImage(img, (-F.w / 2 - pad) * cs, (-F.h - padTop + (F.footDy || 0)) * cs, img.width * cs, img.height * cs);
     ctx.restore();
     if (carry && backView) drawCarry(true);
     if (pfx?.length) drawPersonFx(p, pfx, backView, 'front');
