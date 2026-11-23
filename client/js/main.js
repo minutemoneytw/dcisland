@@ -2932,7 +2932,7 @@ function chibiSprite(race, look, fi) {
         bs = chibiStyleOf(race.own, 'bottom', look?.bottom), ss = chibiStyleOf(race.own, 'shoe', look?.shoe);   // 服裝款式：上衣／褲子／鞋子各一個（look.top／bottom／shoe 是外觀 id，款式 id 跟外觀 id 一樣）
   const skinHex = S.avatar.skins?.find(s2 => s2.id === look?.skin)?.base || null;   // 膚色：look.skin 是 avatar.json skins 的 id，換成它的 base 色碼
   const rules = (race.own.dye || []).filter(r => !r.style || r.style === ts?.id || r.style === bs?.id || r.style === ss?.id).map(r => ({ ...r, hex: (r.slot === 'skin' ? (skinHex && skinHex.toLowerCase() !== r.colors[0].toLowerCase() ? skinHex : null) : look?.[CHIBI_DYE_FIELD[r.slot]]) || null }));   // 膚色跟原色一樣（預設的「自然」）就不換
-  const k = 'chibi:' + fi + '|' + (hs?.id || '') + '|' + (ts?.id || '') + '|' + (bs?.id || '') + '|' + (ss?.id || '') + '|' + (fs?.id || '') + '|' + rules.map(r => r.hex || '').join(',');
+  const k = 'chibi:' + race.id + ':' + fi + '|' + (hs?.id || '') + '|' + (ts?.id || '') + '|' + (bs?.id || '') + '|' + (ss?.id || '') + '|' + (fs?.id || '') + '|' + rules.map(r => r.hex || '').join(',');
   let cv = S.charCache.get(k);
   if (cv) return cv;
   const F = S.avatar.frames, own = race.own;
