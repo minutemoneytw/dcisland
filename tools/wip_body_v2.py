@@ -61,7 +61,8 @@ CENT = [(254, 230, 201), (187, 150, 132), (254, 237, 215), (252, 219, 192), (253
 SKINL = {(254, 230, 201), (254, 237, 215), (253, 224, 206), (241, 222, 198)}
 SHADE = {(252, 219, 192), (240, 210, 183)}
 N4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
-DX = {('front', 0): 12, ('front', 1): 20, ('front', 2): 4, ('left', 0): 10, ('left', 1): 18, ('left', 2): 5, ('back', 0): 12, ('back', 1): 20, ('back', 2): 4}
+DX = {('front', 0): 12, ('front', 1): 20, ('front', 2): 4, ('left', 0): 10, ('left', 1): 18, ('left', 2): 2, ('back', 0): 12, ('back', 1): 20, ('back', 2): 4}   # 左面向步 B 原本 5 → 2（2026-11-23 使用者回報男式西裝側面走路第三格沒對齊；用「頭以下沒被衣服蓋到的皮膚像素」當分數，dx=2 是 0、5 是 91）
+DYS = {('front', 1): 9, ('front', 2): 9, ('back', 1): 9, ('back', 2): 9}   # 正面／背面的走路格：衣服比待機格高 1 排（隨步伐起伏），身體也跟著高 1 排（同樣用分數量的）
 DY = 10
 STEPS = {0: 1, 1: 0, 2: 2}       # 我們的 step → 素體圖的欄
 ROWS = {'front': 0, 'left': 1, 'back': 3}
@@ -155,10 +156,10 @@ def preview(outdir):
     for kind in ('front', 'left', 'back'):
         for step in (0, 1, 2):
             body, face = R[(kind, step)]
-            ox = idx * 48 - 8; dx = DX[(kind, step)]
+            ox = idx * 48 - 8; dx = DX[(kind, step)]; dy = DYS.get((kind, step), DY)
             for layer in (body, face):
                 for (x, y), c in layer.items():
-                    X, Y = x + dx + ox, y + DY
+                    X, Y = x + dx + ox, y + dy
                     if 0 <= X < 9 * 48 and 0 <= Y < 64:
                         img.px[Y][X] = c
             for nm in ('bottom', 'shoes', 'top'):

@@ -1023,8 +1023,8 @@ def build_sheets(ears=False):   # ears：False／True（＝'elf'）／'cat'
                             if c is not None and 0 <= row * CELL + OY - EAR_TOP + y and dst.px[row * CELL + OY - EAR_TOP + y][col * CELL + OX - EAR_EX + x] is None:
                                 dst.px[row * CELL + OY - EAR_TOP + y][col * CELL + OX - EAR_EX + x] = c
     if not ears:
-        complete_head(sheets)
-        fix_back_step_neck(sheets)
+        import gen_body
+        gen_body.apply(sheets)   # body／face 兩層換成素體（2026-11-23，階段 A；舊身體＋complete_head／fix_back_step_neck 的補丁拿掉了）
     return sheets
 
 
@@ -1138,58 +1138,6 @@ def giant_sheets(sheets):
                         if v is not None:
                             out[n].px[row * GIANT_CELL + y][col * GIANT_CELL + GIANT_OX + x] = v
     return out
-
-
-def fix_back_step_neck(sheets):
-    """女式西裝背面走路格（步 1／步 2）最上面缺一塊（2026-11-23 使用者回報；用油頭看很明顯）：這兩格的外套比待機格高 2 排（頭只高 1 排），
-    外套最上面那一排（參考圖被頭髮擋住的部分）是沒有外框的灰色，脖子只剩兩側 1 格。這裡把那一排拿掉、補上脖子的皮膚（抄待機格脖子下面那一排），
-    讓外套第一排變成跟待機格一樣的外框。就地修改 sheets（build_sheets 裡 complete_head 之後呼叫）。"""
-    top, body = sheets['top'], sheets['body']
-    row = WALK_ROW['up']
-    def first_row(col):
-        for y in range(CELL):
-            if any(top.px[row * CELL + y][col * CELL + x] is not None for x in range(CELL)):
-                return y
-    yi = first_row(0)
-    for col in (1, 2, 5, 6):
-        ys = first_row(col)
-        if ys is None or yi is None or ys >= yi:
-            continue
-        for x in range(CELL):
-            if body.px[row * CELL + yi - 1][0 * CELL + x] is not None:
-                body.px[row * CELL + ys][col * CELL + x] = body.px[row * CELL + yi - 1][x]    # 待機格脖子最下面那排的皮膚
-            top.px[row * CELL + ys][col * CELL + x] = None                                      # 灰色的第一排拿掉
-
-
-def complete_head(sheets):
-    """完整素體（頭）：body 層原本只有被瀏海露出來的下半臉、手、腿，換成別的髮型（短髮、馬尾…）會露出空洞。這裡每一格在 body 層補一顆完整的頭（橢圓頭骨，
-    大小跟著該格頭髮的輪廓：寬＝頭髮最寬處−6、高 25 排、頭頂在髮頂下 2 排）＋脖子，外框用皮膚陰影色（跟其他皮膚外框一樣畫在輪廓內側）。只補 body 層還是空的像素。
-    就地修改 sheets（build_sheets 最後呼叫）。"""
-    body, hair = sheets['body'], sheets['hair']
-    for row in WALK_ROW.values():
-        for col in range(9):
-            x0, y0 = col * CELL, row * CELL
-            hrows = [y for y in range(CELL) if any(hair.px[y0 + y][x0 + x] is not None for x in range(CELL))]
-            if not hrows:
-                continue
-            ht = hrows[0]
-            band = [x for y in range(ht + 5, ht + 13) for x in range(CELL) if hair.px[y0 + y][x0 + x] is not None]
-            cx, rx = (min(band) + max(band) + 1) / 2, (max(band) - min(band) + 1) / 2 - 3
-            ry, cy = 12.0, ht + 14.0
-            cells = set()
-            for y in range(int(cy - ry) - 1, int(cy + ry) + 2):
-                for x in range(int(cx - rx) - 1, int(cx + rx) + 2):
-                    if ((x + .5 - cx) / rx) ** 2 + ((y + .5 - cy) / ry) ** 2 <= 1:
-                        cells.add((x, y))
-            for y in range(ht + 23, ht + 28):          # 脖子：6 欄，在頭下面
-                for x in range(int(cx - 3), int(cx + 3)):
-                    cells.add((x, y))
-            old = {(x, y) for y in range(CELL) for x in range(CELL) if body.px[y0 + y][x0 + x] is not None and y < ht + 28}
-            allc = cells | old
-            for (x, y) in cells:
-                if body.px[y0 + y][x0 + x] is None:
-                    edge = any((xx, yy) not in allc for xx, yy in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)))
-                    body.px[y0 + y][x0 + x] = C['sk_d'] if edge else C['sk']
 
 
 # 中長髮（2026-11-23，使用者給的參考圖：正面／側面／背面各一張；參考圖是縮放過的雜色圖，這裡只取輪廓與明暗，重新對應成髮色代號——
