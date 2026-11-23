@@ -445,30 +445,3 @@ def male_sheets():
                         for col in cols:
                             out[nm].px[row * gs.CELL + y0 + yy][col * gs.CELL + px] = PAL[CH.index(ch)]
     return out
-
-
-def body_masks(body):
-    """男式衣服要遮掉我們身體層的手／腿：回傳 {'hands': Img, 'legs': Img}（sheet 大小，要擦掉的格子有不透明像素）。
-    做法：每格 body 層 y>=38 的像素分成連通區，碰到第 56 排以下的是腿、其餘是手。"""
-    from collections import deque
-    hands = Img(gs.SHEET_W, gs.SHEET_H); legs = Img(gs.SHEET_W, gs.SHEET_H)
-    for row in gs.WALK_ROW.values():
-        for col in range(9):
-            x0, y0 = col * gs.CELL, row * gs.CELL
-            cells = {(x, y) for y in range(38, gs.CELL) for x in range(gs.CELL) if body.px[y0 + y][x0 + x] is not None}
-            seen = set()
-            for p in cells:
-                if p in seen:
-                    continue
-                comp = []; dq = deque([p]); seen.add(p)
-                while dq:
-                    x, y = dq.popleft(); comp.append((x, y))
-                    for dx in (-1, 0, 1):
-                        for dy in (-1, 0, 1):
-                            n = (x + dx, y + dy)
-                            if n in cells and n not in seen:
-                                seen.add(n); dq.append(n)
-                target = legs if max(y for _, y in comp) >= 56 else hands
-                for (x, y) in comp:
-                    target.px[y0 + y][x0 + x] = (0, 0, 0)
-    return {'hands': hands, 'legs': legs}
