@@ -1275,14 +1275,14 @@ LONG_HAIR_BACK = [
     '......nn....nn....nddnn...',
     '..................nnn.....',
 ]
-LONG_HAIR_KEY = {'n': 'hn', 'd': 'hd', 'm': 'hm', 'l': 'hl', 'h': 'hh', 'k': 'sk_d', 'f': 'fk'}   # k／f＝頭髮投在額頭上的陰影（皮膚的陰影色；只有油頭用），皮膚換色時一起換
+LONG_HAIR_KEY = {'n': 'hn', 'd': 'hd', 'm': 'hm', 'l': 'hl', 'h': 'hh', 'k': 'sk_d', 'f': 'fk', 'c': 'fc'}   # k／f＝頭髮投在額頭上的陰影（皮膚的陰影色；只有油頭用）、c＝臉前緣的輪廓（深棕，跟下半臉的輪廓同色），皮膚換色時一起換
 
 
-def hair_style_sheet(sheets, maps, center=False, side_dx=0, top_row=0, side_dy=0):
+def hair_style_sheet(sheets, maps, center=False, side_dx=0, top_row=0, side_dy=0, side_shadow_dy=0):
     """回傳 Img(832×1856)：某個髮型的 hair 層（只填走路列；右＝左的鏡像）。sheets＝新人類的各層 sheet（用原本髮型的位置對齊）。
     maps＝{'down': 正面, 'up': 背面, 'left': 側面（臉朝左）}，各是字串列（見 LONG_HAIR_*）；
     center＝True：正面／背面依原本髮型的左右中心置中（髮型比頭寬時用），否則圖的左緣對齊原本髮型的左緣；side_dx＝側面再往右偏幾欄；
-    top_row＝圖的第幾排（從 0 算）對齊原本髮型的頭頂（圖頂端有一小撮翹毛時用）；side_dy＝側面再往下偏幾排（側面頭頂與前髮的相對位置跟正面不同時用）。"""
+    top_row＝圖的第幾排（從 0 算）對齊原本髮型的頭頂（圖頂端有一小撮翹毛時用）；side_dy＝側面再往下偏幾排（側面頭頂與前髮的相對位置跟正面不同時用）。side_shadow_dy＝側面的額頭陰影（k／f／c）相對於頭髮再偏幾排（陰影要留在原位、頭髮往下時用，負數＝往上）；陰影先畫、頭髮蓋在上面。"""
     hair = sheets['hair']
     out = Img(SHEET_W, SHEET_H)
     for d, row in WALK_ROW.items():
@@ -1305,13 +1305,19 @@ def hair_style_sheet(sheets, maps, center=False, side_dx=0, top_row=0, side_dy=0
                 left = (min(xs) + max(xs) + 1) // 2 - len(mp[0]) // 2
             elif src_d == 'left':
                 left += side_dx
-            for y, line in enumerate(mp):
-                for x, ch in enumerate(line):
-                    if ch != '.':
+            sdy = side_shadow_dy if src_d == 'left' else 0
+            for shadow_pass in (True, False):          # 先畫陰影（k／f／c），再畫頭髮（蓋在陰影上面）
+                for y, line in enumerate(mp):
+                    for x, ch in enumerate(line):
+                        if ch == '.' or (ch in 'kfc') != shadow_pass:
+                            continue
                         px = left + x
                         if d == 'right':
                             px = 63 - px           # 鏡像：左面向的格 x → 63-x（OX=18、框寬 28）
-                        out.px[y0 + top + y][x0 + px] = C[LONG_HAIR_KEY[ch]]
+                        yy = y0 + top + y + (sdy if shadow_pass else 0)
+                        if shadow_pass and sheets['face'].px[yy][x0 + px] is not None:
+                            continue   # 額頭陰影不蓋住眼睛：這一格臉層有眼睛就不畫
+                        out.px[yy][x0 + px] = C[LONG_HAIR_KEY[ch]]
     return out
 
 
@@ -1756,10 +1762,11 @@ OIL_HAIR_FRONT = [
     '..nn................nn..',
     '...n................n...',
 ]
-OIL_HAIR_SIDE = [
+OIL_HAIR_SIDE = [   # 側面第 3 排複製了一排（使用者要頭髮再往下一格；整張下移會露出頭頂的頭皮，所以改成把頭髮拉高 1 排）
     '........nnnnnnnnnn........',
     '....nnnnddmmmmmmmmnnn.....',
     '...nddmmmmmmddddnndddn....',
+    '..nmmmmmmmmmmmmmmmmmmmnn..',
     '..nmmmmmmmmmmmmmmmmmmmnn..',
     '.nddmmmmmmmmmmmmmmmddddn..',
     '.nmmmmmmmllmddmmmddmmmnnn.',
@@ -1770,12 +1777,12 @@ OIL_HAIR_SIDE = [
     'nmdmmmhhhmdhhmmhhmmmmmdddn',
     '.ndmmmmmmmnmmmmmmmmmmmmmdn',
     '.ndnnmmmmmnmmmmmmdmmmmmddn',
-    '.nnmkkkkkfffkmmmmdmmmmmmdn',
-    '.n.kkkkkkkkkkkmmmdmmmmddmn',
-    '...kkkkkkkkkkkmmmdmmdmdddn',
-    '...kkkkkkkkkkkmmmndmdmdddn',
-    '....kkkkkkkkkkkmmndmddddn.',
-    '....kkkn....kkkfmdddddddn.',
+    '.nnmckkkkfffkmmmmdmmmmmmdn',
+    '.n.ckkkkkkkkkkmmmdmmmmddmn',
+    '...ckkkkkkkkkkmmmdmmdmdddn',
+    '...ckkkkkkkkkkmmmndmdmdddn',
+    '....ckkkkkkkkkkmmndmddddn.',
+    '....ckk.....kkkfmdddddddn.',
     '..............kfnndddddn..',
     '...............f.ndddddn..',
     '...............f.ndddnnn..',
@@ -1813,7 +1820,7 @@ OIL_HAIR_BACK = [
 
 
 def oil_hair_sheet(sheets):
-    return hair_style_sheet(sheets, {'down': OIL_HAIR_FRONT, 'up': OIL_HAIR_BACK, 'left': OIL_HAIR_SIDE}, center=True, side_dx=0, top_row=0)
+    return hair_style_sheet(sheets, {'down': OIL_HAIR_FRONT, 'up': OIL_HAIR_BACK, 'left': OIL_HAIR_SIDE}, center=True, side_dx=0, top_row=0, side_dy=2, side_shadow_dy=-1)   # 側面：頭頂往下 2 排；地圖第 3 排多複製一排所以下面的髮際線再往下 1 排，額頭陰影（k／f／c）用 side_shadow_dy 抵回去留在原位（2026-11-23 使用者：油頭側面太高；陰影維持原位、頭髮再往下一格）
 
 
 def _hex(c):
