@@ -769,3 +769,10 @@ body {
 .cl-name { color: var(--text); font-size: 15px; }
 .cl-note { color: #ffb070; font-size: 13px; }
 .cl-btns { display: flex; gap: 10px; margin-top: 4px; }
+
+/* 表情符號：右上按鈕與選單（2026-11-23） */
+#emoteBox { position: relative; }
+#emoteMenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; padding: 6px; display: grid; grid-template-columns: repeat(5, 32px); gap: 4px; background: var(--panel-2); border: 1px solid var(--gold-dim); box-shadow: 0 6px 18px rgba(0, 0, 0, .5); }
+#emoteMenu.hidden { display: none; }
+.emote-item { width: 32px; height: 32px; padding: 0; border: 1px solid transparent; background-color: transparent; background-repeat: no-repeat; image-rendering: pixelated; cursor: pointer; }
+.emote-item:hover { border-color: var(--gold-dim); background-color: rgba(255, 255, 255, .08); }

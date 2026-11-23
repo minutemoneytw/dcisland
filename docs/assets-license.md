@@ -64,3 +64,5 @@
 4. 使用者自製（img2pixel）素材導入流程見 `client/assets/external/img2pixel/README.md`（`tools/import_external.py` → `gen_assets.py` 的 `EXTERNAL_BUNDLES`／`MOB_MANIFEST` 登記 → 在本文件補記錄）。
 
 - 2026-11-14 忍術結印的梵文種子字（`client/assets/skills/seal_glyphs.png`）：ॐ／ह्रीं／हूँ 三個字，把系統字型在 16px 的外觀手動描成像素點陣（`gen_assets.py` 的 `SEAL_GLYPHS`），沒有嵌入或散布任何字型檔；梵文字本身是公有領域的文字。
+
+- 2026-11-23 表情符號（`client/assets/emotes/emotes.png`＋`emotes.json`）：DibbelGames「16x16 Emotes Pack」（https://dibbelgames.itch.io/16x16-emotes-pack），25 個表情；itch 頁面說明寫 CC0（不用署名），但側欄的授權欄位標 CC BY 4.0，兩者矛盾（作者留言說不知道能設定），保險起見在此註記作者 DibbelGames，`emotes.json` 的 `_credit` 也有。原圖是 16×16 放大 8 倍，由 `tools/import_emotes.py` 縮回 16×16 拼成 sheet。
