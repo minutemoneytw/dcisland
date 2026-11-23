@@ -8708,7 +8708,7 @@ function maryPaint(cvIn) {   // 畫整台小瑪莉（靜態重建與開獎動畫
   const fresh = S.mary?.res === ma.seq;
   let note = '', noteCol = '#ffe08a';
   if (dblHold) { note = '比倍轉燈中…'; noteCol = '#ffd24a'; }   // 燈效沒跑完不開牌、不亮輸贏
-  else if (ma.dcard >= 0) { note = `比倍開牌 ${ma.dcard}${ma.dcard >= 8 ? '（大）' : ma.dcard <= 6 ? '（小）' : '（莊家贏）'}`; noteCol = '#ffb0b0'; }
+  else if (ma.dcard >= 0) { note = `${ma.pot > 0 ? '猜對！' : '猜錯！'}開 ${ma.dcard}${ma.dcard >= 8 ? '（大）' : ma.dcard <= 6 ? '（小）' : '（莊家贏）'}${ma.pot > 0 ? '翻倍' : '歸零'}`; noteCol = ma.pot > 0 ? '#a8f0b8' : '#ffb0b0'; }   // 講清楚輸贏：歸零後領出／猜大小變暗是正常（沒獎金），不是卡死（2026-11-23 使用者回饋）
   else if (S.mary?.showPlay) { note = maryShowNote(S.mary.showPlay, nm); noteCol = '#a8f0b8'; }   // 勇者／拉霸演出的字幕
   else if (chainRun) { note = `送燈中…（剩 ${ma.lights} 個燈）`; noteCol = '#a8f0b8'; }   // 燈還沒跑完：先不亮每格的輸贏（2026-11-18 使用者回饋）
   else if (!spin && ma.last >= 0 && fresh) {
@@ -8824,6 +8824,9 @@ function maryDblReveal() {   // 比倍開牌（燈效結束）：金額跟上＋
   const ma2 = S.tableView?.ma;
   if (ma2) { M.potShown = ma2.pot || 0; M.jpShown = ma2.jp || 0; M.jpSeen = ma2.jp || 0; }
   sfxTones(M.dbl.card >= 8 || M.dbl.card <= 6 ? [[700, 0, .07], [980, .07, .12]] : [[240, 0, .26]]);   // 開大／開小＝升音；7＝莊家贏的低音
+  // 輸贏講清楚（2026-11-23 使用者回饋「猜大小之後領出也不能按」＝猜錯歸零後按鈕變暗被當成卡死）：
+  // 歸零後領出／猜大小本來就會暗（沒獎金可領／可賭），押注保留、按「開始」就能再玩——用 toast 明確講出來
+  if (ma2) toast(ma2.pot > 0 ? `猜對！開 ${M.dbl.card}，獎池翻倍 ${ma2.pot.toLocaleString('en-US')}——可領出、兌換或再比` : `猜錯！開 ${M.dbl.card}，獎池歸零——押注保留，按「開始」再玩一局`, 3200);
   buildTable();   // 狀態行在面板重建時才會更新：開牌瞬間重建一次，「比倍轉燈中…」換成開牌後的提示（不然燈停了還寫著轉燈中）
 }
 function maryFrame() {
@@ -10118,7 +10121,7 @@ function scrMary(g, v, MX, MY, MW, MH) {
   let note = '', col = '#ffe08a';
   if (spin) note = '開獎中…';
   else if (M.showPlay) { note = maryShowNote(M.showPlay, nm); col = '#a8f0b8'; }
-  else if (ma.dcard >= 0) { note = `比倍開牌 ${ma.dcard}${ma.dcard >= 8 ? '（大）' : ma.dcard <= 6 ? '（小）' : '（莊家贏）'}`; col = '#ffb0b0'; }
+  else if (ma.dcard >= 0) { note = `${ma.pot > 0 ? '猜對！' : '猜錯！'}開 ${ma.dcard}${ma.dcard >= 8 ? '（大）' : ma.dcard <= 6 ? '（小）' : '（莊家贏）'}${ma.pot > 0 ? '翻倍' : '歸零'}`; col = ma.pot > 0 ? '#a8f0b8' : '#ffb0b0'; }
   else if (ma.lights > 0) { note = `送燈中：剩 ${ma.lights} 個`; col = '#a8f0b8'; }
   else if (ma.last >= 0 && M.res === ma.seq) {
     const sym = ma.ring[ma.last], b = bets[cols.indexOf(sym)] || 0, wn = ma.win || b * (ma.pay[sym] || 1);
