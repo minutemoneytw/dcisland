@@ -8578,7 +8578,8 @@ function maryPaint() {   // 畫整台小瑪莉（靜態重建與開獎動畫的�
   g.textBaseline = 'alphabetic';
   const M = S.mary, spin = !!M?.spin, cur = M ? Math.floor(M.pos) % 28 : -1;
   const seat = v.role === 'seat', cols = ma.cols || [], nm = ma.nm || {};
-  const bets = S.maryBets || ma.bets || [];
+  const seat0 = v.role === 'seat', who = v.seats[0]?.name || '';   // 觀戰者看玩家的押注（ma.bets）與名字；只有玩家自己用本機的 S.maryBets（觀戰者自己以前押過的不能混進來）
+  const bets = seat0 ? (S.maryBets || ma.bets || []) : (ma.bets || []);
   const owner = ma.owner || 'gold_dragon', ownerNm = MARY_OWNERS_NM[owner] || '島主';   // 開局時伺服器隨機抽的莊家
   // 猜大小的轉燈（2026-11-22 使用者定）：左右兩個 ONCE MORE 輪流閃紅燈 2 秒（紅＝跳到的位置），開大左邊紅、開小右邊紅；燈效結束前不扣錢也不發籌碼
   const dbl = M?.dbl, dblT = dbl ? (performance.now() - dbl.t0) / 1000 : 0;
@@ -8609,12 +8610,15 @@ function maryPaint() {   // 畫整台小瑪莉（靜態重建與開獎動畫的�
   const showHold = !!(S.mary?.showPlay || S.mary?.showPending);   // 拉霸有演出排隊或播放中：WIN 凍結（跑馬燈轉動的 4.8 秒也涵蓋——不然獎金會先亮出來、演出開始又消失，2026-11-19 使用者回饋）
   const spinHold = !!spin;   // 一般開獎：跑馬燈停格才亮 WIN（經典機台行為）
   const win = Math.floor(dblHold ? (M.potShown || 0) : chainRun ? (S.mary.chainPot || 0) : showHold || spinHold ? (S.mary.potShown || 0) : (ma.pot || 0)), cred = Math.floor(seat ? (ma.chips || 0) : (S.chips || 0));
-  for (const [bx, label, val] of [[30, 'WIN', win], [172, 'CREDIT', cred]]) {
+  for (const [bx, label, val] of [[30, 'WIN', win], [172, seat ? 'CREDIT' : 'PLAYER', cred]]) {
     g.fillStyle = '#140a08'; g.fillRect(bx, 42, 118, 30);
     g.strokeStyle = '#3a2018'; g.lineWidth = 1; g.strokeRect(bx + .5, 42.5, 117, 29);
     g.fillStyle = '#f0a060'; g.font = 'bold 9px "Microsoft JhengHei"'; g.textAlign = 'left';
     g.fillText(label, bx + 7, 53);
-    marySeg(g, bx + 112, 50, 16, String(Math.min(val, 99999999)), '#ff3020', 'right');
+    if (label === 'PLAYER') {   // 觀戰：玩家的籌碼餘額只有本人看得到（伺服器不送），這格改顯示玩家名字
+      g.fillStyle = '#ffd8a0'; g.font = 'bold 13px "Microsoft JhengHei"'; g.textAlign = 'right';
+      g.fillText((who || '（無人）').slice(0, 9), bx + 112, 66);
+    } else marySeg(g, bx + 112, 50, 16, String(Math.min(val, 99999999)), '#ff3020', 'right');
   }
   // 外圈跑馬燈底盤
   g.fillStyle = '#e8dcc0'; g.fillRect(28, 78, 264, 208);
@@ -8680,7 +8684,7 @@ function maryPaint() {   // 畫整台小瑪莉（靜態重建與開獎動畫的�
     }
   } else if (!spin && seat && ma.lights > 0) note = `送燈中：免費多開 ${ma.lights} 次`;
   else if (!spin && seat && ma.pot <= 0) note = S.maryBets ? '按「開始」轉跑馬燈' : '點下面的圖案押注';
-  else if (!spin && !seat) note = '觀戰中';
+  else if (!spin && !seat) note = who ? `${who} 遊玩中` : '觀戰中';
   if (note) { g.font = 'bold 11px "Microsoft JhengHei"'; g.textAlign = 'center'; g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.72)'; g.strokeText(note, ix + iw / 2, iy + ih - 8); g.fillStyle = noteCol; g.fillText(note, ix + iw / 2, iy + ih - 8); }
   // 外圈 28 格（怪物圖案；大獎格外框是靜態金框、ONCE MORE 是綠底白字格；開到 ONCE MORE 的瞬間全部的燈一起閃）
   const flashAll = !!S.mary?.chainFlash, blink = Math.floor(S.t * 6) % 2 === 1;
@@ -8750,7 +8754,7 @@ function maryPaint() {   // 畫整台小瑪莉（靜態重建與開獎動畫的�
     press(b, label, on, b.id === 'spin');
   });
   // 資訊列：總注／提示
-  const total = (S.maryBets || []).reduce((a, b) => a + b, 0);
+  const total = (seat ? (S.maryBets || []) : (ma.bets || [])).reduce((a, b) => a + b, 0);   // 觀戰者看到的是玩家的總注
   g.font = 'bold 11px "Microsoft JhengHei"'; g.textAlign = 'left'; g.fillStyle = '#3a1a08';
   g.fillText(`本注 ${total.toLocaleString('en-US')}`, 22, 436);
   g.textAlign = 'right'; g.fillStyle = '#5a2a10';
@@ -8963,7 +8967,7 @@ function buildMary(box, v, mk, gd) {
   if (!playing) maryStop();
   let status;
   if (playing && v.role === 'seat') status = ma?.lights > 0 ? `送燈中：押注維持，機台自動免費多開 ${ma.lights} 次` : ma?.pot > 0 ? (S.mary?.dbl && !S.mary.dbl.done ? '比倍轉燈中…（燈停才開牌）' : ma.dcard >= 0 ? '比倍中：猜大（8～13）或猜小（1～6），7 是莊家贏' : '有獎金在獎池：先「領出」入袋，或玩「猜大小」比倍') : '點下面的圖案押注，按「開始」轉跑馬燈';
-  else if (playing) status = '觀戰中';
+  else if (playing) status = `觀戰中：${v.seats[0]?.name || '玩家'} 正在玩（看得到他的押注與開獎，籌碼餘額只有本人看得到）`;
   else status = v.seats.length < v.min ? '等待玩家入座（單人機台）' : '按「準備」就開始（用籌碼下注）';
   box.appendChild(mk('div', 'table-status' + (playing && v.role === 'seat' ? ' mine' : ''), status));
   // 整台機台都畫在同一張大畫布上（上方 WIN／CREDIT 七段顯示、外圈跑馬燈、中間島主、下方賠率列與控制盤）；點擊用同一套座標判定
