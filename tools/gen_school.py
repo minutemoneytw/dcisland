@@ -1024,6 +1024,7 @@ def build_sheets(ears=False):   # ears：False／True（＝'elf'）／'cat'
                                 dst.px[row * CELL + OY - EAR_TOP + y][col * CELL + OX - EAR_EX + x] = c
     if not ears:
         complete_head(sheets)
+        fix_back_step_neck(sheets)
     return sheets
 
 
@@ -1137,6 +1138,27 @@ def giant_sheets(sheets):
                         if v is not None:
                             out[n].px[row * GIANT_CELL + y][col * GIANT_CELL + GIANT_OX + x] = v
     return out
+
+
+def fix_back_step_neck(sheets):
+    """女式西裝背面走路格（步 1／步 2）最上面缺一塊（2026-11-23 使用者回報；用油頭看很明顯）：這兩格的外套比待機格高 2 排（頭只高 1 排），
+    外套最上面那一排（參考圖被頭髮擋住的部分）是沒有外框的灰色，脖子只剩兩側 1 格。這裡把那一排拿掉、補上脖子的皮膚（抄待機格脖子下面那一排），
+    讓外套第一排變成跟待機格一樣的外框。就地修改 sheets（build_sheets 裡 complete_head 之後呼叫）。"""
+    top, body = sheets['top'], sheets['body']
+    row = WALK_ROW['up']
+    def first_row(col):
+        for y in range(CELL):
+            if any(top.px[row * CELL + y][col * CELL + x] is not None for x in range(CELL)):
+                return y
+    yi = first_row(0)
+    for col in (1, 2, 5, 6):
+        ys = first_row(col)
+        if ys is None or yi is None or ys >= yi:
+            continue
+        for x in range(CELL):
+            if body.px[row * CELL + yi - 1][0 * CELL + x] is not None:
+                body.px[row * CELL + ys][col * CELL + x] = body.px[row * CELL + yi - 1][x]    # 待機格脖子最下面那排的皮膚
+            top.px[row * CELL + ys][col * CELL + x] = None                                      # 灰色的第一排拿掉
 
 
 def complete_head(sheets):
