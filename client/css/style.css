@@ -282,6 +282,7 @@ body {
 /* 設定（齒輪）選單：右上齒輪點開的下拉選單，操作說明等項目收在這裡 */
 #settingsBox { position: relative; display: flex; align-items: center; }
 #settingsBox .ff-btn, #emoteBox .ff-btn { width: 100%; }
+#btnSettings { display: flex; align-items: center; justify-content: center; }
 #btnSettings svg { display: block; }
 #settingsMenu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; min-width: 136px; padding: 4px; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--gold-dim); box-shadow: 0 6px 18px rgba(0, 0, 0, .5); }
 .settings-item { text-align: left; padding: 9px 12px; border: none; background: none; color: var(--text); font: 13px "Microsoft JhengHei", "PingFang TC", sans-serif; letter-spacing: 1px; cursor: pointer; white-space: nowrap; }
