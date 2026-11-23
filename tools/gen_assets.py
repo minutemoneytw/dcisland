@@ -622,8 +622,12 @@ SCHOOL_GIANT_SHEETS = gen_school.giant_sheets(SCHOOL_SHEETS)   # 新巨人：新
 SCHOOL_LONG_HAIR = gen_school.long_hair_sheet(SCHOOL_SHEETS)
 SCHOOL_LONG_HAIR_DWARF = gen_school.shrink_sheets({'hair': SCHOOL_LONG_HAIR})['hair']
 SCHOOL_LONG_HAIR_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, 'hair': SCHOOL_LONG_HAIR})['hair']
+SCHOOL_PUFF_HAIR = gen_school.puff_hair_sheet(SCHOOL_SHEETS)   # 蓬蓬短髮（綠色參考圖）
+SCHOOL_PUFF_HAIR_DWARF = gen_school.shrink_sheets({'hair': SCHOOL_PUFF_HAIR})['hair']
+SCHOOL_PUFF_HAIR_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, 'hair': SCHOOL_PUFF_HAIR})['hair']
 def school_hair_styles(prefix):
-    return [dict(id="h2_bob", name="鮑伯", sheets={}), dict(id="h2_long", name="中長髮", sheets={"hair": f"{prefix}_hair_long.png"})]
+    return [dict(id="h2_bob", name="鮑伯", sheets={}), dict(id="h2_long", name="中長髮", sheets={"hair": f"{prefix}_hair_long.png"}),
+            dict(id="h2_puff", name="蓬蓬短髮", sheets={"hair": f"{prefix}_hair_puff.png"})]
 SCHOOL_EAR_SHEETS = gen_school.build_sheets(ears=True)   # 新妖精：同一個人，多一層 hat（正面、側面的尖耳，蓋在頭髮上面）
 
 LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ears）；scale＝人類模組整體縮放倍率
@@ -4493,6 +4497,9 @@ def main():
     save_chibi_layer(SCHOOL_LONG_HAIR, "human2_hair_long.png", sub)   # 中長髮（人類／妖精／貓族共用）
     save_chibi_layer(SCHOOL_LONG_HAIR_DWARF, "dwarf2_hair_long.png", sub)
     save_chibi_layer(SCHOOL_LONG_HAIR_GIANT, "giant2_hair_long.png", sub)
+    save_chibi_layer(SCHOOL_PUFF_HAIR, "human2_hair_puff.png", sub)   # 蓬蓬短髮
+    save_chibi_layer(SCHOOL_PUFF_HAIR_DWARF, "dwarf2_hair_puff.png", sub)
+    save_chibi_layer(SCHOOL_PUFF_HAIR_GIANT, "giant2_hair_puff.png", sub)
     for lname in SCHOOL_LAYERS:                       # 新矮人
         save_chibi_layer(SCHOOL_DWARF_SHEETS[lname], f"dwarf2_{lname}.png", sub)
     for lname in SCHOOL_LAYERS:                       # 新巨人（96×96 格）

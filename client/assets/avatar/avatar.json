@@ -3766,6 +3766,13 @@
        "sheets": {
         "hair": "human2_hair_long.png"
        }
+      },
+      {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "human2_hair_puff.png"
+       }
       }
      ]
     },
@@ -3905,6 +3912,13 @@
        "name": "中長髮",
        "sheets": {
         "hair": "human2_hair_long.png"
+       }
+      },
+      {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "human2_hair_puff.png"
        }
       }
      ]
@@ -4047,6 +4061,13 @@
        "sheets": {
         "hair": "human2_hair_long.png"
        }
+      },
+      {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "human2_hair_puff.png"
+       }
       }
      ]
     },
@@ -4187,6 +4208,13 @@
        "name": "中長髮",
        "sheets": {
         "hair": "dwarf2_hair_long.png"
+       }
+      },
+      {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "dwarf2_hair_puff.png"
        }
       }
      ]
@@ -4329,6 +4357,13 @@
        "name": "中長髮",
        "sheets": {
         "hair": "giant2_hair_long.png"
+       }
+      },
+      {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "giant2_hair_puff.png"
        }
       }
      ]
