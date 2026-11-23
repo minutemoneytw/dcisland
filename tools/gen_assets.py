@@ -601,17 +601,6 @@ LPC_EARS = [                     # 種族耳朵圖層：(遊戲檔名, external 
     ("ears_elven", "ear_elven.png"), ("ears_cat_bg", "ear_cat_bg.png"), ("ears_cat_fg", "ear_cat_fg.png"),
 ]
 # 種族：人類＝無耳朵；精靈＝精靈耳（跟膚色）；貓族＝貓耳（bg+fg）；拉拉肥/巨人＝找人類模組縮放（LPC 沒有專用體型）
-# 新風格人物的款式（第一個＝預設，圖層用 chibi_<層>.png；其他款式只換指定的圖層，檔名 chibi_hair_<款>_<層>.png／chibi_outfit_<款>_<層>.png）。id 前面加 chibi_ 進 look.hair／look.top（同步不用改伺服器）
-CHIBI_HAIR_STYLES = [("ponytail", "高馬尾", ()), ("bob", "鮑伯短髮", ("hairbg", "hair"))]
-CHIBI_FACE_STYLES = [("blush", "腮紅", ()), ("plain", "無紋面", ("face",)), ("droop", "垂眼", ("face",)), ("plain_droop", "垂眼無紋面", ("face",)), ("half", "折衷垂眼", ("face",)), ("plain_half", "折衷垂眼無紋面", ("face",))]
-CHIBI_OUTFIT_STYLES = [("apron", "工匠圍裙", ()), ("casual", "便服", ("body", "bottom", "top"))]
-
-def chibi_styles():
-    return dict(
-        hair=[dict(id=f"chibi_{i}", name=n, sheets={l: f"chibi_hair_{i}_{l}.png" for l in ls}) for i, n, ls in CHIBI_HAIR_STYLES],
-        top=[dict(id=f"chibi_{i}", name=n, sheets={l: f"chibi_outfit_{i}_{l}.png" for l in ls}) for i, n, ls in CHIBI_OUTFIT_STYLES],
-        face=[dict(id=f"chibi_{i}", name=n, sheets={l: f"chibi_face_{i}_{l}.png" for l in ls}) for i, n, ls in CHIBI_FACE_STYLES])
-
 import gen_school   # 「新人類」分層 sheet（2026-11-22）：tools/gen_school.py；sheet 在這裡先畫好，換色規則要看實際用到的顏色
 SCHOOL_SHEETS = gen_school.build_sheets()
 SCHOOL_LAYERS = [n for n, im in SCHOOL_SHEETS.items() if any(c is not None for row in im.px for c in row)]   # hairbg／hat 目前是空的，不輸出
@@ -4467,11 +4456,6 @@ def main():
         save(lpc_face_sheet(rel), f"char_face_{fid}.png", sub)
     for eid, rel in LPC_EARS:                        # 種族耳朵（精靈／貓）
         save(lpc_layer_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{eid}.png", sub)
-    # 新風格人物（2026-11-21，使用者定案整套換成自製風格；階段 1：分層 sheet，只有走路列）：tools/gen_chibi.py 畫，
-    # 8 個圖層 chibi_<body|bottom|shoes|top|hairbg|face|hair|hat>.png，由「新風格」種族（LPC_RACES 的 chibi，own）整套套用
-    import gen_chibi
-    for lname, lim in gen_chibi.build_sheets().items():
-        save_chibi_layer(lim, f"chibi_{lname}.png", sub)
     # 新人類（tools/gen_school.py）：圖層 human2_<圖層>.png（hairbg／hat 目前是空的，不輸出）
     for lname in SCHOOL_LAYERS:
         save_chibi_layer(SCHOOL_SHEETS[lname], f"human2_{lname}.png", sub)
@@ -4488,17 +4472,6 @@ def main():
     save_chibi_layer(SCHOOL_EAR_SHEETS["hat"], "elf2_hat.png", sub)
     save_chibi_layer(SCHOOL_CAT_SHEETS["hat"], "cat2_hat.png", sub)   # 新貓族的貓耳
     save_chibi_layer(SCHOOL_CAT_SHEETS["hairbg"], "cat2_hairbg.png", sub)   # 新貓族的尾巴（側面、背面；正面藏在身體後面）   # 新妖精的尖耳（正面、側面；背面的髮型蓋住耳朵，沒有）
-    # 款式（髮型只換 hairbg／hair，服裝只換 body／bottom／top；預設款＝上面那組基本圖）
-    for hid in CHIBI_HAIR_STYLES[1:]:
-        for lname, lim in gen_chibi.build_sheets(hair=hid[0]).items():
-            if lname in ("hairbg", "hair"):
-                save_chibi_layer(lim, f"chibi_hair_{hid[0]}_{lname}.png", sub)
-    for fid in CHIBI_FACE_STYLES[1:]:
-        save_chibi_layer(gen_chibi.build_sheets(face=fid[0])["face"], f"chibi_face_{fid[0]}_face.png", sub)
-    for oid in CHIBI_OUTFIT_STYLES[1:]:
-        for lname, lim in gen_chibi.build_sheets(outfit=oid[0]).items():
-            if lname in ("body", "bottom", "top"):
-                save_chibi_layer(lim, f"chibi_outfit_{oid[0]}_{lname}.png", sub)
     # 基本服裝（LPC 原檔，走路列）
     for cid, rel in LPC_CLOTHES:
         save(lpc_cloth_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{cid}.png", sub)
