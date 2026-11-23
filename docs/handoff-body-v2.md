@@ -10,6 +10,7 @@
 **使用者已經回覆「身體也換成素體」，同意照下面計畫做。**
 
 ## 0.5 進度（2026-11-24 更新）
+- **階段 A～E 全部完成（2026-11-24）**：B 髮型對位（`head_metrics`／`hair_style_sheet`、鮑伯用使用者手改圖 `BOB_MAPS`）、C 女式西裝（`tools/gen_girl.py`）、D 矮人／巨人排數與掛點、貓耳尾巴、E 重產素材並在遊戲載入的 sheet 上看過五個種族。**妖精耳維持舊位置（被鮑伯蓋住，使用者說之後再重畫）**；`nameH` 不變。細節與已知小問題見 `docs/notes.md`「新人類系列換成素體」那一條。以下是階段 A 當時的紀錄。
 - **階段 A 已完成（原始碼已 commit；重產的 PNG／avatar.json 先不 commit，等整套對好）**：
   - 素體資料在 `tools/gen_body.py`（字母地圖，格內座標；`gen_school.build_sheets()` 最後呼叫 `gen_body.apply(sheets)` 取代舊的 body／face 層；舊身體的 `complete_head`／`fix_back_step_neck` 補丁已刪）。想改像素直接改字母；`python tools/gen_body.py <輸出資料夾>` 輸出預覽（素體／男式西裝／中性服裝 × 四方向）。
   - 素體參考圖已換成使用者重給的版本（`docs/ref/body_v2_reference.png`，比舊版多補回幾格腳尖、拿掉幾個雜點）。對位修正：左面向步 B 的 DX 5→2；正面／背面走路格 DY 9（`wip_body_v2.py` 的 `DX`／`DYS`；用「頭以下沒被衣服蓋到的皮膚像素」當分數量的）。
