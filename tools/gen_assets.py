@@ -601,6 +601,13 @@ SCHOOL_TWIN_HAIR_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, 'hair': SCHOO
 SCHOOL_OIL_HAIR = gen_school.oil_hair_sheet(SCHOOL_SHEETS)   # 油頭（灰髮參考圖）
 SCHOOL_OIL_HAIR_DWARF = gen_school.shrink_sheets({'hair': SCHOOL_OIL_HAIR})['hair']
 SCHOOL_OIL_HAIR_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, 'hair': SCHOOL_OIL_HAIR})['hair']
+# 新人類系列目前的整套衣服是「外觀」（glam，不是職業裝備；使用者 2026-11-23 定）：女式西裝外套／西裝短裙／尖皮鞋，沒有圖檔（畫在 human2_* 的 top／bottom／shoes 層），
+# dye＝該層的換色顏色（跟 own.dye 同一份，面板的換色鈕用）。客戶端預設每個職業都選這三件（見 main.js 的 DEFAULT_GLAM）
+SCHOOL_DYE = {r["slot"]: r["colors"] for r in gen_school.dye_rules(SCHOOL_SHEETS)}
+SCHOOL_SUIT = dict(
+    top=dict(id="suit_jacket", name="女式西裝外套", glam=True, dye=SCHOOL_DYE["top"]),
+    bottom=dict(id="suit_skirt", name="西裝短裙", glam=True, dye=SCHOOL_DYE["bottom"]),
+    shoe=dict(id="pointed_shoes", name="尖皮鞋", glam=True, dye=SCHOOL_DYE["shoe"]))
 def school_dye_elf():
     """妖精的換色規則：膚色那條連耳朵（hat 層，皮膚色＋棕色外圈）一起換。"""
     out = []
@@ -4375,7 +4382,7 @@ def main():
         # 基本服裝（LPC 原檔；gender＝之後選性別用）
         # 服裝：男女共用一個 id（sheet＝男、sheetF＝女，client 依角色性別挑；外觀清單一件只出現一次）；
         # dye＝可染色的顏色（lpc_dye_of 自動從圖上取，第一個是主色）；glam＝可當外觀（沒寫 unlock＝一開始就能用）
-        tops=[lpc_garment("tshirt", "T恤", "char_top_tshirt_m.png", "char_top_tshirt_f.png", glam=True),
+        tops=[SCHOOL_SUIT["top"], lpc_garment("tshirt", "T恤", "char_top_tshirt_m.png", "char_top_tshirt_f.png", glam=True),
               lpc_garment("plate", "騎士板甲", "char_top_plate_m.png", "char_top_plate_f.png"),
               lpc_garment("whm_robe", "白魔道袍", "char_top_whm_m.png", "char_top_whm_f.png"),
               lpc_garment("blm_robe", "黑魔道袍", "char_top_blm_m.png", "char_top_blm_f.png"),
@@ -4384,13 +4391,13 @@ def main():
               lpc_garment("sge_robe", "賢者長袍", "char_top_sge_m.png", "char_top_sge_f.png"),
               lpc_garment("war_mail", "戰士鎖子甲", "char_top_war_m.png", "char_top_war_f.png"),
               lpc_garment("nin_top", "忍者上衣", "char_top_nin_m.png", "char_top_nin_f.png")],
-        bottoms=[lpc_garment("pants", "長褲", "char_bottom_pants_m.png", "char_bottom_pants_f.png", glam=True),
+        bottoms=[SCHOOL_SUIT["bottom"], lpc_garment("pants", "長褲", "char_bottom_pants_m.png", "char_bottom_pants_f.png", glam=True),
                  lpc_garment("plate_legs", "騎士腿甲", "char_bottom_plate_m.png", "char_bottom_plate_f.png"),
                  lpc_garment("brd_pants", "燈籠褲", "char_bottom_brd_m.png", "char_bottom_brd_f.png"),
                  lpc_garment("drg_legs", "龍騎士腿甲", "char_bottom_drg_m.png", "char_bottom_drg_f.png"),
                  lpc_garment("war_pants", "戰士長褲", "char_bottom_war_m.png", "char_bottom_war_f.png"),
                  lpc_garment("nin_pants", "忍者長褲", "char_bottom_nin_m.png", "char_bottom_nin_f.png")],
-        shoes=[lpc_garment("shoes", "鞋子", "char_shoes_m.png", "char_shoes_f.png", glam=True),
+        shoes=[SCHOOL_SUIT["shoe"], lpc_garment("shoes", "鞋子", "char_shoes_m.png", "char_shoes_f.png", glam=True),
                lpc_garment("plate_boots", "騎士板甲靴", "char_shoes_plate_m.png", "char_shoes_plate_f.png"),
                lpc_garment("brd_boots", "翻邊皮靴", "char_shoes_brd_m.png", "char_shoes_brd_f.png"),
                lpc_garment("drg_boots", "龍騎士鐵靴", "char_shoes_drg_m.png", "char_shoes_drg_f.png"),

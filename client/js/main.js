@@ -13372,10 +13372,14 @@ function glamFits(slot, it, job = S.me.job) {
   if (!it?.glam || (it.jobs && !it.jobs.includes(job))) return false;
   return slot !== 'weapon' || it.type === jobWeaponDef(job)?.type;
 }
+// 預設外觀（2026-11-23 使用者定）：新人類系列現在整套衣服是「外觀」（女式西裝外套／西裝短裙／尖皮鞋），每個職業預設都選這三件；
+// 按外觀一覽的「不使用外觀」＝記在 glamOff，才會回到職業裝備（裝備目前沒有自己的圖，畫面還是那套衣服）
+const DEFAULT_GLAM = { top: 'suit_jacket', bottom: 'suit_skirt', shoe: 'pointed_shoes' };
 function wardrobe(job = S.me.job) {
   const w = (S.me.wardrobe && typeof S.me.wardrobe === 'object') ? S.me.wardrobe : (S.me.wardrobe = {});
   const e = w[job] && typeof w[job] === 'object' ? w[job] : (w[job] = {});
-  e.glam ||= {}; e.color ||= {};
+  e.glam ||= {}; e.color ||= {}; e.glamOff ||= {};
+  for (const [slot, gid] of Object.entries(DEFAULT_GLAM)) if (!(slot in e.glam) && !e.glamOff[slot] && lookItem(slotList(slot), gid)) e.glam[slot] = gid;
   if (e.glam.weapon === 'goldsword') e.glam.weapon = 'sword_gold';   // 舊的「金劍」外觀（2026-11-09 拿掉）→ 長劍的金黃發光版（解鎖條件同樣是打倒黃金肥龍）
   return e;
 }
@@ -13534,7 +13538,7 @@ function buildGlams() {
     const nm = document.createElement('div'); nm.className = 'title-name'; nm.textContent = name;
     const ds = document.createElement('div'); ds.className = 'title-desc'; ds.textContent = desc;
     o.append(nm, ds);
-    if (ok) o.onclick = () => { if (id) wr.glam[slot] = id; else delete wr.glam[slot]; saveAvatar(); buildAvatarPanel(); buildGlams(); };
+    if (ok) o.onclick = () => { if (id) { wr.glam[slot] = id; delete wr.glamOff[slot]; } else { delete wr.glam[slot]; wr.glamOff[slot] = true; } saveAvatar(); buildAvatarPanel(); buildGlams(); };
     box.appendChild(o);
   };
   row(null, '不使用外觀', `顯示職業裝備：${gearIt ? gearIt.name : '（無）'}`, true);

@@ -3333,6 +3333,19 @@
  ],
  "tops": [
   {
+   "id": "suit_jacket",
+   "name": "女式西裝外套",
+   "glam": true,
+   "dye": [
+    "#3c3434",
+    "#4e4646",
+    "#282424",
+    "#221c1c",
+    "#1f1b1b",
+    "#110e0e"
+   ]
+  },
+  {
    "id": "tshirt",
    "name": "T恤",
    "sheet": "char_top_tshirt_m.png",
@@ -3464,6 +3477,21 @@
  ],
  "bottoms": [
   {
+   "id": "suit_skirt",
+   "name": "西裝短裙",
+   "glam": true,
+   "dye": [
+    "#3c3434",
+    "#4e4646",
+    "#4a3c37",
+    "#282424",
+    "#3a190f",
+    "#221c1c",
+    "#1f1b1b",
+    "#110e0e"
+   ]
+  },
+  {
    "id": "pants",
    "name": "長褲",
    "sheet": "char_bottom_pants_m.png",
@@ -3531,6 +3559,17 @@
   }
  ],
  "shoes": [
+  {
+   "id": "pointed_shoes",
+   "name": "尖皮鞋",
+   "glam": true,
+   "dye": [
+    "#2e201e",
+    "#5c5458",
+    "#2f2b2d",
+    "#17100f"
+   ]
+  },
   {
    "id": "shoes",
    "name": "鞋子",
