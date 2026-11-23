@@ -862,7 +862,7 @@ DYE_SLOTS = {
     'top':    {'layer': 'top',    'only': _with_dark(['k', 'k_l', 'k_d']), 'main': 'k'},
     'bottom': {'layer': 'bottom', 'only': None, 'main': 'k'},
     'shoe':   {'layer': 'shoes',  'only': None, 'main': 'shoe_k'},
-    'skin':   {'layer': 'body',   'only': None, 'main': 'sk'},   # 膚色（2026-11-23 開放換色）：body 層整層（皮膚＋外框陰影色）；elf2 的耳朵（hat 層）另外加進這條規則（gen_assets）
+    'skin':   {'layer': 'body',   'only': None, 'main': 'sk', 'also': ['hair']},   # 髮型裡畫的皮膚陰影（油頭的額頭陰影）也要跟膚色換：hair 層只有顏色表裡的皮膚色會被換、髮色不受影響   # 膚色（2026-11-23 開放換色）：body 層整層（皮膚＋外框陰影色）；elf2 的耳朵（hat 層）另外加進這條規則（gen_assets）
     'eye':    {'layer': 'face',   'only': _with_dark(['eg1', 'eg2', 'eg3', 'eg4']), 'main': 'eg2'},   # 眼珠的 4 階灰（睫毛／瞳孔的黑、高光不換）
 }
 CELL = 64
@@ -1275,7 +1275,7 @@ LONG_HAIR_BACK = [
     '......nn....nn....nddnn...',
     '..................nnn.....',
 ]
-LONG_HAIR_KEY = {'n': 'hn', 'd': 'hd', 'm': 'hm', 'l': 'hl', 'h': 'hh'}
+LONG_HAIR_KEY = {'n': 'hn', 'd': 'hd', 'm': 'hm', 'l': 'hl', 'h': 'hh', 'k': 'sk_d', 'f': 'fk'}   # k／f＝頭髮投在額頭上的陰影（皮膚的陰影色；只有油頭用），皮膚換色時一起換
 
 
 def hair_style_sheet(sheets, maps, center=False, side_dx=0, top_row=0, side_dy=0):
@@ -1730,54 +1730,55 @@ def twin_hair_sheet(sheets):
 
 # 油頭（2026-11-23，使用者給的第六個參考圖：灰髮、頭髮往後梳、額頭整個露出來、兩側髮束垂到耳朵一帶；正面／側面／背面各一張，
 # 第四張是頭髮跟頭的對應位置參考，量得髮線（瀏海下緣）到眼睛約 5～7 排，跟「頭頂對齊」的結果一致）。取輪廓與明暗，重新對應成髮色代號；
-# 髮際線下緣的棕紅色（頭皮的陰影）不畫，露出臉層的皮膚。暗色（亮度 100～150）→ d、<100 → n，其餘規則同外翹髮（只去掉孤立單格，不平滑）。
+# 正面／側面用使用者後來補上陰影的版本（21／22.png）：髮際線下緣的橘色＝頭髮投在額頭上的陰影，畫成皮膚的陰影色（k＝sk_d、較暗的線＝f＝fk），
+# 所以換膚色時陰影跟著換（skin 換色規則連 hair 層一起套）；背面沒有陰影。暗色（亮度 100～150）→ d、<100 → n，其餘規則同外翹髮（只去掉孤立單格，不平滑）。
 OIL_HAIR_FRONT = [
     '........nnnnnnnn........',
-    '......nnmmmnnmmmnn......',
+    '......nnmddddddmnn......',
     '....nnmmddmmmmddmmnn....',
     '..nnmmmmmmmddmmmmmmmnn..',
+    '.ndmmmmmmmmddmmmmmmmmdn.',
     '.nmmmmmmmmmddmmmmmmmmmn.',
-    '.nmmmmmmmmmmmmmmmmmmmmn.',
-    '.nmmmmmmmmmmmmmmmmmmmmn.',
-    '.nmmmmmmmdmddmdmmmmmmmn.',
-    'ndmhhmdmmdmddmdmmdmhhmdn',
-    'nddhhmdmmdmddmdmmdmhhddn',
+    '.nmmmmmmmdmmmmdmmmmmmmn.',
+    '.nmlmmmmmdmdmmdmmmmmlmn.',
+    'nmmlhldmmdmddmdmmdlhlmmn',
+    'nddhhldmmdmddmdmmdlhhddn',
     'ndmmmmmdmdmddmdmdmmmmmdn',
-    'nmmmdmmdmnnnnnnmdmmdmmmn',
-    'ndmddmmnnn....nnnmmddmdn',
-    'ndmndmn..........nmdnmdn',
-    '.nmnmn............nmnmn.',
-    '.nmnn..............nnmn.',
-    '.ndn................ndn.',
-    '.ndn................ndn.',
-    '..nn................nn..',
-    '..nn................nn..',
+    'ndmmdmmdmdmnnmdmdmmdmmdn',
+    'nmmndmmdnnffffnndmmdnmmn',
+    'ndmndmmmkkfkkfkkkmmdnmdn',
+    '.nmnmmkkkkkkkkkkkkmmnmn.',
+    '.nmnmfkkkkkkkkkkkkfmnmn.',
+    '.ndnfkkkkkkkkkkkkkkfndn.',
+    '.ndddn............ndddn.',
+    '..ndn..............ndn..',
+    '..ndf..............fdn..',
     '..nn................nn..',
     '...n................n...',
 ]
 OIL_HAIR_SIDE = [
     '........nnnnnnnnnn........',
-    '....nnnnmddmmmmmmmnnn.....',
-    '...nddmmmmmmmmdddmmmmn....',
+    '....nnnnddmmmmmmmmnnn.....',
+    '...nddmmmmmmddddnndddn....',
     '..nmmmmmmmmmmmmmmmmmmmnn..',
-    '.nddmmmmmmmmmmmmmmmdddmn..',
-    '.nmmmmmmmmmmddmmmddmmmnnn.',
-    'nnnmmmdmmmmddmmmmmmmmmmdn.',
+    '.nddmmmmmmmmmmmmmmmddddn..',
+    '.nmmmmmmmllmddmmmddmmmnnn.',
+    'nmmmmmmmmmmddmmmmmmmmmmmn.',
     'nmmmmmdmmmmdmmmddmmmmmmdn.',
     'nmdhhmdmmmmmmmmmmmhhhmmdn.',
-    'nmdhhmhhhmdmmmmhmmhhmmmmdn',
-    'nmdmmdhhhmdmllmhhmmmmmdddn',
-    '.ndmmdmmnmmmmmmmmmmmmmmddn',
-    '.ndnnnnn.nnnnnmmmdmmmmmddn',
-    '.nn...........nmmdmlmmmddn',
-    '.n............nmmdmlmmmddn',
-    '...............nmmmmdmdddn',
-    '...............nmnmmdmdddn',
-    '................nndmddddn.',
-    '................nnddddddn.',
-    '................nndddddn..',
-    '.................ndddddn..',
-    '..................ndnnnn..',
+    'nmdhhmhhhmdhhmmmhmhhhmmnnn',
+    'nmdmmmhhhmdhhmmhhmmmmmdddn',
+    '.ndmmmmmmmnmmmmmmmmmmmmmdn',
+    '.ndnnmmmmmnmmmmmmdmmmmmddn',
+    '.nnmkkkkkfffkmmmmdmmmmmmdn',
+    '.n.kkkkkkkkkkkmmmdmmmmddmn',
+    '...kkkkkkkkkkkmmmdmmdmdddn',
+    '...kkkkkkkkkkkmmmndmdmdddn',
+    '....kkkkkkkkkkkmmndmddddn.',
+    '....kkkn....kkkfmdddddddn.',
+    '..............kfnndddddn..',
+    '...............f.ndddddn..',
+    '...............f.ndddnnn..',
     '..................nnn..n..',
     '..................n.n.....',
 ]
@@ -1832,7 +1833,7 @@ def dye_rules(sheets):
                     used[tuple(c[:3])] = True
         main = C[d['main']]
         cols = [main] + sorted((c for c in used if c != main), key=lambda c: -_lum(c))
-        out.append(dict(slot=slot, layers=[d['layer']], colors=[_hex(c) for c in cols]))
+        out.append(dict(slot=slot, layers=[d['layer']] + d.get('also', []), colors=[_hex(c) for c in cols]))
     return out
 
 

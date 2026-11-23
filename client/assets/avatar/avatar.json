@@ -2475,7 +2475,8 @@
      {
       "slot": "skin",
       "layers": [
-       "body"
+       "body",
+       "hair"
       ],
       "colors": [
        "#ffe8d2",
@@ -2672,6 +2673,7 @@
       "slot": "skin",
       "layers": [
        "body",
+       "hair",
        "hat"
       ],
       "colors": [
@@ -2871,7 +2873,8 @@
      {
       "slot": "skin",
       "layers": [
-       "body"
+       "body",
+       "hair"
       ],
       "colors": [
        "#ffe8d2",
@@ -3066,7 +3069,8 @@
      {
       "slot": "skin",
       "layers": [
-       "body"
+       "body",
+       "hair"
       ],
       "colors": [
        "#ffe8d2",
@@ -3264,7 +3268,8 @@
      {
       "slot": "skin",
       "layers": [
-       "body"
+       "body",
+       "hair"
       ],
       "colors": [
        "#ffe8d2",

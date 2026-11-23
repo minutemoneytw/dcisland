@@ -608,7 +608,7 @@ def school_dye_elf():
     for r in gen_school.dye_rules(SCHOOL_SHEETS):
         if r["slot"] == "skin":
             extra = ["#%02x%02x%02x" % c for c in sorted(ear) if "#%02x%02x%02x" % c not in r["colors"]]
-            r = dict(r, layers=["body", "hat"], colors=r["colors"] + extra)
+            r = dict(r, layers=["body", "hair", "hat"], colors=r["colors"] + extra)
         out.append(r)
     return out
 def school_hair_styles(prefix):
