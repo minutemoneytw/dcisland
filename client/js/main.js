@@ -2840,34 +2840,6 @@ const lookItem = (list, id) => list?.find(it => it.id === id) || null;
 // （比主色暗的乘上比例、比主色亮的往白色推）。舊格式 recolor: {base, shade} 視同 dye: [base, shade]。結果依 (sheet, 顏色) 快取整張
 const dyeList = it => it?.dye || (it?.recolor ? [it.recolor.base, it.recolor.shade].filter(Boolean) : null);
 const lum = ([r, g, b]) => .299 * r + .587 * g + .114 * b;
-// 雙色染色（貓耳用）：pairs＝[原色清單, 目標色] 多組——每組內的顏色依與該組首色的明暗比例映射到目標色；
-// 沒列進任何一組的顏色（貓耳的深色輪廓）保留原色。結果同樣進 recolorCache
-function duotoneSheet(img, pairs) {
-  const key = 'duo|' + img.src + '|' + pairs.map(p => p[1] + '(' + p[0].join(',') + ')').join(' ');
-  let cv = S.recolorCache.get(key);
-  if (cv) return cv;
-  cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
-  const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
-  const d = g.getImageData(0, 0, cv.width, cv.height), p = d.data;
-  const map = new Map();
-  for (const [dye, hex] of pairs) {
-    if (!hex) continue;   // 沒有目標色（沒髮色）＝這組不映射，保留原色
-    const T = hexRGB(hex), base = Math.max(1, lum(hexRGB(dye[0])));
-    for (const c of dye) {
-      const src = hexRGB(c), k = lum(src) / base;
-      const out = T.map(v => Math.round(k <= 1 ? v * k : v + (255 - v) * Math.min(1, k - 1)));
-      map.set((src[0] << 16) | (src[1] << 8) | src[2], out);
-    }
-  }
-  for (let i = 0; i < p.length; i += 4) {
-    if (!p[i + 3]) continue;
-    const o = map.get((p[i] << 16) | (p[i + 1] << 8) | p[i + 2]);
-    if (o) { p[i] = o[0]; p[i + 1] = o[1]; p[i + 2] = o[2]; }
-  }
-  g.putImageData(d, 0, 0);
-  S.recolorCache.set(key, cv);
-  return cv;
-}
 function dyeSheet(img, dye, hex) {  const key = img.src + '|' + dye.join(',') + '|' + hex;
   let cv = S.recolorCache.get(key);
   if (cv) return cv;
@@ -2988,95 +2960,10 @@ function outlineCanvas(cv, color) {   // 貼著透明、上下左右有不透明
   g.putImageData(id, 0, 0);
 }
 function charSprite(look, fi) {
-  const A = S.avatar, F = A.frames;
-  const legacy = (key, idx, list) => key in look ? (look[key] || null) : (list[idx || 0] ?? list[0]);
-  const shirtHex = legacy('topC', look.shirt, A.shirtColors), pantsHex = legacy('botC', look.pants, A.pantsColors);
-  const hatHex = look.hatC || null, shoeHex = look.shoeC || null;
-  const skin = lookItem(A.skins, look.skin) || A.skins[0], hair = lookItem(A.hair, look.hair) || A.hair[0];
-  const top = lookItem(A.tops, look.top) || A.tops?.[0], bottom = lookItem(A.bottoms, look.bottom) || A.bottoms?.[0];
-  const shoe = lookItem(A.shoes, look.shoe);
-  let hat = lookItem(A.hats, look.hat);
-  const face = lookItem(A.faces, look.face) || A.faces?.[0], eyes = lookItem(A.eyes, look.eyes) || A.eyes?.[0];
-  // 性別：素體 sheet 換成女版（char_body_<膚色> → char_body_female_<膚色>）
-  const skinSheet = (look.gender === 'female' && skin.sheet) ? skin.sheet.replace('char_body_', 'char_body_female_') : skin.sheet;
-  const skinIt = skinSheet === skin.sheet ? skin : { ...skin, sheet: skinSheet };
-  const skinHex = skin.base || null;   // 臉型（頭型）跟膚色重上色
-  const hairHex = look.hairC || hair.hex || null;    // 髮色主色（貓耳跟髮色重上色用；自訂髮色優先）
-  // 調色盤自訂的髮色／眼睛顏色：改用該樣式的棕色底圖（dyeFrom）再依明暗換成自訂色
-  const hairIt = look.hairC && hair.dyeFrom ? { ...hair, sheet: hair.dyeFrom } : hair;
-  const eyesIt = look.eyeC && eyes?.dyeFrom ? { ...eyes, sheet: eyes.dyeFrom } : eyes;
-  const race = lookItem(A.races, look.race) || A.races?.[0] || { id: 'human', scale: 1 };
-  if (race.own) return chibiSprite(race, look, fi);   // 新風格人物（整套自製圖層，不吃髮型／服裝選項）
-  // 服裝男女共用一個 id：女角改用 sheetF（沒有就用 sheet）
-  const byGender = it => it && look.gender === 'female' && it.sheetF ? { ...it, sheet: it.sheetF } : it;
-  const topG = byGender(top), bottomG = byGender(bottom), shoeG = byGender(shoe); hat = byGender(hat);
-  const wpn = look.wpn ? A.weapons.find(w => w.id === look.wpn && w.lpc) : null;   // LPC 武器圖層（見 playerSpriteDiv）
-  const k = [skin.id, skinSheet, look.gender || '', race.id, hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, shoe?.id || '', shoeHex, face?.id || '', eyes?.id || '', look.hairC || '', look.eyeC || '', wpn?.id || '', fi].join('|');
-  let cv = S.charCache.get(k);
-  if (cv) return cv;
-  // 這一幀屬於哪個動作（看 frames.attacks 的起始列；走路／待機＝LPC 第 8～11 列）：武器在這個動作有超大格
-  // （LPC 的 128×128 揮砍、192×192 突刺、128×128 走路的龍槍／弓等）就整張畫布放大，人物畫在正中央
-  const ent0 = F.map ? F.map[fi] : null;
-  let over = null, overCell = null;
-  if (wpn && ent0 && ent0[3]) {   // 工具動作（釣竿）：每一格各自一張超大格，第幾格／方向寫在 map 條目裡
-    over = wpn.lpc.over?.[ent0[3]] || null; overCell = [ent0[4], ent0[5]];
-  } else if (wpn && ent0 && F.attacks) {
-    for (const [an, a] of Object.entries({ ...F.attacks, walk: LPC_WALK_ROWS })) {
-      if (ent0[1] >= a.row && ent0[1] < a.row + 4 && wpn.lpc.over?.[an]) {
-        over = wpn.lpc.over[an]; overCell = [a.cols.indexOf(ent0[0]), ent0[1] - a.row];
-        if (!sheetCellHas(S.charImgs[over.bg] || S.charImgs[over.fg], overCell[0] * over.size, overCell[1] * over.size, over.size, over.size)
-            && !sheetCellHas(S.charImgs[over.fg], overCell[0] * over.size, overCell[1] * over.size, over.size, over.size)) over = null;
-        break;
-      }
-    }
-  }
-  const pad = over ? (over.size - F.w) / 2 : 0;
-  cv = document.createElement('canvas'); cv.width = F.w + pad * 2; cv.height = F.h + pad * 2; cv.pad = pad;
-  const g = cv.getContext('2d');
-  const drawOver = sheet => { const im = sheet && S.charImgs[sheet]; if (im) g.drawImage(im, overCell[0] * over.size, overCell[1] * over.size, over.size, over.size, 0, 0, over.size, over.size); };
-  if (over) drawOver(over.bg);   // 超大格武器的後層（在身體後面）
-  // 這一幀在 sheet 上的格子：LPC 通用格式看 frames.map（[欄,列,退回幀]）；舊格式＝水平排列（fi, 0）。
-  // 攻擊動作的幀帶「退回幀」：素體那一格沒有圖（素材只有走路列）就整個角色改畫退回幀，避免身體消失、只剩頭髮在動
-  let ent = F.map ? F.map[fi] : [fi, 0];
-  if (ent?.[2] != null && !sheetCellHas(S.charImgs[skinIt.sheet], ent[0] * F.w, ent[1] * F.h, F.w, F.h)) ent = F.map[ent[2]];
-  const [cc, cr] = ent, sx = cc * F.w, sy = cr * F.h;
-  // 由下往上：身體 → 褲子 → 鞋子 → 衣服 → 臉型(頭) → 眼睛 →（貓耳後層）→ 頭髮 →（精靈耳／貓耳前層）→ 帽子
-  const layers = [[skinIt], [bottomG, pantsHex], [shoeG, shoeHex], [topG, shirtHex], [face, skinHex], [eyesIt, look.eyeC || null]];
-  if (wpn && !over && wpn.lpc.bg) layers.unshift([{ sheet: wpn.lpc.bg }]);   // 一般格武器的後層（在身體後面）
-  const catTint = race.earFur ? hx2 => [[race.earFur, hx2 || null], [['#ffffff'], race.earInner || '#f5b8ad']] : null;
-  if (race.earBg) layers.push([{ sheet: race.earBg, tint: catTint, hx: hairHex || null }]);   // 貓耳後層（髮下面；毛色跟髮色、耳內粉肉色）
-  if (!hat?.hideHair) layers.push([hairIt, look.hairC || null]);   // 全罩式頭盔（hats 的 hideHair）把頭髮整個蓋住：不畫頭髮，免得從頭盔上方露出來
-  if (race.ear) layers.push([{ sheet: race.ear, dye: race.earDye }, skinHex]);   // 精靈耳（跟膚色）：畫在頭髮上面（LPC 的耳朵層 zPos 126 高於頭髮），否則尖耳被頭髮蓋住（2026-11-09 修正）
-  if (race.earFg) layers.push([{ sheet: race.earFg, tint: catTint, hx: hairHex || null }]);   // 貓耳前層（髮上面；同上）
-  layers.push([hat, hatHex]);
-  if (wpn && !over && wpn.lpc.fg) layers.push([{ sheet: wpn.lpc.fg }]);   // 一般格武器的前層（最上面）
-  const fbEnt = ent !== (F.map?.[fi]) ? null : (ent?.[2] != null ? F.map[ent[2]] : null);   // 正在畫攻擊動作時，這一幀的退回格（給缺動作的單一圖層用）
-  cv.layerMiss = false;   // 有圖層缺這一格（坐姿：該層沒有 LPC sit 圖）→ 呼叫端改用「沉進椅子」的舊畫法
-  for (const [it, hex] of layers) {
-    const img = it && S.charImgs[it.sheet];
-    let lx = sx, ly = sy;
-    // 攻擊動作：素體有動作、但這一層（例如之後加的服裝只有走路列）沒有這一格 → 這層改畫自己的退回格，避免衣服整件消失
-    if (fbEnt && img && !sheetCellHas(img, sx, sy, F.w, F.h)) {
-      lx = fbEnt[0] * F.w; ly = fbEnt[1] * F.h;
-      // 坐姿：這層在這個方向本來就沒東西（臉、眼睛朝上時是空的）不算缺——只有四個方向的 sit 幀都沒有圖才算沒有 sit
-      const sr = F.attacks?.sit?.row;
-      if (sr == null || cr < sr || cr >= sr + 4 || ![0, 1, 2, 3].some(k => sheetCellHas(img, 0, (sr + k) * F.h, F.w, F.h))) cv.layerMiss = true;   // 四個方向的第 1 幀任何一個有東西就算有 sit（臉、眼睛朝上、貓耳後層朝下是空的）
-    }
-    if (!img || lx + F.w > img.width || ly + F.h > img.height) continue;   // 缺圖／這張 sheet 沒有這一格：這層略過
-    let src;
-    if (it.tint) src = duotoneSheet(img, it.tint(it.hx));   // 雙色染色（貓耳：毛→髮色、耳內→粉肉色）
-    else {
-      const dye = dyeList(it);
-      src = dye && hex ? dyeSheet(img, dye, hex) : img;
-    }
-    g.drawImage(src, lx, ly, F.w, F.h, pad, pad, F.w, F.h);
-  }
-  if (over) drawOver(over.fg);   // 超大格武器的前層（最上面）
-  S.charCache.set(k, cv);
-  return cv;
+  const race = lookItem(S.avatar.races, look.race) || S.avatar.races?.[0];   // 舊種族已刪除（2026-11-23）：找不到的 id 退回第一個種族；整套自製圖層，不吃舊的髮型／服裝清單
+  return chibiSprite(race, look, fi);
 }
 // 8 方向視覺朝向：移動時依 (dx, dy) 的角度取最近的方向（鍵盤 8 向剛好一一對應）；玩法（石化等）仍看 face
-const LPC_SKIN_DYE_JS = ['#f9d5ba', '#e4a47c', '#cc8665', '#99423c', '#faecd7'];   // 精靈耳跟膚色重上色用
 function dir8Of(dx, dy) {
   const s = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));   // 扇區：0＝右、2＝下、-2＝上、±4＝左（畫面 y 向下）
   return CHAR_DIR8[((2 - s) % 8 + 8) % 8];
@@ -13507,7 +13394,6 @@ function myLook() {
   return { skin: S.me.skin, hair: ownHair || S.me.hair, race: own?.id || 'human2',
            hat: shownItem('hat')?.id || null, top: ownTop || shownItem('top')?.id || null, bottom: shownItem('bottom')?.id || null,
            shoe: shownItem('shoe')?.id || null,
-           face: (own && chibiStyleOf(own.own, 'face', S.me.cFace)?.id) || S.me.face || 'normal', eyes: lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown',
            hairC: S.me.hairC || null, eyeC: S.me.eyeC || null,   // 調色盤自訂的髮色／眼睛顏色（null＝用選的那一色）
            hatC: c.hat || null, topC: c.top || null, botC: c.bottom || null, shoeC: c.shoe || null,
            wlook: w && w.id !== JOBS[S.me.job]?.weapon ? w.id : null,
@@ -13548,22 +13434,6 @@ function buildAvatarPanel() {
       host.appendChild(o);
     }
   };
-  // 樣式＋顏色兩層的項目（髮型、眼睛）：清單裡每一項是「某樣式的某顏色」；換樣式保留顏色。
-  // 顏色＝樣式那排最後的「換色」鈕（2026-11-09 使用者要求跟裝備的換色一樣）：開選色視窗，上排是這個樣式的預設色、下面調色盤自訂
-  const twoLevel = (list, curId, field, styleHost, cfield) => {
-    const cur = list.find(x => x.id === curId) || list[0]; if (!cur) return;
-    const styles = [];
-    for (const it of list) if (!styles.some(s2 => s2.id === it.style)) styles.push({ id: it.style, name: it.styleName || it.style });
-    lookChips(styleHost, styles, cur.style, sid => {
-      const pick = list.find(x => x.style === sid && x.color === cur.color) || list.find(x => x.style === sid);
-      if (pick) S.me[field] = pick.id;
-    });
-    const b = document.createElement('button'); b.className = 'ff-btn small dye-btn'; b.title = LOOK_COLOR[cfield];
-    const sw = document.createElement('span'); sw.className = 'dye-sw'; sw.style.background = S.me[cfield] || cur.hex || '#888';
-    b.append(sw, document.createTextNode('換色'));
-    b.onclick = () => toggleColor(cfield, cur);
-    styleHost.appendChild(b);
-  };
   lookChips($('raceOpts'), (S.avatar.races || []).map(r => ({ id: r.id, name: r.name, title: r.scale && r.scale !== 1 ? `體型 ×${r.scale}` : '' })),
             ownRaceOf(S.me.race)?.id, v => { S.me.race = v; });
   // 等級：XP 進度條（無上限，每級需求 10 + 5×(Lv−1)；來源＝怪物／釣竿／首捕／採集，2026-11-06）
@@ -13599,7 +13469,7 @@ function buildAvatarPanel() {
     hb.append(hsw, document.createTextNode('換色'));
     hb.onclick = () => toggleColor('hairC', { name: '髮色', hex: ownRace.own.dye.find(r => r.slot === 'hair').colors[0], dye: ownRace.own.dye.find(r => r.slot === 'hair').colors });
     hairHost.appendChild(hb);
-  } else twoLevel(S.avatar.hair, S.me.hair, 'hair', $('hairOpts'), 'hairC');
+  }
   const eyeDye = ownRace?.own.dye?.find(r => r.slot === 'eye');
   if (eyeDye) {   // 自己畫眼睛的種族（新人類）：LPC 的眼神樣式用不到，只留一個換色鈕（換眼珠的灰色）
     const eh = $('eyesOpts'); eh.innerHTML = '';
@@ -13705,13 +13575,7 @@ function openColor(slot, item) {
   Object.assign(colorUI, hex2hsv(colorGet(slot) || orig));
   $('colorTitle').textContent = look ? LOOK_COLOR[slot] : `${SLOTS.find(x => x[0] === slot)[1]}換色：${item.name}`;
   const ps = $('colorPresets'); ps.innerHTML = '';
-  if (look) {   // 外貌：預設色＝同樣式的各顏色（LPC 原本的配色，點了是換成那一項、清掉自訂色）
-    const field = LOOK_FIELD[slot], list = field === 'hair' ? S.avatar.hair : S.avatar.eyes;
-    for (const it of list.filter(x => x.style === item.style && x.hex)) {
-      const o = document.createElement('div'); o.className = 'opt'; o.style.background = it.hex; o.title = it.name;
-      o.onclick = () => { S.me[field] = it.id; colorUI.orig = it.hex; S.charCache.clear(); Object.assign(colorUI, hex2hsv(it.hex)); colorApply(); };
-      ps.appendChild(o);
-    }
+  if (look) {   // 外貌（髮色、眼睛顏色）：沒有預設色，只有原色（目前選的那一色）與下面的調色盤
   } else for (const hex of [dye[0], ...new Set([...S.avatar.shirtColors, ...S.avatar.pantsColors])]) {
     const o = document.createElement('div'); o.className = 'opt'; o.style.background = hex; o.title = hex === dye[0] ? '原色' : hex;
     o.onclick = () => { Object.assign(colorUI, hex2hsv(hex)); colorApply(); };
@@ -14280,12 +14144,7 @@ async function boot() {
     ...S.furn.items.map(async it => S.furnImgs[it.id] = await loadSpr(`assets/furniture/${it.sprite}`, it.anim)),
     ...S.furn.items.flatMap(it => (it.dirs || []).map(async (f, k) => { const im = await loadSpr(`assets/furniture/${f}`, it.anim).catch(() => null); if (im) S.furnImgs[`${it.id}@${k + 1}`] = im; })),   // 朝向 1／2／3 的圖；缺圖就退回正面那張
     // 人物分層 sheet：軀幹（膚色）是必要的（缺了畫不出人），頭髮／衣服／褲子／帽子缺圖就略過那一層
-    ...S.avatar.skins.flatMap(s => {   // 素體 sheet：男版＋女版（性別切換用）
-      const files = [s.sheet, (s.sheet || '').replace('char_body_', 'char_body_female_')];
-      return files.filter((f, i) => f && files.indexOf(f) === i)
-        .map(async f => S.charImgs[f] = await loadImg(`assets/avatar/${f}`));
-    }),
-    ...[...S.avatar.hair, ...(S.avatar.tops || []), ...(S.avatar.bottoms || []), ...(S.avatar.shoes || []), ...(S.avatar.faces || []), ...(S.avatar.eyes || []), ...(S.avatar.hats || [])]
+    ...[...(S.avatar.tops || []), ...(S.avatar.bottoms || []), ...(S.avatar.shoes || []), ...(S.avatar.hats || [])]
       .flatMap(it => [it.sheet, it.sheetF, it.dyeFrom]).filter((f, i, a) => f && a.indexOf(f) === i)   // 沒有圖的（不戴帽子的 nohat）不用載；服裝的女版 sheetF 也要載
       .map(async f => S.charImgs[f] = await optImg(`assets/avatar/${f}`)),
     ...S.avatar.weapons.filter(w => w.lpc).flatMap(w => [w.lpc.bg, w.lpc.fg, ...Object.values(w.lpc.over || {}).flatMap(o => [o.bg, o.fg])])   // LPC 武器圖層

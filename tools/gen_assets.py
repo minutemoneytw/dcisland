@@ -521,11 +521,6 @@ def char_states():
 # 使用者提供的髮型是 LPC 通用格式：832×1344＝13 欄 × 21 列、每格 64×64（單層、透明底、12 種顏色）。
 # LPC 的列＝動作：0-3 施法(7 幀)、4-7 突刺(8)、8-11 走路(9)、12-15 揮砍(6)、16-19 射擊(13)、20 受擊(6)；
 #   每組四列的順序＝朝上/朝左/朝下/朝右（走路＝列 8 上、9 左、10 下、11 右）。
-KIDOL_HAIR = [                   # LPC 短髮模組的 12 種顏色 (檔名後綴, 名稱)
-    ("brown", "棕"), ("brown2", "深棕"), ("black", "黑"), ("blonde", "金"),
-    ("ashblonde", "灰金"), ("ashplatinum", "銀白"), ("red", "紅"), ("orange", "橘"),
-    ("rosepink", "玫瑰粉"), ("green", "綠"), ("blue", "藍"), ("purple", "紫"),
-]
 LPC_CLOTHES = [                  # 基本服裝與職業裝備（LPC 原檔）：(遊戲檔名, external 底下的檔名)
     ("top_tshirt_m", "top_tshirt_m.png"), ("top_tshirt_f", "top_tshirt_f.png"),
     ("bottom_pants_m", "bottom_pants_m.png"), ("bottom_pants_f", "bottom_pants_f.png"),
@@ -579,26 +574,6 @@ LPC_WEAPON_OVER = [             # LPC 武器的超大格動作 sheet（128×128�
 LPC_WEAPON_ROWS = [             # 只有某些動作的一般格武器（64×64）：(遊戲檔名, [(動作, external 底下的檔名)])，放到該動作的列
     ("weapon_recurve_bg", [("shoot", "weapon_recurve_shoot_bg.png")]),
     ("weapon_recurve_fg", [("shoot", "weapon_recurve_shoot_fg.png")]),   # 前層含箭矢（LPC Ammo: arrow）
-]
-LPC_HAIR_STYLES = [              # 其他 LPC 髮型（走路列，原檔是單色，這裡依亮度重上色成多色）：(id, 名稱, external 檔名)
-    ("afro", "爆炸頭", "hair_afro.png"),
-    ("bob", "鮑伯頭", "hair_bob.png"),
-    ("curly", "捲長髮", "hair_curly.png"),
-    ("long", "長髮", "hair_long.png"),
-]
-LPC_SKIN_DYE = ["#f9d5ba", "#e4a47c", "#cc8665", "#99423c", "#faecd7"]   # LPC 膚色調色盤（臉型跟膚色重上色用）
-LPC_CAT_FUR = ["#ff8a00", "#e55600", "#bf4000", "#a42600"]   # LPC 貓耳毛色（依亮度映射成髮色；深色輪廓與耳內白不在此列＝保留／粉肉色）
-LPC_FACES = [                    # 臉型（頭型）：(id, 名稱, external 檔名)
-    ("normal", "普通", "f_normal.png"), ("gaunt", "瘦長", "f_gaunt.png"),
-    ("plump", "圓胖", "f_plump.png"), ("small", "小頭", "f_small.png"), ("old", "老臉", "f_old.png"),
-]
-LPC_EYES = [                     # 眼睛（表情）：(id, 名稱, external 檔名)
-    ("default", "預設", "e_default.png"), ("angry", "生氣", "e_angry.png"), ("sad", "難過", "e_sad.png"),
-    ("lookl", "看左", "e_lookl.png"), ("lookr", "看右", "e_lookr.png"),
-]
-LPC_EYE_IRIS = [(126, 78, 32)]   # LPC 眼睛的虹膜主色（整層重上色的明暗基準）
-LPC_EARS = [                     # 種族耳朵圖層：(遊戲檔名, external 檔名)
-    ("ears_elven", "ear_elven.png"), ("ears_cat_bg", "ear_cat_bg.png"), ("ears_cat_fg", "ear_cat_fg.png"),
 ]
 # 種族：人類＝無耳朵；精靈＝精靈耳（跟膚色）；貓族＝貓耳（bg+fg）；拉拉肥/巨人＝找人類模組縮放（LPC 沒有專用體型）
 import gen_school   # 「新人類」分層 sheet（2026-11-22）：tools/gen_school.py；sheet 在這裡先畫好，換色規則要看實際用到的顏色
@@ -660,31 +635,6 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
         dye=gen_school.dye_rules(SCHOOL_SHEETS),
         anchors=dict(back=[27, 28], backView=[37, 28], waist=[28, 44], hand=dict(down=[42, 41], up=[42, 41], side=[31, 41])))),
 ]
-
-def kidol_main_hex(cid):
-    """取 k-idol 短髮某色 sheet 的「主色」（走路列）→ '#rrggbb'。其他髮型照這 12 色重上色。
-    取色法：先排除深色輪廓（亮度 < 55）；「最亮」的常見色（升列 ≥ 2%）當上限，
-    不是直接取最常見——最常見的常是暗階陰影（例如銀白取到棕色會變「褐色銀白」）。"""
-    r = read_png_pixels(os.path.join(ASSETS, f"external/img2pixel/hair_kidol/kidol_hairstyle_male_{cid}.png"))
-    if r is None:
-        raise SystemExit(f"找不到 k-idol 髮型 {cid}")
-    w, h, data = r
-    cnt = {}
-    for y in range(LPC_WALK_BASE * CHAR_FH, min(h, (LPC_WALK_BASE + 4) * CHAR_FH)):
-        for x in range(w):
-            i = (y * w + x) * 4
-            if data[i + 3] <= 16:
-                continue
-            if 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2] < 55:
-                continue   # 輪廓／陰影不算
-            k = (data[i] >> 3, data[i + 1] >> 3, data[i + 2] >> 3)
-            cnt[k] = cnt.get(k, 0) + 1
-    tot = sum(cnt.values())
-    top_lum = max((0.299 * (k[0] << 3) + 0.587 * (k[1] << 3) + 0.114 * (k[2] << 3)) for k, n in cnt.items() if n >= tot * .02)
-    k = max((k for k, n in cnt.items()
-             if 0.299 * (k[0] << 3) + 0.587 * (k[1] << 3) + 0.114 * (k[2] << 3) >= top_lum * .45),
-            key=lambda k: cnt[k])   # 常見色裡取「亮度 ≥ 上限 45%」的最常見者
-    return "#%02x%02x%02x" % (k[0] << 3, k[1] << 3, k[2] << 3)
 
 # ---------------- LPC 通用格式（2026-11-08 大改：角色整個改用 LPC 通用格式）----------------
 # 角色每個部位都是一張 832×1344＝13 欄 × 21 列、每格 64×64 的 LPC 通用格式 sheet（下載的 LPC 素材可直接用）。
@@ -815,115 +765,10 @@ def _lpc_overlay(sheet, rel, oy0):
             if data[i + 3] > 16:
                 sheet.set(x, oy0 + y, (data[i], data[i + 1], data[i + 2], data[i + 3]))
 
-def lpc_body_sheet(gender="male", skin_key="light"):
-    """身體（不含頭與眼睛）→ 832×1344；再把膚色重上色成目標膚色。頭/眼睛是另外的圖層（臉型/眼睛）。"""
-    body = "base_body_walk.png" if gender == "male" else "base_body_female.png"
-    sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
-    _lpc_overlay(sheet, f"external/img2pixel/lpc/{body}", LPC_WALK_BASE * CHAR_FH)
-    # 膚色重上色：LPC 膚色以主色 (249,213,186) 的亮度為基準，換成目標膚色（保留明暗）
-    tr = hx(SKINS[skin_key][0])
-    ref = 0.299 * 249 + 0.587 * 213 + 0.114 * 186
-    for y in range(sheet.h):
-        for x in range(sheet.w):
-            c = sheet.get(x, y)
-            if c[3] == 0:
-                continue
-            r, g, b = c[0], c[1], c[2]
-            if r > 110 and r >= g and g >= b - 12:   # 膚色系才換
-                f = (0.299 * r + 0.587 * g + 0.114 * b) / ref
-                sheet.set(x, y, (min(255, round(tr[0] * f)), min(255, round(tr[1] * f)), min(255, round(tr[2] * f)), c[3]))
-    return sheet
-
-def lpc_layer_sheet(rel):
-    """把一張 LPC 走路圖層（頭/眼睛/…576×256）疊到走路列 → 832×1344（原色，不重上色）。"""
-    sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
-    _lpc_overlay(sheet, rel, LPC_WALK_BASE * CHAR_FH)
-    return sheet
-
-def lpc_eyes_sheet(rel, target):
-    """眼睛圖層：整層像素依明暗重上色成目標色（跟髮色 12 色同一套）→ 832×1344。
-    眼白不在這層（在素體頭層），所以不用怕；以虹膜主色亮度為基準，瞳孔輪廓變成深色的目標色。
-    （2026-11-09 為 Q 版動漫風重畫過[先是白鞏膜圓眼再改黑框點眼]，使用者看過後決定改回
-    較寫實的風格＝LPC 原始眼睛，重畫的行程式碼已移除。）"""
-    sheet = lpc_layer_sheet(f"external/img2pixel/lpc/{rel}")
-    tr = hx(target)
-    b0 = 0.299 * LPC_EYE_IRIS[0][0] + 0.587 * LPC_EYE_IRIS[0][1] + 0.114 * LPC_EYE_IRIS[0][2]
-    for y in range(sheet.h):
-        for x in range(sheet.w):
-            c = sheet.get(x, y)
-            if c[3] == 0:
-                continue
-            f = (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / b0
-            f = min(f, 1.7)   # 比虹膜主色亮的（沒有）保底；瞳孔變成深色調
-            sheet.set(x, y, (min(255, round(tr[0] * f)), min(255, round(tr[1] * f)), min(255, round(tr[2] * f)), c[3]))
-    return sheet
-
-
-def lpc_face_sheet(rel):
-    """臉型（頭型）圖層＋Q 版小嘴（2026-11-09，使用者要求加可愛的小嘴；LPC 的臉本來沒有嘴）：
-    每個有臉的格（四方向組的第 1~3 列＝左／下／右；朝上不畫）依臉部像素範圍貼 1～2px 的固定小嘴——嘴色**不在
-    膚色 dye 調色盤**（dyeSheet 是整色 exact-match），所以不管換成哪種膚色／自訂色，小嘴都不會被重上色。
-    臉上的斜陰影／光澤與舊眼球畫法**照上游**（2026-11-09 一度壓平臉、清舊眼球配 Q 版眼，使用者決定
-    改回較寫實的風格＝LPC 原始眼睛，那些處理都撤了；上游的眼睛層跟臉型像素本來就對得上）。"""
-    sheet = lpc_layer_sheet(f"external/img2pixel/lpc/{rel}")
-    mouth = (172, 100, 94)               # 淡玫瑰棕的小嘴色（比膚色深一階、不搶眼）
-    for r in range(sheet.h // CHAR_FH):
-        d4 = (r - 21 if r >= 21 else     # 半揮是接在 21 起（其餘動作組都是 4 的倍數起）
-              r % 4) % 4                  # LPC 四列一組：0 上／1 左／2 下／3 右
-        if d4 == 0:
-            continue                      # 朝上（背面）不露臉
-        for c in range(sheet.w // CHAR_FW):
-            ox, oy = c * CHAR_FW, r * CHAR_FH
-            pts = [(x, y) for y in range(CHAR_FH) for x in range(CHAR_FW)
-                   if sheet.get(ox + x, oy + y)[3] > 16]
-            if not pts:
-                continue
-            x0 = min(p[0] for p in pts); x1 = max(p[0] for p in pts)
-            y0 = min(p[1] for p in pts); y1 = max(p[1] for p in pts)
-            my = y1 - 2                   # 下巴上方一列（y1 是下巴的輪廓弧）
-            mx = (x0 + x1) // 2 if d4 == 2 else (x1 - 3 if d4 == 3 else x0 + 3)   # 正面置中；側面貼在前緣內縮處
-            spot = sheet.get(ox + mx, oy + my)
-            if spot[3] > 16 and (spot[0], spot[1], spot[2]) in {(249, 213, 186), (228, 164, 124), (204, 134, 101)}:   # 臉色系（含陰影層）
-                sheet.set(ox + mx, oy + my, (*mouth, 255))            # 1～2px 的小嘴（正面再補第二 px）
-                if d4 == 2 and sheet.get(ox + mx + 1, oy + my)[3] > 16:
-                    sheet.set(ox + mx + 1, oy + my, (*mouth, 255))
-    return sheet
-
-
 def lpc_cloth_sheet(rel):
     """LPC 服裝（走路 9 幀×4 向、576×256）→ 疊到走路列 → 832×1344。"""
     sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
     _lpc_overlay(sheet, rel, LPC_WALK_BASE * CHAR_FH)
-    return sheet
-
-def lpc_hair_tinted(rel, target_hex):
-    """LPC 髮型原檔是單色（ginger）；依每個像素亮度相對主色縮放目標色＝重上色成指定顏色，排到走路列。"""
-    r = read_png_pixels(os.path.join(ASSETS, rel))
-    if r is None:
-        raise SystemExit(f"找不到 LPC 髮型 {rel}")
-    tr = hx(target_hex)
-    ref = 0.299 * 229 + 0.587 * 86 + 0.114 * 0     # 下載檔主色 (229,86,0) 的亮度當基準
-    sheet = Canvas(LPC_COLS * CHAR_FW, LPC_ROWS * CHAR_FH)
-    for src, oy0 in lpc_act_sources(rel):            # 走路列＋攻擊動作各列
-        r = read_png_pixels(os.path.join(ASSETS, src))
-        w, h, data = r
-        _lpc_hair_tint_into(sheet, w, h, data, tr, ref, oy0)
-    return sheet
-
-def _lpc_hair_tint_into(sheet, w, h, data, tr, ref, oy0):
-    for y in range(h):
-        for x in range(w):
-            i = (y * w + x) * 4
-            if data[i + 3] <= 16:
-                continue
-            f = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / ref
-            # ≤1＝乘上比例（變暗）；>1＝往白色推（與 dyeSheet 同步，避免各通道各自封頂造成偏色）
-            if f <= 1:
-                out = (min(255, round(tr[0] * f)), min(255, round(tr[1] * f)), min(255, round(tr[2] * f)))
-            else:
-                w2 = min(1.0, f - 1)
-                out = (round(tr[0] + (255 - tr[0]) * w2), round(tr[1] + (255 - tr[1]) * w2), round(tr[2] + (255 - tr[2]) * w2))
-            sheet.set(x, oy0 + y, (out[0], out[1], out[2], data[i + 3]))
     return sheet
 
 def lpc_dye_of(*files, n=8, min_lum=50):
@@ -4448,14 +4293,6 @@ def main():
 
     print("== 角色（LPC 通用格式）==")
     sub = "avatar"
-    # 素體：LPC 的 body＋head＋eyes 疊成 832×1344（走路列）；男（預設）＋女（之後選性別）；4 種膚色暫共用
-    for key in SKINS:
-        save(lpc_body_sheet("male", key), f"char_body_{key}.png", sub)
-        save(lpc_body_sheet("female", key), f"char_body_female_{key}.png", sub)
-    for fid, _fname, rel in LPC_FACES:               # 臉型（頭型；原色，跟膚色用 dye 重上色）＋Q 版小嘴
-        save(lpc_face_sheet(rel), f"char_face_{fid}.png", sub)
-    for eid, rel in LPC_EARS:                        # 種族耳朵（精靈／貓）
-        save(lpc_layer_sheet(f"external/img2pixel/lpc/{rel}"), f"char_{eid}.png", sub)
     # 新人類（tools/gen_school.py）：圖層 human2_<圖層>.png（hairbg／hat 目前是空的，不輸出）
     for lname in SCHOOL_LAYERS:
         save_chibi_layer(SCHOOL_SHEETS[lname], f"human2_{lname}.png", sub)
@@ -4482,30 +4319,6 @@ def main():
         for anim, rel in parts:
             _lpc_overlay(sheet, f"external/img2pixel/lpc/{rel}", LPC_ATTACKS[anim][0] * CHAR_FH)
         save(sheet, f"char_{cid}.png", sub)
-    # 短髮：2026-11-09 起改用 LPC repo 的 idol 短髮（同一款；k-idol 外部素材沒有半揮等新動作），依亮度重上色成 12 色；
-    # 檔名、id 照舊（char_hair1～12），k-idol 原檔只拿來取 12 色的主色（kidol_main_hex）
-    for i, (cid, _cname) in enumerate(KIDOL_HAIR):
-        save(lpc_hair_tinted("external/img2pixel/lpc/hair_idol.png", kidol_main_hex(cid)), f"char_hair{i + 1}.png", sub)
-    # 其他 LPC 髮型（走路列；依亮度重上色成「與短髮相同的 12 色」）
-    hair_colors = [(cid, cname, kidol_main_hex(cid)) for cid, cname in KIDOL_HAIR]
-    kidol_hex = {cid: chex for cid, _cname, chex in hair_colors}   # 髮色主色（manifest 帶給面板／貓耳染色用）
-    for sid, _sname, fn in LPC_HAIR_STYLES:
-        for cid, _cname, chex in hair_colors:
-            save(lpc_hair_tinted(f"external/img2pixel/lpc/{fn}", chex), f"char_hair_{sid}_{cid}.png", sub)
-    # 眼睛：5 種表情 × 12 色（虹膜重上色成與髮型相同的 12 色系；眼白／瞳孔輪廓不動）
-    for eid, _ename, rel in LPC_EYES:
-        for cid, _cname in KIDOL_HAIR:
-            save(lpc_eyes_sheet(rel, kidol_hex[cid]), f"char_eyes_{eid}_{cid}.png", sub)
-    # 髮色／眼睛顏色的調色盤自訂色：每個樣式拿棕色版當底圖（亮度夠、層次完整），取可染色顏色（只排除最暗的輪廓）
-    hair_dye = {"short": lpc_dye_of("char_hair1.png", n=10, min_lum=25)}
-    for sid, _sname, _fn in LPC_HAIR_STYLES:
-        hair_dye[sid] = lpc_dye_of(f"char_hair_{sid}_brown.png", n=10, min_lum=25)
-    eye_dye = {eid: lpc_dye_of(f"char_eyes_{eid}_brown.png", n=10, min_lum=0) for eid, _en, _rel in LPC_EYES}
-    # 換色以 dye 的第一個顏色當主色（依它算明暗比例）：最常出現的常是暗部輪廓，所以把棕色的主色（kidol_hex["brown"]）排到第一個
-    main_brown = kidol_hex["brown"]
-    for dd in (hair_dye, eye_dye):
-        for k2, lst in dd.items():
-            dd[k2] = [main_brown] + [c for c in lst if c != main_brown]
     write_json(os.path.join(ASSETS, sub, "avatar.json"), dict(
         scale=CHAR_SCALE,
         # 人物分層的幀表（所有層共用）：每層都是 832×1344 的 LPC 通用格式 sheet；map＝65 個邏輯幀 → sheet 的 [欄, 列]；
@@ -4518,24 +4331,9 @@ def main():
                     fps=dict(idle=4, walk=6),
                     anchors=dict(back=[23, 32], backView=[41, 32], waist=[23, 48], hand=[40, 40]),
                     frameAnchors={}),
-        skins=[dict(id=k, name=n, base=SKINS[k][0], shade=SKINS[k][1], sheet=f"char_body_{k}.png")
+        skins=[dict(id=k, name=n, base=SKINS[k][0], shade=SKINS[k][1])
                for k, n in [("pale", "白皙"), ("light", "自然"), ("tan", "小麥"), ("deep", "深膚")]],
-        # 臉型（頭型；原色，執行時用 dye 跟膚色重上色）與眼睛（固定色）
-        faces=[dict(id=fid, name=fn, sheet=f"char_face_{fid}.png", dye=LPC_SKIN_DYE) for fid, fn, _r in LPC_FACES],
-        # 眼睛：5 種眼神（style）× 12 色（color，虹膜＝髮色同一套）；面板分成「眼神」（文字鈕）與「眼睛顏色」（色塊）兩列
-        # dyeFrom／dye＝玩家用調色盤自訂顏色時的底圖（該樣式的棕色版）與它的可染色顏色（整層依明暗換成自訂色）
-        eyes=[dict(id=f"{eid}_{cid}", name=cname, style=eid, styleName=en, color=cid, hex=kidol_hex[cid], sheet=f"char_eyes_{eid}_{cid}.png",
-                   dyeFrom=f"char_eyes_{eid}_brown.png", dye=eye_dye[eid])
-              for eid, en, _rel in LPC_EYES for cid, cname in KIDOL_HAIR],
         races=LPC_RACES,
-        # 髮型：style／styleName＝造型、color／name／hex＝顏色；面板分成「髮型」（文字鈕）與「髮色」（色塊）兩列，換一邊另一邊保持不變
-        # hex＝該款髮色的主色（貓耳跟髮色重上色用）
-        hair=[dict(id=f"hair{i + 1}", name=cname, style="short", styleName="短髮", color=cid, sheet=f"char_hair{i + 1}.png", hex=kidol_hex[cid],
-                   dyeFrom="char_hair1.png", dye=hair_dye["short"])
-              for i, (cid, cname) in enumerate(KIDOL_HAIR)] +
-             [dict(id=f"{sid}_{cid}", name=cname, style=sid, styleName=sname, color=cid, sheet=f"char_hair_{sid}_{cid}.png", hex=kidol_hex[cid],
-                   dyeFrom=f"char_hair_{sid}_brown.png", dye=hair_dye[sid])
-              for sid, sname, _fn in LPC_HAIR_STYLES for cid, cname, _hx in hair_colors],
         # 基本服裝（LPC 原檔；gender＝之後選性別用）
         # 服裝：男女共用一個 id（sheet＝男、sheetF＝女，client 依角色性別挑；外觀清單一件只出現一次）；
         # dye＝可染色的顏色（lpc_dye_of 自動從圖上取，第一個是主色）；glam＝可當外觀（沒寫 unlock＝一開始就能用）
@@ -4568,7 +4366,6 @@ def main():
               dict(id="horned", name="龍騎士角盔", sheet="char_hat_horned.png", hideHair=True, dye=lpc_dye_of("char_hat_horned.png")),
               dict(id="barbarian", name="蠻族頭盔", sheet="char_hat_barbarian.png", dye=lpc_dye_of("char_hat_barbarian.png")),
               dict(id="headband", name="忍者頭巾", sheet="char_hat_ninja.png", dye=lpc_dye_of("char_hat_ninja.png"))],
-        hairColor="#4a3428",
         shirtColors=['#d95c68', '#4a90d9', '#4aa564', '#c9a227', '#8a5cc9', '#e0e0e0', '#4a4a52', '#d97a3a', '#f2a1b5', '#b5303f', '#f0c93a', '#8fd0e8', '#2e5fa8', '#3a3f8c', '#6fcfc0', '#2f8a78', '#8fc455', '#3e6b3a', '#b48be0', '#6a3f9a', '#8a5a3a', '#c8b08a', '#9aa0aa', '#f4ede0'],
         pantsColors=['#4a54a0', '#2f3548', '#4a4a52', '#8a8f99', '#d8d4c8', '#8a6a46', '#c8b08a', '#5a4a3a', '#3e6b3a', '#6a8a4a', '#2f8a78', '#3a78c8', '#2e5fa8', '#7aa8d8', '#6a3f9a', '#a63d4a', '#d97a3a', '#e0b840', '#e8a0b8', '#b5303f', '#1f1f26', '#f0f0f0', '#6fcfc0', '#b48be0'],
         # 武器外觀：每把職業武器各有天藍／金黃發光版（with_glow；2026-11-09 取代舊的「金劍」）
