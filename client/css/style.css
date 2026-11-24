@@ -791,3 +791,22 @@ body {
 .bj-win { color: #7fe0a8; font-weight: bold; }
 .bj-lose { color: #e08a8a; }
 .bj-btns .ff-btn:disabled { opacity: .45; cursor: default; }
+
+/* 吃角子老虎機與輪盤（2026-11-24） */
+.sl-reels { display: flex; justify-content: center; gap: 8px; margin: 10px 0; }
+.sl-reel { width: 96px; height: 96px; background: #f4f0e4; border: 3px solid #7a6a50; image-rendering: pixelated; }
+.sl-win { color: #ffe08a; font-weight: bold; }
+.sl-pay { font-size: 11px; line-height: 1.5; margin-top: 6px; }
+.bj-btns .ff-btn.active, .table-btns .ff-btn.active { border-color: #ffe08a; color: #ffe08a; }
+.ro-top { display: flex; align-items: center; justify-content: center; gap: 14px; margin: 6px 0; }
+.ro-ball { width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: bold; color: #fff; border: 3px solid #d8b050; }
+.ro-ball.red, .ro-h.red { background: #c0392b; } .ro-ball.black, .ro-h.black { background: #1e1e24; } .ro-ball.green, .ro-h.green { background: #1f8a4a; } .ro-ball.idle { background: #2a2a34; color: #888; }
+.ro-hist { display: flex; flex-wrap: wrap; gap: 3px; max-width: 320px; }
+.ro-h { min-width: 22px; height: 22px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; }
+.ro-board { display: grid; grid-template-columns: 34px repeat(12, 1fr) 40px; grid-template-rows: repeat(5, 30px); gap: 2px; margin: 8px auto; max-width: 560px; }
+.ro-cell { position: relative; padding: 0; font-size: 12px; font-weight: bold; color: #fff; border: 1px solid #d8c890; cursor: pointer; background: #14532a; }
+.ro-cell.red { background: #c0392b; } .ro-cell.black { background: #1e1e24; } .ro-cell.green { background: #1f8a4a; } .ro-cell.outside { background: #14532a; }
+.ro-cell:disabled { cursor: default; opacity: .85; }
+.ro-cell:not(:disabled):hover { filter: brightness(1.25); }
+.ro-cell.ro-hit { outline: 2px solid #ffe08a; box-shadow: 0 0 8px #ffe08a; z-index: 1; }
+.ro-chip { position: absolute; right: -2px; top: -4px; min-width: 16px; padding: 0 3px; border-radius: 8px; background: #ffe08a; color: #3a2a08; font-size: 10px; line-height: 14px; }

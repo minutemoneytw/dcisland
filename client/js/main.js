@@ -5291,6 +5291,8 @@ function buildTable() {
   if (tb?.game === 'g2048') { buildG2048(box, v, mk, gd); return; }   // 2048 有自己的畫面
   if (tb?.game === 'bubble') { buildBubble(box, v, mk, gd); return; }   // 泡泡射手有自己的畫面
   if (tb?.game === 'pinball') { buildPinball(box, v, mk, gd); return; }   // 彈珠台有自己的畫面（球檯）
+  if (tb?.game === 'slots') { buildSlots(box, v, mk, gd); return; }   // 吃角子老虎機有自己的畫面（三個轉輪）
+  if (tb?.game === 'roulette') { buildRoulette(box, v, mk, gd); return; }   // 輪盤有自己的畫面（下注盤）
   if (tb?.game === 'blackjack') { buildBlackjack(box, v, mk, gd); return; }   // 21 點有自己的畫面（莊家、各人的牌、下注與操作）
   if (tb?.game === 'mary') { buildMary(box, v, mk, gd); return; }   // 小瑪莉有自己的畫面（跑馬燈＋押注）
   if (tb?.game === 'maze') { buildMaze(box, v, mk, gd); return; }   // 豆豆迷宮有自己的畫面（迷宮）
@@ -9102,6 +9104,190 @@ function buildBlackjack(box, v, mk, gd) {
       hit.onclick = () => S.net?.tbl?.({ a: 'bhit' }); stand.onclick = () => S.net?.tbl?.({ a: 'bstand' }); dbl.onclick = () => S.net?.tbl?.({ a: 'bdbl' });
       bs.append(hit, stand, dbl);
     }
+    box.appendChild(bs);
+  } else if (v.seats.length < v.max) {
+    const bs = mk('div', 'table-btns'), sb = mk('button', 'ff-btn', '入座'); sb.onclick = () => S.net?.tbl?.({ a: 'sit', chips: S.chips }); bs.appendChild(sb); box.appendChild(bs);
+  }
+  const lg = mk('div', 'table-log'); for (const l of tableLogLines(v)) lg.appendChild(mk('div', '', l)); box.appendChild(lg);
+}
+// ── 吃角子老虎機（t97）與輪盤（t96）（2026-11-24，使用者要求：隱藏區的賭博機台）──
+// 規則與結算全在伺服器（worker/src/index.js 的 sl*／ro*、tools/dev_server.py 的 sl_*／ro_*）；客戶端只畫 v.sl／v.ro 並送操作。動畫都用 setTimeout／setInterval，
+// 不靠 rAF（DC 的 iframe 會把 rAF 壓到幾乎停擺，小瑪莉就因此卡過）：結果早就定了，動畫只是表演，計時器一到一定收尾、解鎖。
+const SL_NM = { chicken: '咕咕雞', bunny: '跳跳兔', frog: '大肚蛙', slime_grass: '史萊姆', goblin_grass: '哥布林', gold_dragon: '黃金肥龍' };
+const SL_ANIM_MS = 2400, SL_STOP0 = 900, SL_STOP_GAP = 500;
+function slDrawReels() {   // 三個轉輪畫布：動畫中沒停的轉輪快速換圖，停了的定在結果
+  const cvs = document.querySelectorAll('canvas.sl-reel'), M = S.sl; if (!cvs.length || !M) return;
+  const now = performance.now(), syms = M.syms || Object.keys(SL_NM);
+  cvs.forEach((cv, i) => {
+    const g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height);
+    g.fillStyle = '#f4f0e4'; g.fillRect(0, 0, cv.width, cv.height);
+    const a = M.anim, fin = M.last?.reels?.[i];
+    let sym = fin;
+    if (a && now - a.t0 < SL_STOP0 + i * SL_STOP_GAP) sym = syms[Math.floor((now - a.t0) / 70 + i * 3) % syms.length];
+    if (sym) maryMob(g, sym, cv.width / 2, cv.height / 2, cv.width - 12, 0);
+    else { g.fillStyle = '#9a8a70'; g.font = 'bold 36px sans-serif'; g.textAlign = 'center'; g.fillText('?', cv.width / 2, cv.height / 2 + 12); }
+    g.strokeStyle = '#7a6a50'; g.lineWidth = 2; g.strokeRect(1, 1, cv.width - 2, cv.height - 2);
+  });
+}
+function slFinish() {   // 動畫結束：解鎖、顯示結果與餘額（計時器收尾，不靠 rAF）
+  const M = S.sl; if (!M) return;
+  M.anim = null; clearInterval(M.iv); M.iv = 0; clearTimeout(M.to); M.to = 0;
+  if (S.tableOpen && S.tableView?.game === 'slots') buildTable();
+}
+function buildSlots(box, v, mk, gd) {
+  const sl = v.sl, seat = v.role === 'seat', playing = v.phase === 'playing';
+  const M = (S.sl ||= { seq: sl ? sl.seq : 0, anim: null });
+  M.syms = sl?.syms; M.last = sl?.last || null;
+  if (playing && sl && sl.seq !== M.seq) {   // 新的一次拉霸：開始轉
+    M.seq = sl.seq;
+    if (sl.last) {
+      M.anim = { t0: performance.now() };
+      clearInterval(M.iv); clearTimeout(M.to);
+      M.iv = setInterval(slDrawReels, 70);
+      M.to = setTimeout(slFinish, SL_ANIM_MS);   // 一定收尾
+      sfxWake(); sfxTones([[520, 0, .04], [620, .12, .04], [720, .24, .04]]);
+    }
+  }
+  const spinning = !!M.anim, my = sl?.last, pay = my ? my.pay : 0;
+  if (seat && typeof sl?.chips === 'number' && sl.chips !== S.chips && !xpServer()) { S.chips = Math.floor(sl.chips); chipsSave(); if (!$('avatarPanel').classList.contains('hidden')) buildAvatarPanel(); }
+  let status;
+  if (playing && seat) status = spinning ? '轉動中…' : my ? (pay > 0 ? `${my.reels.map(s => SL_NM[s]).join('・')}　贏 ${pay.toLocaleString('en-US')}！` : `${my.reels.map(s => SL_NM[s]).join('・')}　沒中`) : '選好金額，按「拉霸」';
+  else if (playing) status = `觀戰中：${v.seats[0]?.name || '玩家'} 正在玩（餘額只有本人看得到）`;
+  else status = v.seats.length < v.min ? '等待玩家入座（單人機台）' : '按「準備」就開始（用籌碼下注）';
+  box.appendChild(mk('div', 'table-status' + (playing && seat ? ' mine' : '') + (!spinning && pay > 0 ? ' sl-win' : ''), status));
+  const row = mk('div', 'sl-reels');
+  for (let i = 0; i < 3; i++) { const cv = document.createElement('canvas'); cv.className = 'sl-reel'; cv.width = cv.height = 96; row.appendChild(cv); }
+  box.appendChild(row);
+  slDrawReels();
+  if (playing && seat) {
+    const shown = Math.floor(sl.chips || 0) - (spinning ? pay : 0) + (spinning && my ? my.bet : 0) * 0;   // 轉動中先不顯示這次贏的錢（扣款已在餘額裡）
+    box.appendChild(mk('div', 'table-tag bj-chips', `我的籌碼：${shown.toLocaleString('en-US')}`));
+    const bs = mk('div', 'table-btns');
+    S.slBet = (sl.bets || []).includes(S.slBet) ? S.slBet : 100;
+    for (const a of sl.bets || []) {
+      const b = mk('button', 'ff-btn small' + (S.slBet === a ? ' active' : ''), a >= 1000 ? `${a / 1000}k` : `${a}`);
+      b.disabled = spinning; b.onclick = () => { S.slBet = a; buildTable(); };
+      bs.appendChild(b);
+    }
+    const go = mk('button', 'ff-btn', '拉霸'); go.disabled = spinning || (sl.chips || 0) < S.slBet;
+    go.onclick = () => { go.disabled = true; S.net?.tbl?.({ a: 'sspin', bet: S.slBet }); };
+    bs.appendChild(go);
+    box.appendChild(bs);
+  }
+  const pt = mk('div', 'table-tag sl-pay');   // 賠率表（含本金總賠率）
+  pt.textContent = `三個一樣：${(sl?.syms || []).map(s => `${SL_NM[s]}×${sl.triple[s]}`).join('　')}　｜　左邊兩個一樣：${(sl?.syms || []).map(s => `${SL_NM[s]}×${sl.pair[s]}`).join('　')}`;
+  box.appendChild(pt);
+  const btns = mk('div', 'table-btns');
+  if (!playing) {
+    if (seat) {
+      const me = v.seats[v.me], b = mk('button', 'ff-btn', me.ready ? '取消準備' : '準備');
+      b.onclick = () => S.net?.tbl?.({ a: 'ready', v: !me.ready }); btns.appendChild(b);
+      const st = mk('button', 'ff-btn small', '改為觀戰'); st.onclick = () => S.net?.tbl?.({ a: 'stand' }); btns.appendChild(st);
+    } else if (v.role === 'spec' && v.seats.length < v.max) {
+      const b = mk('button', 'ff-btn', '入座'); b.onclick = () => S.net?.tbl?.({ a: 'sit', chips: S.chips }); btns.appendChild(b);
+    }
+  }
+  box.appendChild(btns);
+  if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
+  const log = mk('div', 'table-log');
+  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  box.appendChild(log);
+}
+// ── 輪盤 ──
+const RO_RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
+const roCol = n => n === 0 ? 'green' : RO_RED.has(n) ? 'red' : 'black';
+const RO_AMTS = [10, 50, 100, 500, 1000, 5000], RO_ANIM_MS = 3600;
+function roMultC(key, n) {   // 與伺服器 roMult／ro_mult 同一套：這個下注鍵在開出 n 時的總賠率（客戶端只拿來亮出中獎格）
+  if (key[0] === 'n') return Number(key.slice(1)) === n ? 36 : 0;
+  if (n === 0) return 0;
+  const red = RO_RED.has(n);
+  return ({ red: red ? 2 : 0, black: red ? 0 : 2, odd: n % 2 === 1 ? 2 : 0, even: n % 2 === 0 ? 2 : 0, low: n <= 18 ? 2 : 0, high: n >= 19 ? 2 : 0,
+    d1: n <= 12 ? 3 : 0, d2: n >= 13 && n <= 24 ? 3 : 0, d3: n >= 25 ? 3 : 0, c1: n % 3 === 1 ? 3 : 0, c2: n % 3 === 2 ? 3 : 0, c3: n % 3 === 0 ? 3 : 0 })[key] || 0;
+}
+function roTimerTick() {
+  const v = S.tableView;
+  if (!S.tableOpen || v?.game !== 'roulette' || !v.ro) { clearInterval(S.roTimer); S.roTimer = 0; return; }
+  const left = Math.max(0, S.roDl - performance.now()), el = document.getElementById('roCount');
+  if (el) el.textContent = `${Math.ceil(left / 1000)} 秒`;
+  if (left <= 0 && performance.now() - (S.roSentAt || 0) > 1200) { S.roSentAt = performance.now(); S.net?.tbl?.({ a: 'timeout' }); }
+}
+function roBallTick() {   // 開球動畫：號碼快速跳動，時間到定在結果（setInterval，到時一定收尾並重建畫面亮出結算）
+  const R = S.ro, el = document.getElementById('roBall'); if (!R?.anim) return;
+  const dt = performance.now() - R.anim.t0;
+  if (dt >= RO_ANIM_MS) { clearInterval(R.iv); R.iv = 0; R.anim = null; if (S.tableOpen && S.tableView?.game === 'roulette') buildTable(); return; }
+  if (el) { const n = Math.floor(Math.random() * 37); el.textContent = n; el.className = `ro-ball ${roCol(n)} spin`; }
+}
+function buildRoulette(box, v, mk, gd) {
+  const r = v.ro, seat = v.role === 'seat', me = v.me;
+  if (!r) {
+    box.appendChild(mk('div', 'table-status', '桌子還沒開，有人入座就開桌'));
+    const bs = mk('div', 'table-btns'), sb = mk('button', 'ff-btn', '入座'); sb.onclick = () => S.net?.tbl?.({ a: 'sit', chips: S.chips }); bs.appendChild(sb); box.appendChild(bs);
+    return;
+  }
+  const R = (S.ro ||= { round: 0, anim: null });
+  if (r.stage === 'result' && R.round !== r.round) {   // 新的一次開球：剛開出的才轉（中途進來、結果已經顯示一陣子的不轉）
+    R.round = r.round; clearInterval(R.iv); R.iv = 0;
+    if (r.left > 5000) { R.anim = { t0: performance.now() }; R.iv = setInterval(roBallTick, 90); sfxWake(); sfxTones([[440, 0, .05], [520, .15, .05], [600, .3, .05]]); } else R.anim = null;
+  } else if (r.stage === 'bet') { R.round = r.round; R.anim = null; clearInterval(R.iv); R.iv = 0; }
+  const my = seat ? r.p[me] : null, spinning = !!R.anim, revealed = r.stage === 'result' && !spinning;
+  if (seat && typeof r.chips === 'number') {   // 籌碼同步：登入者＝機台餘額；訪客＝餘額＋下注階段已下的注（離座退注）
+    const nv = Math.floor(r.chips) + (!xpServer() && r.stage === 'bet' ? (my?.bet || 0) : 0);
+    if (nv !== S.chips) { S.chips = nv; chipsSave(); if (!$('avatarPanel').classList.contains('hidden')) buildAvatarPanel(); }
+  }
+  S.roDl = performance.now() + r.left;
+  if (!S.roTimer) S.roTimer = setInterval(roTimerTick, 250);
+  let st;
+  if (r.stage === 'bet') st = seat ? (my.bet > 0 ? `已下注 ${my.bet}：可再加碼，按「確定」（全員確定就提早開球）` : '下注時間：選金額，點下注盤上的格子') : '下注時間（觀戰中）';
+  else st = spinning ? '輪盤轉動中…' : `開出 ${r.result}（${{ red: '紅', black: '黑', green: '綠' }[roCol(r.result)]}）`;
+  const stat = mk('div', 'table-status' + (seat && r.stage === 'bet' ? ' mine' : ''), st + '　');
+  const cnt = mk('span', 'bj-count', ''); cnt.id = 'roCount'; cnt.textContent = `${Math.ceil(r.left / 1000)} 秒`; stat.appendChild(cnt);
+  box.appendChild(stat);
+  // 球（開出的號碼）＋歷史
+  const top = mk('div', 'ro-top');
+  const ball = mk('div', `ro-ball ${r.result == null || spinning ? 'idle' : roCol(r.result)}`, r.result == null ? '·' : spinning ? '0' : String(r.result)); ball.id = 'roBall';
+  top.appendChild(ball);
+  const hist = mk('div', 'ro-hist');
+  for (const n of [...r.hist].reverse()) hist.appendChild(mk('span', `ro-h ${roCol(n)}`, String(n)));
+  top.appendChild(hist); box.appendChild(top);
+  // 下注盤（歐式：0＋3 列×12 欄＋三直欄＋三打＋外圍注）
+  const board = mk('div', 'ro-board'), mine = my ? my.bets : {};
+  const cell = (key, label, cls, col, row, colSpan = 1, rowSpan = 1) => {
+    const b = mk('button', `ro-cell ${cls}` + (revealed && r.result != null && roMultC(key, r.result) > 0 ? ' ro-hit' : ''), label);
+    b.style.gridColumn = `${col} / span ${colSpan}`; b.style.gridRow = `${row} / span ${rowSpan}`;
+    if (mine[key]) b.appendChild(mk('span', 'ro-chip', mine[key] >= 1000 ? `${mine[key] / 1000}k` : String(mine[key])));
+    b.disabled = !(seat && r.stage === 'bet');
+    b.onclick = () => S.net?.tbl?.({ a: 'rbet', k: key, n: S.roAmt || 100 });
+    board.appendChild(b);
+  };
+  cell('n0', '0', 'green', 1, 1, 1, 3);
+  for (let k = 1; k <= 36; k++) { const colIdx = Math.ceil(k / 3), rowIdx = 3 - ((k - 1) % 3); cell(`n${k}`, String(k), roCol(k), colIdx + 1, rowIdx); }
+  cell('c3', '2:1', 'outside', 14, 1); cell('c2', '2:1', 'outside', 14, 2); cell('c1', '2:1', 'outside', 14, 3);
+  cell('d1', '1st 12', 'outside', 2, 4, 4); cell('d2', '2nd 12', 'outside', 6, 4, 4); cell('d3', '3rd 12', 'outside', 10, 4, 4);
+  cell('low', '1-18', 'outside', 2, 5, 2); cell('even', '雙', 'outside', 4, 5, 2); cell('red', '紅', 'red', 6, 5, 2); cell('black', '黑', 'black', 8, 5, 2); cell('odd', '單', 'outside', 10, 5, 2); cell('high', '19-36', 'outside', 12, 5, 2);
+  box.appendChild(board);
+  // 座位
+  const rowS = mk('div', 'table-seats bj-seats');
+  v.seats.forEach((s, k) => {
+    const p = r.p[k], el = mk('div', 'table-seat bj-seat' + (s.you ? ' you' : '') + (p.st === 'out' && r.stage === 'result' ? ' out' : ''));
+    el.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '')));
+    let tag;
+    if (r.stage === 'bet') tag = p.bet > 0 ? `下注 ${p.bet}${p.ok ? '　✔' : ''}` : p.ok ? '本局不下注' : '尚未下注';
+    else if (!revealed) tag = p.bet > 0 ? `下注 ${p.bet}` : '本局觀望';
+    else if (p.st === 'out') tag = '本局觀望';
+    else tag = p.res === 'win' ? `贏 +${p.pay - p.bet}` : p.res === 'push' ? '平手（退注）' : `輸 -${p.bet - p.pay}`;
+    el.appendChild(mk('div', 'table-tag' + (revealed && p.res === 'win' ? ' bj-win' : revealed && p.res === 'lose' ? ' bj-lose' : ''), tag));
+    rowS.appendChild(el);
+  });
+  box.appendChild(rowS);
+  if (seat) {
+    box.appendChild(mk('div', 'table-tag bj-chips', `我的籌碼：${Math.floor(r.chips || 0).toLocaleString('en-US')}（單格最多 ${r.maxSpot}、一局最多 ${r.maxTotal}）`));
+    const bs = mk('div', 'table-btns bj-btns');
+    S.roAmt = RO_AMTS.includes(S.roAmt) ? S.roAmt : 100;
+    for (const a of RO_AMTS) { const b = mk('button', 'ff-btn small' + (S.roAmt === a ? ' active' : ''), a >= 1000 ? `${a / 1000}k` : `${a}`); b.onclick = () => { S.roAmt = a; buildTable(); }; bs.appendChild(b); }
+    const bet = r.stage === 'bet';
+    const cl = mk('button', 'ff-btn small', '清空'); cl.disabled = !bet || !(my.bet > 0); cl.onclick = () => S.net?.tbl?.({ a: 'rclr' }); bs.appendChild(cl);
+    const rp = mk('button', 'ff-btn small', '重複上局'); rp.disabled = !bet || my.bet > 0 || !r.canRep; rp.onclick = () => S.net?.tbl?.({ a: 'rrep' }); bs.appendChild(rp);
+    const ok = mk('button', 'ff-btn', my.bet > 0 || !my.ok ? '確定' : '本局不下注'); ok.disabled = !bet || my.ok; ok.onclick = () => S.net?.tbl?.({ a: 'rok' }); bs.appendChild(ok);
     box.appendChild(bs);
   } else if (v.seats.length < v.max) {
     const bs = mk('div', 'table-btns'), sb = mk('button', 'ff-btn', '入座'); sb.onclick = () => S.net?.tbl?.({ a: 'sit', chips: S.chips }); bs.appendChild(sb); box.appendChild(bs);

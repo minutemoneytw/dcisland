@@ -1677,6 +1677,9 @@ TABLES_BY_TERRAIN = {
               dict(id="t99", game="mary", cell=[44.5, 2.5], w=2, h=3),   # 2026-11-23：原本 x=42 跟大螢幕（x 27～43）重疊、被螢幕蓋住，往右移到 44.5（離螢幕、離街機群各 1.5 格）
               # 21 點（2026-11-24，使用者要求：隱藏區的賭博桌、1～8 位玩家、莊家用隨機島主）：3×2 格的牌桌，放在隱藏房間小瑪莉右邊（隱藏房間 box [38,4,60,12]）
               dict(id="t98", game="blackjack", cell=[50, 5], w=3, h=2),
+              # 吃角子老虎機（2026-11-24，使用者要求：小瑪莉左邊）與輪盤（21 點右邊）：都在隱藏房間，北牆邊／牌桌排
+              dict(id="t97", game="slots", cell=[41, 2.5], w=2, h=3),
+              dict(id="t96", game="roulette", cell=[55, 5], w=3, h=2),
               # 打磚塊機台（2026-11-16，使用者要求：畫面右側牆邊、餐飲區的下方，機台面向左邊，先放一台）：貼著東牆（房間最右兩欄 x＝83、84），餐飲區地毯（y 16～20）下面隔 1 格
               dict(id="t20", game="breakout", cell=[83, 22], w=2, h=3),
               dict(id="t22", game="bubble", cell=[83, 30], w=2, h=3),   # 泡泡射手（2026-11-17，使用者要求：彈珠台下方放一台）：貼東牆、面向左，在彈珠台下面隔 1 格；單人、分數進排行榜
@@ -2168,6 +2171,60 @@ def table_blackjack():
         cv.rect(x + 3, y + 3, x + 5, y + 8, c)
     for x, y, c in ((32, 12, "#d83a3a"), (32, 14, "#2f66d8"), (35, 13, "#1e1e24"), (35, 15, "#d83a3a")):   # 籌碼
         cv.ellipse(x + 2, y + 2, 3, 2, hx(c)); cv.hline(x - 1, x + 5, y + 2, shade(hx(c), 1.4))
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
+    cv.outline()
+    return cv
+
+def table_slots():
+    """吃角子老虎機（32×48，畫 scale 2＝2×3 格）：深青藍機身、上方金色招牌「7」、中間三個轉輪視窗（櫻桃／7／BAR 的色塊）、右側拉霸桿、下方投幣口。"""
+    cv = Canvas(32, 48)
+    body = hx("#2a6a8a"); dark = shade(body, .6); lite = shade(body, 1.3); gold = hx("#e8c060")
+    cv.rect(2, 0, 29, 47, body)
+    cv.rect(2, 0, 4, 47, dark); cv.rect(27, 0, 29, 47, dark)
+    cv.rect(5, 1, 26, 10, hx("#1a1a28")); cv.hline(5, 26, 1, gold); cv.hline(5, 26, 10, gold)   # 上方招牌
+    for k, c in enumerate(("#e04848", "#f0c020", "#e04848")):   # 招牌上三個 7
+        x = 8 + k * 6
+        cv.hline(x, x + 3, 3, hx(c)); cv.set(x + 3, 4, hx(c)); cv.set(x + 2, 5, hx(c)); cv.set(x + 2, 6, hx(c)); cv.set(x + 1, 7, hx(c)); cv.set(x + 1, 8, hx(c))
+    cv.rect(5, 13, 26, 28, hx("#0c0c14"))                        # 轉輪視窗外框
+    for k in range(3):
+        x = 6 + k * 7
+        cv.rect(x, 14, x + 5, 27, hx("#f4f0e4")); cv.rect(x, 14, x, 27, hx("#c8c0a8")); cv.rect(x + 5, 14, x + 5, 27, hx("#c8c0a8"))
+        cc = ("#e04848", "#3cb45a", "#f0c020")[k]
+        cv.ellipse(x + 2.5, 21, 2, 3, hx(cc)); cv.set(x + 2, 19, shade(hx(cc), 1.5))
+    cv.hline(5, 26, 21, hx("#e03030"))                           # 中線
+    cv.rect(5, 30, 26, 31, dark)
+    for k, bc in enumerate(("#f0c020", "#3cb45a", "#e04848")):   # 下面一排鈕
+        cv.ellipse(10 + k * 6, 35, 1.8, 1.8, hx(bc)); cv.set(10 + k * 6 - 1, 34, shade(hx(bc), 1.4))
+    cv.rect(5, 38, 26, 39, dark)
+    cv.rect(11, 42, 20, 45, hx("#10101a")); cv.hline(11, 20, 42, lite)   # 投幣口／出幣口
+    cv.rect(27, 12, 29, 30, hx("#a8a8b8")); cv.ellipse(28, 11, 2.2, 2.2, hx("#e04848")); cv.set(27, 10, hx("#ffb0b0"))   # 右側拉霸桿
+    cv.outline()
+    return cv
+
+def table_roulette():
+    """輪盤桌（48×32，畫 scale 2＝3×2 格）：深綠絨布桌面，左邊一個紅黑相間的輪盤、右邊一排紅黑格的下注區。"""
+    cv = Canvas(48, 32)
+    wood, felt = hx("#4a3020"), hx("#1f6a3a")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
+    cv.rect(3, 7, 44, 24, felt); cv.rect(3, 7, 44, 8, shade(felt, .8))
+    cx, cy = 14, 16
+    cv.ellipse(cx, cy, 8, 8, hx("#6a4a28")); cv.ellipse(cx, cy, 7, 7, hx("#1a1a1a"))
+    import math
+    for k in range(12):   # 紅黑相間的格子
+        a0, a1 = k * math.pi / 6, (k + 1) * math.pi / 6
+        c = hx("#d83a3a") if k % 2 == 0 else hx("#1e1e24")
+        for r in range(3, 7):
+            for t in range(6):
+                a = a0 + (a1 - a0) * (t + .5) / 6
+                cv.set(int(round(cx + math.cos(a) * r)), int(round(cy + math.sin(a) * r)), c)
+    cv.ellipse(cx, cy, 2, 2, hx("#d8b050")); cv.set(cx, cy, hx("#fff0a0"))
+    cv.set(cx + 4, cy - 3, hx("#ffffff"))   # 小白球
+    for k in range(6):   # 右邊的下注格
+        for j in range(2):
+            c = hx("#d83a3a") if (k + j) % 2 == 0 else hx("#1e1e24")
+            x, y = 26 + k * 3, 11 + j * 5
+            cv.rect(x, y, x + 2, y + 4, c); cv.rect(x, y, x + 2, y, hx("#f6f2e6"))
+    cv.hline(26, 43, 21, hx("#d8b050"))
     cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
@@ -4412,6 +4469,8 @@ def main():
     save(table_pinball(), "table_pinball.png", "games")
     save(table_mary(), "table_mary.png", "games")
     save(table_blackjack(), "table_blackjack.png", "games")
+    save(table_slots(), "table_slots.png", "games")
+    save(table_roulette(), "table_roulette.png", "games")
     save(table_breakout(), "table_breakout.png", "games")
     save(table_bubble(), "table_bubble.png", "games")
     save(table_g2048(), "table_g2048.png", "games")
