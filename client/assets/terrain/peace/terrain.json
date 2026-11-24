@@ -233,7 +233,7 @@
    "game": "mary",
    "cell": [
     44.5,
-    14.5
+    2.5
    ],
    "w": 2,
    "h": 3
@@ -316,6 +316,22 @@
   "w": "wall_w.png",
   "e": "wall_e.png",
   "h": 3
+ },
+ "secret": {
+  "box": [
+   38,
+   4,
+   60,
+   12
+  ],
+  "door": [
+   44,
+   13,
+   46,
+   15
+  ],
+  "curtain": "secret_curtain.png",
+  "rug": "secret_rug.png"
  },
  "props": [
   {

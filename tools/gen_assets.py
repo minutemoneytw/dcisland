@@ -288,6 +288,47 @@ def wall_side(inner_right):
     cv.vline(ox, 0, 15, shade(top, .6))
     return cv
 
+def secret_curtain():
+    """隱藏區的門簾（48×48，畫 scale 2＝3×3 格，剛好蓋住北牆的門洞）：金色吊桿＋深酒紅絨布垂簾（直向皺褶）＋底邊金流蘇。"""
+    cv = Canvas(48, 48)
+    cloth = [hx("#7a2838"), hx("#8e3446"), hx("#7a2838"), hx("#5e1c2a")]   # 皺褶的明暗週期（4 px）
+    for x in range(48):
+        cv.vline(x, 8, 43, cloth[(x + 1) % 4])
+    for x in range(0, 48, 12):   # 較寬的大褶：每 12 px 一道深線
+        cv.vline(x, 8, 43, hx("#4a1420"))
+    cv.vline(23, 8, 43, hx("#3a0e18")); cv.vline(24, 8, 43, hx("#3a0e18"))   # 中間兩片簾子相接的縫
+    gold, gold_l, gold_d = hx("#d8b050"), hx("#f0d684"), hx("#8a6a28")
+    cv.rect(0, 0, 47, 2, gold); cv.hline(0, 47, 0, gold_l); cv.hline(0, 47, 2, gold_d)   # 吊桿
+    cv.rect(0, 0, 2, 4, gold_l); cv.rect(45, 0, 47, 4, gold_l)   # 兩端的飾頭
+    for x in range(0, 48, 4):   # 簾頂的小圓環
+        cv.rect(x + 1, 3, x + 2, 5, gold_d)
+    for x in range(0, 48, 8):   # 上緣垂幔（扇形下緣）
+        cv.rect(x, 6, x + 7, 9, hx("#92384c"))
+        cv.rect(x + 1, 10, x + 6, 10, hx("#92384c")); cv.rect(x + 2, 11, x + 5, 11, hx("#92384c"))
+        cv.hline(x, x + 7, 6, gold_d)
+    cv.rect(0, 42, 47, 43, gold_d)   # 底邊鑲金
+    cv.hline(0, 47, 42, gold)
+    for x in range(1, 48, 3):   # 流蘇
+        cv.vline(x, 44, 47, gold if x % 6 == 1 else gold_l)
+    return cv
+
+def secret_rug():
+    """隱藏區的地毯（368×144，畫 scale 2＝23×9 格）：深紫紅底、金色雙線外框、菱形花紋。"""
+    W, H = 368, 144
+    cv = Canvas(W, H)
+    base, deep, line = hx("#40202e"), hx("#2a1420"), hx("#c8a44a")
+    cv.rect(0, 0, W - 1, H - 1, deep)
+    cv.rect(3, 3, W - 4, H - 4, base)
+    cv.rect(1, 1, W - 2, 1, line); cv.rect(1, H - 2, W - 2, H - 2, line); cv.rect(1, 1, 1, H - 2, line); cv.rect(W - 2, 1, W - 2, H - 2, line)
+    cv.rect(5, 5, W - 6, 5, line); cv.rect(5, H - 6, W - 6, H - 6, line); cv.rect(5, 5, 5, H - 6, line); cv.rect(W - 6, 5, W - 6, H - 6, line)
+    dia = shade(base, 1.45)
+    for k2, y in enumerate(range(16, H - 12, 16)):
+        for x in range(16 + (k2 % 2) * 8, W - 12, 16):
+            cv.set(x, y, line)
+            for d in (1, 2):
+                cv.set(x - d, y, dia); cv.set(x + d, y, dia); cv.set(x, y - d, dia); cv.set(x, y + d, dia)
+    return cv
+
 def dither_tile(base, dot, seed, n=None):
     rng = random.Random(seed)
     cv = Canvas(TILE, TILE)
@@ -1592,6 +1633,10 @@ POOLS_BY_TERRAIN = {
 # 室內地形的方形房間範圍 [x0,y0,x1,y1]（含邊界，格）：2026-11-09 使用者要求和平島縮小到「剛好包含中央到釣魚池再多一點」，且仍是室內（方形、沒有水）。
 # 釣魚池左緣離島心 (53.5,35.5) 27.5 格 → 橫向半寬 31（x 23～84）；縱向取 20（y 16～55，62×40，比例同舊地圖 88×56）。
 ROOM_BOX = {"peace": [23, 16, 84, 55]}
+# 和平島的隱藏區（2026-11-24，協作者要求：賭博機台不要太明顯，大螢幕旁的牆上弄門簾，走過門簾才看得到後面）：
+# box＝隱藏房間的地板範圍（含邊界的格，在北牆後面）、door＝穿過北牆的門洞（牆正面 WALL_H 格高，x 範圍＝門簾寬）。
+# 客戶端 secretOf()：走進門洞（在門簾後面）才畫隱藏區與裡面的東西；小地圖不畫；不能擺家具／鋪地板
+SECRET = {"peace": dict(box=[38, 4, 60, 12], door=[44, 13, 46, 15])}
 
 # 和平島的遊戲桌：地形 → [桌]。id＝桌 id（兩份伺服器的 TABLE_DEFS 要一致）、game＝client/assets/games/games.json 的遊戲 id、
 # cell＝左上角格、w／h＝占幾格（圖 48×32 以 scale 2 畫＝3×2 格）。桌子是島上固定物件，不是可擺設的家具
@@ -1629,7 +1674,7 @@ TABLES_BY_TERRAIN = {
               # 彈珠台（2026-11-17 使用者要求：轉到側面、放到打磚塊底下）：貼東牆、面向左，在打磚塊下面隔 1 格
               dict(id="t19", game="pinball", cell=[83, 26], w=2, h=3),
               # 小瑪莉機台（2026-11-16，使用者要求：北牆最左邊的經典水果盤賭博機台，籌碼經濟的第一個客人；2026-11-18 撞號改編 t99——t21/t22/t23 連續被遠端的新機台用掉，使用者定低號留給遠端、小瑪莉跳 t99）：2×3 格、靠北牆，街機群左邊
-              dict(id="t99", game="mary", cell=[44.5, 14.5], w=2, h=3),   # 2026-11-23：原本 x=42 跟大螢幕（x 27～43）重疊、被螢幕蓋住，往右移到 44.5（離螢幕、離街機群各 1.5 格）
+              dict(id="t99", game="mary", cell=[44.5, 2.5], w=2, h=3),   # 2026-11-23：原本 x=42 跟大螢幕（x 27～43）重疊、被螢幕蓋住，往右移到 44.5（離螢幕、離街機群各 1.5 格）
               # 打磚塊機台（2026-11-16，使用者要求：畫面右側牆邊、餐飲區的下方，機台面向左邊，先放一台）：貼著東牆（房間最右兩欄 x＝83、84），餐飲區地毯（y 16～20）下面隔 1 格
               dict(id="t20", game="breakout", cell=[83, 22], w=2, h=3),
               dict(id="t22", game="bubble", cell=[83, 30], w=2, h=3),   # 泡泡射手（2026-11-17，使用者要求：彈珠台下方放一台）：貼東牆、面向左，在彈珠台下面隔 1 格；單人、分數進排行榜
@@ -4281,6 +4326,9 @@ def main():
                     td["roomBox"] = ROOM_BOX[t["id"]]
                     save(wall_face(), "wall.png", sub); save(wall_side(True), "wall_w.png", sub); save(wall_side(False), "wall_e.png", sub)
                     td["walls"] = dict(n="wall.png", w="wall_w.png", e="wall_e.png", h=WALL_H)   # 東北西三面牆（南面不畫）
+                    if t["id"] in SECRET:   # 隱藏區：門簾與地毯圖＋範圍（客戶端 secretOf）
+                        td["secret"] = dict(SECRET[t["id"]], curtain="secret_curtain.png", rug="secret_rug.png")
+                        save(secret_curtain(), "secret_curtain.png", sub); save(secret_rug(), "secret_rug.png", sub)
         if t["id"] in PROPS_BY_TERRAIN:   # 固定小物件（餐飲區等）：圖放在地形資料夾
             td["props"] = PROPS_BY_TERRAIN[t["id"]]
             save(drink_bar(), "drink_bar.png", sub); save(snack_bar(), "snack_bar.png", sub); save(dine_partition(), "dine_partition.png", sub); save(dine_rug(), "dine_rug.png", sub); save(lounge_rug(), "lounge_rug.png", sub); save(claw_machine(), "claw_machine.png", sub); save(gacha_machine(), "gacha_machine.png", sub)   # 室內房間的方形範圍 [x0,y0,x1,y1]（含邊界）；範圍外不畫、不能走   # ground.png 是 n×n 格的大圖，每格各畫其中一塊（方磚放大 n 倍）

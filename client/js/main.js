@@ -154,6 +154,26 @@ function inRoom(x, y, id = S.terrain) {
   const td = S.terrains[id], b = td?.layout === 'room' && td.roomBox;
   return !b || (x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]);
 }
+// ---- 和平島的隱藏區（2026-11-24，協作者要求：賭博機台不要太明顯）----
+// terrain.json 的 secret＝{box 隱藏房間地板範圍、door 北牆的門洞、curtain 門簾圖、rug 地毯圖}（格座標、含邊界）。房間在北牆後面，
+// 平常不畫、裡面的東西（機台、別人）也不畫；自己走進門洞（門簾後面）才打開（S.secretOpen），退回牆外就關。小地圖不畫、不能擺家具／鋪地板。
+function secretOf(id = S.terrain) { return S.terrains[id]?.secret || null; }
+function secretCell(x, y, id = S.terrain) {   // 這格是隱藏房間或門洞（可以走）
+  const sc = secretOf(id); if (!sc) return false;
+  const b = sc.box, d = sc.door;
+  return (x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]) || (x >= d[0] && x <= d[2] && y >= d[1] && y <= d[3]);
+}
+function inSecretArea(x, y, id = S.terrain) {   // 隱藏區含四周的牆（擺設、地板都不行）
+  const sc = secretOf(id); if (!sc) return false;
+  const b = sc.box;
+  return secretCell(x, y, id) || (x >= b[0] - 1 && x <= b[2] + 1 && y >= b[1] - 4 && y <= b[3]);
+}
+function updateSecret() {   // 每幀：自己走進門簾後面就打開（遲滯：往回退到牆外一點才關，不會在門口閃）
+  const sc = secretOf(), me = S.players[0];
+  if (!sc || !me) { S.secretOpen = false; return; }
+  const y = me.y / CELL, door = sc.door;
+  S.secretOpen = S.secretOpen ? y < door[1] + 1.6 : y < door[1] + 1;
+}
 // ---- 島形（2026-11-14 使用者定：除和平島外，7 座戶外島的形狀彼此明顯不同、大小與現狀差不多）----
 // 全部都表示成「d 值」（<.7 陸地、.7~1.1 岸邊、其餘水，門檻與舊橢圓同一套）的形狀函式，可再疊一層「挖洞」
 // （bites：橢圓咬痕，洞內是水、洞緣留岸邊）。genWorld 會先掃一次（不含雜訊）數陸格，把形狀等比縮放到
@@ -273,7 +293,7 @@ function genWorld(id) {
   }
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
     if (room) {   // 和平島：方形房間 roomBox 內是地板（池另算）；房間外填 0（走不進去，但不畫也不能釣魚，見 inRoom）
-      types[y * COLS + x] = !inRoom(x, y) ? 0 : inPool(x, y, 0) ? 0 : inPool(x, y, 1) ? 1 : 2;
+      types[y * COLS + x] = secretCell(x, y, id) ? 2 : !inRoom(x, y) ? 0 : inPool(x, y, 0) ? 0 : inPool(x, y, 1) ? 1 : 2;   // 隱藏區（北牆後面）也是地板
       continue;
     }
     let d = dist(x, y);
@@ -4404,6 +4424,15 @@ function buildEmoteMenu() {
     b.onclick = () => { emoteSay(e.id); m.classList.add('hidden'); };
     m.appendChild(b);
   });
+}
+function drawSecretRoom(sc, W, ims) {   // 隱藏房間：地毯、北／東／西牆，南面是北牆的背面（門洞那段由門簾蓋住）
+  const [bx0, by0, bx1, by1] = sc.box, d = sc.door;
+  if (ims[sc.rug]) drawSpr(ims[sc.rug], 0, bx0 * CELL, by0 * CELL, (bx1 - bx0 + 1) * CELL, (by1 - by0 + 1) * CELL);
+  if (W) drawRoomWalls({ ...W, h: 3 }, ims, sc.box);
+  const x0 = (bx0 - 1) * CELL, w = (bx1 - bx0 + 3) * CELL, y0 = d[1] * CELL, h = (d[3] - d[1] + 1) * CELL;   // 北牆的背面：整條蓋成深色牆體
+  ctx.fillStyle = '#2a2028'; ctx.fillRect(x0, y0, w, h);
+  ctx.fillStyle = '#4a3a44'; ctx.fillRect(x0, y0, w, 3);
+  ctx.fillStyle = '#1a1218'; ctx.fillRect(x0, y0 + h - 4, w, 4);
 }
 function drawBubble(x, y, text, alpha) {
   ctx.save(); ctx.globalAlpha = alpha;
@@ -12599,7 +12628,7 @@ function buildMinimapBase() {   // 換地形（＝genWorld 重生成）時重畫
   mmBase.width = COLS; mmBase.height = ROWS;
   const g = mmBase.getContext('2d');
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
-    const t = S.world.types[y * COLS + x];
+    const t = secretCell(x, y, T) ? 0 : S.world.types[y * COLS + x];   // 隱藏區不畫在小地圖上
     g.fillStyle = t === 2 ? c.ground : t === 1 ? c.shore : room ? c.room : c.water;
     g.fillRect(x, y, 1, 1);
   }
@@ -12664,9 +12693,10 @@ function drawMinimap() {   // 掛點：draw() 的 drawWeather() 之後（螢幕�
   // 點：營火（橘，集合點）、其他玩家（金）、自己（白＋深色描邊放最上）
   const dot = (wx, wy, col, r) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(ox + wx / CELL * sc, oy + wy / CELL * sc, r, 0, Math.PI * 2); ctx.fill(); };
   if (S.campfire) dot(S.campfire.x, S.campfire.y, '#ff9a4a', 2);
-  for (const r of S.remotes.values()) if (r.x != null) dot(r.x, r.y, '#e8c86a', 1.6);
+  const hid = (px, py) => inSecretArea(Math.floor(px / CELL), Math.floor(py / CELL));   // 在隱藏區裡的人不上小地圖
+  for (const r of S.remotes.values()) if (r.x != null && !hid(r.x, r.y)) dot(r.x, r.y, '#e8c86a', 1.6);
   const me = S.players[0];
-  if (me) { dot(me.x, me.y, '#14100a', 3.2); dot(me.x, me.y, '#f4f8fc', 2); }
+  if (me && !hid(me.x, me.y)) { dot(me.x, me.y, '#14100a', 3.2); dot(me.x, me.y, '#f4f8fc', 2); }
   ctx.restore();
   // 外框與資訊條畫在 clip 外（資訊條壓在圓框下緣、一部分在圓外，clip 內畫會被裁掉——2026-11-13 使用者回饋天氣圖示看不到就是這個原因）
   // 外框：深青銅粗環＋金環＋內圈暗環＋四顆斜角鉚釘（仿範例圖的雕花框；中央指針使用者說不用，拿掉了）
@@ -12705,6 +12735,7 @@ function draw() {
   const T = S.terrain, tMan = S.terrains[T], ims = S.tImages[T];
   const SC = tMan.scale;
   if (!ims) return; // 載圖中略過本幀
+  updateSecret();
   // 鏡頭跟隨（任何人多時也可提供跟隨對象）
   const me = S.players[0] || { x: 0, y: 0 };
   let camX = me.x - canvas.width / 2, camY = me.y - canvas.height * .58;
@@ -12730,7 +12761,7 @@ function draw() {
   const tiles = [ims[tMan.water], ims[tMan.edge], ims[tMan.ground]], tileFi = tiles.map(s => s ? sprFrame(s) : 0), groundRep = tMan.groundRepeat || 1, roomBox = tMan.layout === 'room' && tMan.roomBox;
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
     const t = S.world.types[y * COLS + x], spr = tiles[t];
-    if (!spr || (roomBox && !inRoom(x, y))) continue;   // 室內地形：房間外留黑
+    if (!spr || (roomBox && !inRoom(x, y) && !(S.secretOpen && secretCell(x, y)))) continue;   // 室內地形：房間外留黑（隱藏區打開時才畫）
     if (t === 2 && groundRep > 1) {   // 地面圖是 n×n 格的大圖（和平島室內地板的方磚放大 n 倍）：每格畫其中對應的一塊
       const fw = spr.fw / groundRep, fh = spr.fh / groundRep;
       ctx.drawImage(spr.img, (x % groundRep) * fw, (y % groundRep) * fh, fw, fh, x * CELL, y * CELL, CELL, CELL);
@@ -12739,6 +12770,8 @@ function draw() {
     drawSpr(spr, spr.stagger ? (tileFi[t] + x * 7 + y * 13) % spr.frames : tileFi[t], x * CELL, y * CELL, CELL, CELL);
   }
   if (roomBox && tMan.walls) drawRoomWalls(tMan.walls, ims, roomBox);   // 室內房間的東北西三面牆（房間外，畫在地面之後、物件之前）
+  const secret = tMan.secret;
+  if (secret && S.secretOpen) drawSecretRoom(secret, tMan.walls, ims);   // 隱藏區：只有走進門簾後面才畫
   for (const pr of tMan.props || []) if (pr.kind === 'rug' && ims[pr.img]) { const r = propRect(pr); drawSpr(ims[pr.img], 0, r.x, r.y, r.w, r.h); }   // 地毯（餐飲區）：地板層、角色與物件之下
   // 地板層：蓋在地面上、家具與角色之下（多格地板從錨點畫整張，錨點在鏡頭左上外也要畫，所以往外多看幾格）
   for (let y = Math.max(0, y0 - FLOOR_MAX + 1); y <= y1; y++) for (let x = Math.max(0, x0 - FLOOR_MAX + 1); x <= x1; x++) {
@@ -13019,7 +13052,12 @@ function draw() {
       }
     });
   }
-  list.sort((a, b) => a.y - b.y).forEach(o => o.draw());
+  if (secret && ims[secret.curtain]) {   // 門簾：蓋住北牆的門洞，排序鍵＝牆腳（走進門洞的人會被簾子擋住）
+    const d = secret.door;
+    list.push({ y: (d[3] + 1) * CELL, draw: () => drawSpr(ims[secret.curtain], 0, d[0] * CELL, d[1] * CELL, (d[2] - d[0] + 1) * CELL, (d[3] - d[1] + 1) * CELL) });
+  }
+  const shown = secret && !S.secretOpen ? list.filter(o => o.y >= secret.door[1] * CELL) : list;   // 隱藏區沒打開：裡面的機台、別人、名牌一律不畫
+  shown.sort((a, b) => a.y - b.y).forEach(o => o.draw());
 
   // 地板模式 ghost：游標所在格（長按右鍵時顯示拆除）
   if (S.mode === 'decor' && S.decorTab === 'floor' && S.mouseCell) {
@@ -13198,7 +13236,7 @@ function canPlace(typeId, x, y) {
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
     if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS) return false;
-    if (!groundAt(xx, yy)) return false;   // 水上要先鋪地板
+    if (!groundAt(xx, yy) || inSecretArea(xx, yy)) return false;   // 水上要先鋪地板；隱藏區不能擺
     if (S.occ.get(key(xx, yy)) !== undefined) return false;
   }
   return true;
@@ -13304,7 +13342,7 @@ function applyFloorOp(m, op, items = S.furnItems) {   // 有變動回 true
   m.set(y * COLS + x, op.type);
   return true;
 }
-const floorCellOk = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;   // 地板可以鋪在水上
+const floorCellOk = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS && !inSecretArea(x, y);   // 地板可以鋪在水上
 // 長按鋪設/拆除：游標所在格套用目前動作（沒有變化的不記草稿；地毯掃過去會一塊接一塊鋪，不會重疊）
 function paintFloor() {
   if (S.mode !== 'decor' || S.decorTab !== 'floor' || !S.paint || !S.mouseCell || S.players[0].dead) return;
@@ -13349,7 +13387,7 @@ function canPlaceIn(list, typeId, x, y, floor = S.floorMap) {
   const def = furnitureDef(typeId); if (!def) return false;
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
-    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor) || tableAtCell(xx, yy) || propAtCell(xx, yy)) return false;
+    if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor) || inSecretArea(xx, yy) || tableAtCell(xx, yy) || propAtCell(xx, yy)) return false;
   }
   return !list.some(it => { const d = furnitureDef(it.type) || { w: 1, h: 1 };
     return x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h; });
@@ -14252,6 +14290,7 @@ async function ensureTerrain(id) {
   const files = new Set([man.ground, man.edge, man.water]);
   for (const d of man.deco) files.add(d.sprite);
   if (man.walls) for (const k of ['n', 'w', 'e']) if (man.walls[k]) files.add(man.walls[k]);   // 室內房間的牆
+  if (man.secret) { files.add(man.secret.curtain); files.add(man.secret.rug); }   // 隱藏區的門簾與地毯
   for (const pr of man.props || []) if (pr.img) files.add(pr.img);   // 固定小物件（餐飲區）
   const ims = {};
   // terrain.json 的 anims：{ 檔名: anim }，地面／岸邊／水／點綴物都可以各自設定動畫（沒設＝單張圖）
