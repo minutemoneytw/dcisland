@@ -1675,6 +1675,8 @@ TABLES_BY_TERRAIN = {
               dict(id="t19", game="pinball", cell=[83, 26], w=2, h=3),
               # 小瑪莉機台（2026-11-16，使用者要求：北牆最左邊的經典水果盤賭博機台，籌碼經濟的第一個客人；2026-11-18 撞號改編 t99——t21/t22/t23 連續被遠端的新機台用掉，使用者定低號留給遠端、小瑪莉跳 t99）：2×3 格、靠北牆，街機群左邊
               dict(id="t99", game="mary", cell=[44.5, 2.5], w=2, h=3),   # 2026-11-23：原本 x=42 跟大螢幕（x 27～43）重疊、被螢幕蓋住，往右移到 44.5（離螢幕、離街機群各 1.5 格）
+              # 21 點（2026-11-24，使用者要求：隱藏區的賭博桌、1～8 位玩家、莊家用隨機島主）：3×2 格的牌桌，放在隱藏房間小瑪莉右邊（隱藏房間 box [38,4,60,12]）
+              dict(id="t98", game="blackjack", cell=[50, 5], w=3, h=2),
               # 打磚塊機台（2026-11-16，使用者要求：畫面右側牆邊、餐飲區的下方，機台面向左邊，先放一台）：貼著東牆（房間最右兩欄 x＝83、84），餐飲區地毯（y 16～20）下面隔 1 格
               dict(id="t20", game="breakout", cell=[83, 22], w=2, h=3),
               dict(id="t22", game="bubble", cell=[83, 30], w=2, h=3),   # 泡泡射手（2026-11-17，使用者要求：彈珠台下方放一台）：貼東牆、面向左，在彈珠台下面隔 1 格；單人、分數進排行榜
@@ -2148,6 +2150,25 @@ def table_pinball():
     for y in (34, 37, 40):
         cv.hline(18, 25, y, dark)                                         # 下半身的散熱孔
     cv.hline(7, 29, 46, dark); cv.hline(7, 29, 47, dark)
+    cv.outline()
+    return cv
+
+def table_blackjack():
+    """21 點桌（48×32，畫 scale 2＝3×2 格）：深綠絨布半圓桌面、金邊、桌上一張 A 一張 K（Blackjack）與幾枚籌碼。"""
+    cv = Canvas(48, 32)
+    wood, felt = hx("#4a3020"), hx("#1f6a3a")
+    cv.rect(0, 4, 47, 27, wood); cv.rect(0, 4, 47, 5, shade(wood, 1.3))
+    cv.rect(3, 7, 44, 24, felt); cv.rect(3, 7, 44, 8, shade(felt, .8))
+    gold = hx("#d8b050")
+    cv.hline(5, 42, 20, gold); cv.set(4, 19, gold); cv.set(43, 19, gold)   # 桌面上的金線（玩家下注區）
+    for x, y, ch, red in ((14, 10, "A", False), (20, 12, "K", True)):   # 一張 A 一張 K 疊著放
+        cv.rect(x, y, x + 8, y + 11, hx("#f6f2e6")); cv.rect(x, y, x + 8, y, hx("#1a1612")); cv.rect(x, y + 11, x + 8, y + 11, hx("#1a1612"))
+        cv.vline(x, y, y + 11, hx("#1a1612")); cv.vline(x + 8, y, y + 11, hx("#1a1612"))
+        c = hx("#d83a3a") if red else hx("#1e1e24")
+        cv.rect(x + 3, y + 3, x + 5, y + 8, c)
+    for x, y, c in ((32, 12, "#d83a3a"), (32, 14, "#2f66d8"), (35, 13, "#1e1e24"), (35, 15, "#d83a3a")):   # 籌碼
+        cv.ellipse(x + 2, y + 2, 3, 2, hx(c)); cv.hline(x - 1, x + 5, y + 2, shade(hx(c), 1.4))
+    cv.rect(2, 26, 5, 31, shade(wood, .75)); cv.rect(42, 26, 45, 31, shade(wood, .75))
     cv.outline()
     return cv
 
@@ -4390,6 +4411,7 @@ def main():
         save(arcade_cabinet(col), f"arcade_{k}.png", "games")
     save(table_pinball(), "table_pinball.png", "games")
     save(table_mary(), "table_mary.png", "games")
+    save(table_blackjack(), "table_blackjack.png", "games")
     save(table_breakout(), "table_breakout.png", "games")
     save(table_bubble(), "table_bubble.png", "games")
     save(table_g2048(), "table_g2048.png", "games")

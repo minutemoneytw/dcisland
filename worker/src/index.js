@@ -510,8 +510,8 @@ async function exchangeToken(request, env) {
 // 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 // 與 tools/dev_server.py 的 TABLE_DEFS／om_* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
 // 牌桌狀態存 storage（key `table:<桌 id>`）：DO 會休眠，玩家想牌超過幾秒記憶體就沒了，不存的話牌局會憑空消失。
-const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey", t17: "kingdom", t18: "bigtwo", t19: "pinball", t20: "breakout", t21: "purify", t22: "bubble", t23: "g2048", t24: "planet", t99: "mary" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）；小瑪莉用 t99：t21/t22/t23 連續兩輪被遠端的新機台撞號（2026-11-18 使用者定，低號留給遠端）
-const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 4], kingdom: [2, 4], bigtwo: [2, 4], pinball: [1, 1], breakout: [1, 1], bubble: [1, 1], g2048: [1, 1], planet: [1, 2], purify: [2, 4], mary: [1, 1] };           // 遊戲 → [開局最少人數, 入座上限]
+const TABLE_DEFS = { peace: { t1: "oldmaid", t2: "gomoku", t5: "dodge", t6: "uno", t7: "typing", t8: "intel", t9: "zhtyping", t10: "mage", t11: "blokus", t12: "trigon", t13: "arcade", t14: "maze", t15: "hockey", t16: "hockey", t17: "kingdom", t18: "bigtwo", t19: "pinball", t20: "breakout", t21: "purify", t22: "bubble", t23: "g2048", t24: "planet", t98: "blackjack", t99: "mary" } };   // 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）；小瑪莉用 t99：t21/t22/t23 連續兩輪被遠端的新機台撞號（2026-11-18 使用者定，低號留給遠端）
+const GAME_LIMITS = { oldmaid: [2, 4], gomoku: [2, 2], dodge: [1, 8], uno: [2, 6], typing: [1, 8], zhtyping: [1, 8], intel: [3, 8], mage: [1, 4], blokus: [2, 4], trigon: [2, 4], arcade: [1, 4], maze: [1, 5], hockey: [2, 4], kingdom: [2, 4], bigtwo: [2, 4], pinball: [1, 1], breakout: [1, 1], bubble: [1, 1], g2048: [1, 1], planet: [1, 2], purify: [2, 4], mary: [1, 1], blackjack: [1, 8] };           // 遊戲 → [開局最少人數, 入座上限]
 const TBL_TYP_CD_MS = 200;                       // 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（客戶端約每 250ms 一次）
 const TBL_POS_CD_MS = 60;                          // 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（客戶端實際約 8 次／秒）
 const TBL_CD_MS = 100;                             // 每條連線兩次牌桌操作的最短間隔
@@ -573,11 +573,12 @@ function tblResetSeats(t) {
 // 與 tools/dev_server.py 的同名邏輯同一套，改規則兩邊一起改。
 const TBL_HOLD_MS = 20000, TBL_RK_RE = /^[A-Za-z0-9_-]{16,48}$/;
 const tblRk = v => (typeof v === "string" && TBL_RK_RE.test(v) ? v : null);
-const tblCanHold = (t, s) => t.phase === "playing" && !CAB_GAMES[t.game] && t.game !== "mary" && !!s.rk && !s.left && s.cid != null && t.seats.includes(s);   // 街機機台與小瑪莉不保留：斷線就照離開處理（小瑪莉的獎池會自動領回）
+const tblCanHold = (t, s) => t.phase === "playing" && !CAB_GAMES[t.game] && t.game !== "mary" && t.game !== "blackjack" && !!s.rk && !s.left && s.cid != null && t.seats.includes(s);   // 街機機台與小瑪莉不保留：斷線就照離開處理（小瑪莉的獎池會自動領回）
 function tblJoin(t, cid, name, want, uid, rk) {
   if (tblFind(t, cid)[0]) return;
   const mx = GAME_LIMITS[t.game][1];
-  if (want !== "spec" && t.phase === "lobby" && t.seats.length < mx) { t.seats.push({ cid, name, uid: uid || null, rk: rk || null, ready: false, hand: [], out: false }); tblLog(t, `${name} 入座了`); }
+  if (want !== "spec" && (t.phase === "lobby" || t.game === "blackjack") && t.seats.length < mx) {   // 21 點是賭桌：隨時可以入座
+    t.seats.push({ cid, name, uid: uid || null, rk: rk || null, ready: false, hand: [], out: false }); tblLog(t, `${name} 入座了`); }
   else { t.specs.push({ cid, name, uid: uid || null, rk: rk || null }); tblLog(t, `${name} 來觀戰`); }
 }
 function tblLeave(t, cid) {
@@ -587,7 +588,8 @@ function tblLeave(t, cid) {
     const name = t.seats[i].name;
     if (t.game === "planet") { plLeave(t, i); return; }   // 星球合成：單人局作廢、對戰中離開＝對手獲勝
     if (t.game === "arcade") { arLeave(t, i); return; }   // 俄羅斯方塊：單人局作廢、聯機照當時分數排名，不中斷其他人
-    if (t.game === "mary") return maLeave(t, i);   // 小瑪莉：獎池自動領回（回傳值由呼叫端入帳），最後一人離開就回大廳
+    if (t.game === "mary") return maLeave(t, i);
+    if (t.game === "blackjack") return bjLeave(t, i);   // 21 點：下注階段退注、發牌後離座＝放棄（算虧損）；回傳值由呼叫端入帳，最後一人離開就回大廳   // 小瑪莉：獎池自動領回（回傳值由呼叫端入帳），最後一人離開就回大廳
     if (t.phase === "playing" && t.game === "trigon") { tgLeave(t, i, Date.now()); return; }   // Blokus Trigon：離開不中斷，棋子留在棋盤上、之後跳過
     if (t.phase === "playing" && t.game === "purify") { pgLeave(t, i, Date.now()); return; }   // 淨土守護戰：離開者手牌收回、人偶移出，其餘人繼續（沒人了就清桌）
     if (t.phase === "playing" && t.game === "bigtwo") { btLeave(t, i, Date.now()); return; }   // 大老二：離開者手牌作廢，其餘人繼續（剩不到 2 人就結束）
@@ -609,14 +611,14 @@ function tblLeave(t, cid) {
 }
 function tblSit(t, cid) {
   const [role, i] = tblFind(t, cid);
-  if (role !== "spec" || t.phase !== "lobby" || t.seats.length >= GAME_LIMITS[t.game][1] || CAB_GAMES[t.game]) return;   // 俄羅斯方塊：要入座就走到空機台
+  if (role !== "spec" || (t.phase !== "lobby" && t.game !== "blackjack") || t.seats.length >= GAME_LIMITS[t.game][1] || CAB_GAMES[t.game]) return;   // 俄羅斯方塊：要入座就走到空機台
   const s = t.specs.splice(i, 1)[0];
   t.seats.push({ cid, name: s.name, uid: s.uid || null, rk: s.rk || null, ready: false, hand: [], out: false });
   tblLog(t, `${s.name} 入座了`);
 }
 function tblReady(t, cid, v) {
   const [role, i] = tblFind(t, cid);
-  if (role !== "seat" || t.phase !== "lobby" || CAB_GAMES[t.game]) return;
+  if (role !== "seat" || t.phase !== "lobby" || CAB_GAMES[t.game] || t.game === "blackjack") return;
   t.seats[i].ready = !!v;
   tblCheckStart(t);
 }
@@ -626,7 +628,7 @@ function tblCheckStart(t) {
 // 入座的人改成觀戰（只有還沒開局時；進行中要離開就是 leave，會結束這一局）。剩下的人若都已準備就開局
 function tblStand(t, cid) {
   const [role, i] = tblFind(t, cid);
-  if (role !== "seat" || t.phase !== "lobby" || CAB_GAMES[t.game]) return;
+  if (role !== "seat" || t.phase !== "lobby" || CAB_GAMES[t.game] || t.game === "blackjack") return;
   const s = t.seats.splice(i, 1)[0];
   t.specs.push({ cid, name: s.name, uid: s.uid || null });
   tblLog(t, `${s.name} 改為觀戰`);
@@ -3876,6 +3878,142 @@ function tfRelay(t, cid, msg, scrOut) {
   if (scrOut) scrOut.push(data);
   return t.specs.filter(m => m.cid != null).map(m => [m.cid, data]);
 }
+// ---- 21 點（第 98 桌 t98，2026-11-24，使用者要求：隱藏區的賭博桌，1～8 位玩家，莊家跟小瑪莉一樣用隨機島主）----
+// 賭桌型：**沒有「準備／開局」**——有人入座桌子就開著（phase 一直是 playing，沒人了才回大廳），一局一局自己輪下去，玩家隨時可以入座／離開。
+// 一局四個階段（g.stage）：bet 下注（BJ_BET_MS，全員確定就提早發牌）→ play 玩家輪流（座位順序，每人 BJ_TURN_MS，逾時自動停牌）
+// → result 莊家補牌與結算（BJ_RESULT_MS 後自動下一局）。規則：莊家 17 點（含軟 17）停牌；贏 1 賠 1、21 點（Blackjack，開局兩張）1 賠 1.5、平手退注、
+// 莊家開局就 Blackjack 時只有 Blackjack 的玩家平手；玩家可要牌／停牌／雙倍（只有頭兩張、再下一份同額注、只拿一張）。**沒做**：分牌、保險、投降。
+// 一次洗兩副牌（每局重洗）。籌碼：下注時原子扣款（登入者走 Registry /chips、訪客扣座位上的 session 餘額），結算時入帳（登入者的入帳先記在 g.credits，
+// 動作結束時 bjFlush 一次送 Registry）；下注階段離座退注、發牌後離座＝放棄（算虧損）。虧損（總注 − 回收）離座時按 1 經驗值＝100 籌碼換成
+// 「入座時抽到的島主」的經驗值（同小瑪莉，tableKick／tableLeave 的 maOwnerXp）。逾時由客戶端每秒送 timeout（伺服器核對 g.dl）。
+// 與 tools/dev_server.py 的 bj_* 同一套，改規則兩邊一起改。
+const BJ_MAX_BET = 10000, BJ_BET_MS = 15000, BJ_TURN_MS = 20000, BJ_RESULT_MS = 7000;
+const BJ_MSGS = new Set(["bbet", "bclr", "bok", "bhit", "bstand", "bdbl"]);
+function bjTotal(cards) {   // 手牌點數：[點數, 是否軟牌]。A 算 11 或 1，J／Q／K 算 10
+  let tot = 0, aces = 0;
+  for (const c of cards) { const r = Number(c.slice(1)); if (r === 1) { aces++; tot += 11; } else tot += Math.min(r, 10); }
+  while (tot > 21 && aces) { tot -= 10; aces--; }
+  return [tot, aces > 0];
+}
+function bjDeck() { const d = []; for (let k = 0; k < 2; k++) for (const s of "SHDC") for (let r = 1; r <= 13; r++) d.push(`${s}${r}`); return shuffle(d); }
+const bjResetSeat = (s, st = "") => Object.assign(s, { bet: 0, cards: [], st, dbl: false, res: null, pay: 0, ok: false });
+function bjNewRound(t, now) {
+  const g = t.g;
+  Object.assign(g, { stage: "bet", dl: now + BJ_BET_MS, round: (g.round || 0) + 1, dealer: [], turn: -1, deck: [] });
+  for (const s of t.seats) bjResetSeat(s);
+}
+function bjStart(t, now = Date.now()) {   // 第一個人入座：桌子開張，抽一位島主當莊家（桌子空了才換）
+  const o = MARY_OWNERS[Math.floor(Math.random() * MARY_OWNERS.length)];
+  t.g = { owner: o.id, stage: "bet", dl: now + BJ_BET_MS, round: 1, dealer: [], turn: -1, deck: [], credits: [] };
+  t.result = null; t.phase = "playing"; t.turn = 0;
+  for (const s of t.seats) { bjResetSeat(s); s.spent = 0; s.paid = 0; }
+  tblLog(t, `21 點開桌（莊家：${o.name}）`);
+}
+function bjSeatNew(s, t) {   // 新入座的人：沒帳要記；下注階段可以直接下注，其他階段等下一局
+  s.spent = 0; s.paid = 0;
+  bjResetSeat(s, t.g.stage === "bet" ? "" : "wait");
+}
+function bjCredit(t, s, pay) {   // 結算入帳：訪客直接加在座位餘額；登入者先記在 g.credits（bjFlush 送 Registry）
+  if (pay <= 0) return;
+  s.paid += pay;
+  if (s.uid) t.g.credits.push({ uid: s.uid, cid: s.cid, pay });
+  else s.chips = Math.min(CHIPS_MAX, (s.chips || 0) + pay);
+}
+function bjDeal(t, now) {   // 發牌：下了注的人開局，其他人這局觀望。莊家一張明牌一張暗牌（結算前暗牌不送給客戶端）
+  const g = t.g, act = t.seats.filter(s => s.bet > 0);
+  if (!act.length) { g.dl = now + BJ_BET_MS; return; }   // 沒人下注：再等一輪
+  for (const s of t.seats) s.st = s.bet > 0 ? "play" : "out";
+  g.deck = bjDeck();
+  for (let k = 0; k < 2; k++) { for (const s of act) s.cards.push(g.deck.pop()); g.dealer.push(g.deck.pop()); }
+  for (const s of act) if (bjTotal(s.cards)[0] === 21) s.st = "bj";
+  g.stage = "play";
+  if (bjTotal(g.dealer)[0] === 21) {   // 莊家 Blackjack：沒人要玩了，直接結算
+    for (const s of act) if (s.st === "play") s.st = "stand";
+    bjDealer(t, now); return;
+  }
+  g.turn = -1;
+  bjAdvance(t, 0, now);
+}
+function bjAdvance(t, start, now) {   // 輪到座位順序中從 start 起第一個還要動作的人；沒有就換莊家補牌結算
+  const g = t.g;
+  for (let k = start; k < t.seats.length; k++) if (t.seats[k].st === "play") { g.turn = k; g.dl = now + BJ_TURN_MS; return; }
+  g.turn = -1;
+  bjDealer(t, now);
+}
+function bjDealer(t, now) {   // 莊家亮牌補牌（17 點含軟 17 停牌）並結算所有人
+  const g = t.g, act = t.seats.filter(s => ["stand", "bj", "bust"].includes(s.st));
+  const nat = g.dealer.length === 2 && bjTotal(g.dealer)[0] === 21;
+  if (act.some(s => s.st === "stand") && !nat) while (bjTotal(g.dealer)[0] < 17) g.dealer.push(g.deck.pop());
+  const dt = bjTotal(g.dealer)[0];
+  for (const s of act) {
+    const pt = bjTotal(s.cards)[0];
+    if (s.st === "bust") { s.res = "lose"; s.pay = 0; }
+    else if (s.st === "bj") { if (nat) { s.res = "push"; s.pay = s.bet; } else { s.res = "bj"; s.pay = s.bet + Math.floor(s.bet * 3 / 2); } }
+    else if (nat || (dt <= 21 && pt < dt)) { s.res = "lose"; s.pay = 0; }
+    else if (dt > 21 || pt > dt) { s.res = "win"; s.pay = s.bet * 2; }
+    else { s.res = "push"; s.pay = s.bet; }
+    bjCredit(t, s, s.pay);
+  }
+  g.stage = "result"; g.turn = -1; g.dl = now + BJ_RESULT_MS;
+  tblLog(t, `莊家 ${dt <= 21 ? dt : "爆牌"}：${act.filter(s => s.pay > s.bet).length} 人贏、${act.filter(s => s.res === "push").length} 人平手、${act.filter(s => s.res === "lose").length} 人輸`);
+}
+function bjDraw(t, s) { s.cards.push(t.g.deck.pop()); return bjTotal(s.cards)[0]; }
+function bjOk(t, i, now) {   // 下好注按確定；全員下好注並確定就提早發牌
+  const g = t.g, s = t.seats[i];
+  if (!g || g.stage !== "bet" || s.bet <= 0 || s.ok) return [false, null];
+  s.ok = true;
+  if (t.seats.every(x => x.bet > 0 && x.ok)) bjDeal(t, now);
+  return [true, null];
+}
+function bjAct(t, i, a, now) {   // 要牌／停牌：只有輪到自己時
+  const g = t.g, s = t.seats[i];
+  if (!g || g.stage !== "play" || g.turn !== i || s.st !== "play") return [false, null];
+  if (a === "bhit") { const tot = bjDraw(t, s); if (tot > 21) s.st = "bust"; else if (tot === 21) s.st = "stand"; }
+  else if (a === "bstand") s.st = "stand";
+  else return [false, null];
+  if (s.st !== "play") bjAdvance(t, i + 1, now);
+  return [true, null];
+}
+function bjTimeout(t, now) {   // 逾時（客戶端每秒送 timeout）：下注逾時＝發牌、輪到的人逾時＝自動停牌、結果顯示完＝下一局。回是否有變化
+  const g = t.g;
+  if (t.game !== "blackjack" || t.phase !== "playing" || !g || now < g.dl) return false;
+  if (g.stage === "bet") bjDeal(t, now);
+  else if (g.stage === "play") {
+    const i = g.turn;
+    if (i >= 0 && i < t.seats.length) { t.seats[i].st = "stand"; tblLog(t, `${t.seats[i].name} 逾時，自動停牌`); bjAdvance(t, i + 1, now); }
+    else bjAdvance(t, 0, now);
+  } else bjNewRound(t, now);
+  return true;
+}
+function bjLeave(t, i) {   // 21 點離座：下注階段退注、發牌後的注放棄（算虧損）；輪到的人離開換下一位。回 {uid, pot, owner, loss}（pot＝要退給登入者的注，由呼叫端入帳）
+  const s = t.seats[i], g = t.g || {}, now = Date.now();
+  let refund = 0;
+  if (g.stage === "bet" && (s.bet || 0) > 0) { refund = s.bet; s.spent -= refund; s.bet = 0; }   // 訪客靠客戶端自己把餘額補回（下注階段 S.chips＝餘額＋下的注）
+  const loss = Math.max(0, (s.spent || 0) - (s.paid || 0)), owner = g.owner || null;
+  const turnWas = g.turn === i && g.stage === "play";
+  t.seats.splice(i, 1);
+  if (!t.seats.length) tblResetSeats(t);
+  else if (t.g) {
+    if (g.turn > i) g.turn--;
+    if (turnWas) bjAdvance(t, i, now);
+    else if (g.stage === "bet" && t.seats.every(x => x.bet > 0 && x.ok)) bjDeal(t, now);
+  }
+  return { uid: s.uid || null, pot: refund, owner, loss };
+}
+function bjView(t, cid, v) {
+  const g = t.g, [role, i] = cid === SCR_CID ? ["spec", -1] : tblFind(t, cid);
+  if (!g) return v;
+  const hide = g.stage === "play";
+  v.bj = {
+    owner: g.owner, stage: g.stage, left: Math.max(0, g.dl - Date.now()), round: g.round, turn: g.turn,
+    dealer: hide && g.dealer.length > 1 ? [g.dealer[0], null] : [...g.dealer],
+    dt: g.dealer.length ? bjTotal(hide ? g.dealer.slice(0, 1) : g.dealer)[0] : 0,
+    p: t.seats.map(s => ({ bet: s.bet || 0, cards: [...(s.cards || [])], st: s.st || "", dbl: !!s.dbl, res: s.res || null, pay: s.pay || 0, ok: !!s.ok, tot: s.cards && s.cards.length ? bjTotal(s.cards)[0] : 0 })),
+    chips: role === "seat" ? Math.max(0, Math.floor(t.seats[i].chips || 0)) : null, maxBet: BJ_MAX_BET,
+  };
+  return v;
+}
+
 // ---- 星球合成（第二十四桌 t24，2026-11-20，使用者要求：做一款類似西瓜遊戲的，隕石→冥王星→月球→火星→地球→海王星→土星→木星→太陽→紅巨星→黑洞）：兩台機台共用這一張邏輯桌 ----
 // 跟俄羅斯方塊同一套做法（使用者要求：「應該要一樣是兩台單人機台，然後可以用邀請進行對戰」）：場上兩台機台（cab 0、1；同一台只能坐一個人），每台都是單人遊玩：
 //   單人模式（solo）：各自獨立的一局，結束分數進排行榜（≥ PL_XP_MIN 分得 PL_XP XP）；
@@ -4085,7 +4223,7 @@ function hkEnd(t, cid, msg) {   // 桌主那台回報結束（有一隊到 HK_GO
   if (!Number.isInteger(msg.sa) || !Number.isInteger(msg.sb) || msg.sa < 0 || msg.sb < 0 || msg.sa > 99 || msg.sb > 99) return;
   hkFinish(t, msg.sa, msg.sb, msg.sa >= HK_GOALS || msg.sb >= HK_GOALS ? "" : "時間到");
 }
-const GAME_START = { purify: pgStart, planet: () => {}, g2048: tfStart, bubble: buStart, breakout: brStart, pinball: pbStart, bigtwo: btStart, kingdom: kgStart, arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart, mary: maStart };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
+const GAME_START = { purify: pgStart, planet: () => {}, g2048: tfStart, bubble: buStart, breakout: brStart, pinball: pbStart, bigtwo: btStart, kingdom: kgStart, arcade: () => {}, maze: mzStart, hockey: hkStart, oldmaid: omStart, gomoku: gmStart, dodge: dgStart, uno: unStart, typing: tyStart, zhtyping: tyStart, intel: itStart, mage: mgStart, blokus: bkStart, trigon: tgStart, mary: maStart, blackjack: () => {} };   // 遊戲 → 開局函式（tblReady 全員準備時呼叫）
 // 給某條連線看的版本：自己的手牌完整，別人只有張數
 const SCR_CTL_CD_MS = 5000;   // 大螢幕影片的暫停／繼續／跳轉冷卻（全島共用；2026-11-19 使用者定：任何人都能控制，每次操作 5 秒冷卻）
 const SCR_CD_MS = 5000;   // 大螢幕手動切台的冷卻（全島共用；2026-11-14 使用者要求）
@@ -4129,6 +4267,7 @@ function tblView(t, cid, jp = MARY_JP_SEED) {
     if (t.g && playing) v.pb = { seed: t.g.seed, t0: t.g.t0, sn: Date.now() };
     return v;
   }
+  if (t.game === "blackjack") return bjView(t, cid, v);   // 21 點：莊家、各座位的手牌與注、階段與剩餘時間（暗牌在結算前不送）、我的籌碼
   if (t.game === "mary") {   // 小瑪莉：獎池／開獎格／押注／比倍開的牌／座位上的籌碼（只有本人看得到自己的餘額）；外圈與賠率表一起送（單一真相在伺服器）
     const g = t.g;
     v.ma = { ring: MARY_RING, cols: MARY_COLS, pay: MARY_PAY, nm: MARY_NAME, owner: g ? g.owner : null, pot: g ? g.pot : 0, bets: g ? [...g.bets] : null, last: g ? g.last : -1, dcard: g ? g.dcard : -1, seq: g ? g.seq : 0, rseq: g ? (g.rseq || -1) : -1, lights: g ? (g.lights || 0) : 0,
@@ -4699,7 +4838,7 @@ export class Island {
     const out = [];
     for (const [tid, game] of Object.entries(TABLE_DEFS[terr] || {})) {
       const t = this.tables.get(tid);
-      if (t && (t.phase === "playing" || t.seats.length)) out.push(t);
+      if (t && t.game !== "blackjack" && (t.phase === "playing" || t.seats.length)) out.push(t);   // 21 點還沒有大螢幕畫面：不進轉播清單（它一直是 playing，不排除會自動搶走螢幕變空白）
     }
     return out;
   }
@@ -4923,6 +5062,81 @@ export class Island {
       await this.grantXp(ws2, n, "game");
     }
   }
+  // 21 點（同 bj* 純函式一套）：入座者補上籌碼；桌子還沒開就開桌（第一個人），已經開著就等下一局（下注階段可直接下注）
+  async bjAfterSeat(t, cid, localChips) {
+    const s = t.seats.find(x => x.cid === cid);
+    if (!s || "bet" in s) return;
+    await this.maInitChips(t, cid, localChips);
+    if (t.phase !== "playing" || !t.g) bjStart(t); else bjSeatNew(s, t);
+  }
+  async bjSpend(s, n) {   // 下注／雙倍的扣款：成功回 true。登入者走 Registry 原子扣款、訪客扣座位餘額
+    if (n <= 0) return false;
+    if (s.uid) {
+      const r = await this.registryCall("/chips", { uid: s.uid, spend: n });
+      if (!r || r.ok === false) return false;
+      s.chips = r.chips;
+    } else {
+      if ((s.chips || 0) < n) return false;
+      s.chips -= n;
+    }
+    s.spent = (s.spent || 0) + n;
+    return true;
+  }
+  async bjGive(s, n) {   // 退款（清空注、扣款後發現階段已變）
+    if (n <= 0) return;
+    s.spent -= n;
+    if (s.uid) { const r = await this.registryCall("/chips", { uid: s.uid, add: n }); if (r) s.chips = r.chips; }
+    else s.chips = Math.min(CHIPS_MAX, (s.chips || 0) + n);
+  }
+  async bjFlush(t) {   // 把 g.credits 的登入者入帳送 Registry（結算在同步函式裡算好，這裡才做 I/O）
+    const g = t.g;
+    if (!g || !g.credits || !g.credits.length) return;
+    const list = g.credits; g.credits = [];
+    for (const c of list) {
+      const r = await this.registryCall("/chips", { uid: c.uid, add: c.pay });
+      const seat = r ? t.seats.find(x => x.cid === c.cid && x.uid === c.uid) : null;
+      if (seat) seat.chips = r.chips;
+    }
+  }
+  async bjBet(t, i, amount) {
+    const g = t.g, s = t.seats[i];
+    if (!g || g.stage !== "bet") return [false, "現在不能下注"];
+    if (!Number.isInteger(amount) || amount <= 0 || amount > BJ_MAX_BET) return [false, "押注格式不對"];
+    if ((s.bet || 0) + amount > BJ_MAX_BET) return [false, `單局最多押 ${BJ_MAX_BET}`];
+    if (!(await this.bjSpend(s, amount))) return [false, "籌碼不足"];
+    if (!t.seats.includes(s) || t.g !== g || g.stage !== "bet") { await this.bjGive(s, amount); return [false, "這一局已經開始，注退回"]; }   // 等扣款期間階段變了（逾時發牌）
+    s.bet = (s.bet || 0) + amount; s.ok = false;   // 改了注要重新按確定
+    return [true, null];
+  }
+  async bjClear(t, i) {
+    const g = t.g, s = t.seats[i];
+    if (!g || g.stage !== "bet" || !(s.bet > 0)) return [false, null];
+    const n = s.bet; s.bet = 0; s.ok = false;
+    await this.bjGive(s, n);
+    return [true, null];
+  }
+  async bjDouble(t, i, now) {   // 雙倍：只有輪到自己、頭兩張牌時；再下一份同額注，只拿一張牌
+    const g = t.g, s = t.seats[i];
+    if (!g || g.stage !== "play" || g.turn !== i || s.st !== "play") return [false, null];
+    if (s.cards.length !== 2) return [false, "只有頭兩張牌可以雙倍"];
+    const n = s.bet;
+    if (!(await this.bjSpend(s, n))) return [false, "籌碼不足，不能雙倍"];
+    if (!t.seats.includes(s) || t.g !== g || g.stage !== "play" || g.turn !== t.seats.indexOf(s) || s.st !== "play") { await this.bjGive(s, n); return [false, null]; }   // 等扣款期間輪次變了（逾時停牌）
+    s.bet += n; s.dbl = true;
+    s.st = bjDraw(t, s) > 21 ? "bust" : "stand";
+    bjAdvance(t, t.seats.indexOf(s) + 1, now);
+    return [true, null];
+  }
+  async bjMsg(t, i, a, msg, now) {
+    let r;
+    if (a === "bbet") r = await this.bjBet(t, i, msg.n);
+    else if (a === "bclr") r = await this.bjClear(t, i);
+    else if (a === "bok") r = bjOk(t, i, now);
+    else if (a === "bdbl") r = await this.bjDouble(t, i, now);
+    else r = bjAct(t, i, a, now);
+    await this.bjFlush(t);
+    return r;
+  }
   // 小瑪莉：座位補上籌碼餘額（登入者讀 Registry；訪客用 client 帶上來的本機餘額，session 內以機台為準）
   async maInitChips(t, cid, localChips) {
     const i = t.seats.findIndex(s => s.cid === cid);
@@ -5135,7 +5349,9 @@ export class Island {
       const pname = String((att.state && att.state.name) || (att.user && att.user.name) || `玩家${att.id}`).slice(0, 12);
       if (CAB_GAMES[game]) arJoin(t, att.id, pname, msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null, msg.cab);   // 俄羅斯方塊：坐哪一台由 cab 決定
       else tblJoin(t, att.id, pname, msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null, tblRk(msg.rk));
-      if (game === "mary") await this.maInitChips(t, att.id, msg.chips);   // 小瑪莉：入座就把籌碼餘額帶上機台（登入者讀 Registry；訪客用 client 帶的本機餘額）
+      if (game === "mary") await this.maInitChips(t, att.id, msg.chips);
+      else if (game === "blackjack") await this.bjAfterSeat(t, att.id, msg.chips);   // 21 點：入座帶籌碼、第一個人入座就開桌
+        // 小瑪莉：入座就把籌碼餘額帶上機台（登入者讀 Registry；訪客用 client 帶的本機餘額）
       cur.table = tid; ws.serializeAttachment(cur);
       await this.saveTable(t);
       this.tableNotify(t);
@@ -5263,6 +5479,14 @@ export class Island {
     else if (t.game === "bubble" && a === "over") buOver(t, att.id, msg);   // 泡泡射手：客戶端回報結束（最終分數、關卡）
     else if (t.game === "breakout" && a === "over") brOver(t, att.id, msg);   // 打磚塊：客戶端回報結束（最終分數、關卡）
     else if (t.game === "pinball" && a === "over") pbOver(t, att.id, msg);   // 彈珠台：客戶端回報結束（最終分數）
+    else if (t.game === "blackjack" && (BJ_MSGS.has(a) || a === "timeout")) {   // 21 點：下注／清空／確定／要牌／停牌／雙倍（一切都是伺服器權威）、逾時（任何人都能送，伺服器核對時鐘）
+      let r;
+      if (a === "timeout") { r = [bjTimeout(t, now), null]; await this.bjFlush(t); }
+      else { const [role, i] = tblFind(t, att.id); if (role !== "seat") return; r = await this.bjMsg(t, i, a, msg, now); }
+      const [changed, err] = r;
+      if (err) { try { ws.send(JSON.stringify({ t: "tblerr", id: t.id, text: err })); } catch { /* 對方已斷線 */ } return; }
+      if (!changed) return;
+    }
     else if (t.game === "mary" && (a === "mspin" || a === "mcol" || a === "mxp" || a === "mdbl")) {   // 小瑪莉：押注開獎／領出／兌換經驗值／猜大小（押注與結果都是伺服器權威）
       const [role, i] = tblFind(t, att.id);
       if (role !== "seat") return;
@@ -5277,7 +5501,7 @@ export class Island {
     else if (t.game === "kingdom" && KG_MSGS.has(a)) { if (!kgAct(t, att.id, msg, now)) return; }   // 列島建國：拿資源／保留／建造／交易／封鎖／跳過
     else if (t.game === "intel" && IT_MSGS.has(a)) itMsg(t, att.id, msg, now);   // 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
     else if (a === "ready") tblReady(t, att.id, msg.v);
-    else if (a === "sit") { tblSit(t, att.id); if (t.game === "mary") await this.maInitChips(t, att.id, msg.chips); }   // 小瑪莉：觀戰轉入座也要補上籌碼
+    else if (a === "sit") { tblSit(t, att.id); if (t.game === "mary") await this.maInitChips(t, att.id, msg.chips); else if (t.game === "blackjack") await this.bjAfterSeat(t, att.id, msg.chips); }   // 小瑪莉：觀戰轉入座也要補上籌碼
     else if (a === "stand") tblStand(t, att.id);
     else if (a === "draw") { if (t.game === "uno") unDraw(t, att.id, now); else omDraw(t, att.id, msg.idx); }   // UNO：抽牌；抽鬼牌：抽對方的牌
     else if (a === "shuffle") omShuffle(t, att.id);

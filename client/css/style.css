@@ -780,3 +780,14 @@ body {
 #emoteMenu.hidden { display: none; }
 .emote-item { width: 32px; height: 32px; padding: 0; border: 1px solid transparent; background-color: transparent; background-repeat: no-repeat; image-rendering: pixelated; cursor: pointer; }
 .emote-item:hover { border-color: var(--gold-dim); background-color: rgba(255, 255, 255, .08); }
+
+/* 21 點（2026-11-24）：莊家列、座位的小牌、勝負顏色 */
+.bj-dealer { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 8px 0; }
+.bj-owner { width: 64px; height: 64px; image-rendering: pixelated; background: rgba(255, 255, 255, .05); border: 1px solid var(--gold-dim); }
+.bj-hand { display: flex; justify-content: center; flex-wrap: wrap; gap: 3px; min-height: 44px; margin: 4px 0; }
+.bj-seats .table-seat { flex: 1 1 130px; max-width: 150px; min-height: 100px; padding: 6px; }
+.bj-hand .tcard { width: 26px; height: 38px; font-size: 12px; }
+.bj-count { color: #ffe08a; font-weight: bold; }
+.bj-win { color: #7fe0a8; font-weight: bold; }
+.bj-lose { color: #e08a8a; }
+.bj-btns .ff-btn:disabled { opacity: .45; cursor: default; }

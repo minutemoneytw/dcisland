@@ -5109,7 +5109,7 @@ function leaveTable() {
   const box = $('leaveBox');
   if (!box.classList.contains('hidden')) { leaveAsk(false); return; }   // Esc 再按一次＝取消確認，繼續遊戲
   const v = S.tableView;
-  if (v && v.phase === 'playing' && v.role === 'seat') leaveAsk(true); else closeTable();
+  if (v && v.phase === 'playing' && v.role === 'seat' && (v.game !== 'blackjack' || bjAtRisk(v))) leaveAsk(true); else closeTable();   // 21 點：只有發牌後、手上有注才問（下注階段離座會退注）
 }
 // 規則說明視窗：每個遊戲都有按鈕（有 guide 用分段規則，沒有就用 rules 拆句）；入座／觀戰／遊戲中都能開關，不影響牌局畫面
 // 沒有分段 guide 的遊戲：把簡短規則（rules）依句號拆成條列，一樣有「規則說明」按鈕
@@ -5291,6 +5291,7 @@ function buildTable() {
   if (tb?.game === 'g2048') { buildG2048(box, v, mk, gd); return; }   // 2048 有自己的畫面
   if (tb?.game === 'bubble') { buildBubble(box, v, mk, gd); return; }   // 泡泡射手有自己的畫面
   if (tb?.game === 'pinball') { buildPinball(box, v, mk, gd); return; }   // 彈珠台有自己的畫面（球檯）
+  if (tb?.game === 'blackjack') { buildBlackjack(box, v, mk, gd); return; }   // 21 點有自己的畫面（莊家、各人的牌、下注與操作）
   if (tb?.game === 'mary') { buildMary(box, v, mk, gd); return; }   // 小瑪莉有自己的畫面（跑馬燈＋押注）
   if (tb?.game === 'maze') { buildMaze(box, v, mk, gd); return; }   // 豆豆迷宮有自己的畫面（迷宮）
   if (tb?.game === 'hockey') { buildHockey(box, v, mk, gd); return; }   // 空氣曲棍球有自己的畫面（球場）
@@ -9016,6 +9017,96 @@ function maryClick(px, py, trusted = true) {   // 機台畫布的點擊：控制
   if (ci >= 0 && py >= MARY_BET_Y && py < MARY_BET_Y + 60) { maryAddBet(ci); return; }
   const k = maryCellAt(px, py);
   if (k >= 0) { const ci2 = (ma.cols || []).indexOf(ma.ring[k]); if (ci2 >= 0) maryAddBet(ci2); }
+}
+// ── 21 點（t98，2026-11-24，使用者要求：隱藏區的賭博桌、1～8 位玩家、莊家用隨機島主）──
+// 規則與結算全在伺服器（worker/src/index.js 的 bj*、tools/dev_server.py 的 bj_*）；這裡只畫 v.bj 並送操作：bbet {n}（加注）／bclr（清空）／bok（確定）／bhit／bstand／bdbl，
+// 逾時（下注／輪到的人／結果顯示完）由每個在桌邊的客戶端每秒送 timeout，伺服器核對時鐘。籌碼：登入者以伺服器為準；訪客的 S.chips＝機台餘額＋下注階段已下的注（離座退注）。
+const BJ_AMTS = [10, 50, 100, 500, 1000, 5000];
+function bjTimerTick() {
+  const v = S.tableView;
+  if (!S.tableOpen || v?.game !== 'blackjack' || !v.bj) { clearInterval(S.bjTimer); S.bjTimer = 0; return; }
+  const left = Math.max(0, S.bjDl - performance.now()), el = document.getElementById('bjCount');
+  if (el) el.textContent = `${Math.ceil(left / 1000)} 秒`;
+  if (left <= 0 && performance.now() - (S.bjSentAt || 0) > 1200) { S.bjSentAt = performance.now(); S.net?.tbl?.({ a: 'timeout' }); }   // 時間到：請伺服器推進（任何人都能送，只有第一個有效）
+}
+const bjAtRisk = v => !!(v?.game === 'blackjack' && v.bj && v.role === 'seat' && v.bj.stage === 'play' && v.bj.p[v.me]?.bet > 0 && ['play', 'stand', 'bj'].includes(v.bj.p[v.me].st));   // 發牌後離座＝放棄這一局的注（離開確認只在這時問）
+function buildBlackjack(box, v, mk, gd) {
+  const b = v.bj, seat = v.role === 'seat', me = v.me;
+  if (!b) {   // 還沒有人入座（桌子沒開）：觀戰者可以當第一個坐下的人
+    box.appendChild(mk('div', 'table-status', '桌子還沒開，有人入座就開桌'));
+    const bs = mk('div', 'table-btns'), sb = mk('button', 'ff-btn', '入座'); sb.onclick = () => S.net?.tbl?.({ a: 'sit', chips: S.chips }); bs.appendChild(sb); box.appendChild(bs);
+    return;
+  }
+  const my = seat ? b.p[me] : null;
+  if (seat && typeof b.chips === 'number') {   // 籌碼同步：登入者＝機台上的餘額；訪客＝餘額＋下注階段已下的注（離座退注）
+    const nv = Math.floor(b.chips) + (!xpServer() && b.stage === 'bet' ? (my?.bet || 0) : 0);
+    if (nv !== S.chips) { S.chips = nv; chipsSave(); if (!$('avatarPanel').classList.contains('hidden')) buildAvatarPanel(); }
+  }
+  S.bjDl = performance.now() + b.left;
+  if (!S.bjTimer) S.bjTimer = setInterval(bjTimerTick, 250);
+  // 狀態列＋倒數
+  let st;
+  if (b.stage === 'bet') st = seat ? (my.bet > 0 ? '已下注：可以再加碼，按「確定發牌」（全員確定就提早發牌）' : '下注時間：點金額加注（單局最多 ' + b.maxBet + '）') : '下注時間（觀戰中）';
+  else if (b.stage === 'play') st = b.turn < 0 ? '發牌中…' : seat && b.turn === me ? '輪到你：要牌、停牌或雙倍' : `輪到 ${v.seats[b.turn]?.name || '玩家'}`;
+  else st = '本局結算，稍後自動開始下一局';
+  const stat = mk('div', 'table-status' + (seat && b.stage === 'play' && b.turn === me ? ' mine' : ''), st + '　');
+  const cnt = mk('span', 'bj-count', ''); cnt.id = 'bjCount'; cnt.textContent = `${Math.ceil(b.left / 1000)} 秒`; stat.appendChild(cnt);
+  box.appendChild(stat);
+  // 莊家（隨機島主）
+  const dl = mk('div', 'bj-dealer'), cv = document.createElement('canvas'); cv.width = cv.height = 64; cv.className = 'bj-owner';
+  maryMob(cv.getContext('2d'), b.owner, 32, 34, 60, 0);
+  dl.appendChild(cv);
+  const di = mk('div', 'bj-dealer-info');
+  di.appendChild(mk('div', 'table-name', `莊家：${MARY_OWNERS_NM[b.owner] || '島主'}`));
+  const dc = mk('div', 'table-cards bj-hand'); for (const c of b.dealer) dc.appendChild(cardEl(c)); di.appendChild(dc);
+  di.appendChild(mk('div', 'table-tag', b.dealer.length ? (b.dealer.includes(null) ? `明牌 ${b.dt}` : b.dt > 21 ? `${b.dt} 爆牌` : `${b.dt} 點`) : '等待發牌'));
+  dl.appendChild(di); box.appendChild(dl);
+  // 玩家座位
+  const row = mk('div', 'table-seats bj-seats');
+  v.seats.forEach((s, k) => {
+    const p = b.p[k], turn = b.stage === 'play' && b.turn === k;
+    const el = mk('div', 'table-seat bj-seat' + (s.you ? ' you' : '') + (turn ? ' turn' : '') + (['out', 'wait'].includes(p.st) ? ' out' : ''));
+    el.appendChild(mk('div', 'table-name', s.name + (s.you ? '（你）' : '')));
+    const hand = mk('div', 'table-cards bj-hand'); for (const c of p.cards) hand.appendChild(cardEl(c)); el.appendChild(hand);
+    let tag;
+    if (b.stage === 'bet') tag = p.bet > 0 ? `下注 ${p.bet}${p.ok ? '　✔ 已確定' : ''}` : '尚未下注';
+    else if (p.st === 'out') tag = '本局觀望';
+    else if (p.st === 'wait') tag = '下一局加入';
+    else if (b.stage === 'result' && p.res) tag = p.res === 'win' ? `贏 +${p.pay - p.bet}` : p.res === 'bj' ? `Blackjack！+${p.pay - p.bet}` : p.res === 'push' ? '平手（退注）' : `輸 -${p.bet}`;
+    else tag = p.st === 'bj' ? 'Blackjack！' : p.st === 'bust' ? '爆牌' : p.st === 'stand' ? (p.dbl ? '雙倍・停牌' : '停牌') : turn ? '行動中' : '等待';
+    const tot = p.cards.length ? `${p.tot} 點　` : '';
+    const good = b.stage === 'result' && (p.res === 'win' || p.res === 'bj'), bad = b.stage === 'result' && p.res === 'lose';
+    el.appendChild(mk('div', 'table-tag' + (good ? ' bj-win' : bad ? ' bj-lose' : ''), `${tot}${tag}`));
+    if (b.stage !== 'bet' && p.bet > 0) el.appendChild(mk('div', 'table-label', `注 ${p.bet}`));
+    row.appendChild(el);
+  });
+  box.appendChild(row);
+  // 操作區
+  if (seat) {
+    box.appendChild(mk('div', 'table-tag bj-chips', `我的籌碼：${Math.floor(b.chips || 0).toLocaleString('en-US')}（單局最多押 ${b.maxBet}）`));
+    const bs = mk('div', 'table-btns bj-btns');
+    if (b.stage === 'bet') {
+      for (const a of BJ_AMTS) {
+        const bt = mk('button', 'ff-btn small', a >= 1000 ? `${a / 1000}k` : `${a}`);
+        bt.disabled = my.bet + a > b.maxBet || (b.chips || 0) < a;
+        bt.onclick = () => S.net?.tbl?.({ a: 'bbet', n: a });
+        bs.appendChild(bt);
+      }
+      const cl = mk('button', 'ff-btn small', '清空'); cl.disabled = !(my.bet > 0); cl.onclick = () => S.net?.tbl?.({ a: 'bclr' }); bs.appendChild(cl);
+      const ok = mk('button', 'ff-btn', '確定發牌'); ok.disabled = !(my.bet > 0) || my.ok; ok.onclick = () => S.net?.tbl?.({ a: 'bok' }); bs.appendChild(ok);
+    } else {
+      const mine = b.stage === 'play' && b.turn === me && my.st === 'play';
+      const hit = mk('button', 'ff-btn', '要牌'), stand = mk('button', 'ff-btn', '停牌'), dbl = mk('button', 'ff-btn small', '雙倍');
+      hit.disabled = stand.disabled = !mine;
+      dbl.disabled = !mine || my.cards.length !== 2 || (b.chips || 0) < my.bet;
+      hit.onclick = () => S.net?.tbl?.({ a: 'bhit' }); stand.onclick = () => S.net?.tbl?.({ a: 'bstand' }); dbl.onclick = () => S.net?.tbl?.({ a: 'bdbl' });
+      bs.append(hit, stand, dbl);
+    }
+    box.appendChild(bs);
+  } else if (v.seats.length < v.max) {
+    const bs = mk('div', 'table-btns'), sb = mk('button', 'ff-btn', '入座'); sb.onclick = () => S.net?.tbl?.({ a: 'sit', chips: S.chips }); bs.appendChild(sb); box.appendChild(bs);
+  }
+  const lg = mk('div', 'table-log'); for (const l of tableLogLines(v)) lg.appendChild(mk('div', '', l)); box.appendChild(lg);
 }
 function buildMary(box, v, mk, gd) {
   const playing = v.phase === 'playing', ma = v.ma;

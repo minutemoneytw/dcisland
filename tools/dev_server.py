@@ -729,8 +729,8 @@ def floor_to_list(floor):
 # ============ 和平島：遊戲桌（第一桌：抽鬼牌；2026-11-08，使用者要求）============
 # 牌局由伺服器權威：洗牌、發牌、抽牌、判定都在這裡，手牌只送給本人（別人只看得到張數）。
 # 與 worker/src/index.js 的 TABLE_DEFS／om* 同一套邏輯，改規則兩邊一起改。桌子的位置與外觀在客戶端 terrain.json 的 tables。
-TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey", "t17": "kingdom", "t18": "bigtwo", "t19": "pinball", "t20": "breakout", "t21": "purify", "t22": "bubble", "t23": "g2048", "t24": "planet", "t99": "mary"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）；小瑪莉用 t99：t21/t22/t23 連續兩輪被遠端的新機台撞號（2026-11-18 使用者定，低號留給遠端）
-GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4), "kingdom": (2, 4), "bigtwo": (2, 4), "pinball": (1, 1), "breakout": (1, 1), "bubble": (1, 1), "g2048": (1, 1), "planet": (1, 2), "purify": (2, 4), "mary": (1, 1)}           # 遊戲 → (開局最少人數, 入座上限)
+TABLE_DEFS = {"peace": {"t1": "oldmaid", "t2": "gomoku", "t5": "dodge", "t6": "uno", "t7": "typing", "t8": "intel", "t9": "zhtyping", "t10": "mage", "t11": "blokus", "t12": "trigon", "t13": "arcade", "t14": "maze", "t15": "hockey", "t16": "hockey", "t17": "kingdom", "t18": "bigtwo", "t19": "pinball", "t20": "breakout", "t21": "purify", "t22": "bubble", "t23": "g2048", "t24": "planet", "t98": "blackjack", "t99": "mary"}}   # 地形 → 桌 id → 遊戲 id（客戶端 terrain.json 的 tables 要一致）；小瑪莉用 t99：t21/t22/t23 連續兩輪被遠端的新機台撞號（2026-11-18 使用者定，低號留給遠端）
+GAME_LIMITS = {"oldmaid": (2, 4), "gomoku": (2, 2), "dodge": (1, 8), "uno": (2, 6), "typing": (1, 8), "zhtyping": (1, 8), "intel": (3, 8), "mage": (1, 4), "blokus": (2, 4), "trigon": (2, 4), "arcade": (1, 4), "maze": (1, 5), "hockey": (2, 4), "kingdom": (2, 4), "bigtwo": (2, 4), "pinball": (1, 1), "breakout": (1, 1), "bubble": (1, 1), "g2048": (1, 1), "planet": (1, 2), "purify": (2, 4), "mary": (1, 1), "blackjack": (1, 8)}           # 遊戲 → (開局最少人數, 入座上限)
 TBL_TYP_CD = 0.2                              # 英文打字競賽的打字進度回報（typ）：每條連線最短間隔（秒）
 TBL_POS_CD = 0.06                           # 躲彈幕的位置回報、英文打字競賽的分數回報：每條連線最短間隔（秒，約 16 次／秒上限；客戶端實際約 8 次／秒）
 TBL_CD = 0.1                                # 每條連線兩次牌桌操作的最短間隔（秒）
@@ -808,14 +808,14 @@ def tbl_rk(v):
     return v if isinstance(v, str) and _TBL_RK_RE.match(v) else None
 
 def tbl_can_hold(t, s):
-    return t["phase"] == "playing" and t["game"] not in CAB_GAMES and t["game"] != "mary" and bool(s.get("rk")) and not s.get("left") and s.get("cid") is not None and any(x is s for x in t["seats"])   # 街機機台與小瑪莉不保留：斷線就照離開處理（小瑪莉的獎池會自動領回）
+    return t["phase"] == "playing" and t["game"] not in CAB_GAMES and t["game"] not in ("mary", "blackjack") and bool(s.get("rk")) and not s.get("left") and s.get("cid") is not None and any(x is s for x in t["seats"])   # 街機機台與小瑪莉不保留：斷線就照離開處理（小瑪莉的獎池會自動領回）
 
 def tbl_join(t, cid, name, want="seat", uid=None, rk=None):
     """want＝'seat'（有空位且還沒開局才會入座，否則自動觀戰）或 'spec'（使用者自己選觀戰：沒滿人也可以）。rk＝回座代碼（斷線保留座位用）。"""
     if tbl_find(t, cid)[0]:
         return
     mn, mx = GAME_LIMITS[t["game"]]
-    if want != "spec" and t["phase"] == "lobby" and len(t["seats"]) < mx:
+    if want != "spec" and (t["phase"] == "lobby" or t["game"] == "blackjack") and len(t["seats"]) < mx:   # 21 點是賭桌：隨時可以入座
         t["seats"].append({"cid": cid, "name": name, "uid": uid, "rk": rk, "ready": False, "hand": [], "out": False})
         tbl_log(t, f"{name} 入座了")
     else:
@@ -836,6 +836,8 @@ def tbl_leave(t, cid):
             return
         if t["game"] == "mary":   # 小瑪莉：獎池自動領回（回傳值由呼叫端入帳），最後一人離開就回大廳
             return ma_leave(t, i)
+        if t["game"] == "blackjack":   # 21 點：下注階段退注、發牌後離座＝放棄（算虧損）；回傳值由呼叫端入帳，最後一人離開就回大廳
+            return bj_leave(t, i)
         if t["phase"] == "playing" and t["game"] == "trigon":   # Blokus Trigon：離開不中斷，棋子留在棋盤上、之後跳過
             tg_leave(t, i, int(time.time() * 1000))
             return
@@ -885,7 +887,7 @@ def tbl_check_start(t):
 def tbl_stand(t, cid):
     """入座的人改成觀戰（只有還沒開局時；進行中要離開就是 leave，會結束這一局）。剩下的人若都已準備就開局。"""
     role, i = tbl_find(t, cid)
-    if role != "seat" or t["phase"] != "lobby" or t["game"] in CAB_GAMES:
+    if role != "seat" or t["phase"] != "lobby" or t["game"] in CAB_GAMES or t["game"] == "blackjack":
         return
     s = t["seats"].pop(i)
     t["specs"].append({"cid": cid, "name": s["name"], "uid": s.get("uid")})
@@ -895,7 +897,7 @@ def tbl_stand(t, cid):
 def tbl_sit(t, cid):
     role, i = tbl_find(t, cid)
     mn, mx = GAME_LIMITS[t["game"]]
-    if role != "spec" or t["phase"] != "lobby" or len(t["seats"]) >= mx or t["game"] in CAB_GAMES:   # 俄羅斯方塊：要入座就走到空機台
+    if role != "spec" or (t["phase"] != "lobby" and t["game"] != "blackjack") or len(t["seats"]) >= mx or t["game"] in CAB_GAMES:   # 俄羅斯方塊：要入座就走到空機台
         return
     s = t["specs"].pop(i)
     t["seats"].append({"cid": cid, "name": s["name"], "uid": s.get("uid"), "rk": s.get("rk"), "ready": False, "hand": [], "out": False})
@@ -903,7 +905,7 @@ def tbl_sit(t, cid):
 
 def tbl_ready(t, cid, v):
     role, i = tbl_find(t, cid)
-    if role != "seat" or t["phase"] != "lobby" or t["game"] in CAB_GAMES:
+    if role != "seat" or t["phase"] != "lobby" or t["game"] in CAB_GAMES or t["game"] == "blackjack":
         return
     t["seats"][i]["ready"] = bool(v)
     tbl_check_start(t)
@@ -5771,6 +5773,318 @@ def ma_leave(t, i):
     if not t["seats"]:
         tbl_reset_seats(t)
     return {"uid": s.get("uid"), "pot": pot, "owner": owner, "loss": loss}
+# ---- 21 點（第 98 桌 t98，2026-11-24，使用者要求：隱藏區的賭博桌，1～8 位玩家，莊家跟小瑪莉一樣用隨機島主）----
+# 賭桌型：**沒有「準備／開局」**——有人入座桌子就開著（phase 一直是 playing，沒人了才回大廳），一局一局自己輪下去，玩家隨時可以入座／離開。
+# 一局四個階段（g["stage"]）：bet 下注（BJ_BET_MS，全員確定就提早發牌）→ play 玩家輪流（座位順序，每人 BJ_TURN_MS，逾時自動停牌）
+# → result 莊家補牌與結算（BJ_RESULT_MS 後自動下一局）。規則：莊家 17 點（含軟 17）停牌；贏 1 賠 1、21 點（Blackjack，開局兩張）1 賠 1.5、平手退注、
+# 莊家開局就 Blackjack 時只有 Blackjack 的玩家平手；玩家可要牌／停牌／雙倍（只有頭兩張、再下一份同額注、只拿一張）。**沒做**：分牌、保險、投降。
+# 一次洗兩副牌（每局重洗）。籌碼：下注時原子扣款（登入者走 CHIPS_DB、訪客扣座位上的 session 餘額），結算時入帳；下注階段離座退注、發牌後離座＝放棄（算虧損）。
+# 虧損（總注 − 回收）離座時按 1 經驗值＝100 籌碼換成「入座時抽到的島主」的經驗值（同小瑪莉，呼叫端 _ma_owner_xp）。
+# 逾時由客戶端每秒送 timeout（伺服器核對 g["dl"]）；與 worker/src/index.js 的 bj* 同一套，改規則兩邊一起改。
+BJ_MAX_BET = 10000
+BJ_BET_MS, BJ_TURN_MS, BJ_RESULT_MS = 15000, 20000, 7000
+BJ_MSGS = {"bbet", "bclr", "bok", "bhit", "bstand", "bdbl"}
+
+
+def bj_total(cards):
+    """手牌點數：回 (點數, 是否軟牌)。A 算 11 或 1，J／Q／K 算 10。"""
+    tot, aces = 0, 0
+    for c in cards:
+        r = int(c[1:])
+        if r == 1:
+            aces += 1
+            tot += 11
+        else:
+            tot += min(r, 10)
+    while tot > 21 and aces:
+        tot -= 10
+        aces -= 1
+    return tot, aces > 0
+
+
+def bj_deck():
+    d = [f"{s}{r}" for _ in range(2) for s in OM_SUITS for r in range(1, 14)]
+    random.shuffle(d)
+    return d
+
+
+def bj_reset_seat(s, st=""):
+    s.update(bet=0, cards=[], st=st, dbl=False, res=None, pay=0, ok=False)
+
+
+def bj_new_round(t, now):
+    g = t["g"]
+    g.update(stage="bet", dl=now + BJ_BET_MS, round=g.get("round", 0) + 1, dealer=[], turn=-1, deck=[])
+    for s in t["seats"]:
+        bj_reset_seat(s)
+
+
+def bj_start(t, now=None):
+    """第一個人入座：桌子開張，抽一位島主當莊家（桌子空了才換）。"""
+    now = now or int(time.time() * 1000)
+    o = random.choice(MA_OWNERS)
+    t["g"] = {"owner": o["id"], "stage": "bet", "dl": now + BJ_BET_MS, "round": 1, "dealer": [], "turn": -1, "deck": []}
+    t["result"], t["phase"], t["turn"] = None, "playing", 0
+    for s in t["seats"]:
+        bj_reset_seat(s)
+        s.update(spent=0, paid=0)
+    tbl_log(t, f"21 點開桌（莊家：{o['name']}）")
+
+
+def bj_seat_new(s, t):
+    """新入座的人：沒帳要記；下注階段可以直接下注，其他階段等下一局。"""
+    s.update(spent=0, paid=0)
+    bj_reset_seat(s, "" if t["g"]["stage"] == "bet" else "wait")
+
+
+def bj_credit(s, pay):
+    """結算入帳：登入者走 CHIPS_DB、訪客加在座位的 session 餘額。"""
+    if pay <= 0:
+        return
+    s["paid"] += pay
+    if s.get("uid"):
+        s["chips"] = chips_change(s["uid"], add=pay)
+    else:
+        s["chips"] = min(CHIPS_MAX, (s.get("chips") or 0) + pay)
+
+
+def bj_spend(s, n):
+    """下注／雙倍的扣款：成功回 True。登入者原子扣 CHIPS_DB、訪客扣座位餘額。"""
+    if n <= 0:
+        return False
+    if s.get("uid"):
+        r = chips_change(s["uid"], spend=n)
+        if r is None:
+            return False
+        s["chips"] = r
+    else:
+        if (s.get("chips") or 0) < n:
+            return False
+        s["chips"] -= n
+    s["spent"] += n
+    return True
+
+
+def bj_bet(t, i, amount):
+    g, s = t["g"], t["seats"][i]
+    if not g or g["stage"] != "bet":
+        return False, "現在不能下注"
+    if not isinstance(amount, int) or isinstance(amount, bool) or amount <= 0 or amount > BJ_MAX_BET:
+        return False, "押注格式不對"
+    if s["bet"] + amount > BJ_MAX_BET:
+        return False, f"單局最多押 {BJ_MAX_BET}"
+    if not bj_spend(s, amount):
+        return False, "籌碼不足"
+    s["bet"] += amount
+    s["ok"] = False   # 改了注要重新按確定
+    return True, None
+
+
+def bj_refund(s):
+    """下注階段把已下的注退回（清空／離座）：不算虧損。"""
+    n = s.get("bet", 0)
+    if n <= 0:
+        return 0
+    s["spent"] -= n
+    s["bet"], s["ok"] = 0, False
+    if s.get("uid"):
+        s["chips"] = chips_change(s["uid"], add=n)
+    else:
+        s["chips"] = min(CHIPS_MAX, (s.get("chips") or 0) + n)
+    return n
+
+
+def bj_clear(t, i):
+    g, s = t["g"], t["seats"][i]
+    if not g or g["stage"] != "bet" or s["bet"] <= 0:
+        return False, None
+    bj_refund(s)
+    return True, None
+
+
+def bj_ok(t, i, now):
+    g, s = t["g"], t["seats"][i]
+    if not g or g["stage"] != "bet" or s["bet"] <= 0 or s["ok"]:
+        return False, None
+    s["ok"] = True
+    if all(x["bet"] > 0 and x["ok"] for x in t["seats"]):   # 全員下好注並確定：提早發牌
+        bj_deal(t, now)
+    return True, None
+
+
+def bj_deal(t, now):
+    """發牌：下了注的人開局，其他人這局觀望。莊家一張明牌一張暗牌（g["dealer"][1] 在結算前不送給客戶端）。"""
+    g = t["g"]
+    act = [s for s in t["seats"] if s["bet"] > 0]
+    if not act:   # 沒人下注：再等一輪
+        g["dl"] = now + BJ_BET_MS
+        return
+    for s in t["seats"]:
+        if s["bet"] <= 0:
+            s["st"] = "out"
+        else:
+            s["st"] = "play"
+    g["deck"] = bj_deck()
+    for _ in range(2):
+        for s in act:
+            s["cards"].append(g["deck"].pop())
+        g["dealer"].append(g["deck"].pop())
+    for s in act:
+        if bj_total(s["cards"])[0] == 21:
+            s["st"] = "bj"
+    g["stage"] = "play"
+    if bj_total(g["dealer"])[0] == 21:   # 莊家 Blackjack：沒人要玩了，直接結算
+        for s in act:
+            if s["st"] == "play":
+                s["st"] = "stand"
+        bj_dealer(t, now)
+        return
+    g["turn"] = -1
+    bj_advance(t, 0, now)
+
+
+def bj_advance(t, start, now):
+    """輪到座位順序中從 start 起第一個還要動作的人；沒有就換莊家補牌結算。"""
+    g = t["g"]
+    for k in range(start, len(t["seats"])):
+        if t["seats"][k]["st"] == "play":
+            g["turn"], g["dl"] = k, now + BJ_TURN_MS
+            return
+    g["turn"] = -1
+    bj_dealer(t, now)
+
+
+def bj_dealer(t, now):
+    """莊家亮牌補牌（17 點含軟 17 停牌）並結算所有人。"""
+    g = t["g"]
+    act = [s for s in t["seats"] if s["st"] in ("stand", "bj", "bust")]
+    nat = len(g["dealer"]) == 2 and bj_total(g["dealer"])[0] == 21
+    if any(s["st"] == "stand" for s in act) and not nat:
+        while bj_total(g["dealer"])[0] < 17:
+            g["dealer"].append(g["deck"].pop())
+    dt = bj_total(g["dealer"])[0]
+    for s in act:
+        pt = bj_total(s["cards"])[0]
+        if s["st"] == "bust":
+            s["res"], s["pay"] = "lose", 0
+        elif s["st"] == "bj":
+            s["res"], s["pay"] = ("push", s["bet"]) if nat else ("bj", s["bet"] + s["bet"] * 3 // 2)
+        elif nat or (dt <= 21 and pt < dt):
+            s["res"], s["pay"] = "lose", 0
+        elif dt > 21 or pt > dt:
+            s["res"], s["pay"] = "win", s["bet"] * 2
+        else:
+            s["res"], s["pay"] = "push", s["bet"]
+        bj_credit(s, s["pay"])
+    g["stage"], g["turn"], g["dl"] = "result", -1, now + BJ_RESULT_MS
+    won = [s for s in act if s["pay"] > s["bet"]]
+    tbl_log(t, f"莊家 {dt if dt <= 21 else '爆牌'}：{len(won)} 人贏、{sum(1 for s in act if s['res'] == 'push')} 人平手、{sum(1 for s in act if s['res'] == 'lose')} 人輸")
+
+
+def bj_draw(t, s):
+    s["cards"].append(t["g"]["deck"].pop())
+    return bj_total(s["cards"])[0]
+
+
+def bj_act(t, i, a, now):
+    """要牌／停牌／雙倍：只有輪到自己時。回 (changed, err文字)。"""
+    g, s = t["g"], t["seats"][i]
+    if not g or g["stage"] != "play" or g["turn"] != i or s["st"] != "play":
+        return False, None
+    if a == "bhit":
+        tot = bj_draw(t, s)
+        if tot > 21:
+            s["st"] = "bust"
+        elif tot == 21:
+            s["st"] = "stand"
+    elif a == "bstand":
+        s["st"] = "stand"
+    elif a == "bdbl":
+        if len(s["cards"]) != 2:
+            return False, "只有頭兩張牌可以雙倍"
+        n = s["bet"]
+        if not bj_spend(s, n):
+            return False, "籌碼不足，不能雙倍"
+        s["bet"] += n
+        s["dbl"] = True
+        s["st"] = "bust" if bj_draw(t, s) > 21 else "stand"
+    else:
+        return False, None
+    if s["st"] != "play":
+        bj_advance(t, i + 1, now)
+    return True, None
+
+
+def bj_timeout(t, now):
+    """逾時（客戶端每秒送 timeout，這裡核對時鐘）：下注逾時＝發牌、輪到的人逾時＝自動停牌、結果顯示完＝下一局。回是否有變化。"""
+    g = t.get("g")
+    if t["game"] != "blackjack" or t["phase"] != "playing" or not g or now < g["dl"]:
+        return False
+    if g["stage"] == "bet":
+        bj_deal(t, now)
+    elif g["stage"] == "play":
+        i = g["turn"]
+        if 0 <= i < len(t["seats"]):
+            t["seats"][i]["st"] = "stand"
+            tbl_log(t, f"{t['seats'][i]['name']} 逾時，自動停牌")
+            bj_advance(t, i + 1, now)
+        else:
+            bj_advance(t, 0, now)
+    else:
+        bj_new_round(t, now)
+    return True
+
+
+def bj_msg(t, i, a, msg, now):
+    if a == "bbet":
+        return bj_bet(t, i, msg.get("n"))
+    if a == "bclr":
+        return bj_clear(t, i)
+    if a == "bok":
+        return bj_ok(t, i, now)
+    return bj_act(t, i, a, now)
+
+
+def bj_leave(t, i):
+    """21 點離座：下注階段退注、發牌後的注放棄（算虧損）；輪到的人離開換下一位。回 {"uid", "pot", "owner", "loss"}（pot＝要退給登入者的注，由呼叫端入帳）。"""
+    s, g = t["seats"][i], t["g"] or {}
+    now = int(time.time() * 1000)
+    refund = 0
+    if g.get("stage") == "bet" and s.get("bet", 0) > 0:
+        n = s["bet"]
+        s["spent"] -= n
+        s["bet"] = 0
+        refund = n   # 登入者由呼叫端入帳；訪客靠客戶端自己把餘額補回（下注階段 S.chips＝餘額＋下的注）
+    loss, owner = max(0, s.get("spent", 0) - s.get("paid", 0)), g.get("owner")
+    turn_was = g.get("turn") == i and g.get("stage") == "play"
+    t["seats"].pop(i)
+    if not t["seats"]:
+        tbl_reset_seats(t)
+    elif g:
+        if g.get("turn", -1) > i:
+            g["turn"] -= 1
+        if turn_was:
+            bj_advance(t, i, now)
+        elif g.get("stage") == "bet" and all(x["bet"] > 0 and x["ok"] for x in t["seats"]):
+            bj_deal(t, now)
+    return {"uid": s.get("uid"), "pot": refund, "owner": owner, "loss": loss}
+
+
+def bj_view(t, cid, v):
+    g, now = t["g"], int(time.time() * 1000)
+    role, i = ("spec", -1) if cid == SCR_CID else tbl_find(t, cid)
+    if not g:
+        return v
+    hide = g["stage"] == "play"
+    v["bj"] = {"owner": g["owner"], "stage": g["stage"], "left": max(0, g["dl"] - now), "round": g["round"], "turn": g["turn"],
+               "dealer": ([g["dealer"][0], None] if hide and len(g["dealer"]) > 1 else list(g["dealer"])),
+               "dt": (bj_total(g["dealer"][:1] if hide else g["dealer"])[0] if g["dealer"] else 0),
+               "p": [{"bet": s.get("bet", 0), "cards": list(s.get("cards", [])), "st": s.get("st", ""), "dbl": bool(s.get("dbl")), "res": s.get("res"), "pay": s.get("pay", 0),
+                      "ok": bool(s.get("ok")), "tot": bj_total(s["cards"])[0] if s.get("cards") else 0} for s in t["seats"]],
+               "chips": max(0, int(t["seats"][i].get("chips") or 0)) if role == "seat" else None, "maxBet": BJ_MAX_BET}
+    return v
+
+
 # ---- 星球合成（第二十四桌 t24，2026-11-20，使用者要求：做一款類似西瓜遊戲的，隕石→冥王星→月球→火星→地球→海王星→土星→木星→太陽→紅巨星→黑洞）：兩台機台共用這一張邏輯桌 ----
 # 跟俄羅斯方塊同一套做法（使用者要求：「應該要一樣是兩台單人機台，然後可以用邀請進行對戰」）：場上兩台機台（cab 0、1；同一台只能坐一個人），每台都是單人遊玩：
 #   單人模式（solo）：各自獨立的一局，結束分數進排行榜（≥ PL_XP_MIN 分得 PL_XP XP）；
@@ -6141,7 +6455,7 @@ def hk_end(t, cid, msg):
         return
     hk_finish(t, sa, sb, "" if sa >= HK_GOALS or sb >= HK_GOALS else "時間到")
 
-GAME_START = {"purify": pg_start, "planet": lambda t: None, "g2048": tf_start, "bubble": bu_start, "breakout": br_start, "pinball": pb_start, "bigtwo": bt_start, "kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start, "mary": ma_start}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
+GAME_START = {"purify": pg_start, "planet": lambda t: None, "g2048": tf_start, "bubble": bu_start, "breakout": br_start, "pinball": pb_start, "bigtwo": bt_start, "kingdom": kg_start, "arcade": lambda t: None, "maze": mz_start, "hockey": hk_start, "oldmaid": om_start, "gomoku": gm_start, "dodge": dg_start, "uno": un_start, "typing": ty_start, "zhtyping": ty_start, "intel": it_start, "mage": mg_start, "blokus": bk_start, "trigon": tg_start, "mary": ma_start, "blackjack": lambda t: None}   # 遊戲 → 開局函式（tbl_ready 全員準備時呼叫）
 
 SCR_CID = "__screen__"   # 大螢幕轉播用的虛擬連線編號（tbl_view 把它當觀戰者）
 SCR_CTL_CD_MS = 5000       # 大螢幕影片的暫停／繼續／跳轉冷卻（全島共用；2026-11-19 使用者定：任何人都能控制，每次操作 5 秒冷卻）
@@ -6195,6 +6509,8 @@ def tbl_view(t, cid):
             seats[k].update(sc=s.get("sc", 0), left=bool(s.get("left")))
         if g and playing:
             v["pb"] = {"seed": g["seed"], "t0": g["t0"], "sn": int(time.time() * 1000)}
+    elif t["game"] == "blackjack":   # 21 點：莊家、各座位的手牌與注、階段與剩餘時間（暗牌在結算前不送）、我的籌碼
+        bj_view(t, cid, v)
     elif t["game"] == "mary":   # 小瑪莉：獎池／開獎格／押注／比倍開的牌／座位上的籌碼（只有本人看得到自己的餘額）；外圈、押注列與賠率表一起送（單一真相在伺服器）
         g = t.get("g")
         v["ma"] = {"ring": MA_RING, "cols": MA_COLS, "pay": MA_PAY, "nm": MA_NAME, "owner": g.get("owner") if g else None, "pot": g["pot"] if g else 0, "bets": list(g["bets"]) if g else None, "last": g["last"] if g else -1,
@@ -7543,7 +7859,7 @@ class Room:
         out = []
         for tid, game in TABLE_DEFS.get(terr, {}).items():
             t = self.tables.get(tid)
-            if t and (t["phase"] == "playing" or t["seats"]):
+            if t and t["game"] != "blackjack" and (t["phase"] == "playing" or t["seats"]):   # 21 點還沒有大螢幕畫面：不進轉播清單（它一直是 playing，不排除會自動搶走螢幕變空白）
                 out.append(t)
         return out
 
@@ -7672,6 +7988,17 @@ class Room:
         else:
             v = local_chips
             s["chips"] = max(0, min(CHIPS_MAX, int(v))) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else 0
+
+    def bj_after_seat(self, t, cid, local_chips):
+        """21 點：入座者補上籌碼；桌子還沒開就開桌（第一個人），已經開著就等下一局（下注階段可直接下注）。"""
+        s = next((x for x in t["seats"] if x.get("cid") == cid), None)
+        if not s or "bet" in s:
+            return
+        self.ma_init_chips(t, cid, local_chips)
+        if t["phase"] != "playing" or not t.get("g"):
+            bj_start(t)
+        else:
+            bj_seat_new(s, t)
 
     def _ma_owner_xp(self, t, cr, out):
         """小瑪莉：這次座位 session 的虧損（總注 − 領出／兌換）按 1 經驗值＝100 籌碼，換成「入座時抽到的島主」的經驗值
@@ -7920,6 +8247,8 @@ class Room:
                     tbl_join(t, cid, name, "spec" if msg.get("role") == "spec" else "seat", (c.get("user") or {}).get("id"), tbl_rk(msg.get("rk")))
                 if game == "mary":
                     self.ma_init_chips(t, cid, msg.get("chips"))   # 小瑪莉：入座就把籌碼餘額帶上機台（登入者讀 CHIPS_DB；訪客用 client 帶的本機餘額）
+                elif game == "blackjack":
+                    self.bj_after_seat(t, cid, msg.get("chips"))   # 21 點：入座帶籌碼、第一個人入座就開桌
                 c["table"], c["table_terr"] = tid, terr
                 self._table_notify_locked(t, out)
             else:
@@ -8041,6 +8370,8 @@ class Room:
                         tbl_sit(t, cid)
                         if t["game"] == "mary":
                             self.ma_init_chips(t, cid, msg.get("chips"))   # 小瑪莉：觀戰轉入座也要補上籌碼
+                        elif t["game"] == "blackjack":
+                            self.bj_after_seat(t, cid, msg.get("chips"))   # 21 點：觀戰轉入座
                     elif a == "stand":
                         tbl_stand(t, cid)
                     elif a == "draw":
@@ -8082,6 +8413,9 @@ class Room:
                             tg_timeout(t, now_ms)
                         elif t["game"] == "planet":
                             pl_timeout(t, now_ms)
+                        elif t["game"] == "blackjack":
+                            if not bj_timeout(t, now_ms):
+                                return out, None, None
                         else:
                             un_timeout(t, now_ms)
                     elif a == "place":   # Blokus：放方塊 {p 第幾塊, c 佔用的格子座標}
@@ -8109,6 +8443,16 @@ class Room:
                         br_over(t, cid, msg)
                     elif a == "over" and t["game"] == "pinball":   # 彈珠台：客戶端回報結束（最終分數）
                         pb_over(t, cid, msg)
+                    elif t["game"] == "blackjack" and a in BJ_MSGS:   # 21 點：下注／清空／確定／要牌／停牌／雙倍（一切都是伺服器權威）
+                        role, i = tbl_find(t, cid)
+                        if role != "seat":
+                            return [], None, None
+                        changed, err = bj_msg(t, i, a, msg, now_ms)
+                        if err:
+                            out.append((cid, {"t": "tblerr", "id": t["id"], "text": err}))
+                            return out, None, None
+                        if not changed:
+                            return out, None, None
                     elif t["game"] == "mary" and a in ("mspin", "mcol", "mxp", "mdbl"):   # 小瑪莉：押注開獎／領出／兌換經驗值／猜大小（押注與結果都是伺服器權威）
                         role, i = tbl_find(t, cid)
                         if role != "seat":
