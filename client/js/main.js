@@ -4425,14 +4425,11 @@ function buildEmoteMenu() {
     m.appendChild(b);
   });
 }
-function drawSecretRoom(sc, W, ims) {   // 隱藏房間：地毯、北／東／西牆，南面是北牆的背面（門洞那段由門簾蓋住）
+function drawSecretRoom(sc, W, ims) {   // 隱藏房間：地毯、北／東／西牆，南面沿用主房間的北牆（門洞那段由門簾蓋住）
   const [bx0, by0, bx1, by1] = sc.box, d = sc.door;
   if (ims[sc.rug]) drawSpr(ims[sc.rug], 0, bx0 * CELL, by0 * CELL, (bx1 - bx0 + 1) * CELL, (by1 - by0 + 1) * CELL);
   if (W) drawRoomWalls({ ...W, h: 3 }, ims, sc.box);
-  const x0 = (bx0 - 1) * CELL, w = (bx1 - bx0 + 3) * CELL, y0 = d[1] * CELL, h = (d[3] - d[1] + 1) * CELL;   // 北牆的背面：整條蓋成深色牆體
-  ctx.fillStyle = '#2a2028'; ctx.fillRect(x0, y0, w, h);
-  ctx.fillStyle = '#4a3a44'; ctx.fillRect(x0, y0, w, 3);
-  ctx.fillStyle = '#1a1218'; ctx.fillRect(x0, y0 + h - 4, w, 4);
+  // 南面直接沿用主房間的北牆（2026-11-24 使用者回報：進隱藏房間後簾子同一側的牆壁會消失——原本在這裡把北牆整條蓋成深色背面，拿掉了；牆照常畫、門洞由門簾蓋住）
 }
 function drawBubble(x, y, text, alpha) {
   ctx.save(); ctx.globalAlpha = alpha;
