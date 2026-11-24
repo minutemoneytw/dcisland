@@ -5789,6 +5789,7 @@ BJ_MAX_BET = 10000
 BJ_BET_MS, BJ_TURN_MS, BJ_RESULT_MS = 15000, 20000, 7000
 # 賭博桌不上大螢幕（2026-11-24 使用者定：賭博區都不轉播，但還是可以走到桌邊觀戰）：不進轉播清單、不會被自動選上。新增賭博遊戲時加進來（兩份伺服器一致）
 SCR_HIDDEN_GAMES = {"mary", "blackjack", "slots", "roulette"}
+SINGLE_AUTO_GAMES = {"mary", "slots", "pinball", "breakout", "bubble", "g2048"}   # 單人機台：入座就自動開局（不用按「準備」；結算後想再玩一局還是按「準備」）
 CASINO_GAMES = {"blackjack", "roulette"}   # 賭桌型（沒有準備／開局流程，隨時入座離開）
 BJ_MSGS = {"bbet", "bclr", "bok", "bhit", "bstand", "bdbl"}
 
@@ -8268,6 +8269,13 @@ class Room:
             v = local_chips
             s["chips"] = max(0, min(CHIPS_MAX, int(v))) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else 0
 
+    def single_auto_start(self, t, cid):
+        """小瑪莉／吃角子老虎機：坐上位子就自動準備、開局（單人機台，反正要操作才會開始）。"""
+        s = next((x for x in t["seats"] if x.get("cid") == cid), None)
+        if s and t["phase"] == "lobby":
+            s["ready"] = True
+            tbl_check_start(t)
+
     def bj_after_seat(self, t, cid, local_chips):
         """21 點：入座者補上籌碼；桌子還沒開就開桌（第一個人），已經開著就等下一局（下注階段可直接下注）。"""
         s = next((x for x in t["seats"] if x.get("cid") == cid), None)
@@ -8530,6 +8538,8 @@ class Room:
                     self.ma_init_chips(t, cid, msg.get("chips"))   # 小瑪莉／吃角子老虎機：入座就把籌碼餘額帶上機台（登入者讀 CHIPS_DB；訪客用 client 帶的本機餘額）
                 elif game in CASINO_GAMES:
                     self.bj_after_seat(t, cid, msg.get("chips"))   # 21 點：入座帶籌碼、第一個人入座就開桌
+                if game in SINGLE_AUTO_GAMES:
+                    self.single_auto_start(t, cid)   # 單人機台入座就開局（2026-11-24 使用者定：不用再按「準備」）
                 c["table"], c["table_terr"] = tid, terr
                 self._table_notify_locked(t, out)
             else:
@@ -8653,6 +8663,8 @@ class Room:
                             self.ma_init_chips(t, cid, msg.get("chips"))   # 小瑪莉：觀戰轉入座也要補上籌碼
                         elif t["game"] in CASINO_GAMES:
                             self.bj_after_seat(t, cid, msg.get("chips"))   # 21 點：觀戰轉入座
+                        if t["game"] in SINGLE_AUTO_GAMES:
+                            self.single_auto_start(t, cid)   # 單人機台入座就開局
                     elif a == "stand":
                         tbl_stand(t, cid)
                     elif a == "draw":

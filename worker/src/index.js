@@ -3892,6 +3892,7 @@ function tfRelay(t, cid, msg, scrOut) {
 const BJ_MAX_BET = 10000, BJ_BET_MS = 15000, BJ_TURN_MS = 20000, BJ_RESULT_MS = 7000;
 // 賭博桌不上大螢幕（2026-11-24 使用者定：賭博區都不轉播，但還是可以走到桌邊觀戰）：不進轉播清單、不會被自動選上。新增賭博遊戲時加進來（兩份伺服器一致）
 const SCR_HIDDEN_GAMES = new Set(["mary", "blackjack", "slots", "roulette"]);
+const SINGLE_AUTO_GAMES = new Set(["mary", "slots", "pinball", "breakout", "bubble", "g2048"]);   // 單人機台：入座就自動開局（不用按「準備」；結算後想再玩一局還是按「準備」）
 const CASINO_GAMES = new Set(["blackjack", "roulette"]);   // 賭桌型（沒有準備／開局流程，隨時入座離開）
 const BJ_MSGS = new Set(["bbet", "bclr", "bok", "bhit", "bstand", "bdbl"]);
 function bjTotal(cards) {   // 手牌點數：[點數, 是否軟牌]。A 算 11 或 1，J／Q／K 算 10
@@ -5190,6 +5191,10 @@ export class Island {
     }
   }
   // 21 點（同 bj* 純函式一套）：入座者補上籌碼；桌子還沒開就開桌（第一個人），已經開著就等下一局（下注階段可直接下注）
+  singleAutoStart(t, cid) {   // 小瑪莉／吃角子老虎機：坐上位子就自動準備、開局（單人機台，反正要操作才會開始）
+    const s = t.seats.find(x => x.cid === cid);
+    if (s && t.phase === "lobby") { s.ready = true; tblCheckStart(t); }
+  }
   async bjAfterSeat(t, cid, localChips) {
     const s = t.seats.find(x => x.cid === cid);
     if (!s || "bet" in s) return;
@@ -5532,6 +5537,7 @@ export class Island {
       else tblJoin(t, att.id, pname, msg.role === "spec" ? "spec" : "seat", att.user ? att.user.id : null, tblRk(msg.rk));
       if (game === "mary" || game === "slots") await this.maInitChips(t, att.id, msg.chips);
       else if (CASINO_GAMES.has(game)) await this.bjAfterSeat(t, att.id, msg.chips);   // 21 點：入座帶籌碼、第一個人入座就開桌
+      if (SINGLE_AUTO_GAMES.has(game)) this.singleAutoStart(t, att.id);   // 單人機台入座就開局（2026-11-24 使用者定：不用再按「準備」）
         // 小瑪莉：入座就把籌碼餘額帶上機台（登入者讀 Registry；訪客用 client 帶的本機餘額）
       cur.table = tid; ws.serializeAttachment(cur);
       await this.saveTable(t);
@@ -5682,7 +5688,7 @@ export class Island {
     else if (t.game === "kingdom" && KG_MSGS.has(a)) { if (!kgAct(t, att.id, msg, now)) return; }   // 列島建國：拿資源／保留／建造／交易／封鎖／跳過
     else if (t.game === "intel" && IT_MSGS.has(a)) itMsg(t, att.id, msg, now);   // 秘藥情報戰：投遞／收下／轉手／行動牌／逾時
     else if (a === "ready") tblReady(t, att.id, msg.v);
-    else if (a === "sit") { tblSit(t, att.id); if (t.game === "mary" || t.game === "slots") await this.maInitChips(t, att.id, msg.chips); else if (CASINO_GAMES.has(t.game)) await this.bjAfterSeat(t, att.id, msg.chips); }   // 小瑪莉：觀戰轉入座也要補上籌碼
+    else if (a === "sit") { tblSit(t, att.id); if (t.game === "mary" || t.game === "slots") await this.maInitChips(t, att.id, msg.chips); else if (CASINO_GAMES.has(t.game)) await this.bjAfterSeat(t, att.id, msg.chips); if (SINGLE_AUTO_GAMES.has(t.game)) this.singleAutoStart(t, att.id); }   // 單人機台入座就開局   // 小瑪莉：觀戰轉入座也要補上籌碼
     else if (a === "stand") tblStand(t, att.id);
     else if (a === "draw") { if (t.game === "uno") unDraw(t, att.id, now); else omDraw(t, att.id, msg.idx); }   // UNO：抽牌；抽鬼牌：抽對方的牌
     else if (a === "shuffle") omShuffle(t, att.id);
