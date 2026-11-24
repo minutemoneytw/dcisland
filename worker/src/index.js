@@ -3888,6 +3888,8 @@ function tfRelay(t, cid, msg, scrOut) {
 // 「入座時抽到的島主」的經驗值（同小瑪莉，tableKick／tableLeave 的 maOwnerXp）。逾時由客戶端每秒送 timeout（伺服器核對 g.dl）。
 // 與 tools/dev_server.py 的 bj_* 同一套，改規則兩邊一起改。
 const BJ_MAX_BET = 10000, BJ_BET_MS = 15000, BJ_TURN_MS = 20000, BJ_RESULT_MS = 7000;
+// 賭博桌不上大螢幕（2026-11-24 使用者定：賭博區都不轉播，但還是可以走到桌邊觀戰）：不進轉播清單、不會被自動選上。新增賭博遊戲時加進來（兩份伺服器一致）
+const SCR_HIDDEN_GAMES = new Set(["mary", "blackjack"]);
 const BJ_MSGS = new Set(["bbet", "bclr", "bok", "bhit", "bstand", "bdbl"]);
 function bjTotal(cards) {   // 手牌點數：[點數, 是否軟牌]。A 算 11 或 1，J／Q／K 算 10
   let tot = 0, aces = 0;
@@ -4838,7 +4840,7 @@ export class Island {
     const out = [];
     for (const [tid, game] of Object.entries(TABLE_DEFS[terr] || {})) {
       const t = this.tables.get(tid);
-      if (t && t.game !== "blackjack" && (t.phase === "playing" || t.seats.length)) out.push(t);   // 21 點還沒有大螢幕畫面：不進轉播清單（它一直是 playing，不排除會自動搶走螢幕變空白）
+      if (t && !SCR_HIDDEN_GAMES.has(t.game) && (t.phase === "playing" || t.seats.length)) out.push(t);   // 賭博桌不轉播（SCR_HIDDEN_GAMES）
     }
     return out;
   }
