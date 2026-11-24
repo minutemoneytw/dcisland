@@ -5269,7 +5269,7 @@ export class Island {
       const [changed, err, lost] = a === "mspin" ? await this.maSpin(t, i, msg) : a === "mcol" ? await this.maCollect(t, i) : a === "mxp" ? await this.maExchange(t, i, ws) : maDbl(t, i, msg);
       if (err) { try { ws.send(JSON.stringify({ t: "tblerr", id: t.id, text: err })); } catch { /* 對方已斷線 */ } return; }
       if (!changed) return;
-      if (lost > 0) g.jp = await this.maryJpAdd(lost);   // 比大小輸掉的獎池全額進入累積獎池（2026-11-19 使用者定：三同 40 萬賭輸了，池裡要多 40 萬）
+      if (lost > 0) t.g.jp = await this.maryJpAdd(lost);   // 比大小輸掉的獎池全額進入累積獎池（2026-11-19 使用者定：三同 40 萬賭輸了，池裡要多 40 萬）
     }
     else if (t.game === "maze" && MZ_MSGS.has(a)) { if (a === "mpac") mzSetPac(t, att.id, msg.v); else mzOver(t, att.id, msg); }   // 豆豆迷宮：桌主指定豆豆／豆豆那台回報結束
     else if (t.game === "bigtwo" && BT_MSGS.has(a)) { if (!(a === "bplay" ? btPlay(t, att.id, msg.cs, now) : btPass(t, att.id, now))) return; }   // 大老二：出牌 {cs: [牌]}／pass
