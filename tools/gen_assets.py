@@ -2996,7 +2996,7 @@ EXTERNAL_BUNDLES = [
     dict(sheet="external/img2pixel/ultima_weapon_sheet.png", frames=6, fw=88, fh=74, what="蓋老師（究極神兵）的走路 6 幀（熔岩島島主）"),
     dict(sheet="external/img2pixel/alexander_idle_sheet.png", frames=4, fw=88, fh=77, what="壓力山大的待機 4 幀（機械島島主）"),
     # 2026-11-12 素材庫第一批（OpenGameArt LPC；sheet 已裁成只用到的格）：
-    dict(sheet="external/img2pixel/deer_sheet.png", frames=4, rows=4, fw=64, fh=96, what="鹿的 4 方向（下／左／右／上）× 4 幀走路（草島）"),
+    dict(sheet="external/img2pixel/deer_sheet.png", frames=4, rows=4, fw=64, fh=96, what="鹿的 4 方向（上／左／右／下）× 4 幀走路（草島；第 1 列背影、第 4 列正面）"),
     dict(sheet="external/img2pixel/cat_sheet.png", frames=3, rows=3, fw=32, fh=32, what="貓的 3 方向（上／下／左）× 3 幀走路（和平島；白貓原色，靠 tint 可換色）"),
     dict(sheet="external/img2pixel/dog_sheet.png", frames=3, rows=3, fw=32, fh=32, what="狗的 3 方向（上／下／左）× 3 幀走路（和平島；白狗原色，靠 tint 可換色）"),
     dict(sheet="external/img2pixel/boar_sheet.png", frames=3, rows=4, fw=64, fh=64, what="野豬的 4 方向（上／右／下／左）× 3 幀走路（森林島）"),
@@ -3174,7 +3174,7 @@ MOB_MANIFEST = dict(
         # 鹿（草島）：被動（道德性怪物），4 方向走路
         dict(id="deer", name="鹿", lv=5, speed=40, flee=120, noBounce=True,
              anim=dict(sheet="external/img2pixel/deer_sheet.png", frames=4, rows=4, fw=64, fh=96,
-                       rowDir=["down", "left", "right", "up"], fps=6, scale=0.52),   # 格內實際內容 22×78，畫面約 41px 高（人物約 46px；2026-11-13 使用者定「大隻一點，比雞大」，由 0.4 放大——雞只有約 24px）
+                       rowDir=["up", "left", "right", "down"], fps=6, scale=0.52),   # 原圖第 1 列是背影（往上）、第 4 列是正面（往下）；格內實際內容 22×78，畫面約 41px 高（人物約 46px；2026-11-13 使用者定「大隻一點，比雞大」，由 0.4 放大——雞只有約 24px）
              line="「鹿」豎起耳朵看了你一眼，又低頭繼續啃草。"),
         # 貓／狗（和平島）：被動、固定生成，補和平島「島上沒有動物」的空虛感；和平島不得放敵對怪，這兩隻是安全的
         dict(id="cat", name="貓", lv=2, fixed=2, speed=34, flee=60, noBounce=True,

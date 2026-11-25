@@ -599,10 +599,10 @@
     "fw": 64,
     "fh": 96,
     "rowDir": [
-     "down",
+     "up",
      "left",
      "right",
-     "up"
+     "down"
     ],
     "fps": 6,
     "scale": 0.52
