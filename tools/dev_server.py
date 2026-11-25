@@ -637,7 +637,7 @@ def cell_has_furn(items, cell):
     """該格有沒有家具（家具佔 w×h 格）。"""
     defs = furn_defs()
     for it in items:
-        w, h = defs.get(it["type"], (1, 1))
+        w, h = furn_dims(defs, it["type"], it.get("dir", 0))
         if it["cell"][0] <= cell[0] < it["cell"][0] + w and it["cell"][1] <= cell[1] < it["cell"][1] + h:
             return True
     return False
@@ -657,8 +657,15 @@ def furn_defs():
     global _FURN_DEFS
     if _FURN_DEFS is None:
         with open(os.path.join(CLIENT, "assets", "furniture", "furniture.json"), encoding="utf-8") as f:
-            _FURN_DEFS = {it["id"]: (it["w"], it["h"]) for it in json.load(f)["items"]}
+            man = json.load(f)["items"]
+            _FURN_DEFS = {it["id"]: (it["w"], it["h"]) for it in man}
+            _FURN_ROT.update(it["id"] for it in man if it.get("rotSwap"))
     return _FURN_DEFS
+
+_FURN_ROT = set()   # 朝左／右（dir 1／3）時寬高互換的家具（床；2026-11-25；與 Worker 的 furnDim、main.js 的 furnDimsOf 一致）
+def furn_dims(defs, ftype, dr=0):
+    w, h = defs.get(ftype, (1, 1))
+    return (h, w) if ftype in _FURN_ROT and dr in (1, 3) else (w, h)
 
 _SKILL_DEFS = None
 def owner_says(terrain):
@@ -6470,6 +6477,9 @@ class Room:
             if not d or not valid or len(items) >= MAX_FURN:
                 return False
             x, y = cell
+            dr = msg.get("dir")
+            pd = dr if isinstance(dr, int) and not isinstance(dr, bool) and 1 <= dr <= 3 else 0
+            d = furn_dims(defs, str(msg.get("type")), pd)
             if x < 0 or y < 0 or x + d[0] > COLS or y + d[1] > ROWS:
                 return False
             land = self.dragon_maps.get(terrain)
@@ -6480,13 +6490,12 @@ class Room:
                         if not land[(y + dy) * COLS + x + dx] and floor_at(floor, x + dx, y + dy) is None:
                             return False
             for it in items:
-                w, h = defs.get(it["type"], (1, 1))
+                w, h = furn_dims(defs, it["type"], it.get("dir", 0))
                 if x < it["cell"][0] + w and it["cell"][0] < x + d[0] and y < it["cell"][1] + h and it["cell"][1] < y + d[1]:
                     return False
             it = {"type": str(msg["type"]), "cell": [x, y]}
-            dr = msg.get("dir")
-            if isinstance(dr, int) and not isinstance(dr, bool) and 1 <= dr <= 3:
-                it["dir"] = dr   # 朝向 1 左／2 背／3 右（沒有＝0 正面；2026-11-15）
+            if pd:
+                it["dir"] = pd   # 朝向 1 左／2 背／3 右（沒有＝0 正面；2026-11-15）
             items.append(it)
             return True
         if t == "rotate":   # 旋轉已擺好的家具：dir 0～3（0＝正面，存成沒有 dir 欄位）；點到家具任一格都算
@@ -6494,10 +6503,28 @@ class Room:
             if not valid or not isinstance(dr, int) or isinstance(dr, bool) or not 0 <= dr <= 3:
                 return False
             for it in items:
-                w, h = defs.get(it["type"], (1, 1))
+                w, h = furn_dims(defs, it["type"], it.get("dir", 0))
                 if it["cell"][0] <= cell[0] < it["cell"][0] + w and it["cell"][1] <= cell[1] < it["cell"][1] + h:
                     if it.get("dir", 0) == dr:
                         return False
+                    nw, nh = furn_dims(defs, it["type"], dr)
+                    if (nw, nh) != (w, h):   # 寬高互換（床）：新佔到的格子要在範圍內、水上有地板、沒被別的家具佔住（左上角不動）
+                        x, y = it["cell"]
+                        if x + nw > COLS or y + nh > ROWS:
+                            return False
+                        land = self.dragon_maps.get(terrain)
+                        if land:
+                            floor = self.floor_map(terrain)
+                            for dy in range(nh):
+                                for dx in range(nw):
+                                    if not land[(y + dy) * COLS + x + dx] and floor_at(floor, x + dx, y + dy) is None:
+                                        return False
+                        for o in items:
+                            if o is it:
+                                continue
+                            ow, oh = furn_dims(defs, o["type"], o.get("dir", 0))
+                            if x < o["cell"][0] + ow and o["cell"][0] < x + nw and y < o["cell"][1] + oh and o["cell"][1] < y + nh:
+                                return False
                     if dr:
                         it["dir"] = dr
                     else:
@@ -6508,7 +6535,7 @@ class Room:
             if not valid:
                 return False
             for i, it in enumerate(items):
-                w, h = defs.get(it["type"], (1, 1))
+                w, h = furn_dims(defs, it["type"], it.get("dir", 0))
                 if it["cell"][0] <= cell[0] < it["cell"][0] + w and it["cell"][1] <= cell[1] < it["cell"][1] + h:
                     del items[i]
                     return True

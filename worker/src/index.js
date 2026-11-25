@@ -156,6 +156,10 @@ function isAdminId(env, id) {
   return !!id && String(env.ADMIN_IDS || "").split(",").map(s => s.trim()).filter(Boolean).includes(String(id));
 }
 
+// 家具佔的格數（w×h）；rotSwap 的家具（床）朝左／右（dir 1／3）時寬高互換（2026-11-25；與 main.js 的 furnDimsOf、dev_server.py 的 furn_dims 一致）
+function furnDim(d, dir) {
+  return d && d.rot && (dir === 1 || dir === 3) ? { w: d.h, h: d.w } : d;
+}
 // 對一份擺設清單套用單一操作（place / remove / clear），成功回 true。清空的權限在呼叫端檢查。
 // ground(x,y)＝那格能不能放東西（陸地，或水上鋪了地板）；規則與 client/js/main.js 的 canPlaceIn、dev_server.py 的 edit_furn／commit_furn 一致
 function applyFurnOp(items, defs, op, ground) {
@@ -165,32 +169,45 @@ function applyFurnOp(items, defs, op, ground) {
     const def = defs.get(String(op.type));
     if (!def || !validCell || items.length >= MAX_FURN) return false;
     const [x, y] = cell;
-    if (x < 0 || y < 0 || x + def.w > COLS || y + def.h > ROWS) return false;
-    if (ground) for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) if (!ground(x + dx, y + dy)) return false;   // 水上要有地板
+    const pd = Number.isInteger(op.dir) && op.dir >= 1 && op.dir <= 3 ? op.dir : 0;
+    const fd = furnDim(def, pd);
+    if (x < 0 || y < 0 || x + fd.w > COLS || y + fd.h > ROWS) return false;
+    if (ground) for (let dy = 0; dy < fd.h; dy++) for (let dx = 0; dx < fd.w; dx++) if (!ground(x + dx, y + dy)) return false;   // 水上要有地板
     for (const it of items) {
-      const d = defs.get(it.type);
+      const d = furnDim(defs.get(it.type), it.dir || 0);
       if (!d) continue;
-      if (x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h) return false;
+      if (x < it.cell[0] + d.w && it.cell[0] < x + fd.w && y < it.cell[1] + d.h && it.cell[1] < y + fd.h) return false;
     }
     const it = { type: String(op.type), cell: [x, y] };
-    if (Number.isInteger(op.dir) && op.dir >= 1 && op.dir <= 3) it.dir = op.dir;   // 朝向 1 左／2 背／3 右（沒有＝0 正面；2026-11-15）
+    if (pd) it.dir = pd;   // 朝向 1 左／2 背／3 右（沒有＝0 正面；2026-11-15）
     items.push(it);
     return true;
   }
   if (op.t === "rotate") {   // 旋轉已擺好的家具：dir 0～3（0＝正面，存成沒有 dir 欄位）；點到家具任一格都算
     if (!validCell || !Number.isInteger(op.dir) || op.dir < 0 || op.dir > 3) return false;
     const it = items.find(o => {
-      const d = defs.get(o.type) || { w: 1, h: 1 };
+      const d = furnDim(defs.get(o.type) || { w: 1, h: 1 }, o.dir || 0);
       return cell[0] >= o.cell[0] && cell[0] < o.cell[0] + d.w && cell[1] >= o.cell[1] && cell[1] < o.cell[1] + d.h;
     });
     if (!it || (it.dir || 0) === op.dir) return false;
+    const od = furnDim(defs.get(it.type) || { w: 1, h: 1 }, it.dir || 0), nd = furnDim(defs.get(it.type) || { w: 1, h: 1 }, op.dir);
+    if (od.w !== nd.w || od.h !== nd.h) {   // 寬高互換（床）：新佔到的格子要在範圍內、水上有地板、沒被別的家具佔住（左上角不動）
+      const [x, y] = it.cell;
+      if (x + nd.w > COLS || y + nd.h > ROWS) return false;
+      if (ground) for (let dy = 0; dy < nd.h; dy++) for (let dx = 0; dx < nd.w; dx++) if (!ground(x + dx, y + dy)) return false;
+      for (const o of items) {
+        if (o === it) continue;
+        const d = furnDim(defs.get(o.type) || { w: 1, h: 1 }, o.dir || 0);
+        if (x < o.cell[0] + d.w && o.cell[0] < x + nd.w && y < o.cell[1] + d.h && o.cell[1] < y + nd.h) return false;
+      }
+    }
     if (op.dir) it.dir = op.dir; else delete it.dir;
     return true;
   }
   if (op.t === "remove") {
     if (!validCell) return false;
     const i = items.findIndex(it => {
-      const d = defs.get(it.type) || { w: 1, h: 1 };
+      const d = furnDim(defs.get(it.type) || { w: 1, h: 1 }, it.dir || 0);
       return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
     });
     if (i < 0) return false;
@@ -255,7 +272,7 @@ const floorToList = floor => [...floor].map(([k, id]) => [k % COLS, Math.floor(k
 // 該格有沒有家具（家具佔 w×h 格）
 function cellHasFurn(items, defs, cell) {
   return items.some(it => {
-    const d = defs.get(it.type) || { w: 1, h: 1 };
+    const d = furnDim(defs.get(it.type) || { w: 1, h: 1 }, it.dir || 0);
     return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
   });
 }
@@ -4314,7 +4331,7 @@ export class Island {
     try {
       const res = await this.env.ASSETS.fetch(new Request("https://assets.local/assets/furniture/furniture.json"));
       const man = await res.json();
-      this.furnDefs = new Map(man.items.map(it => [it.id, { w: it.w, h: it.h, text: !!it.text }]));
+      this.furnDefs = new Map(man.items.map(it => [it.id, { w: it.w, h: it.h, text: !!it.text, rot: !!it.rotSwap }]));
     } catch (e) {
       console.log("[furn] manifest 載入失敗", String(e));
       return new Map();          // 載入失敗就不接受擺放，下次再試
