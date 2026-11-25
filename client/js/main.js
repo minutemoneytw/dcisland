@@ -4030,7 +4030,7 @@ function drawGazeEye(x, y, r, pul) {
   ctx.beginPath(); ctx.ellipse(0, 0, r * .16, r * .58, 0, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
-// 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）。床直放（朝下，1×2）：頭在上端的枕頭、被子從 quiltRow 蓋到床尾；橫放（朝左／右，2×1）：頭轉 90 度靠床頭端
+// 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）。床直放（朝下，1×2）：頭在上端的枕頭、被子從 quiltRow 蓋到床尾；橫放（朝左／右，2×1）：拿側面的頭與肩膀轉 90 度靠床頭端
 function drawSleeper(p) {
   const F = S.avatar.frames, img = playerSpriteDiv(p, (F.states.down_idle || [0])[0]);   // 用正面待機的第 1 幀切出頭與肩膀
   const it = seatItemOf(p), sdir = it?.dir || 0;
@@ -4046,7 +4046,8 @@ function drawSleeper(p) {
     ctx.save();
     ctx.translate(left ? x0 + 4 * 2 : x0 + bed.width * 2 - 4 * 2, bottom - 10 * 2);   // 頭頂貼著床頭端（床圖 x＝4）、身體中線在床面中間
     ctx.rotate(left ? -Math.PI / 2 : Math.PI / 2);
-    ctx.drawImage(img, sx, sy, sw, sh, -sw * rs / 2, 0, sw * rs, sh * rs);
+    const side = playerSpriteDiv(p, (F.states[left ? 'left_idle' : 'right_idle'] || [0])[0]);   // 側躺：拿側面的幀轉 90 度（朝左的床用朝左的幀、朝右的床用朝右的幀，臉都朝下＝朝向畫面）
+    ctx.drawImage(side, sx, sy, sw, sh, -sw * rs / 2, 0, sw * rs, sh * rs);
     ctx.restore();
     const qs = def?.quiltSide;   // 被子那一塊（左向圖座標 [x, y, w, h]；朝右是鏡像）蓋回去，遮住身體被切掉的那條線
     if (bed && qs) {
