@@ -4061,7 +4061,7 @@ function drawSleeper(p) {
   const F = S.avatar.frames, frontFi = (F.states.down_idle || [0])[0], img = playerSpriteDiv(p, frontFi, true);   // 用正面待機的第 1 幀（閉眼的頭）切出頭與肩膀
   const it = seatItemOf(p), sdir = it?.dir || 0;
   const race = ownRaceOf(p === S.players[0] ? S.me.race : p.look?.race)?.id || 'human2', ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);
-  const k = Math.min(1.2, foodScaleOf(ffx)) * .75;   // 畫在床上的倍率：吃喝的巨大化／縮小有效，種族體型不算（臉要一樣大）；×.75＝躺著的頭縮小一點（約床寬的一半）
+  const k = Math.min(1.2, foodScaleOf(ffx));   // 畫在床上的倍率：吃喝的巨大化／縮小有效，種族體型不算（臉要一樣大）；躺著的頭 1 倍（0.75 倍時最近鄰會把 1 像素粗的閉眼線抽掉）
   if (sdir === 2) { drawZzz(p); return; }   // 背面（從床頭看）：人在床頭板後面，只留 Zzz
   const RX = 16, RW = 32, RH = 39;                 // 人類幀的取框（寬 32、高 39；底邊含一點肩膀，會被被子蓋住）
   const f0 = faceBoxOf('human2', frontFi), f1 = faceBoxOf(race, frontFi), u = f0 && f1 ? f1.w / f0.w : 1;   // u＝這個種族的幀畫布一個人類像素等於幾個像素
@@ -4075,9 +4075,17 @@ function drawSleeper(p) {
   if (sdir === 1 || sdir === 3) {   // 橫放的床（2×1）
     const left = sdir === 1, x0 = it.cell[0] * CELL, bottom = (it.cell[1] + 1) * CELL, qs = def?.quiltSide;
     const sideFi = (F.states.left_idle || [0])[0], side = playerSpriteDiv(p, sideFi, true), c = crop(sideFi), dw = RW * k, dh = RH * k;
+    // 切面（頭與肩膀取框最底下那一排，身體被切掉的地方）的上端要貼齊被子的上緣，不然切面會露在被子上面、看起來像頭穿過床板：
+    // 量那一排不透明像素的範圍，算出切面上端離臉心多遠，再把人往下／往上挪到切面上端剛好在被子上緣
+    const cutRow = Math.min(side.height - 1, Math.floor(c.r[1] + c.r[3] - 1)), cx0 = Math.max(0, Math.floor(c.r[0])), cx1 = Math.min(side.width, Math.ceil(c.r[0] + c.r[2]));
+    const cd = side.getContext('2d').getImageData(cx0, cutRow, Math.max(1, cx1 - cx0), 1).data;
+    let ca = -1, cb = -1; for (let i = 0; i < cd.length / 4; i++) if (cd[i * 4 + 3]) { if (ca < 0) ca = i; cb = i; }
+    const sc = dw / c.r[2], lxOf = col => -c.fx * k + (col - c.r[0]) * sc;   // 來源欄 → 轉向前的橫向位置（臉心＝0）
+    const upOff = ca < 0 ? -dw / 2 : (left ? -lxOf(cx0 + cb + 1) : lxOf(cx0 + ca));   // 切面上端（螢幕上方那一頭）離臉心的距離（往下為正）
+    const quiltTopY = bottom - (bed.height - (qs ? qs[1] + 1 : 10)) * 2;             // 被子上緣（被子方塊的第一排不透明列）
     ctx.save();
-    // 頭與肩膀的底邊墊在被子上緣裡 2px（切線被被子蓋住），頭頂朝床頭端；臉心在床面中間（朝右的床：床圖鏡像）
-    ctx.translate(left ? x0 + (qs ? qs[0] : 17) * 2 + 2 - dh : x0 + bed.width * 2 - (qs ? qs[0] : 17) * 2 - 2 + dh, bottom - 13 * 2);
+    // 頭頂貼著床頭端（床圖 x＝4，頭不會穿過床頭板）；肩膀那端在被子下面（被子從床圖 x＝17 開始，取框長 39px 一定蓋得到）（朝右的床：床圖鏡像）
+    ctx.translate(left ? x0 + 4 * 2 : x0 + bed.width * 2 - 4 * 2, quiltTopY - upOff);
     ctx.rotate(left ? -Math.PI / 2 : Math.PI / 2);
     if (left) ctx.scale(-1, 1);   // 臉朝上（床是側面圖，人仰躺＝臉朝畫面上方）：朝左的床轉 -90° 要翻面、朝右的床轉 +90° 直接用（朝右的幀跟朝左的是同一張圖，畫的時候才鏡像）
     ctx.drawImage(side, c.r[0], c.r[1], c.r[2], c.r[3], -c.fx * k, 0, dw, dh);
