@@ -1478,15 +1478,15 @@ def tool_axe():  # 斧頭（斧刃在右側＝揮向前方時朝外）
     cv.outline((30, 24, 22, 255))
     return cv
 
-def bed():   # 單人床（1 寬×2 長：床頭在上、床尾在下；2026-11-25 使用者要求 1:2）：睡覺時頭與肩膀躺在枕頭／床單上，被子從 quiltRow＝22 開始蓋到床尾（頭不被切到、被子蓋在身體被切掉的那條線上）
+def bed():   # 單人床（1 寬×2 長：床頭在上、床尾在下；2026-11-25 使用者要求 1:2）：睡覺時頭與肩膀躺在枕頭／床單上，被子從 quiltRow＝19 開始蓋到床尾（頭不被切到、被子蓋在身體被切掉的那條線上）
     cv = Canvas(16, 40)
     cf = hx("#4a6ab0"); cfd = shade(cf, 0.8)
     cv.rect(1, 5, 14, 36, hx("#a57c4e"))       # 床架
     cv.rect(2, 6, 13, 21, hx("#f2ede0"))       # 床單（頭與肩膀躺在這裡）
-    cv.ellipse(8, 9, 6.0, 3.0, hx("#ffffff"))   # 枕頭
-    cv.rect(2, 22, 13, 35, cf)                 # 棉被
-    cv.rect(2, 22, 13, 22, shade(cf, 1.15))
-    for y in (28, 33):                         # 被子上的兩道摺痕
+    cv.ellipse(8, 8, 6.0, 3.0, hx("#ffffff"))   # 枕頭
+    cv.rect(2, 19, 13, 35, cf)                 # 棉被（2026-11-25 往上延伸 3 格：22→19）
+    cv.rect(2, 19, 13, 19, shade(cf, 1.15))
+    for y in (25, 31):                         # 被子上的兩道摺痕
         cv.hline(3, 12, y, cfd)
     cv.rect(1, 36, 14, 37, cfd)                # 床尾板
     cv.rect(2, 38, 3, 39, hx("#4a3630")); cv.rect(12, 38, 13, 39, hx("#4a3630"))
@@ -2922,7 +2922,7 @@ FURN_MANIFEST = dict(
         dict(id="rug",   name="地毯",  w=2, h=2, solid=False, sprite="rug.png", legacy=True),   # 已改為地板（floor_rug）；保留定義讓舊存檔擺著的還看得到、拿得走，但不列在面板
         dict(id="lamp",  name="電燈",  w=1, h=1, solid=True,  sprite="lamp.png"),
         dict(id="tv",    name="電視",  w=1, h=1, solid=True,  sprite="tv.png"),
-        dict(id="bed",   name="床",    w=1, h=2, solid=True,  sprite="bed.png", use="sleep", quiltRow=22, rotSwap=True, quiltSide=[19, 9, 11, 10]),
+        dict(id="bed",   name="床",    w=1, h=2, solid=True,  sprite="bed.png", use="sleep", quiltRow=19, rotSwap=True, quiltSide=[17, 9, 13, 10]),
         dict(id="shelf", name="書架",  w=1, h=1, solid=True,  sprite="shelf.png"),
         dict(id="sign",  name="看板",  w=1, h=1, solid=True,  sprite="sign.png", text=True),
         # 2026-11-14：新增的預設家具（不用合成）
@@ -4168,9 +4168,9 @@ def furn_bed_variants(front):
     side.rect(1, 9, 3, 19, wood); side.vline(1, 9, 19, shade(wood, 1.15)); side.vline(3, 9, 19, wd)          # 床頭板（高）
     side.rect(29, 13, 30, 19, wood); side.vline(30, 13, 19, wd)                                              # 床尾板（矮）
     side.rect(4, 12, 18, 16, hx("#f2ede0"))                                                                   # 床單（頭與肩膀躺在這裡）
-    side.ellipse(9, 13, 4.6, 1.8, hx("#ffffff"))                                                              # 枕頭
-    side.rect(19, 10, 28, 16, cf); side.hline(19, 28, 10, shade(cf, 1.15)); side.hline(19, 28, 16, cfd)      # 棉被（quiltSide＝[19, 9, 11, 10]：x, y, w, h）
-    side.vline(24, 11, 15, cfd)
+    side.ellipse(8, 13, 4.2, 1.8, hx("#ffffff"))                                                              # 枕頭
+    side.rect(17, 10, 28, 16, cf); side.hline(17, 28, 10, shade(cf, 1.15)); side.hline(17, 28, 16, cfd)      # 棉被（往床頭方向延伸 2 格：19→17；quiltSide＝[17, 9, 13, 10]：x, y, w, h）
+    side.vline(23, 11, 15, cfd)
     side.outline()
     back = Canvas(16, 40)
     back.rect(2, 38, 3, 39, leg); back.rect(12, 38, 13, 39, leg)

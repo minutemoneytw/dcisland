@@ -4070,7 +4070,7 @@ function drawSleeper(p) {
     const sideFi = (F.states.left_idle || [0])[0], side = playerSpriteDiv(p, sideFi), c = crop(sideFi), dw = RW * k, dh = RH * k;
     ctx.save();
     // 頭與肩膀的底邊墊在被子上緣裡 2px（切線被被子蓋住），頭頂朝床頭端；臉心在床面中間（朝右的床：床圖鏡像）
-    ctx.translate(left ? x0 + (qs ? qs[0] : 19) * 2 + 2 - dh : x0 + bed.width * 2 - (qs ? qs[0] : 19) * 2 - 2 + dh, bottom - 10 * 2);
+    ctx.translate(left ? x0 + (qs ? qs[0] : 17) * 2 + 2 - dh : x0 + bed.width * 2 - (qs ? qs[0] : 17) * 2 - 2 + dh, bottom - 13 * 2);
     ctx.rotate(left ? -Math.PI / 2 : Math.PI / 2);
     if (left) ctx.scale(-1, 1);   // 臉朝上（床是側面圖，人仰躺＝臉朝畫面上方）：朝左的床轉 -90° 要翻面、朝右的床轉 +90° 直接用（朝右的幀跟朝左的是同一張圖，畫的時候才鏡像）
     ctx.drawImage(side, c.r[0], c.r[1], c.r[2], c.r[3], -c.fx * k, 0, dw, dh);

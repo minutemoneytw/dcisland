@@ -94,12 +94,12 @@
    "solid": true,
    "sprite": "bed.png",
    "use": "sleep",
-   "quiltRow": 22,
+   "quiltRow": 19,
    "rotSwap": true,
    "quiltSide": [
-    19,
+    17,
     9,
-    11,
+    13,
     10
    ],
    "dirs": [
