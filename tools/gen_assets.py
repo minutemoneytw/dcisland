@@ -576,7 +576,6 @@ LPC_WEAPON_ROWS = [             # 只有某些動作的一般格武器（64×64�
     ("weapon_recurve_fg", [("shoot", "weapon_recurve_shoot_fg.png")]),   # 前層含箭矢（LPC Ammo: arrow）
 ]
 # 種族：人類＝無耳朵；精靈＝精靈耳（跟膚色）；貓族＝貓耳（bg+fg）；拉拉肥/巨人＝找人類模組縮放（LPC 沒有專用體型）
-import gen_casual   # 預設的中性服裝（T恤／長褲／鞋子）的像素資料（tools/gen_casual.py）
 import gen_male   # 男式西裝（外套／褲／鞋）的像素資料與遮罩（tools/gen_male.py）
 import gen_school   # 「新人類」分層 sheet（2026-11-22）：tools/gen_school.py；sheet 在這裡先畫好，換色規則要看實際用到的顏色
 SCHOOL_SHEETS = gen_school.build_sheets()
@@ -615,18 +614,6 @@ SCHOOL_MALE = gen_male.male_sheets()
 # （2026-11-23 換成素體：素體的手、腿跟男式西裝本來就對得上，不再需要遮罩擦掉身體層的手／腿；gen_male.body_masks 與 *_mask_*.png 拿掉了）
 SCHOOL_MALE_DWARF = gen_school.shrink_sheets(SCHOOL_MALE)
 SCHOOL_MALE_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_MALE})
-# 預設的中性服裝（2026-11-23，使用者要求依現在的身形重畫）：T恤（短袖）／長褲／鞋子（球鞋），取代原本的 LPC T恤／長褲／鞋子；id 沿用（tshirt／pants／shoes，職業裝備 jobs.json 也用 pants／shoes）
-SCHOOL_CASUAL = gen_casual.casual_sheets()
-SCHOOL_CASUAL_DWARF = gen_school.shrink_sheets(SCHOOL_CASUAL)
-SCHOOL_CASUAL_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_CASUAL})
-CASUAL_DYE = dict(
-    top=["#9b4add", "#892dd4", "#ab64e3", "#b578e6", "#801ed0"],      # 紫 T恤（使用者自繪）：主色、外框、淺、更淺、深（順序＝第一個是主色）
-    bottom=["#5e6bda", "#2d3ed4", "#525fd7", "#6e79dd"],             # 藍長褲（使用者自繪）
-    shoe=["#ced2de", "#303242", "#68727c", "#eef0f6"])
-CASUAL_ITEMS = dict(
-    top=dict(id="tshirt", name="T恤", glam=True, dye=CASUAL_DYE["top"]),
-    bottom=dict(id="pants", name="長褲", glam=True, dye=CASUAL_DYE["bottom"]),
-    shoe=dict(id="shoes", name="鞋子", glam=True, dye=CASUAL_DYE["shoe"]))
 def _used_colors(img):
     cs = {}
     for row in img.px:
@@ -646,22 +633,16 @@ MALE_ITEMS = dict(
 def school_male_dye():
     return [dict(slot="top", style="suit_jacket_m", layers=["top"], colors=MALE_DYE["top"]),
             dict(slot="bottom", style="suit_pants_m", layers=["bottom"], colors=MALE_DYE["bottom"]),
-            dict(slot="shoe", style="leather_shoes_m", layers=["shoes"], colors=MALE_DYE["shoe"]),
-            dict(slot="top", style="tshirt", layers=["top"], colors=CASUAL_DYE["top"]),
-            dict(slot="bottom", style="pants", layers=["bottom"], colors=CASUAL_DYE["bottom"]),
-            dict(slot="shoe", style="shoes", layers=["shoes"], colors=CASUAL_DYE["shoe"])]
+            dict(slot="shoe", style="leather_shoes_m", layers=["shoes"], colors=MALE_DYE["shoe"])]
 def school_outfit_styles(prefix):
     """服裝款式（用外觀的 id 當款式 id：look.top／bottom／shoe 就是外觀 id）。第一個＝預設（女式，用基本圖層）。"""
     return dict(
         top=[dict(id="suit_jacket", name="女式西裝外套", sheets={}),
-             dict(id="suit_jacket_m", name="男式西裝外套", sheets={"top": f"{prefix}_m_top.png"}),
-             dict(id="tshirt", name="T恤", sheets={"top": f"{prefix}_c_top.png"})],   # 手用身體層自己的（前臂畫在 top 層、接到它），不擦
+             dict(id="suit_jacket_m", name="男式西裝外套", sheets={"top": f"{prefix}_m_top.png"})],
         bottom=[dict(id="suit_skirt", name="西裝短裙", sheets={}),
-                dict(id="suit_pants_m", name="西裝褲", sheets={"bottom": f"{prefix}_m_bottom.png"}),
-                dict(id="pants", name="長褲", sheets={"bottom": f"{prefix}_c_bottom.png"})],
+                dict(id="suit_pants_m", name="西裝褲", sheets={"bottom": f"{prefix}_m_bottom.png"})],
         shoe=[dict(id="pointed_shoes", name="尖皮鞋", sheets={}),
-              dict(id="leather_shoes_m", name="皮鞋", sheets={"shoes": f"{prefix}_m_shoes.png"}),
-              dict(id="shoes", name="鞋子", sheets={"shoes": f"{prefix}_c_shoes.png"})])
+              dict(id="leather_shoes_m", name="皮鞋", sheets={"shoes": f"{prefix}_m_shoes.png"})])
 def school_dye_elf():
     """妖精的換色規則：膚色那條連耳朵（hat 層，皮膚色＋棕色外圈）一起換。"""
     out = []
@@ -673,8 +654,8 @@ def school_dye_elf():
         out.append(r)
     return out
 def school_hair_styles(prefix):
-    return [dict(id="h2_bob", name="鮑伯", sheets={}), dict(id="h2_long", name="中長髮", sheets={"hair": f"{prefix}_hair_long.png"}),
-            dict(id="h2_puff", name="蓬蓬短髮", sheets={"hair": f"{prefix}_hair_puff.png"}),
+    return [dict(id="h2_puff", name="蓬蓬短髮", sheets={"hair": f"{prefix}_hair_puff.png"}),   # 第一個＝預設（2026-11-25 使用者定）
+            dict(id="h2_bob", name="鮑伯", sheets={}), dict(id="h2_long", name="中長髮", sheets={"hair": f"{prefix}_hair_long.png"}),
             dict(id="h2_flip", name="外翹髮", sheets={"hair": f"{prefix}_hair_flip.png"}),
             dict(id="h2_pony", name="馬尾", sheets={"hair": f"{prefix}_hair_pony.png"}),
             dict(id="h2_twin", name="雙馬尾", sheets={"hair": f"{prefix}_hair_twin.png"}),
@@ -4401,9 +4382,6 @@ def main():
     save_chibi_layer(SCHOOL_OIL_HAIR, "human2_hair_oil.png", sub)   # 油頭
     save_chibi_layer(SCHOOL_OIL_HAIR_DWARF, "dwarf2_hair_oil.png", sub)
     save_chibi_layer(SCHOOL_OIL_HAIR_GIANT, "giant2_hair_oil.png", sub)
-    for pre, cas in (("human2", SCHOOL_CASUAL), ("dwarf2", SCHOOL_CASUAL_DWARF), ("giant2", SCHOOL_CASUAL_GIANT)):
-        for ln in ("top", "bottom", "shoes"):
-            save_chibi_layer(cas[ln], f"{pre}_c_{ln}.png", sub)              # 預設中性服裝
     for pre, mal in (("human2", SCHOOL_MALE), ("dwarf2", SCHOOL_MALE_DWARF), ("giant2", SCHOOL_MALE_GIANT)):
         for ln in ("top", "bottom", "shoes"):
             save_chibi_layer(mal[ln], f"{pre}_m_{ln}.png", sub)              # 男式西裝
@@ -4442,7 +4420,7 @@ def main():
         # 基本服裝（LPC 原檔；gender＝之後選性別用）
         # 服裝：男女共用一個 id（sheet＝男、sheetF＝女，client 依角色性別挑；外觀清單一件只出現一次）；
         # dye＝可染色的顏色（lpc_dye_of 自動從圖上取，第一個是主色）；glam＝可當外觀（沒寫 unlock＝一開始就能用）
-        tops=[SCHOOL_SUIT["top"], MALE_ITEMS["top"], CASUAL_ITEMS["top"],
+        tops=[SCHOOL_SUIT["top"], MALE_ITEMS["top"],
               lpc_garment("plate", "騎士板甲", "char_top_plate_m.png", "char_top_plate_f.png"),
               lpc_garment("whm_robe", "白魔道袍", "char_top_whm_m.png", "char_top_whm_f.png"),
               lpc_garment("blm_robe", "黑魔道袍", "char_top_blm_m.png", "char_top_blm_f.png"),
@@ -4451,13 +4429,13 @@ def main():
               lpc_garment("sge_robe", "賢者長袍", "char_top_sge_m.png", "char_top_sge_f.png"),
               lpc_garment("war_mail", "戰士鎖子甲", "char_top_war_m.png", "char_top_war_f.png"),
               lpc_garment("nin_top", "忍者上衣", "char_top_nin_m.png", "char_top_nin_f.png")],
-        bottoms=[SCHOOL_SUIT["bottom"], MALE_ITEMS["bottom"], CASUAL_ITEMS["bottom"],
+        bottoms=[SCHOOL_SUIT["bottom"], MALE_ITEMS["bottom"],
                  lpc_garment("plate_legs", "騎士腿甲", "char_bottom_plate_m.png", "char_bottom_plate_f.png"),
                  lpc_garment("brd_pants", "燈籠褲", "char_bottom_brd_m.png", "char_bottom_brd_f.png"),
                  lpc_garment("drg_legs", "龍騎士腿甲", "char_bottom_drg_m.png", "char_bottom_drg_f.png"),
                  lpc_garment("war_pants", "戰士長褲", "char_bottom_war_m.png", "char_bottom_war_f.png"),
                  lpc_garment("nin_pants", "忍者長褲", "char_bottom_nin_m.png", "char_bottom_nin_f.png")],
-        shoes=[SCHOOL_SUIT["shoe"], MALE_ITEMS["shoe"], CASUAL_ITEMS["shoe"],
+        shoes=[SCHOOL_SUIT["shoe"], MALE_ITEMS["shoe"],
                lpc_garment("plate_boots", "騎士板甲靴", "char_shoes_plate_m.png", "char_shoes_plate_f.png"),
                lpc_garment("brd_boots", "翻邊皮靴", "char_shoes_brd_m.png", "char_shoes_brd_f.png"),
                lpc_garment("drg_boots", "龍騎士鐵靴", "char_shoes_drg_m.png", "char_shoes_drg_f.png"),

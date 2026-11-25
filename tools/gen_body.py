@@ -641,14 +641,13 @@ def apply(sheets):
 
 
 def main():
-    """除錯用：輸出預覽（素體、素體＋男式西裝、素體＋預設中性服裝；四個方向×步 A／待機／步 B）到指定資料夾。"""
-    import gen_male, gen_casual
+    """除錯用：輸出預覽（素體、素體＋男式西裝；四個方向×步 A／待機／步 B）到指定資料夾。"""
+    import gen_male
     outdir = sys.argv[1] if len(sys.argv) > 1 else 'body_out'
     os.makedirs(outdir, exist_ok=True)
     bs = body_sheets()
     male = gen_male.male_sheets()
-    casual = gen_casual.casual_sheets()
-    variants = [('素體', []), ('男式西裝', [male]), ('中性服裝', [casual])]
+    variants = [('素體', []), ('男式西裝', [male])]
     cols = (1, 0, 5, 3)            # 步 1（步 A）、待機、步 2（步 B）、待機
     prev = Img(len(variants) * 4 * 66, 4 * 66)
     for vi, (_, extra) in enumerate(variants):

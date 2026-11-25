@@ -202,7 +202,6 @@ DATA = {
             '.........afccccccccccfa',
             '.........acccccaaccccca',
             '.........acaaca..acaaca',
-            'c......................',
         ]),
     },
     ('front', 1): {

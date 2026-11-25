@@ -7,9 +7,9 @@
   { "id": "warrior", "atkAnim": "slash", "name": "戰士", "role": "tank", "weapon": "waraxe",
     "gear": { "hat": "barbarian", "top": "war_mail", "bottom": "war_pants", "shoe": "war_boots" }, "skills": ["vamp", "wshield"] },
   { "id": "whitemage", "atkAnim": "thrust", "name": "白魔法師", "role": "healer", "weapon": "staff",
-    "gear": { "hat": "hood", "top": "whm_robe", "bottom": "pants", "shoe": "shoes" }, "skills": ["sheal", "wings"] },
+    "gear": { "hat": "hood", "top": "whm_robe", "bottom": "suit_pants_m", "shoe": "leather_shoes_m" }, "skills": ["sheal", "wings"] },
   { "id": "sage", "atkAnim": "spellcast", "name": "賢者", "role": "healer", "weapon": "tome",
-    "gear": { "hat": "nohat", "top": "sge_robe", "bottom": "pants", "shoe": "shoes" }, "skills": ["care", "save"] },
+    "gear": { "hat": "nohat", "top": "sge_robe", "bottom": "suit_pants_m", "shoe": "leather_shoes_m" }, "skills": ["care", "save"] },
   { "id": "ninja", "atkAnim": "slash", "name": "忍者", "role": "melee", "weapon": "daggers",
     "gear": { "hat": "headband", "top": "nin_top", "bottom": "nin_pants", "shoe": "nin_tabi" }, "skills": ["ninjutsu", "blink"] },
   { "id": "dragoon", "atkAnim": "thrust", "name": "龍騎士", "role": "melee", "weapon": "lance",
@@ -17,6 +17,6 @@
   { "id": "bard", "atkAnim": "shoot", "name": "吟遊詩人", "role": "ranged", "weapon": "harpbow",
     "gear": { "hat": "cavalier", "top": "brd_vest", "bottom": "brd_pants", "shoe": "brd_boots" }, "skills": ["song", "poison"] },
   { "id": "blackmage", "atkAnim": "thrust", "name": "黑魔法師", "role": "ranged", "weapon": "scepter",
-    "gear": { "hat": "wizard", "top": "blm_robe", "bottom": "pants", "shoe": "shoes" }, "skills": ["circle", "triple"] }
+    "gear": { "hat": "wizard", "top": "blm_robe", "bottom": "suit_pants_m", "shoe": "leather_shoes_m" }, "skills": ["circle", "triple"] }
  ]
 }

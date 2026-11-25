@@ -2359,6 +2359,13 @@
     "styles": {
      "hair": [
       {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "human2_hair_puff.png"
+       }
+      },
+      {
        "id": "h2_bob",
        "name": "鮑伯",
        "sheets": {}
@@ -2368,13 +2375,6 @@
        "name": "中長髮",
        "sheets": {
         "hair": "human2_hair_long.png"
-       }
-      },
-      {
-       "id": "h2_puff",
-       "name": "蓬蓬短髮",
-       "sheets": {
-        "hair": "human2_hair_puff.png"
        }
       },
       {
@@ -2418,13 +2418,6 @@
        "sheets": {
         "top": "human2_m_top.png"
        }
-      },
-      {
-       "id": "tshirt",
-       "name": "T恤",
-       "sheets": {
-        "top": "human2_c_top.png"
-       }
       }
      ],
      "bottom": [
@@ -2439,13 +2432,6 @@
        "sheets": {
         "bottom": "human2_m_bottom.png"
        }
-      },
-      {
-       "id": "pants",
-       "name": "長褲",
-       "sheets": {
-        "bottom": "human2_c_bottom.png"
-       }
       }
      ],
      "shoe": [
@@ -2459,13 +2445,6 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "human2_m_shoes.png"
-       }
-      },
-      {
-       "id": "shoes",
-       "name": "鞋子",
-       "sheets": {
-        "shoes": "human2_c_shoes.png"
        }
       }
      ]
@@ -2589,46 +2568,6 @@
        "#61575a",
        "#716466"
       ]
-     },
-     {
-      "slot": "top",
-      "style": "tshirt",
-      "layers": [
-       "top"
-      ],
-      "colors": [
-       "#9b4add",
-       "#892dd4",
-       "#ab64e3",
-       "#b578e6",
-       "#801ed0"
-      ]
-     },
-     {
-      "slot": "bottom",
-      "style": "pants",
-      "layers": [
-       "bottom"
-      ],
-      "colors": [
-       "#5e6bda",
-       "#2d3ed4",
-       "#525fd7",
-       "#6e79dd"
-      ]
-     },
-     {
-      "slot": "shoe",
-      "style": "shoes",
-      "layers": [
-       "shoes"
-      ],
-      "colors": [
-       "#ced2de",
-       "#303242",
-       "#68727c",
-       "#eef0f6"
-      ]
      }
     ],
     "anchors": {
@@ -2680,6 +2619,13 @@
     "styles": {
      "hair": [
       {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "human2_hair_puff.png"
+       }
+      },
+      {
        "id": "h2_bob",
        "name": "鮑伯",
        "sheets": {}
@@ -2689,13 +2635,6 @@
        "name": "中長髮",
        "sheets": {
         "hair": "human2_hair_long.png"
-       }
-      },
-      {
-       "id": "h2_puff",
-       "name": "蓬蓬短髮",
-       "sheets": {
-        "hair": "human2_hair_puff.png"
        }
       },
       {
@@ -2739,13 +2678,6 @@
        "sheets": {
         "top": "human2_m_top.png"
        }
-      },
-      {
-       "id": "tshirt",
-       "name": "T恤",
-       "sheets": {
-        "top": "human2_c_top.png"
-       }
       }
      ],
      "bottom": [
@@ -2760,13 +2692,6 @@
        "sheets": {
         "bottom": "human2_m_bottom.png"
        }
-      },
-      {
-       "id": "pants",
-       "name": "長褲",
-       "sheets": {
-        "bottom": "human2_c_bottom.png"
-       }
       }
      ],
      "shoe": [
@@ -2780,13 +2705,6 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "human2_m_shoes.png"
-       }
-      },
-      {
-       "id": "shoes",
-       "name": "鞋子",
-       "sheets": {
-        "shoes": "human2_c_shoes.png"
        }
       }
      ]
@@ -2912,46 +2830,6 @@
        "#61575a",
        "#716466"
       ]
-     },
-     {
-      "slot": "top",
-      "style": "tshirt",
-      "layers": [
-       "top"
-      ],
-      "colors": [
-       "#9b4add",
-       "#892dd4",
-       "#ab64e3",
-       "#b578e6",
-       "#801ed0"
-      ]
-     },
-     {
-      "slot": "bottom",
-      "style": "pants",
-      "layers": [
-       "bottom"
-      ],
-      "colors": [
-       "#5e6bda",
-       "#2d3ed4",
-       "#525fd7",
-       "#6e79dd"
-      ]
-     },
-     {
-      "slot": "shoe",
-      "style": "shoes",
-      "layers": [
-       "shoes"
-      ],
-      "colors": [
-       "#ced2de",
-       "#303242",
-       "#68727c",
-       "#eef0f6"
-      ]
      }
     ],
     "anchors": {
@@ -3004,6 +2882,13 @@
     "styles": {
      "hair": [
       {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "human2_hair_puff.png"
+       }
+      },
+      {
        "id": "h2_bob",
        "name": "鮑伯",
        "sheets": {}
@@ -3013,13 +2898,6 @@
        "name": "中長髮",
        "sheets": {
         "hair": "human2_hair_long.png"
-       }
-      },
-      {
-       "id": "h2_puff",
-       "name": "蓬蓬短髮",
-       "sheets": {
-        "hair": "human2_hair_puff.png"
        }
       },
       {
@@ -3063,13 +2941,6 @@
        "sheets": {
         "top": "human2_m_top.png"
        }
-      },
-      {
-       "id": "tshirt",
-       "name": "T恤",
-       "sheets": {
-        "top": "human2_c_top.png"
-       }
       }
      ],
      "bottom": [
@@ -3084,13 +2955,6 @@
        "sheets": {
         "bottom": "human2_m_bottom.png"
        }
-      },
-      {
-       "id": "pants",
-       "name": "長褲",
-       "sheets": {
-        "bottom": "human2_c_bottom.png"
-       }
       }
      ],
      "shoe": [
@@ -3104,13 +2968,6 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "human2_m_shoes.png"
-       }
-      },
-      {
-       "id": "shoes",
-       "name": "鞋子",
-       "sheets": {
-        "shoes": "human2_c_shoes.png"
        }
       }
      ]
@@ -3236,46 +3093,6 @@
        "#61575a",
        "#716466"
       ]
-     },
-     {
-      "slot": "top",
-      "style": "tshirt",
-      "layers": [
-       "top"
-      ],
-      "colors": [
-       "#9b4add",
-       "#892dd4",
-       "#ab64e3",
-       "#b578e6",
-       "#801ed0"
-      ]
-     },
-     {
-      "slot": "bottom",
-      "style": "pants",
-      "layers": [
-       "bottom"
-      ],
-      "colors": [
-       "#5e6bda",
-       "#2d3ed4",
-       "#525fd7",
-       "#6e79dd"
-      ]
-     },
-     {
-      "slot": "shoe",
-      "style": "shoes",
-      "layers": [
-       "shoes"
-      ],
-      "colors": [
-       "#ced2de",
-       "#303242",
-       "#68727c",
-       "#eef0f6"
-      ]
      }
     ],
     "anchors": {
@@ -3326,6 +3143,13 @@
     "styles": {
      "hair": [
       {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "dwarf2_hair_puff.png"
+       }
+      },
+      {
        "id": "h2_bob",
        "name": "鮑伯",
        "sheets": {}
@@ -3335,13 +3159,6 @@
        "name": "中長髮",
        "sheets": {
         "hair": "dwarf2_hair_long.png"
-       }
-      },
-      {
-       "id": "h2_puff",
-       "name": "蓬蓬短髮",
-       "sheets": {
-        "hair": "dwarf2_hair_puff.png"
        }
       },
       {
@@ -3385,13 +3202,6 @@
        "sheets": {
         "top": "dwarf2_m_top.png"
        }
-      },
-      {
-       "id": "tshirt",
-       "name": "T恤",
-       "sheets": {
-        "top": "dwarf2_c_top.png"
-       }
       }
      ],
      "bottom": [
@@ -3406,13 +3216,6 @@
        "sheets": {
         "bottom": "dwarf2_m_bottom.png"
        }
-      },
-      {
-       "id": "pants",
-       "name": "長褲",
-       "sheets": {
-        "bottom": "dwarf2_c_bottom.png"
-       }
       }
      ],
      "shoe": [
@@ -3426,13 +3229,6 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "dwarf2_m_shoes.png"
-       }
-      },
-      {
-       "id": "shoes",
-       "name": "鞋子",
-       "sheets": {
-        "shoes": "dwarf2_c_shoes.png"
        }
       }
      ]
@@ -3555,46 +3351,6 @@
        "#524443",
        "#61575a",
        "#716466"
-      ]
-     },
-     {
-      "slot": "top",
-      "style": "tshirt",
-      "layers": [
-       "top"
-      ],
-      "colors": [
-       "#9b4add",
-       "#892dd4",
-       "#ab64e3",
-       "#b578e6",
-       "#801ed0"
-      ]
-     },
-     {
-      "slot": "bottom",
-      "style": "pants",
-      "layers": [
-       "bottom"
-      ],
-      "colors": [
-       "#5e6bda",
-       "#2d3ed4",
-       "#525fd7",
-       "#6e79dd"
-      ]
-     },
-     {
-      "slot": "shoe",
-      "style": "shoes",
-      "layers": [
-       "shoes"
-      ],
-      "colors": [
-       "#ced2de",
-       "#303242",
-       "#68727c",
-       "#eef0f6"
       ]
      }
     ],
@@ -3649,6 +3405,13 @@
     "styles": {
      "hair": [
       {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "giant2_hair_puff.png"
+       }
+      },
+      {
        "id": "h2_bob",
        "name": "鮑伯",
        "sheets": {}
@@ -3658,13 +3421,6 @@
        "name": "中長髮",
        "sheets": {
         "hair": "giant2_hair_long.png"
-       }
-      },
-      {
-       "id": "h2_puff",
-       "name": "蓬蓬短髮",
-       "sheets": {
-        "hair": "giant2_hair_puff.png"
        }
       },
       {
@@ -3708,13 +3464,6 @@
        "sheets": {
         "top": "giant2_m_top.png"
        }
-      },
-      {
-       "id": "tshirt",
-       "name": "T恤",
-       "sheets": {
-        "top": "giant2_c_top.png"
-       }
       }
      ],
      "bottom": [
@@ -3729,13 +3478,6 @@
        "sheets": {
         "bottom": "giant2_m_bottom.png"
        }
-      },
-      {
-       "id": "pants",
-       "name": "長褲",
-       "sheets": {
-        "bottom": "giant2_c_bottom.png"
-       }
       }
      ],
      "shoe": [
@@ -3749,13 +3491,6 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "giant2_m_shoes.png"
-       }
-      },
-      {
-       "id": "shoes",
-       "name": "鞋子",
-       "sheets": {
-        "shoes": "giant2_c_shoes.png"
        }
       }
      ]
@@ -3878,46 +3613,6 @@
        "#524443",
        "#61575a",
        "#716466"
-      ]
-     },
-     {
-      "slot": "top",
-      "style": "tshirt",
-      "layers": [
-       "top"
-      ],
-      "colors": [
-       "#9b4add",
-       "#892dd4",
-       "#ab64e3",
-       "#b578e6",
-       "#801ed0"
-      ]
-     },
-     {
-      "slot": "bottom",
-      "style": "pants",
-      "layers": [
-       "bottom"
-      ],
-      "colors": [
-       "#5e6bda",
-       "#2d3ed4",
-       "#525fd7",
-       "#6e79dd"
-      ]
-     },
-     {
-      "slot": "shoe",
-      "style": "shoes",
-      "layers": [
-       "shoes"
-      ],
-      "colors": [
-       "#ced2de",
-       "#303242",
-       "#68727c",
-       "#eef0f6"
       ]
      }
     ],
@@ -3974,18 +3669,6 @@
     "#382a27",
     "#463a39",
     "#524443"
-   ]
-  },
-  {
-   "id": "tshirt",
-   "name": "T恤",
-   "glam": true,
-   "dye": [
-    "#9b4add",
-    "#892dd4",
-    "#ab64e3",
-    "#b578e6",
-    "#801ed0"
    ]
   },
   {
@@ -4131,17 +3814,6 @@
    ]
   },
   {
-   "id": "pants",
-   "name": "長褲",
-   "glam": true,
-   "dye": [
-    "#5e6bda",
-    "#2d3ed4",
-    "#525fd7",
-    "#6e79dd"
-   ]
-  },
-  {
    "id": "plate_legs",
    "name": "騎士腿甲",
    "sheet": "char_bottom_plate_m.png",
@@ -4217,17 +3889,6 @@
     "#524443",
     "#61575a",
     "#716466"
-   ]
-  },
-  {
-   "id": "shoes",
-   "name": "鞋子",
-   "glam": true,
-   "dye": [
-    "#ced2de",
-    "#303242",
-    "#68727c",
-    "#eef0f6"
    ]
   },
   {

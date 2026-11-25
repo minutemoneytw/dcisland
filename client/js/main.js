@@ -13409,9 +13409,9 @@ function glamFits(slot, it, job = S.me.job) {
   if (!it?.glam || (it.jobs && !it.jobs.includes(job))) return false;
   return slot !== 'weapon' || it.type === jobWeaponDef(job)?.type;
 }
-// 預設外觀（2026-11-23 使用者定）：新人類系列現在整套衣服是「外觀」（女式西裝外套／西裝短裙／尖皮鞋），每個職業預設都選這三件；
+// 預設外觀（2026-11-23 使用者定）：新人類系列現在整套衣服是「外觀」（2026-11-25 預設改男式西裝外套／西裝褲／皮鞋；女式西裝仍可在外觀選），每個職業預設都選這三件；
 // 按外觀一覽的「不使用外觀」＝記在 glamOff，才會回到職業裝備（裝備目前沒有自己的圖，畫面還是那套衣服）
-const DEFAULT_GLAM = { top: 'suit_jacket', bottom: 'suit_skirt', shoe: 'pointed_shoes' };
+const DEFAULT_GLAM = { top: 'suit_jacket_m', bottom: 'suit_pants_m', shoe: 'leather_shoes_m' };
 function wardrobe(job = S.me.job) {
   const w = (S.me.wardrobe && typeof S.me.wardrobe === 'object') ? S.me.wardrobe : (S.me.wardrobe = {});
   const e = w[job] && typeof w[job] === 'object' ? w[job] : (w[job] = {});
