@@ -4085,7 +4085,7 @@ function drawSleeper(p) {
     const quiltTopY = bottom - (bed.height - (qs ? qs[1] + 1 : 10)) * 2;             // 被子上緣（被子方塊的第一排不透明列）
     ctx.save();
     // 頭頂貼著床頭端（床圖 x＝4，頭不會穿過床頭板）；肩膀那端在被子下面（被子從床圖 x＝17 開始，取框長 39px 一定蓋得到）（朝右的床：床圖鏡像）
-    ctx.translate(left ? x0 + 4 * 2 : x0 + bed.width * 2 - 4 * 2, quiltTopY - upOff);
+    ctx.translate(left ? x0 + 4 * 2 - 2 * 2 : x0 + bed.width * 2 - 4 * 2 + 2 * 2, quiltTopY - upOff - (left ? 4 : 1) * 2);   // 使用者微調（2026-11-25，單位＝床圖 1 格＝2px）：床頭在左的人往左 2、往上 4；床頭在右的人往右 2、往上 1
     ctx.rotate(left ? -Math.PI / 2 : Math.PI / 2);
     if (left) ctx.scale(-1, 1);   // 臉朝上（床是側面圖，人仰躺＝臉朝畫面上方）：朝左的床轉 -90° 要翻面、朝右的床轉 +90° 直接用（朝右的幀跟朝左的是同一張圖，畫的時候才鏡像）
     ctx.drawImage(side, c.r[0], c.r[1], c.r[2], c.r[3], -c.fx * k, 0, dw, dh);
@@ -4101,7 +4101,7 @@ function drawSleeper(p) {
   if (bed && def?.quiltRow) {   // 直放的床（1×2）：被子從 quiltRow 開始蓋到床尾；頭與肩膀的底邊墊在被子上緣下面 2px（切線被被子蓋住、對得準）
     const rows = bed.height - def.quiltRow, fi = sprFrame(bed, p.seat ? cellPhase(p.seat.cell[0], p.seat.cell[1]) : 0), quiltTop = p.y - rows * 2;
     const c = crop(frontFi), dw = RW * k, dh = RH * k;
-    ctx.drawImage(img, c.r[0], c.r[1], c.r[2], c.r[3], p.x - c.fx * k, quiltTop + 2 - dh, dw, dh);
+    ctx.drawImage(img, c.r[0], c.r[1], c.r[2], c.r[3], p.x - c.fx * k, quiltTop + 2 - dh + 4 * 2, dw, dh);   // 正面睡：使用者微調往下 4 格（2026-11-25，1 格＝2px）
     ctx.drawImage(bed.img, fi * bed.fw, def.quiltRow, bed.fw, rows, p.x - bed.width, quiltTop, bed.width * 2, rows * 2);
   }
   drawZzz(p);
