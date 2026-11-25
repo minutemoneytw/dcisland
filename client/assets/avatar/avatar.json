@@ -4041,7 +4041,7 @@
   {
    "id": "ninja_garb",
    "name": "忍者服",
-   "glam": true,
+   "keepGear": true,
    "dye": [
     "#302a35",
     "#1a161e",
@@ -4197,7 +4197,7 @@
   {
    "id": "ninja_pants",
    "name": "忍者寬褲",
-   "glam": true,
+   "keepGear": true,
    "dye": [
     "#382f39",
     "#201a22",
@@ -4289,7 +4289,7 @@
   {
    "id": "ninja_boots",
    "name": "忍者靴",
-   "glam": true,
+   "keepGear": true,
    "dye": [
     "#5b2a2f",
     "#381820",

@@ -619,7 +619,7 @@ SCHOOL_MALE = gen_male.male_sheets()
 # （2026-11-23 換成素體：素體的手、腿跟男式西裝本來就對得上，不再需要遮罩擦掉身體層的手／腿；gen_male.body_masks 與 *_mask_*.png 拿掉了）
 SCHOOL_MALE_DWARF = gen_school.shrink_sheets(SCHOOL_MALE)
 SCHOOL_MALE_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_MALE})
-# 忍者套裝（2026-11-25）：同男式三件的做法，各自一個款式、三件外觀（圖層 <種族>_n_top／bottom／shoes）
+# 忍者套裝（2026-11-25）：同男式三件的做法，各自一個款式；2026-11-26 使用者定：這是忍者職業的「裝備」不是外觀（jobs.json 的 gear；keepGear＝客戶端不套預設外觀蓋掉它），預設不戴帽子（圖層 <種族>_n_top／bottom／shoes）
 SCHOOL_NINJA = gen_ninja.ninja_sheets()
 SCHOOL_NINJA_DWARF = gen_school.shrink_sheets(SCHOOL_NINJA)
 SCHOOL_NINJA_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_NINJA})
@@ -644,9 +644,9 @@ NINJA_DYE = dict(top=_hexes([gen_ninja.CLOTH[i] for i in (2, 0, 1, 3, 4, 5, 6)])
                  bottom=_hexes([gen_ninja.PANTS[i] for i in (2, 0, 1, 3, 4, 5, 6)]),
                  shoe=_hexes([gen_ninja.BOOT[i] for i in (2, 0, 1, 3, 4, 5, 6)]))
 NINJA_ITEMS = dict(
-    top=dict(id="ninja_garb", name="忍者服", glam=True, dye=NINJA_DYE["top"]),
-    bottom=dict(id="ninja_pants", name="忍者寬褲", glam=True, dye=NINJA_DYE["bottom"]),
-    shoe=dict(id="ninja_boots", name="忍者靴", glam=True, dye=NINJA_DYE["shoe"]))
+    top=dict(id="ninja_garb", name="忍者服", keepGear=True, dye=NINJA_DYE["top"]),
+    bottom=dict(id="ninja_pants", name="忍者寬褲", keepGear=True, dye=NINJA_DYE["bottom"]),
+    shoe=dict(id="ninja_boots", name="忍者靴", keepGear=True, dye=NINJA_DYE["shoe"]))
 def school_ninja_dye():
     return [dict(slot="top", style="ninja_garb", layers=["top"], colors=NINJA_DYE["top"]),
             dict(slot="bottom", style="ninja_pants", layers=["bottom"], colors=NINJA_DYE["bottom"]),

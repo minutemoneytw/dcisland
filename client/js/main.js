@@ -13473,7 +13473,7 @@ function wardrobe(job = S.me.job) {
   const w = (S.me.wardrobe && typeof S.me.wardrobe === 'object') ? S.me.wardrobe : (S.me.wardrobe = {});
   const e = w[job] && typeof w[job] === 'object' ? w[job] : (w[job] = {});
   e.glam ||= {}; e.color ||= {}; e.glamOff ||= {};
-  for (const [slot, gid] of Object.entries(DEFAULT_GLAM)) if (!(slot in e.glam) && !e.glamOff[slot] && lookItem(slotList(slot), gid)) e.glam[slot] = gid;
+  for (const [slot, gid] of Object.entries(DEFAULT_GLAM)) if (!(slot in e.glam) && !e.glamOff[slot] && lookItem(slotList(slot), gid) && !lookItem(slotList(slot), JOBS[job]?.gear?.[slot])?.keepGear) e.glam[slot] = gid;   // keepGear＝這件職業裝備有自己的新風格圖（忍者套裝），不套預設外觀
   if (e.glam.weapon === 'goldsword') e.glam.weapon = 'sword_gold';   // 舊的「金劍」外觀（2026-11-09 拿掉）→ 長劍的金黃發光版（解鎖條件同樣是打倒黃金肥龍）
   return e;
 }
