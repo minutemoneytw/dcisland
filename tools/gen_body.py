@@ -609,6 +609,123 @@ DATA = {
 }
 
 
+# 睡覺用的身體（bodyz 層，2026-11-25 使用者給的閉眼版素體：31.png 正面、32.png 側面〔原圖朝右，這裡已鏡像成朝左〕）：
+# 跟 body 一樣的位置與大小，只有頭不同（眼睛位置補上皮膚、畫上閉眼的弧線，沒有 face 層）；只有待機格（正面／朝左；朝右＝朝左的鏡像）用得到，其他格沿用 body。
+# 睡在床上時引擎用 bodyz 取代 body、不畫 face（main.js 的 chibiSprite(..., sleep)）。
+SLEEP = {
+    ('front', 0): (20, 10, [
+        '.........ffffff.........',
+        '.......ffdssssdff.......',
+        '......fssssssssssf......',
+        '.....fssssssssssssf.....',
+        '....fssssssssssssssf....',
+        '....fssssssssssssssf....',
+        '...fssssssssssssssssf...',
+        '...fssssssssssssssssf...',
+        '...fssssssssssssssssf...',
+        '...fssssssssssssssssf...',
+        '...fssssssssssssssssf...',
+        '...fssssssssssssssssf...',
+        '....cssssssssssssssc....',
+        '....fsscccsssscccssf....',
+        '....fssssssssssssssf....',
+        '.....cfssssssssssfc.....',
+        '......cfssssssssfc......',
+        '.......ccfssssfcc.......',
+        '.........cssssc.........',
+        '.......cfssssssfc.......',
+        '......cssssssssssc......',
+        '.....cssssssssssssc.....',
+        '.....fdssssssssssdf.....',
+        '....cdsdssssssssdsdc....',
+        '....fsdfssssssssfdsf....',
+        '...cssdcsssssssscdssc...',
+        '...cssdcsssssssscdssc...',
+        '...cssdcsssssssscdssc...',
+        '...fssccssssssssccssf...',
+        '..csssccsssffsssccsssc..',
+        '..cssscccfssssfcccsssc..',
+        '.cssssccssssssssccssssc.',
+        'cssssfcfssssssssfcfssssc',
+        'cssssccssssssssssccssssc',
+        'cssdc.cssssssssssc.cdssc',
+        '.ccc..cssssssssssc..ccc.',
+        '......cssssffssssc......',
+        '......cssssffssssc......',
+        '......csssdffdsssc......',
+        '......csssdffdsssc......',
+        '......cfssdffdssfc......',
+        '.......csssffsssc.......',
+        '.......csssccsssc.......',
+        '.......csssccsssc.......',
+        '.......csfccccfsc.......',
+        '.......cdssccssdc.......',
+        '.......fsdsccsdsf.......',
+        '.......fffdccdfff.......',
+        '.......cdsdccdsdc.......',
+        '......cffssccssffc......',
+        '.....csssssccsssssc.....',
+        '.....cssssfccfssssc.....',
+        '.....cccccc..cccccc.....',
+    ]),
+    ('left', 0): (22, 10, [
+        '......fffffff......',
+        '....ffsssssssff....',
+        '...fsssssssssssf...',
+        '..fsssssssssssssf..',
+        '.fsssssssssssssssf.',
+        'fssssssssssssssssf.',
+        'fsssssssssssssssssf',
+        'fsssssssssssssssssf',
+        'fdssssssssssssssssf',
+        'cdssssssssssssssssf',
+        'csssssssssssssssssf',
+        'csssssssssssssssssf',
+        'csssssssssssssssssf',
+        'cccssssssssssssssf.',
+        'cfdsscccsssssssssc.',
+        '.fssssssssssssssf..',
+        '..cssssssssssssf...',
+        '...cdssssssssff....',
+        '....ffcsssscc......',
+        '.......csssf.......',
+        '......csssssc......',
+        '.....cdssssssc.....',
+        '....sfsssssssc.....',
+        '....fssssfsssc.....',
+        '....fssssfsssc.....',
+        '....fssssfsssc.....',
+        '....fsssscsssc.....',
+        '....fsssscsssc.....',
+        '....fsssscssdc.....',
+        '....csssdcdddc.....',
+        '....csssfdsddc.....',
+        '....csssfsssfc.....',
+        '.....cssfsssfc.....',
+        '.....csdfdssfc.....',
+        '.....cdsffffff.....',
+        '.....csssssdff.....',
+        '.....csssssdff.....',
+        '.....cssssssff.....',
+        '......sssssdff.....',
+        '......fssssdf......',
+        '......fsssssf......',
+        '......fsssssf......',
+        '.......fsssf.......',
+        '.......fsssf.......',
+        '.......fsssf.......',
+        '.......fsssf.......',
+        '.......fdssf.......',
+        '.......fsddc.......',
+        '.......cdddc.......',
+        '......ccfdsf.......',
+        '....csssdsdf.......',
+        '....csssffffc......',
+        '....ccccccccc......',
+    ]),
+}
+
+
 def _put(img, row, col, x0, y0, rows, pal, mirror):
     """把一塊字母地圖畫到 sheet 的（row, col）格；mirror＝True＝左右鏡像（x' ＝ 63 − x）。"""
     for yy, line in enumerate(rows):
@@ -622,13 +739,14 @@ def _put(img, row, col, x0, y0, rows, pal, mirror):
 
 def body_sheets():
     """{'body': Img, 'face': Img}：832×1856 的 sheet，只填走路列 8～11（上／左／下／右）。"""
-    out = {'body': Img(gs.SHEET_W, gs.SHEET_H), 'face': Img(gs.SHEET_W, gs.SHEET_H)}
+    out = {'body': Img(gs.SHEET_W, gs.SHEET_H), 'face': Img(gs.SHEET_W, gs.SHEET_H), 'bodyz': Img(gs.SHEET_W, gs.SHEET_H)}
     src = {'down': ('front', False), 'up': ('back', False), 'left': ('left', False), 'right': ('left', True)}
     for d, row in gs.WALK_ROW.items():
         kind, mirror = src[d]
         for col, st in enumerate(gs.WALK_FRAMES):
-            for nm, pal in (('body', BODY_PAL), ('face', FACE_PAL)):
-                ent = DATA[(kind, st)].get(nm)
+            for nm, pal in (('body', BODY_PAL), ('face', FACE_PAL), ('bodyz', BODY_PAL)):
+                ent = SLEEP.get((kind, st)) if nm == 'bodyz' else None
+                ent = ent or DATA[(kind, st)].get('body' if nm == 'bodyz' else nm)   # bodyz：待機格用閉眼版，其他格＝body
                 if ent:
                     _put(out[nm], row, col, ent[0], ent[1], ent[2], pal, mirror)
     return out
@@ -637,7 +755,7 @@ def body_sheets():
 def apply(sheets):
     """就地把 sheets 的 body／face 兩層換成素體（build_sheets 最後呼叫）。"""
     new = body_sheets()
-    sheets['body'], sheets['face'] = new['body'], new['face']
+    sheets['body'], sheets['face'], sheets['bodyz'] = new['body'], new['face'], new['bodyz']
 
 
 def main():

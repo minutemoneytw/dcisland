@@ -2931,12 +2931,13 @@ const CHIBI_ORDER = ['body', 'bottom', 'shoes', 'top', 'hairbg', 'face', 'hair',
 const CHIBI_DYE_FIELD = { hair: 'hairC', top: 'topC', bottom: 'botC', shoe: 'shoeC', hat: 'hatC', eye: 'eyeC' };   // eye＝眼睛顏色（外貌頁的眼睛換色鈕，存在 S.me.eyeC）
 // 款式：own.styles.hair／top＝[{id, name, sheets:{圖層: 檔名}}]（第一個是預設，sheets 空＝用基本圖層）；look.hair／look.top 是款式 id 才算，否則用預設
 const chibiStyleOf = (own, kind, id) => (own.styles?.[kind] || []).find(x => x.id === id) || own.styles?.[kind]?.[0] || null;
-function chibiSprite(race, look, fi) {
+function chibiSprite(race, look, fi, sleep) {   // sleep：睡姿用——body 換成 bodyz（閉眼的頭）、不畫 face（睡在床上時用，見 drawSleeper）
   const fs = chibiStyleOf(race.own, 'face', look?.face), hs = chibiStyleOf(race.own, 'hair', look?.hair), ts = chibiStyleOf(race.own, 'top', look?.top),
         bs = chibiStyleOf(race.own, 'bottom', look?.bottom), ss = chibiStyleOf(race.own, 'shoe', look?.shoe);   // 服裝款式：上衣／褲子／鞋子各一個（look.top／bottom／shoe 是外觀 id，款式 id 跟外觀 id 一樣）
   const skinHex = S.avatar.skins?.find(s2 => s2.id === look?.skin)?.base || null;   // 膚色：look.skin 是 avatar.json skins 的 id，換成它的 base 色碼
   const rules = (race.own.dye || []).filter(r => !r.style || r.style === ts?.id || r.style === bs?.id || r.style === ss?.id).map(r => ({ ...r, hex: (r.slot === 'skin' ? (skinHex && skinHex.toLowerCase() !== r.colors[0].toLowerCase() ? skinHex : null) : look?.[CHIBI_DYE_FIELD[r.slot]]) || null }));   // 膚色跟原色一樣（預設的「自然」）就不換
-  const k = 'chibi:' + race.id + ':' + fi + '|' + (hs?.id || '') + '|' + (ts?.id || '') + '|' + (bs?.id || '') + '|' + (ss?.id || '') + '|' + (fs?.id || '') + '|' + rules.map(r => r.hex || '').join(',');
+  sleep = !!(sleep && race.own.sheets.bodyz);
+  const k = (sleep ? 'chibiz:' : 'chibi:') + race.id + ':' + fi + '|' + (hs?.id || '') + '|' + (ts?.id || '') + '|' + (bs?.id || '') + '|' + (ss?.id || '') + '|' + (fs?.id || '') + '|' + rules.map(r => r.hex || '').join(',');
   let cv = S.charCache.get(k);
   if (cv) return cv;
   const F = S.avatar.frames, own = race.own;
@@ -2948,9 +2949,11 @@ function chibiSprite(race, look, fi) {
   cv = document.createElement('canvas'); cv.width = cw; cv.height = ch; cv.pad = own.ox || 0; cv.padTop = own.oy || 0; cv.layerMiss = false;
   const g = cv.getContext('2d');
   for (const n of CHIBI_ORDER) {
-    let img = S.charImgs[hs?.sheets?.[n] || ts?.sheets?.[n] || bs?.sheets?.[n] || ss?.sheets?.[n] || fs?.sheets?.[n] || own.sheets[n]];
+    if (sleep && n === 'face') continue;   // 睡覺閉眼：眼睛已經畫在 bodyz 裡
+    const ln = sleep && n === 'body' ? 'bodyz' : n;
+    let img = S.charImgs[hs?.sheets?.[n] || ts?.sheets?.[n] || bs?.sheets?.[n] || ss?.sheets?.[n] || fs?.sheets?.[n] || own.sheets[ln]];
     if (!img || sx + cw > img.width || sy + ch > img.height) continue;
-    for (const r of rules) if (r.hex && r.layers.includes(n)) img = dyeSheet(img, r.colors, r.hex);   // 同一張圖可以被多條規則依序換色（例如 bottom 層：圍裙下擺跟上衣、褲子跟褲子）
+    for (const r of rules) if (r.hex && r.layers.includes(ln)) img = dyeSheet(img, r.colors, r.hex);   // 同一張圖可以被多條規則依序換色（例如 bottom 層：圍裙下擺跟上衣、褲子跟褲子）
     g.drawImage(img, sx, sy, cw, ch, 0, 0, cw, ch);
     for (const st of [ts, bs, ss]) {   // 款式帶遮罩（erase）：這一層畫完後把遮罩蓋住的像素擦掉（男式外套／褲子要擦掉身體層自己的手／腿）
       const mk = st?.erase?.[n] && S.charImgs[st.erase[n]];
@@ -2969,9 +2972,9 @@ function outlineCanvas(cv, color) {   // 貼著透明、上下左右有不透明
   for (const i of mark) { d[i] = r; d[i + 1] = gg; d[i + 2] = b; d[i + 3] = 255; }
   g.putImageData(id, 0, 0);
 }
-function charSprite(look, fi) {
+function charSprite(look, fi, sleep) {
   const race = lookItem(S.avatar.races, look.race) || S.avatar.races?.[0];   // 舊種族已刪除（2026-11-23）：找不到的 id 退回第一個種族；整套自製圖層，不吃舊的髮型／服裝清單
-  return chibiSprite(race, look, fi);
+  return chibiSprite(race, look, fi, sleep);
 }
 // 8 方向視覺朝向：移動時依 (dx, dy) 的角度取最近的方向（鍵盤 8 向剛好一一對應）；玩法（石化等）仍看 face
 function dir8Of(dx, dy) {
@@ -3100,15 +3103,15 @@ function spawnNPCs() {
   S.players = [S.players[0], ...out];
 }
 
-function playerSpriteDiv(p, fi) {
+function playerSpriteDiv(p, fi, sleep) {
   // NPC 與遠端玩家都有自己的 look；自己（players[0]）則用當前職業的裝備＋外觀（myLook）。
   // LPC 武器（avatar.json 武器條目有 lpc）是人物的一層：帶 wpn（武器 id）給 charSprite 一起合成
-  if (p.npc) return charSprite(p.look || myLook(), fi);
+  if (p.npc) return charSprite(p.look || myLook(), fi, sleep);
   const me = p === S.players[0], look = p.look || myLook();
   let wd = me ? (p.tool ? null : lpcWeaponFor(S.me.weapon, look.wlook, look.race)) : lpcWeaponFor(p.weapon, look.wlook, look.race);
   if (wd?.lpc.fishOnly && !p.fish) wd = null;
   if (p.pose === 'sit' && !p.fish) wd = null;   // 坐著不拿武器（LPC 武器圖層沒有 sit 幀，會害整個造型退回舊畫法）   // LPC 釣竿只在釣魚時畫（四方向的拋竿／持竿／收線動作），平常照舊背著小圖
-  return charSprite(wd ? { ...look, wpn: wd.id } : look, fi);
+  return charSprite(wd ? { ...look, wpn: wd.id } : look, fi, sleep);
 }
 // 拿著的武器有沒有 LPC 圖層：有就回該武器條目（武器外觀有 LPC 圖就用外觀的，外觀沒有 LPC 圖就退回舊的小圖畫法）
 function lpcWeaponFor(wid, wlook, raceId) {
@@ -4055,7 +4058,7 @@ function faceBoxOf(raceId, fi) {
 // 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）。床直放（朝下，1×2）：頭在上端的枕頭、被子從 quiltRow 蓋到床尾；橫放（朝左／右，2×1）：拿側面的頭與肩膀轉 90 度靠床頭端，臉朝上
 // 取框以「臉」為準（2026-11-25）：以人類幀的框（x 16..48、y 0..39，臉在其中）為標準，其他種族依 face 圖層的臉心與臉寬換算成各自幀畫布的框，所以矮人／巨人的臉跟人類一樣大、在同一個位置
 function drawSleeper(p) {
-  const F = S.avatar.frames, frontFi = (F.states.down_idle || [0])[0], img = playerSpriteDiv(p, frontFi);   // 用正面待機的第 1 幀切出頭與肩膀
+  const F = S.avatar.frames, frontFi = (F.states.down_idle || [0])[0], img = playerSpriteDiv(p, frontFi, true);   // 用正面待機的第 1 幀（閉眼的頭）切出頭與肩膀
   const it = seatItemOf(p), sdir = it?.dir || 0;
   const race = ownRaceOf(p === S.players[0] ? S.me.race : p.look?.race)?.id || 'human2', ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);
   const k = Math.min(1.2, foodScaleOf(ffx)) * .75;   // 畫在床上的倍率：吃喝的巨大化／縮小有效，種族體型不算（臉要一樣大）；×.75＝躺著的頭縮小一點（約床寬的一半）
@@ -4071,7 +4074,7 @@ function drawSleeper(p) {
   const def = furnitureDef(p.seatType || 'bed'), bed = furnImg(p.seatType || 'bed', sdir);
   if (sdir === 1 || sdir === 3) {   // 橫放的床（2×1）
     const left = sdir === 1, x0 = it.cell[0] * CELL, bottom = (it.cell[1] + 1) * CELL, qs = def?.quiltSide;
-    const sideFi = (F.states.left_idle || [0])[0], side = playerSpriteDiv(p, sideFi), c = crop(sideFi), dw = RW * k, dh = RH * k;
+    const sideFi = (F.states.left_idle || [0])[0], side = playerSpriteDiv(p, sideFi, true), c = crop(sideFi), dw = RW * k, dh = RH * k;
     ctx.save();
     // 頭與肩膀的底邊墊在被子上緣裡 2px（切線被被子蓋住），頭頂朝床頭端；臉心在床面中間（朝右的床：床圖鏡像）
     ctx.translate(left ? x0 + (qs ? qs[0] : 17) * 2 + 2 - dh : x0 + bed.width * 2 - (qs ? qs[0] : 17) * 2 - 2 + dh, bottom - 13 * 2);

@@ -2353,7 +2353,8 @@
      "shoes": "human2_shoes.png",
      "top": "human2_top.png",
      "face": "human2_face.png",
-     "hair": "human2_hair.png"
+     "hair": "human2_hair.png",
+     "bodyz": "human2_bodyz.png"
     },
     "outline": null,
     "styles": {
@@ -2504,7 +2505,8 @@
       "layers": [
        "body",
        "hair",
-       "top"
+       "top",
+       "bodyz"
       ],
       "colors": [
        "#ffe8d2",
@@ -2613,6 +2615,7 @@
      "top": "human2_top.png",
      "face": "human2_face.png",
      "hair": "human2_hair.png",
+     "bodyz": "human2_bodyz.png",
      "hat": "elf2_hat.png"
     },
     "outline": null,
@@ -2765,7 +2768,8 @@
        "body",
        "hair",
        "top",
-       "hat"
+       "hat",
+       "bodyz"
       ],
       "colors": [
        "#ffe8d2",
@@ -2875,6 +2879,7 @@
      "top": "human2_top.png",
      "face": "human2_face.png",
      "hair": "human2_hair.png",
+     "bodyz": "human2_bodyz.png",
      "hat": "cat2_hat.png",
      "hairbg": "cat2_hairbg.png"
     },
@@ -3029,7 +3034,8 @@
       "layers": [
        "body",
        "hair",
-       "top"
+       "top",
+       "bodyz"
       ],
       "colors": [
        "#ffe8d2",
@@ -3137,7 +3143,8 @@
      "shoes": "dwarf2_shoes.png",
      "top": "dwarf2_top.png",
      "face": "dwarf2_face.png",
-     "hair": "dwarf2_hair.png"
+     "hair": "dwarf2_hair.png",
+     "bodyz": "dwarf2_bodyz.png"
     },
     "outline": null,
     "styles": {
@@ -3288,7 +3295,8 @@
       "layers": [
        "body",
        "hair",
-       "top"
+       "top",
+       "bodyz"
       ],
       "colors": [
        "#ffe8d2",
@@ -3399,7 +3407,8 @@
      "shoes": "giant2_shoes.png",
      "top": "giant2_top.png",
      "face": "giant2_face.png",
-     "hair": "giant2_hair.png"
+     "hair": "giant2_hair.png",
+     "bodyz": "giant2_bodyz.png"
     },
     "outline": null,
     "styles": {
@@ -3550,7 +3559,8 @@
       "layers": [
        "body",
        "hair",
-       "top"
+       "top",
+       "bodyz"
       ],
       "colors": [
        "#ffe8d2",

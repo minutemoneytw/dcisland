@@ -862,7 +862,7 @@ DYE_SLOTS = {
     'top':    {'layer': 'top',    'only': _with_dark(['k', 'k_l', 'k_d']), 'main': 'k'},
     'bottom': {'layer': 'bottom', 'only': None, 'main': 'k'},
     'shoe':   {'layer': 'shoes',  'only': None, 'main': 'shoe_k'},
-    'skin':   {'layer': 'body',   'only': None, 'main': 'sk', 'also': ['hair', 'top']},   # 髮型裡畫的皮膚陰影（油頭的額頭陰影）、男式外套 top 層的手也要跟膚色換：hair／top 層只有顏色表裡的皮膚色會被換、髮色與衣服色不受影響   # 膚色（2026-11-23 開放換色）：body 層整層（皮膚＋外框陰影色）；elf2 的耳朵（hat 層）另外加進這條規則（gen_assets）
+    'skin':   {'layer': 'body',   'only': None, 'main': 'sk', 'also': ['hair', 'top', 'bodyz']},   # 髮型裡畫的皮膚陰影（油頭的額頭陰影）、男式外套 top 層的手也要跟膚色換：hair／top 層只有顏色表裡的皮膚色會被換、髮色與衣服色不受影響   # 膚色（2026-11-23 開放換色）：body 層整層（皮膚＋外框陰影色）；elf2 的耳朵（hat 層）另外加進這條規則（gen_assets）
     'eye':    {'layer': 'face',   'only': _with_dark(['eg1', 'eg2', 'eg3', 'eg4']), 'main': 'eg2'},   # 眼珠的 4 階灰（睫毛／瞳孔的黑、高光不換）
 }
 CELL = 64
