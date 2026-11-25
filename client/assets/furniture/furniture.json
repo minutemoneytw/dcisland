@@ -94,7 +94,7 @@
    "solid": true,
    "sprite": "bed.png",
    "use": "sleep",
-   "quiltRow": 13,
+   "quiltRow": 21,
    "dirs": [
     "bed_l.png",
     "bed_b.png",

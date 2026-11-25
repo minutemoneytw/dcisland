@@ -1478,15 +1478,15 @@ def tool_axe():  # 斧頭（斧刃在右側＝揮向前方時朝外）
     cv.outline((30, 24, 22, 255))
     return cv
 
-def bed():   # 單人床（1 寬×2 長：床頭在上、床尾在下；2026-11-25 使用者要求 1:2）：一個枕頭，睡覺時頭靠在枕頭上；quiltRow=13（被子從第 13 列開始，一直蓋到床尾）
+def bed():   # 單人床（1 寬×2 長：床頭在上、床尾在下；2026-11-25 使用者要求 1:2）：一個枕頭，睡覺時頭靠在枕頭上；quiltRow=21（被子從第 21 列開始，頭與肩膀在被子上面，不被切到；一直蓋到床尾）
     cv = Canvas(16, 40)
     cf = hx("#4a6ab0"); cfd = shade(cf, 0.8)
     cv.rect(1, 8, 14, 36, hx("#a57c4e"))       # 床架
-    cv.rect(2, 9, 13, 12, hx("#f2ede0"))       # 枕頭帶
+    cv.rect(2, 9, 13, 20, hx("#f2ede0"))       # 床單（枕頭到被子之間，頭與肩膀躺在這裡）
     cv.ellipse(8, 10, 4.5, 2.0, hx("#ffffff"))  # 枕頭
-    cv.rect(2, 13, 13, 35, cf)                 # 棉被
-    cv.rect(2, 13, 13, 13, shade(cf, 1.15))
-    for y in (20, 28):                         # 被子上的兩道摺痕
+    cv.rect(2, 21, 13, 35, cf)                 # 棉被
+    cv.rect(2, 21, 13, 21, shade(cf, 1.15))
+    for y in (27, 33):                         # 被子上的兩道摺痕
         cv.hline(3, 12, y, cfd)
     cv.rect(1, 36, 14, 37, cfd)                # 床尾板
     cv.rect(2, 38, 3, 39, hx("#4a3630")); cv.rect(12, 38, 13, 39, hx("#4a3630"))
@@ -2922,7 +2922,7 @@ FURN_MANIFEST = dict(
         dict(id="rug",   name="地毯",  w=2, h=2, solid=False, sprite="rug.png", legacy=True),   # 已改為地板（floor_rug）；保留定義讓舊存檔擺著的還看得到、拿得走，但不列在面板
         dict(id="lamp",  name="電燈",  w=1, h=1, solid=True,  sprite="lamp.png"),
         dict(id="tv",    name="電視",  w=1, h=1, solid=True,  sprite="tv.png"),
-        dict(id="bed",   name="床",    w=1, h=2, solid=True,  sprite="bed.png", use="sleep", quiltRow=13),
+        dict(id="bed",   name="床",    w=1, h=2, solid=True,  sprite="bed.png", use="sleep", quiltRow=21),
         dict(id="shelf", name="書架",  w=1, h=1, solid=True,  sprite="shelf.png"),
         dict(id="sign",  name="看板",  w=1, h=1, solid=True,  sprite="sign.png", text=True),
         # 2026-11-14：新增的預設家具（不用合成）
@@ -4158,7 +4158,7 @@ def furn_seat_variants(W, H, bt, st, sb, lb, cb, cs, cl, arm=None):
     return {1: side, 2: back, 3: _furn_mirror(side)}
 
 def furn_bed_variants(front):
-    # 床（16×40，1 寬×2 長，正面是從床尾看：枕頭在遠端上方、棉被在前面；quiltRow＝13）。
+    # 床（16×40，1 寬×2 長，正面是從床尾看：枕頭在遠端上方、棉被在前面；quiltRow＝21）。
     # 床的佔地固定 1×2（旋轉不換寬高），所以朝左／右沿用正面的圖（頭還是在上端，睡姿也照正面畫）；朝上＝從床頭看：整片床頭板在前，後面是長長的棉被。
     wood, wd = hx("#a57c4e"), shade(hx("#a57c4e"), 0.8)
     cf = hx("#4a6ab0"); leg = hx("#4a3630"); cfd = shade(cf, 0.8)
