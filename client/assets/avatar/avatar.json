@@ -2431,6 +2431,13 @@
        "sheets": {
         "top": "human2_m_top.png"
        }
+      },
+      {
+       "id": "ninja_garb",
+       "name": "忍者服",
+       "sheets": {
+        "top": "human2_n_top.png"
+       }
       }
      ],
      "bottom": [
@@ -2445,6 +2452,13 @@
        "sheets": {
         "bottom": "human2_m_bottom.png"
        }
+      },
+      {
+       "id": "ninja_pants",
+       "name": "忍者寬褲",
+       "sheets": {
+        "bottom": "human2_n_bottom.png"
+       }
       }
      ],
      "shoe": [
@@ -2458,6 +2472,13 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "human2_m_shoes.png"
+       }
+      },
+      {
+       "id": "ninja_boots",
+       "name": "忍者靴",
+       "sheets": {
+        "shoes": "human2_n_shoes.png"
        }
       }
      ]
@@ -2582,6 +2603,54 @@
        "#61575a",
        "#716466"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "ninja_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#302a35",
+       "#1a161e",
+       "#252029",
+       "#3b3440",
+       "#463e4b",
+       "#514857",
+       "#5c5262"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "ninja_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#382f39",
+       "#201a22",
+       "#2c252e",
+       "#443a45",
+       "#504551",
+       "#5c4f5c",
+       "#685a68"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "ninja_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#5b2a2f",
+       "#381820",
+       "#492128",
+       "#6c3337",
+       "#7d3c3f",
+       "#8f4546",
+       "#a04e4e"
+      ]
      }
     ],
     "anchors": {
@@ -2693,6 +2762,13 @@
        "sheets": {
         "top": "human2_m_top.png"
        }
+      },
+      {
+       "id": "ninja_garb",
+       "name": "忍者服",
+       "sheets": {
+        "top": "human2_n_top.png"
+       }
       }
      ],
      "bottom": [
@@ -2707,6 +2783,13 @@
        "sheets": {
         "bottom": "human2_m_bottom.png"
        }
+      },
+      {
+       "id": "ninja_pants",
+       "name": "忍者寬褲",
+       "sheets": {
+        "bottom": "human2_n_bottom.png"
+       }
       }
      ],
      "shoe": [
@@ -2720,6 +2803,13 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "human2_m_shoes.png"
+       }
+      },
+      {
+       "id": "ninja_boots",
+       "name": "忍者靴",
+       "sheets": {
+        "shoes": "human2_n_shoes.png"
        }
       }
      ]
@@ -2846,6 +2936,54 @@
        "#61575a",
        "#716466"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "ninja_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#302a35",
+       "#1a161e",
+       "#252029",
+       "#3b3440",
+       "#463e4b",
+       "#514857",
+       "#5c5262"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "ninja_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#382f39",
+       "#201a22",
+       "#2c252e",
+       "#443a45",
+       "#504551",
+       "#5c4f5c",
+       "#685a68"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "ninja_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#5b2a2f",
+       "#381820",
+       "#492128",
+       "#6c3337",
+       "#7d3c3f",
+       "#8f4546",
+       "#a04e4e"
+      ]
      }
     ],
     "anchors": {
@@ -2958,6 +3096,13 @@
        "sheets": {
         "top": "human2_m_top.png"
        }
+      },
+      {
+       "id": "ninja_garb",
+       "name": "忍者服",
+       "sheets": {
+        "top": "human2_n_top.png"
+       }
       }
      ],
      "bottom": [
@@ -2972,6 +3117,13 @@
        "sheets": {
         "bottom": "human2_m_bottom.png"
        }
+      },
+      {
+       "id": "ninja_pants",
+       "name": "忍者寬褲",
+       "sheets": {
+        "bottom": "human2_n_bottom.png"
+       }
       }
      ],
      "shoe": [
@@ -2985,6 +3137,13 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "human2_m_shoes.png"
+       }
+      },
+      {
+       "id": "ninja_boots",
+       "name": "忍者靴",
+       "sheets": {
+        "shoes": "human2_n_shoes.png"
        }
       }
      ]
@@ -3111,6 +3270,54 @@
        "#61575a",
        "#716466"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "ninja_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#302a35",
+       "#1a161e",
+       "#252029",
+       "#3b3440",
+       "#463e4b",
+       "#514857",
+       "#5c5262"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "ninja_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#382f39",
+       "#201a22",
+       "#2c252e",
+       "#443a45",
+       "#504551",
+       "#5c4f5c",
+       "#685a68"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "ninja_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#5b2a2f",
+       "#381820",
+       "#492128",
+       "#6c3337",
+       "#7d3c3f",
+       "#8f4546",
+       "#a04e4e"
+      ]
      }
     ],
     "anchors": {
@@ -3221,6 +3428,13 @@
        "sheets": {
         "top": "dwarf2_m_top.png"
        }
+      },
+      {
+       "id": "ninja_garb",
+       "name": "忍者服",
+       "sheets": {
+        "top": "dwarf2_n_top.png"
+       }
       }
      ],
      "bottom": [
@@ -3235,6 +3449,13 @@
        "sheets": {
         "bottom": "dwarf2_m_bottom.png"
        }
+      },
+      {
+       "id": "ninja_pants",
+       "name": "忍者寬褲",
+       "sheets": {
+        "bottom": "dwarf2_n_bottom.png"
+       }
       }
      ],
      "shoe": [
@@ -3248,6 +3469,13 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "dwarf2_m_shoes.png"
+       }
+      },
+      {
+       "id": "ninja_boots",
+       "name": "忍者靴",
+       "sheets": {
+        "shoes": "dwarf2_n_shoes.png"
        }
       }
      ]
@@ -3371,6 +3599,54 @@
        "#524443",
        "#61575a",
        "#716466"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "ninja_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#302a35",
+       "#1a161e",
+       "#252029",
+       "#3b3440",
+       "#463e4b",
+       "#514857",
+       "#5c5262"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "ninja_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#382f39",
+       "#201a22",
+       "#2c252e",
+       "#443a45",
+       "#504551",
+       "#5c4f5c",
+       "#685a68"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "ninja_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#5b2a2f",
+       "#381820",
+       "#492128",
+       "#6c3337",
+       "#7d3c3f",
+       "#8f4546",
+       "#a04e4e"
       ]
      }
     ],
@@ -3485,6 +3761,13 @@
        "sheets": {
         "top": "giant2_m_top.png"
        }
+      },
+      {
+       "id": "ninja_garb",
+       "name": "忍者服",
+       "sheets": {
+        "top": "giant2_n_top.png"
+       }
       }
      ],
      "bottom": [
@@ -3499,6 +3782,13 @@
        "sheets": {
         "bottom": "giant2_m_bottom.png"
        }
+      },
+      {
+       "id": "ninja_pants",
+       "name": "忍者寬褲",
+       "sheets": {
+        "bottom": "giant2_n_bottom.png"
+       }
       }
      ],
      "shoe": [
@@ -3512,6 +3802,13 @@
        "name": "皮鞋",
        "sheets": {
         "shoes": "giant2_m_shoes.png"
+       }
+      },
+      {
+       "id": "ninja_boots",
+       "name": "忍者靴",
+       "sheets": {
+        "shoes": "giant2_n_shoes.png"
        }
       }
      ]
@@ -3636,6 +3933,54 @@
        "#61575a",
        "#716466"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "ninja_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#302a35",
+       "#1a161e",
+       "#252029",
+       "#3b3440",
+       "#463e4b",
+       "#514857",
+       "#5c5262"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "ninja_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#382f39",
+       "#201a22",
+       "#2c252e",
+       "#443a45",
+       "#504551",
+       "#5c4f5c",
+       "#685a68"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "ninja_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#5b2a2f",
+       "#381820",
+       "#492128",
+       "#6c3337",
+       "#7d3c3f",
+       "#8f4546",
+       "#a04e4e"
+      ]
      }
     ],
     "anchors": {
@@ -3691,6 +4036,20 @@
     "#382a27",
     "#463a39",
     "#524443"
+   ]
+  },
+  {
+   "id": "ninja_garb",
+   "name": "忍者服",
+   "glam": true,
+   "dye": [
+    "#302a35",
+    "#1a161e",
+    "#252029",
+    "#3b3440",
+    "#463e4b",
+    "#514857",
+    "#5c5262"
    ]
   },
   {
@@ -3836,6 +4195,20 @@
    ]
   },
   {
+   "id": "ninja_pants",
+   "name": "忍者寬褲",
+   "glam": true,
+   "dye": [
+    "#382f39",
+    "#201a22",
+    "#2c252e",
+    "#443a45",
+    "#504551",
+    "#5c4f5c",
+    "#685a68"
+   ]
+  },
+  {
    "id": "plate_legs",
    "name": "騎士腿甲",
    "sheet": "char_bottom_plate_m.png",
@@ -3911,6 +4284,20 @@
     "#524443",
     "#61575a",
     "#716466"
+   ]
+  },
+  {
+   "id": "ninja_boots",
+   "name": "忍者靴",
+   "glam": true,
+   "dye": [
+    "#5b2a2f",
+    "#381820",
+    "#492128",
+    "#6c3337",
+    "#7d3c3f",
+    "#8f4546",
+    "#a04e4e"
    ]
   },
   {
