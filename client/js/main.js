@@ -2802,12 +2802,16 @@ function rebuildOcc() {
   S.furnItems.forEach((it, idx) => {
     const def = S.furn.items.find(f => f.id === it.type);
     if (!def || !Array.isArray(it.cell)) return;   // manifest 沒有的種類／壞格子：略過（本地舊存檔可能有，別讓 boot 當掉）
-    for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++)
+    const fd = furnDimsOf(def, it.dir || 0);
+    for (let dy = 0; dy < fd.h; dy++) for (let dx = 0; dx < fd.w; dx++)
       S.occ.set(key(it.cell[0] + dx, it.cell[1] + dy), idx);
   });
 }
 
 function furnitureDef(id) { return S.furn.items.find(f => f.id ===id); }
+// 家具佔的格數：rotSwap 的家具（床，2026-11-25）朝左／右（dir 1／3）時寬高互換（左上角不動）；與兩份伺服器（Worker 的 furnDim、dev_server.py 的 furn_dims）一致
+const furnDimsOf = (def, dir) => (def?.rotSwap && (dir === 1 || dir === 3)) ? { w: def.h, h: def.w } : { w: def?.w || 1, h: def?.h || 1 };
+const itemDims = it => furnDimsOf(furnitureDef(it.type), it.dir || 0);
 
 // ---------------- 遮擋 / 碰撞 ----------------
 // 格子能不能站人／放家具：陸地，或水上鋪了地板（m＝要看的地板，預設目前畫面上的）
@@ -3815,8 +3819,8 @@ function seatItemOf(p) {
   const def = p.seatType && furnitureDef(p.seatType); if (!def) return null;
   // 別人的座標是平滑追過去的（永遠差一點點）：坐下的 y 剛好落在格線上（椅子 y＋h 格底邊 −2px），floor 會在「差一點」時算到上面那一格、找不到椅子，
   // 整個人就沒有椅背遮擋／沉進椅子的處理（機率性穿模、跟自己看到的不一樣）→ 改四捨五入到最近的格線
-  const cx = Math.floor(p.x / CELL), cy = Math.round((p.y + (p.pose === 'sit' ? 2 : 0)) / CELL) - def.h;
-  return S.furnItems.find(o => o.type === p.seatType && furnCovers(o, [cx, cy])) || null;
+  const cx = Math.floor(p.x / CELL), by = Math.round((p.y + (p.pose === 'sit' ? 2 : 0)) / CELL);
+  return S.furnItems.find(o => o.type === p.seatType && (furnCovers(o, [cx, by - def.h]) || (def.rotSwap && furnCovers(o, [cx, by - def.w])))) || null;   // 床橫放時 h 是 w（不知道遠端的床朝哪，兩種都試）
 }
 // 坐姿（2026-11-15，使用者要求改善）：LPC 素材沒有坐姿幀，所以讓人「陷進椅子」——往下沉 seat.drop px，從椅面前緣（背面時是椅背頂）那一列以下的部分裁掉，
 // 再把家具那一截重畫在人身上，看起來就是坐在椅子裡（腿被椅面擋住）。seat 參數在 furniture.json（gen_assets.py 的 FURN_SEATS 算出來）
@@ -4026,22 +4030,36 @@ function drawGazeEye(x, y, r, pul) {
   ctx.beginPath(); ctx.ellipse(0, 0, r * .16, r * .58, 0, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
-// 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊；床是 1×2，頭在上端的枕頭，朝左／右的床圖跟正面一樣）
+// 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）。床直放（朝下，1×2）：頭在上端的枕頭、被子從 quiltRow 蓋到床尾；橫放（朝左／右，2×1）：頭轉 90 度靠床頭端
 function drawSleeper(p) {
-  const F = S.avatar.frames, s = F.scale || 2, img = playerSpriteDiv(p, (F.states.down_idle || [0])[0]);   // 用正面待機的第 1 幀切出頭與肩膀
+  const F = S.avatar.frames, img = playerSpriteDiv(p, (F.states.down_idle || [0])[0]);   // 用正面待機的第 1 幀切出頭與肩膀
   const it = seatItemOf(p), sdir = it?.dir || 0;
   // 體型：依種族倍率（拉拉肥 0.5／巨人 1.5…）與吃喝的巨大化／縮小縮放，床放不下太大的所以上限 1.2；側面的床再縮 0.85（頭枕在窄窄的枕頭上）
   const race = ownRaceOf(p === S.players[0] ? S.me.race : p.look?.race)?.id || 'human2', ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);
   const rs = Math.min(1.2, ((S.avatar.races?.find(r => r.id === race)?.scale) || 1) * foodScaleOf(ffx));
   if (sdir === 2) { drawZzz(p); return; }   // 背面（從床頭看）：人在床頭板後面，只留 Zzz
-  // 頭與肩膀那塊：由底圖實測——人佔幀內 x 22..40、y 20..63（高 44），頭約在上 30%
-  const sw = Math.round(F.w * .30), sh = Math.round(F.h * .21), sx = Math.round(F.w * .36), sy = Math.round(F.h * .30);
-  const headDy = ((furnitureDef(p.seatType || 'bed')?.h || 1) - 1) * CELL;   // 床是 1×2：枕頭在床的上端，頭要往上移一格
-  ctx.drawImage(img, sx, sy, sw, sh, p.x - sw * s * rs / 2, p.y - 33 - headDy + sh * s * (1 - rs) / 2, sw * s * rs, sh * s * rs);   // 頭的水平中心對準枕頭（單人床中央）；依種族縮放
+  // 頭與肩膀那塊（2026-11-25 重量測：新素體的頭髮頂在幀內第 1～4 列、頭在第 10～28 列、肩膀約 30～33 列，所以取 x 16..48、y 0..33）
+  const sx = 16, sw = 32, sy = 0, sh = 33;
   const def = furnitureDef(p.seatType || 'bed'), bed = furnImg(p.seatType || 'bed', sdir);
-  if (bed && def?.quiltRow) {   // 被子：從床的「同一幀」切出被子那幾列蓋回去（床有動畫時才對得上）
-    const rows = bed.height - def.quiltRow, fi = sprFrame(bed, p.seat ? cellPhase(p.seat.cell[0], p.seat.cell[1]) : 0);
-    ctx.drawImage(bed.img, fi * bed.fw, def.quiltRow, bed.fw, rows, p.x - bed.width, p.y - rows * 2, bed.width * 2, rows * 2);
+  if (sdir === 1 || sdir === 3) {   // 橫放的床（2×1）：人躺在床上——把頭到肩膀轉 90 度，頭靠床頭端的枕頭，肩膀以下被被子蓋住
+    const left = sdir === 1, x0 = it.cell[0] * CELL, bottom = (it.cell[1] + 1) * CELL;
+    ctx.save();
+    ctx.translate(left ? x0 + 4 * 2 : x0 + bed.width * 2 - 4 * 2, bottom - 10 * 2);   // 頭頂貼著床頭端（床圖 x＝4）、身體中線在床面中間
+    ctx.rotate(left ? -Math.PI / 2 : Math.PI / 2);
+    ctx.drawImage(img, sx, sy, sw, sh, -sw * rs / 2, 0, sw * rs, sh * rs);
+    ctx.restore();
+    const qs = def?.quiltSide;   // 被子那一塊（左向圖座標 [x, y, w, h]；朝右是鏡像）蓋回去，遮住身體被切掉的那條線
+    if (bed && qs) {
+      const qx = left ? qs[0] : bed.width - qs[0] - qs[2];
+      ctx.drawImage(bed.img, qx, qs[1], qs[2], qs[3], x0 + qx * 2, bottom - (bed.height - qs[1]) * 2, qs[2] * 2, qs[3] * 2);
+    }
+    drawZzz(p);
+    return;
+  }
+  if (bed && def?.quiltRow) {   // 直放的床（1×2）：被子從 quiltRow 開始蓋到床尾；頭與肩膀的底邊墊在被子上緣下面 2px（切線被被子蓋住、對得準），頭頂就在枕頭上
+    const rows = bed.height - def.quiltRow, fi = sprFrame(bed, p.seat ? cellPhase(p.seat.cell[0], p.seat.cell[1]) : 0), quiltTop = p.y - rows * 2;
+    ctx.drawImage(img, sx, sy, sw, sh, p.x - sw * rs / 2, quiltTop + 2 - sh * rs, sw * rs, sh * rs);
+    ctx.drawImage(bed.img, fi * bed.fw, def.quiltRow, bed.fw, rows, p.x - bed.width, quiltTop, bed.width * 2, rows * 2);
   }
   drawZzz(p);
 }
@@ -4064,8 +4082,8 @@ function furnAtPoint(wx, wy) {   // 世界座標點到哪件家具（依繪製�
   for (let i = S.furnItems.length - 1; i >= 0; i--) {
     const it = S.furnItems[i], def = furnitureDef(it.type), img = furnImg(it.type, it.dir);
     if (!def || !img) continue;
-    const sc = S.furn.scale || 2, x0 = it.cell[0] * CELL, y1 = (it.cell[1] + def.h) * CELL;
-    if (wx >= x0 && wx <= x0 + Math.max(def.w * CELL, img.width * sc) && wy >= y1 - img.height * sc && wy <= y1) return it;
+    const fd = itemDims(it), sc = S.furn.scale || 2, x0 = it.cell[0] * CELL, y1 = (it.cell[1] + fd.h) * CELL;
+    if (wx >= x0 && wx <= x0 + Math.max(fd.w * CELL, img.width * sc) && wy >= y1 - img.height * sc && wy <= y1) return it;
   }
   return null;
 }
@@ -4357,7 +4375,7 @@ function seatNear(p) {     // F 鍵：身邊最近的可坐/可睡家具
   let best = null, bd = 56;
   for (const it of S.furnItems) {
     const def = furnitureDef(it.type); if (!def?.use) continue;
-    const d = Math.hypot((it.cell[0] + def.w / 2) * CELL - p.x, (it.cell[1] + def.h / 2) * CELL - p.y);
+    const fd = itemDims(it), d = Math.hypot((it.cell[0] + fd.w / 2) * CELL - p.x, (it.cell[1] + fd.h / 2) * CELL - p.y);
     if (d < bd) { bd = d; best = it; }
   }
   return best;
@@ -4370,9 +4388,9 @@ function usePose(it) {
     standUp(p);
     if (same) return;
   }
-  const cx = (it.cell[0] + def.w / 2) * CELL, cy = (it.cell[1] + def.h / 2) * CELL;
+  const fd = itemDims(it), cx = (it.cell[0] + fd.w / 2) * CELL, cy = (it.cell[1] + fd.h / 2) * CELL;
   if (Math.hypot(cx - p.x, cy - p.y) > 80) { say(`靠近一點再${def.use === 'sit' ? '坐' : '躺'}`); return; }
-  const sx = cx, sy = (it.cell[1] + def.h) * CELL - (def.use === 'sit' ? 2 : 0);
+  const sx = cx, sy = (it.cell[1] + fd.h) * CELL - (def.use === 'sit' ? 2 : 0);
   for (const r of S.remotes.values()) if (r.pose && Math.abs(r.x - sx) < 10 && Math.abs(r.y - sy) < 10) { say('這裡有人了'); return; }
   p.pose = def.use; p.seat = { type: it.type, cell: [it.cell[0], it.cell[1]] }; p.seatType = it.type; p.face = 'down'; p.d8 = 'down';
   if (def.use === 'sit') seatFace(p, it.dir || 0);
@@ -4390,7 +4408,7 @@ function standUp(p) {
   const seat = p.seat;
   p.pose = null; p.seat = null; p.seatType = null;
   if (seat) {   // 起身時站到家具前面（前面有東西擋就原地，仍可走出來）
-    const def = furnitureDef(seat.type), ny = (seat.cell[1] + (def?.h || 1)) * CELL + 6;
+    const sit = S.furnItems.find(o => o.type === seat.type && o.cell[0] === seat.cell[0] && o.cell[1] === seat.cell[1]), ny = (seat.cell[1] + (sit ? itemDims(sit).h : (furnitureDef(seat.type)?.h || 1))) * CELL + 6;
     if (!blocked(p.x, ny)) p.y = ny;
   }
 }
@@ -12637,13 +12655,14 @@ function draw() {
   }
   S.furnItems.forEach((it, idx) => {
     const def = furnitureDef(it.type), img = furnImg(it.type, it.dir); if (!img) return;
-    if (offView(it.cell[0] * CELL, (it.cell[1] + def.h) * CELL, Math.max(def.w * CELL, img.width * SC), img.height * SC, def.text ? 90 : 4)) return;
+    const fd = furnDimsOf(def, it.dir || 0);
+    if (offView(it.cell[0] * CELL, (it.cell[1] + fd.h) * CELL, Math.max(fd.w * CELL, img.width * SC), img.height * SC, def.text ? 90 : 4)) return;
     list.push({
-      y: (it.cell[1] + def.h) * CELL - 1,
+      y: (it.cell[1] + fd.h) * CELL - 1,
       draw: () => {
         ctx.save();
         if (idx === S.pickedIdx) ctx.globalAlpha = .5;
-        drawSpr(img, sprFrame(img, cellPhase(it.cell[0], it.cell[1])), it.cell[0] * CELL, (it.cell[1] + def.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
+        drawSpr(img, sprFrame(img, cellPhase(it.cell[0], it.cell[1])), it.cell[0] * CELL, (it.cell[1] + fd.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
         if (def.text && it.text) {   // 看板的字：走近（約 4 格內）才顯示在上方，只顯示第一行前 16 字，點開看全文
           const me = S.players[0], cx = (it.cell[0] + def.w / 2) * CELL, cy = (it.cell[1] + def.h) * CELL;
           if (Math.hypot(cx - me.x, cy - me.y) < 130) {
@@ -12874,12 +12893,12 @@ function draw() {
   // 裝飾模式 ghost
   if (S.mode === 'decor' && S.decorTab === 'furn' && S.mouseCell && S.sel && S.furnImgs[S.sel]) {
     const def = furnitureDef(S.sel), img = furnImg(S.sel, S.rot || 0);
-    const [mx, my] = S.mouseCell, w = def.w * CELL, h = def.h * CELL;
-    const valid = canPlace(S.sel, mx, my);
+    const fd = furnDimsOf(def, S.rot || 0), [mx, my] = S.mouseCell, w = fd.w * CELL, h = fd.h * CELL;
+    const valid = canPlace(S.sel, mx, my, S.rot || 0);
     ctx.fillStyle = valid ? 'rgba(90,220,120,.28)' : 'rgba(220,80,80,.3)';
     ctx.fillRect(mx * CELL, my * CELL, w, h);
     ctx.globalAlpha = .75;
-    drawSpr(img, sprFrame(img), mx * CELL, (my + def.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
+    drawSpr(img, sprFrame(img), mx * CELL, (my + fd.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
     ctx.globalAlpha = 1;
     ctx.strokeStyle = valid ? 'rgba(120,255,160,.8)' : 'rgba(255,120,120,.8)';
     ctx.strokeRect(mx * CELL + .5, my * CELL + .5, w - 1, h - 1);
@@ -13021,8 +13040,8 @@ function draw() {
 }
 
 const MAX_FURN = 500;   // 每個地形的擺設上限（與兩份伺服器的 MAX_FURN 一致）
-function canPlace(typeId, x, y) {
-  const def = furnitureDef(typeId);
+function canPlace(typeId, x, y, dir = 0) {
+  const def = furnDimsOf(furnitureDef(typeId), dir);
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
     if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS) return false;
@@ -13169,28 +13188,33 @@ function onNetFurn(items) {
 // 同島的人在你保存之前看不到。保存時伺服器會逐一驗證（被別人搶先占用的會被跳過），清空只有管理員能做。
 const cloneFurn = list => list.map(it => { const o = { type: it.type, cell: [it.cell[0], it.cell[1]] }; if (it.text) o.text = it.text; if (it.dir) o.dir = it.dir; return o; });
 const furnCovers = (it, cell) => {
-  const d = furnitureDef(it.type) || { w: 1, h: 1 };
+  const d = itemDims(it);
   return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
 };
 // 在指定清單上能不能放（範圍、水邊〔水上要有地板 floor〕、與清單內家具重疊）；規則與兩份伺服器一致
-function canPlaceIn(list, typeId, x, y, floor = S.floorMap) {
-  const def = furnitureDef(typeId); if (!def) return false;
+function canPlaceIn(list, typeId, x, y, floor = S.floorMap, dir = 0) {
+  if (!furnitureDef(typeId)) return false;
+  const def = furnDimsOf(furnitureDef(typeId), dir);
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
     if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor) || tableAtCell(xx, yy) || propAtCell(xx, yy)) return false;
   }
-  return !list.some(it => { const d = furnitureDef(it.type) || { w: 1, h: 1 };
+  return !list.some(it => { const d = itemDims(it);
     return x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h; });
 }
 // 把一個家具操作套到清單上（直接改 list；不合法的略過）
 function applyFurnOpTo(list, op, floor = S.floorMap) {
   if (op.t === 'clear') list.length = 0;
   else if (op.t === 'remove') { const i = list.findIndex(it => furnCovers(it, op.cell)); if (i >= 0) list.splice(i, 1); }
-  else if (op.t === 'place' && canPlaceIn(list, op.type, op.cell[0], op.cell[1], floor)) {
+  else if (op.t === 'place' && canPlaceIn(list, op.type, op.cell[0], op.cell[1], floor, op.dir || 0)) {
     const o = { type: op.type, cell: [op.cell[0], op.cell[1]] }; if (op.dir) o.dir = op.dir; list.push(o);
   } else if (op.t === 'rotate') {   // 旋轉已擺好的家具（點到它的任一格）；dir 0＝正面（不存欄位）
     const it = list.find(o => furnCovers(o, op.cell));
-    if (it) { if (op.dir) it.dir = op.dir; else delete it.dir; }
+    if (it) {
+      const od = itemDims(it), nd = furnDimsOf(furnitureDef(it.type), op.dir || 0);
+      if ((od.w !== nd.w || od.h !== nd.h) && !canPlaceIn(list.filter(o => o !== it), it.type, it.cell[0], it.cell[1], floor, op.dir || 0)) return;   // 寬高互換（床）：新佔到的格子被擋住就不轉
+      if (op.dir) it.dir = op.dir; else delete it.dir;
+    }
   }
 }
 // 裝飾模式按 R：游標指著已擺好的家具就轉那一件（記成草稿，按「完成」才保存）；沒指著就轉「下一件要放的」預覽方向
@@ -13933,7 +13957,7 @@ canvas.addEventListener('mousedown', e => {
   const [x, y] = S.mouseCell;
   if (S.draft.length >= 300) { toast('未保存的變動太多了，請先按「完成」保存'); return; }
   if (S.furnItems.length >= MAX_FURN) { toast(`這個地形的擺設已達上限（${MAX_FURN} 件）`); return; }
-  if (canPlace(S.sel, x, y)) { stageOp(S.rot ? { t: 'place', type: S.sel, cell: [x, y], dir: S.rot } : { t: 'place', type: S.sel, cell: [x, y] }); toast('放置'); }
+  if (canPlace(S.sel, x, y, S.rot || 0)) { stageOp(S.rot ? { t: 'place', type: S.sel, cell: [x, y], dir: S.rot } : { t: 'place', type: S.sel, cell: [x, y] }); toast('放置'); }
   else toast('這裡放不下（水上要先鋪地板／已占用）');
 });
 canvas.addEventListener('contextmenu', e => {
