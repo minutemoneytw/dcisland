@@ -3921,6 +3921,10 @@ function drawPersonBase(p, wi, nameColor) {
     if (fish) drawLineAndBobber(p, wi, fish, rodTip);
     if (pose) nameY = p.y - 46 - (p.seatDrop || 0);   // 坐姿整個人下沉時名牌不跟著下沉
   }
+  if (p.pose === 'sleep') {   // 睡在床上：名牌移到床頭上方（不蓋在人臉上）
+    const sit = seatItemOf(p), sim = sit && furnImg(sit.type, sit.dir);
+    if (sim) nameY = p.y - sim.height * (S.furn.scale || 2) - 6;
+  }
   // 名牌（FFXIV 感：白字黑邊）
   ctx.font = '10px "Microsoft JhengHei"';
   ctx.textAlign = 'center';
