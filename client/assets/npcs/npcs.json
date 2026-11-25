@@ -1,5 +1,5 @@
 {
- "_comment": "NPC 設定。terrains＝每張地圖各自的 NPC（切換地圖不會帶著走）：每張 2 位一般 NPC + 1 位嚮導（guide:true，跟他講話會跳出 help 操作說明）；機械島目前還沒有 NPC；和平島只有一位固定不動的嚮導（pos＝格子座標、fixed:true，在扭蛋機右邊）。每位都有自己的個性與台詞（lines，隨機說一句、不連續重複）。look 的 skin/hair/shirt 對應 avatar.json。加 NPC/台詞＝改這個檔，不用改程式。",
+ "_comment": "NPC 設定。terrains＝每張地圖各自的 NPC（切換地圖不會帶著走）：每張 2 位一般 NPC + 1 位嚮導（guide:true，跟他講話會跳出 help 操作說明）；機械島目前還沒有 NPC；和平島只有一位固定不動的嚮導（pos＝格子座標、fixed:true，在扭蛋機右邊）。每位都有自己的個性與台詞（lines，隨機說一句、不連續重複）。look 是新人類系列的固定造型：race（種族 id）、skin（膚色 id）、hair（髮型款式 id）、hairC／eyeC（髮色／眼睛色碼）、top／bottom／shoe（外觀 id）與 topC／botC／shoeC（衣服顏色色碼），款式與可選值見 avatar.json。加 NPC/台詞＝改這個檔，不用改程式。",
  "range": 80,
  "duration": 3,
  "help": {
@@ -63,10 +63,16 @@
    {
     "name": "阿福",
     "look": {
+     "race": "human2",
      "skin": "tan",
-     "hair": "hair1",
-     "shirt": 2,
-     "pants": 5
+     "hair": "h2_flip",
+     "hairC": "#7a4a2a",
+     "top": "suit_jacket_m",
+     "topC": "#7a9a4a",
+     "bottom": "suit_pants_m",
+     "botC": "#6a5a3a",
+     "shoe": "leather_shoes_m",
+     "shoeC": "#5a3a22"
     },
     "lines": [
      "早安",
@@ -84,10 +90,16 @@
    {
     "name": "小跳",
     "look": {
+     "race": "dwarf2",
      "skin": "light",
-     "hair": "hair3",
-     "shirt": 7,
-     "pants": 11
+     "hair": "h2_twin",
+     "hairC": "#e8a040",
+     "top": "suit_jacket",
+     "topC": "#e86a6a",
+     "bottom": "suit_skirt",
+     "botC": "#4a6ad0",
+     "shoe": "pointed_shoes",
+     "shoeC": "#8a3a3a"
     },
     "lines": [
      "你今天跳跳樂了嗎",
@@ -105,10 +117,16 @@
    {
     "name": "嚮導・小綠",
     "look": {
+     "race": "human2",
      "skin": "pale",
-     "hair": "hair2",
-     "shirt": 3,
-     "pants": 2
+     "hair": "h2_pony",
+     "hairC": "#4aa860",
+     "top": "suit_jacket",
+     "topC": "#3a8a5a",
+     "bottom": "suit_skirt",
+     "botC": "#2f6a46",
+     "shoe": "pointed_shoes",
+     "shoeC": "#244a34"
     },
     "lines": [
      "歡迎來到島上",
@@ -128,10 +146,16 @@
    {
     "name": "海風",
     "look": {
+     "race": "human2",
      "skin": "tan",
-     "hair": "hair2",
-     "shirt": 1,
-     "pants": 6
+     "hair": "h2_oil",
+     "hairC": "#2a2a30",
+     "top": "suit_jacket_m",
+     "topC": "#3a8ac8",
+     "bottom": "suit_pants_m",
+     "botC": "#e8d8b0",
+     "shoe": "leather_shoes_m",
+     "shoeC": "#a08060"
     },
     "lines": [
      "適合翹班",
@@ -149,10 +173,16 @@
    {
     "name": "貝殼阿嬤",
     "look": {
+     "race": "dwarf2",
      "skin": "pale",
-     "hair": "hair3",
-     "shirt": 4,
-     "pants": 4
+     "hair": "h2_bob",
+     "hairC": "#d8d8e0",
+     "top": "suit_jacket",
+     "topC": "#d87a9a",
+     "bottom": "suit_skirt",
+     "botC": "#8a5a7a",
+     "shoe": "pointed_shoes",
+     "shoeC": "#6a3a4a"
     },
     "lines": [
      "你好",
@@ -170,10 +200,16 @@
    {
     "name": "嚮導・小藍",
     "look": {
+     "race": "human2",
      "skin": "light",
-     "hair": "hair1",
-     "shirt": 3,
-     "pants": 12
+     "hair": "h2_long",
+     "hairC": "#3a6ad8",
+     "top": "suit_jacket",
+     "topC": "#4a90d8",
+     "bottom": "suit_skirt",
+     "botC": "#2a4a90",
+     "shoe": "pointed_shoes",
+     "shoeC": "#1e3466"
     },
     "lines": [
      "歡迎來到島上",
@@ -193,10 +229,16 @@
    {
     "name": "老雪",
     "look": {
+     "race": "giant2",
      "skin": "pale",
-     "hair": "hair1",
-     "shirt": 5,
-     "pants": 1
+     "hair": "h2_oil",
+     "hairC": "#e8eef4",
+     "top": "suit_jacket_m",
+     "topC": "#6a7a90",
+     "bottom": "suit_pants_m",
+     "botC": "#3a4458",
+     "shoe": "leather_shoes_m",
+     "shoeC": "#2a303c"
     },
     "lines": [
      "好",
@@ -213,10 +255,16 @@
    {
     "name": "雪球",
     "look": {
+     "race": "dwarf2",
      "skin": "light",
-     "hair": "hair3",
-     "shirt": 0,
-     "pants": 15
+     "hair": "h2_puff",
+     "hairC": "#f0f4ff",
+     "top": "suit_jacket",
+     "topC": "#a8d4f0",
+     "bottom": "suit_skirt",
+     "botC": "#ffffff",
+     "shoe": "pointed_shoes",
+     "shoeC": "#7a8aa0"
     },
     "lines": [
      "哇，是新朋友！",
@@ -233,10 +281,16 @@
    {
     "name": "嚮導・小白",
     "look": {
+     "race": "human2",
      "skin": "deep",
-     "hair": "hair2",
-     "shirt": 3,
-     "pants": 2
+     "hair": "h2_bob",
+     "hairC": "#dfe8f0",
+     "top": "suit_jacket",
+     "topC": "#c8d8e8",
+     "bottom": "suit_skirt",
+     "botC": "#8aa0b8",
+     "shoe": "pointed_shoes",
+     "shoeC": "#5a6a80"
     },
     "lines": [
      "歡迎來到島上",
@@ -256,10 +310,17 @@
    {
     "name": "夜貓",
     "look": {
+     "race": "cat2",
      "skin": "deep",
-     "hair": "hair3",
-     "shirt": 6,
-     "pants": 20
+     "hair": "h2_flip",
+     "hairC": "#402060",
+     "top": "suit_jacket_m",
+     "topC": "#2a2040",
+     "bottom": "suit_pants_m",
+     "botC": "#201830",
+     "shoe": "leather_shoes_m",
+     "shoeC": "#120c1c",
+     "eyeC": "#e8c030"
     },
     "lines": [
      "好睏",
@@ -276,10 +337,17 @@
    {
     "name": "占星師",
     "look": {
+     "race": "elf2",
      "skin": "pale",
-     "hair": "hair2",
-     "shirt": 4,
-     "pants": 14
+     "hair": "h2_long",
+     "hairC": "#b0a0e8",
+     "top": "suit_jacket",
+     "topC": "#4a3a8a",
+     "bottom": "suit_skirt",
+     "botC": "#2a2060",
+     "shoe": "pointed_shoes",
+     "shoeC": "#1a1440",
+     "eyeC": "#80d0ff"
     },
     "lines": [
      "(一些艱澀難懂的話)",
@@ -297,10 +365,16 @@
    {
     "name": "嚮導・小紫",
     "look": {
+     "race": "human2",
      "skin": "tan",
-     "hair": "hair1",
-     "shirt": 3,
-     "pants": 1
+     "hair": "h2_twin",
+     "hairC": "#a050d0",
+     "top": "suit_jacket",
+     "topC": "#8a4ab0",
+     "bottom": "suit_skirt",
+     "botC": "#5a2a80",
+     "shoe": "pointed_shoes",
+     "shoeC": "#3a1a54"
     },
     "lines": [
      "歡迎來到島上",
@@ -320,10 +394,16 @@
    {
     "name": "森林隱者",
     "look": {
+     "race": "elf2",
      "skin": "deep",
-     "hair": "hair1",
-     "shirt": 2,
-     "pants": 7
+     "hair": "h2_bob",
+     "hairC": "#607040",
+     "top": "suit_jacket_m",
+     "topC": "#4a5a30",
+     "bottom": "suit_pants_m",
+     "botC": "#3a3a22",
+     "shoe": "leather_shoes_m",
+     "shoeC": "#2a2416"
     },
     "lines": [
      "(一些富含哲理的話)",
@@ -341,10 +421,16 @@
    {
     "name": "採菇人",
     "look": {
+     "race": "dwarf2",
      "skin": "light",
-     "hair": "hair2",
-     "shirt": 7,
-     "pants": 9
+     "hair": "h2_puff",
+     "hairC": "#c05030",
+     "top": "suit_jacket",
+     "topC": "#d8a050",
+     "bottom": "suit_skirt",
+     "botC": "#7a4a2a",
+     "shoe": "pointed_shoes",
+     "shoeC": "#4a2a18"
     },
     "lines": [
      "這朵可以吃，那朵不行",
@@ -361,10 +447,16 @@
    {
     "name": "嚮導・小翠",
     "look": {
+     "race": "elf2",
      "skin": "pale",
-     "hair": "hair3",
-     "shirt": 3,
-     "pants": 2
+     "hair": "h2_pony",
+     "hairC": "#70c080",
+     "top": "suit_jacket",
+     "topC": "#4a9a60",
+     "bottom": "suit_skirt",
+     "botC": "#306a40",
+     "shoe": "pointed_shoes",
+     "shoeC": "#204a2c"
     },
     "lines": [
      "歡迎來到島上",
@@ -384,10 +476,16 @@
    {
     "name": "鐵匠",
     "look": {
+     "race": "giant2",
      "skin": "deep",
-     "hair": "hair1",
-     "shirt": 0,
-     "pants": 7
+     "hair": "h2_oil",
+     "hairC": "#30201a",
+     "top": "suit_jacket_m",
+     "topC": "#5a2a20",
+     "bottom": "suit_pants_m",
+     "botC": "#2a2a30",
+     "shoe": "leather_shoes_m",
+     "shoeC": "#201810"
     },
     "lines": [
      "熱死人了！",
@@ -404,10 +502,16 @@
    {
     "name": "阿岩",
     "look": {
+     "race": "dwarf2",
      "skin": "tan",
-     "hair": "hair3",
-     "shirt": 1,
-     "pants": 12
+     "hair": "h2_flip",
+     "hairC": "#a03020",
+     "top": "suit_jacket_m",
+     "topC": "#8a6a40",
+     "bottom": "suit_pants_m",
+     "botC": "#4a4040",
+     "shoe": "leather_shoes_m",
+     "shoeC": "#2a2020"
     },
     "lines": [
      "你今天柏德之門3了嗎？",
@@ -424,10 +528,16 @@
    {
     "name": "嚮導・小紅",
     "look": {
+     "race": "human2",
      "skin": "light",
-     "hair": "hair2",
-     "shirt": 3,
-     "pants": 2
+     "hair": "h2_twin",
+     "hairC": "#e04030",
+     "top": "suit_jacket",
+     "topC": "#d04040",
+     "bottom": "suit_skirt",
+     "botC": "#7a2020",
+     "shoe": "pointed_shoes",
+     "shoeC": "#501414"
     },
     "lines": [
      "歡迎來到島上",
@@ -447,10 +557,16 @@
    {
     "name": "嚮導・小和",
     "look": {
+     "race": "human2",
      "skin": "light",
-     "hair": "hair3",
-     "shirt": 3,
-     "pants": 2
+     "hair": "h2_pony",
+     "hairC": "#f0b0c0",
+     "top": "suit_jacket",
+     "topC": "#f0a0b8",
+     "bottom": "suit_skirt",
+     "botC": "#a0c8e8",
+     "shoe": "pointed_shoes",
+     "shoeC": "#7a6a8a"
     },
     "lines": [
      "歡迎來到和平島",
