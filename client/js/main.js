@@ -3881,8 +3881,8 @@ function drawPersonBase(p, wi, nameColor) {
     const ghost = ffx?.includes('fghost');   // 吃喝的透明化：整個人半透明
     if (ghost) ctx.globalAlpha = .35;
     p.rodJit = p.fish?.ph === 'reel' && rodFrameNow(p) != null ? Math.round(Math.sin(S.t * 30)) : 0;   // 拉竿：竿子往後拉住、整個人左右抖 1px（原本拉竿時竿尖抖動的感覺）
-    // 側面坐姿（sit_left／sit_right）：整個人往椅背方向挪（使用者微調 2026-11-25，單位＝2px 一格）：人類／妖精／貓族 2 格、矮人 4 格、巨人 0；朝左的人往右、朝右的人往左
-    const sitDx = pose === 'sit' && !p.fish && sitReal(p) ? (SIT_BACK_SHIFT[race] ?? 2) * 2 * (d8Of(p) === 'left' ? 1 : -1) : 0;
+    // 側面坐姿（sit_left／sit_right）：整個人往椅背方向挪（使用者微調 2026-11-25，單位＝2px 一格）：人類／妖精／貓族 2 格、矮人 4 格、巨人 0；朝左的人往左、朝右的人往右（往面向的方向挪；使用者說第一版往椅背挪「反了」）
+    const sitDx = pose === 'sit' && !p.fish && sitReal(p) ? (SIT_BACK_SHIFT[race] ?? 2) * 2 * (d8Of(p) === 'left' ? -1 : 1) : 0;
     ctx.save(); ctx.translate(p.x + p.rodJit + sitDx, p.y - p.z);
     // 武器（背在背上／掛在腰間；揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
     const fish = wi && (!pose || (pose === 'sit' && p.fish)) && p.fish ? p.fish : null;
