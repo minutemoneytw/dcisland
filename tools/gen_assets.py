@@ -620,8 +620,8 @@ SCHOOL_CASUAL = gen_casual.casual_sheets()
 SCHOOL_CASUAL_DWARF = gen_school.shrink_sheets(SCHOOL_CASUAL)
 SCHOOL_CASUAL_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_CASUAL})
 CASUAL_DYE = dict(
-    top=["#ced4e2", "#60667c", "#a8b0c6", "#e8ecf4"],      # 底色、外框、陰影、亮部（順序＝第一個是主色）
-    bottom=["#526486", "#262e44", "#3c4a68", "#6a7ea0"],
+    top=["#9b4add", "#892dd4", "#ab64e3", "#b578e6", "#801ed0"],      # 紫 T恤（使用者自繪）：主色、外框、淺、更淺、深（順序＝第一個是主色）
+    bottom=["#5e6bda", "#2d3ed4", "#525fd7", "#6e79dd"],             # 藍長褲（使用者自繪）
     shoe=["#ced2de", "#303242", "#68727c", "#eef0f6"])
 CASUAL_ITEMS = dict(
     top=dict(id="tshirt", name="T恤", glam=True, dye=CASUAL_DYE["top"]),
