@@ -3849,6 +3849,7 @@ function drawPerson(p, wi, nameColor) {
   ctx.restore();
   ctx.drawImage(im.img, 0, from, im.fw, rows, it.cell[0] * CELL, bottom - rows * sc, im.width * sc, rows * sc);   // 前景：椅面前緣（或椅背）蓋在人身上
 }
+const SIT_BACK_SHIFT = { human2: 2, elf2: 2, cat2: 2, dwarf2: 4, giant2: 0 };   // 側面坐姿往椅背挪幾格（1 格＝2px）
 function drawPersonBase(p, wi, nameColor) {
   const pose = p.pose === 'sit' || p.pose === 'sleep' ? p.pose : null;
   const race = ownRaceOf(p === S.players[0] ? S.me.race : p.look?.race)?.id || 'human2';
@@ -3880,7 +3881,9 @@ function drawPersonBase(p, wi, nameColor) {
     const ghost = ffx?.includes('fghost');   // 吃喝的透明化：整個人半透明
     if (ghost) ctx.globalAlpha = .35;
     p.rodJit = p.fish?.ph === 'reel' && rodFrameNow(p) != null ? Math.round(Math.sin(S.t * 30)) : 0;   // 拉竿：竿子往後拉住、整個人左右抖 1px（原本拉竿時竿尖抖動的感覺）
-    ctx.save(); ctx.translate(p.x + p.rodJit, p.y - p.z);
+    // 側面坐姿（sit_left／sit_right）：整個人往椅背方向挪（使用者微調 2026-11-25，單位＝2px 一格）：人類／妖精／貓族 2 格、矮人 4 格、巨人 0；朝左的人往右、朝右的人往左
+    const sitDx = pose === 'sit' && !p.fish && sitReal(p) ? (SIT_BACK_SHIFT[race] ?? 2) * 2 * (d8Of(p) === 'left' ? 1 : -1) : 0;
+    ctx.save(); ctx.translate(p.x + p.rodJit + sitDx, p.y - p.z);
     // 武器（背在背上／掛在腰間；揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
     const fish = wi && (!pose || (pose === 'sit' && p.fish)) && p.fish ? p.fish : null;
     const carry = wi && !pose && !fish && !(p.swing > 0) && !p.cast;   // 不拿在手上（詠唱中高舉法杖）
@@ -3923,7 +3926,7 @@ function drawPersonBase(p, wi, nameColor) {
     if (ghost) ctx.globalAlpha = 1;
     if (ffx?.length) drawFoodOverhead(p, ffx, nameY);   // 暈眩的星星、中毒的泡泡
     if (fish) drawLineAndBobber(p, wi, fish, rodTip);
-    if (pose) nameY = p.y - 46 - (p.seatDrop || 0);   // 坐姿整個人下沉時名牌不跟著下沉
+    if (pose && !(pose === 'sit' && !p.fish && sitReal(p))) nameY = p.y - 46 - (p.seatDrop || 0);   // 坐姿整個人下沉時名牌不跟著下沉；有真的側面坐姿幀（頭沒有下沉）就維持站姿的名牌高度（巨人的頭比較高，不然名字會蓋住臉）
   }
   if (p.pose === 'sleep') {   // 睡在床上：名牌移到床頭上方（不蓋在人臉上）
     const sit = seatItemOf(p), sim = sit && furnImg(sit.type, sit.dir);
