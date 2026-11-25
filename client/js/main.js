@@ -4036,21 +4036,22 @@ function drawSleeper(p) {
   const it = seatItemOf(p), sdir = it?.dir || 0;
   // 體型：依種族倍率（拉拉肥 0.5／巨人 1.5…）與吃喝的巨大化／縮小縮放，床放不下太大的所以上限 1.2；側面的床再縮 0.85（頭枕在窄窄的枕頭上）
   const race = ownRaceOf(p === S.players[0] ? S.me.race : p.look?.race)?.id || 'human2', ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);
-  const rs = Math.min(1.2, ((S.avatar.races?.find(r => r.id === race)?.scale) || 1) * foodScaleOf(ffx));
+  const rs = Math.min(1.2, ((S.avatar.races?.find(r => r.id === race)?.scale) || 1) * foodScaleOf(ffx)) * .75;   // ×.75：躺著的頭縮小一點（約床寬的一半）
   if (sdir === 2) { drawZzz(p); return; }   // 背面（從床頭看）：人在床頭板後面，只留 Zzz
   // 頭與肩膀那塊（2026-11-25 重量測：新素體的頭髮頂在幀內第 1～4 列、頭在第 10～28 列、肩膀約 30～33 列，所以取 x 16..48、y 0..33）
   const sx = 16, sw = 32, sy = 0, sh = 33;
   const def = furnitureDef(p.seatType || 'bed'), bed = furnImg(p.seatType || 'bed', sdir);
   if (sdir === 1 || sdir === 3) {   // 橫放的床（2×1）：人躺在床上——把頭到肩膀轉 90 度，頭靠床頭端的枕頭，肩膀以下被被子蓋住
-    const left = sdir === 1, x0 = it.cell[0] * CELL, bottom = (it.cell[1] + 1) * CELL;
+    const left = sdir === 1, x0 = it.cell[0] * CELL, bottom = (it.cell[1] + 1) * CELL, qs = def?.quiltSide;
     ctx.save();
-    ctx.translate(left ? x0 + 4 * 2 : x0 + bed.width * 2 - 4 * 2, bottom - 10 * 2);   // 頭頂貼著床頭端（床圖 x＝4）、身體中線在床面中間
+    // 頭與肩膀的底邊墊在被子上緣裡 2px（切線被被子蓋住），頭頂就朝床頭端；身體中線在床面中間
+    ctx.translate(left ? x0 + (qs ? qs[0] : 19) * 2 + 2 - sh * rs : x0 + bed.width * 2 - (qs ? qs[0] : 19) * 2 - 2 + sh * rs, bottom - 10 * 2);
     ctx.rotate(left ? -Math.PI / 2 : Math.PI / 2);
-    const side = playerSpriteDiv(p, (F.states.left_idle || [0])[0]);   // 側躺：拿朝左的側面幀轉 90 度（朝右的幀跟朝左的是同一張圖，畫的時候才鏡像，所以朝右的床自己左右翻）。朝左的床轉 -90°、朝右的床翻面後轉 +90°，臉都朝下＝朝向畫面
-    if (!left) ctx.scale(-1, 1);
+    const side = playerSpriteDiv(p, (F.states.left_idle || [0])[0]);   // 側躺：拿朝左的側面幀轉 90 度（朝右的幀跟朝左的是同一張圖，畫的時候才鏡像，所以朝右的床自己左右翻）。
+    if (left) ctx.scale(-1, 1);   // 臉朝上（床是側面圖，人仰躺＝臉朝畫面上方）：朝左的床轉 -90° 要翻面、朝右的床轉 +90° 直接用
     ctx.drawImage(side, sx, sy, sw, sh, -sw * rs / 2, 0, sw * rs, sh * rs);
     ctx.restore();
-    const qs = def?.quiltSide;   // 被子那一塊（左向圖座標 [x, y, w, h]；朝右是鏡像）蓋回去，遮住身體被切掉的那條線
+    // 被子那一塊（左向圖座標 [x, y, w, h]；朝右是鏡像）蓋回去，遮住身體被切掉的那條線
     if (bed && qs) {
       const qx = left ? qs[0] : bed.width - qs[0] - qs[2];
       ctx.drawImage(bed.img, qx, qs[1], qs[2], qs[3], x0 + qx * 2, bottom - (bed.height - qs[1]) * 2, qs[2] * 2, qs[3] * 2);
