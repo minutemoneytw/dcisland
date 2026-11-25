@@ -4026,7 +4026,7 @@ function drawGazeEye(x, y, r, pul) {
   ctx.beginPath(); ctx.ellipse(0, 0, r * .16, r * .58, 0, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
-// 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）
+// 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊；床是 1×2，頭在上端的枕頭，朝左／右的床圖跟正面一樣）
 function drawSleeper(p) {
   const F = S.avatar.frames, s = F.scale || 2, img = playerSpriteDiv(p, (F.states.down_idle || [0])[0]);   // 用正面待機的第 1 幀切出頭與肩膀
   const it = seatItemOf(p), sdir = it?.dir || 0;
@@ -4034,26 +4034,12 @@ function drawSleeper(p) {
   const race = ownRaceOf(p === S.players[0] ? S.me.race : p.look?.race)?.id || 'human2', ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);
   const rs = Math.min(1.2, ((S.avatar.races?.find(r => r.id === race)?.scale) || 1) * foodScaleOf(ffx));
   if (sdir === 2) { drawZzz(p); return; }   // 背面（從床頭看）：人在床頭板後面，只留 Zzz
-  if (sdir === 1 || sdir === 3) {   // 側面的床（2026-11-15）：人側躺在床上——把「頭到腰」那段轉 90 度，頭枕在枕頭上，其餘由棉被蓋住
-    const def = furnitureDef(it.type), bed = furnImg(it.type, sdir), left = sdir === 1;
-    const x0 = it.cell[0] * CELL, bottom = (it.cell[1] + def.h) * CELL, pillowX = x0 + (left ? 6 : 9) * 2, pillowY = bottom - (bed.height - 13) * 2;
-    const sx = Math.round(F.w * .30), sw = Math.round(F.w * .42), sy = Math.round(F.h * .27), sh = Math.round(F.h * .42);
-    ctx.save();
-    ctx.beginPath(); ctx.rect(x0 + 3, pillowY - 40, 26, 80); ctx.clip();
-    ctx.translate(pillowX + (left ? -3 : 3), pillowY + 1); ctx.rotate(left ? -Math.PI / 2 : Math.PI / 2);
-    const kk = rs * .85;
-    ctx.drawImage(img, sx, sy, sw, sh, -sw * s * kk / 2, 0, sw * s * kk, sh * s * kk);
-    ctx.restore();
-    const qx = left ? 7 : 2;   // 棉被那一塊（床圖座標 x 7..13／鏡像 2..8、y 11..18）蓋回去
-    ctx.drawImage(bed.img, qx, 11, 7, 8, x0 + qx * 2, bottom - (bed.height - 11) * 2, 14, 16);
-    drawZzz(p);
-    return;
-  }
   // 頭與肩膀那塊：由底圖實測——人佔幀內 x 22..40、y 20..63（高 44），頭約在上 30%
   const sw = Math.round(F.w * .30), sh = Math.round(F.h * .21), sx = Math.round(F.w * .36), sy = Math.round(F.h * .30);
-  ctx.drawImage(img, sx, sy, sw, sh, p.x - sw * s * rs / 2, p.y - 33 + sh * s * (1 - rs) / 2, sw * s * rs, sh * s * rs);   // 頭的水平中心對準枕頭（單人床中央）；依種族縮放
-  const def = furnitureDef(p.seatType || 'bed'), bed = S.furnImgs[p.seatType || 'bed'];
-  if (bed && def?.quiltRow && !seatItem(p)?.dir) {   // （床轉了方向就不套正面圖的被子）被子：從床的「同一幀」切出被子那幾列蓋回去（床有動畫時才對得上）
+  const headDy = ((furnitureDef(p.seatType || 'bed')?.h || 1) - 1) * CELL;   // 床是 1×2：枕頭在床的上端，頭要往上移一格
+  ctx.drawImage(img, sx, sy, sw, sh, p.x - sw * s * rs / 2, p.y - 33 - headDy + sh * s * (1 - rs) / 2, sw * s * rs, sh * s * rs);   // 頭的水平中心對準枕頭（單人床中央）；依種族縮放
+  const def = furnitureDef(p.seatType || 'bed'), bed = furnImg(p.seatType || 'bed', sdir);
+  if (bed && def?.quiltRow) {   // 被子：從床的「同一幀」切出被子那幾列蓋回去（床有動畫時才對得上）
     const rows = bed.height - def.quiltRow, fi = sprFrame(bed, p.seat ? cellPhase(p.seat.cell[0], p.seat.cell[1]) : 0);
     ctx.drawImage(bed.img, fi * bed.fw, def.quiltRow, bed.fw, rows, p.x - bed.width, p.y - rows * 2, bed.width * 2, rows * 2);
   }

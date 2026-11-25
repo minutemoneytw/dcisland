@@ -1478,16 +1478,18 @@ def tool_axe():  # 斧頭（斧刃在右側＝揮向前方時朝外）
     cv.outline((30, 24, 22, 255))
     return cv
 
-def bed():   # 單人床（一格寬）：一個枕頭，睡覺時頭靠在枕頭上；quiltRow=13（被子從第 13 列開始）
-    cv = Canvas(16, 24)
+def bed():   # 單人床（1 寬×2 長：床頭在上、床尾在下；2026-11-25 使用者要求 1:2）：一個枕頭，睡覺時頭靠在枕頭上；quiltRow=13（被子從第 13 列開始，一直蓋到床尾）
+    cv = Canvas(16, 40)
     cf = hx("#4a6ab0"); cfd = shade(cf, 0.8)
-    cv.rect(1, 8, 14, 20, hx("#a57c4e"))       # 床架
+    cv.rect(1, 8, 14, 36, hx("#a57c4e"))       # 床架
     cv.rect(2, 9, 13, 12, hx("#f2ede0"))       # 枕頭帶
     cv.ellipse(8, 10, 4.5, 2.0, hx("#ffffff"))  # 枕頭
-    cv.rect(2, 13, 13, 19, cf)                 # 棉被
+    cv.rect(2, 13, 13, 35, cf)                 # 棉被
     cv.rect(2, 13, 13, 13, shade(cf, 1.15))
-    cv.rect(1, 20, 14, 21, cfd)
-    cv.rect(2, 22, 3, 23, hx("#4a3630")); cv.rect(12, 22, 13, 23, hx("#4a3630"))
+    for y in (20, 28):                         # 被子上的兩道摺痕
+        cv.hline(3, 12, y, cfd)
+    cv.rect(1, 36, 14, 37, cfd)                # 床尾板
+    cv.rect(2, 38, 3, 39, hx("#4a3630")); cv.rect(12, 38, 13, 39, hx("#4a3630"))
     cv.outline()
     return cv
 
@@ -2920,7 +2922,7 @@ FURN_MANIFEST = dict(
         dict(id="rug",   name="地毯",  w=2, h=2, solid=False, sprite="rug.png", legacy=True),   # 已改為地板（floor_rug）；保留定義讓舊存檔擺著的還看得到、拿得走，但不列在面板
         dict(id="lamp",  name="電燈",  w=1, h=1, solid=True,  sprite="lamp.png"),
         dict(id="tv",    name="電視",  w=1, h=1, solid=True,  sprite="tv.png"),
-        dict(id="bed",   name="床",    w=1, h=1, solid=True,  sprite="bed.png", use="sleep", quiltRow=13),
+        dict(id="bed",   name="床",    w=1, h=2, solid=True,  sprite="bed.png", use="sleep", quiltRow=13),
         dict(id="shelf", name="書架",  w=1, h=1, solid=True,  sprite="shelf.png"),
         dict(id="sign",  name="看板",  w=1, h=1, solid=True,  sprite="sign.png", text=True),
         # 2026-11-14：新增的預設家具（不用合成）
@@ -4155,27 +4157,21 @@ def furn_seat_variants(W, H, bt, st, sb, lb, cb, cs, cl, arm=None):
     back.outline()
     return {1: side, 2: back, 3: _furn_mirror(side)}
 
-def furn_bed_variants():
-    # 床（16×24，正面是從床尾看：枕頭在遠端上方、棉被在前面；quiltRow＝13）。朝左／右＝從側面看長邊：床頭板在一端、床尾板矮一點、中間枕頭與棉被；背面＝從床頭看：床頭板的背板擋住床墊
+def furn_bed_variants(front):
+    # 床（16×40，1 寬×2 長，正面是從床尾看：枕頭在遠端上方、棉被在前面；quiltRow＝13）。
+    # 床的佔地固定 1×2（旋轉不換寬高），所以朝左／右沿用正面的圖（頭還是在上端，睡姿也照正面畫）；朝上＝從床頭看：整片床頭板在前，後面是長長的棉被。
     wood, wd = hx("#a57c4e"), shade(hx("#a57c4e"), 0.8)
-    cf = hx("#4a6ab0"); leg = hx("#4a3630")
-    side = Canvas(16, 24)
-    side.rect(2, 20, 3, 23, leg); side.rect(12, 20, 13, 23, leg)
-    side.rect(1, 17, 14, 19, wood); side.hline(1, 14, 17, shade(wood, 1.15)); side.hline(1, 14, 19, wd)      # 側面床框
-    side.rect(1, 9, 3, 19, wood); side.vline(1, 9, 19, shade(wood, 1.15)); side.vline(3, 9, 19, wd)         # 床頭板（高）
-    side.rect(13, 13, 14, 19, wood); side.vline(14, 13, 19, wd)                                              # 床尾板（矮）
-    side.rect(4, 13, 12, 16, hx("#f2ede0"))                                                                   # 床單
-    side.ellipse(6, 13, 2.6, 1.6, hx("#ffffff"))                                                              # 枕頭
-    side.rect(8, 12, 12, 16, cf); side.hline(8, 12, 12, shade(cf, 1.15)); side.hline(8, 12, 16, shade(cf, 0.8))   # 棉被
-    side.outline()
-    back = Canvas(16, 24)
-    back.rect(2, 22, 3, 23, leg); back.rect(12, 22, 13, 23, leg)
-    back.rect(2, 5, 13, 7, cf); back.hline(2, 13, 5, shade(cf, 1.15))                                        # 遠端露出一截棉被
-    back.rect(1, 8, 14, 21, shade(wood, 0.9)); back.hline(1, 14, 8, shade(wood, 1.2)); back.hline(1, 14, 21, wd)   # 床頭板背板（整片）
+    cf = hx("#4a6ab0"); leg = hx("#4a3630"); cfd = shade(cf, 0.8)
+    back = Canvas(16, 40)
+    back.rect(2, 38, 3, 39, leg); back.rect(12, 38, 13, 39, leg)
+    back.rect(2, 5, 13, 21, cf); back.hline(2, 13, 5, shade(cf, 1.15))                                        # 遠端露出長長一截棉被
+    for y in (11, 17):
+        back.hline(3, 12, y, cfd)
+    back.rect(1, 22, 14, 37, shade(wood, 0.9)); back.hline(1, 14, 22, shade(wood, 1.2)); back.hline(1, 14, 37, wd)   # 床頭板背板（整片）
     for x in (5, 8, 11):
-        back.vline(x, 10, 19, wd)
+        back.vline(x, 24, 35, wd)
     back.outline()
-    return {1: side, 2: back, 3: _furn_mirror(side)}
+    return {1: _furn_mirror(front), 2: back, 3: front}
 
 # 其餘有方向性的家具＝箱型：背面是一整塊板，側面是「深度」那麼窄的一塊板；扁平的（屏風、鏡子、窗簾、掛飾）側面更窄
 FURN_THIN = {"folding_screen": 4, "floor_mirror": 5, "charm_curtain": 4, "dragon_shield": 4, "dragon_trophy": 6, "antler_rack": 5, "bat_screen": 4}
@@ -4184,7 +4180,7 @@ def furn_variants(fid, cv):
     if fid in FURN_SEATS:
         return furn_seat_variants(**FURN_SEATS[fid])
     if fid == "bed":
-        return furn_bed_variants()
+        return furn_bed_variants(cv)
     flat = furn_flat(cv)
     side = furn_squeeze(flat, FURN_THIN.get(fid, 8))
     return {1: side, 2: flat, 3: _furn_mirror(side)}
