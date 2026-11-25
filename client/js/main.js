@@ -4046,7 +4046,8 @@ function drawSleeper(p) {
     ctx.save();
     ctx.translate(left ? x0 + 4 * 2 : x0 + bed.width * 2 - 4 * 2, bottom - 10 * 2);   // 頭頂貼著床頭端（床圖 x＝4）、身體中線在床面中間
     ctx.rotate(left ? -Math.PI / 2 : Math.PI / 2);
-    const side = playerSpriteDiv(p, (F.states[left ? 'left_idle' : 'right_idle'] || [0])[0]);   // 側躺：拿側面的幀轉 90 度（朝左的床用朝左的幀、朝右的床用朝右的幀，臉都朝下＝朝向畫面）
+    const side = playerSpriteDiv(p, (F.states.left_idle || [0])[0]);   // 側躺：拿朝左的側面幀轉 90 度（朝右的幀跟朝左的是同一張圖，畫的時候才鏡像，所以朝右的床自己左右翻）。朝左的床轉 -90°、朝右的床翻面後轉 +90°，臉都朝下＝朝向畫面
+    if (!left) ctx.scale(-1, 1);
     ctx.drawImage(side, sx, sy, sw, sh, -sw * rs / 2, 0, sw * rs, sh * rs);
     ctx.restore();
     const qs = def?.quiltSide;   // 被子那一塊（左向圖座標 [x, y, w, h]；朝右是鏡像）蓋回去，遮住身體被切掉的那條線
