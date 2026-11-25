@@ -2945,16 +2945,17 @@ function chibiSprite(race, look, fi, sleep) {   // sleep：睡姿用——body �
   let ent = F.map ? F.map[fi] : [fi, 0];
   const body = S.charImgs[own.sheets.body];
   if (ent?.[2] != null && !sheetCellHas(body, ent[0] * cw, ent[1] * ch, cw, ch)) ent = F.map[ent[2]];
-  const [cc, cr] = ent, sx = cc * cw, sy = cr * ch;
+  const [cc, cr] = ent, sx = cc * cw, sy = cr * ch, idleSx = ent[3] != null ? ent[3] * cw : sx;   // ent[3]：這一幀只有腿層（body／bottom／shoes）用 ent[0] 那一欄、其他層用 ent[3] 欄（側面坐姿，見 tools/gen_sit.py）
   cv = document.createElement('canvas'); cv.width = cw; cv.height = ch; cv.pad = own.ox || 0; cv.padTop = own.oy || 0; cv.layerMiss = false;
   const g = cv.getContext('2d');
   for (const n of CHIBI_ORDER) {
     if (sleep && n === 'face') continue;   // 睡覺閉眼：眼睛已經畫在 bodyz 裡
     const ln = sleep && n === 'body' ? 'bodyz' : n;
     let img = S.charImgs[hs?.sheets?.[n] || ts?.sheets?.[n] || bs?.sheets?.[n] || ss?.sheets?.[n] || fs?.sheets?.[n] || own.sheets[ln]];
-    if (!img || sx + cw > img.width || sy + ch > img.height) continue;
+    const lsx = (n === 'body' || n === 'bottom' || n === 'shoes') ? sx : idleSx;
+    if (!img || lsx + cw > img.width || sy + ch > img.height) continue;
     for (const r of rules) if (r.hex && r.layers.includes(ln)) img = dyeSheet(img, r.colors, r.hex);   // 同一張圖可以被多條規則依序換色（例如 bottom 層：圍裙下擺跟上衣、褲子跟褲子）
-    g.drawImage(img, sx, sy, cw, ch, 0, 0, cw, ch);
+    g.drawImage(img, lsx, sy, cw, ch, 0, 0, cw, ch);
     for (const st of [ts, bs, ss]) {   // 款式帶遮罩（erase）：這一層畫完後把遮罩蓋住的像素擦掉（男式外套／褲子要擦掉身體層自己的手／腿）
       const mk = st?.erase?.[n] && S.charImgs[st.erase[n]];
       if (mk) { g.globalCompositeOperation = 'destination-out'; g.drawImage(mk, sx, sy, cw, ch, 0, 0, cw, ch); g.globalCompositeOperation = 'source-over'; }

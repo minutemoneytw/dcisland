@@ -515,6 +515,9 @@ def char_states():
     st["sit"] = [CHAR_SIT]
     if "char_attack_frames" in globals():
         st.update(char_attack_frames()[1])   # 攻擊動作（LPC 揮砍／突刺／施法／射擊）
+        n = CHAR_FRAMES + len(char_attack_frames()[0])
+        st["sit_left"] = [n, n, n]           # 新人類系列的側面坐姿（tools/gen_sit.py；朝下／朝上還沒做，沒有 sit_down／sit_up 就用舊的「沉進椅子」畫法）
+        st["sit_right"] = [n + 1, n + 1, n + 1]
     return st
 
 # ---------------- 髮型模組（LPC 通用格式外部素材）----------------
@@ -576,6 +579,7 @@ LPC_WEAPON_ROWS = [             # 只有某些動作的一般格武器（64×64�
     ("weapon_recurve_fg", [("shoot", "weapon_recurve_shoot_fg.png")]),   # 前層含箭矢（LPC Ammo: arrow）
 ]
 # 種族：人類＝無耳朵；精靈＝精靈耳（跟膚色）；貓族＝貓耳（bg+fg）；拉拉肥/巨人＝找人類模組縮放（LPC 沒有專用體型）
+import gen_sit   # 側面坐姿格（腿層 sheet 的第 9 欄，tools/gen_sit.py）
 import gen_male   # 男式西裝（外套／褲／鞋）的像素資料與遮罩（tools/gen_male.py）
 import gen_school   # 「新人類」分層 sheet（2026-11-22）：tools/gen_school.py；sheet 在這裡先畫好，換色規則要看實際用到的顏色
 SCHOOL_SHEETS = gen_school.build_sheets()
@@ -805,7 +809,10 @@ def char_frame_map():
         for k in range(4):
             m.append([LPC_WALK_COLS[k], row])   # 走路 4 幀
     m.append([0, LPC_WALK_BASE + 2])            # 坐姿暫用正面走路幀 0
-    return m + char_attack_frames()[0]
+    m += char_attack_frames()[0]
+    m.append([9, LPC_WALK_BASE + 1, None, 0])   # 側面坐姿（朝左）：腿層（body／bottom／shoes）用第 9 欄、其他層用待機欄（第 4 個值），見 gen_sit.py
+    m.append([9, LPC_WALK_BASE + 3, None, 0])   # 朝右（朝左的鏡像）
+    return m
 
 def lpc_act_sources(rel):
     """一張 LPC 走路來源圖（external/img2pixel/lpc/<名稱>.png）＋它的攻擊動作檔（同資料夾 act/<名稱>_<動作>.png）：
@@ -4367,6 +4374,13 @@ def main():
 
     print("== 角色（LPC 通用格式）==")
     sub = "avatar"
+    # 側面坐姿格（tools/gen_sit.py）：加在每張腿層 sheet 的第 9 欄；矮人、巨人的腿長 18、25 排
+    g_h = gen_sit.add_sit_cells(SCHOOL_SHEETS, 64, 21)
+    gen_sit.add_sit_cells(SCHOOL_MALE, 64, 21, names=("bottom", "shoes"), geom=g_h)
+    g_d = gen_sit.add_sit_cells(SCHOOL_DWARF_SHEETS, 64, 18)
+    gen_sit.add_sit_cells(SCHOOL_MALE_DWARF, 64, 18, names=("bottom", "shoes"), geom=g_d)
+    g_g = gen_sit.add_sit_cells(SCHOOL_GIANT_SHEETS, 96, 25)
+    gen_sit.add_sit_cells(SCHOOL_MALE_GIANT, 96, 25, names=("bottom", "shoes"), geom=g_g)
     # 新人類（tools/gen_school.py）：圖層 human2_<圖層>.png（hairbg／hat 目前是空的，不輸出）
     for lname in SCHOOL_LAYERS:
         save_chibi_layer(SCHOOL_SHEETS[lname], f"human2_{lname}.png", sub)
@@ -4413,7 +4427,7 @@ def main():
         # 人物分層的幀表（所有層共用）：每層都是 832×1344 的 LPC 通用格式 sheet；map＝65 個邏輯幀 → sheet 的 [欄, 列]；
         # w/h＝每格大小、scale＝引擎放大倍率；anchors＝武器掛點（格內像素座標，腳底中心＝(w/2, h)）；frameAnchors 逐幀覆寫
         # footDy＝畫圖時往下挪幾 px：LPC 的腳底在格子第 60～62 列（不是 64），不挪的話人和影子之間有空隙
-        frames=dict(w=CHAR_FW, h=CHAR_FH, scale=CHAR_SCALE, footDy=2, count=CHAR_FRAMES + len(char_attack_frames()[0]), dirs=CHAR_DIRS, states=char_states(),
+        frames=dict(w=CHAR_FW, h=CHAR_FH, scale=CHAR_SCALE, footDy=2, count=CHAR_FRAMES + len(char_attack_frames()[0]) + 2, dirs=CHAR_DIRS, states=char_states(),
                     map=char_frame_map(),
                     # 攻擊動作在 sheet 上的起始列與用到的欄（引擎用來判斷某一幀屬於哪個動作，LPC 武器的超大格靠它對位）
                     attacks={k: dict(row=r, cols=c) for k, (r, c) in LPC_ATTACKS.items()},
