@@ -4080,6 +4080,7 @@ function drawSleeper(p) {
     ctx.translate(left ? x0 + (qs ? qs[0] : 17) * 2 + 2 - dh : x0 + bed.width * 2 - (qs ? qs[0] : 17) * 2 - 2 + dh, bottom - 13 * 2);
     ctx.rotate(left ? -Math.PI / 2 : Math.PI / 2);
     if (left) ctx.scale(-1, 1);   // 臉朝上（床是側面圖，人仰躺＝臉朝畫面上方）：朝左的床轉 -90° 要翻面、朝右的床轉 +90° 直接用（朝右的幀跟朝左的是同一張圖，畫的時候才鏡像）
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';   // 縮成 0.75 倍：最近鄰會把 1 像素粗的閉眼線抽掉，用平滑縮圖才留得住
     ctx.drawImage(side, c.r[0], c.r[1], c.r[2], c.r[3], -c.fx * k, 0, dw, dh);
     ctx.restore();
     // 被子那一塊（左向圖座標 [x, y, w, h]；朝右是鏡像）蓋回去，遮住身體被切掉的那條線
@@ -4093,7 +4094,9 @@ function drawSleeper(p) {
   if (bed && def?.quiltRow) {   // 直放的床（1×2）：被子從 quiltRow 開始蓋到床尾；頭與肩膀的底邊墊在被子上緣下面 2px（切線被被子蓋住、對得準）
     const rows = bed.height - def.quiltRow, fi = sprFrame(bed, p.seat ? cellPhase(p.seat.cell[0], p.seat.cell[1]) : 0), quiltTop = p.y - rows * 2;
     const c = crop(frontFi), dw = RW * k, dh = RH * k;
+    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, c.r[0], c.r[1], c.r[2], c.r[3], p.x - c.fx * k, quiltTop + 2 - dh, dw, dh);
+    ctx.restore();
     ctx.drawImage(bed.img, fi * bed.fw, def.quiltRow, bed.fw, rows, p.x - bed.width, quiltTop, bed.width * 2, rows * 2);
   }
   drawZzz(p);
