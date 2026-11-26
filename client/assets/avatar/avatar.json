@@ -2461,6 +2461,13 @@
        }
       },
       {
+       "id": "dragoon_armor",
+       "name": "龍騎士鎧甲",
+       "sheets": {
+        "top": "human2_g_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -2517,6 +2524,13 @@
        }
       },
       {
+       "id": "dragoon_legs",
+       "name": "龍騎士腿甲",
+       "sheets": {
+        "bottom": "human2_g_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -2570,6 +2584,13 @@
        "name": "賢者靴",
        "sheets": {
         "shoes": "human2_s_shoes.png"
+       }
+      },
+      {
+       "id": "dragoon_boots",
+       "name": "龍騎士靴",
+       "sheets": {
+        "shoes": "human2_g_shoes.png"
        }
       },
       {
@@ -2630,6 +2651,14 @@
        "hideHair": true,
        "sheets": {
         "hat": "human2_k_hat.png"
+       }
+      },
+      {
+       "id": "dragoon_helm",
+       "name": "龍騎士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_g_hat.png"
        }
       }
      ]
@@ -2988,6 +3017,68 @@
      },
      {
       "slot": "top",
+      "style": "dragoon_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "dragoon_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "dragoon_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "dragoon_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#504c76",
+       "#3a365a",
+       "#6c6694",
+       "#8c86b6",
+       "#161424"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -3255,6 +3346,13 @@
        }
       },
       {
+       "id": "dragoon_armor",
+       "name": "龍騎士鎧甲",
+       "sheets": {
+        "top": "human2_g_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -3311,6 +3409,13 @@
        }
       },
       {
+       "id": "dragoon_legs",
+       "name": "龍騎士腿甲",
+       "sheets": {
+        "bottom": "human2_g_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -3364,6 +3469,13 @@
        "name": "賢者靴",
        "sheets": {
         "shoes": "human2_s_shoes.png"
+       }
+      },
+      {
+       "id": "dragoon_boots",
+       "name": "龍騎士靴",
+       "sheets": {
+        "shoes": "human2_g_shoes.png"
        }
       },
       {
@@ -3424,6 +3536,14 @@
        "hideHair": true,
        "sheets": {
         "hat": "human2_k_hat.png"
+       }
+      },
+      {
+       "id": "dragoon_helm",
+       "name": "龍騎士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_g_hat.png"
        }
       }
      ]
@@ -3784,6 +3904,68 @@
      },
      {
       "slot": "top",
+      "style": "dragoon_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "dragoon_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "dragoon_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "dragoon_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#504c76",
+       "#3a365a",
+       "#6c6694",
+       "#8c86b6",
+       "#161424"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -4052,6 +4234,13 @@
        }
       },
       {
+       "id": "dragoon_armor",
+       "name": "龍騎士鎧甲",
+       "sheets": {
+        "top": "human2_g_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -4108,6 +4297,13 @@
        }
       },
       {
+       "id": "dragoon_legs",
+       "name": "龍騎士腿甲",
+       "sheets": {
+        "bottom": "human2_g_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -4161,6 +4357,13 @@
        "name": "賢者靴",
        "sheets": {
         "shoes": "human2_s_shoes.png"
+       }
+      },
+      {
+       "id": "dragoon_boots",
+       "name": "龍騎士靴",
+       "sheets": {
+        "shoes": "human2_g_shoes.png"
        }
       },
       {
@@ -4221,6 +4424,14 @@
        "hideHair": true,
        "sheets": {
         "hat": "human2_k_hat.png"
+       }
+      },
+      {
+       "id": "dragoon_helm",
+       "name": "龍騎士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_g_hat.png"
        }
       }
      ]
@@ -4581,6 +4792,68 @@
      },
      {
       "slot": "top",
+      "style": "dragoon_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "dragoon_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "dragoon_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "dragoon_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#504c76",
+       "#3a365a",
+       "#6c6694",
+       "#8c86b6",
+       "#161424"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -4847,6 +5120,13 @@
        }
       },
       {
+       "id": "dragoon_armor",
+       "name": "龍騎士鎧甲",
+       "sheets": {
+        "top": "dwarf2_g_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -4903,6 +5183,13 @@
        }
       },
       {
+       "id": "dragoon_legs",
+       "name": "龍騎士腿甲",
+       "sheets": {
+        "bottom": "dwarf2_g_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -4956,6 +5243,13 @@
        "name": "賢者靴",
        "sheets": {
         "shoes": "dwarf2_s_shoes.png"
+       }
+      },
+      {
+       "id": "dragoon_boots",
+       "name": "龍騎士靴",
+       "sheets": {
+        "shoes": "dwarf2_g_shoes.png"
        }
       },
       {
@@ -5016,6 +5310,14 @@
        "hideHair": true,
        "sheets": {
         "hat": "dwarf2_k_hat.png"
+       }
+      },
+      {
+       "id": "dragoon_helm",
+       "name": "龍騎士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "dwarf2_g_hat.png"
        }
       }
      ]
@@ -5370,6 +5672,68 @@
        "#686064",
        "#f2f0ec",
        "#fefdfa"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "dragoon_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "dragoon_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "dragoon_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "dragoon_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#504c76",
+       "#3a365a",
+       "#6c6694",
+       "#8c86b6",
+       "#161424"
       ]
      },
      {
@@ -5643,6 +6007,13 @@
        }
       },
       {
+       "id": "dragoon_armor",
+       "name": "龍騎士鎧甲",
+       "sheets": {
+        "top": "giant2_g_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -5699,6 +6070,13 @@
        }
       },
       {
+       "id": "dragoon_legs",
+       "name": "龍騎士腿甲",
+       "sheets": {
+        "bottom": "giant2_g_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -5752,6 +6130,13 @@
        "name": "賢者靴",
        "sheets": {
         "shoes": "giant2_s_shoes.png"
+       }
+      },
+      {
+       "id": "dragoon_boots",
+       "name": "龍騎士靴",
+       "sheets": {
+        "shoes": "giant2_g_shoes.png"
        }
       },
       {
@@ -5812,6 +6197,14 @@
        "hideHair": true,
        "sheets": {
         "hat": "giant2_k_hat.png"
+       }
+      },
+      {
+       "id": "dragoon_helm",
+       "name": "龍騎士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "giant2_g_hat.png"
        }
       }
      ]
@@ -6170,6 +6563,68 @@
      },
      {
       "slot": "top",
+      "style": "dragoon_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "dragoon_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "dragoon_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "dragoon_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#504c76",
+       "#3a365a",
+       "#6c6694",
+       "#8c86b6",
+       "#161424"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -6410,6 +6865,20 @@
    ]
   },
   {
+   "id": "dragoon_armor",
+   "name": "龍騎士鎧甲",
+   "keepGear": true,
+   "dye": [
+    "#4f4a6b",
+    "#2c2941",
+    "#3d3956",
+    "#615b80",
+    "#726b95",
+    "#847caa",
+    "#1a182c"
+   ]
+  },
+  {
    "id": "bard_garb",
    "name": "吟遊詩人斗篷",
    "keepGear": true,
@@ -6642,6 +7111,20 @@
    ]
   },
   {
+   "id": "dragoon_legs",
+   "name": "龍騎士腿甲",
+   "keepGear": true,
+   "dye": [
+    "#4f4a6b",
+    "#2c2941",
+    "#3d3956",
+    "#615b80",
+    "#726b95",
+    "#847caa",
+    "#1a182c"
+   ]
+  },
+  {
    "id": "bard_pants",
    "name": "吟遊詩人長褲",
    "keepGear": true,
@@ -6804,6 +7287,20 @@
    ]
   },
   {
+   "id": "dragoon_boots",
+   "name": "龍騎士靴",
+   "keepGear": true,
+   "dye": [
+    "#4f4a6b",
+    "#2c2941",
+    "#3d3956",
+    "#615b80",
+    "#726b95",
+    "#847caa",
+    "#1a182c"
+   ]
+  },
+  {
    "id": "bard_boots",
    "name": "吟遊詩人靴",
    "keepGear": true,
@@ -6931,6 +7428,20 @@
     "#686064",
     "#f2f0ec",
     "#fefdfa"
+   ]
+  },
+  {
+   "id": "dragoon_helm",
+   "name": "龍騎士角盔",
+   "sheet": null,
+   "keepGear": true,
+   "hideHair": true,
+   "dye": [
+    "#504c76",
+    "#3a365a",
+    "#6c6694",
+    "#8c86b6",
+    "#161424"
    ]
   },
   {
