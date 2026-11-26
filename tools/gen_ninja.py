@@ -175,6 +175,10 @@ def ninja_top(kind, x0, y0, rows):
     _pauldrons(g)
     # 領口交襟：正面中間的襯衫條換成深色內衣（_base 已處理）；腰帶位置＝手的位置往上一點
     sash_y = g.h - 7 if kind != 'left' else g.h - 8
+    if kind == 'left':      # 側面：腰帶要在手的高度（原本比手高），手套最後蓋回去所以手還是在腰帶上面（2026-11-26 使用者回報）
+        hy = [y for (x, y), ch in g.src.items() if ch in SKIN and y >= 8]
+        if hy:
+            sash_y = min(hy) - 1
     _sash(g, (sash_y, sash_y + 1))
     _scarf(g, cx)
     for p, c in hands.items():
