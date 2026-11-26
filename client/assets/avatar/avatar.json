@@ -2454,6 +2454,13 @@
        }
       },
       {
+       "id": "sage_coat",
+       "name": "賢者長外套",
+       "sheets": {
+        "top": "human2_s_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -2500,6 +2507,13 @@
        "name": "白魔法師長褲",
        "sheets": {
         "bottom": "human2_w_bottom.png"
+       }
+      },
+      {
+       "id": "sage_pants",
+       "name": "賢者長褲",
+       "sheets": {
+        "bottom": "human2_s_bottom.png"
        }
       },
       {
@@ -2552,6 +2566,13 @@
        }
       },
       {
+       "id": "sage_boots",
+       "name": "賢者靴",
+       "sheets": {
+        "shoes": "human2_s_shoes.png"
+       }
+      },
+      {
        "id": "bard_boots",
        "name": "吟遊詩人靴",
        "sheets": {
@@ -2583,6 +2604,15 @@
        "hairCutDy": -2,
        "sheets": {
         "hat": "human2_w_hat.png"
+       }
+      },
+      {
+       "id": "sage_hat",
+       "name": "賢者貝雷帽",
+       "hairFromHat": true,
+       "hairCutDy": 0,
+       "sheets": {
+        "hat": "human2_s_hat.png"
        }
       },
       {
@@ -2897,6 +2927,67 @@
      },
      {
       "slot": "top",
+      "style": "sage_coat",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ebe6e2",
+       "#c8beba",
+       "#d1c8c4",
+       "#d9d2ce",
+       "#e2dcd8",
+       "#f3f0ec",
+       "#fcfaf6"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sage_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#393942",
+       "#22222a",
+       "#2d2d36",
+       "#44444e",
+       "#4f4f5a",
+       "#5b5b66",
+       "#666672"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sage_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#47352b",
+       "#2c201c",
+       "#392a23",
+       "#543f32",
+       "#614939",
+       "#6f5441",
+       "#7c5e48"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sage_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#dedad6",
+       "#686064",
+       "#f2f0ec",
+       "#fefdfa"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -3157,6 +3248,13 @@
        }
       },
       {
+       "id": "sage_coat",
+       "name": "賢者長外套",
+       "sheets": {
+        "top": "human2_s_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -3203,6 +3301,13 @@
        "name": "白魔法師長褲",
        "sheets": {
         "bottom": "human2_w_bottom.png"
+       }
+      },
+      {
+       "id": "sage_pants",
+       "name": "賢者長褲",
+       "sheets": {
+        "bottom": "human2_s_bottom.png"
        }
       },
       {
@@ -3255,6 +3360,13 @@
        }
       },
       {
+       "id": "sage_boots",
+       "name": "賢者靴",
+       "sheets": {
+        "shoes": "human2_s_shoes.png"
+       }
+      },
+      {
        "id": "bard_boots",
        "name": "吟遊詩人靴",
        "sheets": {
@@ -3286,6 +3398,15 @@
        "hairCutDy": -2,
        "sheets": {
         "hat": "human2_w_hat.png"
+       }
+      },
+      {
+       "id": "sage_hat",
+       "name": "賢者貝雷帽",
+       "hairFromHat": true,
+       "hairCutDy": 0,
+       "sheets": {
+        "hat": "human2_s_hat.png"
        }
       },
       {
@@ -3602,6 +3723,67 @@
      },
      {
       "slot": "top",
+      "style": "sage_coat",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ebe6e2",
+       "#c8beba",
+       "#d1c8c4",
+       "#d9d2ce",
+       "#e2dcd8",
+       "#f3f0ec",
+       "#fcfaf6"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sage_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#393942",
+       "#22222a",
+       "#2d2d36",
+       "#44444e",
+       "#4f4f5a",
+       "#5b5b66",
+       "#666672"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sage_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#47352b",
+       "#2c201c",
+       "#392a23",
+       "#543f32",
+       "#614939",
+       "#6f5441",
+       "#7c5e48"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sage_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#dedad6",
+       "#686064",
+       "#f2f0ec",
+       "#fefdfa"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -3863,6 +4045,13 @@
        }
       },
       {
+       "id": "sage_coat",
+       "name": "賢者長外套",
+       "sheets": {
+        "top": "human2_s_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -3909,6 +4098,13 @@
        "name": "白魔法師長褲",
        "sheets": {
         "bottom": "human2_w_bottom.png"
+       }
+      },
+      {
+       "id": "sage_pants",
+       "name": "賢者長褲",
+       "sheets": {
+        "bottom": "human2_s_bottom.png"
        }
       },
       {
@@ -3961,6 +4157,13 @@
        }
       },
       {
+       "id": "sage_boots",
+       "name": "賢者靴",
+       "sheets": {
+        "shoes": "human2_s_shoes.png"
+       }
+      },
+      {
        "id": "bard_boots",
        "name": "吟遊詩人靴",
        "sheets": {
@@ -3992,6 +4195,15 @@
        "hairCutDy": -2,
        "sheets": {
         "hat": "human2_w_hat.png"
+       }
+      },
+      {
+       "id": "sage_hat",
+       "name": "賢者貝雷帽",
+       "hairFromHat": true,
+       "hairCutDy": 0,
+       "sheets": {
+        "hat": "human2_s_hat.png"
        }
       },
       {
@@ -4308,6 +4520,67 @@
      },
      {
       "slot": "top",
+      "style": "sage_coat",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ebe6e2",
+       "#c8beba",
+       "#d1c8c4",
+       "#d9d2ce",
+       "#e2dcd8",
+       "#f3f0ec",
+       "#fcfaf6"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sage_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#393942",
+       "#22222a",
+       "#2d2d36",
+       "#44444e",
+       "#4f4f5a",
+       "#5b5b66",
+       "#666672"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sage_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#47352b",
+       "#2c201c",
+       "#392a23",
+       "#543f32",
+       "#614939",
+       "#6f5441",
+       "#7c5e48"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sage_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#dedad6",
+       "#686064",
+       "#f2f0ec",
+       "#fefdfa"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -4567,6 +4840,13 @@
        }
       },
       {
+       "id": "sage_coat",
+       "name": "賢者長外套",
+       "sheets": {
+        "top": "dwarf2_s_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -4613,6 +4893,13 @@
        "name": "白魔法師長褲",
        "sheets": {
         "bottom": "dwarf2_w_bottom.png"
+       }
+      },
+      {
+       "id": "sage_pants",
+       "name": "賢者長褲",
+       "sheets": {
+        "bottom": "dwarf2_s_bottom.png"
        }
       },
       {
@@ -4665,6 +4952,13 @@
        }
       },
       {
+       "id": "sage_boots",
+       "name": "賢者靴",
+       "sheets": {
+        "shoes": "dwarf2_s_shoes.png"
+       }
+      },
+      {
        "id": "bard_boots",
        "name": "吟遊詩人靴",
        "sheets": {
@@ -4696,6 +4990,15 @@
        "hairCutDy": -2,
        "sheets": {
         "hat": "dwarf2_w_hat.png"
+       }
+      },
+      {
+       "id": "sage_hat",
+       "name": "賢者貝雷帽",
+       "hairFromHat": true,
+       "hairCutDy": 0,
+       "sheets": {
+        "hat": "dwarf2_s_hat.png"
        }
       },
       {
@@ -5010,6 +5313,67 @@
      },
      {
       "slot": "top",
+      "style": "sage_coat",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ebe6e2",
+       "#c8beba",
+       "#d1c8c4",
+       "#d9d2ce",
+       "#e2dcd8",
+       "#f3f0ec",
+       "#fcfaf6"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sage_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#393942",
+       "#22222a",
+       "#2d2d36",
+       "#44444e",
+       "#4f4f5a",
+       "#5b5b66",
+       "#666672"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sage_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#47352b",
+       "#2c201c",
+       "#392a23",
+       "#543f32",
+       "#614939",
+       "#6f5441",
+       "#7c5e48"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sage_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#dedad6",
+       "#686064",
+       "#f2f0ec",
+       "#fefdfa"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -5272,6 +5636,13 @@
        }
       },
       {
+       "id": "sage_coat",
+       "name": "賢者長外套",
+       "sheets": {
+        "top": "giant2_s_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -5318,6 +5689,13 @@
        "name": "白魔法師長褲",
        "sheets": {
         "bottom": "giant2_w_bottom.png"
+       }
+      },
+      {
+       "id": "sage_pants",
+       "name": "賢者長褲",
+       "sheets": {
+        "bottom": "giant2_s_bottom.png"
        }
       },
       {
@@ -5370,6 +5748,13 @@
        }
       },
       {
+       "id": "sage_boots",
+       "name": "賢者靴",
+       "sheets": {
+        "shoes": "giant2_s_shoes.png"
+       }
+      },
+      {
        "id": "bard_boots",
        "name": "吟遊詩人靴",
        "sheets": {
@@ -5401,6 +5786,15 @@
        "hairCutDy": -2,
        "sheets": {
         "hat": "giant2_w_hat.png"
+       }
+      },
+      {
+       "id": "sage_hat",
+       "name": "賢者貝雷帽",
+       "hairFromHat": true,
+       "hairCutDy": 0,
+       "sheets": {
+        "hat": "giant2_s_hat.png"
        }
       },
       {
@@ -5715,6 +6109,67 @@
      },
      {
       "slot": "top",
+      "style": "sage_coat",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ebe6e2",
+       "#c8beba",
+       "#d1c8c4",
+       "#d9d2ce",
+       "#e2dcd8",
+       "#f3f0ec",
+       "#fcfaf6"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sage_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#393942",
+       "#22222a",
+       "#2d2d36",
+       "#44444e",
+       "#4f4f5a",
+       "#5b5b66",
+       "#666672"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sage_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#47352b",
+       "#2c201c",
+       "#392a23",
+       "#543f32",
+       "#614939",
+       "#6f5441",
+       "#7c5e48"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sage_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#dedad6",
+       "#686064",
+       "#f2f0ec",
+       "#fefdfa"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -5941,6 +6396,20 @@
    ]
   },
   {
+   "id": "sage_coat",
+   "name": "賢者長外套",
+   "keepGear": true,
+   "dye": [
+    "#ebe6e2",
+    "#c8beba",
+    "#d1c8c4",
+    "#d9d2ce",
+    "#e2dcd8",
+    "#f3f0ec",
+    "#fcfaf6"
+   ]
+  },
+  {
    "id": "bard_garb",
    "name": "吟遊詩人斗篷",
    "keepGear": true,
@@ -6159,6 +6628,20 @@
    ]
   },
   {
+   "id": "sage_pants",
+   "name": "賢者長褲",
+   "keepGear": true,
+   "dye": [
+    "#393942",
+    "#22222a",
+    "#2d2d36",
+    "#44444e",
+    "#4f4f5a",
+    "#5b5b66",
+    "#666672"
+   ]
+  },
+  {
    "id": "bard_pants",
    "name": "吟遊詩人長褲",
    "keepGear": true,
@@ -6307,6 +6790,20 @@
    ]
   },
   {
+   "id": "sage_boots",
+   "name": "賢者靴",
+   "keepGear": true,
+   "dye": [
+    "#47352b",
+    "#2c201c",
+    "#392a23",
+    "#543f32",
+    "#614939",
+    "#6f5441",
+    "#7c5e48"
+   ]
+  },
+  {
    "id": "bard_boots",
    "name": "吟遊詩人靴",
    "keepGear": true,
@@ -6422,6 +6919,18 @@
     "#8e645c",
     "#f4eade",
     "#fffaf2"
+   ]
+  },
+  {
+   "id": "sage_hat",
+   "name": "賢者貝雷帽",
+   "sheet": null,
+   "keepGear": true,
+   "dye": [
+    "#dedad6",
+    "#686064",
+    "#f2f0ec",
+    "#fefdfa"
    ]
   },
   {
