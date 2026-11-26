@@ -20,6 +20,9 @@ Discord Activity 小遊戲：2D 點陣島，**同一個語音頻道＝同一座�
 正式站跑在 Cloudflare（`https://dcisland.less78518.workers.dev`）。
 里程碑（詳見 `docs/spec.md`）：M0 本機 demo、M1 Discord 串接、M2 多人同步 已完成；M3（個人島/參觀/鎖島/審核 bot）、M4（公測）未開始。
 
+## 進行中的大工程
+- **新人類系列身體換成「素體」**（使用者 2026-11-23 決定）：計畫、已量好的對位數字、踩過的坑、各階段驗收都在 **`docs/handoff-body-v2.md`**，動人物／髮型／服裝前先讀。腳本 `tools/wip_body_v2.py`，參考圖在 `docs/ref/`。
+
 ## 部署
 - **推到 `main` 且改到 `client/**`、`worker/**` 或 `.github/workflows/deploy.yml`，GitHub Actions 會自動部署到正式站**（只改 `docs/` 不會）。
 - `DISCORD_CLIENT_SECRET` 存在 Cloudflare Worker secrets，CI 與 repo 都不應出現它。
@@ -61,7 +64,7 @@ cd worker && npx wrangler dev --port 8790   # 本機預覽 Worker 版（含 Dura
 6. 前端為純 ES module、單一全域狀態物件 `S`（`main.js`）；沿用現有風格，不要為小改動重構整檔。
 7. `localStorage` key 前綴為 `dcisland.m0.*`，改格式時要考慮舊資料。
 8. **和平島不能出現任何敵對 NPC／怪物**（島主、野生敵對怪、釣上來的怪物都不行；使用者定，詳見 `docs/notes.md`「和平島與遊戲桌」）。新增會生成敵對單位的機制時，要排除 `peace`。
-9. **人物、服裝、武器只用 LPC 素材，不要用程式畫的暫代圖**（使用者定，2026-11-09）。來源是 Universal-LPC-Spritesheet-Character-Generator，做法與授權記錄見 `docs/notes.md`「美術：多幀動畫與人物分層」。
+9. **人物、服裝、武器：現有的是 LPC；使用者 2026-11-21 定案「之後整套換成新的自製風格」**（Q 版像素、程式畫，風格照使用者給的參考圖；分層、動作、武器、服裝都重做，換完之前 LPC 照常運作）。新風格的圖一律由 `tools/` 的產生器畫（不手改 PNG），分階段的做法與進度見 `docs/notes.md`「美術：多幀動畫與人物分層」最前面的「新風格人物」。**還沒換完的部分仍用 LPC，不要另外用程式畫暫代圖**；LPC 的做法與授權記錄（Universal-LPC-Spritesheet-Character-Generator）也在同一段。
 10. **新增生物要先量大小**：人物畫面上約 46px 高，量素材實際內容的大小、照這個比例定 `anim.scale`（野外小動物約 20～30px；細節見 `docs/notes.md`「野外動物」的新增怪物規範）。**新怪一律給 `lv`**（血量＝2×lv、攻擊力＝1+lv÷8、經驗值＝1+lv÷4；各島等級帶每島差 10 級；主動怪不會攻擊等級比牠高的角色）。
 11. **使用者做過的設計決定**（例如野外動物刻意不同步、家具開放所有人編輯）記在 `docs/notes.md`，不要自行「修正」。
 

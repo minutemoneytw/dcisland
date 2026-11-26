@@ -5,7 +5,7 @@
   "h": 64,
   "scale": 1,
   "footDy": 2,
-  "count": 289,
+  "count": 291,
   "dirs": [
    "down",
    "down_right",
@@ -527,9 +527,9 @@
     236
    ],
    "sit_right": [
-    234,
-    235,
-    236
+    290,
+    290,
+    290
    ],
    "sit_up_right": [
     234,
@@ -547,9 +547,9 @@
     230
    ],
    "sit_left": [
-    228,
-    229,
-    230
+    289,
+    289,
+    289
    ],
    "sit_down_left": [
     228,
@@ -2213,6 +2213,18 @@
     "rod",
     12,
     3
+   ],
+   [
+    9,
+    9,
+    null,
+    0
+   ],
+   [
+    9,
+    11,
+    null,
+    0
    ]
   ],
   "attacks": {
@@ -2318,2256 +2330,5056 @@
   {
    "id": "pale",
    "name": "白皙",
-   "base": "#f7ddbf",
-   "shade": "#dcb992",
-   "sheet": "char_body_pale.png"
+   "base": "#fff3e8",
+   "shade": "#e8c8b4"
   },
   {
    "id": "light",
    "name": "自然",
-   "base": "#f0c8a0",
-   "shade": "#d4a37c",
-   "sheet": "char_body_light.png"
+   "base": "#ffe8d2",
+   "shade": "#deb2a0"
   },
   {
    "id": "tan",
    "name": "小麥",
-   "base": "#d9a06a",
-   "shade": "#b27e4f",
-   "sheet": "char_body_tan.png"
+   "base": "#e8b88c",
+   "shade": "#c08c64"
   },
   {
    "id": "deep",
    "name": "深膚",
-   "base": "#9c6238",
-   "shade": "#7a4a2a",
-   "sheet": "char_body_deep.png"
-  }
- ],
- "faces": [
-  {
-   "id": "normal",
-   "name": "普通",
-   "sheet": "char_face_normal.png",
-   "dye": [
-    "#f9d5ba",
-    "#e4a47c",
-    "#cc8665",
-    "#99423c",
-    "#faecd7"
-   ]
-  },
-  {
-   "id": "gaunt",
-   "name": "瘦長",
-   "sheet": "char_face_gaunt.png",
-   "dye": [
-    "#f9d5ba",
-    "#e4a47c",
-    "#cc8665",
-    "#99423c",
-    "#faecd7"
-   ]
-  },
-  {
-   "id": "plump",
-   "name": "圓胖",
-   "sheet": "char_face_plump.png",
-   "dye": [
-    "#f9d5ba",
-    "#e4a47c",
-    "#cc8665",
-    "#99423c",
-    "#faecd7"
-   ]
-  },
-  {
-   "id": "small",
-   "name": "小頭",
-   "sheet": "char_face_small.png",
-   "dye": [
-    "#f9d5ba",
-    "#e4a47c",
-    "#cc8665",
-    "#99423c",
-    "#faecd7"
-   ]
-  },
-  {
-   "id": "old",
-   "name": "老臉",
-   "sheet": "char_face_old.png",
-   "dye": [
-    "#f9d5ba",
-    "#e4a47c",
-    "#cc8665",
-    "#99423c",
-    "#faecd7"
-   ]
-  }
- ],
- "eyes": [
-  {
-   "id": "default_brown",
-   "name": "棕",
-   "style": "default",
-   "styleName": "預設",
-   "color": "brown",
-   "hex": "#684018",
-   "sheet": "char_eyes_default_brown.png",
-   "dyeFrom": "char_eyes_default_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "default_brown2",
-   "name": "深棕",
-   "style": "default",
-   "styleName": "預設",
-   "color": "brown2",
-   "hex": "#604820",
-   "sheet": "char_eyes_default_brown2.png",
-   "dyeFrom": "char_eyes_default_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "default_black",
-   "name": "黑",
-   "style": "default",
-   "styleName": "預設",
-   "color": "black",
-   "hex": "#585858",
-   "sheet": "char_eyes_default_black.png",
-   "dyeFrom": "char_eyes_default_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "default_blonde",
-   "name": "金",
-   "style": "default",
-   "styleName": "預設",
-   "color": "blonde",
-   "hex": "#b88830",
-   "sheet": "char_eyes_default_blonde.png",
-   "dyeFrom": "char_eyes_default_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "default_ashblonde",
-   "name": "灰金",
-   "style": "default",
-   "styleName": "預設",
-   "color": "ashblonde",
-   "hex": "#c0a880",
-   "sheet": "char_eyes_default_ashblonde.png",
-   "dyeFrom": "char_eyes_default_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "default_ashplatinum",
-   "name": "銀白",
-   "style": "default",
-   "styleName": "預設",
-   "color": "ashplatinum",
-   "hex": "#c8b8a8",
-   "sheet": "char_eyes_default_ashplatinum.png",
-   "dyeFrom": "char_eyes_default_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "default_red",
-   "name": "紅",
-   "style": "default",
-   "styleName": "預設",
-   "color": "red",
-   "hex": "#a00830",
-   "sheet": "char_eyes_default_red.png",
-   "dyeFrom": "char_eyes_default_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "default_orange",
-   "name": "橘",
-   "style": "default",
-   "styleName": "預設",
-   "color": "orange",
-   "hex": "#b83000",
-   "sheet": "char_eyes_default_orange.png",
-   "dyeFrom": "char_eyes_default_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "default_rosepink",
-   "name": "玫瑰粉",
-   "style": "default",
-   "styleName": "預設",
-   "color": "rosepink",
-   "hex": "#b87070",
-   "sheet": "char_eyes_default_rosepink.png",
-   "dyeFrom": "char_eyes_default_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "default_green",
-   "name": "綠",
-   "style": "default",
-   "styleName": "預設",
-   "color": "green",
-   "hex": "#008050",
-   "sheet": "char_eyes_default_green.png",
-   "dyeFrom": "char_eyes_default_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "default_blue",
-   "name": "藍",
-   "style": "default",
-   "styleName": "預設",
-   "color": "blue",
-   "hex": "#20a8b8",
-   "sheet": "char_eyes_default_blue.png",
-   "dyeFrom": "char_eyes_default_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "default_purple",
-   "name": "紫",
-   "style": "default",
-   "styleName": "預設",
-   "color": "purple",
-   "hex": "#702078",
-   "sheet": "char_eyes_default_purple.png",
-   "dyeFrom": "char_eyes_default_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "angry_brown",
-   "name": "棕",
-   "style": "angry",
-   "styleName": "生氣",
-   "color": "brown",
-   "hex": "#684018",
-   "sheet": "char_eyes_angry_brown.png",
-   "dyeFrom": "char_eyes_angry_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#b16d29",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "angry_brown2",
-   "name": "深棕",
-   "style": "angry",
-   "styleName": "生氣",
-   "color": "brown2",
-   "hex": "#604820",
-   "sheet": "char_eyes_angry_brown2.png",
-   "dyeFrom": "char_eyes_angry_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#b16d29",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "angry_black",
-   "name": "黑",
-   "style": "angry",
-   "styleName": "生氣",
-   "color": "black",
-   "hex": "#585858",
-   "sheet": "char_eyes_angry_black.png",
-   "dyeFrom": "char_eyes_angry_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#b16d29",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "angry_blonde",
-   "name": "金",
-   "style": "angry",
-   "styleName": "生氣",
-   "color": "blonde",
-   "hex": "#b88830",
-   "sheet": "char_eyes_angry_blonde.png",
-   "dyeFrom": "char_eyes_angry_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#b16d29",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "angry_ashblonde",
-   "name": "灰金",
-   "style": "angry",
-   "styleName": "生氣",
-   "color": "ashblonde",
-   "hex": "#c0a880",
-   "sheet": "char_eyes_angry_ashblonde.png",
-   "dyeFrom": "char_eyes_angry_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#b16d29",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "angry_ashplatinum",
-   "name": "銀白",
-   "style": "angry",
-   "styleName": "生氣",
-   "color": "ashplatinum",
-   "hex": "#c8b8a8",
-   "sheet": "char_eyes_angry_ashplatinum.png",
-   "dyeFrom": "char_eyes_angry_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#b16d29",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "angry_red",
-   "name": "紅",
-   "style": "angry",
-   "styleName": "生氣",
-   "color": "red",
-   "hex": "#a00830",
-   "sheet": "char_eyes_angry_red.png",
-   "dyeFrom": "char_eyes_angry_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#b16d29",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "angry_orange",
-   "name": "橘",
-   "style": "angry",
-   "styleName": "生氣",
-   "color": "orange",
-   "hex": "#b83000",
-   "sheet": "char_eyes_angry_orange.png",
-   "dyeFrom": "char_eyes_angry_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#b16d29",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "angry_rosepink",
-   "name": "玫瑰粉",
-   "style": "angry",
-   "styleName": "生氣",
-   "color": "rosepink",
-   "hex": "#b87070",
-   "sheet": "char_eyes_angry_rosepink.png",
-   "dyeFrom": "char_eyes_angry_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#b16d29",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "angry_green",
-   "name": "綠",
-   "style": "angry",
-   "styleName": "生氣",
-   "color": "green",
-   "hex": "#008050",
-   "sheet": "char_eyes_angry_green.png",
-   "dyeFrom": "char_eyes_angry_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#b16d29",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "angry_blue",
-   "name": "藍",
-   "style": "angry",
-   "styleName": "生氣",
-   "color": "blue",
-   "hex": "#20a8b8",
-   "sheet": "char_eyes_angry_blue.png",
-   "dyeFrom": "char_eyes_angry_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#b16d29",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "angry_purple",
-   "name": "紫",
-   "style": "angry",
-   "styleName": "生氣",
-   "color": "purple",
-   "hex": "#702078",
-   "sheet": "char_eyes_angry_purple.png",
-   "dyeFrom": "char_eyes_angry_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#b16d29",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "sad_brown",
-   "name": "棕",
-   "style": "sad",
-   "styleName": "難過",
-   "color": "brown",
-   "hex": "#684018",
-   "sheet": "char_eyes_sad_brown.png",
-   "dyeFrom": "char_eyes_sad_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#945b22",
-    "#b16d29"
-   ]
-  },
-  {
-   "id": "sad_brown2",
-   "name": "深棕",
-   "style": "sad",
-   "styleName": "難過",
-   "color": "brown2",
-   "hex": "#604820",
-   "sheet": "char_eyes_sad_brown2.png",
-   "dyeFrom": "char_eyes_sad_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#945b22",
-    "#b16d29"
-   ]
-  },
-  {
-   "id": "sad_black",
-   "name": "黑",
-   "style": "sad",
-   "styleName": "難過",
-   "color": "black",
-   "hex": "#585858",
-   "sheet": "char_eyes_sad_black.png",
-   "dyeFrom": "char_eyes_sad_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#945b22",
-    "#b16d29"
-   ]
-  },
-  {
-   "id": "sad_blonde",
-   "name": "金",
-   "style": "sad",
-   "styleName": "難過",
-   "color": "blonde",
-   "hex": "#b88830",
-   "sheet": "char_eyes_sad_blonde.png",
-   "dyeFrom": "char_eyes_sad_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#945b22",
-    "#b16d29"
-   ]
-  },
-  {
-   "id": "sad_ashblonde",
-   "name": "灰金",
-   "style": "sad",
-   "styleName": "難過",
-   "color": "ashblonde",
-   "hex": "#c0a880",
-   "sheet": "char_eyes_sad_ashblonde.png",
-   "dyeFrom": "char_eyes_sad_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#945b22",
-    "#b16d29"
-   ]
-  },
-  {
-   "id": "sad_ashplatinum",
-   "name": "銀白",
-   "style": "sad",
-   "styleName": "難過",
-   "color": "ashplatinum",
-   "hex": "#c8b8a8",
-   "sheet": "char_eyes_sad_ashplatinum.png",
-   "dyeFrom": "char_eyes_sad_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#945b22",
-    "#b16d29"
-   ]
-  },
-  {
-   "id": "sad_red",
-   "name": "紅",
-   "style": "sad",
-   "styleName": "難過",
-   "color": "red",
-   "hex": "#a00830",
-   "sheet": "char_eyes_sad_red.png",
-   "dyeFrom": "char_eyes_sad_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#945b22",
-    "#b16d29"
-   ]
-  },
-  {
-   "id": "sad_orange",
-   "name": "橘",
-   "style": "sad",
-   "styleName": "難過",
-   "color": "orange",
-   "hex": "#b83000",
-   "sheet": "char_eyes_sad_orange.png",
-   "dyeFrom": "char_eyes_sad_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#945b22",
-    "#b16d29"
-   ]
-  },
-  {
-   "id": "sad_rosepink",
-   "name": "玫瑰粉",
-   "style": "sad",
-   "styleName": "難過",
-   "color": "rosepink",
-   "hex": "#b87070",
-   "sheet": "char_eyes_sad_rosepink.png",
-   "dyeFrom": "char_eyes_sad_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#945b22",
-    "#b16d29"
-   ]
-  },
-  {
-   "id": "sad_green",
-   "name": "綠",
-   "style": "sad",
-   "styleName": "難過",
-   "color": "green",
-   "hex": "#008050",
-   "sheet": "char_eyes_sad_green.png",
-   "dyeFrom": "char_eyes_sad_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#945b22",
-    "#b16d29"
-   ]
-  },
-  {
-   "id": "sad_blue",
-   "name": "藍",
-   "style": "sad",
-   "styleName": "難過",
-   "color": "blue",
-   "hex": "#20a8b8",
-   "sheet": "char_eyes_sad_blue.png",
-   "dyeFrom": "char_eyes_sad_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#945b22",
-    "#b16d29"
-   ]
-  },
-  {
-   "id": "sad_purple",
-   "name": "紫",
-   "style": "sad",
-   "styleName": "難過",
-   "color": "purple",
-   "hex": "#702078",
-   "sheet": "char_eyes_sad_purple.png",
-   "dyeFrom": "char_eyes_sad_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#442a10",
-    "#945b22",
-    "#b16d29"
-   ]
-  },
-  {
-   "id": "lookl_brown",
-   "name": "棕",
-   "style": "lookl",
-   "styleName": "看左",
-   "color": "brown",
-   "hex": "#684018",
-   "sheet": "char_eyes_lookl_brown.png",
-   "dyeFrom": "char_eyes_lookl_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookl_brown2",
-   "name": "深棕",
-   "style": "lookl",
-   "styleName": "看左",
-   "color": "brown2",
-   "hex": "#604820",
-   "sheet": "char_eyes_lookl_brown2.png",
-   "dyeFrom": "char_eyes_lookl_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookl_black",
-   "name": "黑",
-   "style": "lookl",
-   "styleName": "看左",
-   "color": "black",
-   "hex": "#585858",
-   "sheet": "char_eyes_lookl_black.png",
-   "dyeFrom": "char_eyes_lookl_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookl_blonde",
-   "name": "金",
-   "style": "lookl",
-   "styleName": "看左",
-   "color": "blonde",
-   "hex": "#b88830",
-   "sheet": "char_eyes_lookl_blonde.png",
-   "dyeFrom": "char_eyes_lookl_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookl_ashblonde",
-   "name": "灰金",
-   "style": "lookl",
-   "styleName": "看左",
-   "color": "ashblonde",
-   "hex": "#c0a880",
-   "sheet": "char_eyes_lookl_ashblonde.png",
-   "dyeFrom": "char_eyes_lookl_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookl_ashplatinum",
-   "name": "銀白",
-   "style": "lookl",
-   "styleName": "看左",
-   "color": "ashplatinum",
-   "hex": "#c8b8a8",
-   "sheet": "char_eyes_lookl_ashplatinum.png",
-   "dyeFrom": "char_eyes_lookl_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookl_red",
-   "name": "紅",
-   "style": "lookl",
-   "styleName": "看左",
-   "color": "red",
-   "hex": "#a00830",
-   "sheet": "char_eyes_lookl_red.png",
-   "dyeFrom": "char_eyes_lookl_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookl_orange",
-   "name": "橘",
-   "style": "lookl",
-   "styleName": "看左",
-   "color": "orange",
-   "hex": "#b83000",
-   "sheet": "char_eyes_lookl_orange.png",
-   "dyeFrom": "char_eyes_lookl_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookl_rosepink",
-   "name": "玫瑰粉",
-   "style": "lookl",
-   "styleName": "看左",
-   "color": "rosepink",
-   "hex": "#b87070",
-   "sheet": "char_eyes_lookl_rosepink.png",
-   "dyeFrom": "char_eyes_lookl_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookl_green",
-   "name": "綠",
-   "style": "lookl",
-   "styleName": "看左",
-   "color": "green",
-   "hex": "#008050",
-   "sheet": "char_eyes_lookl_green.png",
-   "dyeFrom": "char_eyes_lookl_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookl_blue",
-   "name": "藍",
-   "style": "lookl",
-   "styleName": "看左",
-   "color": "blue",
-   "hex": "#20a8b8",
-   "sheet": "char_eyes_lookl_blue.png",
-   "dyeFrom": "char_eyes_lookl_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookl_purple",
-   "name": "紫",
-   "style": "lookl",
-   "styleName": "看左",
-   "color": "purple",
-   "hex": "#702078",
-   "sheet": "char_eyes_lookl_purple.png",
-   "dyeFrom": "char_eyes_lookl_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookr_brown",
-   "name": "棕",
-   "style": "lookr",
-   "styleName": "看右",
-   "color": "brown",
-   "hex": "#684018",
-   "sheet": "char_eyes_lookr_brown.png",
-   "dyeFrom": "char_eyes_lookr_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookr_brown2",
-   "name": "深棕",
-   "style": "lookr",
-   "styleName": "看右",
-   "color": "brown2",
-   "hex": "#604820",
-   "sheet": "char_eyes_lookr_brown2.png",
-   "dyeFrom": "char_eyes_lookr_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookr_black",
-   "name": "黑",
-   "style": "lookr",
-   "styleName": "看右",
-   "color": "black",
-   "hex": "#585858",
-   "sheet": "char_eyes_lookr_black.png",
-   "dyeFrom": "char_eyes_lookr_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookr_blonde",
-   "name": "金",
-   "style": "lookr",
-   "styleName": "看右",
-   "color": "blonde",
-   "hex": "#b88830",
-   "sheet": "char_eyes_lookr_blonde.png",
-   "dyeFrom": "char_eyes_lookr_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookr_ashblonde",
-   "name": "灰金",
-   "style": "lookr",
-   "styleName": "看右",
-   "color": "ashblonde",
-   "hex": "#c0a880",
-   "sheet": "char_eyes_lookr_ashblonde.png",
-   "dyeFrom": "char_eyes_lookr_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookr_ashplatinum",
-   "name": "銀白",
-   "style": "lookr",
-   "styleName": "看右",
-   "color": "ashplatinum",
-   "hex": "#c8b8a8",
-   "sheet": "char_eyes_lookr_ashplatinum.png",
-   "dyeFrom": "char_eyes_lookr_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookr_red",
-   "name": "紅",
-   "style": "lookr",
-   "styleName": "看右",
-   "color": "red",
-   "hex": "#a00830",
-   "sheet": "char_eyes_lookr_red.png",
-   "dyeFrom": "char_eyes_lookr_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookr_orange",
-   "name": "橘",
-   "style": "lookr",
-   "styleName": "看右",
-   "color": "orange",
-   "hex": "#b83000",
-   "sheet": "char_eyes_lookr_orange.png",
-   "dyeFrom": "char_eyes_lookr_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookr_rosepink",
-   "name": "玫瑰粉",
-   "style": "lookr",
-   "styleName": "看右",
-   "color": "rosepink",
-   "hex": "#b87070",
-   "sheet": "char_eyes_lookr_rosepink.png",
-   "dyeFrom": "char_eyes_lookr_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookr_green",
-   "name": "綠",
-   "style": "lookr",
-   "styleName": "看右",
-   "color": "green",
-   "hex": "#008050",
-   "sheet": "char_eyes_lookr_green.png",
-   "dyeFrom": "char_eyes_lookr_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookr_blue",
-   "name": "藍",
-   "style": "lookr",
-   "styleName": "看右",
-   "color": "blue",
-   "hex": "#20a8b8",
-   "sheet": "char_eyes_lookr_blue.png",
-   "dyeFrom": "char_eyes_lookr_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
-  },
-  {
-   "id": "lookr_purple",
-   "name": "紫",
-   "style": "lookr",
-   "styleName": "看右",
-   "color": "purple",
-   "hex": "#702078",
-   "sheet": "char_eyes_lookr_purple.png",
-   "dyeFrom": "char_eyes_lookr_brown.png",
-   "dye": [
-    "#684018",
-    "#261709",
-    "#5a3715",
-    "#b16d29",
-    "#442a10",
-    "#945b22"
-   ]
+   "base": "#a86f4a",
+   "shade": "#80502f"
   }
  ],
  "races": [
   {
-   "id": "human",
+   "id": "human2",
    "name": "人類",
-   "scale": 1.0
-  },
-  {
-   "id": "elf",
-   "name": "精靈",
    "scale": 1.0,
-   "ear": "char_ears_elven.png",
-   "earDye": [
-    "#f9d5ba",
-    "#e4a47c",
-    "#cc8665",
-    "#99423c",
-    "#faecd7"
-   ]
+   "nameH": 66,
+   "own": {
+    "sheets": {
+     "body": "human2_body.png",
+     "bottom": "human2_bottom.png",
+     "shoes": "human2_shoes.png",
+     "top": "human2_top.png",
+     "face": "human2_face.png",
+     "hair": "human2_hair.png",
+     "bodyz": "human2_bodyz.png"
+    },
+    "outline": null,
+    "styles": {
+     "hair": [
+      {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "human2_hair_puff.png"
+       }
+      },
+      {
+       "id": "h2_bob",
+       "name": "鮑伯",
+       "sheets": {}
+      },
+      {
+       "id": "h2_long",
+       "name": "中長髮",
+       "sheets": {
+        "hair": "human2_hair_long.png"
+       }
+      },
+      {
+       "id": "h2_flip",
+       "name": "外翹髮",
+       "sheets": {
+        "hair": "human2_hair_flip.png"
+       }
+      },
+      {
+       "id": "h2_pony",
+       "name": "馬尾",
+       "sheets": {
+        "hair": "human2_hair_pony.png"
+       }
+      },
+      {
+       "id": "h2_twin",
+       "name": "雙馬尾",
+       "sheets": {
+        "hair": "human2_hair_twin.png"
+       }
+      },
+      {
+       "id": "h2_oil",
+       "name": "油頭",
+       "sheets": {
+        "hair": "human2_hair_oil.png"
+       }
+      }
+     ],
+     "top": [
+      {
+       "id": "suit_jacket",
+       "name": "女式西裝外套",
+       "sheets": {}
+      },
+      {
+       "id": "suit_jacket_m",
+       "name": "男式西裝外套",
+       "sheets": {
+        "top": "human2_m_top.png"
+       }
+      },
+      {
+       "id": "ninja_garb",
+       "name": "忍者服",
+       "sheets": {
+        "top": "human2_n_top.png"
+       }
+      },
+      {
+       "id": "blm_garb",
+       "name": "黑魔法師長袍",
+       "sheets": {
+        "top": "human2_b_top.png"
+       }
+      },
+      {
+       "id": "wm_robe",
+       "name": "白魔法師長袍",
+       "sheets": {
+        "top": "human2_w_top.png"
+       }
+      },
+      {
+       "id": "sage_coat",
+       "name": "賢者長外套",
+       "sheets": {
+        "top": "human2_s_top.png"
+       }
+      },
+      {
+       "id": "dragoon_armor",
+       "name": "龍騎士鎧甲",
+       "sheets": {
+        "top": "human2_g_top.png"
+       }
+      },
+      {
+       "id": "warrior_armor",
+       "name": "戰士鎧甲",
+       "sheets": {
+        "top": "human2_r_top.png"
+       }
+      },
+      {
+       "id": "bard_garb",
+       "name": "吟遊詩人斗篷",
+       "sheets": {
+        "top": "human2_d_top.png"
+       }
+      },
+      {
+       "id": "knight_armor",
+       "name": "騎士鎧甲",
+       "sheets": {
+        "top": "human2_k_top.png"
+       }
+      }
+     ],
+     "bottom": [
+      {
+       "id": "suit_skirt",
+       "name": "西裝短裙",
+       "sheets": {}
+      },
+      {
+       "id": "suit_pants_m",
+       "name": "西裝褲",
+       "sheets": {
+        "bottom": "human2_m_bottom.png"
+       }
+      },
+      {
+       "id": "ninja_pants",
+       "name": "忍者寬褲",
+       "sheets": {
+        "bottom": "human2_n_bottom.png"
+       }
+      },
+      {
+       "id": "blm_pants",
+       "name": "黑魔法師長褲",
+       "sheets": {
+        "bottom": "human2_b_bottom.png"
+       }
+      },
+      {
+       "id": "wm_pants",
+       "name": "白魔法師長褲",
+       "sheets": {
+        "bottom": "human2_w_bottom.png"
+       }
+      },
+      {
+       "id": "sage_pants",
+       "name": "賢者長褲",
+       "sheets": {
+        "bottom": "human2_s_bottom.png"
+       }
+      },
+      {
+       "id": "dragoon_legs",
+       "name": "龍騎士腿甲",
+       "sheets": {
+        "bottom": "human2_g_bottom.png"
+       }
+      },
+      {
+       "id": "warrior_legs",
+       "name": "戰士腿甲",
+       "sheets": {
+        "bottom": "human2_r_bottom.png"
+       }
+      },
+      {
+       "id": "bard_pants",
+       "name": "吟遊詩人長褲",
+       "sheets": {
+        "bottom": "human2_d_bottom.png"
+       }
+      },
+      {
+       "id": "knight_legs",
+       "name": "騎士腿甲",
+       "sheets": {
+        "bottom": "human2_k_bottom.png"
+       }
+      }
+     ],
+     "shoe": [
+      {
+       "id": "pointed_shoes",
+       "name": "尖皮鞋",
+       "sheets": {}
+      },
+      {
+       "id": "leather_shoes_m",
+       "name": "皮鞋",
+       "sheets": {
+        "shoes": "human2_m_shoes.png"
+       }
+      },
+      {
+       "id": "ninja_boots",
+       "name": "忍者靴",
+       "sheets": {
+        "shoes": "human2_n_shoes.png"
+       }
+      },
+      {
+       "id": "blm_boots",
+       "name": "黑魔法師靴",
+       "sheets": {
+        "shoes": "human2_b_shoes.png"
+       }
+      },
+      {
+       "id": "wm_boots",
+       "name": "白魔法師靴",
+       "sheets": {
+        "shoes": "human2_w_shoes.png"
+       }
+      },
+      {
+       "id": "sage_boots",
+       "name": "賢者靴",
+       "sheets": {
+        "shoes": "human2_s_shoes.png"
+       }
+      },
+      {
+       "id": "dragoon_boots",
+       "name": "龍騎士靴",
+       "sheets": {
+        "shoes": "human2_g_shoes.png"
+       }
+      },
+      {
+       "id": "warrior_boots",
+       "name": "戰士靴",
+       "sheets": {
+        "shoes": "human2_r_shoes.png"
+       }
+      },
+      {
+       "id": "bard_boots",
+       "name": "吟遊詩人靴",
+       "sheets": {
+        "shoes": "human2_d_shoes.png"
+       }
+      },
+      {
+       "id": "knight_boots",
+       "name": "騎士靴",
+       "sheets": {
+        "shoes": "human2_k_shoes.png"
+       }
+      }
+     ],
+     "hat": [
+      {
+       "id": "blm_hat",
+       "name": "黑魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "human2_b_hat.png"
+       }
+      },
+      {
+       "id": "wm_hat",
+       "name": "白魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "human2_w_hat.png"
+       }
+      },
+      {
+       "id": "sage_hat",
+       "name": "賢者貝雷帽",
+       "hairFromHat": true,
+       "hairCutDy": -8,
+       "sheets": {
+        "hat": "human2_s_hat.png"
+       }
+      },
+      {
+       "id": "bard_hat",
+       "name": "吟遊詩人帽",
+       "hairFromHat": true,
+       "hairCutDy": -1,
+       "sheets": {
+        "hat": "human2_d_hat.png"
+       }
+      },
+      {
+       "id": "knight_helm",
+       "name": "騎士頭盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_k_hat.png"
+       }
+      },
+      {
+       "id": "dragoon_helm",
+       "name": "龍騎士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_g_hat.png"
+       }
+      },
+      {
+       "id": "warrior_helm",
+       "name": "戰士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_r_hat.png"
+       }
+      }
+     ]
+    },
+    "dye": [
+     {
+      "slot": "hair",
+      "layers": [
+       "hair"
+      ],
+      "colors": [
+       "#7482b2",
+       "#c8d4f8",
+       "#8494c0",
+       "#8c7aac",
+       "#6472a2",
+       "#3c4a7c",
+       "#222846"
+      ]
+     },
+     {
+      "slot": "top",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#221c1c",
+       "#110e0e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#221c1c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2e201e",
+       "#5c5458",
+       "#17100f"
+      ]
+     },
+     {
+      "slot": "skin",
+      "layers": [
+       "body",
+       "hair",
+       "top",
+       "bodyz"
+      ],
+      "colors": [
+       "#ffe8d2",
+       "#deb2a0",
+       "#b39894",
+       "#744a3c"
+      ]
+     },
+     {
+      "slot": "eye",
+      "layers": [
+       "face"
+      ],
+      "colors": [
+       "#787780",
+       "#4a4242"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "suit_jacket_m",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#463a39",
+       "#524443"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "suit_pants_m",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#463a39",
+       "#221918",
+       "#2f211e",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466",
+       "#8c7e7f"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "leather_shoes_m",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "ninja_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#302a35",
+       "#1a161e",
+       "#252029",
+       "#3b3440",
+       "#463e4b",
+       "#514857",
+       "#5c5262"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "ninja_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#382f39",
+       "#201a22",
+       "#2c252e",
+       "#443a45",
+       "#504551",
+       "#5c4f5c",
+       "#685a68"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "ninja_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#5b2a2f",
+       "#381820",
+       "#492128",
+       "#6c3337",
+       "#7d3c3f",
+       "#8f4546",
+       "#a04e4e"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "blm_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#332b47",
+       "#141022",
+       "#231e35",
+       "#42395a",
+       "#51476d",
+       "#61547f",
+       "#706292"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "blm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#2d2740",
+       "#161224",
+       "#221c32",
+       "#39314e",
+       "#453b5c",
+       "#50466a",
+       "#5c5078"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "blm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#292237",
+       "#14101e",
+       "#1f192a",
+       "#342b43",
+       "#3f344f",
+       "#493d5c",
+       "#544668"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "blm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#221c36",
+       "#100c1c",
+       "#362c52",
+       "#524474"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "wm_robe",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#efe4d9",
+       "#ceb8ac",
+       "#d6c3b7",
+       "#decec3",
+       "#e6d9ce",
+       "#f7efe5",
+       "#fffaf0"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "wm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#826f63",
+       "#54443e",
+       "#63524a",
+       "#736157",
+       "#917d6f",
+       "#a18c7c",
+       "#b09a88"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "wm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#6c4a39",
+       "#3a241e",
+       "#4b3127",
+       "#5b3d30",
+       "#7d5742",
+       "#8d634b",
+       "#9e7054"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "wm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e2d0c2",
+       "#8e645c",
+       "#f4eade",
+       "#fffaf2"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "sage_coat",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ebe6e2",
+       "#c8beba",
+       "#d1c8c4",
+       "#d9d2ce",
+       "#e2dcd8",
+       "#f3f0ec",
+       "#fcfaf6"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sage_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#393942",
+       "#22222a",
+       "#2d2d36",
+       "#44444e",
+       "#4f4f5a",
+       "#5b5b66",
+       "#666672"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sage_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#47352b",
+       "#2c201c",
+       "#392a23",
+       "#543f32",
+       "#614939",
+       "#6f5441",
+       "#7c5e48"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sage_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#dedad6",
+       "#686064",
+       "#f2f0ec",
+       "#fefdfa"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "dragoon_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "dragoon_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "dragoon_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "dragoon_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#504c76",
+       "#3a365a",
+       "#6c6694",
+       "#8c86b6",
+       "#161424"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "warrior_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "warrior_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "warrior_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "warrior_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#888286",
+       "#605a5e",
+       "#aea8aa",
+       "#cec8ca",
+       "#221e22"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "bard_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#475539",
+       "#253020",
+       "#36432d",
+       "#586745",
+       "#697a52",
+       "#7a8c5e",
+       "#141e14",
+       "#e8e0d0",
+       "#c7beab",
+       "#d7cfbd",
+       "#f8f1e2",
+       "#b7ac99",
+       "#a69b86"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "bard_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#513927",
+       "#221610",
+       "#322218",
+       "#412d1f",
+       "#61452f",
+       "#705036",
+       "#805c3e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "bard_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#462f21",
+       "#1e120e",
+       "#2b1c14",
+       "#39251b",
+       "#533927",
+       "#61422e",
+       "#6e4c34"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "bard_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#323e26",
+       "#121a10",
+       "#485836",
+       "#62724c"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "knight_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "knight_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "knight_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "knight_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e0dee6",
+       "#bcb8c6",
+       "#f6f4f8",
+       "#fffefc",
+       "#807c8c"
+      ]
+     }
+    ],
+    "anchors": {
+     "back": [
+      27,
+      36
+     ],
+     "backView": [
+      37,
+      36
+     ],
+     "waist": [
+      28,
+      46
+     ],
+     "hand": {
+      "down": [
+       42,
+       44
+      ],
+      "up": [
+       42,
+       44
+      ],
+      "side": [
+       31,
+       44
+      ]
+     }
+    }
+   }
   },
   {
-   "id": "cat",
+   "id": "elf2",
+   "name": "妖精",
+   "scale": 1.0,
+   "nameH": 66,
+   "own": {
+    "sheets": {
+     "body": "human2_body.png",
+     "bottom": "human2_bottom.png",
+     "shoes": "human2_shoes.png",
+     "top": "human2_top.png",
+     "face": "human2_face.png",
+     "hair": "human2_hair.png",
+     "bodyz": "human2_bodyz.png",
+     "hat": "elf2_hat.png"
+    },
+    "outline": null,
+    "styles": {
+     "hair": [
+      {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "human2_hair_puff.png"
+       }
+      },
+      {
+       "id": "h2_bob",
+       "name": "鮑伯",
+       "sheets": {}
+      },
+      {
+       "id": "h2_long",
+       "name": "中長髮",
+       "sheets": {
+        "hair": "human2_hair_long.png"
+       }
+      },
+      {
+       "id": "h2_flip",
+       "name": "外翹髮",
+       "sheets": {
+        "hair": "human2_hair_flip.png"
+       }
+      },
+      {
+       "id": "h2_pony",
+       "name": "馬尾",
+       "sheets": {
+        "hair": "human2_hair_pony.png"
+       }
+      },
+      {
+       "id": "h2_twin",
+       "name": "雙馬尾",
+       "sheets": {
+        "hair": "human2_hair_twin.png"
+       }
+      },
+      {
+       "id": "h2_oil",
+       "name": "油頭",
+       "sheets": {
+        "hair": "human2_hair_oil.png"
+       }
+      }
+     ],
+     "top": [
+      {
+       "id": "suit_jacket",
+       "name": "女式西裝外套",
+       "sheets": {}
+      },
+      {
+       "id": "suit_jacket_m",
+       "name": "男式西裝外套",
+       "sheets": {
+        "top": "human2_m_top.png"
+       }
+      },
+      {
+       "id": "ninja_garb",
+       "name": "忍者服",
+       "sheets": {
+        "top": "human2_n_top.png"
+       }
+      },
+      {
+       "id": "blm_garb",
+       "name": "黑魔法師長袍",
+       "sheets": {
+        "top": "human2_b_top.png"
+       }
+      },
+      {
+       "id": "wm_robe",
+       "name": "白魔法師長袍",
+       "sheets": {
+        "top": "human2_w_top.png"
+       }
+      },
+      {
+       "id": "sage_coat",
+       "name": "賢者長外套",
+       "sheets": {
+        "top": "human2_s_top.png"
+       }
+      },
+      {
+       "id": "dragoon_armor",
+       "name": "龍騎士鎧甲",
+       "sheets": {
+        "top": "human2_g_top.png"
+       }
+      },
+      {
+       "id": "warrior_armor",
+       "name": "戰士鎧甲",
+       "sheets": {
+        "top": "human2_r_top.png"
+       }
+      },
+      {
+       "id": "bard_garb",
+       "name": "吟遊詩人斗篷",
+       "sheets": {
+        "top": "human2_d_top.png"
+       }
+      },
+      {
+       "id": "knight_armor",
+       "name": "騎士鎧甲",
+       "sheets": {
+        "top": "human2_k_top.png"
+       }
+      }
+     ],
+     "bottom": [
+      {
+       "id": "suit_skirt",
+       "name": "西裝短裙",
+       "sheets": {}
+      },
+      {
+       "id": "suit_pants_m",
+       "name": "西裝褲",
+       "sheets": {
+        "bottom": "human2_m_bottom.png"
+       }
+      },
+      {
+       "id": "ninja_pants",
+       "name": "忍者寬褲",
+       "sheets": {
+        "bottom": "human2_n_bottom.png"
+       }
+      },
+      {
+       "id": "blm_pants",
+       "name": "黑魔法師長褲",
+       "sheets": {
+        "bottom": "human2_b_bottom.png"
+       }
+      },
+      {
+       "id": "wm_pants",
+       "name": "白魔法師長褲",
+       "sheets": {
+        "bottom": "human2_w_bottom.png"
+       }
+      },
+      {
+       "id": "sage_pants",
+       "name": "賢者長褲",
+       "sheets": {
+        "bottom": "human2_s_bottom.png"
+       }
+      },
+      {
+       "id": "dragoon_legs",
+       "name": "龍騎士腿甲",
+       "sheets": {
+        "bottom": "human2_g_bottom.png"
+       }
+      },
+      {
+       "id": "warrior_legs",
+       "name": "戰士腿甲",
+       "sheets": {
+        "bottom": "human2_r_bottom.png"
+       }
+      },
+      {
+       "id": "bard_pants",
+       "name": "吟遊詩人長褲",
+       "sheets": {
+        "bottom": "human2_d_bottom.png"
+       }
+      },
+      {
+       "id": "knight_legs",
+       "name": "騎士腿甲",
+       "sheets": {
+        "bottom": "human2_k_bottom.png"
+       }
+      }
+     ],
+     "shoe": [
+      {
+       "id": "pointed_shoes",
+       "name": "尖皮鞋",
+       "sheets": {}
+      },
+      {
+       "id": "leather_shoes_m",
+       "name": "皮鞋",
+       "sheets": {
+        "shoes": "human2_m_shoes.png"
+       }
+      },
+      {
+       "id": "ninja_boots",
+       "name": "忍者靴",
+       "sheets": {
+        "shoes": "human2_n_shoes.png"
+       }
+      },
+      {
+       "id": "blm_boots",
+       "name": "黑魔法師靴",
+       "sheets": {
+        "shoes": "human2_b_shoes.png"
+       }
+      },
+      {
+       "id": "wm_boots",
+       "name": "白魔法師靴",
+       "sheets": {
+        "shoes": "human2_w_shoes.png"
+       }
+      },
+      {
+       "id": "sage_boots",
+       "name": "賢者靴",
+       "sheets": {
+        "shoes": "human2_s_shoes.png"
+       }
+      },
+      {
+       "id": "dragoon_boots",
+       "name": "龍騎士靴",
+       "sheets": {
+        "shoes": "human2_g_shoes.png"
+       }
+      },
+      {
+       "id": "warrior_boots",
+       "name": "戰士靴",
+       "sheets": {
+        "shoes": "human2_r_shoes.png"
+       }
+      },
+      {
+       "id": "bard_boots",
+       "name": "吟遊詩人靴",
+       "sheets": {
+        "shoes": "human2_d_shoes.png"
+       }
+      },
+      {
+       "id": "knight_boots",
+       "name": "騎士靴",
+       "sheets": {
+        "shoes": "human2_k_shoes.png"
+       }
+      }
+     ],
+     "hat": [
+      {
+       "id": "blm_hat",
+       "name": "黑魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "human2_b_hat.png"
+       }
+      },
+      {
+       "id": "wm_hat",
+       "name": "白魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "human2_w_hat.png"
+       }
+      },
+      {
+       "id": "sage_hat",
+       "name": "賢者貝雷帽",
+       "hairFromHat": true,
+       "hairCutDy": -8,
+       "sheets": {
+        "hat": "human2_s_hat.png"
+       }
+      },
+      {
+       "id": "bard_hat",
+       "name": "吟遊詩人帽",
+       "hairFromHat": true,
+       "hairCutDy": -1,
+       "sheets": {
+        "hat": "human2_d_hat.png"
+       }
+      },
+      {
+       "id": "knight_helm",
+       "name": "騎士頭盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_k_hat.png"
+       }
+      },
+      {
+       "id": "dragoon_helm",
+       "name": "龍騎士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_g_hat.png"
+       }
+      },
+      {
+       "id": "warrior_helm",
+       "name": "戰士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_r_hat.png"
+       }
+      }
+     ]
+    },
+    "dye": [
+     {
+      "slot": "hair",
+      "layers": [
+       "hair"
+      ],
+      "colors": [
+       "#7482b2",
+       "#c8d4f8",
+       "#8494c0",
+       "#8c7aac",
+       "#6472a2",
+       "#3c4a7c",
+       "#222846"
+      ]
+     },
+     {
+      "slot": "top",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#221c1c",
+       "#110e0e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#221c1c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2e201e",
+       "#5c5458",
+       "#17100f"
+      ]
+     },
+     {
+      "slot": "skin",
+      "layers": [
+       "body",
+       "hair",
+       "top",
+       "hat",
+       "bodyz"
+      ],
+      "colors": [
+       "#ffe8d2",
+       "#deb2a0",
+       "#b39894",
+       "#744a3c",
+       "#8f756a"
+      ]
+     },
+     {
+      "slot": "eye",
+      "layers": [
+       "face"
+      ],
+      "colors": [
+       "#787780",
+       "#4a4242"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "suit_jacket_m",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#463a39",
+       "#524443"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "suit_pants_m",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#463a39",
+       "#221918",
+       "#2f211e",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466",
+       "#8c7e7f"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "leather_shoes_m",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "ninja_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#302a35",
+       "#1a161e",
+       "#252029",
+       "#3b3440",
+       "#463e4b",
+       "#514857",
+       "#5c5262"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "ninja_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#382f39",
+       "#201a22",
+       "#2c252e",
+       "#443a45",
+       "#504551",
+       "#5c4f5c",
+       "#685a68"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "ninja_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#5b2a2f",
+       "#381820",
+       "#492128",
+       "#6c3337",
+       "#7d3c3f",
+       "#8f4546",
+       "#a04e4e"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "blm_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#332b47",
+       "#141022",
+       "#231e35",
+       "#42395a",
+       "#51476d",
+       "#61547f",
+       "#706292"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "blm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#2d2740",
+       "#161224",
+       "#221c32",
+       "#39314e",
+       "#453b5c",
+       "#50466a",
+       "#5c5078"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "blm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#292237",
+       "#14101e",
+       "#1f192a",
+       "#342b43",
+       "#3f344f",
+       "#493d5c",
+       "#544668"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "blm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#221c36",
+       "#100c1c",
+       "#362c52",
+       "#524474"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "wm_robe",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#efe4d9",
+       "#ceb8ac",
+       "#d6c3b7",
+       "#decec3",
+       "#e6d9ce",
+       "#f7efe5",
+       "#fffaf0"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "wm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#826f63",
+       "#54443e",
+       "#63524a",
+       "#736157",
+       "#917d6f",
+       "#a18c7c",
+       "#b09a88"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "wm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#6c4a39",
+       "#3a241e",
+       "#4b3127",
+       "#5b3d30",
+       "#7d5742",
+       "#8d634b",
+       "#9e7054"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "wm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e2d0c2",
+       "#8e645c",
+       "#f4eade",
+       "#fffaf2"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "sage_coat",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ebe6e2",
+       "#c8beba",
+       "#d1c8c4",
+       "#d9d2ce",
+       "#e2dcd8",
+       "#f3f0ec",
+       "#fcfaf6"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sage_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#393942",
+       "#22222a",
+       "#2d2d36",
+       "#44444e",
+       "#4f4f5a",
+       "#5b5b66",
+       "#666672"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sage_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#47352b",
+       "#2c201c",
+       "#392a23",
+       "#543f32",
+       "#614939",
+       "#6f5441",
+       "#7c5e48"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sage_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#dedad6",
+       "#686064",
+       "#f2f0ec",
+       "#fefdfa"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "dragoon_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "dragoon_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "dragoon_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "dragoon_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#504c76",
+       "#3a365a",
+       "#6c6694",
+       "#8c86b6",
+       "#161424"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "warrior_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "warrior_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "warrior_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "warrior_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#888286",
+       "#605a5e",
+       "#aea8aa",
+       "#cec8ca",
+       "#221e22"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "bard_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#475539",
+       "#253020",
+       "#36432d",
+       "#586745",
+       "#697a52",
+       "#7a8c5e",
+       "#141e14",
+       "#e8e0d0",
+       "#c7beab",
+       "#d7cfbd",
+       "#f8f1e2",
+       "#b7ac99",
+       "#a69b86"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "bard_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#513927",
+       "#221610",
+       "#322218",
+       "#412d1f",
+       "#61452f",
+       "#705036",
+       "#805c3e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "bard_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#462f21",
+       "#1e120e",
+       "#2b1c14",
+       "#39251b",
+       "#533927",
+       "#61422e",
+       "#6e4c34"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "bard_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#323e26",
+       "#121a10",
+       "#485836",
+       "#62724c"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "knight_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "knight_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "knight_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "knight_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e0dee6",
+       "#bcb8c6",
+       "#f6f4f8",
+       "#fffefc",
+       "#807c8c"
+      ]
+     }
+    ],
+    "anchors": {
+     "back": [
+      27,
+      36
+     ],
+     "backView": [
+      37,
+      36
+     ],
+     "waist": [
+      28,
+      46
+     ],
+     "hand": {
+      "down": [
+       42,
+       44
+      ],
+      "up": [
+       42,
+       44
+      ],
+      "side": [
+       31,
+       44
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "cat2",
    "name": "貓族",
    "scale": 1.0,
-   "earBg": "char_ears_cat_bg.png",
-   "earFg": "char_ears_cat_fg.png",
-   "earFur": [
-    "#ff8a00",
-    "#e55600",
-    "#bf4000",
-    "#a42600"
-   ],
-   "earInner": "#f5b8ad"
+   "nameH": 66,
+   "own": {
+    "sheets": {
+     "body": "human2_body.png",
+     "bottom": "human2_bottom.png",
+     "shoes": "human2_shoes.png",
+     "top": "human2_top.png",
+     "face": "human2_face.png",
+     "hair": "human2_hair.png",
+     "bodyz": "human2_bodyz.png",
+     "hat": "cat2_hat.png",
+     "hairbg": "cat2_hairbg.png"
+    },
+    "outline": null,
+    "styles": {
+     "hair": [
+      {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "human2_hair_puff.png"
+       }
+      },
+      {
+       "id": "h2_bob",
+       "name": "鮑伯",
+       "sheets": {}
+      },
+      {
+       "id": "h2_long",
+       "name": "中長髮",
+       "sheets": {
+        "hair": "human2_hair_long.png"
+       }
+      },
+      {
+       "id": "h2_flip",
+       "name": "外翹髮",
+       "sheets": {
+        "hair": "human2_hair_flip.png"
+       }
+      },
+      {
+       "id": "h2_pony",
+       "name": "馬尾",
+       "sheets": {
+        "hair": "human2_hair_pony.png"
+       }
+      },
+      {
+       "id": "h2_twin",
+       "name": "雙馬尾",
+       "sheets": {
+        "hair": "human2_hair_twin.png"
+       }
+      },
+      {
+       "id": "h2_oil",
+       "name": "油頭",
+       "sheets": {
+        "hair": "human2_hair_oil.png"
+       }
+      }
+     ],
+     "top": [
+      {
+       "id": "suit_jacket",
+       "name": "女式西裝外套",
+       "sheets": {}
+      },
+      {
+       "id": "suit_jacket_m",
+       "name": "男式西裝外套",
+       "sheets": {
+        "top": "human2_m_top.png"
+       }
+      },
+      {
+       "id": "ninja_garb",
+       "name": "忍者服",
+       "sheets": {
+        "top": "human2_n_top.png"
+       }
+      },
+      {
+       "id": "blm_garb",
+       "name": "黑魔法師長袍",
+       "sheets": {
+        "top": "human2_b_top.png"
+       }
+      },
+      {
+       "id": "wm_robe",
+       "name": "白魔法師長袍",
+       "sheets": {
+        "top": "human2_w_top.png"
+       }
+      },
+      {
+       "id": "sage_coat",
+       "name": "賢者長外套",
+       "sheets": {
+        "top": "human2_s_top.png"
+       }
+      },
+      {
+       "id": "dragoon_armor",
+       "name": "龍騎士鎧甲",
+       "sheets": {
+        "top": "human2_g_top.png"
+       }
+      },
+      {
+       "id": "warrior_armor",
+       "name": "戰士鎧甲",
+       "sheets": {
+        "top": "human2_r_top.png"
+       }
+      },
+      {
+       "id": "bard_garb",
+       "name": "吟遊詩人斗篷",
+       "sheets": {
+        "top": "human2_d_top.png"
+       }
+      },
+      {
+       "id": "knight_armor",
+       "name": "騎士鎧甲",
+       "sheets": {
+        "top": "human2_k_top.png"
+       }
+      }
+     ],
+     "bottom": [
+      {
+       "id": "suit_skirt",
+       "name": "西裝短裙",
+       "sheets": {}
+      },
+      {
+       "id": "suit_pants_m",
+       "name": "西裝褲",
+       "sheets": {
+        "bottom": "human2_m_bottom.png"
+       }
+      },
+      {
+       "id": "ninja_pants",
+       "name": "忍者寬褲",
+       "sheets": {
+        "bottom": "human2_n_bottom.png"
+       }
+      },
+      {
+       "id": "blm_pants",
+       "name": "黑魔法師長褲",
+       "sheets": {
+        "bottom": "human2_b_bottom.png"
+       }
+      },
+      {
+       "id": "wm_pants",
+       "name": "白魔法師長褲",
+       "sheets": {
+        "bottom": "human2_w_bottom.png"
+       }
+      },
+      {
+       "id": "sage_pants",
+       "name": "賢者長褲",
+       "sheets": {
+        "bottom": "human2_s_bottom.png"
+       }
+      },
+      {
+       "id": "dragoon_legs",
+       "name": "龍騎士腿甲",
+       "sheets": {
+        "bottom": "human2_g_bottom.png"
+       }
+      },
+      {
+       "id": "warrior_legs",
+       "name": "戰士腿甲",
+       "sheets": {
+        "bottom": "human2_r_bottom.png"
+       }
+      },
+      {
+       "id": "bard_pants",
+       "name": "吟遊詩人長褲",
+       "sheets": {
+        "bottom": "human2_d_bottom.png"
+       }
+      },
+      {
+       "id": "knight_legs",
+       "name": "騎士腿甲",
+       "sheets": {
+        "bottom": "human2_k_bottom.png"
+       }
+      }
+     ],
+     "shoe": [
+      {
+       "id": "pointed_shoes",
+       "name": "尖皮鞋",
+       "sheets": {}
+      },
+      {
+       "id": "leather_shoes_m",
+       "name": "皮鞋",
+       "sheets": {
+        "shoes": "human2_m_shoes.png"
+       }
+      },
+      {
+       "id": "ninja_boots",
+       "name": "忍者靴",
+       "sheets": {
+        "shoes": "human2_n_shoes.png"
+       }
+      },
+      {
+       "id": "blm_boots",
+       "name": "黑魔法師靴",
+       "sheets": {
+        "shoes": "human2_b_shoes.png"
+       }
+      },
+      {
+       "id": "wm_boots",
+       "name": "白魔法師靴",
+       "sheets": {
+        "shoes": "human2_w_shoes.png"
+       }
+      },
+      {
+       "id": "sage_boots",
+       "name": "賢者靴",
+       "sheets": {
+        "shoes": "human2_s_shoes.png"
+       }
+      },
+      {
+       "id": "dragoon_boots",
+       "name": "龍騎士靴",
+       "sheets": {
+        "shoes": "human2_g_shoes.png"
+       }
+      },
+      {
+       "id": "warrior_boots",
+       "name": "戰士靴",
+       "sheets": {
+        "shoes": "human2_r_shoes.png"
+       }
+      },
+      {
+       "id": "bard_boots",
+       "name": "吟遊詩人靴",
+       "sheets": {
+        "shoes": "human2_d_shoes.png"
+       }
+      },
+      {
+       "id": "knight_boots",
+       "name": "騎士靴",
+       "sheets": {
+        "shoes": "human2_k_shoes.png"
+       }
+      }
+     ],
+     "hat": [
+      {
+       "id": "blm_hat",
+       "name": "黑魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "human2_b_hat.png"
+       }
+      },
+      {
+       "id": "wm_hat",
+       "name": "白魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "human2_w_hat.png"
+       }
+      },
+      {
+       "id": "sage_hat",
+       "name": "賢者貝雷帽",
+       "hairFromHat": true,
+       "hairCutDy": -8,
+       "sheets": {
+        "hat": "human2_s_hat.png"
+       }
+      },
+      {
+       "id": "bard_hat",
+       "name": "吟遊詩人帽",
+       "hairFromHat": true,
+       "hairCutDy": -1,
+       "sheets": {
+        "hat": "human2_d_hat.png"
+       }
+      },
+      {
+       "id": "knight_helm",
+       "name": "騎士頭盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_k_hat.png"
+       }
+      },
+      {
+       "id": "dragoon_helm",
+       "name": "龍騎士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_g_hat.png"
+       }
+      },
+      {
+       "id": "warrior_helm",
+       "name": "戰士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_r_hat.png"
+       }
+      }
+     ]
+    },
+    "dye": [
+     {
+      "slot": "hair",
+      "layers": [
+       "hair",
+       "hat",
+       "hairbg"
+      ],
+      "colors": [
+       "#7482b2",
+       "#c8d4f8",
+       "#8494c0",
+       "#8c7aac",
+       "#6472a2",
+       "#3c4a7c",
+       "#222846"
+      ]
+     },
+     {
+      "slot": "top",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#221c1c",
+       "#110e0e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#221c1c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2e201e",
+       "#5c5458",
+       "#17100f"
+      ]
+     },
+     {
+      "slot": "skin",
+      "layers": [
+       "body",
+       "hair",
+       "top",
+       "bodyz"
+      ],
+      "colors": [
+       "#ffe8d2",
+       "#deb2a0",
+       "#b39894",
+       "#744a3c"
+      ]
+     },
+     {
+      "slot": "eye",
+      "layers": [
+       "face"
+      ],
+      "colors": [
+       "#787780",
+       "#4a4242"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "suit_jacket_m",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#463a39",
+       "#524443"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "suit_pants_m",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#463a39",
+       "#221918",
+       "#2f211e",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466",
+       "#8c7e7f"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "leather_shoes_m",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "ninja_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#302a35",
+       "#1a161e",
+       "#252029",
+       "#3b3440",
+       "#463e4b",
+       "#514857",
+       "#5c5262"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "ninja_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#382f39",
+       "#201a22",
+       "#2c252e",
+       "#443a45",
+       "#504551",
+       "#5c4f5c",
+       "#685a68"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "ninja_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#5b2a2f",
+       "#381820",
+       "#492128",
+       "#6c3337",
+       "#7d3c3f",
+       "#8f4546",
+       "#a04e4e"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "blm_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#332b47",
+       "#141022",
+       "#231e35",
+       "#42395a",
+       "#51476d",
+       "#61547f",
+       "#706292"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "blm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#2d2740",
+       "#161224",
+       "#221c32",
+       "#39314e",
+       "#453b5c",
+       "#50466a",
+       "#5c5078"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "blm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#292237",
+       "#14101e",
+       "#1f192a",
+       "#342b43",
+       "#3f344f",
+       "#493d5c",
+       "#544668"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "blm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#221c36",
+       "#100c1c",
+       "#362c52",
+       "#524474"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "wm_robe",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#efe4d9",
+       "#ceb8ac",
+       "#d6c3b7",
+       "#decec3",
+       "#e6d9ce",
+       "#f7efe5",
+       "#fffaf0"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "wm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#826f63",
+       "#54443e",
+       "#63524a",
+       "#736157",
+       "#917d6f",
+       "#a18c7c",
+       "#b09a88"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "wm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#6c4a39",
+       "#3a241e",
+       "#4b3127",
+       "#5b3d30",
+       "#7d5742",
+       "#8d634b",
+       "#9e7054"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "wm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e2d0c2",
+       "#8e645c",
+       "#f4eade",
+       "#fffaf2"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "sage_coat",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ebe6e2",
+       "#c8beba",
+       "#d1c8c4",
+       "#d9d2ce",
+       "#e2dcd8",
+       "#f3f0ec",
+       "#fcfaf6"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sage_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#393942",
+       "#22222a",
+       "#2d2d36",
+       "#44444e",
+       "#4f4f5a",
+       "#5b5b66",
+       "#666672"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sage_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#47352b",
+       "#2c201c",
+       "#392a23",
+       "#543f32",
+       "#614939",
+       "#6f5441",
+       "#7c5e48"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sage_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#dedad6",
+       "#686064",
+       "#f2f0ec",
+       "#fefdfa"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "dragoon_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "dragoon_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "dragoon_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "dragoon_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#504c76",
+       "#3a365a",
+       "#6c6694",
+       "#8c86b6",
+       "#161424"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "warrior_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "warrior_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "warrior_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "warrior_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#888286",
+       "#605a5e",
+       "#aea8aa",
+       "#cec8ca",
+       "#221e22"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "bard_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#475539",
+       "#253020",
+       "#36432d",
+       "#586745",
+       "#697a52",
+       "#7a8c5e",
+       "#141e14",
+       "#e8e0d0",
+       "#c7beab",
+       "#d7cfbd",
+       "#f8f1e2",
+       "#b7ac99",
+       "#a69b86"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "bard_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#513927",
+       "#221610",
+       "#322218",
+       "#412d1f",
+       "#61452f",
+       "#705036",
+       "#805c3e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "bard_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#462f21",
+       "#1e120e",
+       "#2b1c14",
+       "#39251b",
+       "#533927",
+       "#61422e",
+       "#6e4c34"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "bard_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#323e26",
+       "#121a10",
+       "#485836",
+       "#62724c"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "knight_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "knight_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "knight_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "knight_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e0dee6",
+       "#bcb8c6",
+       "#f6f4f8",
+       "#fffefc",
+       "#807c8c"
+      ]
+     }
+    ],
+    "anchors": {
+     "back": [
+      27,
+      36
+     ],
+     "backView": [
+      37,
+      36
+     ],
+     "waist": [
+      28,
+      46
+     ],
+     "hand": {
+      "down": [
+       42,
+       44
+      ],
+      "up": [
+       42,
+       44
+      ],
+      "side": [
+       31,
+       44
+      ]
+     }
+    }
+   }
   },
   {
-   "id": "lalafell",
-   "name": "拉拉肥",
-   "scale": 0.5
+   "id": "dwarf2",
+   "name": "矮人",
+   "scale": 1.0,
+   "nameH": 58,
+   "own": {
+    "sheets": {
+     "body": "dwarf2_body.png",
+     "bottom": "dwarf2_bottom.png",
+     "shoes": "dwarf2_shoes.png",
+     "top": "dwarf2_top.png",
+     "face": "dwarf2_face.png",
+     "hair": "dwarf2_hair.png",
+     "bodyz": "dwarf2_bodyz.png"
+    },
+    "outline": null,
+    "styles": {
+     "hair": [
+      {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "dwarf2_hair_puff.png"
+       }
+      },
+      {
+       "id": "h2_bob",
+       "name": "鮑伯",
+       "sheets": {}
+      },
+      {
+       "id": "h2_long",
+       "name": "中長髮",
+       "sheets": {
+        "hair": "dwarf2_hair_long.png"
+       }
+      },
+      {
+       "id": "h2_flip",
+       "name": "外翹髮",
+       "sheets": {
+        "hair": "dwarf2_hair_flip.png"
+       }
+      },
+      {
+       "id": "h2_pony",
+       "name": "馬尾",
+       "sheets": {
+        "hair": "dwarf2_hair_pony.png"
+       }
+      },
+      {
+       "id": "h2_twin",
+       "name": "雙馬尾",
+       "sheets": {
+        "hair": "dwarf2_hair_twin.png"
+       }
+      },
+      {
+       "id": "h2_oil",
+       "name": "油頭",
+       "sheets": {
+        "hair": "dwarf2_hair_oil.png"
+       }
+      }
+     ],
+     "top": [
+      {
+       "id": "suit_jacket",
+       "name": "女式西裝外套",
+       "sheets": {}
+      },
+      {
+       "id": "suit_jacket_m",
+       "name": "男式西裝外套",
+       "sheets": {
+        "top": "dwarf2_m_top.png"
+       }
+      },
+      {
+       "id": "ninja_garb",
+       "name": "忍者服",
+       "sheets": {
+        "top": "dwarf2_n_top.png"
+       }
+      },
+      {
+       "id": "blm_garb",
+       "name": "黑魔法師長袍",
+       "sheets": {
+        "top": "dwarf2_b_top.png"
+       }
+      },
+      {
+       "id": "wm_robe",
+       "name": "白魔法師長袍",
+       "sheets": {
+        "top": "dwarf2_w_top.png"
+       }
+      },
+      {
+       "id": "sage_coat",
+       "name": "賢者長外套",
+       "sheets": {
+        "top": "dwarf2_s_top.png"
+       }
+      },
+      {
+       "id": "dragoon_armor",
+       "name": "龍騎士鎧甲",
+       "sheets": {
+        "top": "dwarf2_g_top.png"
+       }
+      },
+      {
+       "id": "warrior_armor",
+       "name": "戰士鎧甲",
+       "sheets": {
+        "top": "dwarf2_r_top.png"
+       }
+      },
+      {
+       "id": "bard_garb",
+       "name": "吟遊詩人斗篷",
+       "sheets": {
+        "top": "dwarf2_d_top.png"
+       }
+      },
+      {
+       "id": "knight_armor",
+       "name": "騎士鎧甲",
+       "sheets": {
+        "top": "dwarf2_k_top.png"
+       }
+      }
+     ],
+     "bottom": [
+      {
+       "id": "suit_skirt",
+       "name": "西裝短裙",
+       "sheets": {}
+      },
+      {
+       "id": "suit_pants_m",
+       "name": "西裝褲",
+       "sheets": {
+        "bottom": "dwarf2_m_bottom.png"
+       }
+      },
+      {
+       "id": "ninja_pants",
+       "name": "忍者寬褲",
+       "sheets": {
+        "bottom": "dwarf2_n_bottom.png"
+       }
+      },
+      {
+       "id": "blm_pants",
+       "name": "黑魔法師長褲",
+       "sheets": {
+        "bottom": "dwarf2_b_bottom.png"
+       }
+      },
+      {
+       "id": "wm_pants",
+       "name": "白魔法師長褲",
+       "sheets": {
+        "bottom": "dwarf2_w_bottom.png"
+       }
+      },
+      {
+       "id": "sage_pants",
+       "name": "賢者長褲",
+       "sheets": {
+        "bottom": "dwarf2_s_bottom.png"
+       }
+      },
+      {
+       "id": "dragoon_legs",
+       "name": "龍騎士腿甲",
+       "sheets": {
+        "bottom": "dwarf2_g_bottom.png"
+       }
+      },
+      {
+       "id": "warrior_legs",
+       "name": "戰士腿甲",
+       "sheets": {
+        "bottom": "dwarf2_r_bottom.png"
+       }
+      },
+      {
+       "id": "bard_pants",
+       "name": "吟遊詩人長褲",
+       "sheets": {
+        "bottom": "dwarf2_d_bottom.png"
+       }
+      },
+      {
+       "id": "knight_legs",
+       "name": "騎士腿甲",
+       "sheets": {
+        "bottom": "dwarf2_k_bottom.png"
+       }
+      }
+     ],
+     "shoe": [
+      {
+       "id": "pointed_shoes",
+       "name": "尖皮鞋",
+       "sheets": {}
+      },
+      {
+       "id": "leather_shoes_m",
+       "name": "皮鞋",
+       "sheets": {
+        "shoes": "dwarf2_m_shoes.png"
+       }
+      },
+      {
+       "id": "ninja_boots",
+       "name": "忍者靴",
+       "sheets": {
+        "shoes": "dwarf2_n_shoes.png"
+       }
+      },
+      {
+       "id": "blm_boots",
+       "name": "黑魔法師靴",
+       "sheets": {
+        "shoes": "dwarf2_b_shoes.png"
+       }
+      },
+      {
+       "id": "wm_boots",
+       "name": "白魔法師靴",
+       "sheets": {
+        "shoes": "dwarf2_w_shoes.png"
+       }
+      },
+      {
+       "id": "sage_boots",
+       "name": "賢者靴",
+       "sheets": {
+        "shoes": "dwarf2_s_shoes.png"
+       }
+      },
+      {
+       "id": "dragoon_boots",
+       "name": "龍騎士靴",
+       "sheets": {
+        "shoes": "dwarf2_g_shoes.png"
+       }
+      },
+      {
+       "id": "warrior_boots",
+       "name": "戰士靴",
+       "sheets": {
+        "shoes": "dwarf2_r_shoes.png"
+       }
+      },
+      {
+       "id": "bard_boots",
+       "name": "吟遊詩人靴",
+       "sheets": {
+        "shoes": "dwarf2_d_shoes.png"
+       }
+      },
+      {
+       "id": "knight_boots",
+       "name": "騎士靴",
+       "sheets": {
+        "shoes": "dwarf2_k_shoes.png"
+       }
+      }
+     ],
+     "hat": [
+      {
+       "id": "blm_hat",
+       "name": "黑魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "dwarf2_b_hat.png"
+       }
+      },
+      {
+       "id": "wm_hat",
+       "name": "白魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "dwarf2_w_hat.png"
+       }
+      },
+      {
+       "id": "sage_hat",
+       "name": "賢者貝雷帽",
+       "hairFromHat": true,
+       "hairCutDy": -8,
+       "sheets": {
+        "hat": "dwarf2_s_hat.png"
+       }
+      },
+      {
+       "id": "bard_hat",
+       "name": "吟遊詩人帽",
+       "hairFromHat": true,
+       "hairCutDy": -1,
+       "sheets": {
+        "hat": "dwarf2_d_hat.png"
+       }
+      },
+      {
+       "id": "knight_helm",
+       "name": "騎士頭盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "dwarf2_k_hat.png"
+       }
+      },
+      {
+       "id": "dragoon_helm",
+       "name": "龍騎士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "dwarf2_g_hat.png"
+       }
+      },
+      {
+       "id": "warrior_helm",
+       "name": "戰士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "dwarf2_r_hat.png"
+       }
+      }
+     ]
+    },
+    "dye": [
+     {
+      "slot": "hair",
+      "layers": [
+       "hair"
+      ],
+      "colors": [
+       "#7482b2",
+       "#c8d4f8",
+       "#8494c0",
+       "#8c7aac",
+       "#6472a2",
+       "#3c4a7c",
+       "#222846"
+      ]
+     },
+     {
+      "slot": "top",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#221c1c",
+       "#110e0e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#221c1c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2e201e",
+       "#5c5458",
+       "#17100f"
+      ]
+     },
+     {
+      "slot": "skin",
+      "layers": [
+       "body",
+       "hair",
+       "top",
+       "bodyz"
+      ],
+      "colors": [
+       "#ffe8d2",
+       "#deb2a0",
+       "#b39894",
+       "#744a3c"
+      ]
+     },
+     {
+      "slot": "eye",
+      "layers": [
+       "face"
+      ],
+      "colors": [
+       "#787780",
+       "#4a4242"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "suit_jacket_m",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#463a39",
+       "#524443"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "suit_pants_m",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#463a39",
+       "#221918",
+       "#2f211e",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466",
+       "#8c7e7f"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "leather_shoes_m",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "ninja_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#302a35",
+       "#1a161e",
+       "#252029",
+       "#3b3440",
+       "#463e4b",
+       "#514857",
+       "#5c5262"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "ninja_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#382f39",
+       "#201a22",
+       "#2c252e",
+       "#443a45",
+       "#504551",
+       "#5c4f5c",
+       "#685a68"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "ninja_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#5b2a2f",
+       "#381820",
+       "#492128",
+       "#6c3337",
+       "#7d3c3f",
+       "#8f4546",
+       "#a04e4e"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "blm_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#332b47",
+       "#141022",
+       "#231e35",
+       "#42395a",
+       "#51476d",
+       "#61547f",
+       "#706292"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "blm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#2d2740",
+       "#161224",
+       "#221c32",
+       "#39314e",
+       "#453b5c",
+       "#50466a",
+       "#5c5078"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "blm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#292237",
+       "#14101e",
+       "#1f192a",
+       "#342b43",
+       "#3f344f",
+       "#493d5c",
+       "#544668"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "blm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#221c36",
+       "#100c1c",
+       "#362c52",
+       "#524474"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "wm_robe",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#efe4d9",
+       "#ceb8ac",
+       "#d6c3b7",
+       "#decec3",
+       "#e6d9ce",
+       "#f7efe5",
+       "#fffaf0"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "wm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#826f63",
+       "#54443e",
+       "#63524a",
+       "#736157",
+       "#917d6f",
+       "#a18c7c",
+       "#b09a88"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "wm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#6c4a39",
+       "#3a241e",
+       "#4b3127",
+       "#5b3d30",
+       "#7d5742",
+       "#8d634b",
+       "#9e7054"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "wm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e2d0c2",
+       "#8e645c",
+       "#f4eade",
+       "#fffaf2"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "sage_coat",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ebe6e2",
+       "#c8beba",
+       "#d1c8c4",
+       "#d9d2ce",
+       "#e2dcd8",
+       "#f3f0ec",
+       "#fcfaf6"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sage_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#393942",
+       "#22222a",
+       "#2d2d36",
+       "#44444e",
+       "#4f4f5a",
+       "#5b5b66",
+       "#666672"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sage_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#47352b",
+       "#2c201c",
+       "#392a23",
+       "#543f32",
+       "#614939",
+       "#6f5441",
+       "#7c5e48"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sage_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#dedad6",
+       "#686064",
+       "#f2f0ec",
+       "#fefdfa"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "dragoon_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "dragoon_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "dragoon_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "dragoon_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#504c76",
+       "#3a365a",
+       "#6c6694",
+       "#8c86b6",
+       "#161424"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "warrior_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "warrior_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "warrior_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "warrior_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#888286",
+       "#605a5e",
+       "#aea8aa",
+       "#cec8ca",
+       "#221e22"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "bard_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#475539",
+       "#253020",
+       "#36432d",
+       "#586745",
+       "#697a52",
+       "#7a8c5e",
+       "#141e14",
+       "#e8e0d0",
+       "#c7beab",
+       "#d7cfbd",
+       "#f8f1e2",
+       "#b7ac99",
+       "#a69b86"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "bard_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#513927",
+       "#221610",
+       "#322218",
+       "#412d1f",
+       "#61452f",
+       "#705036",
+       "#805c3e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "bard_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#462f21",
+       "#1e120e",
+       "#2b1c14",
+       "#39251b",
+       "#533927",
+       "#61422e",
+       "#6e4c34"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "bard_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#323e26",
+       "#121a10",
+       "#485836",
+       "#62724c"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "knight_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "knight_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "knight_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "knight_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e0dee6",
+       "#bcb8c6",
+       "#f6f4f8",
+       "#fffefc",
+       "#807c8c"
+      ]
+     }
+    ],
+    "anchors": {
+     "back": [
+      27,
+      41
+     ],
+     "backView": [
+      37,
+      41
+     ],
+     "waist": [
+      28,
+      49
+     ],
+     "hand": {
+      "down": [
+       42,
+       47
+      ],
+      "up": [
+       42,
+       47
+      ],
+      "side": [
+       31,
+       47
+      ]
+     }
+    }
+   }
   },
   {
-   "id": "giant",
+   "id": "giant2",
    "name": "巨人",
-   "scale": 1.5
-  }
- ],
- "hair": [
-  {
-   "id": "hair1",
-   "name": "棕",
-   "style": "short",
-   "styleName": "短髮",
-   "color": "brown",
-   "sheet": "char_hair1.png",
-   "hex": "#684018",
-   "dyeFrom": "char_hair1.png",
-   "dye": [
-    "#684018",
-    "#251709",
-    "#533313",
-    "#3e260e",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "hair2",
-   "name": "深棕",
-   "style": "short",
-   "styleName": "短髮",
-   "color": "brown2",
-   "sheet": "char_hair2.png",
-   "hex": "#604820",
-   "dyeFrom": "char_hair1.png",
-   "dye": [
-    "#684018",
-    "#251709",
-    "#533313",
-    "#3e260e",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "hair3",
-   "name": "黑",
-   "style": "short",
-   "styleName": "短髮",
-   "color": "black",
-   "sheet": "char_hair3.png",
-   "hex": "#585858",
-   "dyeFrom": "char_hair1.png",
-   "dye": [
-    "#684018",
-    "#251709",
-    "#533313",
-    "#3e260e",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "hair4",
-   "name": "金",
-   "style": "short",
-   "styleName": "短髮",
-   "color": "blonde",
-   "sheet": "char_hair4.png",
-   "hex": "#b88830",
-   "dyeFrom": "char_hair1.png",
-   "dye": [
-    "#684018",
-    "#251709",
-    "#533313",
-    "#3e260e",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "hair5",
-   "name": "灰金",
-   "style": "short",
-   "styleName": "短髮",
-   "color": "ashblonde",
-   "sheet": "char_hair5.png",
-   "hex": "#c0a880",
-   "dyeFrom": "char_hair1.png",
-   "dye": [
-    "#684018",
-    "#251709",
-    "#533313",
-    "#3e260e",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "hair6",
-   "name": "銀白",
-   "style": "short",
-   "styleName": "短髮",
-   "color": "ashplatinum",
-   "sheet": "char_hair6.png",
-   "hex": "#c8b8a8",
-   "dyeFrom": "char_hair1.png",
-   "dye": [
-    "#684018",
-    "#251709",
-    "#533313",
-    "#3e260e",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "hair7",
-   "name": "紅",
-   "style": "short",
-   "styleName": "短髮",
-   "color": "red",
-   "sheet": "char_hair7.png",
-   "hex": "#a00830",
-   "dyeFrom": "char_hair1.png",
-   "dye": [
-    "#684018",
-    "#251709",
-    "#533313",
-    "#3e260e",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "hair8",
-   "name": "橘",
-   "style": "short",
-   "styleName": "短髮",
-   "color": "orange",
-   "sheet": "char_hair8.png",
-   "hex": "#b83000",
-   "dyeFrom": "char_hair1.png",
-   "dye": [
-    "#684018",
-    "#251709",
-    "#533313",
-    "#3e260e",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "hair9",
-   "name": "玫瑰粉",
-   "style": "short",
-   "styleName": "短髮",
-   "color": "rosepink",
-   "sheet": "char_hair9.png",
-   "hex": "#b87070",
-   "dyeFrom": "char_hair1.png",
-   "dye": [
-    "#684018",
-    "#251709",
-    "#533313",
-    "#3e260e",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "hair10",
-   "name": "綠",
-   "style": "short",
-   "styleName": "短髮",
-   "color": "green",
-   "sheet": "char_hair10.png",
-   "hex": "#008050",
-   "dyeFrom": "char_hair1.png",
-   "dye": [
-    "#684018",
-    "#251709",
-    "#533313",
-    "#3e260e",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "hair11",
-   "name": "藍",
-   "style": "short",
-   "styleName": "短髮",
-   "color": "blue",
-   "sheet": "char_hair11.png",
-   "hex": "#20a8b8",
-   "dyeFrom": "char_hair1.png",
-   "dye": [
-    "#684018",
-    "#251709",
-    "#533313",
-    "#3e260e",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "hair12",
-   "name": "紫",
-   "style": "short",
-   "styleName": "短髮",
-   "color": "purple",
-   "sheet": "char_hair12.png",
-   "hex": "#702078",
-   "dyeFrom": "char_hair1.png",
-   "dye": [
-    "#684018",
-    "#251709",
-    "#533313",
-    "#3e260e",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "afro_brown",
-   "name": "棕",
-   "style": "afro",
-   "styleName": "爆炸頭",
-   "color": "brown",
-   "sheet": "char_hair_afro_brown.png",
-   "hex": "#684018",
-   "dyeFrom": "char_hair_afro_brown.png",
-   "dye": [
-    "#684018",
-    "#533313",
-    "#3e260e",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "afro_brown2",
-   "name": "深棕",
-   "style": "afro",
-   "styleName": "爆炸頭",
-   "color": "brown2",
-   "sheet": "char_hair_afro_brown2.png",
-   "hex": "#604820",
-   "dyeFrom": "char_hair_afro_brown.png",
-   "dye": [
-    "#684018",
-    "#533313",
-    "#3e260e",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "afro_black",
-   "name": "黑",
-   "style": "afro",
-   "styleName": "爆炸頭",
-   "color": "black",
-   "sheet": "char_hair_afro_black.png",
-   "hex": "#585858",
-   "dyeFrom": "char_hair_afro_brown.png",
-   "dye": [
-    "#684018",
-    "#533313",
-    "#3e260e",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "afro_blonde",
-   "name": "金",
-   "style": "afro",
-   "styleName": "爆炸頭",
-   "color": "blonde",
-   "sheet": "char_hair_afro_blonde.png",
-   "hex": "#b88830",
-   "dyeFrom": "char_hair_afro_brown.png",
-   "dye": [
-    "#684018",
-    "#533313",
-    "#3e260e",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "afro_ashblonde",
-   "name": "灰金",
-   "style": "afro",
-   "styleName": "爆炸頭",
-   "color": "ashblonde",
-   "sheet": "char_hair_afro_ashblonde.png",
-   "hex": "#c0a880",
-   "dyeFrom": "char_hair_afro_brown.png",
-   "dye": [
-    "#684018",
-    "#533313",
-    "#3e260e",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "afro_ashplatinum",
-   "name": "銀白",
-   "style": "afro",
-   "styleName": "爆炸頭",
-   "color": "ashplatinum",
-   "sheet": "char_hair_afro_ashplatinum.png",
-   "hex": "#c8b8a8",
-   "dyeFrom": "char_hair_afro_brown.png",
-   "dye": [
-    "#684018",
-    "#533313",
-    "#3e260e",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "afro_red",
-   "name": "紅",
-   "style": "afro",
-   "styleName": "爆炸頭",
-   "color": "red",
-   "sheet": "char_hair_afro_red.png",
-   "hex": "#a00830",
-   "dyeFrom": "char_hair_afro_brown.png",
-   "dye": [
-    "#684018",
-    "#533313",
-    "#3e260e",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "afro_orange",
-   "name": "橘",
-   "style": "afro",
-   "styleName": "爆炸頭",
-   "color": "orange",
-   "sheet": "char_hair_afro_orange.png",
-   "hex": "#b83000",
-   "dyeFrom": "char_hair_afro_brown.png",
-   "dye": [
-    "#684018",
-    "#533313",
-    "#3e260e",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "afro_rosepink",
-   "name": "玫瑰粉",
-   "style": "afro",
-   "styleName": "爆炸頭",
-   "color": "rosepink",
-   "sheet": "char_hair_afro_rosepink.png",
-   "hex": "#b87070",
-   "dyeFrom": "char_hair_afro_brown.png",
-   "dye": [
-    "#684018",
-    "#533313",
-    "#3e260e",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "afro_green",
-   "name": "綠",
-   "style": "afro",
-   "styleName": "爆炸頭",
-   "color": "green",
-   "sheet": "char_hair_afro_green.png",
-   "hex": "#008050",
-   "dyeFrom": "char_hair_afro_brown.png",
-   "dye": [
-    "#684018",
-    "#533313",
-    "#3e260e",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "afro_blue",
-   "name": "藍",
-   "style": "afro",
-   "styleName": "爆炸頭",
-   "color": "blue",
-   "sheet": "char_hair_afro_blue.png",
-   "hex": "#20a8b8",
-   "dyeFrom": "char_hair_afro_brown.png",
-   "dye": [
-    "#684018",
-    "#533313",
-    "#3e260e",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "afro_purple",
-   "name": "紫",
-   "style": "afro",
-   "styleName": "爆炸頭",
-   "color": "purple",
-   "sheet": "char_hair_afro_purple.png",
-   "hex": "#702078",
-   "dyeFrom": "char_hair_afro_brown.png",
-   "dye": [
-    "#684018",
-    "#533313",
-    "#3e260e",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "bob_brown",
-   "name": "棕",
-   "style": "bob",
-   "styleName": "鮑伯頭",
-   "color": "brown",
-   "sheet": "char_hair_bob_brown.png",
-   "hex": "#684018",
-   "dyeFrom": "char_hair_bob_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#533313",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "bob_brown2",
-   "name": "深棕",
-   "style": "bob",
-   "styleName": "鮑伯頭",
-   "color": "brown2",
-   "sheet": "char_hair_bob_brown2.png",
-   "hex": "#604820",
-   "dyeFrom": "char_hair_bob_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#533313",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "bob_black",
-   "name": "黑",
-   "style": "bob",
-   "styleName": "鮑伯頭",
-   "color": "black",
-   "sheet": "char_hair_bob_black.png",
-   "hex": "#585858",
-   "dyeFrom": "char_hair_bob_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#533313",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "bob_blonde",
-   "name": "金",
-   "style": "bob",
-   "styleName": "鮑伯頭",
-   "color": "blonde",
-   "sheet": "char_hair_bob_blonde.png",
-   "hex": "#b88830",
-   "dyeFrom": "char_hair_bob_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#533313",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "bob_ashblonde",
-   "name": "灰金",
-   "style": "bob",
-   "styleName": "鮑伯頭",
-   "color": "ashblonde",
-   "sheet": "char_hair_bob_ashblonde.png",
-   "hex": "#c0a880",
-   "dyeFrom": "char_hair_bob_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#533313",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "bob_ashplatinum",
-   "name": "銀白",
-   "style": "bob",
-   "styleName": "鮑伯頭",
-   "color": "ashplatinum",
-   "sheet": "char_hair_bob_ashplatinum.png",
-   "hex": "#c8b8a8",
-   "dyeFrom": "char_hair_bob_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#533313",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "bob_red",
-   "name": "紅",
-   "style": "bob",
-   "styleName": "鮑伯頭",
-   "color": "red",
-   "sheet": "char_hair_bob_red.png",
-   "hex": "#a00830",
-   "dyeFrom": "char_hair_bob_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#533313",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "bob_orange",
-   "name": "橘",
-   "style": "bob",
-   "styleName": "鮑伯頭",
-   "color": "orange",
-   "sheet": "char_hair_bob_orange.png",
-   "hex": "#b83000",
-   "dyeFrom": "char_hair_bob_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#533313",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "bob_rosepink",
-   "name": "玫瑰粉",
-   "style": "bob",
-   "styleName": "鮑伯頭",
-   "color": "rosepink",
-   "sheet": "char_hair_bob_rosepink.png",
-   "hex": "#b87070",
-   "dyeFrom": "char_hair_bob_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#533313",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "bob_green",
-   "name": "綠",
-   "style": "bob",
-   "styleName": "鮑伯頭",
-   "color": "green",
-   "sheet": "char_hair_bob_green.png",
-   "hex": "#008050",
-   "dyeFrom": "char_hair_bob_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#533313",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "bob_blue",
-   "name": "藍",
-   "style": "bob",
-   "styleName": "鮑伯頭",
-   "color": "blue",
-   "sheet": "char_hair_bob_blue.png",
-   "hex": "#20a8b8",
-   "dyeFrom": "char_hair_bob_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#533313",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "bob_purple",
-   "name": "紫",
-   "style": "bob",
-   "styleName": "鮑伯頭",
-   "color": "purple",
-   "sheet": "char_hair_bob_purple.png",
-   "hex": "#702078",
-   "dyeFrom": "char_hair_bob_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#533313",
-    "#251709",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "curly_brown",
-   "name": "棕",
-   "style": "curly",
-   "styleName": "捲長髮",
-   "color": "brown",
-   "sheet": "char_hair_curly_brown.png",
-   "hex": "#684018",
-   "dyeFrom": "char_hair_curly_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "curly_brown2",
-   "name": "深棕",
-   "style": "curly",
-   "styleName": "捲長髮",
-   "color": "brown2",
-   "sheet": "char_hair_curly_brown2.png",
-   "hex": "#604820",
-   "dyeFrom": "char_hair_curly_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "curly_black",
-   "name": "黑",
-   "style": "curly",
-   "styleName": "捲長髮",
-   "color": "black",
-   "sheet": "char_hair_curly_black.png",
-   "hex": "#585858",
-   "dyeFrom": "char_hair_curly_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "curly_blonde",
-   "name": "金",
-   "style": "curly",
-   "styleName": "捲長髮",
-   "color": "blonde",
-   "sheet": "char_hair_curly_blonde.png",
-   "hex": "#b88830",
-   "dyeFrom": "char_hair_curly_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "curly_ashblonde",
-   "name": "灰金",
-   "style": "curly",
-   "styleName": "捲長髮",
-   "color": "ashblonde",
-   "sheet": "char_hair_curly_ashblonde.png",
-   "hex": "#c0a880",
-   "dyeFrom": "char_hair_curly_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "curly_ashplatinum",
-   "name": "銀白",
-   "style": "curly",
-   "styleName": "捲長髮",
-   "color": "ashplatinum",
-   "sheet": "char_hair_curly_ashplatinum.png",
-   "hex": "#c8b8a8",
-   "dyeFrom": "char_hair_curly_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "curly_red",
-   "name": "紅",
-   "style": "curly",
-   "styleName": "捲長髮",
-   "color": "red",
-   "sheet": "char_hair_curly_red.png",
-   "hex": "#a00830",
-   "dyeFrom": "char_hair_curly_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "curly_orange",
-   "name": "橘",
-   "style": "curly",
-   "styleName": "捲長髮",
-   "color": "orange",
-   "sheet": "char_hair_curly_orange.png",
-   "hex": "#b83000",
-   "dyeFrom": "char_hair_curly_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "curly_rosepink",
-   "name": "玫瑰粉",
-   "style": "curly",
-   "styleName": "捲長髮",
-   "color": "rosepink",
-   "sheet": "char_hair_curly_rosepink.png",
-   "hex": "#b87070",
-   "dyeFrom": "char_hair_curly_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "curly_green",
-   "name": "綠",
-   "style": "curly",
-   "styleName": "捲長髮",
-   "color": "green",
-   "sheet": "char_hair_curly_green.png",
-   "hex": "#008050",
-   "dyeFrom": "char_hair_curly_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "curly_blue",
-   "name": "藍",
-   "style": "curly",
-   "styleName": "捲長髮",
-   "color": "blue",
-   "sheet": "char_hair_curly_blue.png",
-   "hex": "#20a8b8",
-   "dyeFrom": "char_hair_curly_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "curly_purple",
-   "name": "紫",
-   "style": "curly",
-   "styleName": "捲長髮",
-   "color": "purple",
-   "sheet": "char_hair_curly_purple.png",
-   "hex": "#702078",
-   "dyeFrom": "char_hair_curly_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "long_brown",
-   "name": "棕",
-   "style": "long",
-   "styleName": "長髮",
-   "color": "brown",
-   "sheet": "char_hair_long_brown.png",
-   "hex": "#684018",
-   "dyeFrom": "char_hair_long_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "long_brown2",
-   "name": "深棕",
-   "style": "long",
-   "styleName": "長髮",
-   "color": "brown2",
-   "sheet": "char_hair_long_brown2.png",
-   "hex": "#604820",
-   "dyeFrom": "char_hair_long_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "long_black",
-   "name": "黑",
-   "style": "long",
-   "styleName": "長髮",
-   "color": "black",
-   "sheet": "char_hair_long_black.png",
-   "hex": "#585858",
-   "dyeFrom": "char_hair_long_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "long_blonde",
-   "name": "金",
-   "style": "long",
-   "styleName": "長髮",
-   "color": "blonde",
-   "sheet": "char_hair_long_blonde.png",
-   "hex": "#b88830",
-   "dyeFrom": "char_hair_long_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "long_ashblonde",
-   "name": "灰金",
-   "style": "long",
-   "styleName": "長髮",
-   "color": "ashblonde",
-   "sheet": "char_hair_long_ashblonde.png",
-   "hex": "#c0a880",
-   "dyeFrom": "char_hair_long_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "long_ashplatinum",
-   "name": "銀白",
-   "style": "long",
-   "styleName": "長髮",
-   "color": "ashplatinum",
-   "sheet": "char_hair_long_ashplatinum.png",
-   "hex": "#c8b8a8",
-   "dyeFrom": "char_hair_long_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "long_red",
-   "name": "紅",
-   "style": "long",
-   "styleName": "長髮",
-   "color": "red",
-   "sheet": "char_hair_long_red.png",
-   "hex": "#a00830",
-   "dyeFrom": "char_hair_long_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "long_orange",
-   "name": "橘",
-   "style": "long",
-   "styleName": "長髮",
-   "color": "orange",
-   "sheet": "char_hair_long_orange.png",
-   "hex": "#b83000",
-   "dyeFrom": "char_hair_long_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "long_rosepink",
-   "name": "玫瑰粉",
-   "style": "long",
-   "styleName": "長髮",
-   "color": "rosepink",
-   "sheet": "char_hair_long_rosepink.png",
-   "hex": "#b87070",
-   "dyeFrom": "char_hair_long_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "long_green",
-   "name": "綠",
-   "style": "long",
-   "styleName": "長髮",
-   "color": "green",
-   "sheet": "char_hair_long_green.png",
-   "hex": "#008050",
-   "dyeFrom": "char_hair_long_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "long_blue",
-   "name": "藍",
-   "style": "long",
-   "styleName": "長髮",
-   "color": "blue",
-   "sheet": "char_hair_long_blue.png",
-   "hex": "#20a8b8",
-   "dyeFrom": "char_hair_long_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
-  },
-  {
-   "id": "long_purple",
-   "name": "紫",
-   "style": "long",
-   "styleName": "長髮",
-   "color": "purple",
-   "sheet": "char_hair_long_purple.png",
-   "hex": "#702078",
-   "dyeFrom": "char_hair_long_brown.png",
-   "dye": [
-    "#684018",
-    "#3e260e",
-    "#251709",
-    "#533313",
-    "#997d62"
-   ]
+   "scale": 1.0,
+   "nameH": 74,
+   "own": {
+    "cell": 96,
+    "ox": 16,
+    "oy": 32,
+    "sheets": {
+     "body": "giant2_body.png",
+     "bottom": "giant2_bottom.png",
+     "shoes": "giant2_shoes.png",
+     "top": "giant2_top.png",
+     "face": "giant2_face.png",
+     "hair": "giant2_hair.png",
+     "bodyz": "giant2_bodyz.png"
+    },
+    "outline": null,
+    "styles": {
+     "hair": [
+      {
+       "id": "h2_puff",
+       "name": "蓬蓬短髮",
+       "sheets": {
+        "hair": "giant2_hair_puff.png"
+       }
+      },
+      {
+       "id": "h2_bob",
+       "name": "鮑伯",
+       "sheets": {}
+      },
+      {
+       "id": "h2_long",
+       "name": "中長髮",
+       "sheets": {
+        "hair": "giant2_hair_long.png"
+       }
+      },
+      {
+       "id": "h2_flip",
+       "name": "外翹髮",
+       "sheets": {
+        "hair": "giant2_hair_flip.png"
+       }
+      },
+      {
+       "id": "h2_pony",
+       "name": "馬尾",
+       "sheets": {
+        "hair": "giant2_hair_pony.png"
+       }
+      },
+      {
+       "id": "h2_twin",
+       "name": "雙馬尾",
+       "sheets": {
+        "hair": "giant2_hair_twin.png"
+       }
+      },
+      {
+       "id": "h2_oil",
+       "name": "油頭",
+       "sheets": {
+        "hair": "giant2_hair_oil.png"
+       }
+      }
+     ],
+     "top": [
+      {
+       "id": "suit_jacket",
+       "name": "女式西裝外套",
+       "sheets": {}
+      },
+      {
+       "id": "suit_jacket_m",
+       "name": "男式西裝外套",
+       "sheets": {
+        "top": "giant2_m_top.png"
+       }
+      },
+      {
+       "id": "ninja_garb",
+       "name": "忍者服",
+       "sheets": {
+        "top": "giant2_n_top.png"
+       }
+      },
+      {
+       "id": "blm_garb",
+       "name": "黑魔法師長袍",
+       "sheets": {
+        "top": "giant2_b_top.png"
+       }
+      },
+      {
+       "id": "wm_robe",
+       "name": "白魔法師長袍",
+       "sheets": {
+        "top": "giant2_w_top.png"
+       }
+      },
+      {
+       "id": "sage_coat",
+       "name": "賢者長外套",
+       "sheets": {
+        "top": "giant2_s_top.png"
+       }
+      },
+      {
+       "id": "dragoon_armor",
+       "name": "龍騎士鎧甲",
+       "sheets": {
+        "top": "giant2_g_top.png"
+       }
+      },
+      {
+       "id": "warrior_armor",
+       "name": "戰士鎧甲",
+       "sheets": {
+        "top": "giant2_r_top.png"
+       }
+      },
+      {
+       "id": "bard_garb",
+       "name": "吟遊詩人斗篷",
+       "sheets": {
+        "top": "giant2_d_top.png"
+       }
+      },
+      {
+       "id": "knight_armor",
+       "name": "騎士鎧甲",
+       "sheets": {
+        "top": "giant2_k_top.png"
+       }
+      }
+     ],
+     "bottom": [
+      {
+       "id": "suit_skirt",
+       "name": "西裝短裙",
+       "sheets": {}
+      },
+      {
+       "id": "suit_pants_m",
+       "name": "西裝褲",
+       "sheets": {
+        "bottom": "giant2_m_bottom.png"
+       }
+      },
+      {
+       "id": "ninja_pants",
+       "name": "忍者寬褲",
+       "sheets": {
+        "bottom": "giant2_n_bottom.png"
+       }
+      },
+      {
+       "id": "blm_pants",
+       "name": "黑魔法師長褲",
+       "sheets": {
+        "bottom": "giant2_b_bottom.png"
+       }
+      },
+      {
+       "id": "wm_pants",
+       "name": "白魔法師長褲",
+       "sheets": {
+        "bottom": "giant2_w_bottom.png"
+       }
+      },
+      {
+       "id": "sage_pants",
+       "name": "賢者長褲",
+       "sheets": {
+        "bottom": "giant2_s_bottom.png"
+       }
+      },
+      {
+       "id": "dragoon_legs",
+       "name": "龍騎士腿甲",
+       "sheets": {
+        "bottom": "giant2_g_bottom.png"
+       }
+      },
+      {
+       "id": "warrior_legs",
+       "name": "戰士腿甲",
+       "sheets": {
+        "bottom": "giant2_r_bottom.png"
+       }
+      },
+      {
+       "id": "bard_pants",
+       "name": "吟遊詩人長褲",
+       "sheets": {
+        "bottom": "giant2_d_bottom.png"
+       }
+      },
+      {
+       "id": "knight_legs",
+       "name": "騎士腿甲",
+       "sheets": {
+        "bottom": "giant2_k_bottom.png"
+       }
+      }
+     ],
+     "shoe": [
+      {
+       "id": "pointed_shoes",
+       "name": "尖皮鞋",
+       "sheets": {}
+      },
+      {
+       "id": "leather_shoes_m",
+       "name": "皮鞋",
+       "sheets": {
+        "shoes": "giant2_m_shoes.png"
+       }
+      },
+      {
+       "id": "ninja_boots",
+       "name": "忍者靴",
+       "sheets": {
+        "shoes": "giant2_n_shoes.png"
+       }
+      },
+      {
+       "id": "blm_boots",
+       "name": "黑魔法師靴",
+       "sheets": {
+        "shoes": "giant2_b_shoes.png"
+       }
+      },
+      {
+       "id": "wm_boots",
+       "name": "白魔法師靴",
+       "sheets": {
+        "shoes": "giant2_w_shoes.png"
+       }
+      },
+      {
+       "id": "sage_boots",
+       "name": "賢者靴",
+       "sheets": {
+        "shoes": "giant2_s_shoes.png"
+       }
+      },
+      {
+       "id": "dragoon_boots",
+       "name": "龍騎士靴",
+       "sheets": {
+        "shoes": "giant2_g_shoes.png"
+       }
+      },
+      {
+       "id": "warrior_boots",
+       "name": "戰士靴",
+       "sheets": {
+        "shoes": "giant2_r_shoes.png"
+       }
+      },
+      {
+       "id": "bard_boots",
+       "name": "吟遊詩人靴",
+       "sheets": {
+        "shoes": "giant2_d_shoes.png"
+       }
+      },
+      {
+       "id": "knight_boots",
+       "name": "騎士靴",
+       "sheets": {
+        "shoes": "giant2_k_shoes.png"
+       }
+      }
+     ],
+     "hat": [
+      {
+       "id": "blm_hat",
+       "name": "黑魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "giant2_b_hat.png"
+       }
+      },
+      {
+       "id": "wm_hat",
+       "name": "白魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "giant2_w_hat.png"
+       }
+      },
+      {
+       "id": "sage_hat",
+       "name": "賢者貝雷帽",
+       "hairFromHat": true,
+       "hairCutDy": -8,
+       "sheets": {
+        "hat": "giant2_s_hat.png"
+       }
+      },
+      {
+       "id": "bard_hat",
+       "name": "吟遊詩人帽",
+       "hairFromHat": true,
+       "hairCutDy": -1,
+       "sheets": {
+        "hat": "giant2_d_hat.png"
+       }
+      },
+      {
+       "id": "knight_helm",
+       "name": "騎士頭盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "giant2_k_hat.png"
+       }
+      },
+      {
+       "id": "dragoon_helm",
+       "name": "龍騎士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "giant2_g_hat.png"
+       }
+      },
+      {
+       "id": "warrior_helm",
+       "name": "戰士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "giant2_r_hat.png"
+       }
+      }
+     ]
+    },
+    "dye": [
+     {
+      "slot": "hair",
+      "layers": [
+       "hair"
+      ],
+      "colors": [
+       "#7482b2",
+       "#c8d4f8",
+       "#8494c0",
+       "#8c7aac",
+       "#6472a2",
+       "#3c4a7c",
+       "#222846"
+      ]
+     },
+     {
+      "slot": "top",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#221c1c",
+       "#110e0e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#3c3434",
+       "#4e4646",
+       "#221c1c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2e201e",
+       "#5c5458",
+       "#17100f"
+      ]
+     },
+     {
+      "slot": "skin",
+      "layers": [
+       "body",
+       "hair",
+       "top",
+       "bodyz"
+      ],
+      "colors": [
+       "#ffe8d2",
+       "#deb2a0",
+       "#b39894",
+       "#744a3c"
+      ]
+     },
+     {
+      "slot": "eye",
+      "layers": [
+       "face"
+      ],
+      "colors": [
+       "#787780",
+       "#4a4242"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "suit_jacket_m",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#463a39",
+       "#524443"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "suit_pants_m",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#463a39",
+       "#221918",
+       "#2f211e",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466",
+       "#8c7e7f"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "leather_shoes_m",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#2f211e",
+       "#221918",
+       "#382a27",
+       "#524443",
+       "#61575a",
+       "#716466"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "ninja_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#302a35",
+       "#1a161e",
+       "#252029",
+       "#3b3440",
+       "#463e4b",
+       "#514857",
+       "#5c5262"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "ninja_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#382f39",
+       "#201a22",
+       "#2c252e",
+       "#443a45",
+       "#504551",
+       "#5c4f5c",
+       "#685a68"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "ninja_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#5b2a2f",
+       "#381820",
+       "#492128",
+       "#6c3337",
+       "#7d3c3f",
+       "#8f4546",
+       "#a04e4e"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "blm_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#332b47",
+       "#141022",
+       "#231e35",
+       "#42395a",
+       "#51476d",
+       "#61547f",
+       "#706292"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "blm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#2d2740",
+       "#161224",
+       "#221c32",
+       "#39314e",
+       "#453b5c",
+       "#50466a",
+       "#5c5078"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "blm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#292237",
+       "#14101e",
+       "#1f192a",
+       "#342b43",
+       "#3f344f",
+       "#493d5c",
+       "#544668"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "blm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#221c36",
+       "#100c1c",
+       "#362c52",
+       "#524474"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "wm_robe",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#efe4d9",
+       "#ceb8ac",
+       "#d6c3b7",
+       "#decec3",
+       "#e6d9ce",
+       "#f7efe5",
+       "#fffaf0"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "wm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#826f63",
+       "#54443e",
+       "#63524a",
+       "#736157",
+       "#917d6f",
+       "#a18c7c",
+       "#b09a88"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "wm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#6c4a39",
+       "#3a241e",
+       "#4b3127",
+       "#5b3d30",
+       "#7d5742",
+       "#8d634b",
+       "#9e7054"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "wm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e2d0c2",
+       "#8e645c",
+       "#f4eade",
+       "#fffaf2"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "sage_coat",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#ebe6e2",
+       "#c8beba",
+       "#d1c8c4",
+       "#d9d2ce",
+       "#e2dcd8",
+       "#f3f0ec",
+       "#fcfaf6"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sage_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#393942",
+       "#22222a",
+       "#2d2d36",
+       "#44444e",
+       "#4f4f5a",
+       "#5b5b66",
+       "#666672"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sage_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#47352b",
+       "#2c201c",
+       "#392a23",
+       "#543f32",
+       "#614939",
+       "#6f5441",
+       "#7c5e48"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sage_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#dedad6",
+       "#686064",
+       "#f2f0ec",
+       "#fefdfa"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "dragoon_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "dragoon_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "dragoon_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#4f4a6b",
+       "#2c2941",
+       "#3d3956",
+       "#615b80",
+       "#726b95",
+       "#847caa",
+       "#1a182c"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "dragoon_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#504c76",
+       "#3a365a",
+       "#6c6694",
+       "#8c86b6",
+       "#161424"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "warrior_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "warrior_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "warrior_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "warrior_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#888286",
+       "#605a5e",
+       "#aea8aa",
+       "#cec8ca",
+       "#221e22"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "bard_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#475539",
+       "#253020",
+       "#36432d",
+       "#586745",
+       "#697a52",
+       "#7a8c5e",
+       "#141e14",
+       "#e8e0d0",
+       "#c7beab",
+       "#d7cfbd",
+       "#f8f1e2",
+       "#b7ac99",
+       "#a69b86"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "bard_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#513927",
+       "#221610",
+       "#322218",
+       "#412d1f",
+       "#61452f",
+       "#705036",
+       "#805c3e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "bard_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#462f21",
+       "#1e120e",
+       "#2b1c14",
+       "#39251b",
+       "#533927",
+       "#61422e",
+       "#6e4c34"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "bard_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#323e26",
+       "#121a10",
+       "#485836",
+       "#62724c"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "knight_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "knight_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "knight_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "knight_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e0dee6",
+       "#bcb8c6",
+       "#f6f4f8",
+       "#fffefc",
+       "#807c8c"
+      ]
+     }
+    ],
+    "anchors": {
+     "back": [
+      27,
+      30
+     ],
+     "backView": [
+      37,
+      30
+     ],
+     "waist": [
+      28,
+      42
+     ],
+     "hand": {
+      "down": [
+       42,
+       40
+      ],
+      "up": [
+       42,
+       40
+      ],
+      "side": [
+       31,
+       40
+      ]
+     }
+    }
+   }
   }
  ],
  "tops": [
   {
-   "id": "tshirt",
-   "name": "T恤",
-   "sheet": "char_top_tshirt_m.png",
-   "sheetF": "char_top_tshirt_f.png",
+   "id": "suit_jacket",
+   "name": "女式西裝外套",
+   "glam": true,
    "dye": [
-    "#e5e6c7",
-    "#c4b59f",
-    "#958080",
-    "#4d4a5d",
-    "#ffffff"
-   ],
-   "glam": true
+    "#3c3434",
+    "#4e4646",
+    "#221c1c",
+    "#110e0e"
+   ]
+  },
+  {
+   "id": "suit_jacket_m",
+   "name": "男式西裝外套",
+   "glam": true,
+   "dye": [
+    "#2f211e",
+    "#221918",
+    "#382a27",
+    "#463a39",
+    "#524443"
+   ]
+  },
+  {
+   "id": "ninja_garb",
+   "name": "忍者服",
+   "keepGear": true,
+   "dye": [
+    "#302a35",
+    "#1a161e",
+    "#252029",
+    "#3b3440",
+    "#463e4b",
+    "#514857",
+    "#5c5262"
+   ]
+  },
+  {
+   "id": "blm_garb",
+   "name": "黑魔法師長袍",
+   "keepGear": true,
+   "dye": [
+    "#332b47",
+    "#141022",
+    "#231e35",
+    "#42395a",
+    "#51476d",
+    "#61547f",
+    "#706292"
+   ]
+  },
+  {
+   "id": "wm_robe",
+   "name": "白魔法師長袍",
+   "keepGear": true,
+   "dye": [
+    "#efe4d9",
+    "#ceb8ac",
+    "#d6c3b7",
+    "#decec3",
+    "#e6d9ce",
+    "#f7efe5",
+    "#fffaf0"
+   ]
+  },
+  {
+   "id": "sage_coat",
+   "name": "賢者長外套",
+   "keepGear": true,
+   "dye": [
+    "#ebe6e2",
+    "#c8beba",
+    "#d1c8c4",
+    "#d9d2ce",
+    "#e2dcd8",
+    "#f3f0ec",
+    "#fcfaf6"
+   ]
+  },
+  {
+   "id": "dragoon_armor",
+   "name": "龍騎士鎧甲",
+   "keepGear": true,
+   "dye": [
+    "#4f4a6b",
+    "#2c2941",
+    "#3d3956",
+    "#615b80",
+    "#726b95",
+    "#847caa",
+    "#1a182c"
+   ]
+  },
+  {
+   "id": "warrior_armor",
+   "name": "戰士鎧甲",
+   "keepGear": true,
+   "dye": [
+    "#767174",
+    "#423e41",
+    "#5c575b",
+    "#908b8d",
+    "#aaa4a7",
+    "#c4bec0",
+    "#282428"
+   ]
+  },
+  {
+   "id": "bard_garb",
+   "name": "吟遊詩人斗篷",
+   "keepGear": true,
+   "dye": [
+    "#475539",
+    "#253020",
+    "#36432d",
+    "#586745",
+    "#697a52",
+    "#7a8c5e",
+    "#141e14",
+    "#e8e0d0",
+    "#c7beab",
+    "#d7cfbd",
+    "#f8f1e2",
+    "#b7ac99",
+    "#a69b86"
+   ]
+  },
+  {
+   "id": "knight_armor",
+   "name": "騎士鎧甲",
+   "keepGear": true,
+   "dye": [
+    "#d6d3d6",
+    "#adaab2",
+    "#c2bec4",
+    "#eae8e8",
+    "#fffdfa",
+    "#9895a0",
+    "#84808e"
+   ]
   },
   {
    "id": "plate",
@@ -4687,17 +7499,141 @@
  ],
  "bottoms": [
   {
-   "id": "pants",
-   "name": "長褲",
-   "sheet": "char_bottom_pants_m.png",
-   "sheetF": "char_bottom_pants_f.png",
+   "id": "suit_skirt",
+   "name": "西裝短裙",
+   "glam": true,
    "dye": [
-    "#c4b59f",
-    "#e5e6c7",
-    "#958080",
-    "#4d4a5d"
-   ],
-   "glam": true
+    "#3c3434",
+    "#4e4646",
+    "#221c1c"
+   ]
+  },
+  {
+   "id": "suit_pants_m",
+   "name": "西裝褲",
+   "glam": true,
+   "dye": [
+    "#463a39",
+    "#221918",
+    "#2f211e",
+    "#382a27",
+    "#524443",
+    "#61575a",
+    "#716466",
+    "#8c7e7f"
+   ]
+  },
+  {
+   "id": "ninja_pants",
+   "name": "忍者寬褲",
+   "keepGear": true,
+   "dye": [
+    "#382f39",
+    "#201a22",
+    "#2c252e",
+    "#443a45",
+    "#504551",
+    "#5c4f5c",
+    "#685a68"
+   ]
+  },
+  {
+   "id": "blm_pants",
+   "name": "黑魔法師長褲",
+   "keepGear": true,
+   "dye": [
+    "#2d2740",
+    "#161224",
+    "#221c32",
+    "#39314e",
+    "#453b5c",
+    "#50466a",
+    "#5c5078"
+   ]
+  },
+  {
+   "id": "wm_pants",
+   "name": "白魔法師長褲",
+   "keepGear": true,
+   "dye": [
+    "#826f63",
+    "#54443e",
+    "#63524a",
+    "#736157",
+    "#917d6f",
+    "#a18c7c",
+    "#b09a88"
+   ]
+  },
+  {
+   "id": "sage_pants",
+   "name": "賢者長褲",
+   "keepGear": true,
+   "dye": [
+    "#393942",
+    "#22222a",
+    "#2d2d36",
+    "#44444e",
+    "#4f4f5a",
+    "#5b5b66",
+    "#666672"
+   ]
+  },
+  {
+   "id": "dragoon_legs",
+   "name": "龍騎士腿甲",
+   "keepGear": true,
+   "dye": [
+    "#4f4a6b",
+    "#2c2941",
+    "#3d3956",
+    "#615b80",
+    "#726b95",
+    "#847caa",
+    "#1a182c"
+   ]
+  },
+  {
+   "id": "warrior_legs",
+   "name": "戰士腿甲",
+   "keepGear": true,
+   "dye": [
+    "#767174",
+    "#423e41",
+    "#5c575b",
+    "#908b8d",
+    "#aaa4a7",
+    "#c4bec0",
+    "#282428"
+   ]
+  },
+  {
+   "id": "bard_pants",
+   "name": "吟遊詩人長褲",
+   "keepGear": true,
+   "dye": [
+    "#513927",
+    "#221610",
+    "#322218",
+    "#412d1f",
+    "#61452f",
+    "#705036",
+    "#805c3e"
+   ]
+  },
+  {
+   "id": "knight_legs",
+   "name": "騎士腿甲",
+   "keepGear": true,
+   "dye": [
+    "#d6d3d6",
+    "#adaab2",
+    "#c2bec4",
+    "#eae8e8",
+    "#fffdfa",
+    "#9895a0",
+    "#84808e"
+   ]
   },
   {
    "id": "plate_legs",
@@ -4755,18 +7691,139 @@
  ],
  "shoes": [
   {
-   "id": "shoes",
-   "name": "鞋子",
-   "sheet": "char_shoes_m.png",
-   "sheetF": "char_shoes_f.png",
+   "id": "pointed_shoes",
+   "name": "尖皮鞋",
+   "glam": true,
    "dye": [
-    "#c4b59f",
-    "#e5e6c7",
-    "#ffffff",
-    "#958080",
-    "#4d4a5d"
-   ],
-   "glam": true
+    "#2e201e",
+    "#5c5458",
+    "#17100f"
+   ]
+  },
+  {
+   "id": "leather_shoes_m",
+   "name": "皮鞋",
+   "glam": true,
+   "dye": [
+    "#2f211e",
+    "#221918",
+    "#382a27",
+    "#524443",
+    "#61575a",
+    "#716466"
+   ]
+  },
+  {
+   "id": "ninja_boots",
+   "name": "忍者靴",
+   "keepGear": true,
+   "dye": [
+    "#5b2a2f",
+    "#381820",
+    "#492128",
+    "#6c3337",
+    "#7d3c3f",
+    "#8f4546",
+    "#a04e4e"
+   ]
+  },
+  {
+   "id": "blm_boots",
+   "name": "黑魔法師靴",
+   "keepGear": true,
+   "dye": [
+    "#292237",
+    "#14101e",
+    "#1f192a",
+    "#342b43",
+    "#3f344f",
+    "#493d5c",
+    "#544668"
+   ]
+  },
+  {
+   "id": "wm_boots",
+   "name": "白魔法師靴",
+   "keepGear": true,
+   "dye": [
+    "#6c4a39",
+    "#3a241e",
+    "#4b3127",
+    "#5b3d30",
+    "#7d5742",
+    "#8d634b",
+    "#9e7054"
+   ]
+  },
+  {
+   "id": "sage_boots",
+   "name": "賢者靴",
+   "keepGear": true,
+   "dye": [
+    "#47352b",
+    "#2c201c",
+    "#392a23",
+    "#543f32",
+    "#614939",
+    "#6f5441",
+    "#7c5e48"
+   ]
+  },
+  {
+   "id": "dragoon_boots",
+   "name": "龍騎士靴",
+   "keepGear": true,
+   "dye": [
+    "#4f4a6b",
+    "#2c2941",
+    "#3d3956",
+    "#615b80",
+    "#726b95",
+    "#847caa",
+    "#1a182c"
+   ]
+  },
+  {
+   "id": "warrior_boots",
+   "name": "戰士靴",
+   "keepGear": true,
+   "dye": [
+    "#767174",
+    "#423e41",
+    "#5c575b",
+    "#908b8d",
+    "#aaa4a7",
+    "#c4bec0",
+    "#282428"
+   ]
+  },
+  {
+   "id": "bard_boots",
+   "name": "吟遊詩人靴",
+   "keepGear": true,
+   "dye": [
+    "#462f21",
+    "#1e120e",
+    "#2b1c14",
+    "#39251b",
+    "#533927",
+    "#61422e",
+    "#6e4c34"
+   ]
+  },
+  {
+   "id": "knight_boots",
+   "name": "騎士靴",
+   "keepGear": true,
+   "dye": [
+    "#d6d3d6",
+    "#adaab2",
+    "#c2bec4",
+    "#eae8e8",
+    "#fffdfa",
+    "#9895a0",
+    "#84808e"
+   ]
   },
   {
    "id": "plate_boots",
@@ -4833,6 +7890,96 @@
    "name": "不戴帽子",
    "sheet": null,
    "glam": true
+  },
+  {
+   "id": "blm_hat",
+   "name": "黑魔法師帽",
+   "sheet": null,
+   "keepGear": true,
+   "dye": [
+    "#221c36",
+    "#100c1c",
+    "#362c52",
+    "#524474"
+   ]
+  },
+  {
+   "id": "wm_hat",
+   "name": "白魔法師帽",
+   "sheet": null,
+   "keepGear": true,
+   "dye": [
+    "#e2d0c2",
+    "#8e645c",
+    "#f4eade",
+    "#fffaf2"
+   ]
+  },
+  {
+   "id": "sage_hat",
+   "name": "賢者貝雷帽",
+   "sheet": null,
+   "keepGear": true,
+   "dye": [
+    "#dedad6",
+    "#686064",
+    "#f2f0ec",
+    "#fefdfa"
+   ]
+  },
+  {
+   "id": "dragoon_helm",
+   "name": "龍騎士角盔",
+   "sheet": null,
+   "keepGear": true,
+   "hideHair": true,
+   "dye": [
+    "#504c76",
+    "#3a365a",
+    "#6c6694",
+    "#8c86b6",
+    "#161424"
+   ]
+  },
+  {
+   "id": "warrior_helm",
+   "name": "戰士角盔",
+   "sheet": null,
+   "keepGear": true,
+   "hideHair": true,
+   "dye": [
+    "#888286",
+    "#605a5e",
+    "#aea8aa",
+    "#cec8ca",
+    "#221e22"
+   ]
+  },
+  {
+   "id": "bard_hat",
+   "name": "吟遊詩人帽",
+   "sheet": null,
+   "keepGear": true,
+   "dye": [
+    "#323e26",
+    "#121a10",
+    "#485836",
+    "#62724c"
+   ]
+  },
+  {
+   "id": "knight_helm",
+   "name": "騎士頭盔",
+   "sheet": null,
+   "keepGear": true,
+   "hideHair": true,
+   "dye": [
+    "#e0dee6",
+    "#bcb8c6",
+    "#f6f4f8",
+    "#fffefc",
+    "#807c8c"
+   ]
   },
   {
    "id": "armet",
@@ -4914,7 +8061,6 @@
    ]
   }
  ],
- "hairColor": "#4a3428",
  "shirtColors": [
   "#d95c68",
   "#4a90d9",

@@ -3,20 +3,20 @@
  "legacy": { "tank": "knight", "healer": "whitemage", "dps": "ninja" },
  "jobs": [
   { "id": "knight", "atkAnim": "halfslash", "name": "騎士", "role": "tank", "weapon": "sword",
-    "gear": { "hat": "armet", "top": "plate", "bottom": "plate_legs", "shoe": "plate_boots" }, "skills": ["guard", "kshield"] },
+    "gear": { "hat": "knight_helm", "top": "knight_armor", "bottom": "knight_legs", "shoe": "knight_boots" }, "skills": ["guard", "kshield"] },
   { "id": "warrior", "atkAnim": "slash", "name": "戰士", "role": "tank", "weapon": "waraxe",
-    "gear": { "hat": "barbarian", "top": "war_mail", "bottom": "war_pants", "shoe": "war_boots" }, "skills": ["vamp", "wshield"] },
+    "gear": { "hat": "warrior_helm", "top": "warrior_armor", "bottom": "warrior_legs", "shoe": "warrior_boots" }, "skills": ["vamp", "wshield"] },
   { "id": "whitemage", "atkAnim": "thrust", "name": "白魔法師", "role": "healer", "weapon": "staff",
-    "gear": { "hat": "hood", "top": "whm_robe", "bottom": "pants", "shoe": "shoes" }, "skills": ["sheal", "wings"] },
+    "gear": { "hat": "wm_hat", "top": "wm_robe", "bottom": "wm_pants", "shoe": "wm_boots" }, "skills": ["sheal", "wings"] },
   { "id": "sage", "atkAnim": "spellcast", "name": "賢者", "role": "healer", "weapon": "tome",
-    "gear": { "hat": "nohat", "top": "sge_robe", "bottom": "pants", "shoe": "shoes" }, "skills": ["care", "save"] },
+    "gear": { "hat": "sage_hat", "top": "sage_coat", "bottom": "sage_pants", "shoe": "sage_boots" }, "skills": ["care", "save"] },
   { "id": "ninja", "atkAnim": "slash", "name": "忍者", "role": "melee", "weapon": "daggers",
-    "gear": { "hat": "headband", "top": "nin_top", "bottom": "nin_pants", "shoe": "nin_tabi" }, "skills": ["ninjutsu", "blink"] },
+    "gear": { "hat": "nohat", "top": "ninja_garb", "bottom": "ninja_pants", "shoe": "ninja_boots" }, "skills": ["ninjutsu", "blink"] },
   { "id": "dragoon", "atkAnim": "thrust", "name": "龍騎士", "role": "melee", "weapon": "lance",
-    "gear": { "hat": "horned", "top": "drg_plate", "bottom": "drg_legs", "shoe": "drg_boots" }, "skills": ["highjump", "backjump"] },
+    "gear": { "hat": "dragoon_helm", "top": "dragoon_armor", "bottom": "dragoon_legs", "shoe": "dragoon_boots" }, "skills": ["highjump", "backjump"] },
   { "id": "bard", "atkAnim": "shoot", "name": "吟遊詩人", "role": "ranged", "weapon": "harpbow",
-    "gear": { "hat": "cavalier", "top": "brd_vest", "bottom": "brd_pants", "shoe": "brd_boots" }, "skills": ["song", "poison"] },
+    "gear": { "hat": "bard_hat", "top": "bard_garb", "bottom": "bard_pants", "shoe": "bard_boots" }, "skills": ["song", "poison"] },
   { "id": "blackmage", "atkAnim": "thrust", "name": "黑魔法師", "role": "ranged", "weapon": "scepter",
-    "gear": { "hat": "wizard", "top": "blm_robe", "bottom": "pants", "shoe": "shoes" }, "skills": ["circle", "triple"] }
+    "gear": { "hat": "blm_hat", "top": "blm_garb", "bottom": "blm_pants", "shoe": "blm_boots" }, "skills": ["circle", "triple"] }
  ]
 }

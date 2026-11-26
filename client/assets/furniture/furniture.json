@@ -90,11 +90,18 @@
    "id": "bed",
    "name": "床",
    "w": 1,
-   "h": 1,
+   "h": 2,
    "solid": true,
    "sprite": "bed.png",
    "use": "sleep",
-   "quiltRow": 13,
+   "quiltRow": 19,
+   "rotSwap": true,
+   "quiltSide": [
+    17,
+    9,
+    13,
+    10
+   ],
    "dirs": [
     "bed_l.png",
     "bed_b.png",

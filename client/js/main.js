@@ -65,7 +65,7 @@ const S = {
   charImgs: {},                 // 人物分層 sheet：檔名 -> Image（軀幹／頭髮／衣服／褲子／帽子）
   charCache: new Map(),         // (造型, 幀號) -> 合成好的一幀
   recolorCache: new Map(),      // (sheet, 顏色) -> 換好色的整張 sheet
-  me: lsObj('dcisland.m0.avatar', null) || { skin: 'light', hair: 'hair1', race: 'human', gender: 'male', shirt: 0, weapon: 'sword' },
+  me: lsObj('dcisland.m0.avatar', null) || { skin: 'light', hair: 'hair1', race: 'human2', shirt: 0, weapon: 'sword' },
   profile: lsObj('dcisland.m0.profile', null) || { xp: 0, showLv: true },   // 等級等個人資料（跟著人走，換職業繼承；key＝dcisland.m0.profile）
   world: null,                  // {types: Uint8Array, decos: []}
   furnItems: [],                // [{type, cell:[x,y]}]
@@ -2822,12 +2822,16 @@ function rebuildOcc() {
   S.furnItems.forEach((it, idx) => {
     const def = S.furn.items.find(f => f.id === it.type);
     if (!def || !Array.isArray(it.cell)) return;   // manifest 沒有的種類／壞格子：略過（本地舊存檔可能有，別讓 boot 當掉）
-    for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++)
+    const fd = furnDimsOf(def, it.dir || 0);
+    for (let dy = 0; dy < fd.h; dy++) for (let dx = 0; dx < fd.w; dx++)
       S.occ.set(key(it.cell[0] + dx, it.cell[1] + dy), idx);
   });
 }
 
 function furnitureDef(id) { return S.furn.items.find(f => f.id ===id); }
+// 家具佔的格數：rotSwap 的家具（床，2026-11-25）朝左／右（dir 1／3）時寬高互換（左上角不動）；與兩份伺服器（Worker 的 furnDim、dev_server.py 的 furn_dims）一致
+const furnDimsOf = (def, dir) => (def?.rotSwap && (dir === 1 || dir === 3)) ? { w: def.h, h: def.w } : { w: def?.w || 1, h: def?.h || 1 };
+const itemDims = it => furnDimsOf(furnitureDef(it.type), it.dir || 0);
 
 // ---------------- 遮擋 / 碰撞 ----------------
 // 格子能不能站人／放家具：陸地，或水上鋪了地板（m＝要看的地板，預設目前畫面上的）
@@ -2860,34 +2864,6 @@ const lookItem = (list, id) => list?.find(it => it.id === id) || null;
 // （比主色暗的乘上比例、比主色亮的往白色推）。舊格式 recolor: {base, shade} 視同 dye: [base, shade]。結果依 (sheet, 顏色) 快取整張
 const dyeList = it => it?.dye || (it?.recolor ? [it.recolor.base, it.recolor.shade].filter(Boolean) : null);
 const lum = ([r, g, b]) => .299 * r + .587 * g + .114 * b;
-// 雙色染色（貓耳用）：pairs＝[原色清單, 目標色] 多組——每組內的顏色依與該組首色的明暗比例映射到目標色；
-// 沒列進任何一組的顏色（貓耳的深色輪廓）保留原色。結果同樣進 recolorCache
-function duotoneSheet(img, pairs) {
-  const key = 'duo|' + img.src + '|' + pairs.map(p => p[1] + '(' + p[0].join(',') + ')').join(' ');
-  let cv = S.recolorCache.get(key);
-  if (cv) return cv;
-  cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
-  const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
-  const d = g.getImageData(0, 0, cv.width, cv.height), p = d.data;
-  const map = new Map();
-  for (const [dye, hex] of pairs) {
-    if (!hex) continue;   // 沒有目標色（沒髮色）＝這組不映射，保留原色
-    const T = hexRGB(hex), base = Math.max(1, lum(hexRGB(dye[0])));
-    for (const c of dye) {
-      const src = hexRGB(c), k = lum(src) / base;
-      const out = T.map(v => Math.round(k <= 1 ? v * k : v + (255 - v) * Math.min(1, k - 1)));
-      map.set((src[0] << 16) | (src[1] << 8) | src[2], out);
-    }
-  }
-  for (let i = 0; i < p.length; i += 4) {
-    if (!p[i + 3]) continue;
-    const o = map.get((p[i] << 16) | (p[i + 1] << 8) | p[i + 2]);
-    if (o) { p[i] = o[0]; p[i + 1] = o[1]; p[i + 2] = o[2]; }
-  }
-  g.putImageData(d, 0, 0);
-  S.recolorCache.set(key, cv);
-  return cv;
-}
 function dyeSheet(img, dye, hex) {  const key = img.src + '|' + dye.join(',') + '|' + hex;
   let cv = S.recolorCache.get(key);
   if (cv) return cv;
@@ -2906,6 +2882,7 @@ function dyeSheet(img, dye, hex) {  const key = img.src + '|' + dye.join(',') + 
     if (o) { p[i] = o[0]; p[i + 1] = o[1]; p[i + 2] = o[2]; }
   }
   g.putImageData(d, 0, 0);
+  cv.src = key;   // 換過色的畫布再被換色（新風格同一層依序多條規則）時，recolorCache 的 key 才不會撞
   S.recolorCache.set(key, cv);
   return cv;
 }
@@ -2964,95 +2941,95 @@ function sheetCellHas(img, sx, sy, w, h) {
   }
   return v;
 }
-function charSprite(look, fi) {
-  const A = S.avatar, F = A.frames;
-  const legacy = (key, idx, list) => key in look ? (look[key] || null) : (list[idx || 0] ?? list[0]);
-  const shirtHex = legacy('topC', look.shirt, A.shirtColors), pantsHex = legacy('botC', look.pants, A.pantsColors);
-  const hatHex = look.hatC || null, shoeHex = look.shoeC || null;
-  const skin = lookItem(A.skins, look.skin) || A.skins[0], hair = lookItem(A.hair, look.hair) || A.hair[0];
-  const top = lookItem(A.tops, look.top) || A.tops?.[0], bottom = lookItem(A.bottoms, look.bottom) || A.bottoms?.[0];
-  const shoe = lookItem(A.shoes, look.shoe);
-  let hat = lookItem(A.hats, look.hat);
-  const face = lookItem(A.faces, look.face) || A.faces?.[0], eyes = lookItem(A.eyes, look.eyes) || A.eyes?.[0];
-  // 性別：素體 sheet 換成女版（char_body_<膚色> → char_body_female_<膚色>）
-  const skinSheet = (look.gender === 'female' && skin.sheet) ? skin.sheet.replace('char_body_', 'char_body_female_') : skin.sheet;
-  const skinIt = skinSheet === skin.sheet ? skin : { ...skin, sheet: skinSheet };
-  const skinHex = skin.base || null;   // 臉型（頭型）跟膚色重上色
-  const hairHex = look.hairC || hair.hex || null;    // 髮色主色（貓耳跟髮色重上色用；自訂髮色優先）
-  // 調色盤自訂的髮色／眼睛顏色：改用該樣式的棕色底圖（dyeFrom）再依明暗換成自訂色
-  const hairIt = look.hairC && hair.dyeFrom ? { ...hair, sheet: hair.dyeFrom } : hair;
-  const eyesIt = look.eyeC && eyes?.dyeFrom ? { ...eyes, sheet: eyes.dyeFrom } : eyes;
-  const race = lookItem(A.races, look.race) || A.races?.[0] || { id: 'human', scale: 1 };
-  // 服裝男女共用一個 id：女角改用 sheetF（沒有就用 sheet）
-  const byGender = it => it && look.gender === 'female' && it.sheetF ? { ...it, sheet: it.sheetF } : it;
-  const topG = byGender(top), bottomG = byGender(bottom), shoeG = byGender(shoe); hat = byGender(hat);
-  const wpn = look.wpn ? A.weapons.find(w => w.id === look.wpn && w.lpc) : null;   // LPC 武器圖層（見 playerSpriteDiv）
-  const k = [skin.id, skinSheet, look.gender || '', race.id, hair.id, hat?.id || '', hatHex, top?.id, shirtHex, bottom?.id, pantsHex, shoe?.id || '', shoeHex, face?.id || '', eyes?.id || '', look.hairC || '', look.eyeC || '', wpn?.id || '', fi].join('|');
+// sheet 的某一格裡最下面一排有不透明像素的排號（0～h-1）；整格空的回 -1（結果依 (圖, 格子) 快取）。帽子用：帽沿最低的那排以上的頭髮不畫
+const cellBottomCache = new Map();
+function cellBottomRow(img, sx, sy, w, h) {
+  if (!img || sx + w > img.width || sy + h > img.height) return -1;
+  const k = img.src + '|' + sx + ',' + sy;
+  let v = cellBottomCache.get(k);
+  if (v === undefined) {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const g = cv.getContext('2d'); g.drawImage(img, sx, sy, w, h, 0, 0, w, h);
+    const d = g.getImageData(0, 0, w, h).data;
+    v = -1;
+    for (let y = h - 1; y >= 0 && v < 0; y--) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3]) { v = y; break; }
+    cellBottomCache.set(k, v);
+  }
+  return v;
+}
+// 新風格人物（2026-11-21，使用者定案整套換成自製 Q 版像素風格；階段 1）：種族的 own.sheets＝8 個圖層（跟 LPC 同格式的 sheet，只填走路列），
+// 由下往上疊；**描邊不在圖層裡**，合成後整個人統一畫一圈 own.outline 色的外框（每層各自描邊，層與層之間會多出不該有的線）。
+// 沒有這一格（攻擊、釣魚、坐姿以外的動作）就用 map 條目的退回幀（待機）。武器、服裝選項、換色都還沒做（之後階段）。
+// 新風格（整套自製圖層）的種族定義；不是新風格回 null。掛點（背／腰／手）因為身形不同，用 own.anchors 覆寫（依面向 down／up／side 各給一組）
+const ownRaceOf = id => { const rs = S.avatar?.races, r = (id && rs?.find(r => r.id === id)) || rs?.[0]; return r?.own ? r : null; };   // 舊種族（human／elf／cat／lalafell／giant／chibi）已刪除：找不到的 id 一律當第一個種族（人類）
+const CHIBI_ORDER = ['body', 'bottom', 'shoes', 'top', 'hairbg', 'face', 'hair', 'hat'];
+// 新風格的換色：own.dye＝[{slot, layers, colors}]（slot 對應 look 的 hair／top／bottom／shoe／hat 的色碼；colors 第一個是主色，其餘依明暗比例跟著變，見 dyeSheet）
+const CHIBI_DYE_FIELD = { hair: 'hairC', top: 'topC', bottom: 'botC', shoe: 'shoeC', hat: 'hatC', eye: 'eyeC' };   // eye＝眼睛顏色（外貌頁的眼睛換色鈕，存在 S.me.eyeC）
+// 款式：own.styles.hair／top＝[{id, name, sheets:{圖層: 檔名}}]（第一個是預設，sheets 空＝用基本圖層）；look.hair／look.top 是款式 id 才算，否則用預設
+const chibiStyleOf = (own, kind, id) => (own.styles?.[kind] || []).find(x => x.id === id) || own.styles?.[kind]?.[0] || null;
+function chibiSprite(race, look, fi, sleep) {   // sleep：睡姿用——body 換成 bodyz（閉眼的頭）、不畫 face（睡在床上時用，見 drawSleeper）
+  const fs = chibiStyleOf(race.own, 'face', look?.face), hs = chibiStyleOf(race.own, 'hair', look?.hair), ts = chibiStyleOf(race.own, 'top', look?.top),
+        bs = chibiStyleOf(race.own, 'bottom', look?.bottom), ss = chibiStyleOf(race.own, 'shoe', look?.shoe),
+        hts = race.own.styles?.hat?.find(x => x.id === look?.hat) || null;   // 帽子款式：只有套裝附的帽子（沒找到＝沒戴帽子；不像髮型／服裝會退回第一個）   // 服裝款式：上衣／褲子／鞋子各一個（look.top／bottom／shoe 是外觀 id，款式 id 跟外觀 id 一樣）
+  const skinHex = S.avatar.skins?.find(s2 => s2.id === look?.skin)?.base || null;   // 膚色：look.skin 是 avatar.json skins 的 id，換成它的 base 色碼
+  const rules = (race.own.dye || []).filter(r => !r.style || r.style === ts?.id || r.style === bs?.id || r.style === ss?.id || r.style === hts?.id).map(r => ({ ...r, hex: (r.slot === 'skin' ? (skinHex && skinHex.toLowerCase() !== r.colors[0].toLowerCase() ? skinHex : null) : look?.[CHIBI_DYE_FIELD[r.slot]]) || null }));   // 膚色跟原色一樣（預設的「自然」）就不換
+  sleep = !!(sleep && race.own.sheets.bodyz);
+  const k = (sleep ? 'chibiz:' : 'chibi:') + race.id + ':' + fi + '|' + (hs?.id || '') + '|' + (ts?.id || '') + '|' + (bs?.id || '') + '|' + (ss?.id || '') + '|' + (fs?.id || '') + '|' + (hts?.id || '') + '|' + rules.map(r => r.hex || '').join(',');
   let cv = S.charCache.get(k);
   if (cv) return cv;
-  // 這一幀屬於哪個動作（看 frames.attacks 的起始列；走路／待機＝LPC 第 8～11 列）：武器在這個動作有超大格
-  // （LPC 的 128×128 揮砍、192×192 突刺、128×128 走路的龍槍／弓等）就整張畫布放大，人物畫在正中央
-  const ent0 = F.map ? F.map[fi] : null;
-  let over = null, overCell = null;
-  if (wpn && ent0 && ent0[3]) {   // 工具動作（釣竿）：每一格各自一張超大格，第幾格／方向寫在 map 條目裡
-    over = wpn.lpc.over?.[ent0[3]] || null; overCell = [ent0[4], ent0[5]];
-  } else if (wpn && ent0 && F.attacks) {
-    for (const [an, a] of Object.entries({ ...F.attacks, walk: LPC_WALK_ROWS })) {
-      if (ent0[1] >= a.row && ent0[1] < a.row + 4 && wpn.lpc.over?.[an]) {
-        over = wpn.lpc.over[an]; overCell = [a.cols.indexOf(ent0[0]), ent0[1] - a.row];
-        if (!sheetCellHas(S.charImgs[over.bg] || S.charImgs[over.fg], overCell[0] * over.size, overCell[1] * over.size, over.size, over.size)
-            && !sheetCellHas(S.charImgs[over.fg], overCell[0] * over.size, overCell[1] * over.size, over.size, over.size)) over = null;
-        break;
+  const F = S.avatar.frames, own = race.own;
+  const cw = own.cell || F.w, ch = own.cell || F.h;   // 種族自己的格子大小（新巨人 96×96；預設跟 frames 一樣）。邏輯格（F.w×F.h）放在格子的 (ox, oy)，畫的時候 pad／padTop 補回去
+  let ent = F.map ? F.map[fi] : [fi, 0];
+  const body = S.charImgs[own.sheets.body];
+  if (ent?.[2] != null && !sheetCellHas(body, ent[0] * cw, ent[1] * ch, cw, ch)) ent = F.map[ent[2]];
+  const [cc, cr] = ent, sx = cc * cw, sy = cr * ch, idleSx = ent[3] != null ? ent[3] * cw : sx;   // ent[3]：這一幀只有腿層（body／bottom／shoes）用 ent[0] 那一欄、其他層用 ent[3] 欄（側面坐姿，見 tools/gen_sit.py）
+  cv = document.createElement('canvas'); cv.width = cw; cv.height = ch; cv.pad = own.ox || 0; cv.padTop = own.oy || 0; cv.layerMiss = false;
+  const g = cv.getContext('2d');
+  // 戴帽子：帽沿最低的那排（這一幀的 hat 圖）以上的頭髮不畫（hairFromHat；帽子蓋住的部分），以下的頭髮照畫（帽沿下面露出來的髮尾、瀏海）
+  const hatBottom = hts?.hairFromHat ? cellBottomRow(S.charImgs[hts.sheets?.hat], idleSx, sy, cw, ch) : -1;
+  for (const n of CHIBI_ORDER) {
+    if (sleep && n === 'face') continue;   // 睡覺閉眼：眼睛已經畫在 bodyz 裡
+    const ln = sleep && n === 'body' ? 'bodyz' : n;
+    if (n === 'hair' && hts?.hideHair) continue;   // 頭盔（hideHair）：完全不顯示頭髮
+    if (n === 'hat' && hts && !hts.hideHair) {   // 戴帽子：種族自己的 hat 層（妖精／貓族的耳朵）先畫，帽子再蓋上去（頭盔連耳朵一起蓋住，不畫）
+      const ear = S.charImgs[own.sheets.hat];
+      if (ear && idleSx + cw <= ear.width && sy + ch <= ear.height) {   // 帽沿以上的耳朵（貓耳）被帽子蓋住不畫，帽沿以下的（妖精的尖耳）照畫
+        const cut = Math.max(0, Math.min(ch, hatBottom + 1 + (hts.hairCutDy || 0)));
+        g.drawImage(ear, idleSx, sy + cut, cw, ch - cut, 0, cut, cw, ch - cut);
       }
     }
-  }
-  const pad = over ? (over.size - F.w) / 2 : 0;
-  cv = document.createElement('canvas'); cv.width = F.w + pad * 2; cv.height = F.h + pad * 2; cv.pad = pad;
-  const g = cv.getContext('2d');
-  const drawOver = sheet => { const im = sheet && S.charImgs[sheet]; if (im) g.drawImage(im, overCell[0] * over.size, overCell[1] * over.size, over.size, over.size, 0, 0, over.size, over.size); };
-  if (over) drawOver(over.bg);   // 超大格武器的後層（在身體後面）
-  // 這一幀在 sheet 上的格子：LPC 通用格式看 frames.map（[欄,列,退回幀]）；舊格式＝水平排列（fi, 0）。
-  // 攻擊動作的幀帶「退回幀」：素體那一格沒有圖（素材只有走路列）就整個角色改畫退回幀，避免身體消失、只剩頭髮在動
-  let ent = F.map ? F.map[fi] : [fi, 0];
-  if (ent?.[2] != null && !sheetCellHas(S.charImgs[skinIt.sheet], ent[0] * F.w, ent[1] * F.h, F.w, F.h)) ent = F.map[ent[2]];
-  const [cc, cr] = ent, sx = cc * F.w, sy = cr * F.h;
-  // 由下往上：身體 → 褲子 → 鞋子 → 衣服 → 臉型(頭) → 眼睛 →（貓耳後層）→ 頭髮 →（精靈耳／貓耳前層）→ 帽子
-  const layers = [[skinIt], [bottomG, pantsHex], [shoeG, shoeHex], [topG, shirtHex], [face, skinHex], [eyesIt, look.eyeC || null]];
-  if (wpn && !over && wpn.lpc.bg) layers.unshift([{ sheet: wpn.lpc.bg }]);   // 一般格武器的後層（在身體後面）
-  const catTint = race.earFur ? hx2 => [[race.earFur, hx2 || null], [['#ffffff'], race.earInner || '#f5b8ad']] : null;
-  if (race.earBg) layers.push([{ sheet: race.earBg, tint: catTint, hx: hairHex || null }]);   // 貓耳後層（髮下面；毛色跟髮色、耳內粉肉色）
-  if (!hat?.hideHair) layers.push([hairIt, look.hairC || null]);   // 全罩式頭盔（hats 的 hideHair）把頭髮整個蓋住：不畫頭髮，免得從頭盔上方露出來
-  if (race.ear) layers.push([{ sheet: race.ear, dye: race.earDye }, skinHex]);   // 精靈耳（跟膚色）：畫在頭髮上面（LPC 的耳朵層 zPos 126 高於頭髮），否則尖耳被頭髮蓋住（2026-11-09 修正）
-  if (race.earFg) layers.push([{ sheet: race.earFg, tint: catTint, hx: hairHex || null }]);   // 貓耳前層（髮上面；同上）
-  layers.push([hat, hatHex]);
-  if (wpn && !over && wpn.lpc.fg) layers.push([{ sheet: wpn.lpc.fg }]);   // 一般格武器的前層（最上面）
-  const fbEnt = ent !== (F.map?.[fi]) ? null : (ent?.[2] != null ? F.map[ent[2]] : null);   // 正在畫攻擊動作時，這一幀的退回格（給缺動作的單一圖層用）
-  cv.layerMiss = false;   // 有圖層缺這一格（坐姿：該層沒有 LPC sit 圖）→ 呼叫端改用「沉進椅子」的舊畫法
-  for (const [it, hex] of layers) {
-    const img = it && S.charImgs[it.sheet];
-    let lx = sx, ly = sy;
-    // 攻擊動作：素體有動作、但這一層（例如之後加的服裝只有走路列）沒有這一格 → 這層改畫自己的退回格，避免衣服整件消失
-    if (fbEnt && img && !sheetCellHas(img, sx, sy, F.w, F.h)) {
-      lx = fbEnt[0] * F.w; ly = fbEnt[1] * F.h;
-      // 坐姿：這層在這個方向本來就沒東西（臉、眼睛朝上時是空的）不算缺——只有四個方向的 sit 幀都沒有圖才算沒有 sit
-      const sr = F.attacks?.sit?.row;
-      if (sr == null || cr < sr || cr >= sr + 4 || ![0, 1, 2, 3].some(k => sheetCellHas(img, 0, (sr + k) * F.h, F.w, F.h))) cv.layerMiss = true;   // 四個方向的第 1 幀任何一個有東西就算有 sit（臉、眼睛朝上、貓耳後層朝下是空的）
+    let img = S.charImgs[hts?.sheets?.[n] || hs?.sheets?.[n] || ts?.sheets?.[n] || bs?.sheets?.[n] || ss?.sheets?.[n] || fs?.sheets?.[n] || own.sheets[ln]];
+    const lsx = (n === 'body' || n === 'bottom' || n === 'shoes') ? sx : idleSx;
+    if (!img || lsx + cw > img.width || sy + ch > img.height) continue;
+    for (const r of rules) if (r.hex && r.layers.includes(ln)) img = dyeSheet(img, r.colors, r.hex);   // 同一張圖可以被多條規則依序換色（例如 bottom 層：圍裙下擺跟上衣、褲子跟褲子）
+    if (n === 'hair' && hatBottom >= 0) {
+      const cut = Math.max(0, Math.min(ch, hatBottom + 1 + (hts.hairCutDy || 0)));
+      g.drawImage(img, lsx, sy + cut, cw, ch - cut, 0, cut, cw, ch - cut);
+      continue;
     }
-    if (!img || lx + F.w > img.width || ly + F.h > img.height) continue;   // 缺圖／這張 sheet 沒有這一格：這層略過
-    let src;
-    if (it.tint) src = duotoneSheet(img, it.tint(it.hx));   // 雙色染色（貓耳：毛→髮色、耳內→粉肉色）
-    else {
-      const dye = dyeList(it);
-      src = dye && hex ? dyeSheet(img, dye, hex) : img;
+    g.drawImage(img, lsx, sy, cw, ch, 0, 0, cw, ch);
+    for (const st of [ts, bs, ss]) {   // 款式帶遮罩（erase）：這一層畫完後把遮罩蓋住的像素擦掉（男式外套／褲子要擦掉身體層自己的手／腿）
+      const mk = st?.erase?.[n] && S.charImgs[st.erase[n]];
+      if (mk) { g.globalCompositeOperation = 'destination-out'; g.drawImage(mk, sx, sy, cw, ch, 0, 0, cw, ch); g.globalCompositeOperation = 'source-over'; }
     }
-    g.drawImage(src, lx, ly, F.w, F.h, pad, pad, F.w, F.h);
   }
-  if (over) drawOver(over.fg);   // 超大格武器的前層（最上面）
+  if (own.outline) outlineCanvas(cv, own.outline);   // 外框已經畫在圖層裡的種族（新人類）不設 outline，不再統一畫一圈
   S.charCache.set(k, cv);
   return cv;
 }
+function outlineCanvas(cv, color) {   // 貼著透明、上下左右有不透明像素的透明格，畫成 color（#rrggbb）
+  const w = cv.width, h = cv.height, g = cv.getContext('2d'), id = g.getImageData(0, 0, w, h), d = id.data;
+  const r = parseInt(color.slice(1, 3), 16), gg = parseInt(color.slice(3, 5), 16), b = parseInt(color.slice(5, 7), 16), mark = [];
+  const solid = (x, y) => x >= 0 && y >= 0 && x < w && y < h && d[(y * w + x) * 4 + 3] > 0;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (!solid(x, y) && (solid(x + 1, y) || solid(x - 1, y) || solid(x, y + 1) || solid(x, y - 1))) mark.push((y * w + x) * 4);
+  for (const i of mark) { d[i] = r; d[i + 1] = gg; d[i + 2] = b; d[i + 3] = 255; }
+  g.putImageData(id, 0, 0);
+}
+function charSprite(look, fi, sleep) {
+  const race = lookItem(S.avatar.races, look.race) || S.avatar.races?.[0];   // 舊種族已刪除（2026-11-23）：找不到的 id 退回第一個種族；整套自製圖層，不吃舊的髮型／服裝清單
+  return chibiSprite(race, look, fi, sleep);
+}
 // 8 方向視覺朝向：移動時依 (dx, dy) 的角度取最近的方向（鍵盤 8 向剛好一一對應）；玩法（石化等）仍看 face
-const LPC_SKIN_DYE_JS = ['#f9d5ba', '#e4a47c', '#cc8665', '#99423c', '#faecd7'];   // 精靈耳跟膚色重上色用
 function dir8Of(dx, dy) {
   const s = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));   // 扇區：0＝右、2＝下、-2＝上、±4＝左（畫面 y 向下）
   return CHAR_DIR8[((2 - s) % 8 + 8) % 8];
@@ -3179,19 +3156,20 @@ function spawnNPCs() {
   S.players = [S.players[0], ...out];
 }
 
-function playerSpriteDiv(p, fi) {
+function playerSpriteDiv(p, fi, sleep) {
   // NPC 與遠端玩家都有自己的 look；自己（players[0]）則用當前職業的裝備＋外觀（myLook）。
   // LPC 武器（avatar.json 武器條目有 lpc）是人物的一層：帶 wpn（武器 id）給 charSprite 一起合成
-  if (p.npc) return charSprite(p.look || myLook(), fi);
+  if (p.npc) return charSprite(p.look || myLook(), fi, sleep);
   const me = p === S.players[0], look = p.look || myLook();
-  let wd = me ? (p.tool ? null : lpcWeaponFor(S.me.weapon, look.wlook)) : lpcWeaponFor(p.weapon, look.wlook);
+  let wd = me ? (p.tool ? null : lpcWeaponFor(S.me.weapon, look.wlook, look.race)) : lpcWeaponFor(p.weapon, look.wlook, look.race);
   if (wd?.lpc.fishOnly && !p.fish) wd = null;
   if (p.pose === 'sit' && !p.fish) wd = null;   // 坐著不拿武器（LPC 武器圖層沒有 sit 幀，會害整個造型退回舊畫法）   // LPC 釣竿只在釣魚時畫（四方向的拋竿／持竿／收線動作），平常照舊背著小圖
-  return charSprite(wd ? { ...look, wpn: wd.id } : look, fi);
+  return charSprite(wd ? { ...look, wpn: wd.id } : look, fi, sleep);
 }
 // 拿著的武器有沒有 LPC 圖層：有就回該武器條目（武器外觀有 LPC 圖就用外觀的，外觀沒有 LPC 圖就退回舊的小圖畫法）
-function lpcWeaponFor(wid, wlook) {
+function lpcWeaponFor(wid, wlook, raceId) {
   const ws = S.avatar?.weapons; if (!ws || !wid) return null;
+  if (ownRaceOf(raceId)) return null;   // 新風格人物：LPC 武器圖層是照 LPC 身形畫的，不能用；改畫小圖武器（掛背上／腰間、揮擊、詠唱舉杖）
   const base = ws.find(w => w.id === wid);
   if (wlook && wlook !== wid) {
     const g = ws.find(w => w.id === wlook);
@@ -3200,9 +3178,9 @@ function lpcWeaponFor(wid, wlook) {
   return base?.lpc ? base : null;
 }
 // 武器的圖：拿著職業武器且有選同類型的武器外觀（glam）時畫外觀的圖；玩法（射程、詠唱等）照拿著的武器
-function weaponImgFor(wid, wlook) {
+function weaponImgFor(wid, wlook, raceId) {
   if (!wid || wid === 'hands') return null;
-  if (lpcWeaponFor(wid, wlook) && !lpcWeaponFor(wid, wlook).lpc.fishOnly) return null;   // LPC 武器畫在人物圖層裡（charSprite），不另外畫小圖（釣竿例外：沒在釣魚時背小圖）
+  if (lpcWeaponFor(wid, wlook, raceId) && !lpcWeaponFor(wid, wlook, raceId).lpc.fishOnly) return null;   // LPC 武器畫在人物圖層裡（charSprite），不另外畫小圖（釣竿例外：沒在釣魚時背小圖）
   if (wlook && wlook !== wid) {
     const ws = S.avatar.weapons, g = ws.find(w => w.id === wlook), base = ws.find(w => w.id === wid);
     if (g?.glam && base && g.type === base.type && S.weaponImgs[wlook]) return S.weaponImgs[wlook];
@@ -3567,7 +3545,7 @@ function noulithSlots(px, py, t, seed) {   // 繞著上半身緩慢繞圈的四�
   });
 }
 function drawNoulithIdle(p, wid, part) {   // part：'back'＝畫在人物後面、'front'＝前面（依陣位高低分）
-  if (wid !== 'tome' || p.dead) return;
+  if (wid !== 'tome' || p.dead || p.pose === 'sit' || p.pose === 'sleep') return;   // 坐下／睡覺時收起（賢具是賢者的武器，跟其他職業的武器一樣不拿出來）
   const t = S.t, seed = noulithSeed(p);
   if (!S.floaters.some(f => f.fxk === 'carego' || f.fxk === 'healgo')) {   // 四座都外出（關心／群療）時待機位全空
     const slots = noulithSlots(p.x, p.y, t, seed);
@@ -3815,7 +3793,8 @@ function drawFxFloater(f) {
     case 'after': {   // 縮地殘影：自己的身影淡淡留在原地
       const F = S.avatar.frames, fi = (F.states[`${f.d8}_idle`] || F.states.down_idle)[0], cs = F.scale || 2;
       ctx.globalAlpha = .4 * al; ctx.filter = 'brightness(1.6) saturate(.3)';
-      ctx.drawImage(charSprite(myLook(), fi), f.x - F.w * cs / 2, f.y - (F.h - (F.footDy || 0)) * cs, F.w * cs, F.h * cs);
+      const im = charSprite(myLook(), fi), pd = im.pad || 0, pt = im.padTop ?? pd;
+      ctx.drawImage(im, f.x - (F.w / 2 + pd) * cs, f.y - (F.h + pt - (F.footDy || 0)) * cs, im.width * cs, im.height * cs);
       break;
     }
     case 'firebomb': {   // 火遁：前 30% 火球飛向落點，之後橘紅色火焰爆開（範圍圈＋往上竄的火舌）
@@ -3896,8 +3875,8 @@ function seatItemOf(p) {
   const def = p.seatType && furnitureDef(p.seatType); if (!def) return null;
   // 別人的座標是平滑追過去的（永遠差一點點）：坐下的 y 剛好落在格線上（椅子 y＋h 格底邊 −2px），floor 會在「差一點」時算到上面那一格、找不到椅子，
   // 整個人就沒有椅背遮擋／沉進椅子的處理（機率性穿模、跟自己看到的不一樣）→ 改四捨五入到最近的格線
-  const cx = Math.floor(p.x / CELL), cy = Math.round((p.y + (p.pose === 'sit' ? 2 : 0)) / CELL) - def.h;
-  return S.furnItems.find(o => o.type === p.seatType && furnCovers(o, [cx, cy])) || null;
+  const cx = Math.floor(p.x / CELL), by = Math.round((p.y + (p.pose === 'sit' ? 2 : 0)) / CELL);
+  return S.furnItems.find(o => o.type === p.seatType && (furnCovers(o, [cx, by - def.h]) || (def.rotSwap && furnCovers(o, [cx, by - def.w])))) || null;   // 床橫放時 h 是 w（不知道遠端的床朝哪，兩種都試）
 }
 // 坐姿（2026-11-15，使用者要求改善）：LPC 素材沒有坐姿幀，所以讓人「陷進椅子」——往下沉 seat.drop px，從椅面前緣（背面時是椅背頂）那一列以下的部分裁掉，
 // 再把家具那一截重畫在人身上，看起來就是坐在椅子裡（腿被椅面擋住）。seat 參數在 furniture.json（gen_assets.py 的 FURN_SEATS 算出來）
@@ -3922,12 +3901,14 @@ function drawPerson(p, wi, nameColor) {
   ctx.restore();
   ctx.drawImage(im.img, 0, from, im.fw, rows, it.cell[0] * CELL, bottom - rows * sc, im.width * sc, rows * sc);   // 前景：椅面前緣（或椅背）蓋在人身上
 }
+const SIT_BACK_SHIFT = { human2: 2, elf2: 2, cat2: 2, dwarf2: 4, giant2: 1 };   // 側面坐姿往椅背挪幾格（1 格＝2px）
 function drawPersonBase(p, wi, nameColor) {
   const pose = p.pose === 'sit' || p.pose === 'sleep' ? p.pose : null;
-  const race = (p === S.players[0] ? S.me.race : p.look?.race) || 'human';
+  const race = ownRaceOf(p === S.players[0] ? S.me.race : p.look?.race)?.id || 'human2';
   const ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);   // 吃喝的效果（巨大化／縮小／透明／暈眩／中毒）
-  const raceScale = ((S.avatar.races?.find(r => r.id === race)?.scale) || 1) * foodScaleOf(ffx);   // 種族倍率：拉拉肥 0.5／巨人 1.5（整個模組一起縮）；吃喝的巨大化／縮小再乘上去
-  let nameY = p.y - p.z - Math.round(52 * raceScale);   // 名牌跟著身高（種族倍率）移
+  const raceDef = S.avatar.races?.find(r => r.id === race);
+  const raceScale = (raceDef?.scale || 1) * foodScaleOf(ffx);   // 種族倍率：拉拉肥 0.5／巨人 1.5（整個模組一起縮）；吃喝的巨大化／縮小再乘上去
+  let nameY = p.y - p.z - Math.round((raceDef?.nameH || 52) * raceScale);   // 名牌跟著身高（種族倍率）移；種族可以用 nameH 指定名牌離腳底多高（新人類系列頭頂有耳朵，要再高一點）
   if (pose === 'sleep') {
     drawSleeper(p);
     nameY = p.y - Math.round(46 * raceScale);
@@ -3939,12 +3920,22 @@ function drawPersonBase(p, wi, nameColor) {
     }
     const cf = charFrame(p), img = playerSpriteDiv(p, cf.fi), F = S.avatar.frames;   // 方向已畫在幀裡，只有借用另一邊的幀時才左右翻轉
     charAnch = { back: charAnchor(cf.fi, 'back'), backView: charAnchor(cf.fi, 'backView'), waist: charAnchor(cf.fi, 'waist'), hand: charAnchor(cf.fi, 'hand') };
+    const ownA = ownRaceOf(race)?.own.anchors;
+    if (ownA) {   // 新風格：掛點照新身形（每個值可以是 [x,y]，或依面向分 down／up／side 的物件）
+      const dd = d8Of(p), fk = dd.startsWith('up') ? 'up' : dd.startsWith('down') && dd !== 'down_left' && dd !== 'down_right' ? 'down' : 'side';
+      for (const [kind, a0] of Object.entries(ownA)) {
+        const a = Array.isArray(a0) ? a0 : (a0[fk] || a0.down);
+        charAnch[kind] = [(a[0] - F.w / 2) * (F.scale || 2), (a[1] - F.h + (F.footDy || 0)) * (F.scale || 2)];
+      }
+    }
     const pet = S.t < (p.petUntil ?? 0);   // 石化：身體灰階（自己的石化即時同步；遠端玩家的石化由光束事件就地推斷，純演出）
     if (pet) { ctx.save(); ctx.filter = 'grayscale(1) brightness(.92)'; }
     const ghost = ffx?.includes('fghost');   // 吃喝的透明化：整個人半透明
     if (ghost) ctx.globalAlpha = .35;
     p.rodJit = p.fish?.ph === 'reel' && rodFrameNow(p) != null ? Math.round(Math.sin(S.t * 30)) : 0;   // 拉竿：竿子往後拉住、整個人左右抖 1px（原本拉竿時竿尖抖動的感覺）
-    ctx.save(); ctx.translate(p.x + p.rodJit, p.y - p.z);
+    // 側面坐姿（sit_left／sit_right）：整個人往椅背方向挪（使用者微調 2026-11-25，單位＝2px 一格）：人類／妖精／貓族 2 格、矮人 4 格、巨人 1；朝左的人往左、朝右的人往右（往面向的方向挪；使用者說第一版往椅背挪「反了」）
+    const sitD8 = d8Of(p), sitDx = pose === 'sit' && !p.fish && (sitD8 === 'left' || sitD8 === 'right') && sitReal(p) ? (SIT_BACK_SHIFT[race] ?? 2) * 2 * (sitD8 === 'left' ? -1 : 1) : 0;   // 只有側面（朝左／朝右）；正面、背面不挪（原本也被套到，偏了 4px）
+    ctx.save(); ctx.translate(p.x + p.rodJit + sitDx, p.y - p.z);
     // 武器（背在背上／掛在腰間；揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
     const fish = wi && (!pose || (pose === 'sit' && p.fish)) && p.fish ? p.fish : null;
     const carry = wi && !pose && !fish && !(p.swing > 0) && !p.cast;   // 不拿在手上（詠唱中高舉法杖）
@@ -3959,11 +3950,11 @@ function drawPersonBase(p, wi, nameColor) {
     ctx.save();
     if (cf.mirror) ctx.scale(-1, 1);
     const cs = (F.scale || 2) * raceScale;   // 錨點＝腳底中央；放大＝frames.scale × 種族倍率
-    const pad = img.pad || 0;   // 超大格（LPC 武器揮砍）：畫布四周多出 pad，人物仍以腳底中央對齊
+    const pad = img.pad || 0, padTop = img.padTop ?? pad;   // 超大格（LPC 武器揮砍）：畫布四周多出 pad，人物仍以腳底中央對齊；padTop＝上方多出的（新巨人的格子只往上、左右加大，下面沒有）
     // footDy：LPC 的腳底在格子第 60～62 列，不往下挪的話腳和影子之間有空隙（看起來像飄在空中）
     const hyb = sitFishBody(p);
     if (hyb) {   // 坐著釣魚：下半身＝sit 幀（不帶竿），上半身＝釣魚幀往下挪
-      const wy = -SIT_FISH_WAIST * cs, dy = SIT_FISH_DY * cs, x0 = (-F.w / 2 - pad) * cs, y0 = (-F.h - pad + (F.footDy || 0)) * cs;
+      const wy = -SIT_FISH_WAIST * cs, dy = SIT_FISH_DY * cs, x0 = (-F.w / 2 - pad) * cs, y0 = (-F.h - padTop + (F.footDy || 0)) * cs;
       ctx.save(); ctx.beginPath(); ctx.rect(-300, wy, 600, 300); ctx.clip();
       ctx.drawImage(hyb.img, (-F.w / 2) * cs, (-F.h + (F.footDy || 0)) * cs, hyb.img.width * cs, hyb.img.height * cs);
       ctx.restore();
@@ -3971,7 +3962,7 @@ function drawPersonBase(p, wi, nameColor) {
       ctx.drawImage(img, x0, y0 + dy, img.width * cs, img.height * cs);
       ctx.restore();
     } else
-    ctx.drawImage(img, (-F.w / 2 - pad) * cs, (-F.h - pad + (F.footDy || 0)) * cs, img.width * cs, img.height * cs);
+    ctx.drawImage(img, (-F.w / 2 - pad) * cs, (-F.h - padTop + (F.footDy || 0)) * cs, img.width * cs, img.height * cs);
     ctx.restore();
     if (carry && backView) drawCarry(true);
     if (pfx?.length) drawPersonFx(p, pfx, backView, 'front');
@@ -3987,7 +3978,11 @@ function drawPersonBase(p, wi, nameColor) {
     if (ghost) ctx.globalAlpha = 1;
     if (ffx?.length) drawFoodOverhead(p, ffx, nameY);   // 暈眩的星星、中毒的泡泡
     if (fish) drawLineAndBobber(p, wi, fish, rodTip);
-    if (pose) nameY = p.y - 46 - (p.seatDrop || 0);   // 坐姿整個人下沉時名牌不跟著下沉
+    if (pose && !(pose === 'sit' && !p.fish && sitReal(p))) nameY = p.y - 46 - (p.seatDrop || 0);   // 坐姿整個人下沉時名牌不跟著下沉；有真的側面坐姿幀（頭沒有下沉）就維持站姿的名牌高度（巨人的頭比較高，不然名字會蓋住臉）
+  }
+  if (p.pose === 'sleep') {   // 睡在床上：名牌移到床頭上方（不蓋在人臉上）
+    const sit = seatItemOf(p), sim = sit && furnImg(sit.type, sit.dir);
+    if (sim) nameY = p.y - sim.height * (S.furn.scale || 2) - 6;
   }
   // 名牌（FFXIV 感：白字黑邊）
   ctx.font = '10px "Microsoft JhengHei"';
@@ -4098,36 +4093,72 @@ function drawGazeEye(x, y, r, pul) {
   ctx.beginPath(); ctx.ellipse(0, 0, r * .16, r * .58, 0, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
-// 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）
+// 某種族某一幀的「臉」（face 圖層的不透明像素）在幀畫布座標的外框：{cx, cy, w}；沒有就回 null（結果快取）。睡覺用它把各種族的臉對到同一個位置、同一個大小
+const faceBoxCache = new Map();
+function faceBoxOf(raceId, fi) {
+  const k = raceId + ':' + fi;
+  if (faceBoxCache.has(k)) return faceBoxCache.get(k);
+  let out = null;
+  const own = ownRaceOf(raceId)?.own, F = S.avatar.frames, img = own && S.charImgs[own.sheets.face], ent = F.map?.[fi];
+  if (img && ent) {
+    const cw = own.cell || F.w, ch = own.cell || F.h, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+    const g = cv.getContext('2d'); g.drawImage(img, ent[0] * cw, ent[1] * ch, cw, ch, 0, 0, cw, ch);
+    const d = g.getImageData(0, 0, cw, ch).data;
+    let x0 = cw, x1 = -1, y0 = ch, y1 = -1;
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) if (d[(y * cw + x) * 4 + 3]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    if (x1 >= 0) out = { cx: (x0 + x1 + 1) / 2, cy: (y0 + y1 + 1) / 2, w: x1 - x0 + 1 };
+  }
+  faceBoxCache.set(k, out);
+  return out;
+}
+// 睡覺：只畫頭與肩膀躺在枕頭上，再把棉被蓋回去（p.x＝床的水平中心、p.y＝床的底邊）。床直放（朝下，1×2）：頭在上端的枕頭、被子從 quiltRow 蓋到床尾；橫放（朝左／右，2×1）：拿側面的頭與肩膀轉 90 度靠床頭端，臉朝上
+// 取框以「臉」為準（2026-11-25）：以人類幀的框（x 16..48、y 0..39，臉在其中）為標準，其他種族依 face 圖層的臉心與臉寬換算成各自幀畫布的框，所以矮人／巨人的臉跟人類一樣大、在同一個位置
 function drawSleeper(p) {
-  const F = S.avatar.frames, s = F.scale || 2, img = playerSpriteDiv(p, (F.states.down_idle || [0])[0]);   // 用正面待機的第 1 幀切出頭與肩膀
+  const F = S.avatar.frames, frontFi = (F.states.down_idle || [0])[0], img = playerSpriteDiv(p, frontFi, true);   // 用正面待機的第 1 幀（閉眼的頭）切出頭與肩膀
   const it = seatItemOf(p), sdir = it?.dir || 0;
-  // 體型：依種族倍率（拉拉肥 0.5／巨人 1.5…）與吃喝的巨大化／縮小縮放，床放不下太大的所以上限 1.2；側面的床再縮 0.85（頭枕在窄窄的枕頭上）
-  const race = (p === S.players[0] ? S.me.race : p.look?.race) || 'human', ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);
-  const rs = Math.min(1.2, ((S.avatar.races?.find(r => r.id === race)?.scale) || 1) * foodScaleOf(ffx));
+  const race = ownRaceOf(p === S.players[0] ? S.me.race : p.look?.race)?.id || 'human2', ffx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);
+  const k = Math.min(1.2, foodScaleOf(ffx));   // 畫在床上的倍率：吃喝的巨大化／縮小有效，種族體型不算（臉要一樣大）；躺著的頭 1 倍（0.75 倍時最近鄰會把 1 像素粗的閉眼線抽掉）
   if (sdir === 2) { drawZzz(p); return; }   // 背面（從床頭看）：人在床頭板後面，只留 Zzz
-  if (sdir === 1 || sdir === 3) {   // 側面的床（2026-11-15）：人側躺在床上——把「頭到腰」那段轉 90 度，頭枕在枕頭上，其餘由棉被蓋住
-    const def = furnitureDef(it.type), bed = furnImg(it.type, sdir), left = sdir === 1;
-    const x0 = it.cell[0] * CELL, bottom = (it.cell[1] + def.h) * CELL, pillowX = x0 + (left ? 6 : 9) * 2, pillowY = bottom - (bed.height - 13) * 2;
-    const sx = Math.round(F.w * .30), sw = Math.round(F.w * .42), sy = Math.round(F.h * .27), sh = Math.round(F.h * .42);
+  const RX = 16, RW = 32, RH = 39;                 // 人類幀的取框（寬 32、高 39；底邊含一點肩膀，會被被子蓋住）
+  const f0 = faceBoxOf('human2', frontFi), f1 = faceBoxOf(race, frontFi), u = f0 && f1 ? f1.w / f0.w : 1;   // u＝這個種族的幀畫布一個人類像素等於幾個像素
+  // 取框：回 [來源 x, y, w, h]（race 幀畫布座標）與臉心在框內的位置 [dx, dy]（單位＝人類像素）
+  const crop = fi => {
+    const a0 = faceBoxOf('human2', fi), a1 = faceBoxOf(race, fi);
+    if (!a0 || !a1) return { r: [RX, 0, RW, RH], fx: 16, fy: 24 };
+    return { r: [a1.cx - (a0.cx - RX) * u, a1.cy - a0.cy * u, RW * u, RH * u], fx: a0.cx - RX, fy: a0.cy };
+  };
+  const def = furnitureDef(p.seatType || 'bed'), bed = furnImg(p.seatType || 'bed', sdir);
+  if (sdir === 1 || sdir === 3) {   // 橫放的床（2×1）
+    const left = sdir === 1, x0 = it.cell[0] * CELL, bottom = (it.cell[1] + 1) * CELL, qs = def?.quiltSide;
+    const sideFi = (F.states.left_idle || [0])[0], side = playerSpriteDiv(p, sideFi, true), c = crop(sideFi), dw = RW * k, dh = RH * k;
+    // 切面（頭與肩膀取框最底下那一排，身體被切掉的地方）的上端要貼齊被子的上緣，不然切面會露在被子上面、看起來像頭穿過床板：
+    // 量那一排不透明像素的範圍，算出切面上端離臉心多遠，再把人往下／往上挪到切面上端剛好在被子上緣
+    const cutRow = Math.min(side.height - 1, Math.floor(c.r[1] + c.r[3] - 1)), cx0 = Math.max(0, Math.floor(c.r[0])), cx1 = Math.min(side.width, Math.ceil(c.r[0] + c.r[2]));
+    const cd = side.getContext('2d').getImageData(cx0, cutRow, Math.max(1, cx1 - cx0), 1).data;
+    let ca = -1, cb = -1; for (let i = 0; i < cd.length / 4; i++) if (cd[i * 4 + 3]) { if (ca < 0) ca = i; cb = i; }
+    const sc = dw / c.r[2], lxOf = col => -c.fx * k + (col - c.r[0]) * sc;   // 來源欄 → 轉向前的橫向位置（臉心＝0）
+    const upOff = ca < 0 ? -dw / 2 : (left ? -lxOf(cx0 + cb + 1) : lxOf(cx0 + ca));   // 切面上端（螢幕上方那一頭）離臉心的距離（往下為正）
+    const quiltTopY = bottom - (bed.height - (qs ? qs[1] + 1 : 10)) * 2;             // 被子上緣（被子方塊的第一排不透明列）
     ctx.save();
-    ctx.beginPath(); ctx.rect(x0 + 3, pillowY - 40, 26, 80); ctx.clip();
-    ctx.translate(pillowX + (left ? -3 : 3), pillowY + 1); ctx.rotate(left ? -Math.PI / 2 : Math.PI / 2);
-    const kk = rs * .85;
-    ctx.drawImage(img, sx, sy, sw, sh, -sw * s * kk / 2, 0, sw * s * kk, sh * s * kk);
+    // 頭頂貼著床頭端（床圖 x＝4，頭不會穿過床頭板）；肩膀那端在被子下面（被子從床圖 x＝17 開始，取框長 39px 一定蓋得到）（朝右的床：床圖鏡像）
+    ctx.translate(left ? x0 + 4 * 2 - 2 * 2 : x0 + bed.width * 2 - 4 * 2 + 2 * 2, quiltTopY - upOff - (left ? 4 : 1) * 2);   // 使用者微調（2026-11-25，單位＝床圖 1 格＝2px）：床頭在左的人往左 2、往上 4；床頭在右的人往右 2、往上 1
+    ctx.rotate(left ? -Math.PI / 2 : Math.PI / 2);
+    if (left) ctx.scale(-1, 1);   // 臉朝上（床是側面圖，人仰躺＝臉朝畫面上方）：朝左的床轉 -90° 要翻面、朝右的床轉 +90° 直接用（朝右的幀跟朝左的是同一張圖，畫的時候才鏡像）
+    ctx.drawImage(side, c.r[0], c.r[1], c.r[2], c.r[3], -c.fx * k, 0, dw, dh);
     ctx.restore();
-    const qx = left ? 7 : 2;   // 棉被那一塊（床圖座標 x 7..13／鏡像 2..8、y 11..18）蓋回去
-    ctx.drawImage(bed.img, qx, 11, 7, 8, x0 + qx * 2, bottom - (bed.height - 11) * 2, 14, 16);
+    // 被子那一塊（左向圖座標 [x, y, w, h]；朝右是鏡像）蓋回去，遮住身體被切掉的那條線
+    if (bed && qs) {
+      const qx = left ? qs[0] : bed.width - qs[0] - qs[2];
+      ctx.drawImage(bed.img, qx, qs[1], qs[2], qs[3], x0 + qx * 2, bottom - (bed.height - qs[1]) * 2, qs[2] * 2, qs[3] * 2);
+    }
     drawZzz(p);
     return;
   }
-  // 頭與肩膀那塊：由底圖實測——人佔幀內 x 22..40、y 20..63（高 44），頭約在上 30%
-  const sw = Math.round(F.w * .30), sh = Math.round(F.h * .21), sx = Math.round(F.w * .36), sy = Math.round(F.h * .30);
-  ctx.drawImage(img, sx, sy, sw, sh, p.x - sw * s * rs / 2, p.y - 33 + sh * s * (1 - rs) / 2, sw * s * rs, sh * s * rs);   // 頭的水平中心對準枕頭（單人床中央）；依種族縮放
-  const def = furnitureDef(p.seatType || 'bed'), bed = S.furnImgs[p.seatType || 'bed'];
-  if (bed && def?.quiltRow && !seatItem(p)?.dir) {   // （床轉了方向就不套正面圖的被子）被子：從床的「同一幀」切出被子那幾列蓋回去（床有動畫時才對得上）
-    const rows = bed.height - def.quiltRow, fi = sprFrame(bed, p.seat ? cellPhase(p.seat.cell[0], p.seat.cell[1]) : 0);
-    ctx.drawImage(bed.img, fi * bed.fw, def.quiltRow, bed.fw, rows, p.x - bed.width, p.y - rows * 2, bed.width * 2, rows * 2);
+  if (bed && def?.quiltRow) {   // 直放的床（1×2）：被子從 quiltRow 開始蓋到床尾；頭與肩膀的底邊墊在被子上緣下面 2px（切線被被子蓋住、對得準）
+    const rows = bed.height - def.quiltRow, fi = sprFrame(bed, p.seat ? cellPhase(p.seat.cell[0], p.seat.cell[1]) : 0), quiltTop = p.y - rows * 2;
+    const c = crop(frontFi), dw = RW * k, dh = RH * k;
+    ctx.drawImage(img, c.r[0], c.r[1], c.r[2], c.r[3], p.x - c.fx * k, quiltTop + 2 - dh + 4 * 2, dw, dh);   // 正面睡：使用者微調往下 4 格（2026-11-25，1 格＝2px）
+    ctx.drawImage(bed.img, fi * bed.fw, def.quiltRow, bed.fw, rows, p.x - bed.width, quiltTop, bed.width * 2, rows * 2);
   }
   drawZzz(p);
 }
@@ -4150,8 +4181,8 @@ function furnAtPoint(wx, wy) {   // 世界座標點到哪件家具（依繪製�
   for (let i = S.furnItems.length - 1; i >= 0; i--) {
     const it = S.furnItems[i], def = furnitureDef(it.type), img = furnImg(it.type, it.dir);
     if (!def || !img) continue;
-    const sc = S.furn.scale || 2, x0 = it.cell[0] * CELL, y1 = (it.cell[1] + def.h) * CELL;
-    if (wx >= x0 && wx <= x0 + Math.max(def.w * CELL, img.width * sc) && wy >= y1 - img.height * sc && wy <= y1) return it;
+    const fd = itemDims(it), sc = S.furn.scale || 2, x0 = it.cell[0] * CELL, y1 = (it.cell[1] + fd.h) * CELL;
+    if (wx >= x0 && wx <= x0 + Math.max(fd.w * CELL, img.width * sc) && wy >= y1 - img.height * sc && wy <= y1) return it;
   }
   return null;
 }
@@ -4449,7 +4480,7 @@ function seatNear(p) {     // F 鍵：身邊最近的可坐/可睡家具
   let best = null, bd = 56;
   for (const it of S.furnItems) {
     const def = furnitureDef(it.type); if (!def?.use) continue;
-    const d = Math.hypot((it.cell[0] + def.w / 2) * CELL - p.x, (it.cell[1] + def.h / 2) * CELL - p.y);
+    const fd = itemDims(it), d = Math.hypot((it.cell[0] + fd.w / 2) * CELL - p.x, (it.cell[1] + fd.h / 2) * CELL - p.y);
     if (d < bd) { bd = d; best = it; }
   }
   return best;
@@ -4462,9 +4493,9 @@ function usePose(it) {
     standUp(p);
     if (same) return;
   }
-  const cx = (it.cell[0] + def.w / 2) * CELL, cy = (it.cell[1] + def.h / 2) * CELL;
+  const fd = itemDims(it), cx = (it.cell[0] + fd.w / 2) * CELL, cy = (it.cell[1] + fd.h / 2) * CELL;
   if (Math.hypot(cx - p.x, cy - p.y) > 80) { say(`靠近一點再${def.use === 'sit' ? '坐' : '躺'}`); return; }
-  const sx = cx, sy = (it.cell[1] + def.h) * CELL - (def.use === 'sit' ? 2 : 0);
+  const sx = cx, sy = (it.cell[1] + fd.h) * CELL - (def.use === 'sit' ? 2 : 0);
   for (const r of S.remotes.values()) if (r.pose && Math.abs(r.x - sx) < 10 && Math.abs(r.y - sy) < 10) { say('這裡有人了'); return; }
   p.pose = def.use; p.seat = { type: it.type, cell: [it.cell[0], it.cell[1]] }; p.seatType = it.type; p.face = 'down'; p.d8 = 'down';
   if (def.use === 'sit') seatFace(p, it.dir || 0);
@@ -4482,7 +4513,7 @@ function standUp(p) {
   const seat = p.seat;
   p.pose = null; p.seat = null; p.seatType = null;
   if (seat) {   // 起身時站到家具前面（前面有東西擋就原地，仍可走出來）
-    const def = furnitureDef(seat.type), ny = (seat.cell[1] + (def?.h || 1)) * CELL + 6;
+    const sit = S.furnItems.find(o => o.type === seat.type && o.cell[0] === seat.cell[0] && o.cell[1] === seat.cell[1]), ny = (seat.cell[1] + (sit ? itemDims(sit).h : (furnitureDef(seat.type)?.h || 1))) * CELL + 6;
     if (!blocked(p.x, ny)) p.y = ny;
   }
 }
@@ -13116,13 +13147,14 @@ function draw() {
   }
   S.furnItems.forEach((it, idx) => {
     const def = furnitureDef(it.type), img = furnImg(it.type, it.dir); if (!img) return;
-    if (offView(it.cell[0] * CELL, (it.cell[1] + def.h) * CELL, Math.max(def.w * CELL, img.width * SC), img.height * SC, def.text ? 90 : 4)) return;
+    const fd = furnDimsOf(def, it.dir || 0);
+    if (offView(it.cell[0] * CELL, (it.cell[1] + fd.h) * CELL, Math.max(fd.w * CELL, img.width * SC), img.height * SC, def.text ? 90 : 4)) return;
     list.push({
-      y: (it.cell[1] + def.h) * CELL - 1,
+      y: (it.cell[1] + fd.h) * CELL - 1,
       draw: () => {
         ctx.save();
         if (idx === S.pickedIdx) ctx.globalAlpha = .5;
-        drawSpr(img, sprFrame(img, cellPhase(it.cell[0], it.cell[1])), it.cell[0] * CELL, (it.cell[1] + def.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
+        drawSpr(img, sprFrame(img, cellPhase(it.cell[0], it.cell[1])), it.cell[0] * CELL, (it.cell[1] + fd.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
         if (def.text && it.text) {   // 看板的字：走近（約 4 格內）才顯示在上方，只顯示第一行前 16 字，點開看全文
           const me = S.players[0], cx = (it.cell[0] + def.w / 2) * CELL, cy = (it.cell[1] + def.h) * CELL;
           if (Math.hypot(cx - me.x, cy - me.y) < 130) {
@@ -13306,7 +13338,7 @@ function draw() {
       draw: () => {
         const wid = p.tool || S.me.weapon;      // 打石頭/樹木時暫時換成鎬子/斧頭
         // 賢具不畫手持/腰間的武器圖（腰間那座看起來像殘影）：待機的四座漂浮賢具就是它的樣子（drawNoulithIdle）
-        const wi = !p.npc && wid !== 'tome' ? weaponImgFor(wid, p.tool ? null : myLook().wlook) : null;
+        const wi = !p.npc && wid !== 'tome' ? weaponImgFor(wid, p.tool ? null : myLook().wlook, S.me.race) : null;
         drawNoulithIdle(p, p.npc ? null : wid, 'back');
         drawPerson(p, wi, p.npc ? (p.guide ? '#ffd86b' : '#bcd8e8') : '#ffffff');
         drawNoulithIdle(p, p.npc ? null : wid, 'front');
@@ -13321,7 +13353,7 @@ function draw() {
       y: r.y + (r.pose ? 2 : 0),
       draw: () => {   // 同島的人用暖金色名牌區分；賢具同樣不畫腰間武器圖
         drawNoulithIdle(r, r.weapon, 'back');
-        drawPerson(r, r.weapon === 'tome' ? null : weaponImgFor(r.weapon, r.look?.wlook), '#ffe9a8');
+        drawPerson(r, r.weapon === 'tome' ? null : weaponImgFor(r.weapon, r.look?.wlook, r.look?.race), '#ffe9a8');
         drawNoulithIdle(r, r.weapon, 'front');
       }
     });
@@ -13358,12 +13390,12 @@ function draw() {
   // 裝飾模式 ghost
   if (S.mode === 'decor' && S.decorTab === 'furn' && S.mouseCell && S.sel && S.furnImgs[S.sel]) {
     const def = furnitureDef(S.sel), img = furnImg(S.sel, S.rot || 0);
-    const [mx, my] = S.mouseCell, w = def.w * CELL, h = def.h * CELL;
-    const valid = canPlace(S.sel, mx, my);
+    const fd = furnDimsOf(def, S.rot || 0), [mx, my] = S.mouseCell, w = fd.w * CELL, h = fd.h * CELL;
+    const valid = canPlace(S.sel, mx, my, S.rot || 0);
     ctx.fillStyle = valid ? 'rgba(90,220,120,.28)' : 'rgba(220,80,80,.3)';
     ctx.fillRect(mx * CELL, my * CELL, w, h);
     ctx.globalAlpha = .75;
-    drawSpr(img, sprFrame(img), mx * CELL, (my + def.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
+    drawSpr(img, sprFrame(img), mx * CELL, (my + fd.h) * CELL - img.height * SC, img.width * SC, img.height * SC);
     ctx.globalAlpha = 1;
     ctx.strokeStyle = valid ? 'rgba(120,255,160,.8)' : 'rgba(255,120,120,.8)';
     ctx.strokeRect(mx * CELL + .5, my * CELL + .5, w - 1, h - 1);
@@ -13505,8 +13537,8 @@ function draw() {
 }
 
 const MAX_FURN = 500;   // 每個地形的擺設上限（與兩份伺服器的 MAX_FURN 一致）
-function canPlace(typeId, x, y) {
-  const def = furnitureDef(typeId);
+function canPlace(typeId, x, y, dir = 0) {
+  const def = furnDimsOf(furnitureDef(typeId), dir);
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
     if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS) return false;
@@ -13653,28 +13685,33 @@ function onNetFurn(items) {
 // 同島的人在你保存之前看不到。保存時伺服器會逐一驗證（被別人搶先占用的會被跳過），清空只有管理員能做。
 const cloneFurn = list => list.map(it => { const o = { type: it.type, cell: [it.cell[0], it.cell[1]] }; if (it.text) o.text = it.text; if (it.dir) o.dir = it.dir; return o; });
 const furnCovers = (it, cell) => {
-  const d = furnitureDef(it.type) || { w: 1, h: 1 };
+  const d = itemDims(it);
   return cell[0] >= it.cell[0] && cell[0] < it.cell[0] + d.w && cell[1] >= it.cell[1] && cell[1] < it.cell[1] + d.h;
 };
 // 在指定清單上能不能放（範圍、水邊〔水上要有地板 floor〕、與清單內家具重疊）；規則與兩份伺服器一致
-function canPlaceIn(list, typeId, x, y, floor = S.floorMap) {
-  const def = furnitureDef(typeId); if (!def) return false;
+function canPlaceIn(list, typeId, x, y, floor = S.floorMap, dir = 0) {
+  if (!furnitureDef(typeId)) return false;
+  const def = furnDimsOf(furnitureDef(typeId), dir);
   for (let dy = 0; dy < def.h; dy++) for (let dx = 0; dx < def.w; dx++) {
     const xx = x + dx, yy = y + dy;
     if (xx < 0 || yy < 0 || xx >= COLS || yy >= ROWS || !groundAt(xx, yy, floor) || inSecretArea(xx, yy) || tableAtCell(xx, yy) || propAtCell(xx, yy)) return false;
   }
-  return !list.some(it => { const d = furnitureDef(it.type) || { w: 1, h: 1 };
+  return !list.some(it => { const d = itemDims(it);
     return x < it.cell[0] + d.w && it.cell[0] < x + def.w && y < it.cell[1] + d.h && it.cell[1] < y + def.h; });
 }
 // 把一個家具操作套到清單上（直接改 list；不合法的略過）
 function applyFurnOpTo(list, op, floor = S.floorMap) {
   if (op.t === 'clear') list.length = 0;
   else if (op.t === 'remove') { const i = list.findIndex(it => furnCovers(it, op.cell)); if (i >= 0) list.splice(i, 1); }
-  else if (op.t === 'place' && canPlaceIn(list, op.type, op.cell[0], op.cell[1], floor)) {
+  else if (op.t === 'place' && canPlaceIn(list, op.type, op.cell[0], op.cell[1], floor, op.dir || 0)) {
     const o = { type: op.type, cell: [op.cell[0], op.cell[1]] }; if (op.dir) o.dir = op.dir; list.push(o);
   } else if (op.t === 'rotate') {   // 旋轉已擺好的家具（點到它的任一格）；dir 0＝正面（不存欄位）
     const it = list.find(o => furnCovers(o, op.cell));
-    if (it) { if (op.dir) it.dir = op.dir; else delete it.dir; }
+    if (it) {
+      const od = itemDims(it), nd = furnDimsOf(furnitureDef(it.type), op.dir || 0);
+      if ((od.w !== nd.w || od.h !== nd.h) && !canPlaceIn(list.filter(o => o !== it), it.type, it.cell[0], it.cell[1], floor, op.dir || 0)) return;   // 寬高互換（床）：新佔到的格子被擋住就不轉
+      if (op.dir) it.dir = op.dir; else delete it.dir;
+    }
   }
 }
 // 裝飾模式按 R：游標指著已擺好的家具就轉那一件（記成草稿，按「完成」才保存）；沒指著就轉「下一件要放的」預覽方向
@@ -13879,10 +13916,15 @@ function glamFits(slot, it, job = S.me.job) {
   if (!it?.glam || (it.jobs && !it.jobs.includes(job))) return false;
   return slot !== 'weapon' || it.type === jobWeaponDef(job)?.type;
 }
+// 預設外觀（2026-11-23 使用者定）：新人類系列現在整套衣服是「外觀」（2026-11-25 預設改男式西裝外套／西裝褲／皮鞋；女式西裝仍可在外觀選），每個職業預設都選這三件；
+// 按外觀一覽的「不使用外觀」＝記在 glamOff，才會回到職業裝備（裝備目前沒有自己的圖，畫面還是那套衣服）
+const DEFAULT_GLAM = { top: 'suit_jacket_m', bottom: 'suit_pants_m', shoe: 'leather_shoes_m' };
 function wardrobe(job = S.me.job) {
   const w = (S.me.wardrobe && typeof S.me.wardrobe === 'object') ? S.me.wardrobe : (S.me.wardrobe = {});
   const e = w[job] && typeof w[job] === 'object' ? w[job] : (w[job] = {});
-  e.glam ||= {}; e.color ||= {};
+  e.glam ||= {}; e.color ||= {}; e.glamOff ||= {};
+  for (const [slot, gid] of Object.entries(DEFAULT_GLAM)) if (e.glam[slot] === gid && lookItem(slotList(slot), JOBS[job]?.gear?.[slot])?.keepGear) delete e.glam[slot];   // 舊存檔：這個職業的裝備後來才標 keepGear，之前被自動套上的預設外觀（西裝）要拿掉，不然新裝備看不到
+  for (const [slot, gid] of Object.entries(DEFAULT_GLAM)) if (!(slot in e.glam) && !e.glamOff[slot] && lookItem(slotList(slot), gid) && !lookItem(slotList(slot), JOBS[job]?.gear?.[slot])?.keepGear) e.glam[slot] = gid;   // keepGear＝這件職業裝備有自己的新風格圖（忍者套裝），不套預設外觀
   if (e.glam.weapon === 'goldsword') e.glam.weapon = 'sword_gold';   // 舊的「金劍」外觀（2026-11-09 拿掉）→ 長劍的金黃發光版（解鎖條件同樣是打倒黃金肥龍）
   return e;
 }
@@ -13897,10 +13939,11 @@ function shownItem(slot, job = S.me.job) {
 // 自己的顯示造型（畫自己、送給同島的人都用這個；外觀與裝備在這裡就決定好，別人只看結果）
 function myLook() {
   const c = wardrobe().color, w = shownItem('weapon');
-  return { skin: S.me.skin, hair: S.me.hair, gender: S.me.gender || 'male', race: S.me.race || 'human',
+  const own = ownRaceOf(S.me.race);   // 新風格：髮型／服裝款式放進 look.hair／look.top（款式 id，同步不用改伺服器）
+  const ownHair = own && chibiStyleOf(own.own, 'hair', S.me.cHair)?.id;
+  return { skin: S.me.skin, hair: ownHair || S.me.hair, race: own?.id || 'human2',
            hat: shownItem('hat')?.id || null, top: shownItem('top')?.id || null, bottom: shownItem('bottom')?.id || null,
            shoe: shownItem('shoe')?.id || null,
-           face: S.me.face || 'normal', eyes: lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown',
            hairC: S.me.hairC || null, eyeC: S.me.eyeC || null,   // 調色盤自訂的髮色／眼睛顏色（null＝用選的那一色）
            hatC: c.hat || null, topC: c.top || null, botC: c.bottom || null, shoeC: c.shoe || null,
            wlook: w && w.id !== JOBS[S.me.job]?.weapon ? w.id : null,
@@ -13941,26 +13984,8 @@ function buildAvatarPanel() {
       host.appendChild(o);
     }
   };
-  // 樣式＋顏色兩層的項目（髮型、眼睛）：清單裡每一項是「某樣式的某顏色」；換樣式保留顏色。
-  // 顏色＝樣式那排最後的「換色」鈕（2026-11-09 使用者要求跟裝備的換色一樣）：開選色視窗，上排是這個樣式的預設色、下面調色盤自訂
-  const twoLevel = (list, curId, field, styleHost, cfield) => {
-    const cur = list.find(x => x.id === curId) || list[0]; if (!cur) return;
-    const styles = [];
-    for (const it of list) if (!styles.some(s2 => s2.id === it.style)) styles.push({ id: it.style, name: it.styleName || it.style });
-    lookChips(styleHost, styles, cur.style, sid => {
-      const pick = list.find(x => x.style === sid && x.color === cur.color) || list.find(x => x.style === sid);
-      if (pick) S.me[field] = pick.id;
-    });
-    const b = document.createElement('button'); b.className = 'ff-btn small dye-btn'; b.title = LOOK_COLOR[cfield];
-    const sw = document.createElement('span'); sw.className = 'dye-sw'; sw.style.background = S.me[cfield] || cur.hex || '#888';
-    b.append(sw, document.createTextNode('換色'));
-    b.onclick = () => toggleColor(cfield, cur);
-    styleHost.appendChild(b);
-  };
   lookChips($('raceOpts'), (S.avatar.races || []).map(r => ({ id: r.id, name: r.name, title: r.scale && r.scale !== 1 ? `體型 ×${r.scale}` : '' })),
-            S.me.race || 'human', v => { S.me.race = v; });
-  // 性別（男／女）：換素體與對應性別的服裝
-  lookChips($('genderOpts'), [{ id: 'male', name: '男' }, { id: 'female', name: '女' }], S.me.gender || 'male', v => { S.me.gender = v; });
+            ownRaceOf(S.me.race)?.id, v => { S.me.race = v; });
   // 等級：XP 進度條（無上限，每級需求 10 + 5×(Lv−1)；來源＝怪物／釣竿／首捕／採集，2026-11-06）
   const li = lvInfo(S.profile.xp);
   $('lvCur').textContent = `Lv.${li.lv}`;
@@ -13985,9 +14010,25 @@ function buildAvatarPanel() {
   $('titleCur').textContent = titleText(S.me.title) || '無';   // 稱號：按「稱號設定」開稱號一覽選
   lookSwatches($('skinOpts'), S.avatar.skins.map(s2 => ({ id: s2.id, name: s2.name, hex: s2.base })), S.me.skin, v => { S.me.skin = v; });
   // 髮型／髮色、臉型、眼神／眼睛顏色
-  twoLevel(S.avatar.hair, S.me.hair, 'hair', $('hairOpts'), 'hairC');
-  lookChips($('faceOpts'), S.avatar.faces || [], S.me.face || 'normal', v => { S.me.face = v; });
-  twoLevel(S.avatar.eyes || [], lookItem(S.avatar.eyes, S.me.eyes) ? S.me.eyes : 'default_brown', 'eyes', $('eyesOpts'), 'eyeC');
+  const ownRace = ownRaceOf(S.me.race);
+  if (ownRace?.own.styles?.hair) {   // 新風格：髮型款式（自己畫的），髮色用同一個換色鈕
+    const hairHost = $('hairOpts');
+    lookChips(hairHost, ownRace.own.styles.hair, chibiStyleOf(ownRace.own, 'hair', S.me.cHair)?.id, v => { S.me.cHair = v; });
+    const hb = document.createElement('button'); hb.className = 'ff-btn small dye-btn'; hb.title = LOOK_COLOR.hairC;
+    const hsw = document.createElement('span'); hsw.className = 'dye-sw'; hsw.style.background = S.me.hairC || ownRace.own.dye.find(r => r.slot === 'hair').colors[0];
+    hb.append(hsw, document.createTextNode('換色'));
+    hb.onclick = () => toggleColor('hairC', { name: '髮色', hex: ownRace.own.dye.find(r => r.slot === 'hair').colors[0], dye: ownRace.own.dye.find(r => r.slot === 'hair').colors });
+    hairHost.appendChild(hb);
+  }
+  const eyeDye = ownRace?.own.dye?.find(r => r.slot === 'eye');
+  if (eyeDye) {   // 自己畫眼睛的種族（新人類）：LPC 的眼神樣式用不到，只留一個換色鈕（換眼珠的灰色）
+    const eh = $('eyesOpts'); eh.innerHTML = '';
+    const eb = document.createElement('button'); eb.className = 'ff-btn small dye-btn'; eb.title = LOOK_COLOR.eyeC;
+    const esw = document.createElement('span'); esw.className = 'dye-sw'; esw.style.background = S.me.eyeC || eyeDye.colors[0];
+    eb.append(esw, document.createTextNode('換色'));
+    eb.onclick = () => toggleColor('eyeC', { name: '眼睛顏色', hex: eyeDye.colors[0], dye: eyeDye.colors });
+    eh.appendChild(eb);
+  }
   // 裝備與外觀：每個部位一列——顯示中的那件（裝備，或套了外觀時的外觀名）＋「外觀」鈕（開外觀一覽選）＋換色鈕
   const box = $('gearRows'); box.innerHTML = '';
   const wr = wardrobe();
@@ -14035,7 +14076,7 @@ function buildGlams() {
     const nm = document.createElement('div'); nm.className = 'title-name'; nm.textContent = name;
     const ds = document.createElement('div'); ds.className = 'title-desc'; ds.textContent = desc;
     o.append(nm, ds);
-    if (ok) o.onclick = () => { if (id) wr.glam[slot] = id; else delete wr.glam[slot]; saveAvatar(); buildAvatarPanel(); buildGlams(); };
+    if (ok) o.onclick = () => { if (id) { wr.glam[slot] = id; delete wr.glamOff[slot]; } else { delete wr.glam[slot]; wr.glamOff[slot] = true; } saveAvatar(); buildAvatarPanel(); buildGlams(); };
     box.appendChild(o);
   };
   row(null, '不使用外觀', `顯示職業裝備：${gearIt ? gearIt.name : '（無）'}`, true);
@@ -14077,13 +14118,7 @@ function openColor(slot, item) {
   Object.assign(colorUI, hex2hsv(colorGet(slot) || orig));
   $('colorTitle').textContent = look ? LOOK_COLOR[slot] : `${SLOTS.find(x => x[0] === slot)[1]}換色：${item.name}`;
   const ps = $('colorPresets'); ps.innerHTML = '';
-  if (look) {   // 外貌：預設色＝同樣式的各顏色（LPC 原本的配色，點了是換成那一項、清掉自訂色）
-    const field = LOOK_FIELD[slot], list = field === 'hair' ? S.avatar.hair : S.avatar.eyes;
-    for (const it of list.filter(x => x.style === item.style && x.hex)) {
-      const o = document.createElement('div'); o.className = 'opt'; o.style.background = it.hex; o.title = it.name;
-      o.onclick = () => { S.me[field] = it.id; colorUI.orig = it.hex; S.charCache.clear(); Object.assign(colorUI, hex2hsv(it.hex)); colorApply(); };
-      ps.appendChild(o);
-    }
+  if (look) {   // 外貌（髮色、眼睛顏色）：沒有預設色，只有原色（目前選的那一色）與下面的調色盤
   } else for (const hex of [dye[0], ...new Set([...S.avatar.shirtColors, ...S.avatar.pantsColors])]) {
     const o = document.createElement('div'); o.className = 'opt'; o.style.background = hex; o.title = hex === dye[0] ? '原色' : hex;
     o.onclick = () => { Object.assign(colorUI, hex2hsv(hex)); colorApply(); };
@@ -14420,7 +14455,7 @@ canvas.addEventListener('mousedown', e => {
   const [x, y] = S.mouseCell;
   if (S.draft.length >= 300) { toast('未保存的變動太多了，請先按「完成」保存'); return; }
   if (S.furnItems.length >= MAX_FURN) { toast(`這個地形的擺設已達上限（${MAX_FURN} 件）`); return; }
-  if (canPlace(S.sel, x, y)) { stageOp(S.rot ? { t: 'place', type: S.sel, cell: [x, y], dir: S.rot } : { t: 'place', type: S.sel, cell: [x, y] }); toast('放置'); }
+  if (canPlace(S.sel, x, y, S.rot || 0)) { stageOp(S.rot ? { t: 'place', type: S.sel, cell: [x, y], dir: S.rot } : { t: 'place', type: S.sel, cell: [x, y] }); toast('放置'); }
   else toast('這裡放不下（水上要先鋪地板／已占用）');
 });
 canvas.addEventListener('contextmenu', e => {
@@ -14655,17 +14690,12 @@ async function boot() {
     ...S.furn.items.map(async it => S.furnImgs[it.id] = await loadSpr(`assets/furniture/${it.sprite}`, it.anim)),
     ...S.furn.items.flatMap(it => (it.dirs || []).map(async (f, k) => { const im = await loadSpr(`assets/furniture/${f}`, it.anim).catch(() => null); if (im) S.furnImgs[`${it.id}@${k + 1}`] = im; })),   // 朝向 1／2／3 的圖；缺圖就退回正面那張
     // 人物分層 sheet：軀幹（膚色）是必要的（缺了畫不出人），頭髮／衣服／褲子／帽子缺圖就略過那一層
-    ...S.avatar.skins.flatMap(s => {   // 素體 sheet：男版＋女版（性別切換用）
-      const files = [s.sheet, (s.sheet || '').replace('char_body_', 'char_body_female_')];
-      return files.filter((f, i) => f && files.indexOf(f) === i)
-        .map(async f => S.charImgs[f] = await loadImg(`assets/avatar/${f}`));
-    }),
-    ...[...S.avatar.hair, ...(S.avatar.tops || []), ...(S.avatar.bottoms || []), ...(S.avatar.shoes || []), ...(S.avatar.faces || []), ...(S.avatar.eyes || []), ...(S.avatar.hats || [])]
+    ...[...(S.avatar.tops || []), ...(S.avatar.bottoms || []), ...(S.avatar.shoes || []), ...(S.avatar.hats || [])]
       .flatMap(it => [it.sheet, it.sheetF, it.dyeFrom]).filter((f, i, a) => f && a.indexOf(f) === i)   // 沒有圖的（不戴帽子的 nohat）不用載；服裝的女版 sheetF 也要載
       .map(async f => S.charImgs[f] = await optImg(`assets/avatar/${f}`)),
     ...S.avatar.weapons.filter(w => w.lpc).flatMap(w => [w.lpc.bg, w.lpc.fg, ...Object.values(w.lpc.over || {}).flatMap(o => [o.bg, o.fg])])   // LPC 武器圖層
       .filter(Boolean).map(async f => S.charImgs[f] = await optImg(`assets/avatar/${f}`)),
-    ...(S.avatar.races || []).flatMap(r => [r.ear, r.earBg, r.earFg]).filter(Boolean)   // 種族耳朵圖層（精靈耳／貓耳前後層）
+    ...(S.avatar.races || []).flatMap(r => [r.ear, r.earBg, r.earFg, ...Object.values(r.own?.sheets || {}), ...Object.values(r.own?.styles || {}).flat().flatMap(x => [...Object.values(x.sheets || {}), ...Object.values(x.erase || {})])]).filter(Boolean)   // 種族耳朵圖層（精靈耳／貓耳前後層）、新風格人物的圖層
       .map(async f => S.charImgs[f] = await loadImg(`assets/avatar/${f}`)),
     ...S.avatar.weapons.filter(w => w.sprite).map(async w => {
       const im = await optImg(`assets/avatar/${w.sprite}`);
