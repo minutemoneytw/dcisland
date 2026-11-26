@@ -326,14 +326,14 @@ def _head_box(kind, step):
 
 def hat_pixels(kind, cx, top):
     """圓頂軟帽＋窄帽沿＋白羽毛。帽沿從頭頂下 3 排開始（4 排），圓頂在帽沿上面 7 排，羽毛再往後上方翹。"""
-    R = {'front': 14.0, 'back': 14.0, 'left': 15.0}[kind]
+    R = {'front': 15.0, 'back': 15.0, 'left': 16.0}[kind]          # 帽沿半寬（2026-11-26 使用者要求帽子左右加寬 2 格＝每邊 +1，頭髮才不會像從帽子上長出來）
     center = {'front': cx, 'back': cx, 'left': cx + 1.5}[kind]
     brim_y = top + 3
     CROWN = 9
     sil = {}
     for r in range(CROWN):
         t = (r + 1) / CROWN                                      # 0（頂）→ 1（底）
-        hw = 4.5 + 5.5 * math.sqrt(max(0.0, 1 - (1 - t) ** 2))   # 圓頂：越往下越寬
+        hw = 5.5 + 5.5 * math.sqrt(max(0.0, 1 - (1 - t) ** 2))   # 圓頂：越往下越寬
         for x in range(round(center - hw), round(center + hw) + 1):
             sil[(x, brim_y - CROWN + r)] = ('crown', r, x - center, hw)
     for i in range(4):
