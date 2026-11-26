@@ -7,7 +7,7 @@
   { "id": "warrior", "atkAnim": "slash", "name": "戰士", "role": "tank", "weapon": "waraxe",
     "gear": { "hat": "barbarian", "top": "war_mail", "bottom": "war_pants", "shoe": "war_boots" }, "skills": ["vamp", "wshield"] },
   { "id": "whitemage", "atkAnim": "thrust", "name": "白魔法師", "role": "healer", "weapon": "staff",
-    "gear": { "hat": "hood", "top": "whm_robe", "bottom": "suit_pants_m", "shoe": "leather_shoes_m" }, "skills": ["sheal", "wings"] },
+    "gear": { "hat": "wm_hat", "top": "wm_robe", "bottom": "wm_pants", "shoe": "wm_boots" }, "skills": ["sheal", "wings"] },
   { "id": "sage", "atkAnim": "spellcast", "name": "賢者", "role": "healer", "weapon": "tome",
     "gear": { "hat": "nohat", "top": "sge_robe", "bottom": "suit_pants_m", "shoe": "leather_shoes_m" }, "skills": ["care", "save"] },
   { "id": "ninja", "atkAnim": "slash", "name": "忍者", "role": "melee", "weapon": "daggers",

@@ -2447,6 +2447,13 @@
        }
       },
       {
+       "id": "wm_robe",
+       "name": "白魔法師長袍",
+       "sheets": {
+        "top": "human2_w_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -2486,6 +2493,13 @@
        "name": "黑魔法師長褲",
        "sheets": {
         "bottom": "human2_b_bottom.png"
+       }
+      },
+      {
+       "id": "wm_pants",
+       "name": "白魔法師長褲",
+       "sheets": {
+        "bottom": "human2_w_bottom.png"
        }
       },
       {
@@ -2531,6 +2545,13 @@
        }
       },
       {
+       "id": "wm_boots",
+       "name": "白魔法師靴",
+       "sheets": {
+        "shoes": "human2_w_shoes.png"
+       }
+      },
+      {
        "id": "bard_boots",
        "name": "吟遊詩人靴",
        "sheets": {
@@ -2553,6 +2574,15 @@
        "hairCutDy": -2,
        "sheets": {
         "hat": "human2_b_hat.png"
+       }
+      },
+      {
+       "id": "wm_hat",
+       "name": "白魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "human2_w_hat.png"
        }
       },
       {
@@ -2802,6 +2832,67 @@
        "#100c1c",
        "#362c52",
        "#524474"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "wm_robe",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#efe4d9",
+       "#ceb8ac",
+       "#d6c3b7",
+       "#decec3",
+       "#e6d9ce",
+       "#f7efe5",
+       "#fffaf0"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "wm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#826f63",
+       "#54443e",
+       "#63524a",
+       "#736157",
+       "#917d6f",
+       "#a18c7c",
+       "#b09a88"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "wm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#6c4a39",
+       "#3a241e",
+       "#4b3127",
+       "#5b3d30",
+       "#7d5742",
+       "#8d634b",
+       "#9e7054"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "wm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e2d0c2",
+       "#8e645c",
+       "#f4eade",
+       "#fffaf2"
       ]
      },
      {
@@ -3059,6 +3150,13 @@
        }
       },
       {
+       "id": "wm_robe",
+       "name": "白魔法師長袍",
+       "sheets": {
+        "top": "human2_w_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -3098,6 +3196,13 @@
        "name": "黑魔法師長褲",
        "sheets": {
         "bottom": "human2_b_bottom.png"
+       }
+      },
+      {
+       "id": "wm_pants",
+       "name": "白魔法師長褲",
+       "sheets": {
+        "bottom": "human2_w_bottom.png"
        }
       },
       {
@@ -3143,6 +3248,13 @@
        }
       },
       {
+       "id": "wm_boots",
+       "name": "白魔法師靴",
+       "sheets": {
+        "shoes": "human2_w_shoes.png"
+       }
+      },
+      {
        "id": "bard_boots",
        "name": "吟遊詩人靴",
        "sheets": {
@@ -3165,6 +3277,15 @@
        "hairCutDy": -2,
        "sheets": {
         "hat": "human2_b_hat.png"
+       }
+      },
+      {
+       "id": "wm_hat",
+       "name": "白魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "human2_w_hat.png"
        }
       },
       {
@@ -3416,6 +3537,67 @@
        "#100c1c",
        "#362c52",
        "#524474"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "wm_robe",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#efe4d9",
+       "#ceb8ac",
+       "#d6c3b7",
+       "#decec3",
+       "#e6d9ce",
+       "#f7efe5",
+       "#fffaf0"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "wm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#826f63",
+       "#54443e",
+       "#63524a",
+       "#736157",
+       "#917d6f",
+       "#a18c7c",
+       "#b09a88"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "wm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#6c4a39",
+       "#3a241e",
+       "#4b3127",
+       "#5b3d30",
+       "#7d5742",
+       "#8d634b",
+       "#9e7054"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "wm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e2d0c2",
+       "#8e645c",
+       "#f4eade",
+       "#fffaf2"
       ]
      },
      {
@@ -3674,6 +3856,13 @@
        }
       },
       {
+       "id": "wm_robe",
+       "name": "白魔法師長袍",
+       "sheets": {
+        "top": "human2_w_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -3713,6 +3902,13 @@
        "name": "黑魔法師長褲",
        "sheets": {
         "bottom": "human2_b_bottom.png"
+       }
+      },
+      {
+       "id": "wm_pants",
+       "name": "白魔法師長褲",
+       "sheets": {
+        "bottom": "human2_w_bottom.png"
        }
       },
       {
@@ -3758,6 +3954,13 @@
        }
       },
       {
+       "id": "wm_boots",
+       "name": "白魔法師靴",
+       "sheets": {
+        "shoes": "human2_w_shoes.png"
+       }
+      },
+      {
        "id": "bard_boots",
        "name": "吟遊詩人靴",
        "sheets": {
@@ -3780,6 +3983,15 @@
        "hairCutDy": -2,
        "sheets": {
         "hat": "human2_b_hat.png"
+       }
+      },
+      {
+       "id": "wm_hat",
+       "name": "白魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "human2_w_hat.png"
        }
       },
       {
@@ -4031,6 +4243,67 @@
        "#100c1c",
        "#362c52",
        "#524474"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "wm_robe",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#efe4d9",
+       "#ceb8ac",
+       "#d6c3b7",
+       "#decec3",
+       "#e6d9ce",
+       "#f7efe5",
+       "#fffaf0"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "wm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#826f63",
+       "#54443e",
+       "#63524a",
+       "#736157",
+       "#917d6f",
+       "#a18c7c",
+       "#b09a88"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "wm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#6c4a39",
+       "#3a241e",
+       "#4b3127",
+       "#5b3d30",
+       "#7d5742",
+       "#8d634b",
+       "#9e7054"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "wm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e2d0c2",
+       "#8e645c",
+       "#f4eade",
+       "#fffaf2"
       ]
      },
      {
@@ -4287,6 +4560,13 @@
        }
       },
       {
+       "id": "wm_robe",
+       "name": "白魔法師長袍",
+       "sheets": {
+        "top": "dwarf2_w_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -4326,6 +4606,13 @@
        "name": "黑魔法師長褲",
        "sheets": {
         "bottom": "dwarf2_b_bottom.png"
+       }
+      },
+      {
+       "id": "wm_pants",
+       "name": "白魔法師長褲",
+       "sheets": {
+        "bottom": "dwarf2_w_bottom.png"
        }
       },
       {
@@ -4371,6 +4658,13 @@
        }
       },
       {
+       "id": "wm_boots",
+       "name": "白魔法師靴",
+       "sheets": {
+        "shoes": "dwarf2_w_shoes.png"
+       }
+      },
+      {
        "id": "bard_boots",
        "name": "吟遊詩人靴",
        "sheets": {
@@ -4393,6 +4687,15 @@
        "hairCutDy": -2,
        "sheets": {
         "hat": "dwarf2_b_hat.png"
+       }
+      },
+      {
+       "id": "wm_hat",
+       "name": "白魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "dwarf2_w_hat.png"
        }
       },
       {
@@ -4642,6 +4945,67 @@
        "#100c1c",
        "#362c52",
        "#524474"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "wm_robe",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#efe4d9",
+       "#ceb8ac",
+       "#d6c3b7",
+       "#decec3",
+       "#e6d9ce",
+       "#f7efe5",
+       "#fffaf0"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "wm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#826f63",
+       "#54443e",
+       "#63524a",
+       "#736157",
+       "#917d6f",
+       "#a18c7c",
+       "#b09a88"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "wm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#6c4a39",
+       "#3a241e",
+       "#4b3127",
+       "#5b3d30",
+       "#7d5742",
+       "#8d634b",
+       "#9e7054"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "wm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e2d0c2",
+       "#8e645c",
+       "#f4eade",
+       "#fffaf2"
       ]
      },
      {
@@ -4901,6 +5265,13 @@
        }
       },
       {
+       "id": "wm_robe",
+       "name": "白魔法師長袍",
+       "sheets": {
+        "top": "giant2_w_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -4940,6 +5311,13 @@
        "name": "黑魔法師長褲",
        "sheets": {
         "bottom": "giant2_b_bottom.png"
+       }
+      },
+      {
+       "id": "wm_pants",
+       "name": "白魔法師長褲",
+       "sheets": {
+        "bottom": "giant2_w_bottom.png"
        }
       },
       {
@@ -4985,6 +5363,13 @@
        }
       },
       {
+       "id": "wm_boots",
+       "name": "白魔法師靴",
+       "sheets": {
+        "shoes": "giant2_w_shoes.png"
+       }
+      },
+      {
        "id": "bard_boots",
        "name": "吟遊詩人靴",
        "sheets": {
@@ -5007,6 +5392,15 @@
        "hairCutDy": -2,
        "sheets": {
         "hat": "giant2_b_hat.png"
+       }
+      },
+      {
+       "id": "wm_hat",
+       "name": "白魔法師帽",
+       "hairFromHat": true,
+       "hairCutDy": -2,
+       "sheets": {
+        "hat": "giant2_w_hat.png"
        }
       },
       {
@@ -5260,6 +5654,67 @@
      },
      {
       "slot": "top",
+      "style": "wm_robe",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#efe4d9",
+       "#ceb8ac",
+       "#d6c3b7",
+       "#decec3",
+       "#e6d9ce",
+       "#f7efe5",
+       "#fffaf0"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "wm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#826f63",
+       "#54443e",
+       "#63524a",
+       "#736157",
+       "#917d6f",
+       "#a18c7c",
+       "#b09a88"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "wm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#6c4a39",
+       "#3a241e",
+       "#4b3127",
+       "#5b3d30",
+       "#7d5742",
+       "#8d634b",
+       "#9e7054"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "wm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e2d0c2",
+       "#8e645c",
+       "#f4eade",
+       "#fffaf2"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -5472,6 +5927,20 @@
    ]
   },
   {
+   "id": "wm_robe",
+   "name": "白魔法師長袍",
+   "keepGear": true,
+   "dye": [
+    "#efe4d9",
+    "#ceb8ac",
+    "#d6c3b7",
+    "#decec3",
+    "#e6d9ce",
+    "#f7efe5",
+    "#fffaf0"
+   ]
+  },
+  {
    "id": "bard_garb",
    "name": "吟遊詩人斗篷",
    "keepGear": true,
@@ -5676,6 +6145,20 @@
    ]
   },
   {
+   "id": "wm_pants",
+   "name": "白魔法師長褲",
+   "keepGear": true,
+   "dye": [
+    "#826f63",
+    "#54443e",
+    "#63524a",
+    "#736157",
+    "#917d6f",
+    "#a18c7c",
+    "#b09a88"
+   ]
+  },
+  {
    "id": "bard_pants",
    "name": "吟遊詩人長褲",
    "keepGear": true,
@@ -5810,6 +6293,20 @@
    ]
   },
   {
+   "id": "wm_boots",
+   "name": "白魔法師靴",
+   "keepGear": true,
+   "dye": [
+    "#6c4a39",
+    "#3a241e",
+    "#4b3127",
+    "#5b3d30",
+    "#7d5742",
+    "#8d634b",
+    "#9e7054"
+   ]
+  },
+  {
    "id": "bard_boots",
    "name": "吟遊詩人靴",
    "keepGear": true,
@@ -5913,6 +6410,18 @@
     "#100c1c",
     "#362c52",
     "#524474"
+   ]
+  },
+  {
+   "id": "wm_hat",
+   "name": "白魔法師帽",
+   "sheet": null,
+   "keepGear": true,
+   "dye": [
+    "#e2d0c2",
+    "#8e645c",
+    "#f4eade",
+    "#fffaf2"
    ]
   },
   {
