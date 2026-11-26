@@ -2438,6 +2438,13 @@
        "sheets": {
         "top": "human2_n_top.png"
        }
+      },
+      {
+       "id": "blm_garb",
+       "name": "黑魔法師長袍",
+       "sheets": {
+        "top": "human2_b_top.png"
+       }
       }
      ],
      "bottom": [
@@ -2459,6 +2466,13 @@
        "sheets": {
         "bottom": "human2_n_bottom.png"
        }
+      },
+      {
+       "id": "blm_pants",
+       "name": "黑魔法師長褲",
+       "sheets": {
+        "bottom": "human2_b_bottom.png"
+       }
       }
      ],
      "shoe": [
@@ -2479,6 +2493,23 @@
        "name": "忍者靴",
        "sheets": {
         "shoes": "human2_n_shoes.png"
+       }
+      },
+      {
+       "id": "blm_boots",
+       "name": "黑魔法師靴",
+       "sheets": {
+        "shoes": "human2_b_shoes.png"
+       }
+      }
+     ],
+     "hat": [
+      {
+       "id": "blm_hat",
+       "name": "黑魔法師帽",
+       "hairFromHat": true,
+       "sheets": {
+        "hat": "human2_b_hat.png"
        }
       }
      ]
@@ -2651,6 +2682,67 @@
        "#8f4546",
        "#a04e4e"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "blm_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#332b47",
+       "#141022",
+       "#231e35",
+       "#42395a",
+       "#51476d",
+       "#61547f",
+       "#706292"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "blm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#2d2740",
+       "#161224",
+       "#221c32",
+       "#39314e",
+       "#453b5c",
+       "#50466a",
+       "#5c5078"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "blm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#292237",
+       "#14101e",
+       "#1f192a",
+       "#342b43",
+       "#3f344f",
+       "#493d5c",
+       "#544668"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "blm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#221c36",
+       "#100c1c",
+       "#362c52",
+       "#524474"
+      ]
      }
     ],
     "anchors": {
@@ -2769,6 +2861,13 @@
        "sheets": {
         "top": "human2_n_top.png"
        }
+      },
+      {
+       "id": "blm_garb",
+       "name": "黑魔法師長袍",
+       "sheets": {
+        "top": "human2_b_top.png"
+       }
       }
      ],
      "bottom": [
@@ -2790,6 +2889,13 @@
        "sheets": {
         "bottom": "human2_n_bottom.png"
        }
+      },
+      {
+       "id": "blm_pants",
+       "name": "黑魔法師長褲",
+       "sheets": {
+        "bottom": "human2_b_bottom.png"
+       }
       }
      ],
      "shoe": [
@@ -2810,6 +2916,23 @@
        "name": "忍者靴",
        "sheets": {
         "shoes": "human2_n_shoes.png"
+       }
+      },
+      {
+       "id": "blm_boots",
+       "name": "黑魔法師靴",
+       "sheets": {
+        "shoes": "human2_b_shoes.png"
+       }
+      }
+     ],
+     "hat": [
+      {
+       "id": "blm_hat",
+       "name": "黑魔法師帽",
+       "hairFromHat": true,
+       "sheets": {
+        "hat": "human2_b_hat.png"
        }
       }
      ]
@@ -2984,6 +3107,67 @@
        "#8f4546",
        "#a04e4e"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "blm_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#332b47",
+       "#141022",
+       "#231e35",
+       "#42395a",
+       "#51476d",
+       "#61547f",
+       "#706292"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "blm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#2d2740",
+       "#161224",
+       "#221c32",
+       "#39314e",
+       "#453b5c",
+       "#50466a",
+       "#5c5078"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "blm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#292237",
+       "#14101e",
+       "#1f192a",
+       "#342b43",
+       "#3f344f",
+       "#493d5c",
+       "#544668"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "blm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#221c36",
+       "#100c1c",
+       "#362c52",
+       "#524474"
+      ]
      }
     ],
     "anchors": {
@@ -3103,6 +3287,13 @@
        "sheets": {
         "top": "human2_n_top.png"
        }
+      },
+      {
+       "id": "blm_garb",
+       "name": "黑魔法師長袍",
+       "sheets": {
+        "top": "human2_b_top.png"
+       }
       }
      ],
      "bottom": [
@@ -3124,6 +3315,13 @@
        "sheets": {
         "bottom": "human2_n_bottom.png"
        }
+      },
+      {
+       "id": "blm_pants",
+       "name": "黑魔法師長褲",
+       "sheets": {
+        "bottom": "human2_b_bottom.png"
+       }
       }
      ],
      "shoe": [
@@ -3144,6 +3342,23 @@
        "name": "忍者靴",
        "sheets": {
         "shoes": "human2_n_shoes.png"
+       }
+      },
+      {
+       "id": "blm_boots",
+       "name": "黑魔法師靴",
+       "sheets": {
+        "shoes": "human2_b_shoes.png"
+       }
+      }
+     ],
+     "hat": [
+      {
+       "id": "blm_hat",
+       "name": "黑魔法師帽",
+       "hairFromHat": true,
+       "sheets": {
+        "hat": "human2_b_hat.png"
        }
       }
      ]
@@ -3318,6 +3533,67 @@
        "#8f4546",
        "#a04e4e"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "blm_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#332b47",
+       "#141022",
+       "#231e35",
+       "#42395a",
+       "#51476d",
+       "#61547f",
+       "#706292"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "blm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#2d2740",
+       "#161224",
+       "#221c32",
+       "#39314e",
+       "#453b5c",
+       "#50466a",
+       "#5c5078"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "blm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#292237",
+       "#14101e",
+       "#1f192a",
+       "#342b43",
+       "#3f344f",
+       "#493d5c",
+       "#544668"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "blm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#221c36",
+       "#100c1c",
+       "#362c52",
+       "#524474"
+      ]
      }
     ],
     "anchors": {
@@ -3435,6 +3711,13 @@
        "sheets": {
         "top": "dwarf2_n_top.png"
        }
+      },
+      {
+       "id": "blm_garb",
+       "name": "黑魔法師長袍",
+       "sheets": {
+        "top": "dwarf2_b_top.png"
+       }
       }
      ],
      "bottom": [
@@ -3456,6 +3739,13 @@
        "sheets": {
         "bottom": "dwarf2_n_bottom.png"
        }
+      },
+      {
+       "id": "blm_pants",
+       "name": "黑魔法師長褲",
+       "sheets": {
+        "bottom": "dwarf2_b_bottom.png"
+       }
       }
      ],
      "shoe": [
@@ -3476,6 +3766,23 @@
        "name": "忍者靴",
        "sheets": {
         "shoes": "dwarf2_n_shoes.png"
+       }
+      },
+      {
+       "id": "blm_boots",
+       "name": "黑魔法師靴",
+       "sheets": {
+        "shoes": "dwarf2_b_shoes.png"
+       }
+      }
+     ],
+     "hat": [
+      {
+       "id": "blm_hat",
+       "name": "黑魔法師帽",
+       "hairFromHat": true,
+       "sheets": {
+        "hat": "dwarf2_b_hat.png"
        }
       }
      ]
@@ -3647,6 +3954,67 @@
        "#7d3c3f",
        "#8f4546",
        "#a04e4e"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "blm_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#332b47",
+       "#141022",
+       "#231e35",
+       "#42395a",
+       "#51476d",
+       "#61547f",
+       "#706292"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "blm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#2d2740",
+       "#161224",
+       "#221c32",
+       "#39314e",
+       "#453b5c",
+       "#50466a",
+       "#5c5078"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "blm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#292237",
+       "#14101e",
+       "#1f192a",
+       "#342b43",
+       "#3f344f",
+       "#493d5c",
+       "#544668"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "blm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#221c36",
+       "#100c1c",
+       "#362c52",
+       "#524474"
       ]
      }
     ],
@@ -3768,6 +4136,13 @@
        "sheets": {
         "top": "giant2_n_top.png"
        }
+      },
+      {
+       "id": "blm_garb",
+       "name": "黑魔法師長袍",
+       "sheets": {
+        "top": "giant2_b_top.png"
+       }
       }
      ],
      "bottom": [
@@ -3789,6 +4164,13 @@
        "sheets": {
         "bottom": "giant2_n_bottom.png"
        }
+      },
+      {
+       "id": "blm_pants",
+       "name": "黑魔法師長褲",
+       "sheets": {
+        "bottom": "giant2_b_bottom.png"
+       }
       }
      ],
      "shoe": [
@@ -3809,6 +4191,23 @@
        "name": "忍者靴",
        "sheets": {
         "shoes": "giant2_n_shoes.png"
+       }
+      },
+      {
+       "id": "blm_boots",
+       "name": "黑魔法師靴",
+       "sheets": {
+        "shoes": "giant2_b_shoes.png"
+       }
+      }
+     ],
+     "hat": [
+      {
+       "id": "blm_hat",
+       "name": "黑魔法師帽",
+       "hairFromHat": true,
+       "sheets": {
+        "hat": "giant2_b_hat.png"
        }
       }
      ]
@@ -3981,6 +4380,67 @@
        "#8f4546",
        "#a04e4e"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "blm_garb",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#332b47",
+       "#141022",
+       "#231e35",
+       "#42395a",
+       "#51476d",
+       "#61547f",
+       "#706292"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "blm_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#2d2740",
+       "#161224",
+       "#221c32",
+       "#39314e",
+       "#453b5c",
+       "#50466a",
+       "#5c5078"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "blm_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#292237",
+       "#14101e",
+       "#1f192a",
+       "#342b43",
+       "#3f344f",
+       "#493d5c",
+       "#544668"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "blm_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#221c36",
+       "#100c1c",
+       "#362c52",
+       "#524474"
+      ]
      }
     ],
     "anchors": {
@@ -4050,6 +4510,20 @@
     "#463e4b",
     "#514857",
     "#5c5262"
+   ]
+  },
+  {
+   "id": "blm_garb",
+   "name": "黑魔法師長袍",
+   "keepGear": true,
+   "dye": [
+    "#332b47",
+    "#141022",
+    "#231e35",
+    "#42395a",
+    "#51476d",
+    "#61547f",
+    "#706292"
    ]
   },
   {
@@ -4209,6 +4683,20 @@
    ]
   },
   {
+   "id": "blm_pants",
+   "name": "黑魔法師長褲",
+   "keepGear": true,
+   "dye": [
+    "#2d2740",
+    "#161224",
+    "#221c32",
+    "#39314e",
+    "#453b5c",
+    "#50466a",
+    "#5c5078"
+   ]
+  },
+  {
    "id": "plate_legs",
    "name": "騎士腿甲",
    "sheet": "char_bottom_plate_m.png",
@@ -4301,6 +4789,20 @@
    ]
   },
   {
+   "id": "blm_boots",
+   "name": "黑魔法師靴",
+   "keepGear": true,
+   "dye": [
+    "#292237",
+    "#14101e",
+    "#1f192a",
+    "#342b43",
+    "#3f344f",
+    "#493d5c",
+    "#544668"
+   ]
+  },
+  {
    "id": "plate_boots",
    "name": "騎士板甲靴",
    "sheet": "char_shoes_plate_m.png",
@@ -4365,6 +4867,18 @@
    "name": "不戴帽子",
    "sheet": null,
    "glam": true
+  },
+  {
+   "id": "blm_hat",
+   "name": "黑魔法師帽",
+   "sheet": null,
+   "keepGear": true,
+   "dye": [
+    "#221c36",
+    "#100c1c",
+    "#362c52",
+    "#524474"
+   ]
   },
   {
    "id": "armet",

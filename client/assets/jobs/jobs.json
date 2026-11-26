@@ -17,6 +17,6 @@
   { "id": "bard", "atkAnim": "shoot", "name": "吟遊詩人", "role": "ranged", "weapon": "harpbow",
     "gear": { "hat": "cavalier", "top": "brd_vest", "bottom": "brd_pants", "shoe": "brd_boots" }, "skills": ["song", "poison"] },
   { "id": "blackmage", "atkAnim": "thrust", "name": "黑魔法師", "role": "ranged", "weapon": "scepter",
-    "gear": { "hat": "wizard", "top": "blm_robe", "bottom": "suit_pants_m", "shoe": "leather_shoes_m" }, "skills": ["circle", "triple"] }
+    "gear": { "hat": "blm_hat", "top": "blm_garb", "bottom": "blm_pants", "shoe": "blm_boots" }, "skills": ["circle", "triple"] }
  ]
 }

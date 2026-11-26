@@ -2921,6 +2921,22 @@ function sheetCellHas(img, sx, sy, w, h) {
   }
   return v;
 }
+// sheet 的某一格裡最下面一排有不透明像素的排號（0～h-1）；整格空的回 -1（結果依 (圖, 格子) 快取）。帽子用：帽沿最低的那排以上的頭髮不畫
+const cellBottomCache = new Map();
+function cellBottomRow(img, sx, sy, w, h) {
+  if (!img || sx + w > img.width || sy + h > img.height) return -1;
+  const k = img.src + '|' + sx + ',' + sy;
+  let v = cellBottomCache.get(k);
+  if (v === undefined) {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const g = cv.getContext('2d'); g.drawImage(img, sx, sy, w, h, 0, 0, w, h);
+    const d = g.getImageData(0, 0, w, h).data;
+    v = -1;
+    for (let y = h - 1; y >= 0 && v < 0; y--) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3]) { v = y; break; }
+    cellBottomCache.set(k, v);
+  }
+  return v;
+}
 // 新風格人物（2026-11-21，使用者定案整套換成自製 Q 版像素風格；階段 1）：種族的 own.sheets＝8 個圖層（跟 LPC 同格式的 sheet，只填走路列），
 // 由下往上疊；**描邊不在圖層裡**，合成後整個人統一畫一圈 own.outline 色的外框（每層各自描邊，層與層之間會多出不該有的線）。
 // 沒有這一格（攻擊、釣魚、坐姿以外的動作）就用 map 條目的退回幀（待機）。武器、服裝選項、換色都還沒做（之後階段）。
@@ -2933,11 +2949,12 @@ const CHIBI_DYE_FIELD = { hair: 'hairC', top: 'topC', bottom: 'botC', shoe: 'sho
 const chibiStyleOf = (own, kind, id) => (own.styles?.[kind] || []).find(x => x.id === id) || own.styles?.[kind]?.[0] || null;
 function chibiSprite(race, look, fi, sleep) {   // sleep：睡姿用——body 換成 bodyz（閉眼的頭）、不畫 face（睡在床上時用，見 drawSleeper）
   const fs = chibiStyleOf(race.own, 'face', look?.face), hs = chibiStyleOf(race.own, 'hair', look?.hair), ts = chibiStyleOf(race.own, 'top', look?.top),
-        bs = chibiStyleOf(race.own, 'bottom', look?.bottom), ss = chibiStyleOf(race.own, 'shoe', look?.shoe);   // 服裝款式：上衣／褲子／鞋子各一個（look.top／bottom／shoe 是外觀 id，款式 id 跟外觀 id 一樣）
+        bs = chibiStyleOf(race.own, 'bottom', look?.bottom), ss = chibiStyleOf(race.own, 'shoe', look?.shoe),
+        hts = race.own.styles?.hat?.find(x => x.id === look?.hat) || null;   // 帽子款式：只有套裝附的帽子（沒找到＝沒戴帽子；不像髮型／服裝會退回第一個）   // 服裝款式：上衣／褲子／鞋子各一個（look.top／bottom／shoe 是外觀 id，款式 id 跟外觀 id 一樣）
   const skinHex = S.avatar.skins?.find(s2 => s2.id === look?.skin)?.base || null;   // 膚色：look.skin 是 avatar.json skins 的 id，換成它的 base 色碼
-  const rules = (race.own.dye || []).filter(r => !r.style || r.style === ts?.id || r.style === bs?.id || r.style === ss?.id).map(r => ({ ...r, hex: (r.slot === 'skin' ? (skinHex && skinHex.toLowerCase() !== r.colors[0].toLowerCase() ? skinHex : null) : look?.[CHIBI_DYE_FIELD[r.slot]]) || null }));   // 膚色跟原色一樣（預設的「自然」）就不換
+  const rules = (race.own.dye || []).filter(r => !r.style || r.style === ts?.id || r.style === bs?.id || r.style === ss?.id || r.style === hts?.id).map(r => ({ ...r, hex: (r.slot === 'skin' ? (skinHex && skinHex.toLowerCase() !== r.colors[0].toLowerCase() ? skinHex : null) : look?.[CHIBI_DYE_FIELD[r.slot]]) || null }));   // 膚色跟原色一樣（預設的「自然」）就不換
   sleep = !!(sleep && race.own.sheets.bodyz);
-  const k = (sleep ? 'chibiz:' : 'chibi:') + race.id + ':' + fi + '|' + (hs?.id || '') + '|' + (ts?.id || '') + '|' + (bs?.id || '') + '|' + (ss?.id || '') + '|' + (fs?.id || '') + '|' + rules.map(r => r.hex || '').join(',');
+  const k = (sleep ? 'chibiz:' : 'chibi:') + race.id + ':' + fi + '|' + (hs?.id || '') + '|' + (ts?.id || '') + '|' + (bs?.id || '') + '|' + (ss?.id || '') + '|' + (fs?.id || '') + '|' + (hts?.id || '') + '|' + rules.map(r => r.hex || '').join(',');
   let cv = S.charCache.get(k);
   if (cv) return cv;
   const F = S.avatar.frames, own = race.own;
@@ -2948,13 +2965,27 @@ function chibiSprite(race, look, fi, sleep) {   // sleep：睡姿用——body �
   const [cc, cr] = ent, sx = cc * cw, sy = cr * ch, idleSx = ent[3] != null ? ent[3] * cw : sx;   // ent[3]：這一幀只有腿層（body／bottom／shoes）用 ent[0] 那一欄、其他層用 ent[3] 欄（側面坐姿，見 tools/gen_sit.py）
   cv = document.createElement('canvas'); cv.width = cw; cv.height = ch; cv.pad = own.ox || 0; cv.padTop = own.oy || 0; cv.layerMiss = false;
   const g = cv.getContext('2d');
+  // 戴帽子：帽沿最低的那排（這一幀的 hat 圖）以上的頭髮不畫（hairFromHat；帽子蓋住的部分），以下的頭髮照畫（帽沿下面露出來的髮尾、瀏海）
+  const hatBottom = hts?.hairFromHat ? cellBottomRow(S.charImgs[hts.sheets?.hat], idleSx, sy, cw, ch) : -1;
   for (const n of CHIBI_ORDER) {
     if (sleep && n === 'face') continue;   // 睡覺閉眼：眼睛已經畫在 bodyz 裡
     const ln = sleep && n === 'body' ? 'bodyz' : n;
-    let img = S.charImgs[hs?.sheets?.[n] || ts?.sheets?.[n] || bs?.sheets?.[n] || ss?.sheets?.[n] || fs?.sheets?.[n] || own.sheets[ln]];
+    if (n === 'hat' && hts) {   // 戴帽子：種族自己的 hat 層（妖精／貓族的耳朵）先畫，帽子再蓋上去
+      const ear = S.charImgs[own.sheets.hat];
+      if (ear && idleSx + cw <= ear.width && sy + ch <= ear.height) {   // 帽沿以上的耳朵（貓耳）被帽子蓋住不畫，帽沿以下的（妖精的尖耳）照畫
+        const cut = Math.min(ch, hatBottom + 1);
+        g.drawImage(ear, idleSx, sy + cut, cw, ch - cut, 0, cut, cw, ch - cut);
+      }
+    }
+    let img = S.charImgs[hts?.sheets?.[n] || hs?.sheets?.[n] || ts?.sheets?.[n] || bs?.sheets?.[n] || ss?.sheets?.[n] || fs?.sheets?.[n] || own.sheets[ln]];
     const lsx = (n === 'body' || n === 'bottom' || n === 'shoes') ? sx : idleSx;
     if (!img || lsx + cw > img.width || sy + ch > img.height) continue;
     for (const r of rules) if (r.hex && r.layers.includes(ln)) img = dyeSheet(img, r.colors, r.hex);   // 同一張圖可以被多條規則依序換色（例如 bottom 層：圍裙下擺跟上衣、褲子跟褲子）
+    if (n === 'hair' && hatBottom >= 0) {
+      const cut = Math.min(ch, hatBottom + 1);
+      g.drawImage(img, lsx, sy + cut, cw, ch - cut, 0, cut, cw, ch - cut);
+      continue;
+    }
     g.drawImage(img, lsx, sy, cw, ch, 0, 0, cw, ch);
     for (const st of [ts, bs, ss]) {   // 款式帶遮罩（erase）：這一層畫完後把遮罩蓋住的像素擦掉（男式外套／褲子要擦掉身體層自己的手／腿）
       const mk = st?.erase?.[n] && S.charImgs[st.erase[n]];
