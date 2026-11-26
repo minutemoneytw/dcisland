@@ -29,6 +29,7 @@ GLOVE = {'l': (112, 78, 52), 'm': (78, 52, 36), 'n': (48, 32, 24)}              
 BROWN = dict(d=(58, 38, 28), m=(98, 66, 44), l=(140, 100, 68))                                 # 背帶／腰帶／箭袋
 GOLD = dict(d=(128, 96, 56), m=(190, 150, 90), l=(236, 204, 140))
 FEATHER = dict(l=(250, 246, 234), m=(222, 216, 198), d=(172, 164, 146))
+SLEEVE = ((174, 146, 108), (150, 122, 88))   # 袖子（比軀幹的淺米白深一階、偏暖，手臂才跟身體分得開）
 SKIN = 'lmn'
 HAT = dict(a=(18, 26, 16), b=(50, 62, 38), c=(72, 88, 54), d=(98, 114, 76))
 
@@ -77,6 +78,38 @@ class Grid:
 
 
 # ---------- 斗篷 ----------
+def _sleeves(g):
+    """手臂（袖子）：手套上面 9 排、手套左右各多 1 欄＝袖子，換成比軀幹深一階的米白（軀幹是淺米白，不然手臂跟身體糊成一片），
+    外緣一欄棕色描邊、手套上面兩排棕色護腕。正面／背面＝兩隻手，側面＝近側那隻手。"""
+    skin = {p for p, ch in g.src.items() if ch in SKIN}
+    cols = sorted({x for x, y in skin})
+    groups, cur = [], []
+    for x in cols:
+        if cur and x - cur[-1] > 1:
+            groups.append(cur); cur = []
+        cur.append(x)
+    if cur:
+        groups.append(cur)
+    for grp in groups:
+        x0, x1 = grp[0], grp[-1]
+        ys = [y for (x, y) in skin if x0 <= x <= x1]
+        if not ys:
+            continue
+        y0 = min(ys)
+        for y in range(max(0, y0 - 9), y0):
+            for x in range(x0 - 1, x1 + 2):
+                if (x, y) not in g.px or g.src.get((x, y)) in SKIN:
+                    continue
+                if g.px[(x, y)] in GREEN or g.px[(x, y)] in (GOLD['d'], GOLD['m']):
+                    continue                                           # 披肩、金線不動
+                edge = (x == x0 - 1 or x == x1 + 1)
+                g.px[(x, y)] = BROWN['d'] if edge else SLEEVE[0 if (x + y) % 4 else 1]
+        for y in (y0 - 1, y0 - 2, y0 - 3):
+            for x in range(x0 - 1, x1 + 2):
+                if (x, y) in g.px and g.src.get((x, y)) not in SKIN:
+                    g.px[(x, y)] = BROWN['l'] if y == y0 - 1 else (BROWN['m'] if y == y0 - 2 else BROWN['d'])       # 護腕（三排）
+
+
 def _mantle(g, cx, rows=6):
     """肩膀到胸口一圈綠色披肩（前 rows 排），下緣一道金線；正面中間留一個 V 形襯衫領口。"""
     k = g.kind
@@ -251,6 +284,7 @@ def bard_top(kind, x0, y0, rows):
                 g.px[(x, y)] = GREEN[4] if x < cx else GREEN[3]
     _belt(g, cx, by)
     _mantle(g, cx)
+    _sleeves(g)
     _straps(g, cx, by)
     _collar(g, cx)
     _cloak(g, cx, by)

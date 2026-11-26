@@ -671,7 +671,7 @@ def school_blm_dye():
             dict(slot="bottom", style="blm_pants", layers=["bottom"], colors=BLM_DYE["bottom"]),
             dict(slot="shoe", style="blm_boots", layers=["shoes"], colors=BLM_DYE["shoe"]),
             dict(slot="hat", style="blm_hat", layers=["hat"], colors=BLM_DYE["hat"])]
-BARD_DYE = dict(top=_hexes([gen_bard.GREEN[i] for i in (3, 1, 2, 4, 5, 6, 0)]),   # 只換斗篷的綠色階（米白襯衫、棕色背帶、金邊不換）
+BARD_DYE = dict(top=_hexes([gen_bard.GREEN[i] for i in (3, 1, 2, 4, 5, 6, 0)] + [gen_bard.CREAM[i] for i in (5, 3, 4, 6, 2, 1)]),   # 換斗篷的綠色階＋米白襯衫（棕色背帶、金邊不換）；第一個＝斗篷的綠＝主色
                 bottom=_hexes([gen_bard.PANTS[i] for i in (3, 0, 1, 2, 4, 5, 6)]),
                 shoe=_hexes([gen_bard.BOOT[i] for i in (3, 0, 1, 2, 4, 5, 6)]),
                 hat=_hexes([gen_bard.HAT[k] for k in 'bacd']))                    # 帽子：帽身綠色階（帽帶、金花、羽毛不換）
