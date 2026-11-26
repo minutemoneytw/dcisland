@@ -2970,7 +2970,8 @@ function chibiSprite(race, look, fi, sleep) {   // sleep：睡姿用——body �
   for (const n of CHIBI_ORDER) {
     if (sleep && n === 'face') continue;   // 睡覺閉眼：眼睛已經畫在 bodyz 裡
     const ln = sleep && n === 'body' ? 'bodyz' : n;
-    if (n === 'hat' && hts) {   // 戴帽子：種族自己的 hat 層（妖精／貓族的耳朵）先畫，帽子再蓋上去
+    if (n === 'hair' && hts?.hideHair) continue;   // 頭盔（hideHair）：完全不顯示頭髮
+    if (n === 'hat' && hts && !hts.hideHair) {   // 戴帽子：種族自己的 hat 層（妖精／貓族的耳朵）先畫，帽子再蓋上去（頭盔連耳朵一起蓋住，不畫）
       const ear = S.charImgs[own.sheets.hat];
       if (ear && idleSx + cw <= ear.width && sy + ch <= ear.height) {   // 帽沿以上的耳朵（貓耳）被帽子蓋住不畫，帽沿以下的（妖精的尖耳）照畫
         const cut = Math.max(0, Math.min(ch, hatBottom + 1 + (hts.hairCutDy || 0)));
@@ -13504,6 +13505,7 @@ function wardrobe(job = S.me.job) {
   const w = (S.me.wardrobe && typeof S.me.wardrobe === 'object') ? S.me.wardrobe : (S.me.wardrobe = {});
   const e = w[job] && typeof w[job] === 'object' ? w[job] : (w[job] = {});
   e.glam ||= {}; e.color ||= {}; e.glamOff ||= {};
+  for (const [slot, gid] of Object.entries(DEFAULT_GLAM)) if (e.glam[slot] === gid && lookItem(slotList(slot), JOBS[job]?.gear?.[slot])?.keepGear) delete e.glam[slot];   // 舊存檔：這個職業的裝備後來才標 keepGear，之前被自動套上的預設外觀（西裝）要拿掉，不然新裝備看不到
   for (const [slot, gid] of Object.entries(DEFAULT_GLAM)) if (!(slot in e.glam) && !e.glamOff[slot] && lookItem(slotList(slot), gid) && !lookItem(slotList(slot), JOBS[job]?.gear?.[slot])?.keepGear) e.glam[slot] = gid;   // keepGear＝這件職業裝備有自己的新風格圖（忍者套裝），不套預設外觀
   if (e.glam.weapon === 'goldsword') e.glam.weapon = 'sword_gold';   // 舊的「金劍」外觀（2026-11-09 拿掉）→ 長劍的金黃發光版（解鎖條件同樣是打倒黃金肥龍）
   return e;
