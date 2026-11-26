@@ -3525,7 +3525,7 @@ function noulithSlots(px, py, t, seed) {   // 繞著上半身緩慢繞圈的四�
   });
 }
 function drawNoulithIdle(p, wid, part) {   // part：'back'＝畫在人物後面、'front'＝前面（依陣位高低分）
-  if (wid !== 'tome' || p.dead) return;
+  if (wid !== 'tome' || p.dead || p.pose === 'sit' || p.pose === 'sleep') return;   // 坐下／睡覺時收起（賢具是賢者的武器，跟其他職業的武器一樣不拿出來）
   const t = S.t, seed = noulithSeed(p);
   if (!S.floaters.some(f => f.fxk === 'carego' || f.fxk === 'healgo')) {   // 四座都外出（關心／群療）時待機位全空
     const slots = noulithSlots(p.x, p.y, t, seed);
