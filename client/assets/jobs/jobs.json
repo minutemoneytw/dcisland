@@ -15,7 +15,7 @@
   { "id": "dragoon", "atkAnim": "thrust", "name": "龍騎士", "role": "melee", "weapon": "lance",
     "gear": { "hat": "horned", "top": "drg_plate", "bottom": "drg_legs", "shoe": "drg_boots" }, "skills": ["highjump", "backjump"] },
   { "id": "bard", "atkAnim": "shoot", "name": "吟遊詩人", "role": "ranged", "weapon": "harpbow",
-    "gear": { "hat": "cavalier", "top": "brd_vest", "bottom": "brd_pants", "shoe": "brd_boots" }, "skills": ["song", "poison"] },
+    "gear": { "hat": "bard_hat", "top": "bard_garb", "bottom": "bard_pants", "shoe": "bard_boots" }, "skills": ["song", "poison"] },
   { "id": "blackmage", "atkAnim": "thrust", "name": "黑魔法師", "role": "ranged", "weapon": "scepter",
     "gear": { "hat": "blm_hat", "top": "blm_garb", "bottom": "blm_pants", "shoe": "blm_boots" }, "skills": ["circle", "triple"] }
  ]
