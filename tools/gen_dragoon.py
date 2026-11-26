@@ -141,20 +141,23 @@ def _skirt(g, cx, by, E):
     a, b = g.row_ext(hy)
     cuts = (0, 3, 1, 4, 0, 2, 3, 1)
 
-    def plate(x0, x1, shade, jag, edge_l=True, edge_r=True):
+    def plate(x0, x1, shade, jag, dirn=0):
+        """一片布片；dirn＝往外斜的方向（-1 往左、+1 往右、0 垂直）：每往下 3 排整片多挪 1 欄。"""
         for x in range(x0, x1 + 1):
-            L = last - (cuts[(x - x0 + jag) % 8] if jag >= 0 else 0)
+            L = last - cuts[(x - x0 + jag) % 8]
             for y in range(top, L + 1):
+                sx = x + dirn * ((y - top) // 3)
                 c = RED['m'] if (x - x0) % 3 else RED['l']
                 if shade:
                     c = RED['d'] if (x - x0) % 3 else RED['m']
-                g.put(x, y, c)
-            if x == x0 and edge_l or x == x1 and edge_r:
-                for y in range(top, L + 1):
-                    g.put(x, y, GOLD['m'] if x == x0 else GOLD['d'])
+                if (x == x0 and dirn <= 0) or (x == x1 and dirn > 0):
+                    c = GOLD['m'] if dirn <= 0 else GOLD['d']      # 只有外側那一欄鑲邊
+                g.put(sx, y, c)
+                if dirn and (y - top) % 3 == 2:                  # 斜出去留下的縫補一格，才不會斷開
+                    g.put(sx + dirn, y, c)
     if k == 'front':
-        plate(a - 1, cx - 3, False, 0)
-        plate(cx + 2, b + 1, True, 3)
+        plate(a - 1, cx - 3, False, 0, -1)
+        plate(cx + 2, b + 1, True, 3, 1)
         for x in range(cx - 2, cx + 2):                         # 中間窄片：尖角往下
             L = last + 0 - (0 if x in (cx - 1, cx) else 2)
             for y in range(top, L + 1):
@@ -169,14 +172,23 @@ def _skirt(g, cx, by, E):
         for dx in (-2, 1):
             g.put(cx + dx, cy, GOLD['l']); g.put(cx + dx, cy + 1, GOLD['m'])
     elif k == 'back':
-        plate(a - 1, cx - 1, False, 1)
-        plate(cx, b + 1, True, 4)
+        plate(a - 1, cx - 1, False, 1, -1)
+        plate(cx, b + 1, True, 4, 1)
         for y in range(top, last - 1):
             g.put(cx - 1, y, GOLD['d']); g.put(cx, y, GOLD['m'])    # 中縫
-    else:
-        plate(a + 1, b + 2, False, 0)
-        for y in range(top, last - 1):
-            g.put(b + 2, y, GOLD['d'])
+    else:                                                       # 側面：前緣往前（左）斜、後緣往後（右）斜
+        for y in range(top, last + 1):
+            lo = a + 1 - (y - top) // 4
+            hi = b + 2 + (y - top) // 3
+            for x in range(lo, hi + 1):
+                if y > last - cuts[(x - lo) % 8]:
+                    continue
+                c = RED['m'] if (x - lo) % 3 else RED['l']
+                if x == lo:
+                    c = GOLD['m']
+                elif x == hi:
+                    c = GOLD['d']
+                g.put(x, y, c)
     g.h += E
 
 
@@ -387,18 +399,17 @@ def hat_pixels(kind, cx, top, ext=None):
     # 三根貼著頭盔的凸角：中間一根（頭頂中線的三角鰭）＋左右各一根（頭盔上緣兩側，往外上彎一點點）；正面眉線中間再有一個尖角往下
     hornpx = {}
     if kind == 'left':
-        bx = round(cx) + 3
-        for i in range(0, 14):                                         # 往後上掃的長角（中間那根）
-            by_ = top - 1 - i // 2
-            n = 3 if i < 6 else (2 if i < 11 else 1)
+        cxr = round(cx)
+        for i in range(0, 12):                                         # 遠側的角（最後面、略暗）：從耳上後面往後上
+            for t in range(2):
+                hornpx[(cxr + 3 + i, top + 1 - i // 3 + t)] = GOLD['d'] if t == 1 else GOLD['m']
+        for i in range(0, 11):                                         # 近側的角：從耳上（耳朵上方）貼著盔面往後延伸
+            for t in range(2):
+                hornpx[(cxr + 1 + i, top + 4 - i // 4 + t)] = GOLD['l'] if t == 0 else GOLD['m']
+        for i in range(0, 16):                                         # 中間的角：從頭頂中間往後上掃（最長）
+            n = 3 if i < 6 else (2 if i < 12 else 1)
             for t in range(n):
-                hornpx[(bx + i, by_ + t)] = GOLD['l'] if t == 0 else (GOLD['m'] if t == 1 else GOLD['d'])
-        for i in range(0, 7):                                          # 貼著後腦的第二根（短）
-            for t in range(2):
-                hornpx[(bx - 4 + i, top + 3 + i // 3 - t + 1)] = GOLD['m'] if t == 0 else GOLD['d']
-        for i in range(0, 6):                                          # 第三根（前上方，短）
-            for t in range(2):
-                hornpx[(round(cx) - 5 - i // 3 + 0, top - 3 + i // 2 * 0 - i // 2 + t)] = GOLD['l'] if t == 0 else GOLD['m']
+                hornpx[(cxr - 3 + i, top - 3 - i // 3 + t)] = GOLD['l'] if t == 0 else (GOLD['m'] if t == 1 else GOLD['d'])
     else:
         mx = round(cx)
         for r, hw in enumerate((0, 1, 1, 2, 2)):                       # 中間：三角鰭，頂端在頭頂上方 4 排
