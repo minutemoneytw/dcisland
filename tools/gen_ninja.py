@@ -126,7 +126,7 @@ def _scarf(g, cx):
             for y in range(2, 12):
                 g.hline(cx - 1, cx + 1, y, R['m'] if y % 3 else R['l'])
                 g.put(cx + 1, y, R['d'])
-            g.put(cx, 11, R['d']); g.px.pop((cx - 1, 11), None); g.px.pop((cx + 1, 11), None)
+            # （尾端原本缺一個三角形；使用者 2026-11-26 手改成整排，改成規則：尾端不留缺口）
     else:
         # 側面（臉朝左）：脖子一圈＋尾巴往後（右）飄成一條斜帶
         a, b = g.row_ext(0) if g.row_ext(0) else (cx - 3, cx + 3)
@@ -153,8 +153,6 @@ def _sash(g, ys):
         for i, y in enumerate(range(ys[-1] + 2, ys[-1] + 8)):
             g.hline(cx - 1, cx + 1, y, R['m'])
             g.put(cx - 1, y, R['d']); g.put(cx + 1, y, R['d'])
-            if 1 <= i <= 3:
-                g.put(cx, y, T['l'] if i != 2 else T['m'])
     elif g.kind == 'back':
         cx = (a + b) // 2
         for i, y in enumerate(range(ys[-1] + 2, ys[-1] + 5)):
@@ -162,6 +160,20 @@ def _sash(g, ys):
     else:
         for i, y in enumerate(range(ys[-1] + 2, ys[-1] + 5)):
             g.hline(b - 1, b, y, R['m']); g.put(b, y, R['d'])
+
+
+def _fill_notches(g, ymin):
+    """第 ymin 排以下，上下左右至少 3 個鄰居有顏色的透明格（1 像素的缺口／洞）補成鄰居的顏色（使用者 2026-11-26 手補過這些缺口，改成規則）；
+    顏色取左邊鄰居，沒有就取右邊、上面、下面。"""
+    add = {}
+    for y in range(ymin, g.h + 8):
+        for x in range(-4, 40):
+            if (x, y) in g.px:
+                continue
+            nb = [g.px.get(q) for q in ((x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1))]
+            if sum(1 for c in nb if c is not None) >= 3:
+                add[(x, y)] = next(c for c in nb if c is not None)
+    g.px.update(add)
 
 
 def ninja_top(kind, x0, y0, rows):
@@ -177,8 +189,33 @@ def ninja_top(kind, x0, y0, rows):
     sash_y = g.h - 7 if kind != 'left' else g.h - 8
     _sash(g, (sash_y, sash_y + 1))
     _scarf(g, cx)
+    wrist = False
+    if kind == 'left':      # 側面：手往前擺的那一幀，手上面細細的一截（2 欄寬）是前臂——畫成長袖（內衣色 j／k），不是皮膚＋護腕（使用者 2026-11-26 手改）
+        skin = {}
+        for (x, y), ch in g.src.items():
+            if ch in SKIN and y >= 8:
+                skin.setdefault(y, []).append(x)
+        rows_ = sorted(skin)
+        strip = []
+        for y in rows_:
+            if len(skin[y]) <= 2:
+                strip.append(y)
+            else:
+                break
+        if len(strip) >= 2:                      # 至少 2 排細細的一截才算前臂（只有 1 排的是手本身的最上面一排）
+            wrist = True
+            sx = sorted(skin[strip[0]])
+            for y in strip + [strip[-1] + 1]:
+                for i, x in enumerate(sx):
+                    hands[(x, y)] = UNDER['j'] if i == 0 else UNDER['k']
+                    g.px[(x, y)] = hands[(x, y)]
     for p, c in hands.items():
         g.px[p] = c
+    if kind == 'front':     # 正面走路時手擺在身體中間的那一幀：腰帶與帶牌在手的前面（使用者 2026-11-26 手改成這樣）→ 手套蓋回去之後再畫一次腰帶＋帶牌
+        _sash(g, (sash_y, sash_y + 1))
+    if kind in ('front', 'back'):
+        _fill_notches(g, 10)
+        _fill_notches(g, 10)         # 補完一格後旁邊又變成缺口的（2 格寬的缺口）再補一次
     if kind == 'left':      # 側面：手臂（手套上面 9 排）在腰帶前面——手臂經過的地方不畫腰帶／圍巾的紅色（腰帶位置三幀一致，不隨手移動）
         red = set(RED.values())
         skin = sorted(p for p, ch in g.src.items() if ch in SKIN and p[1] >= 8)
@@ -194,7 +231,7 @@ def ninja_top(kind, x0, y0, rows):
             x0, x1 = grp[0], grp[-1]
             ys = [y for (x, y) in skin if x0 <= x <= x1]
             y0 = min(ys)
-            for y in range(max(0, y0 - 9), y0 + 1):
+            for y in range(max(0, y0 - 9), y0 + (4 if wrist else 1)):          # 手臂蓋住腰帶：手往前擺的那幀（有前臂）要蓋到手上面往下 3 排，腰帶在那幾排
                 for x in range(x0 - 1, x1 + 2):
                     if g.px.get((x, y)) in red and (x, y) in g.src:
                         g.px[(x, y)] = _base(g.src[(x, y)], 'top') or g.px[(x, y)]
@@ -225,41 +262,6 @@ def ninja_shoes(kind, x0, y0, rows):
     return g.out()
 
 
-HAND_TOP = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'hand', 'ninja_top_human.png')
-
-
-def _read_rgba(path):
-    """讀 RGBA（color type 6）PNG → Img（透明＝None）。tools/hand/ 裡的圖是用 RGBA 存的。"""
-    import struct, zlib
-    b = open(path, 'rb').read()
-    pos, idat = 8, b''
-    while pos < len(b):
-        ln, = struct.unpack('>I', b[pos:pos + 4]); tag = b[pos + 4:pos + 8]; data = b[pos + 8:pos + 8 + ln]; pos += 12 + ln
-        if tag == b'IHDR':
-            w, h, bd, ct = struct.unpack('>IIBB', data[:10])
-        elif tag == b'IDAT':
-            idat += data
-    assert bd == 8 and ct == 6, '手改圖要存成 8 位元 RGBA PNG（tools/hand/README.md）'
-    raw = zlib.decompress(idat); stride = w * 4; prev = bytearray(stride); i = 0
-    im = Img(w, h)
-    for y in range(h):
-        f = raw[i]; line = bytearray(raw[i + 1:i + 1 + stride]); i += 1 + stride
-        for x in range(stride):
-            a = line[x - 4] if x >= 4 else 0; up = prev[x]; c = prev[x - 4] if x >= 4 else 0
-            if f == 1: line[x] = (line[x] + a) & 255
-            elif f == 2: line[x] = (line[x] + up) & 255
-            elif f == 3: line[x] = (line[x] + ((a + up) >> 1)) & 255
-            elif f == 4:
-                p = a + up - c; pa, pb, pc = abs(p - a), abs(p - up), abs(p - c)
-                pr = a if pa <= pb and pa <= pc else (up if pb <= pc else c)
-                line[x] = (line[x] + pr) & 255
-        prev = line
-        for x in range(w):
-            r, g, bb, al = line[x * 4:x * 4 + 4]
-            im.px[y][x] = None if al == 0 else ((r, g, bb) if al == 255 else (r, g, bb, al))
-    return im
-
-
 def ninja_sheets():
     """回傳 {'top': Img, 'bottom': Img, 'shoes': Img}（832×1856，只填走路列；右＝左的鏡像）。"""
     fns = {'top': ninja_top, 'bottom': ninja_bottom, 'shoes': ninja_shoes}
@@ -277,6 +279,4 @@ def ninja_sheets():
                         px = 63 - px
                     for col in cols:
                         out[nm].px[row * gs.CELL + y][col * gs.CELL + px] = c
-    if os.path.exists(HAND_TOP):      # 使用者手改過的人類忍者服上衣（2026-11-26）：整張換成他畫的（矮人、巨人由它縮放而來），不再用上面的規則畫
-        out['top'] = _read_rgba(HAND_TOP)
     return out
