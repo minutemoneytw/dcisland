@@ -218,6 +218,25 @@ def blm_top(kind, x0, y0, rows):
             if i == 2:
                 g.put(cx - 1, y, GEM['m']); g.put(cx, y, GEM['l'])
     g.restore_hands()
+    if kind == 'left':      # 側面：手臂與手在腰帶前面——手臂經過的地方不畫腰帶（金邊／深色帶），改回長袍本來的顏色（使用者要求）
+        belt = set(GOLD.values()) | {ROBE[1]}
+        skin = sorted(p for p, ch in g.src.items() if ch in SKIN and p[1] >= 8)
+        cols = sorted({x for x, y in skin})
+        groups, cur = [], []
+        for x in cols:
+            if cur and x - cur[-1] > 1:
+                groups.append(cur); cur = []
+            cur.append(x)
+        if cur:
+            groups.append(cur)
+        for grp in groups:
+            x0, x1 = grp[0], grp[-1]
+            ys = [y for (x, y) in skin if x0 <= x <= x1]
+            y0 = min(ys)
+            for y in range(max(0, y0 - 9), y0 + 1):
+                for x in range(x0 - 1, x1 + 2):
+                    if g.px.get((x, y)) in belt and (x, y) in g.src and g.src[(x, y)] not in SKIN:
+                        g.px[(x, y)] = _base(g.src[(x, y)], 'top') or g.px[(x, y)]
     return _outline(g.out(), ROBE, ROBE[0])
 
 
