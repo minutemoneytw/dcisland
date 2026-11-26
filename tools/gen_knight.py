@@ -55,6 +55,11 @@ class Grid:
                 else:
                     self.px[(x, y)] = _base(ch, kind)
         self.h = len(rows)
+        self.hands = {p: self.px[p] for p, ch in self.src.items() if ch in SKIN}    # 手套：最後蓋回去
+
+    def restore_hands(self):
+        for p, c in self.hands.items():
+            self.px[p] = c
 
     def row_ext(self, y):
         xs = [x for (x, yy) in self.px if yy == y]
@@ -229,7 +234,8 @@ def knight_top(kind, x0, y0, rows):
         _belt(g, cx, by)
     if kind == 'left':
         _arms(g)
-    return g.out()
+    g.restore_hands()
+    return _outline(g.out(), ARMOR, HELM['a'])                 # 輪廓線跟頭盔一樣（使用者要求明顯一點）
 
 
 def knight_bottom(kind, x0, y0, rows):
@@ -252,7 +258,7 @@ def knight_bottom(kind, x0, y0, rows):
     if e:
         for x in range(e[0], e[1] + 1):
             g.put(x, ky, ARMOR[1])
-    return g.out()
+    return _outline(g.out(), ARMOR, HELM['a'])
 
 
 def knight_shoes(kind, x0, y0, rows):
@@ -268,7 +274,17 @@ def knight_shoes(kind, x0, y0, rows):
         ex = sorted(x for (x, y) in g.px if y == g.h - 2)
         if ex:
             g.put(ex[0], g.h - 2, GOLD['m']); g.put(ex[-1], g.h - 2, GOLD['m'])
-    return g.out()
+    return _outline(g.out(), ARMOR, HELM['a'])
+
+
+def _outline(px, ramp, color):
+    """輪廓線：這一層的邊緣像素（上下左右有透明的）如果是盔甲／袍子本身的色階，就換成 color（金邊、紅色披風這些裝飾色不動）。"""
+    keep = set(ramp)
+    out = dict(px)
+    for (x, y), c in px.items():
+        if c in keep and any((x + dx, y + dy) not in px for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+            out[(x, y)] = color
+    return out
 
 
 # ---------- 頭盔 ----------

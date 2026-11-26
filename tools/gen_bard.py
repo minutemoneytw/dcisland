@@ -60,6 +60,11 @@ class Grid:
                 else:
                     self.px[(x, y)] = _base(ch, kind)
         self.h = len(rows)
+        self.hands = {p: self.px[p] for p, ch in self.src.items() if ch in SKIN}    # 手套：最後蓋回去
+
+    def restore_hands(self):
+        for p, c in self.hands.items():
+            self.px[p] = c
 
     def row_ext(self, y):
         xs = [x for (x, yy) in self.px if yy == y]
@@ -257,8 +262,8 @@ def _cloak(g, cx, by, E=6):
         last = i >= E - 1
         if k == 'front':
             for x in range(a - 0, b + 1):
-                if cx - 3 <= x <= cx + 2:
-                    continue
+                if cx - 7 <= x <= cx + 6:
+                    continue                                          # 腿（褲子）的範圍不蓋：斗篷只在腿的兩側（使用者：斗篷不要穿過褲子）
                 if last and (x - a < i - (E - 2) or b - x < i - (E - 2)):
                     continue
                 c = GREEN[4] if x < cx else GREEN[3]
@@ -269,7 +274,7 @@ def _cloak(g, cx, by, E=6):
                     continue
                 g.put(x, y, GOLD['m'] if i == E else (GREEN[4] if x < cx else GREEN[3]))
         else:
-            for x in range(a + 2, b + 2 + fl):
+            for x in range(b - 1, b + 2 + fl):                       # 側面：下襬接長的部分只在腿的後面（身體後緣以外）
                 g.put(x, y, GOLD['m'] if i == E else GREEN[4])
     if k == 'back':                                            # 背面斗篷的尖角金色紋樣（下襬上方一排 V）
         for x in range(a + 2, b - 1, 4):
@@ -297,6 +302,7 @@ def bard_top(kind, x0, y0, rows):
     _quiver(g, cx)
     if kind == 'left':      # 側面：近側那隻手臂最後畫（蓋在斗篷與箭袋上面；手往後擺的那幀手臂才不會被斗篷吃掉）
         _sleeves(g)
+    g.restore_hands()
     return g.out()
 
 

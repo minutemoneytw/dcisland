@@ -171,11 +171,14 @@ def ninja_top(kind, x0, y0, rows):
     g.hem = g.row_ext(g.h - 1)
     cx = (g.hem[0] + g.hem[1]) // 2
     _bracers(g)
+    hands = {p: g.px[p] for p, ch in g.src.items() if ch in SKIN}      # 護腕之後的手：最後蓋回去（側面的腰帶、圍巾尾巴不要遮住手）
     _pauldrons(g)
     # 領口交襟：正面中間的襯衫條換成深色內衣（_base 已處理）；腰帶位置＝手的位置往上一點
     sash_y = g.h - 7 if kind != 'left' else g.h - 8
     _sash(g, (sash_y, sash_y + 1))
     _scarf(g, cx)
+    for p, c in hands.items():
+        g.px[p] = c
     return g.out()
 
 
