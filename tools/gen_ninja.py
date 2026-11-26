@@ -175,14 +175,29 @@ def ninja_top(kind, x0, y0, rows):
     _pauldrons(g)
     # 領口交襟：正面中間的襯衫條換成深色內衣（_base 已處理）；腰帶位置＝手的位置往上一點
     sash_y = g.h - 7 if kind != 'left' else g.h - 8
-    if kind == 'left':      # 側面：腰帶要在手的高度（原本比手高），手套最後蓋回去所以手還是在腰帶上面（2026-11-26 使用者回報）
-        hy = [y for (x, y), ch in g.src.items() if ch in SKIN and y >= 8]
-        if hy:
-            sash_y = min(hy) - 1
     _sash(g, (sash_y, sash_y + 1))
     _scarf(g, cx)
     for p, c in hands.items():
         g.px[p] = c
+    if kind == 'left':      # 側面：手臂（手套上面 9 排）在腰帶前面——手臂經過的地方不畫腰帶／圍巾的紅色（腰帶位置三幀一致，不隨手移動）
+        red = set(RED.values())
+        skin = sorted(p for p, ch in g.src.items() if ch in SKIN and p[1] >= 8)
+        cols = sorted({x for x, y in skin})
+        groups, cur = [], []
+        for x in cols:
+            if cur and x - cur[-1] > 1:
+                groups.append(cur); cur = []
+            cur.append(x)
+        if cur:
+            groups.append(cur)
+        for grp in groups:
+            x0, x1 = grp[0], grp[-1]
+            ys = [y for (x, y) in skin if x0 <= x <= x1]
+            y0 = min(ys)
+            for y in range(max(0, y0 - 9), y0 + 1):
+                for x in range(x0 - 1, x1 + 2):
+                    if g.px.get((x, y)) in red and (x, y) in g.src:
+                        g.px[(x, y)] = _base(g.src[(x, y)], 'top') or g.px[(x, y)]
     return g.out()
 
 
