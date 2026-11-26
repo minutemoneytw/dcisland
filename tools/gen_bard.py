@@ -88,7 +88,7 @@ def _isskin(g, x, y):
     return ch is not None and ch in SKIN
 
 
-def _sleeves(g):
+def _sleeves(g, cx=None):
     """手臂（袖子）：手套上面 9 排、手套左右各多 1 欄＝袖子，換成比軀幹深一階的米白（軀幹是淺米白，不然手臂跟身體糊成一片），
     外緣一欄棕色描邊、手套上面兩排棕色護腕。正面／背面＝兩隻手，側面＝近側那隻手。"""
     skin = {p for p, ch in g.src.items() if ch in SKIN and p[1] >= 8}      # y>=8：上面幾排零星的皮膚像素（脖子）不是手
@@ -102,6 +102,8 @@ def _sleeves(g):
         groups.append(cur)
     for grp in groups:
         x0, x1 = grp[0], grp[-1]
+        if cx is not None and g.kind != 'left' and abs((x0 + x1) / 2 - cx) < 6:
+            continue                                                # 正面／背面：手在身體前面（走路的某一幀）時，不當袖子（不然整個軀幹被染成袖子色）
         ys = [y for (x, y) in skin if x0 <= x <= x1]
         if not ys:
             continue
@@ -295,7 +297,7 @@ def bard_top(kind, x0, y0, rows):
     _belt(g, cx, by)
     _mantle(g, cx)
     if kind != 'left':
-        _sleeves(g)
+        _sleeves(g, cx)
     _straps(g, cx, by)
     _collar(g, cx)
     _cloak(g, cx, by)
