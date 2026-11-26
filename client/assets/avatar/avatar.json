@@ -2452,6 +2452,13 @@
        "sheets": {
         "top": "human2_d_top.png"
        }
+      },
+      {
+       "id": "knight_armor",
+       "name": "騎士鎧甲",
+       "sheets": {
+        "top": "human2_k_top.png"
+       }
       }
      ],
      "bottom": [
@@ -2486,6 +2493,13 @@
        "name": "吟遊詩人長褲",
        "sheets": {
         "bottom": "human2_d_bottom.png"
+       }
+      },
+      {
+       "id": "knight_legs",
+       "name": "騎士腿甲",
+       "sheets": {
+        "bottom": "human2_k_bottom.png"
        }
       }
      ],
@@ -2522,6 +2536,13 @@
        "sheets": {
         "shoes": "human2_d_shoes.png"
        }
+      },
+      {
+       "id": "knight_boots",
+       "name": "騎士靴",
+       "sheets": {
+        "shoes": "human2_k_shoes.png"
+       }
       }
      ],
      "hat": [
@@ -2541,6 +2562,14 @@
        "hairCutDy": -1,
        "sheets": {
         "hat": "human2_d_hat.png"
+       }
+      },
+      {
+       "id": "knight_helm",
+       "name": "騎士頭盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_k_hat.png"
        }
       }
      ]
@@ -2841,6 +2870,68 @@
        "#485836",
        "#62724c"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "knight_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "knight_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "knight_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "knight_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e0dee6",
+       "#bcb8c6",
+       "#f6f4f8",
+       "#fffefc",
+       "#807c8c"
+      ]
      }
     ],
     "anchors": {
@@ -2973,6 +3064,13 @@
        "sheets": {
         "top": "human2_d_top.png"
        }
+      },
+      {
+       "id": "knight_armor",
+       "name": "騎士鎧甲",
+       "sheets": {
+        "top": "human2_k_top.png"
+       }
       }
      ],
      "bottom": [
@@ -3007,6 +3105,13 @@
        "name": "吟遊詩人長褲",
        "sheets": {
         "bottom": "human2_d_bottom.png"
+       }
+      },
+      {
+       "id": "knight_legs",
+       "name": "騎士腿甲",
+       "sheets": {
+        "bottom": "human2_k_bottom.png"
        }
       }
      ],
@@ -3043,6 +3148,13 @@
        "sheets": {
         "shoes": "human2_d_shoes.png"
        }
+      },
+      {
+       "id": "knight_boots",
+       "name": "騎士靴",
+       "sheets": {
+        "shoes": "human2_k_shoes.png"
+       }
       }
      ],
      "hat": [
@@ -3062,6 +3174,14 @@
        "hairCutDy": -1,
        "sheets": {
         "hat": "human2_d_hat.png"
+       }
+      },
+      {
+       "id": "knight_helm",
+       "name": "騎士頭盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_k_hat.png"
        }
       }
      ]
@@ -3364,6 +3484,68 @@
        "#485836",
        "#62724c"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "knight_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "knight_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "knight_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "knight_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e0dee6",
+       "#bcb8c6",
+       "#f6f4f8",
+       "#fffefc",
+       "#807c8c"
+      ]
      }
     ],
     "anchors": {
@@ -3497,6 +3679,13 @@
        "sheets": {
         "top": "human2_d_top.png"
        }
+      },
+      {
+       "id": "knight_armor",
+       "name": "騎士鎧甲",
+       "sheets": {
+        "top": "human2_k_top.png"
+       }
       }
      ],
      "bottom": [
@@ -3531,6 +3720,13 @@
        "name": "吟遊詩人長褲",
        "sheets": {
         "bottom": "human2_d_bottom.png"
+       }
+      },
+      {
+       "id": "knight_legs",
+       "name": "騎士腿甲",
+       "sheets": {
+        "bottom": "human2_k_bottom.png"
        }
       }
      ],
@@ -3567,6 +3763,13 @@
        "sheets": {
         "shoes": "human2_d_shoes.png"
        }
+      },
+      {
+       "id": "knight_boots",
+       "name": "騎士靴",
+       "sheets": {
+        "shoes": "human2_k_shoes.png"
+       }
       }
      ],
      "hat": [
@@ -3586,6 +3789,14 @@
        "hairCutDy": -1,
        "sheets": {
         "hat": "human2_d_hat.png"
+       }
+      },
+      {
+       "id": "knight_helm",
+       "name": "騎士頭盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_k_hat.png"
        }
       }
      ]
@@ -3888,6 +4099,68 @@
        "#485836",
        "#62724c"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "knight_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "knight_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "knight_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "knight_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e0dee6",
+       "#bcb8c6",
+       "#f6f4f8",
+       "#fffefc",
+       "#807c8c"
+      ]
      }
     ],
     "anchors": {
@@ -4019,6 +4292,13 @@
        "sheets": {
         "top": "dwarf2_d_top.png"
        }
+      },
+      {
+       "id": "knight_armor",
+       "name": "騎士鎧甲",
+       "sheets": {
+        "top": "dwarf2_k_top.png"
+       }
       }
      ],
      "bottom": [
@@ -4053,6 +4333,13 @@
        "name": "吟遊詩人長褲",
        "sheets": {
         "bottom": "dwarf2_d_bottom.png"
+       }
+      },
+      {
+       "id": "knight_legs",
+       "name": "騎士腿甲",
+       "sheets": {
+        "bottom": "dwarf2_k_bottom.png"
        }
       }
      ],
@@ -4089,6 +4376,13 @@
        "sheets": {
         "shoes": "dwarf2_d_shoes.png"
        }
+      },
+      {
+       "id": "knight_boots",
+       "name": "騎士靴",
+       "sheets": {
+        "shoes": "dwarf2_k_shoes.png"
+       }
       }
      ],
      "hat": [
@@ -4108,6 +4402,14 @@
        "hairCutDy": -1,
        "sheets": {
         "hat": "dwarf2_d_hat.png"
+       }
+      },
+      {
+       "id": "knight_helm",
+       "name": "騎士頭盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "dwarf2_k_hat.png"
        }
       }
      ]
@@ -4407,6 +4709,68 @@
        "#121a10",
        "#485836",
        "#62724c"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "knight_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "knight_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "knight_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "knight_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e0dee6",
+       "#bcb8c6",
+       "#f6f4f8",
+       "#fffefc",
+       "#807c8c"
       ]
      }
     ],
@@ -4542,6 +4906,13 @@
        "sheets": {
         "top": "giant2_d_top.png"
        }
+      },
+      {
+       "id": "knight_armor",
+       "name": "騎士鎧甲",
+       "sheets": {
+        "top": "giant2_k_top.png"
+       }
       }
      ],
      "bottom": [
@@ -4576,6 +4947,13 @@
        "name": "吟遊詩人長褲",
        "sheets": {
         "bottom": "giant2_d_bottom.png"
+       }
+      },
+      {
+       "id": "knight_legs",
+       "name": "騎士腿甲",
+       "sheets": {
+        "bottom": "giant2_k_bottom.png"
        }
       }
      ],
@@ -4612,6 +4990,13 @@
        "sheets": {
         "shoes": "giant2_d_shoes.png"
        }
+      },
+      {
+       "id": "knight_boots",
+       "name": "騎士靴",
+       "sheets": {
+        "shoes": "giant2_k_shoes.png"
+       }
       }
      ],
      "hat": [
@@ -4631,6 +5016,14 @@
        "hairCutDy": -1,
        "sheets": {
         "hat": "giant2_d_hat.png"
+       }
+      },
+      {
+       "id": "knight_helm",
+       "name": "騎士頭盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "giant2_k_hat.png"
        }
       }
      ]
@@ -4931,6 +5324,68 @@
        "#485836",
        "#62724c"
       ]
+     },
+     {
+      "slot": "top",
+      "style": "knight_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "knight_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "knight_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#d6d3d6",
+       "#adaab2",
+       "#c2bec4",
+       "#eae8e8",
+       "#fffdfa",
+       "#9895a0",
+       "#84808e"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "knight_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#e0dee6",
+       "#bcb8c6",
+       "#f6f4f8",
+       "#fffefc",
+       "#807c8c"
+      ]
      }
     ],
     "anchors": {
@@ -5034,6 +5489,20 @@
     "#f8f1e2",
     "#b7ac99",
     "#a69b86"
+   ]
+  },
+  {
+   "id": "knight_armor",
+   "name": "騎士鎧甲",
+   "keepGear": true,
+   "dye": [
+    "#d6d3d6",
+    "#adaab2",
+    "#c2bec4",
+    "#eae8e8",
+    "#fffdfa",
+    "#9895a0",
+    "#84808e"
    ]
   },
   {
@@ -5221,6 +5690,20 @@
    ]
   },
   {
+   "id": "knight_legs",
+   "name": "騎士腿甲",
+   "keepGear": true,
+   "dye": [
+    "#d6d3d6",
+    "#adaab2",
+    "#c2bec4",
+    "#eae8e8",
+    "#fffdfa",
+    "#9895a0",
+    "#84808e"
+   ]
+  },
+  {
    "id": "plate_legs",
    "name": "騎士腿甲",
    "sheet": "char_bottom_plate_m.png",
@@ -5341,6 +5824,20 @@
    ]
   },
   {
+   "id": "knight_boots",
+   "name": "騎士靴",
+   "keepGear": true,
+   "dye": [
+    "#d6d3d6",
+    "#adaab2",
+    "#c2bec4",
+    "#eae8e8",
+    "#fffdfa",
+    "#9895a0",
+    "#84808e"
+   ]
+  },
+  {
    "id": "plate_boots",
    "name": "騎士板甲靴",
    "sheet": "char_shoes_plate_m.png",
@@ -5428,6 +5925,20 @@
     "#121a10",
     "#485836",
     "#62724c"
+   ]
+  },
+  {
+   "id": "knight_helm",
+   "name": "騎士頭盔",
+   "sheet": null,
+   "keepGear": true,
+   "hideHair": true,
+   "dye": [
+    "#e0dee6",
+    "#bcb8c6",
+    "#f6f4f8",
+    "#fffefc",
+    "#807c8c"
    ]
   },
   {

@@ -3,7 +3,7 @@
  "legacy": { "tank": "knight", "healer": "whitemage", "dps": "ninja" },
  "jobs": [
   { "id": "knight", "atkAnim": "halfslash", "name": "騎士", "role": "tank", "weapon": "sword",
-    "gear": { "hat": "armet", "top": "plate", "bottom": "plate_legs", "shoe": "plate_boots" }, "skills": ["guard", "kshield"] },
+    "gear": { "hat": "knight_helm", "top": "knight_armor", "bottom": "knight_legs", "shoe": "knight_boots" }, "skills": ["guard", "kshield"] },
   { "id": "warrior", "atkAnim": "slash", "name": "戰士", "role": "tank", "weapon": "waraxe",
     "gear": { "hat": "barbarian", "top": "war_mail", "bottom": "war_pants", "shoe": "war_boots" }, "skills": ["vamp", "wshield"] },
   { "id": "whitemage", "atkAnim": "thrust", "name": "白魔法師", "role": "healer", "weapon": "staff",
