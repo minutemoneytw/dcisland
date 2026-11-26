@@ -2508,6 +2508,7 @@
        "id": "blm_hat",
        "name": "黑魔法師帽",
        "hairFromHat": true,
+       "hairCutDy": -2,
        "sheets": {
         "hat": "human2_b_hat.png"
        }
@@ -2931,6 +2932,7 @@
        "id": "blm_hat",
        "name": "黑魔法師帽",
        "hairFromHat": true,
+       "hairCutDy": -2,
        "sheets": {
         "hat": "human2_b_hat.png"
        }
@@ -3357,6 +3359,7 @@
        "id": "blm_hat",
        "name": "黑魔法師帽",
        "hairFromHat": true,
+       "hairCutDy": -2,
        "sheets": {
         "hat": "human2_b_hat.png"
        }
@@ -3781,6 +3784,7 @@
        "id": "blm_hat",
        "name": "黑魔法師帽",
        "hairFromHat": true,
+       "hairCutDy": -2,
        "sheets": {
         "hat": "dwarf2_b_hat.png"
        }
@@ -4206,6 +4210,7 @@
        "id": "blm_hat",
        "name": "黑魔法師帽",
        "hairFromHat": true,
+       "hairCutDy": -2,
        "sheets": {
         "hat": "giant2_b_hat.png"
        }

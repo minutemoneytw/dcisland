@@ -689,8 +689,8 @@ def school_outfit_styles(prefix):
               dict(id="leather_shoes_m", name="皮鞋", sheets={"shoes": f"{prefix}_m_shoes.png"}),
               dict(id="ninja_boots", name="忍者靴", sheets={"shoes": f"{prefix}_n_shoes.png"}),
               dict(id="blm_boots", name="黑魔法師靴", sheets={"shoes": f"{prefix}_b_shoes.png"})],
-        # 帽子款式（只有套裝附的帽子；其他種族還沒有帽子款式）：hairFromHat＝帽沿以上的頭髮不畫（客戶端 chibiSprite）
-        hat=[dict(id="blm_hat", name="黑魔法師帽", hairFromHat=True, sheets={"hat": f"{prefix}_b_hat.png"})])
+        # 帽子款式（只有套裝附的帽子；其他種族還沒有帽子款式）：hairFromHat＝帽沿以上的頭髮不畫（客戶端 chibiSprite；hairCutDy＝切線相對帽沿最低那排的位移，帽子往下挪 2 排後切線維持原位＝-2）
+        hat=[dict(id="blm_hat", name="黑魔法師帽", hairFromHat=True, hairCutDy=-2, sheets={"hat": f"{prefix}_b_hat.png"})])
 def school_dye_elf():
     """妖精的換色規則：膚色那條連耳朵（hat 層，皮膚色＋棕色外圈）一起換。"""
     out = []

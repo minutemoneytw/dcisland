@@ -253,11 +253,11 @@ def _head_box(kind, step):
 
 
 def hat_pixels(kind, cx, top):
-    """帽子的 {(x, y): 色}；cx＝頭的中心欄（小數）、top＝頭頂排（素體 body 的第一排）。帽子從 top-8 排開始：11 排尖頂＋5 排帽沿。"""
+    """帽子的 {(x, y): 色}；cx＝頭的中心欄（小數）、top＝頭頂排（素體 body 的第一排）。帽子從 top-6 排開始：11 排尖頂＋5 排帽沿。"""
     R = {'front': 15.5, 'back': 15.5, 'left': 16.5}[kind]
     lean = {'front': 2.0, 'back': -2.0, 'left': 5.0}[kind]           # 尖頂往哪邊彎（側面往後＝往右）
     center = {'front': cx, 'back': cx, 'left': cx + 2.0}[kind]
-    y_top = top - 8
+    y_top = top - 6                                                    # 2026-11-26 使用者要求帽子比原本（top-8）低 2 排；頭髮切掉的位置不變（款式的 hairCutDy）
     CONE = 11
     sil = {}
     for r in range(CONE):
