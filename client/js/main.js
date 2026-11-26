@@ -2973,7 +2973,7 @@ function chibiSprite(race, look, fi, sleep) {   // sleep：睡姿用——body �
     if (n === 'hat' && hts) {   // 戴帽子：種族自己的 hat 層（妖精／貓族的耳朵）先畫，帽子再蓋上去
       const ear = S.charImgs[own.sheets.hat];
       if (ear && idleSx + cw <= ear.width && sy + ch <= ear.height) {   // 帽沿以上的耳朵（貓耳）被帽子蓋住不畫，帽沿以下的（妖精的尖耳）照畫
-        const cut = Math.min(ch, hatBottom + 1);
+        const cut = Math.max(0, Math.min(ch, hatBottom + 1 + (hts.hairCutDy || 0)));
         g.drawImage(ear, idleSx, sy + cut, cw, ch - cut, 0, cut, cw, ch - cut);
       }
     }
@@ -2982,7 +2982,7 @@ function chibiSprite(race, look, fi, sleep) {   // sleep：睡姿用——body �
     if (!img || lsx + cw > img.width || sy + ch > img.height) continue;
     for (const r of rules) if (r.hex && r.layers.includes(ln)) img = dyeSheet(img, r.colors, r.hex);   // 同一張圖可以被多條規則依序換色（例如 bottom 層：圍裙下擺跟上衣、褲子跟褲子）
     if (n === 'hair' && hatBottom >= 0) {
-      const cut = Math.min(ch, hatBottom + 1);
+      const cut = Math.max(0, Math.min(ch, hatBottom + 1 + (hts.hairCutDy || 0)));
       g.drawImage(img, lsx, sy + cut, cw, ch - cut, 0, cut, cw, ch - cut);
       continue;
     }
@@ -3913,7 +3913,7 @@ function drawPersonBase(p, wi, nameColor) {
     if (ghost) ctx.globalAlpha = .35;
     p.rodJit = p.fish?.ph === 'reel' && rodFrameNow(p) != null ? Math.round(Math.sin(S.t * 30)) : 0;   // 拉竿：竿子往後拉住、整個人左右抖 1px（原本拉竿時竿尖抖動的感覺）
     // 側面坐姿（sit_left／sit_right）：整個人往椅背方向挪（使用者微調 2026-11-25，單位＝2px 一格）：人類／妖精／貓族 2 格、矮人 4 格、巨人 1；朝左的人往左、朝右的人往右（往面向的方向挪；使用者說第一版往椅背挪「反了」）
-    const sitDx = pose === 'sit' && !p.fish && sitReal(p) ? (SIT_BACK_SHIFT[race] ?? 2) * 2 * (d8Of(p) === 'left' ? -1 : 1) : 0;
+    const sitD8 = d8Of(p), sitDx = pose === 'sit' && !p.fish && (sitD8 === 'left' || sitD8 === 'right') && sitReal(p) ? (SIT_BACK_SHIFT[race] ?? 2) * 2 * (sitD8 === 'left' ? -1 : 1) : 0;   // 只有側面（朝左／朝右）；正面、背面不挪（原本也被套到，偏了 4px）
     ctx.save(); ctx.translate(p.x + p.rodJit + sitDx, p.y - p.z);
     // 武器（背在背上／掛在腰間；揮擊時畫在身前）；坐著時不拿；釣魚時釣竿拋向前方
     const fish = wi && (!pose || (pose === 'sit' && p.fish)) && p.fish ? p.fish : null;
