@@ -2468,6 +2468,13 @@
        }
       },
       {
+       "id": "warrior_armor",
+       "name": "戰士鎧甲",
+       "sheets": {
+        "top": "human2_r_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -2531,6 +2538,13 @@
        }
       },
       {
+       "id": "warrior_legs",
+       "name": "戰士腿甲",
+       "sheets": {
+        "bottom": "human2_r_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -2591,6 +2605,13 @@
        "name": "龍騎士靴",
        "sheets": {
         "shoes": "human2_g_shoes.png"
+       }
+      },
+      {
+       "id": "warrior_boots",
+       "name": "戰士靴",
+       "sheets": {
+        "shoes": "human2_r_shoes.png"
        }
       },
       {
@@ -2659,6 +2680,14 @@
        "hideHair": true,
        "sheets": {
         "hat": "human2_g_hat.png"
+       }
+      },
+      {
+       "id": "warrior_helm",
+       "name": "戰士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_r_hat.png"
        }
       }
      ]
@@ -3079,6 +3108,68 @@
      },
      {
       "slot": "top",
+      "style": "warrior_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "warrior_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "warrior_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "warrior_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#888286",
+       "#605a5e",
+       "#aea8aa",
+       "#cec8ca",
+       "#221e22"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -3353,6 +3444,13 @@
        }
       },
       {
+       "id": "warrior_armor",
+       "name": "戰士鎧甲",
+       "sheets": {
+        "top": "human2_r_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -3416,6 +3514,13 @@
        }
       },
       {
+       "id": "warrior_legs",
+       "name": "戰士腿甲",
+       "sheets": {
+        "bottom": "human2_r_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -3476,6 +3581,13 @@
        "name": "龍騎士靴",
        "sheets": {
         "shoes": "human2_g_shoes.png"
+       }
+      },
+      {
+       "id": "warrior_boots",
+       "name": "戰士靴",
+       "sheets": {
+        "shoes": "human2_r_shoes.png"
        }
       },
       {
@@ -3544,6 +3656,14 @@
        "hideHair": true,
        "sheets": {
         "hat": "human2_g_hat.png"
+       }
+      },
+      {
+       "id": "warrior_helm",
+       "name": "戰士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_r_hat.png"
        }
       }
      ]
@@ -3966,6 +4086,68 @@
      },
      {
       "slot": "top",
+      "style": "warrior_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "warrior_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "warrior_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "warrior_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#888286",
+       "#605a5e",
+       "#aea8aa",
+       "#cec8ca",
+       "#221e22"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -4241,6 +4423,13 @@
        }
       },
       {
+       "id": "warrior_armor",
+       "name": "戰士鎧甲",
+       "sheets": {
+        "top": "human2_r_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -4304,6 +4493,13 @@
        }
       },
       {
+       "id": "warrior_legs",
+       "name": "戰士腿甲",
+       "sheets": {
+        "bottom": "human2_r_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -4364,6 +4560,13 @@
        "name": "龍騎士靴",
        "sheets": {
         "shoes": "human2_g_shoes.png"
+       }
+      },
+      {
+       "id": "warrior_boots",
+       "name": "戰士靴",
+       "sheets": {
+        "shoes": "human2_r_shoes.png"
        }
       },
       {
@@ -4432,6 +4635,14 @@
        "hideHair": true,
        "sheets": {
         "hat": "human2_g_hat.png"
+       }
+      },
+      {
+       "id": "warrior_helm",
+       "name": "戰士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "human2_r_hat.png"
        }
       }
      ]
@@ -4854,6 +5065,68 @@
      },
      {
       "slot": "top",
+      "style": "warrior_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "warrior_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "warrior_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "warrior_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#888286",
+       "#605a5e",
+       "#aea8aa",
+       "#cec8ca",
+       "#221e22"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -5127,6 +5400,13 @@
        }
       },
       {
+       "id": "warrior_armor",
+       "name": "戰士鎧甲",
+       "sheets": {
+        "top": "dwarf2_r_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -5190,6 +5470,13 @@
        }
       },
       {
+       "id": "warrior_legs",
+       "name": "戰士腿甲",
+       "sheets": {
+        "bottom": "dwarf2_r_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -5250,6 +5537,13 @@
        "name": "龍騎士靴",
        "sheets": {
         "shoes": "dwarf2_g_shoes.png"
+       }
+      },
+      {
+       "id": "warrior_boots",
+       "name": "戰士靴",
+       "sheets": {
+        "shoes": "dwarf2_r_shoes.png"
        }
       },
       {
@@ -5318,6 +5612,14 @@
        "hideHair": true,
        "sheets": {
         "hat": "dwarf2_g_hat.png"
+       }
+      },
+      {
+       "id": "warrior_helm",
+       "name": "戰士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "dwarf2_r_hat.png"
        }
       }
      ]
@@ -5734,6 +6036,68 @@
        "#6c6694",
        "#8c86b6",
        "#161424"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "warrior_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "warrior_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "warrior_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "warrior_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#888286",
+       "#605a5e",
+       "#aea8aa",
+       "#cec8ca",
+       "#221e22"
       ]
      },
      {
@@ -6014,6 +6378,13 @@
        }
       },
       {
+       "id": "warrior_armor",
+       "name": "戰士鎧甲",
+       "sheets": {
+        "top": "giant2_r_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -6077,6 +6448,13 @@
        }
       },
       {
+       "id": "warrior_legs",
+       "name": "戰士腿甲",
+       "sheets": {
+        "bottom": "giant2_r_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -6137,6 +6515,13 @@
        "name": "龍騎士靴",
        "sheets": {
         "shoes": "giant2_g_shoes.png"
+       }
+      },
+      {
+       "id": "warrior_boots",
+       "name": "戰士靴",
+       "sheets": {
+        "shoes": "giant2_r_shoes.png"
        }
       },
       {
@@ -6205,6 +6590,14 @@
        "hideHair": true,
        "sheets": {
         "hat": "giant2_g_hat.png"
+       }
+      },
+      {
+       "id": "warrior_helm",
+       "name": "戰士角盔",
+       "hideHair": true,
+       "sheets": {
+        "hat": "giant2_r_hat.png"
        }
       }
      ]
@@ -6625,6 +7018,68 @@
      },
      {
       "slot": "top",
+      "style": "warrior_armor",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "warrior_legs",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "warrior_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#767174",
+       "#423e41",
+       "#5c575b",
+       "#908b8d",
+       "#aaa4a7",
+       "#c4bec0",
+       "#282428"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "warrior_helm",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#888286",
+       "#605a5e",
+       "#aea8aa",
+       "#cec8ca",
+       "#221e22"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -6879,6 +7334,20 @@
    ]
   },
   {
+   "id": "warrior_armor",
+   "name": "戰士鎧甲",
+   "keepGear": true,
+   "dye": [
+    "#767174",
+    "#423e41",
+    "#5c575b",
+    "#908b8d",
+    "#aaa4a7",
+    "#c4bec0",
+    "#282428"
+   ]
+  },
+  {
    "id": "bard_garb",
    "name": "吟遊詩人斗篷",
    "keepGear": true,
@@ -7125,6 +7594,20 @@
    ]
   },
   {
+   "id": "warrior_legs",
+   "name": "戰士腿甲",
+   "keepGear": true,
+   "dye": [
+    "#767174",
+    "#423e41",
+    "#5c575b",
+    "#908b8d",
+    "#aaa4a7",
+    "#c4bec0",
+    "#282428"
+   ]
+  },
+  {
    "id": "bard_pants",
    "name": "吟遊詩人長褲",
    "keepGear": true,
@@ -7301,6 +7784,20 @@
    ]
   },
   {
+   "id": "warrior_boots",
+   "name": "戰士靴",
+   "keepGear": true,
+   "dye": [
+    "#767174",
+    "#423e41",
+    "#5c575b",
+    "#908b8d",
+    "#aaa4a7",
+    "#c4bec0",
+    "#282428"
+   ]
+  },
+  {
    "id": "bard_boots",
    "name": "吟遊詩人靴",
    "keepGear": true,
@@ -7442,6 +7939,20 @@
     "#6c6694",
     "#8c86b6",
     "#161424"
+   ]
+  },
+  {
+   "id": "warrior_helm",
+   "name": "戰士角盔",
+   "sheet": null,
+   "keepGear": true,
+   "hideHair": true,
+   "dye": [
+    "#888286",
+    "#605a5e",
+    "#aea8aa",
+    "#cec8ca",
+    "#221e22"
    ]
   },
   {
