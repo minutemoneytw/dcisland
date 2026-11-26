@@ -780,7 +780,7 @@ def school_outfit_styles(prefix):
         # 帽子款式（只有套裝附的帽子；其他種族還沒有帽子款式）：hairFromHat＝帽沿以上的頭髮不畫（客戶端 chibiSprite；hairCutDy＝切線相對帽沿最低那排的位移，帽子往下挪 2 排後切線維持原位＝-2）
         hat=[dict(id="blm_hat", name="黑魔法師帽", hairFromHat=True, hairCutDy=-2, sheets={"hat": f"{prefix}_b_hat.png"}),
              dict(id="wm_hat", name="白魔法師帽", hairFromHat=True, hairCutDy=-2, sheets={"hat": f"{prefix}_w_hat.png"}),
-             dict(id="sage_hat", name="賢者貝雷帽", hairFromHat=True, hairCutDy=0, sheets={"hat": f"{prefix}_s_hat.png"}),
+             dict(id="sage_hat", name="賢者貝雷帽", hairFromHat=True, hairCutDy=-8, sheets={"hat": f"{prefix}_s_hat.png"}),
              dict(id="bard_hat", name="吟遊詩人帽", hairFromHat=True, hairCutDy=-1, sheets={"hat": f"{prefix}_d_hat.png"}),
              dict(id="knight_helm", name="騎士頭盔", hideHair=True, sheets={"hat": f"{prefix}_k_hat.png"})])
 def school_dye_elf():
