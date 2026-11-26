@@ -2538,7 +2538,7 @@
        "id": "bard_hat",
        "name": "吟遊詩人帽",
        "hairFromHat": true,
-       "hairCutDy": 0,
+       "hairCutDy": -1,
        "sheets": {
         "hat": "human2_d_hat.png"
        }
@@ -3059,7 +3059,7 @@
        "id": "bard_hat",
        "name": "吟遊詩人帽",
        "hairFromHat": true,
-       "hairCutDy": 0,
+       "hairCutDy": -1,
        "sheets": {
         "hat": "human2_d_hat.png"
        }
@@ -3583,7 +3583,7 @@
        "id": "bard_hat",
        "name": "吟遊詩人帽",
        "hairFromHat": true,
-       "hairCutDy": 0,
+       "hairCutDy": -1,
        "sheets": {
         "hat": "human2_d_hat.png"
        }
@@ -4105,7 +4105,7 @@
        "id": "bard_hat",
        "name": "吟遊詩人帽",
        "hairFromHat": true,
-       "hairCutDy": 0,
+       "hairCutDy": -1,
        "sheets": {
         "hat": "dwarf2_d_hat.png"
        }
@@ -4628,7 +4628,7 @@
        "id": "bard_hat",
        "name": "吟遊詩人帽",
        "hairFromHat": true,
-       "hairCutDy": 0,
+       "hairCutDy": -1,
        "sheets": {
         "hat": "giant2_d_hat.png"
        }

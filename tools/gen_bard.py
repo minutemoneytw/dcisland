@@ -78,10 +78,15 @@ class Grid:
 
 
 # ---------- 斗篷 ----------
+def _isskin(g, x, y):
+    ch = g.src.get((x, y))
+    return ch is not None and ch in SKIN
+
+
 def _sleeves(g):
     """手臂（袖子）：手套上面 9 排、手套左右各多 1 欄＝袖子，換成比軀幹深一階的米白（軀幹是淺米白，不然手臂跟身體糊成一片），
     外緣一欄棕色描邊、手套上面兩排棕色護腕。正面／背面＝兩隻手，側面＝近側那隻手。"""
-    skin = {p for p, ch in g.src.items() if ch in SKIN}
+    skin = {p for p, ch in g.src.items() if ch in SKIN and p[1] >= 8}      # y>=8：上面幾排零星的皮膚像素（脖子）不是手
     cols = sorted({x for x, y in skin})
     groups, cur = [], []
     for x in cols:
@@ -98,15 +103,15 @@ def _sleeves(g):
         y0 = min(ys)
         for y in range(max(0, y0 - 9), y0):
             for x in range(x0 - 1, x1 + 2):
-                if (x, y) not in g.px or g.src.get((x, y)) in SKIN:
+                if (x, y) not in g.px or _isskin(g, x, y):
                     continue
-                if g.px[(x, y)] in GREEN or g.px[(x, y)] in (GOLD['d'], GOLD['m']):
-                    continue                                           # 披肩、金線不動
+                if g.kind != 'left' and (g.px[(x, y)] in GREEN or g.px[(x, y)] in (GOLD['d'], GOLD['m'])):
+                    continue                                           # 披肩、金線不動（側面的手臂最後畫、蓋在斗篷與箭袋上面，所以不跳過）
                 edge = (x == x0 - 1 or x == x1 + 1)
                 g.px[(x, y)] = BROWN['d'] if edge else SLEEVE[0 if (x + y) % 4 else 1]
         for y in (y0 - 1, y0 - 2, y0 - 3):
             for x in range(x0 - 1, x1 + 2):
-                if (x, y) in g.px and g.src.get((x, y)) not in SKIN:
+                if (x, y) in g.px and not _isskin(g, x, y):
                     g.px[(x, y)] = BROWN['l'] if y == y0 - 1 else (BROWN['m'] if y == y0 - 2 else BROWN['d'])       # 護腕（三排）
 
 
@@ -284,11 +289,14 @@ def bard_top(kind, x0, y0, rows):
                 g.px[(x, y)] = GREEN[4] if x < cx else GREEN[3]
     _belt(g, cx, by)
     _mantle(g, cx)
-    _sleeves(g)
+    if kind != 'left':
+        _sleeves(g)
     _straps(g, cx, by)
     _collar(g, cx)
     _cloak(g, cx, by)
     _quiver(g, cx)
+    if kind == 'left':      # 側面：近側那隻手臂最後畫（蓋在斗篷與箭袋上面；手往後擺的那幀手臂才不會被斗篷吃掉）
+        _sleeves(g)
     return g.out()
 
 
