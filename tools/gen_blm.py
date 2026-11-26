@@ -254,14 +254,14 @@ def _head_box(kind, step):
 
 def hat_pixels(kind, cx, top):
     """帽子的 {(x, y): 色}；cx＝頭的中心欄（小數）、top＝頭頂排（素體 body 的第一排）。帽子從 top-9 排開始：11 排尖頂＋5 排帽沿。"""
-    R = {'front': 17.5, 'back': 17.5, 'left': 18.5}[kind]          # 帽沿半寬（2026-11-26 使用者要求左右各加寬 1；之後再要求加寬 2 格＝每邊再 +1，頭髮才不會像從帽子上長出來）
+    R = {'front': 19.0, 'back': 19.0, 'left': 20.0}[kind]          # 帽沿半寬（2026-11-26 使用者要求左右各加寬 1；之後再要求加寬 2 格＝每邊再 +1，頭髮才不會像從帽子上長出來）
     lean = {'front': 2.0, 'back': -2.0, 'left': 5.0}[kind]           # 尖頂往哪邊彎（側面往後＝往右）
     center = {'front': cx, 'back': cx, 'left': cx + 2.0}[kind]
     y_top = top - 9                                                    # 2026-11-26 使用者要求帽子比原本（top-8）低 2 排；頭髮切掉的位置不變（款式的 hairCutDy）
     CONE = 11                                                           # 尖頂 11 排（2026-11-26 使用者要求整頂帽子往上移 3 排：帽沿從 top+5 變 top+2；頂端不能超出格子上緣〔頭頂 top 最小 9〕，所以尖頂比之前的 13 排少 2 排）
     sil = {}
     for r in range(CONE):
-        hw = 1.0 + r * 0.7
+        hw = 1.0 + r * 0.9
         off = lean * (1 - r / (CONE - 1)) ** 1.6
         lo, hi = round(center + off - hw), round(center + off + hw)
         for x in range(lo, hi + 1):
@@ -275,7 +275,7 @@ def hat_pixels(kind, cx, top):
     out = {}
     for (x, y), (part, i, dx) in sil.items():
         if part == 'cone':
-            hw = 1.0 + i * 0.7
+            hw = 1.0 + i * 0.9
             if dx < -hw * 0.45:
                 c = HAT['c']
             elif dx > hw * 0.35:
