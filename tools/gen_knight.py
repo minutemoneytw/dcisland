@@ -300,8 +300,8 @@ def hat_pixels(kind, cx, top, ext=None):
     brow = top + 8
     guard_bot = top + 14
     nape = top + 16
-    rx = 13.0
-    cyc = top + 6
+    rx = 10.5        # 圓（橢圓）形：寬度只比頭多 1～2 排（頭寬 18～19），不是蘑菇狀（2026-11-26 使用者要求）
+    cyc = top + 7
     last_y = max(ext) if ext else top + 18
 
     def hx(y):
@@ -309,7 +309,7 @@ def hat_pixels(kind, cx, top, ext=None):
         return ext[yy] if ext else (round(cx - 11), round(cx + 11))
 
     sil = {}
-    c = cx if kind != 'left' else cx + 1.5
+    c = cx
     for y in range(ry_top, brow + 1):                       # 圓頂（眉線以上）
         hw = rx * math.sqrt(max(0.0, 1 - ((cyc - y) / (cyc - ry_top + 0.7)) ** 2)) if y <= cyc else rx
         for x in range(round(c - hw), round(c + hw) + 1):
