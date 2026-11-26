@@ -131,64 +131,52 @@ def _belt(g, cx, y):
             g.put(cx + dx, y, GOLD['l']); g.put(cx + dx, y + 1, GOLD['m'])
 
 
-def _tabard_front(g, cx, by, E):
-    """正面：紅色十字旗袍從腰帶垂到下襬下面（尖尖的下襬、金邊、金色十字）。"""
-    top = by + 2
-    last = g.h - 1 + E
-    cut = (0, 3, 1, 4, 0, 2, 3, 1)                                   # 每欄下襬縮短幾排（鋸齒破碎）
-    for y in range(top, last + 1):
-        w = 4
-        for x in range(cx - w, cx + w):
-            if y > last - cut[(x - cx + w) % len(cut)]:
-                continue
-            g.put(x, y, RED['m'] if x < cx else RED['d'])
-        g.put(cx - w, y, GOLD['m']) if y <= last - cut[0] else None
-        g.put(cx + w - 1, y, GOLD['d']) if y <= last - cut[(2 * w - 1) % len(cut)] else None
-    cy = top + 4
-    for dy in range(-1, 5):                                          # 金色十字
-        g.put(cx - 1, cy + dy, GOLD['l']); g.put(cx, cy + dy, GOLD['m'])
-    for dx in (-2, 1):
-        g.put(cx + dx, cy + 0, GOLD['l']); g.put(cx + dx, cy + 1, GOLD['m'])
-
-
-def _cape(g, cx, E=8):
-    """披風：正面＝兩側紅色披片（披在手臂後面）；背面＝整片紅披風＋金色十字；側面＝往後飄的紅披風。"""
+def _skirt(g, cx, by, E):
+    """戰裙：腰帶下面往下垂的幾片布片（不是披風）。正面＝左右兩片寬的＋中間一片窄而長的（尖角往下）；背面＝左右兩片；側面＝一片從腰垂到後面。
+    每片下襬鋸齒破碎，布片外緣香檳銀邊，中間片有香檳銀十字。"""
     k = g.kind
+    top = by + 2
     hy = g.h - 1
-    a, b = g.row_ext(hy)
     last = hy + E
+    a, b = g.row_ext(hy)
+    cuts = (0, 3, 1, 4, 0, 2, 3, 1)
+
+    def plate(x0, x1, shade, jag, edge_l=True, edge_r=True):
+        for x in range(x0, x1 + 1):
+            L = last - (cuts[(x - x0 + jag) % 8] if jag >= 0 else 0)
+            for y in range(top, L + 1):
+                c = RED['m'] if (x - x0) % 3 else RED['l']
+                if shade:
+                    c = RED['d'] if (x - x0) % 3 else RED['m']
+                g.put(x, y, c)
+            if x == x0 and edge_l or x == x1 and edge_r:
+                for y in range(top, L + 1):
+                    g.put(x, y, GOLD['m'] if x == x0 else GOLD['d'])
     if k == 'front':
-        for y in range(6, last + 1):
-            t = (y - 6) / max(1, last - 6)
-            fl = 1 + int(t * 2)
-            for x in range(a - fl, a):
-                g.put(x, y, GOLD['m'] if x == a - fl else RED['m'])
-            for x in range(b + 1, b + fl + 1):
-                g.put(x, y, GOLD['d'] if x == b + fl else RED['d'])
+        plate(a - 1, cx - 3, False, 0)
+        plate(cx + 2, b + 1, True, 3)
+        for x in range(cx - 2, cx + 2):                         # 中間窄片：尖角往下
+            L = last + 0 - (0 if x in (cx - 1, cx) else 2)
+            for y in range(top, L + 1):
+                g.put(x, y, RED['m'] if x < cx else RED['d'])
+            g.put(x, top, GOLD['m'])
+        for y in range(top + 1, last + 1):
+            g.put(cx - 2, y, GOLD['m']) if y <= last - 2 else None
+            g.put(cx + 1, y, GOLD['d']) if y <= last - 2 else None
+        cy = top + 3
+        for dy in range(-1, 5):                                  # 中間片的香檳銀十字
+            g.put(cx - 1, cy + dy, GOLD['l']); g.put(cx, cy + dy, GOLD['m'])
+        for dx in (-2, 1):
+            g.put(cx + dx, cy, GOLD['l']); g.put(cx + dx, cy + 1, GOLD['m'])
     elif k == 'back':
-        for y in range(5, last + 1):
-            if y > last - 2 and False:
-                continue
-            for x in range(cx - 7, cx + 7):
-                if y > last - (0, 3, 1, 4, 0, 2, 3, 1)[(x - cx + 7) % 8]:
-                    continue                                       # 下襬鋸齒
-                edge = x in (cx - 7, cx + 6)
-                g.put(x, y, GOLD['m'] if (edge or y == last) else (RED['m'] if x < cx else RED['d']))
-        cyx = 9
-        for dy in range(-2, 6):                                      # 金色十字
-            g.put(cx - 1, cyx + dy + 5, GOLD['l']); g.put(cx, cyx + dy + 5, GOLD['m'])
-        for dx in (-3, -2, 1, 2):
-            g.put(cx + dx, cyx + 5, GOLD['l']); g.put(cx + dx, cyx + 6, GOLD['m'])
+        plate(a - 1, cx - 1, False, 1)
+        plate(cx, b + 1, True, 4)
+        for y in range(top, last - 1):
+            g.put(cx - 1, y, GOLD['d']); g.put(cx, y, GOLD['m'])    # 中縫
     else:
-        for y in range(3, last + 1):
-            t = (y - 3) / max(1, last - 3)
-            lo = b - 1 + int(t * 2)
-            hi = b + 2 + int(t * 5)
-            for x in range(lo, hi + 1):
-                if y > last - (0, 2, 1, 3, 0, 2)[(x - lo) % 6]:
-                    continue                                       # 下襬鋸齒
-                g.put(x, y, GOLD['m'] if (x == hi or y == last) else (RED['m'] if (x - lo) % 3 else RED['d']))
-    # 下襬接長：正面中間（旗袍）、背面／側面延伸過的那幾排已在上面畫完
+        plate(a + 1, b + 2, False, 0)
+        for y in range(top, last - 1):
+            g.put(b + 2, y, GOLD['d'])
     g.h += E
 
 
@@ -227,24 +215,10 @@ def dragoon_top(kind, x0, y0, rows):
     hem = g.row_ext(g.h - 1)
     cx = (hem[0] + hem[1]) // 2
     by = g.h - 8
-    E = 8
-    if kind == 'back':
-        pass
-    _cape(g, cx, 0) if False else None
-    h0 = g.h
     _pauldrons(g)
     _scarf(g, cx)
-    _belt(g, cx, by)
-    # 披風先畫（在盔甲底下），所以要在盔甲上色之後、旗袍之前：cape 會用 put 覆蓋，所以先存下盔甲再疊披風只畫在空格
-    saved = dict(g.px)
-    _cape(g, cx, E)
-    for p, c in saved.items():                          # 盔甲本體蓋回披風上面（披風只留在盔甲外面）
-        if kind == 'back' and p[1] >= 5 and abs(p[0] - cx - 0.5) <= 6.5 and not _isskin(g, *p):
-            continue                                    # 背面：背上整片都是披風
-        g.px[p] = c
-    if kind == 'front':
-        _tabard_front(g, cx, by, E)
-        _belt(g, cx, by)
+    _skirt(g, cx, by, 8)
+    _belt(g, cx, by)                                    # 腰帶蓋在戰裙上緣
     if kind == 'left':
         _arms(g)
     g.restore_hands()
@@ -410,24 +384,36 @@ def hat_pixels(kind, cx, top, ext=None):
                         out[p] = GOLD['l'] if (dx + dy) < 0 else GOLD['m']
                         sil[p] = 1
         out[(ecx, ecy)] = GOLD['d']
-    # 長角：正面／背面＝兩側向外上彎、側面＝往後（右）上掃（3 排粗，尖端 1 排）
+    # 三根貼著頭盔的凸角：中間一根（頭頂中線的三角鰭）＋左右各一根（頭盔上緣兩側，往外上彎一點點）；正面眉線中間再有一個尖角往下
     hornpx = {}
     if kind == 'left':
         bx = round(cx) + 3
-        for i in range(0, 14):
+        for i in range(0, 14):                                         # 往後上掃的長角（中間那根）
             by_ = top - 1 - i // 2
             n = 3 if i < 6 else (2 if i < 11 else 1)
             for t in range(n):
-                p = (bx + i, by_ + t)
-                hornpx[p] = GOLD['l'] if t == 0 else (GOLD['m'] if t == 1 else GOLD['d'])
+                hornpx[(bx + i, by_ + t)] = GOLD['l'] if t == 0 else (GOLD['m'] if t == 1 else GOLD['d'])
+        for i in range(0, 7):                                          # 貼著後腦的第二根（短）
+            for t in range(2):
+                hornpx[(bx - 4 + i, top + 3 + i // 3 - t + 1)] = GOLD['m'] if t == 0 else GOLD['d']
+        for i in range(0, 6):                                          # 第三根（前上方，短）
+            for t in range(2):
+                hornpx[(round(cx) - 5 - i // 3 + 0, top - 3 + i // 2 * 0 - i // 2 + t)] = GOLD['l'] if t == 0 else GOLD['m']
     else:
-        pts = [(0, 2), (1, 2), (1, 1), (2, 1), (2, 0), (2, -1), (3, -1), (3, -2), (3, -3), (4, -3), (4, -4), (4, -5)]
-        for sgn in (-1, 1):
+        mx = round(cx)
+        for r, hw in enumerate((0, 1, 1, 2, 2)):                       # 中間：三角鰭，頂端在頭頂上方 4 排
+            for x in range(mx - 1 - hw + (1 if hw == 0 else 0), mx + hw + (0 if hw else 0) + 1):
+                hornpx[(x, top - 7 + r)] = GOLD['l'] if x < mx else GOLD['m']
+        pts = [(0, 2), (1, 2), (1, 1), (1, 0), (2, 0), (2, -1), (2, -2), (3, -3), (3, -4)]
+        for sgn in (-1, 1):                                            # 左右：貼著盔頂兩側的短角
             bx = round(cx) + sgn * 9 + (0 if sgn > 0 else -1)
             for n, (dx, dy) in enumerate(pts):
-                for t in range(2 if n < 9 else 1):
-                    q = (bx + sgn * dx - sgn * t, top + dy + 1)
-                    hornpx[q] = GOLD['l'] if t == 0 else GOLD['m']
+                for t in range(2 if n < 7 else 1):
+                    hornpx[(bx + sgn * dx - sgn * t, top + dy + 1)] = GOLD['l'] if t == 0 else GOLD['m']
+        if kind == 'front':                                            # 眉線中間：尖角往下
+            for r, (xa_, xb_) in enumerate(((mx - 2, mx + 1), (mx - 1, mx), (mx - 1, mx))):
+                for x in range(xa_, xb_ + 1):
+                    hornpx[(x, brow + 1 + r)] = GOLD['l'] if x < mx else GOLD['m']
     # 外框
     for (x, y) in list(sil):
         if any((x + dx, y + dy) not in sil for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
