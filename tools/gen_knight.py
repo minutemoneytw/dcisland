@@ -278,43 +278,70 @@ def _head_box(kind, step):
     return (min(xs) + max(xs) + 1) / 2.0, y0
 
 
-def hat_pixels(kind, cx, top):
-    """圓頂頭盔：蓋住頭頂與頭的兩側，眉線（頭頂下 8 排）以下留出臉；背面整個後腦包住（到頭頂下 15 排）。"""
+def _head_ext(kind, step):
+    """素體的頭（前 19 排）每一排在 sheet 格座標的左右界：{y: (xa, xb)}。"""
+    x0, y0, rows = gb.DATA[(kind, step)]['body']
+    out = {}
+    for r in range(19):
+        xs = [x0 + x for x, ch in enumerate(rows[r]) if ch != '.']
+        if xs:
+            out[y0 + r] = (min(xs), max(xs))
+    return out
+
+
+def hat_pixels(kind, cx, top, ext=None):
+    """頭盔（2026-11-26 使用者修改）：
+    - 圓頂蓋住頭頂與頭的兩側，眉線（頭頂下 8 排）以上整個包住；
+    - 正面：眉線以下兩側的臉頰護片「緊貼臉型」（沿著頭的輪廓、各 3 欄寬），長度到下巴往上數 3 排（頭頂下 14 排），中間留出臉；
+    - 側面（臉朝左）：前面留出臉，後面完整包覆整個後腦——從耳側（護片位置）往後斜向下一直包到後頸（下緣是斜的）；
+    - 背面：整個後腦包住，沿著頭的輪廓到後頸。"""
+    ext = ext or {}
     ry_top = top - 3
     brow = top + 8
+    guard_bot = top + 14
+    nape = top + 16
     rx = 13.0
     cyc = top + 6
+    last_y = max(ext) if ext else top + 18
+
+    def hx(y):
+        yy = min(max(y, min(ext)), last_y) if ext else None
+        return ext[yy] if ext else (round(cx - 11), round(cx + 11))
+
     sil = {}
-    for y in range(ry_top, (top + 15 if kind == 'back' else top + 13) + 1):
-        if y <= cyc:
-            hw = rx * math.sqrt(max(0.0, 1 - ((cyc - y) / (cyc - ry_top + 0.7)) ** 2))
-        else:
-            hw = rx - (y - cyc) * (0.35 if kind == 'back' else 0.0)
-        c = cx if kind != 'left' else cx + 1.5
-        lo, hi = round(c - hw), round(c + hw)
-        for x in range(lo, hi + 1):
-            if kind == 'back':
+    c = cx if kind != 'left' else cx + 1.5
+    for y in range(ry_top, brow + 1):                       # 圓頂（眉線以上）
+        hw = rx * math.sqrt(max(0.0, 1 - ((cyc - y) / (cyc - ry_top + 0.7)) ** 2)) if y <= cyc else rx
+        for x in range(round(c - hw), round(c + hw) + 1):
+            sil[(x, y)] = 1
+    ear_x = round(cx)                                         # 側面：耳側（護片）的欄
+    if kind == 'front':
+        for y in range(brow + 1, guard_bot + 1):
+            xa, xb = hx(y)
+            for x in (xa - 2, xa - 1, xa, xa + 1, xb - 1, xb, xb + 1, xb + 2):      # 各 4 欄寬：外 2 欄＋頭輪廓內 2 欄（緊貼臉型）
                 sil[(x, y)] = 1
-            elif kind == 'front':
-                if y <= brow or x <= round(c - hw) + 2 or x >= round(c + hw) - 2:     # 眉線以上整個蓋住；以下只剩兩側臉頰護片
-                    if y > brow + 4 and (x > round(c - hw) + 2 and x < round(c + hw) - 2):
-                        continue
-                    sil[(x, y)] = 1
-            else:                                                                      # 側面：臉朝左，前面（左）留出臉，後腦與後頸護片
-                if y <= brow or x >= round(c + 1):
-                    sil[(x, y)] = 1
-    # 前面側面：眉線以下左邊是臉，所以把眉線以下、x < c+1 的去掉（上面已處理）；兩側臉頰護片只留 3 欄
+    elif kind == 'left':
+        for y in range(brow + 1, nape + 1):
+            xa, xb = hx(y)
+            xf = ear_x + (y - (brow + 1))                     # 前緣往後斜：從耳側斜向下到後頸
+            for x in range(xf, xb + 2):
+                sil[(x, y)] = 1
+    else:
+        for y in range(brow + 1, nape + 1):
+            xa, xb = hx(y)
+            for x in range(xa - 1, xb + 2):
+                sil[(x, y)] = 1
     out = {}
     for (x, y) in sil:
         t = (x - (cx - rx)) / (2 * rx)
-        c = HELM['d'] if (t < .32 and y < top + 4) else (HELM['c'] if t < .62 else HELM['b'])
+        col = HELM['d'] if (t < .32 and y < top + 4) else (HELM['c'] if t < .62 else HELM['b'])
         if y < top + 1:
-            c = HELM['e'] if t < .5 else HELM['d']
-        out[(x, y)] = c
+            col = HELM['e'] if t < .5 else HELM['d']
+        out[(x, y)] = col
     # 眉線金邊（臉的上緣）
     if kind in ('front', 'left'):
-        for x in range(round(cx - rx) + 3, round(cx + rx) - 2):
-            if (x, brow) in sil and (kind == 'front' or x < round(cx + 1.5 + 1)):
+        for x in range(round(c - rx) + 3, round(c + rx) - 2):
+            if (x, brow) in sil:
                 out[(x, brow)] = GOLD['m']
     # 冠飾：正面＝頭頂中間一條金色縱帶（頂端展開成箭頭），側面＝沿頭頂的金色脊，背面＝縱縫＋橫縫
     if kind == 'front':
@@ -332,24 +359,28 @@ def hat_pixels(kind, cx, top):
             if ys and min(ys) < top + 3:
                 out[(x, min(ys) + 1)] = GOLD['l']; out[(x, min(ys) + 2)] = GOLD['m']
     else:
-        for y in range(ry_top, top + 15):
+        for y in range(ry_top, nape):
             if (round(cx), y) in sil:
                 out[(round(cx) - 1, y)] = GOLD['l']; out[(round(cx), y)] = GOLD['m']
         for x in range(round(cx - rx) + 2, round(cx + rx) - 1):
             if (x, top + 6) in sil:
                 out[(x, top + 6)] = GOLD['m']
-    # 耳側金盤（圓盤，半徑約 2）
-    ex = {'front': [cx - 11.5, cx + 10.5], 'back': [cx - 11.5, cx + 10.5], 'left': [cx + 2.5]}[kind]
-    ey = top + 10
-    for e in ex:
+    # 耳側金盤（圓盤，半徑約 2）：正面／背面＝護片上（頭的兩側），側面＝耳側
+    ey = top + 11
+    if kind == 'left':
+        ex = [(ear_x + 1, ey)]
+    else:
+        xa, xb = hx(ey)
+        ex = [(xa, ey), (xb, ey)]
+    for (ecx, ecy) in ex:
         for dx in range(-2, 3):
             for dy in range(-2, 3):
-                if dx * dx + dy * dy <= 5:
-                    p = (round(e) + dx, ey + dy)
+                if dx * dx + dy * dy <= (2 if kind != 'left' else 5):       # 正面／背面的護片窄，金盤小一點（十字形），不然護片整條變金色
+                    p = (ecx + dx, ecy + dy)
                     if p in sil or kind == 'left':
                         out[p] = GOLD['l'] if (dx + dy) < 0 else GOLD['m']
                         sil[p] = 1
-        out[(round(e), ey)] = GOLD['d']
+        out[(ecx, ecy)] = GOLD['d']
     # 外框
     for (x, y) in list(sil):
         if any((x + dx, y + dy) not in sil for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
@@ -368,7 +399,7 @@ def knight_sheets():
                 x0, y0, rows = DATA[(kind, step)][nm]
                 cells[nm] = {(x + 16, y): c for (x, y), c in fn(kind, x0, y0, rows).items() if c is not None}
             cx, top = _head_box(kind, step)
-            cells['hat'] = hat_pixels(kind, cx, top)
+            cells['hat'] = hat_pixels(kind, cx, top, _head_ext(kind, step))
             for nm, cell in cells.items():
                 for (x, y), c in cell.items():
                     px = 63 - x if d == 'right' else x
