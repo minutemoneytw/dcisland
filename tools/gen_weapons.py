@@ -140,9 +140,14 @@ def sword_sheath(hilt_only=False):
     """劍鞘裡的劍（騎士，掛在腰間時畫這張）：同樣 11×38，上面是皮革劍鞘＋金色鞘口與鞘尖，只露出護手與握柄。"""
     cv = W(11, 38)
     cx = 5
-    if hilt_only:
-        cv.rect(cx - 2, 21, cx + 2, 23, GOLD[3]); cv.rect(cx - 2, 21, cx - 2, 23, GOLD[4])
-        _hilt(cv, cx, 24)
+    if hilt_only:   # 正面／背面只露出一小截（使用者 2026-11-27：大小縮到一半）：鞘口 1 排、護手 2 排（5 格寬）、握柄 3 排、劍首 2 排，劍首底端仍在轉軸（第 35 排）
+        cv.rect(cx - 1, 28, cx + 1, 28, GOLD[3]); cv.set(cx - 1, 28, GOLD[4])
+        cv.rect(cx - 2, 29, cx + 2, 29, GOLD[4]); cv.rect(cx - 2, 30, cx + 2, 30, GOLD[2]); cv.set(cx + 2, 30, GOLD[1])
+        for i in range(3):
+            c = LEATHER[2] if i % 2 == 0 else LEATHER[0]
+            cv.rect(cx - 1, 31 + i, cx + 1, 31 + i, c); cv.set(cx - 1, 31 + i, LEATHER[3] if i % 2 == 0 else LEATHER[1])
+        cv.rect(cx - 1, 34, cx + 1, 34, GOLD[3]); cv.set(cx - 1, 34, GOLD[4])
+        cv.rect(cx - 1, 35, cx + 1, 35, GOLD[1])
         cv.outline()
         return cv
     for y in range(1, 24):
