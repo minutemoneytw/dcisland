@@ -1037,6 +1037,41 @@ def build_sheets(ears=False):   # ears：False／True（＝'elf'）／'cat'
 DWARF_DROP = (32, 35, 36, 38, 39, 48, 49, 54)   # 2026-11-24 階段 D：照素體重挑——逐排比「這排跟下一排差幾個像素（9 格全部圖層疊起來）」，挑差最小的：外套 32／35／36／38／39、裙子中段 48／49、小腿 54
 
 
+# ---- 側面走路的「頭下沉」（2026-11-27，使用者指出）：向左／向右走路時，素體的頭會比待機往下沉 1 格（走路步伐格，欄 1、2、5、6；正面、背面不會）。
+# 衣服在「頭的最下緣（下巴）以上」的部分（高領、帽兜、肩甲上緣…）要跟著頭下沉 1 格；下巴以下的衣服本來就畫在身體該在的位置，不動。
+# 下巴列用素體待機格（欄 0）量：由頭頂往下，寬度先到過 12、再掉到 8 以下之前的最後一排（脖子比頭窄很多）。所有上衣圖層都在人類版 sheet 上過這個（矮人、巨人由人類版縮放而來）
+BOB_COLS = (1, 2, 5, 6)
+
+
+def head_chin_row(body, row):
+    seen = False
+    for y in range(8, 56):
+        n = sum(1 for x in range(CELL) if body.px[row * CELL + y][x] is not None)
+        seen = seen or n >= 12
+        if seen and n <= 8:
+            return y - 1
+    return None
+
+
+def collar_bob(sheets, body):
+    """sheets['top'] 的側面走路格：下巴以上的像素整個往下 1 格（原地改，回傳 sheets）。"""
+    top = sheets['top']
+    for d in ('left', 'right'):
+        row = WALK_ROW[d]
+        chin = head_chin_row(body, row)
+        if chin is None:
+            continue
+        for col in BOB_COLS:
+            x0 = col * CELL
+            for x in range(x0, x0 + CELL):
+                above = [top.px[row * CELL + y][x] for y in range(0, chin + 1)]      # 下巴（含）以上的這一欄
+                for y in range(0, chin + 1):
+                    top.px[row * CELL + y][x] = above[y - 1] if y >= 1 else None     # 往下 1 格：上面空出來的那排清空
+                if above[chin] is not None:
+                    top.px[row * CELL + chin + 1][x] = above[chin]                   # 原本在下巴那排的像素落到下巴下面一排（蓋掉那一排原本的；它本來就是領口的延伸）
+    return sheets
+
+
 def shrink_sheets(sheets, drop=DWARF_DROP):
     """每個格子拿掉 drop 的那幾排，上面的排往下補（只處理走路列）。回傳新的 {圖層名: Img}。"""
     out = {n: Img(SHEET_W, SHEET_H) for n in sheets}

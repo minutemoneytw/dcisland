@@ -632,6 +632,7 @@ import gen_ninja   # 忍者套裝（tools/gen_ninja.py，幾何沿用男式西�
 import gen_male   # 男式西裝（外套／褲／鞋）的像素資料與遮罩（tools/gen_male.py）
 import gen_school   # 「新人類」分層 sheet（2026-11-22）：tools/gen_school.py；sheet 在這裡先畫好，換色規則要看實際用到的顏色
 SCHOOL_SHEETS = gen_school.build_sheets()
+gen_school.collar_bob(SCHOOL_SHEETS, SCHOOL_SHEETS['body'])   # 側面走路：下巴以上的上衣跟著頭下沉 1 格（女式西裝在下巴以下，不會動；其他套裝各自過同一個處理）
 SCHOOL_LAYERS = [n for n, im in SCHOOL_SHEETS.items() if any(c is not None for row in im.px for c in row)]   # hairbg／hat 目前是空的，不輸出
 SCHOOL_CAT_SHEETS = gen_school.build_sheets(ears='cat')   # 新貓族：同一個人，多一層 hat（四個方向的貓耳，蓋在頭髮上面）
 SCHOOL_DWARF_SHEETS = gen_school.shrink_sheets(SCHOOL_SHEETS)   # 新矮人：新人類拿掉軀幹、小腿幾排的小孩體型
@@ -663,40 +664,40 @@ SCHOOL_SUIT = dict(
     bottom=dict(id="suit_skirt", name="西裝短裙", glam=True, dye=SCHOOL_DYE["bottom"]),
     shoe=dict(id="pointed_shoes", name="尖皮鞋", glam=True, dye=SCHOOL_DYE["shoe"]))
 # 男式西裝（2026-11-23）：三件外觀各自一個款式（own.styles.top／bottom／shoe），款式用自己的圖層
-SCHOOL_MALE = gen_male.male_sheets()
+SCHOOL_MALE = gen_school.collar_bob(gen_male.male_sheets(), SCHOOL_SHEETS['body'])   # 側面走路：下巴以上的上衣跟著頭下沉 1 格（gen_school.collar_bob）
 # （2026-11-23 換成素體：素體的手、腿跟男式西裝本來就對得上，不再需要遮罩擦掉身體層的手／腿；gen_male.body_masks 與 *_mask_*.png 拿掉了）
 SCHOOL_MALE_DWARF = gen_school.shrink_sheets(SCHOOL_MALE)
 SCHOOL_MALE_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_MALE})
 # 忍者套裝（2026-11-25）：同男式三件的做法，各自一個款式；2026-11-26 使用者定：這是忍者職業的「裝備」不是外觀（jobs.json 的 gear；keepGear＝客戶端不套預設外觀蓋掉它），預設不戴帽子（圖層 <種族>_n_top／bottom／shoes）
-SCHOOL_NINJA = gen_ninja.ninja_sheets()
+SCHOOL_NINJA = gen_school.collar_bob(gen_ninja.ninja_sheets(), SCHOOL_SHEETS['body'])   # 側面走路：下巴以上的上衣跟著頭下沉 1 格（gen_school.collar_bob）
 SCHOOL_NINJA_DWARF = gen_school.shrink_sheets(SCHOOL_NINJA)
 SCHOOL_NINJA_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_NINJA})
 # 黑魔法師套裝（2026-11-26，使用者給例圖；是黑魔法師職業的「裝備」：keepGear，jobs.json 的 gear；圖層 <種族>_b_top／bottom／shoes／hat）
-SCHOOL_BLM = gen_blm.blm_sheets()
+SCHOOL_BLM = gen_school.collar_bob(gen_blm.blm_sheets(), SCHOOL_SHEETS['body'])   # 側面走路：下巴以上的上衣跟著頭下沉 1 格（gen_school.collar_bob）
 SCHOOL_BLM_DWARF = gen_school.shrink_sheets(SCHOOL_BLM)
 SCHOOL_BLM_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_BLM})
 # 白魔法師套裝（2026-11-26，使用者給例圖；白魔法師職業的「裝備」：keepGear，jobs.json 的 gear；圖層 <種族>_w_top／bottom／shoes／hat）
-SCHOOL_WM = gen_wmage.wm_sheets()
+SCHOOL_WM = gen_school.collar_bob(gen_wmage.wm_sheets(), SCHOOL_SHEETS['body'])   # 側面走路：下巴以上的上衣跟著頭下沉 1 格（gen_school.collar_bob）
 SCHOOL_WM_DWARF = gen_school.shrink_sheets(SCHOOL_WM)
 SCHOOL_WM_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_WM})
 # 賢者套裝（2026-11-27，使用者給例圖；賢者職業的「裝備」：keepGear，jobs.json 的 gear；圖層 <種族>_s_top／bottom／shoes／hat）
-SCHOOL_SAGE = gen_sage.sage_sheets()
+SCHOOL_SAGE = gen_school.collar_bob(gen_sage.sage_sheets(), SCHOOL_SHEETS['body'])   # 側面走路：下巴以上的上衣跟著頭下沉 1 格（gen_school.collar_bob）
 SCHOOL_SAGE_DWARF = gen_school.shrink_sheets(SCHOOL_SAGE)
 SCHOOL_SAGE_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_SAGE})
 # 龍騎士套裝（2026-11-27，使用者給例圖；龍騎士職業的「裝備」：keepGear，jobs.json 的 gear；圖層 <種族>_g_top／bottom／shoes／hat）
-SCHOOL_DRAGOON = gen_dragoon.dragoon_sheets()
+SCHOOL_DRAGOON = gen_school.collar_bob(gen_dragoon.dragoon_sheets(), SCHOOL_SHEETS['body'])   # 側面走路：下巴以上的上衣跟著頭下沉 1 格（gen_school.collar_bob）
 SCHOOL_DRAGOON_DWARF = gen_school.shrink_sheets(SCHOOL_DRAGOON)
 SCHOOL_DRAGOON_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_DRAGOON})
 # 戰士套裝（2026-11-27，使用者給例圖；戰士職業的「裝備」：keepGear，jobs.json 的 gear；圖層 <種族>_r_top／bottom／shoes／hat）
-SCHOOL_WARRIOR = gen_warrior.warrior_sheets()
+SCHOOL_WARRIOR = gen_school.collar_bob(gen_warrior.warrior_sheets(), SCHOOL_SHEETS['body'])   # 側面走路：下巴以上的上衣跟著頭下沉 1 格（gen_school.collar_bob）
 SCHOOL_WARRIOR_DWARF = gen_school.shrink_sheets(SCHOOL_WARRIOR)
 SCHOOL_WARRIOR_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_WARRIOR})
 # 吟遊詩人套裝（2026-11-26，使用者給例圖；吟遊詩人職業的「裝備」：keepGear，jobs.json 的 gear；圖層 <種族>_d_top／bottom／shoes／hat）
-SCHOOL_BARD = gen_bard.bard_sheets()
+SCHOOL_BARD = gen_school.collar_bob(gen_bard.bard_sheets(), SCHOOL_SHEETS['body'])   # 側面走路：下巴以上的上衣跟著頭下沉 1 格（gen_school.collar_bob）
 SCHOOL_BARD_DWARF = gen_school.shrink_sheets(SCHOOL_BARD)
 SCHOOL_BARD_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_BARD})
 # 騎士套裝（2026-11-26，使用者給例圖；騎士職業的「裝備」：keepGear，jobs.json 的 gear；圖層 <種族>_k_top／bottom／shoes／hat；頭盔 hideHair，換色只換盔甲的白色階）
-SCHOOL_KNIGHT = gen_knight.knight_sheets()
+SCHOOL_KNIGHT = gen_school.collar_bob(gen_knight.knight_sheets(), SCHOOL_SHEETS['body'])   # 側面走路：下巴以上的上衣跟著頭下沉 1 格（gen_school.collar_bob）
 SCHOOL_KNIGHT_DWARF = gen_school.shrink_sheets(SCHOOL_KNIGHT)
 SCHOOL_KNIGHT_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_KNIGHT})
 def _used_colors(img):
