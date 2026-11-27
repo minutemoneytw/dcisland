@@ -237,19 +237,36 @@ def _head_box(kind, step):
 def hat_pixels(kind, cx, top, right=False):
     """深灰色毛帽：圓頂（top-4 起）往下蓋到額頭上緣（top+6），直紋；下緣一條米色綁帶（3 排，有扣環），耳邊垂米色名牌（5 排）。"""
     hc = cx + (1.5 if kind == 'left' else 0.0)
-    prof = (9.0, 11.5, 13.0, 13.5, 13.5, 13.5, 13.5, 13.5, 13.5, 13.0, 13.0)   # 左右各比原本寬 3 格
+    prof = (4.5, 8.0, 10.5, 12.0, 13.0, 13.5, 13.5, 13.5, 14.0, 14.0, 14.0)   # 圓頂（上窄下寬）＋最下面 5 排是反折的帽緣（比帽身再寬 0.5）
     y0 = top - 4
+    cuff0 = top + 2                                                          # 反折帽緣從這排開始（到 top+6）
     sil, out = set(), {}
     for i, w in enumerate(prof):
-        for x in range(round(hc - w), round(hc + w) + 1):
-            sil.add((x, y0 + i))
-            if y0 + i >= top + 3 and y0 + i <= top + 5:                       # 綁帶 3 排
-                c = BEIGE[4] if y0 + i == top + 4 else (BEIGE[3] if y0 + i == top + 3 else BEIGE[2])
-            else:
-                c = DARK[3] if (x - round(hc)) % 3 else DARK[2]
-                if i < 2:
-                    c = DARK[4] if (x - round(hc)) % 3 else DARK[3]
-            out[(x, y0 + i)] = c
+        y = y0 + i
+        lo, hi = hc - w, hc + w
+        if kind == 'left' and y < cuff0:                                      # 側面：帽頂往後（右）垮一點
+            hi += 1.5 + (cuff0 - y) * 0.2
+        if kind == 'back' and y < cuff0:
+            lo -= 0.5; hi += 0.5
+        for x in range(round(lo), round(hi) + 1):
+            sil.add((x, y))
+            u = x - round(hc)
+            if y >= cuff0:                                                    # 帽緣：橫向羅紋（每排深淺交替）＋立體的上緣亮線
+                c = DARK[4] if y == cuff0 else (DARK[3] if (y + x) % 2 == 0 else DARK[2])
+                if y == top + 6:
+                    c = DARK[1]
+            else:                                                             # 帽身：直向羅紋，兩排一組錯開（針織）
+                c = DARK[3] if (u + (y // 2)) % 3 else DARK[2]
+                if y - y0 < 2:
+                    c = DARK[4] if (u + y) % 2 else DARK[3]
+                elif u < -w * 0.4 and (u + y) % 4 == 0:
+                    c = DARK[4]                                               # 左上的反光
+            out[(x, y)] = c
+    # 米色綁帶：壓在帽緣中間 3 排（比帽緣窄 1 格），扣環
+    for y in range(top + 3, top + 6):
+        for x in range(round(hc - 13), round(hc + 13) + 1):
+            if (x, y) in sil:
+                out[(x, y)] = BEIGE[4] if y == top + 4 else (BEIGE[3] if y == top + 3 else BEIGE[2])
     bx = round(hc) + (3 if kind == 'front' else (-3 if kind == 'back' else 0))     # 扣環
     for yy in range(top + 3, top + 6):
         for xx in range(bx, bx + 3):
