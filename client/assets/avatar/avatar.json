@@ -2477,6 +2477,13 @@
        }
       },
       {
+       "id": "street_jacket",
+       "name": "街頭寬鬆夾克",
+       "sheets": {
+        "top": "human2_t_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -2561,6 +2568,13 @@
        }
       },
       {
+       "id": "street_pants",
+       "name": "街頭工作寬褲",
+       "sheets": {
+        "bottom": "human2_t_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -2642,6 +2656,13 @@
        "name": "甜心蝴蝶結靴",
        "sheets": {
         "shoes": "human2_p_shoes.png"
+       }
+      },
+      {
+       "id": "street_sneakers",
+       "name": "街頭厚底球鞋",
+       "sheets": {
+        "shoes": "human2_t_shoes.png"
        }
       },
       {
@@ -2731,6 +2752,15 @@
        "hideHair": true,
        "sheets": {
         "hat": "human2_r_hat.png"
+       }
+      },
+      {
+       "id": "street_beanie",
+       "name": "街頭毛帽",
+       "hairFromHat": true,
+       "hairCutDy": -7,
+       "sheets": {
+        "hat": "human2_t_hat.png"
        }
       },
       {
@@ -3286,6 +3316,70 @@
      },
      {
       "slot": "top",
+      "style": "street_jacket",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#c5b39c",
+       "#96806c",
+       "#a6917c",
+       "#b5a28c",
+       "#d5c4ac",
+       "#e4d5bc",
+       "#f4e6cc"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "street_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#473e3f",
+       "#221e22",
+       "#2e292c",
+       "#3b3335",
+       "#534949",
+       "#605352",
+       "#6c5e5c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "street_sneakers",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#c5b39c",
+       "#96806c",
+       "#a6917c",
+       "#b5a28c",
+       "#d5c4ac",
+       "#e4d5bc",
+       "#f4e6cc"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "street_beanie",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#473e3f",
+       "#221e22",
+       "#2e292c",
+       "#3b3335",
+       "#534949",
+       "#605352",
+       "#6c5e5c"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -3617,6 +3711,13 @@
        }
       },
       {
+       "id": "street_jacket",
+       "name": "街頭寬鬆夾克",
+       "sheets": {
+        "top": "human2_t_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -3701,6 +3802,13 @@
        }
       },
       {
+       "id": "street_pants",
+       "name": "街頭工作寬褲",
+       "sheets": {
+        "bottom": "human2_t_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -3782,6 +3890,13 @@
        "name": "甜心蝴蝶結靴",
        "sheets": {
         "shoes": "human2_p_shoes.png"
+       }
+      },
+      {
+       "id": "street_sneakers",
+       "name": "街頭厚底球鞋",
+       "sheets": {
+        "shoes": "human2_t_shoes.png"
        }
       },
       {
@@ -3871,6 +3986,15 @@
        "hideHair": true,
        "sheets": {
         "hat": "human2_r_hat.png"
+       }
+      },
+      {
+       "id": "street_beanie",
+       "name": "街頭毛帽",
+       "hairFromHat": true,
+       "hairCutDy": -7,
+       "sheets": {
+        "hat": "human2_t_hat.png"
        }
       },
       {
@@ -4428,6 +4552,70 @@
      },
      {
       "slot": "top",
+      "style": "street_jacket",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#c5b39c",
+       "#96806c",
+       "#a6917c",
+       "#b5a28c",
+       "#d5c4ac",
+       "#e4d5bc",
+       "#f4e6cc"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "street_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#473e3f",
+       "#221e22",
+       "#2e292c",
+       "#3b3335",
+       "#534949",
+       "#605352",
+       "#6c5e5c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "street_sneakers",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#c5b39c",
+       "#96806c",
+       "#a6917c",
+       "#b5a28c",
+       "#d5c4ac",
+       "#e4d5bc",
+       "#f4e6cc"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "street_beanie",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#473e3f",
+       "#221e22",
+       "#2e292c",
+       "#3b3335",
+       "#534949",
+       "#605352",
+       "#6c5e5c"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -4760,6 +4948,13 @@
        }
       },
       {
+       "id": "street_jacket",
+       "name": "街頭寬鬆夾克",
+       "sheets": {
+        "top": "human2_t_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -4844,6 +5039,13 @@
        }
       },
       {
+       "id": "street_pants",
+       "name": "街頭工作寬褲",
+       "sheets": {
+        "bottom": "human2_t_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -4925,6 +5127,13 @@
        "name": "甜心蝴蝶結靴",
        "sheets": {
         "shoes": "human2_p_shoes.png"
+       }
+      },
+      {
+       "id": "street_sneakers",
+       "name": "街頭厚底球鞋",
+       "sheets": {
+        "shoes": "human2_t_shoes.png"
        }
       },
       {
@@ -5014,6 +5223,15 @@
        "hideHair": true,
        "sheets": {
         "hat": "human2_r_hat.png"
+       }
+      },
+      {
+       "id": "street_beanie",
+       "name": "街頭毛帽",
+       "hairFromHat": true,
+       "hairCutDy": -7,
+       "sheets": {
+        "hat": "human2_t_hat.png"
        }
       },
       {
@@ -5571,6 +5789,70 @@
      },
      {
       "slot": "top",
+      "style": "street_jacket",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#c5b39c",
+       "#96806c",
+       "#a6917c",
+       "#b5a28c",
+       "#d5c4ac",
+       "#e4d5bc",
+       "#f4e6cc"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "street_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#473e3f",
+       "#221e22",
+       "#2e292c",
+       "#3b3335",
+       "#534949",
+       "#605352",
+       "#6c5e5c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "street_sneakers",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#c5b39c",
+       "#96806c",
+       "#a6917c",
+       "#b5a28c",
+       "#d5c4ac",
+       "#e4d5bc",
+       "#f4e6cc"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "street_beanie",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#473e3f",
+       "#221e22",
+       "#2e292c",
+       "#3b3335",
+       "#534949",
+       "#605352",
+       "#6c5e5c"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -5901,6 +6183,13 @@
        }
       },
       {
+       "id": "street_jacket",
+       "name": "街頭寬鬆夾克",
+       "sheets": {
+        "top": "dwarf2_t_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -5985,6 +6274,13 @@
        }
       },
       {
+       "id": "street_pants",
+       "name": "街頭工作寬褲",
+       "sheets": {
+        "bottom": "dwarf2_t_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -6066,6 +6362,13 @@
        "name": "甜心蝴蝶結靴",
        "sheets": {
         "shoes": "dwarf2_p_shoes.png"
+       }
+      },
+      {
+       "id": "street_sneakers",
+       "name": "街頭厚底球鞋",
+       "sheets": {
+        "shoes": "dwarf2_t_shoes.png"
        }
       },
       {
@@ -6155,6 +6458,15 @@
        "hideHair": true,
        "sheets": {
         "hat": "dwarf2_r_hat.png"
+       }
+      },
+      {
+       "id": "street_beanie",
+       "name": "街頭毛帽",
+       "hairFromHat": true,
+       "hairCutDy": -7,
+       "sheets": {
+        "hat": "dwarf2_t_hat.png"
        }
       },
       {
@@ -6710,6 +7022,70 @@
      },
      {
       "slot": "top",
+      "style": "street_jacket",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#c5b39c",
+       "#96806c",
+       "#a6917c",
+       "#b5a28c",
+       "#d5c4ac",
+       "#e4d5bc",
+       "#f4e6cc"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "street_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#473e3f",
+       "#221e22",
+       "#2e292c",
+       "#3b3335",
+       "#534949",
+       "#605352",
+       "#6c5e5c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "street_sneakers",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#c5b39c",
+       "#96806c",
+       "#a6917c",
+       "#b5a28c",
+       "#d5c4ac",
+       "#e4d5bc",
+       "#f4e6cc"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "street_beanie",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#473e3f",
+       "#221e22",
+       "#2e292c",
+       "#3b3335",
+       "#534949",
+       "#605352",
+       "#6c5e5c"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -7043,6 +7419,13 @@
        }
       },
       {
+       "id": "street_jacket",
+       "name": "街頭寬鬆夾克",
+       "sheets": {
+        "top": "giant2_t_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -7127,6 +7510,13 @@
        }
       },
       {
+       "id": "street_pants",
+       "name": "街頭工作寬褲",
+       "sheets": {
+        "bottom": "giant2_t_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -7208,6 +7598,13 @@
        "name": "甜心蝴蝶結靴",
        "sheets": {
         "shoes": "giant2_p_shoes.png"
+       }
+      },
+      {
+       "id": "street_sneakers",
+       "name": "街頭厚底球鞋",
+       "sheets": {
+        "shoes": "giant2_t_shoes.png"
        }
       },
       {
@@ -7297,6 +7694,15 @@
        "hideHair": true,
        "sheets": {
         "hat": "giant2_r_hat.png"
+       }
+      },
+      {
+       "id": "street_beanie",
+       "name": "街頭毛帽",
+       "hairFromHat": true,
+       "hairCutDy": -7,
+       "sheets": {
+        "hat": "giant2_t_hat.png"
        }
       },
       {
@@ -7852,6 +8258,70 @@
      },
      {
       "slot": "top",
+      "style": "street_jacket",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#c5b39c",
+       "#96806c",
+       "#a6917c",
+       "#b5a28c",
+       "#d5c4ac",
+       "#e4d5bc",
+       "#f4e6cc"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "street_pants",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#473e3f",
+       "#221e22",
+       "#2e292c",
+       "#3b3335",
+       "#534949",
+       "#605352",
+       "#6c5e5c"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "street_sneakers",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#c5b39c",
+       "#96806c",
+       "#a6917c",
+       "#b5a28c",
+       "#d5c4ac",
+       "#e4d5bc",
+       "#f4e6cc"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "street_beanie",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#473e3f",
+       "#221e22",
+       "#2e292c",
+       "#3b3335",
+       "#534949",
+       "#605352",
+       "#6c5e5c"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -8171,6 +8641,20 @@
    ]
   },
   {
+   "id": "street_jacket",
+   "name": "街頭寬鬆夾克",
+   "glam": true,
+   "dye": [
+    "#c5b39c",
+    "#96806c",
+    "#a6917c",
+    "#b5a28c",
+    "#d5c4ac",
+    "#e4d5bc",
+    "#f4e6cc"
+   ]
+  },
+  {
    "id": "bard_garb",
    "name": "吟遊詩人斗篷",
    "keepGear": true,
@@ -8459,6 +8943,20 @@
    ]
   },
   {
+   "id": "street_pants",
+   "name": "街頭工作寬褲",
+   "glam": true,
+   "dye": [
+    "#473e3f",
+    "#221e22",
+    "#2e292c",
+    "#3b3335",
+    "#534949",
+    "#605352",
+    "#6c5e5c"
+   ]
+  },
+  {
    "id": "bard_pants",
    "name": "吟遊詩人長褲",
    "keepGear": true,
@@ -8677,6 +9175,20 @@
    ]
   },
   {
+   "id": "street_sneakers",
+   "name": "街頭厚底球鞋",
+   "glam": true,
+   "dye": [
+    "#c5b39c",
+    "#96806c",
+    "#a6917c",
+    "#b5a28c",
+    "#d5c4ac",
+    "#e4d5bc",
+    "#f4e6cc"
+   ]
+  },
+  {
    "id": "bard_boots",
    "name": "吟遊詩人靴",
    "keepGear": true,
@@ -8847,6 +9359,22 @@
     "#5f4548",
     "#6c4e51",
     "#78585a"
+   ]
+  },
+  {
+   "id": "street_beanie",
+   "name": "街頭毛帽",
+   "sheet": null,
+   "glam": true,
+   "hideHair": false,
+   "dye": [
+    "#473e3f",
+    "#221e22",
+    "#2e292c",
+    "#3b3335",
+    "#534949",
+    "#605352",
+    "#6c5e5c"
    ]
   },
   {
