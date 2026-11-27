@@ -6851,7 +6851,8 @@ function scrRender() {
   }
   // 最近兩行紀錄
   g.textAlign = 'left'; g.fillStyle = '#7f8cb0'; g.font = `11px ${SCR_FONT}`;
-  (v.log || []).slice(-2).forEach((l, q) => g.fillText(l, 10, SCR_H - 18 + q * 14, SCR_W - 20));
+  const scrLog = sc.game === 'mary' && S.scrMary?.logSnap ? S.scrMary.logSnap : (v.log || []);
+  scrLog.slice(-2).forEach((l, q) => g.fillText(l, 10, SCR_H - 18 + q * 14, SCR_W - 20));
 }
 // 轉播清單視窗
 function openScrPick() {
@@ -8631,7 +8632,8 @@ function onNetTpb(m) { const P = S.pb; if (P && P.role === 'spec') pbApplySnap(P
 // 獎池可以「兌換」成角色經驗值（1 經驗值＝100 籌碼，真兌換：XP 不回饋籌碼）——登入者由伺服器記帳，
 // 訪客的 XP 在本機（S.profile.xp），這裡直接加＋演出；離座時的虧損由伺服器換成入座抽到的島主的經驗值。
 const MARY_W = 320, MARY_H = 480;   // 機台畫面（CSS px；畫布內部再 ×2，放大不糊）
-const MARY_SHOW_MS = 5400;   // 勇者挑戰＋拉霸演出的總時長（0～1.2s 揮砍、1.2～2.2s 打倒、2.2～4.2s 拉霸轉動〔3.4s 起逐格停〕、4.2s 起亮結果）
+const MARY_SHOW_MS = 5400;   // 勇者挑戰＋拉霸演出的總時長（先對打 MARY_FIGHT_S 秒，之後才轉拉霸、亮結果）
+const MARY_FIGHT_S = 2;      // 勇者對島主先打滿這幾秒（人要留在畫面上），之後才亮拉霸結果與開獎紀錄
 const MARY_DBL_S = 2;        // 猜大小的轉燈：左右兩個 ONCE MORE 輪流閃 2 秒才開牌（2026-11-22 使用者定：燈效停止後才扣錢／發籌碼）
 const MARY_DBL_TAIL = 1.2;   // 開牌後亮邊再脈動 1.2 秒（之後定格亮著，直到下一次開獎／領出）
 const MARY_AMTS = [10, 50, 100, 500, 1000, 5000];   // 每注金額鈕
@@ -8742,16 +8744,19 @@ function maryPaint(cvIn) {   // 畫整台小瑪莉（靜態重建與開獎動畫
   const sp2 = S.mary?.showPlay, st2 = sp2 ? (performance.now() - sp2.t0) / 1000 : 0;
   g.save(); g.beginPath(); g.rect(ix + 2, iy + 2, iw - 4, ih - 4); g.clip();       // 島主與勇者只畫在藍色區裡
   maryMob(g, owner, ix + iw / 2, iy + 46 + (ih - 46) * .58, 70, Math.floor(S.t * 6) % 6);   // 島主（幀會動；入座開局時隨機跳一位）——上方讓位給拉霸
-  if (sp2 && st2 < 2.2) {   // 勇者挑戰島主：從左邊滑進來揮砍（打倒時島主金光閃爍）
-    const hx = ix + 22 + Math.min(1, st2 / .5) * 16, hy = iy + 92;
-    const heroImg = S.charImgs?.['char_body_light.png'];
-    if (heroImg) g.drawImage(heroImg, 0, 0, 64, 64, hx - 14, hy - 22, 28, 44);
-    else { g.fillStyle = '#e8c8a8'; g.fillRect(hx - 8, hy - 16, 16, 32); }
+  if (sp2 && st2 < MARY_FIGHT_S) {   // 勇者挑戰島主：打滿 2 秒才亮結果（從左邊滑進來揮砍；打倒時島主金光閃爍）
+    const hx = ix + 28 + Math.min(1, st2 / .5) * 18, foot = iy + ih - 8;
+    const heroImg = maryHeroSprite();
+    g.imageSmoothingEnabled = false;
+    if (heroImg) {
+      const hh = 58, hw = heroImg.width * (hh / heroImg.height);
+      g.drawImage(heroImg, hx - hw * .42, foot - hh, hw, hh);
+    } else { g.fillStyle = '#e8c8a8'; g.fillRect(hx - 8, foot - 36, 16, 32); }
     g.fillStyle = '#ffffff'; g.font = 'bold 9px "Microsoft JhengHei"'; g.textAlign = 'center';
-    g.fillText('勇者', hx, hy + 12);
-    if (st2 > .5 && st2 < 1.0) {   // 揮砍特效
-      g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.globalAlpha = 1 - (st2 - .5) / .5;
-      g.beginPath(); g.moveTo(hx + 26, hy - 30); g.lineTo(hx + 50, hy + 4); g.stroke();
+    g.fillText('勇者', hx, foot - 60);
+    if (st2 > .55 && st2 < 1.35) {   // 揮砍特效
+      g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.globalAlpha = 1 - (st2 - .55) / .8;
+      g.beginPath(); g.moveTo(hx + 18, foot - 48); g.lineTo(hx + 46, foot - 16); g.stroke();
       g.globalAlpha = 1;
     }
     if (sp2.heroWin && st2 >= 1.2 && Math.floor(S.t * 8) % 2 === 0) { g.fillStyle = 'rgba(255,240,160,.4)'; g.fillRect(ix + 2, iy + 40, iw - 4, ih - 42); }
@@ -8765,13 +8770,13 @@ function maryPaint(cvIn) {   // 畫整台小瑪莉（靜態重建與開獎動畫
     g.fillStyle = '#140a08'; g.fillRect(rx, ry, rw, rh);
     g.strokeStyle = '#3a2018'; g.lineWidth = 1; g.strokeRect(rx + .5, ry + .5, rw - 1, rh - 1);
     let sym;
-    if (sp2 && sp2.heroWin) sym = st2 >= 3.4 + i * .4 ? sp2.reels[i] : cols[(Math.floor(S.t * 15) + i * 3) % 8];   // 打倒島主才轉拉霸：轉動中快速跳格，依序停格（cols＝伺服器送來的 8 種圖案）
+    if (sp2 && sp2.heroWin && st2 >= MARY_FIGHT_S) sym = st2 >= MARY_FIGHT_S + 1.2 + i * .4 ? sp2.reels[i] : cols[(Math.floor(S.t * 15) + i * 3) % 8];   // 對打 2 秒後才轉拉霸：轉動中快速跳格，依序停格（cols＝伺服器送來的 8 種圖案）
     else sym = (sp2 ? sp2.reels : ma.show?.reels)?.[i] || ['chicken', 'bunny', 'frog'][i];   // 戰敗／平常：暗暗顯示上一次的結果（戰敗的 reels 是 null）
     if (!sp2) g.globalAlpha = .5;
     maryMob(g, sym, rx + rw / 2, ry + rh / 2, rh - 6);
     g.globalAlpha = 1;
   }
-  if (sp2 && sp2.triple && st2 >= 4.2 && Math.floor(S.t * 6) % 2 === 0) {   // 三同：拉霸窗外框金光閃爍
+  if (sp2 && sp2.triple && st2 >= MARY_FIGHT_S + 2.2 && Math.floor(S.t * 6) % 2 === 0) {   // 三同：拉霸窗外框金光閃爍
     g.strokeStyle = '#ffd24a'; g.lineWidth = 2; g.strokeRect(rx0 - 3.5, ry - 3.5, rw * 3 + rgap * 2 + 7, rh + 7);
   }
   g.font = 'bold 9px "Microsoft JhengHei"'; g.fillStyle = '#e8f0ff'; g.textAlign = 'right';
@@ -8984,6 +8989,9 @@ function maryFrame() {
     }
   }
   maryPaint();
+  const wait = maryLogPending(M);
+  if (M.logWait && !wait) marySyncLog();   // 跑燈停了、或對打滿 2 秒：這時才把「開出／沒押中／猜大」寫進紀錄
+  M.logWait = wait;
   const dblRun = !!(S.mary?.dbl && performance.now() - S.mary.dbl.t0 < (MARY_DBL_S + MARY_DBL_TAIL) * 1000);
   if (S.mary?.spin || S.mary?.showPlay || dblRun) S.maryRaf = requestAnimationFrame(maryFrame); else S.maryRaf = 0;   // 演出播放中也要連續重畫
 }
@@ -8999,6 +9007,9 @@ function marySkip() {   // 「停止」：直接把跑馬燈跳到伺服器開�
   else if (ma2) M.potShown = ma2.pot || 0;
   if (M.chainHold && ma2 && !(ma2.lights > 0)) { M.chainHold = false; M.chainEnd = ma2.seq; }   // 燈全部跑完：解除凍結
   maryPaint();
+  const wait = maryLogPending(M);
+  if (M.logWait && !wait) marySyncLog();
+  M.logWait = wait;
   if (M.showPlay) S.maryRaf = requestAnimationFrame(maryFrame);   // 演出接著播
   maryLightsNext();   // 送燈：跳到結果也照樣接著自動多開（演出中會自動等）
 }
@@ -9035,12 +9046,42 @@ function maryGlow() {   // JP 橫幅的閃爍：桌面開著時每 0.5 秒重畫
   if (!S.mary?.spin && !S.mary?.showPlay && !(S.mary?.dbl && performance.now() - S.mary.dbl.t0 < (MARY_DBL_S + MARY_DBL_TAIL) * 1000)) maryPaint();
   maryGlowTimer = setTimeout(maryGlow, 500);
 }
+function maryHeroSprite() {   // 中間對戰的勇者：玩家現在的人物（朝右站著）。舊的 char_body_light.png 已隨 LPC 換掉，那一格是空的
+  const fi = S.avatar?.frames?.states?.right_idle?.[0];
+  if (fi == null) return null;
+  const look = S.me || { race: S.avatar.races?.[0]?.id };
+  return look?.race || S.avatar.races?.[0] ? charSprite(look, fi) : null;
+}
+function maryLogPending(M) {   // 開獎紀錄先別亮：跑馬燈還沒停、比倍燈還沒停、或勇者對打的 2 秒還沒完
+  if (!M) return false;
+  if (M.spin || M.showPending) return true;
+  if (M.dbl && !M.dbl.done) return true;
+  return !!(M.showPlay && (performance.now() - M.showPlay.t0) / 1000 < MARY_FIGHT_S);
+}
+function maryLogFor(v, M) {   // 小瑪莉的紀錄。結果那幾行（開出／沒押中／猜大…）等跑燈或對打結束才併進來；入座、領出這種不在等的，到了就顯示
+  const cur = v?.log || [];
+  if (!M) return cur;
+  if (M.logSnap == null) M.logSnap = cur.slice();
+  if (!maryLogPending(M)) M.logSnap = cur.slice();
+  return M.logSnap;
+}
+function marySyncLog() {   // 跑燈或對打結束：面板上的紀錄補上這次的結果（不必整頁重建）
+  const el = document.getElementById('maryLog'), v = S.tableView, M = S.mary;
+  if (!el || !v || v.game !== 'mary' || !M) return;
+  el.replaceChildren();
+  for (const l of tableLogLines({ ...v, log: maryLogFor(v, M) })) {
+    const d = document.createElement('div');
+    if (l.startsWith('你獲得')) d.className = 'table-xp';
+    d.textContent = l;
+    el.appendChild(d);
+  }
+}
 function maryShowNote(sp, nm) {   // 勇者挑戰＋拉霸演出的字幕（照時間軸換句）
   const t = (performance.now() - sp.t0) / 1000;
-  if (!sp.heroWin) return t < 1.2 ? '勇者現身，挑戰島主！' : '勇者挑戰失敗…';
-  if (t < 1.2) return '勇者現身，挑戰島主！';
-  if (t < 2.2) return '勇者打倒了島主！拉霸啟動！';
-  if (t < 4.2) return '';   // 拉霸轉動中（畫面自己說話）
+  if (t < MARY_FIGHT_S) return '勇者現身，挑戰島主！';
+  if (!sp.heroWin) return '勇者挑戰失敗…';
+  if (t < MARY_FIGHT_S + 1) return '勇者打倒了島主！拉霸啟動！';
+  if (t < MARY_FIGHT_S + 2.2) return '';   // 拉霸轉動中（畫面自己說話）
   if (sp.triple === 'gold_dragon') return `三個黃金肥龍！獨得獎池 ${sp.prize.toLocaleString('en-US')}！`;
   if (sp.triple) return `三同 ${nm[sp.triple] || sp.triple}！贏 ${sp.prize.toLocaleString('en-US')}`;
   return '拉霸沒有中…';
@@ -9454,8 +9495,8 @@ function buildMary(box, v, mk, gd) {
   }
   box.appendChild(btns);
   if (v.specs) box.appendChild(mk('div', 'table-tag', `${v.specs} 人觀戰中`));
-  const log = mk('div', 'table-log');
-  for (const l of tableLogLines(v)) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));
+  const log = mk('div', 'table-log'); log.id = 'maryLog';
+  for (const l of tableLogLines({ ...v, log: maryLogFor(v, S.mary) })) log.appendChild(mk('div', l.startsWith('你獲得') ? 'table-xp' : null, l));   // 跑燈、對打、比倍轉燈沒結束前，先不印這一注的開出／沒押中／猜大
   box.appendChild(log);
   if (gd?.rules) box.appendChild(mk('div', 'table-rules', gd.rules));
 }
@@ -10471,8 +10512,9 @@ function scrG2048(g, v, MX, MY, MW, MH) {
 // 大螢幕：小瑪莉（2026-11-23，使用者要求）——不用改伺服器：螢幕收到的 scr 畫面（tblView 的 SCR_CID 版）本來就帶 v.ma（獎池／押注／開獎格／勇者演出，只有籌碼餘額不送）。
 // 機台畫面直接重用 maryPaint（暫時把 S.mary／S.tableView／S.maryBets 換成螢幕自己的，畫完換回來）畫到離屏畫布再縮小；
 // 跑馬燈與勇者演出的動畫狀態是螢幕自己維護的一份（scrMaryTick，簡化版的 maryFrame：不出聲音、不處理比倍轉燈與送燈鏈，比倍只直接顯示結果）。
-function scrMaryTick(M, ma) {
+function scrMaryTick(M, ma, log) {
   const now = performance.now();
+  const lines = log || [];
   if (M.seq == null || ma.seq < M.seq) {   // 剛開螢幕、或換了一場（seq 重來）：直接停在目前狀態，不補播
     Object.assign(M, { seq: ma.seq, pos: ma.last >= 0 ? ma.last : 0, spin: null, showPlay: null, showPending: null, showSeq: ma.show ? ma.show.seq : 0, res: ma.rseq === ma.seq ? ma.seq : -1, last: ma.last,
       potShown: ma.pot || 0, jpShown: ma.jp || 0, jpSeen: ma.jp || 0, chainHold: false, chainFlash: false, chainEnd: 0, chainPot: 0, dbl: null, lastFrame: now });
@@ -10501,11 +10543,13 @@ function scrMaryTick(M, ma) {
   }
   if (M.chainHold && !M.spin && !(ma.lights > 0)) { M.chainHold = false; M.chainEnd = ma.seq; }
   M.lastFrame = now;
+  if (!maryLogPending(M)) M.logSnap = lines.slice();   // 跑燈與對打沒結束前，大螢幕底下那兩行先維持上一筆紀錄
+  else if (M.logSnap == null) M.logSnap = lines.slice();
 }
 function scrMary(g, v, MX, MY, MW, MH) {
   const ma = v.ma; if (!ma || !ma.ring) return;
   const M = (S.scrMary ||= { seq: null });
-  scrMaryTick(M, ma);
+  scrMaryTick(M, ma, v.log);
   const cvm = (S.scrMaryCv ||= Object.assign(document.createElement('canvas'), { width: MARY_W * 2, height: MARY_H * 2 })), sv = [S.mary, S.tableView, S.maryBets];
   S.mary = M; S.tableView = { ...v, role: 'spec' }; S.maryBets = null;
   try { maryPaint(cvm); } finally { [S.mary, S.tableView, S.maryBets] = sv; }
