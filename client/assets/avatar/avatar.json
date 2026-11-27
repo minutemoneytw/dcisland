@@ -2421,13 +2421,8 @@
      ],
      "top": [
       {
-       "id": "suit_jacket",
-       "name": "女式西裝外套",
-       "sheets": {}
-      },
-      {
        "id": "suit_jacket_m",
-       "name": "男式西裝外套",
+       "name": "西裝外套",
        "sheets": {
         "top": "human2_m_top.png"
        }
@@ -2567,7 +2562,7 @@
       },
       {
        "id": "uk_trousers",
-       "name": "英倫長褲",
+       "name": "英倫格紋長褲",
        "sheets": {
         "bottom": "human2_u_bottom.png"
        }
@@ -2640,13 +2635,6 @@
        "name": "騎士靴",
        "sheets": {
         "shoes": "human2_k_shoes.png"
-       }
-      },
-      {
-       "id": "uk_boots",
-       "name": "英倫皮靴",
-       "sheets": {
-        "shoes": "human2_u_shoes.png"
        }
       }
      ],
@@ -3302,22 +3290,6 @@
       ]
      },
      {
-      "slot": "shoe",
-      "style": "uk_boots",
-      "layers": [
-       "shoes"
-      ],
-      "colors": [
-       "#5d3d29",
-       "#241610",
-       "#372318",
-       "#4a3021",
-       "#704a31",
-       "#83573a",
-       "#966442"
-      ]
-     },
-     {
       "slot": "hat",
       "style": "uk_cap",
       "layers": [
@@ -3495,13 +3467,8 @@
      ],
      "top": [
       {
-       "id": "suit_jacket",
-       "name": "女式西裝外套",
-       "sheets": {}
-      },
-      {
        "id": "suit_jacket_m",
-       "name": "男式西裝外套",
+       "name": "西裝外套",
        "sheets": {
         "top": "human2_m_top.png"
        }
@@ -3641,7 +3608,7 @@
       },
       {
        "id": "uk_trousers",
-       "name": "英倫長褲",
+       "name": "英倫格紋長褲",
        "sheets": {
         "bottom": "human2_u_bottom.png"
        }
@@ -3714,13 +3681,6 @@
        "name": "騎士靴",
        "sheets": {
         "shoes": "human2_k_shoes.png"
-       }
-      },
-      {
-       "id": "uk_boots",
-       "name": "英倫皮靴",
-       "sheets": {
-        "shoes": "human2_u_shoes.png"
        }
       }
      ],
@@ -4378,22 +4338,6 @@
       ]
      },
      {
-      "slot": "shoe",
-      "style": "uk_boots",
-      "layers": [
-       "shoes"
-      ],
-      "colors": [
-       "#5d3d29",
-       "#241610",
-       "#372318",
-       "#4a3021",
-       "#704a31",
-       "#83573a",
-       "#966442"
-      ]
-     },
-     {
       "slot": "hat",
       "style": "uk_cap",
       "layers": [
@@ -4572,13 +4516,8 @@
      ],
      "top": [
       {
-       "id": "suit_jacket",
-       "name": "女式西裝外套",
-       "sheets": {}
-      },
-      {
        "id": "suit_jacket_m",
-       "name": "男式西裝外套",
+       "name": "西裝外套",
        "sheets": {
         "top": "human2_m_top.png"
        }
@@ -4718,7 +4657,7 @@
       },
       {
        "id": "uk_trousers",
-       "name": "英倫長褲",
+       "name": "英倫格紋長褲",
        "sheets": {
         "bottom": "human2_u_bottom.png"
        }
@@ -4791,13 +4730,6 @@
        "name": "騎士靴",
        "sheets": {
         "shoes": "human2_k_shoes.png"
-       }
-      },
-      {
-       "id": "uk_boots",
-       "name": "英倫皮靴",
-       "sheets": {
-        "shoes": "human2_u_shoes.png"
        }
       }
      ],
@@ -5455,22 +5387,6 @@
       ]
      },
      {
-      "slot": "shoe",
-      "style": "uk_boots",
-      "layers": [
-       "shoes"
-      ],
-      "colors": [
-       "#5d3d29",
-       "#241610",
-       "#372318",
-       "#4a3021",
-       "#704a31",
-       "#83573a",
-       "#966442"
-      ]
-     },
-     {
       "slot": "hat",
       "style": "uk_cap",
       "layers": [
@@ -5647,13 +5563,8 @@
      ],
      "top": [
       {
-       "id": "suit_jacket",
-       "name": "女式西裝外套",
-       "sheets": {}
-      },
-      {
        "id": "suit_jacket_m",
-       "name": "男式西裝外套",
+       "name": "西裝外套",
        "sheets": {
         "top": "dwarf2_m_top.png"
        }
@@ -5793,7 +5704,7 @@
       },
       {
        "id": "uk_trousers",
-       "name": "英倫長褲",
+       "name": "英倫格紋長褲",
        "sheets": {
         "bottom": "dwarf2_u_bottom.png"
        }
@@ -5866,13 +5777,6 @@
        "name": "騎士靴",
        "sheets": {
         "shoes": "dwarf2_k_shoes.png"
-       }
-      },
-      {
-       "id": "uk_boots",
-       "name": "英倫皮靴",
-       "sheets": {
-        "shoes": "dwarf2_u_shoes.png"
        }
       }
      ],
@@ -6528,22 +6432,6 @@
       ]
      },
      {
-      "slot": "shoe",
-      "style": "uk_boots",
-      "layers": [
-       "shoes"
-      ],
-      "colors": [
-       "#5d3d29",
-       "#241610",
-       "#372318",
-       "#4a3021",
-       "#704a31",
-       "#83573a",
-       "#966442"
-      ]
-     },
-     {
       "slot": "hat",
       "style": "uk_cap",
       "layers": [
@@ -6723,13 +6611,8 @@
      ],
      "top": [
       {
-       "id": "suit_jacket",
-       "name": "女式西裝外套",
-       "sheets": {}
-      },
-      {
        "id": "suit_jacket_m",
-       "name": "男式西裝外套",
+       "name": "西裝外套",
        "sheets": {
         "top": "giant2_m_top.png"
        }
@@ -6869,7 +6752,7 @@
       },
       {
        "id": "uk_trousers",
-       "name": "英倫長褲",
+       "name": "英倫格紋長褲",
        "sheets": {
         "bottom": "giant2_u_bottom.png"
        }
@@ -6942,13 +6825,6 @@
        "name": "騎士靴",
        "sheets": {
         "shoes": "giant2_k_shoes.png"
-       }
-      },
-      {
-       "id": "uk_boots",
-       "name": "英倫皮靴",
-       "sheets": {
-        "shoes": "giant2_u_shoes.png"
        }
       }
      ],
@@ -7604,22 +7480,6 @@
       ]
      },
      {
-      "slot": "shoe",
-      "style": "uk_boots",
-      "layers": [
-       "shoes"
-      ],
-      "colors": [
-       "#5d3d29",
-       "#241610",
-       "#372318",
-       "#4a3021",
-       "#704a31",
-       "#83573a",
-       "#966442"
-      ]
-     },
-     {
       "slot": "hat",
       "style": "uk_cap",
       "layers": [
@@ -7731,19 +7591,8 @@
  ],
  "tops": [
   {
-   "id": "suit_jacket",
-   "name": "女式西裝外套",
-   "glam": true,
-   "dye": [
-    "#3c3434",
-    "#4e4646",
-    "#221c1c",
-    "#110e0e"
-   ]
-  },
-  {
    "id": "suit_jacket_m",
-   "name": "男式西裝外套",
+   "name": "西裝外套",
    "glam": true,
    "dye": [
     "#2f211e",
@@ -8141,7 +7990,7 @@
   },
   {
    "id": "uk_trousers",
-   "name": "英倫長褲",
+   "name": "英倫格紋長褲",
    "glam": true,
    "dye": [
     "#4a3e3a",
@@ -8341,20 +8190,6 @@
     "#fffdfa",
     "#9895a0",
     "#84808e"
-   ]
-  },
-  {
-   "id": "uk_boots",
-   "name": "英倫皮靴",
-   "glam": true,
-   "dye": [
-    "#5d3d29",
-    "#241610",
-    "#372318",
-    "#4a3021",
-    "#704a31",
-    "#83573a",
-    "#966442"
    ]
   },
   {

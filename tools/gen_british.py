@@ -1,4 +1,4 @@
-"""英倫風格外觀（報童帽／格紋披肩外套／長褲／皮靴）的像素資料（2026-11-27，使用者給的英倫偵探例圖：棕色格紋八角報童帽＋帽帶金扣、
+"""英倫風格外觀（報童帽／格紋披肩外套／格紋長褲）的像素資料（2026-11-27，使用者給的英倫偵探例圖：棕色格紋八角報童帽＋帽帶金扣、
 格紋短披肩外套＋米白滾邊、胸前酒紅背心＋白襯衫領＋領帶、深棕長褲反摺褲管、棕色皮靴）。這是「外觀」（glam，不是職業裝備）。
 
 做法同 gen_bard.py：幾何（9 格的輪廓、肩寬、袖子、手、腿）沿用男式西裝（gen_male.DATA），逐字母換成英倫配色，再用規則疊特徵：
@@ -21,7 +21,6 @@ def ramp(dark, light, n=7):
 
 TWEED = ramp((44, 30, 26), (168, 136, 112))          # 格紋外套／帽子的棕色（0 最暗 … 6 最亮）；dye 的主色＝TWEED[3]
 PANTS = ramp((30, 24, 24), (118, 100, 92))           # 深棕灰長褲
-BOOT = ramp((36, 22, 16), (150, 100, 66))            # 棕色皮靴
 CREAM = dict(d=(190, 168, 140), m=(226, 208, 178), l=(250, 242, 222))   # 格線、滾邊、襯衫領
 VEST = dict(d=(86, 22, 30), m=(128, 34, 42), l=(172, 56, 58))           # 酒紅背心／領帶
 GOLD = dict(d=(128, 96, 56), m=(190, 150, 90), l=(236, 204, 140))       # 金釦、帽帶扣
@@ -104,11 +103,20 @@ def british_top(kind, x0, y0, rows):
         for x in range(e[0], e[1] + 1):
             if (x, CAPE - 1) in g.px and g.src.get((x, CAPE - 1)) not in SKIN and g.src.get((x, CAPE - 1)) not in SHIRT:
                 g.px[(x, CAPE - 1)] = CREAM['m'] if x <= cx else CREAM['d']
-        if kind != 'left':                                   # 披肩角：正面／背面左右各外凸 1 格
+        if kind != 'left':                                   # 披肩角：正面／背面左右各外凸 2 格（2026-11-27 使用者要求披肩加寬一格：原本 1 格）
             for y in (CAPE - 2, CAPE - 1):
-                for x in (e[0] - 1, e[1] + 1):
+                for x in (e[0] - 2, e[0] - 1, e[1] + 1, e[1] + 2):
                     if (x, y) not in g.px and (x, y) not in g.src:
-                        g.px[(x, y)] = CREAM['m'] if y == CAPE - 1 else TWEED[0]
+                        g.px[(x, y)] = CREAM['m'] if y == CAPE - 1 else plaid(x, y, 3)
+            for y in (CAPE - 2, CAPE - 1):                   # 外緣一格描邊色
+                for x in (e[0] - 2, e[1] + 2):
+                    if (x, y) in g.px:
+                        g.px[(x, y)] = TWEED[0]
+        else:                                                # 側面：披肩往身後（右）多 1 格
+            for y in range(3, CAPE):
+                ey = g.row_ext(y)
+                if ey and (ey[1] + 1, y) not in g.px:
+                    g.px[(ey[1] + 1, y)] = CREAM['m'] if y == CAPE - 1 else plaid(ey[1] + 1, y, 3)
     # 袖口：手上面 1 排換米白（正面／背面兩隻手、側面一隻手）
     skin = [(x, y) for (x, y), ch in g.src.items() if ch in SKIN and y >= 8]
     for (x, y) in skin:
@@ -170,31 +178,29 @@ def gb_skin(ch):
     return _SKIN_COL[ch]
 
 
+def plaid_p(x, y, i):
+    """長褲的格紋：同一組褲色階，格線比底色亮兩階（交叉處亮三階），比外套的格紋更暗、更細。"""
+    v, h = (x % 5 == 2), (y % 4 == 1)
+    if v and h:
+        return PANTS[min(6, i + 3)]
+    if v or h:
+        return PANTS[min(6, i + 2)]
+    return PANTS[i]
+
+
 def british_bottom(kind, x0, y0, rows):
     g = Grid(x0, y0, rows, 'bottom')
     for (x, y), ch in g.src.items():
-        i = min(6, _src_idx(ch))
-        g.px[(x, y)] = PANTS[i]
+        i = min(5, _src_idx(ch))
+        g.px[(x, y)] = PANTS[i] if i <= 1 else plaid_p(x, y, min(i, 3))     # a、b＝外框／最暗不畫格紋
     n = g.h
-    for (x, y), ch in g.src.items():                        # 褲管反摺：最後兩排淺一階，上緣一條淺線
+    for (x, y), ch in g.src.items():                        # 褲管反摺：最後兩排淺一階（無格紋），上緣一條暗線
         if y == n - 2:
             g.px[(x, y)] = PANTS[5]
         elif y == n - 1:
             g.px[(x, y)] = PANTS[4]
         elif y == n - 3:
             g.px[(x, y)] = PANTS[1]
-    return g.out()
-
-
-def british_shoes(kind, x0, y0, rows):
-    g = Grid(x0, y0, rows, 'shoes')
-    for (x, y), ch in g.src.items():
-        i = min(6, _src_idx(ch))
-        g.px[(x, y)] = BOOT[i]
-        if y == 0:
-            g.px[(x, y)] = BOOT[5]                            # 靴口一排淺棕
-        elif y == 1:
-            g.px[(x, y)] = BOOT[3]
     return g.out()
 
 
@@ -268,7 +274,7 @@ def hat_pixels(kind, cx, top):
 
 
 def british_sheets():
-    fns = {'top': british_top, 'bottom': british_bottom, 'shoes': british_shoes}
+    fns = {'top': british_top, 'bottom': british_bottom}
     out = {n: Img(gs.SHEET_W, gs.SHEET_H) for n in list(fns) + ['hat']}
     for d, row in gs.WALK_ROW.items():
         kind = ROW['left' if d == 'right' else d]
