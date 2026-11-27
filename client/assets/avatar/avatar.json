@@ -2653,6 +2653,10 @@
        "name": "賢者貝雷帽",
        "hairFromHat": true,
        "hairCutDy": -8,
+       "hairCutDyByRow": {
+        "9": -16,
+        "10": -16
+       },
        "sheets": {
         "hat": "human2_s_hat.png"
        }
@@ -3629,6 +3633,10 @@
        "name": "賢者貝雷帽",
        "hairFromHat": true,
        "hairCutDy": -8,
+       "hairCutDyByRow": {
+        "9": -16,
+        "10": -16
+       },
        "sheets": {
         "hat": "human2_s_hat.png"
        }
@@ -4608,6 +4616,10 @@
        "name": "賢者貝雷帽",
        "hairFromHat": true,
        "hairCutDy": -8,
+       "hairCutDyByRow": {
+        "9": -16,
+        "10": -16
+       },
        "sheets": {
         "hat": "human2_s_hat.png"
        }
@@ -5585,6 +5597,10 @@
        "name": "賢者貝雷帽",
        "hairFromHat": true,
        "hairCutDy": -8,
+       "hairCutDyByRow": {
+        "9": -16,
+        "10": -16
+       },
        "sheets": {
         "hat": "dwarf2_s_hat.png"
        }
@@ -6563,6 +6579,10 @@
        "name": "賢者貝雷帽",
        "hairFromHat": true,
        "hairCutDy": -8,
+       "hairCutDyByRow": {
+        "9": -16,
+        "10": -16
+       },
        "sheets": {
         "hat": "giant2_s_hat.png"
        }

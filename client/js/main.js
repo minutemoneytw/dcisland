@@ -2994,7 +2994,7 @@ function chibiSprite(race, look, fi, sleep) {   // sleep：睡姿用——body �
     if (n === 'hat' && hts && !hts.hideHair) {   // 戴帽子：種族自己的 hat 層（妖精／貓族的耳朵）先畫，帽子再蓋上去（頭盔連耳朵一起蓋住，不畫）
       const ear = S.charImgs[own.sheets.hat];
       if (ear && idleSx + cw <= ear.width && sy + ch <= ear.height) {   // 帽沿以上的耳朵（貓耳）被帽子蓋住不畫，帽沿以下的（妖精的尖耳）照畫
-        const cut = Math.max(0, Math.min(ch, hatBottom + 1 + (hts.hairCutDy || 0)));
+        const cut = Math.max(0, Math.min(ch, hatBottom + 1 + (hts.hairCutDyByRow?.[cr] ?? hts.hairCutDy ?? 0)));
         g.drawImage(ear, idleSx, sy + cut, cw, ch - cut, 0, cut, cw, ch - cut);
       }
     }
@@ -3003,7 +3003,7 @@ function chibiSprite(race, look, fi, sleep) {   // sleep：睡姿用——body �
     if (!img || lsx + cw > img.width || sy + ch > img.height) continue;
     for (const r of rules) if (r.hex && r.layers.includes(ln)) img = dyeSheet(img, r.colors, r.hex);   // 同一張圖可以被多條規則依序換色（例如 bottom 層：圍裙下擺跟上衣、褲子跟褲子）
     if (n === 'hair' && hatBottom >= 0) {
-      const cut = Math.max(0, Math.min(ch, hatBottom + 1 + (hts.hairCutDy || 0)));
+      const cut = Math.max(0, Math.min(ch, hatBottom + 1 + (hts.hairCutDyByRow?.[cr] ?? hts.hairCutDy ?? 0)));   // hairCutDyByRow＝某一列（方向）另外指定的切線位移（賢者貝雷帽正面有垂尾，帽子最低排比背面低很多，要另外拉回跟背面同高）
       g.drawImage(img, lsx, sy + cut, cw, ch - cut, 0, cut, cw, ch - cut);
       continue;
     }
