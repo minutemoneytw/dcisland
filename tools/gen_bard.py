@@ -389,6 +389,9 @@ def hat_pixels(kind, cx, top):
     return out
 
 
+HAND_HAT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'hand', 'bard_hat_human.png')   # 使用者給的帽子圖（走路列 9 欄×4 方向，在整張 sheet 的 (13, 512) 起），疊在舊版上存成整張 RGBA；改圖直接改這個檔再重跑 gen_assets.py
+
+
 def bard_sheets():
     fns = {'top': bard_top, 'bottom': bard_bottom, 'shoes': bard_shoes}
     out = {n: Img(gs.SHEET_W, gs.SHEET_H) for n in list(fns) + ['hat']}
@@ -408,4 +411,7 @@ def bard_sheets():
                         continue
                     for col in cols:
                         out[nm].px[row * gs.CELL + y][col * gs.CELL + px] = c
+    if os.path.exists(HAND_HAT):      # 使用者手畫的人類吟遊詩人帽（2026-11-27）：整張換成他畫的（矮人、巨人由它縮放而來）
+        from gen_wmage import _read_rgba
+        out['hat'] = _read_rgba(HAND_HAT)
     return out
