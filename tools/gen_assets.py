@@ -629,6 +629,7 @@ import gen_sage   # 賢者套裝（tools/gen_sage.py：貝雷帽／長外套／�
 import gen_wmage   # 白魔法師套裝（tools/gen_wmage.py：帽子／長袍／長褲／靴子，同黑魔法師的做法）
 import gen_blm   # 黑魔法師套裝（tools/gen_blm.py：帽子／長袍／長褲／靴子，幾何沿用男式西裝）
 import gen_ninja   # 忍者套裝（tools/gen_ninja.py，幾何沿用男式西裝、換配色加圍巾／腰帶／肩甲／護腕）
+import gen_weapons   # 新風格人物的職業武器（2026-11-27，tools/gen_weapons.py：照人物 1 倍像素畫的精緻武器）
 import gen_male   # 男式西裝（外套／褲／鞋）的像素資料與遮罩（tools/gen_male.py）
 import gen_school   # 「新人類」分層 sheet（2026-11-22）：tools/gen_school.py；sheet 在這裡先畫好，換色規則要看實際用到的顏色
 SCHOOL_SHEETS = gen_school.build_sheets()
@@ -1181,6 +1182,10 @@ def with_glow(weapons):
             for k in ("carry", "back", "scale"):
                 if k in base:
                     g[k] = base[k]
+            for ck in ("carrySprite", "sideSprite"):   # 掛著時畫的圖（劍鞘裡的劍）、側面版也要有發光版
+                if base.get(ck):
+                    glow_image(base[ck], base[ck].replace(".png", f"_{suf}.png"), color, halo, (10 ** 6, 10 ** 6))
+                    g[ck] = base[ck].replace(".png", f"_{suf}.png")
             spr = base["sprite"]
             glow_image(spr, spr.replace(".png", f"_{suf}.png"), color, halo, (10 ** 6, 10 ** 6))
             g["sprite"] = spr.replace(".png", f"_{suf}.png")
@@ -4667,15 +4672,18 @@ def main():
     save(command_icon_act(), "command_act.png", "ui")      # 命令提示圖示（壓力山大）：行動＝走路小綠人
     save(command_icon_still(), "command_still.png", "ui")  # 靜止＝站立小紅人（main.js 的 CMD_ICONS 載入）
     print("== 武器 ==")
-    save(weapon_sword(), "weapon_sword.png", "avatar")
-    save(weapon_waraxe(), "weapon_waraxe.png", "avatar")
-    save(weapon_daggers(), "weapon_daggers.png", "avatar")
-    save(weapon_scepter(), "weapon_scepter.png", "avatar")
+    save(gen_weapons.sword(), "weapon_sword.png", "avatar")   # 2026-11-27 職業武器換成 gen_weapons 的精緻版（1 倍像素；賢具、釣竿沒動）
+    save(gen_weapons.sword_sheath(), "weapon_sword_sheath.png", "avatar")   # 騎士的劍掛在腰間時畫劍鞘裡的劍
+    save(gen_weapons.waraxe(), "weapon_waraxe.png", "avatar")
+    save(gen_weapons.dagger(), "weapon_daggers.png", "avatar")
+    save(gen_weapons.scepter(), "weapon_scepter.png", "avatar")
     save(seal_glyphs(), "seal_glyphs.png", "skills")
     save(weapon_tome(), "weapon_tome.png", "avatar")
-    save(weapon_harpbow(), "weapon_harpbow.png", "avatar")
-    save(weapon_lance(), "weapon_lance.png", "avatar")
-    save(weapon_staff(), "weapon_staff.png", "avatar")
+    save(gen_weapons.harpbow(), "weapon_harpbow.png", "avatar")
+    save(gen_weapons.lance(), "weapon_lance.png", "avatar")
+    save(gen_weapons.staff(), "weapon_staff.png", "avatar")
+    for nm in ("sword_sheath", "waraxe", "daggers", "scepter", "harpbow", "lance", "staff"):   # 側面版（掛著、朝左右走時畫這張；2026-11-27 使用者要求每把武器正面＋側面）
+        save(getattr(gen_weapons, {"daggers": "dagger"}.get(nm, nm) + "_side")(), f"weapon_{nm}_side.png", "avatar")
     save(weapon_rod(), "weapon_rod.png", "avatar")
     print("== 釣魚：魚類圖鑑 ==")
     for t, fid, name, rar, size, draw in FISH_TABLE:
@@ -4842,28 +4850,29 @@ def main():
             #        之後的 64px 武器模組照人物規格畫、不寫 scale 就是 1 倍
             # lpc＝LPC 武器圖層（畫在人物圖裡、跟手完全對齊；有這欄就不畫舊的小圖）：bg／fg＝一般格（走路、待機時拿在手上；bg 在身體後面、fg 在最上面），
             # over＝某個攻擊動作的超大格 sheet（size＝每格邊長，人物畫在格子正中央）。2026-11-09 騎士先換：LPC Arming Sword（steel）
-            dict(id="sword", name="長劍", type="sword", sprite="weapon_sword.png", carry="back", back="hilt", scale=2,
+            dict(id="sword", name="長劍", type="sword", sprite="weapon_sword.png", carry="waist", carrySprite="weapon_sword_sheath.png", sideSprite="weapon_sword_sheath_side.png",   # 2026-11-27 使用者要求：騎士的劍平常掛在腰間（掛著畫劍鞘裡的劍）；圖照人物 1 倍像素畫，不再標 scale 2
+                 
                  lpc=dict(bg="char_weapon_arming_bg.png", fg="char_weapon_arming_fg.png",
                           over=dict(slash=dict(size=128, bg="char_weapon_arming_slash_bg.png", fg="char_weapon_arming_slash_fg.png"),
                                     halfslash=dict(size=128, bg="char_weapon_arming_halfslash_bg.png", fg="char_weapon_arming_halfslash_fg.png")))),
-            dict(id="waraxe", name="戰斧", type="axe", sprite="weapon_waraxe.png", carry="back", scale=2,
+            dict(id="waraxe", name="戰斧", type="axe", sprite="weapon_waraxe.png", sideSprite="weapon_waraxe_side.png", carry="back",
                  lpc=dict(bg="char_weapon_waraxe_bg.png", fg="char_weapon_waraxe_fg.png",   # LPC 戰斧（waraxe）：走路一般格、揮砍 192 超大格
                           over=dict(slash=dict(size=192, bg="char_weapon_waraxe_slash_bg.png", fg="char_weapon_waraxe_slash_fg.png")))),
-            dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", scale=2, ranged=dict(range=400, cast=1.0, dmg=4, gap=0.2, slide=0.4, lvMul=4, splash=60),   # LPC 環頭杖（loop）；LPC 的杖只有突刺，攻擊／詠唱都播突刺
+            dict(id="staff", name="法杖", type="staff", sprite="weapon_staff.png", sideSprite="weapon_staff_side.png", ranged=dict(range=400, cast=1.0, dmg=4, gap=0.2, slide=0.4, lvMul=4, splash=60),   # LPC 環頭杖（loop）；LPC 的杖只有突刺，攻擊／詠唱都播突刺
                  lpc=dict(bg="char_weapon_loop_bg.png", fg="char_weapon_loop_fg.png",
                           over=dict(thrust=dict(size=192, bg="char_weapon_loop_thrust_bg.png", fg="char_weapon_loop_thrust_fg.png")))),   # ranged：遠距詠唱——射程 px、詠唱秒數、傷害；按攻擊會自動瞄準（島主優先）
             dict(id="tome", name="賢具", type="tome", sprite="weapon_tome.png", carry="waist", scale=2, ranged=dict(range=320, cast=0, dmg=1, shot="funnels")),   # 賢具＝浮游炮（FF14 nouliths）：不用詠唱，攻擊時四座賢具飛出、各朝目標射一道光束（main.js 的 fxk 'funnels'）；不用詠唱的 dmg 1（使用者定的平衡，同豎琴弓）
             # 豎琴弓：遠程但不用詠唱（cast 0＝按攻擊直接射箭；shot: "arrow"＝畫箭矢而不是光球）。dmg 1：加上輸出的 +1＝2，
             # 和忍者一樣；要詠唱的武器（咒杖等）才是 2＋1＝3（使用者定：不用詠唱的普攻都是 2）
-            dict(id="harpbow", name="豎琴弓", type="bow", sprite="weapon_harpbow.png", carry="back", ranged=dict(range=320, cast=0, dmg=1, shot="arrow"),
+            dict(id="harpbow", name="豎琴弓", type="bow", sprite="weapon_harpbow.png", sideSprite="weapon_harpbow_side.png", carry="back", ranged=dict(range=320, cast=0, dmg=1, shot="arrow"),
                  lpc=dict(bg="char_weapon_recurve_bg.png", fg="char_weapon_recurve_fg.png",   # LPC 反曲弓：射擊是一般格（前層含箭矢），走路是 128 超大格
                           over=dict(walk=dict(size=128, bg="char_weapon_recurve_walk_bg.png", fg="char_weapon_recurve_walk_fg.png")))),
-            dict(id="lance", name="長槍", type="lance", sprite="weapon_lance.png", carry="back",
+            dict(id="lance", name="長槍", type="lance", sprite="weapon_lance.png", sideSprite="weapon_lance_side.png", carry="back",
                  lpc=dict(over=dict(walk=dict(size=128, bg="char_weapon_dragonspear_walk_bg.png", fg="char_weapon_dragonspear_walk_fg.png"),   # LPC 龍槍：走路 128、突刺 192
                                     thrust=dict(size=192, bg="char_weapon_dragonspear_thrust_bg.png", fg="char_weapon_dragonspear_thrust_fg.png")))),
-            dict(id="daggers", name="短劍", type="daggers", sprite="weapon_daggers.png", carry="waist",   # 2026-11-09 換 LPC 短劍（dagger，單手；LPC 沒有雙持），名稱由「雙劍」改「短劍」
+            dict(id="daggers", name="短劍", type="daggers", sprite="weapon_daggers.png", sideSprite="weapon_daggers_side.png", carry="hips",   # hips＝左右腰各掛一把（2026-11-27 使用者要求）   # 2026-11-09 換 LPC 短劍（dagger，單手；LPC 沒有雙持），名稱由「雙劍」改「短劍」
                  lpc=dict(bg="char_weapon_dagger_bg.png", fg="char_weapon_dagger_fg.png")),
-            dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", ranged=dict(range=400, cast=0.8, dmg=6, gap=0, slide=0.4, lvMul=3, splash=70),
+            dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", sideSprite="weapon_scepter_side.png", ranged=dict(range=400, cast=0.8, dmg=6, gap=0, slide=0.4, lvMul=3, splash=70),
                  lpc=dict(bg="char_weapon_s_bg.png", fg="char_weapon_s_fg.png",   # LPC S 形杖（s）；只有突刺
                           over=dict(thrust=dict(size=192, bg="char_weapon_s_thrust_bg.png", fg="char_weapon_s_thrust_fg.png")))),   # gap：詠唱放完到下一次能開始的間隔（秒）；沒寫＝ATK_CD（0.45）。咒杖 gap=0＝連續施放，間隔就是詠唱時間
             dict(id="rod", name="釣竿", type="rod", sprite="weapon_rod.png", carry="back", fishing=True,   # fishing：拿著時左鍵／F 是釣魚，不能攻擊

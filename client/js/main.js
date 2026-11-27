@@ -3941,8 +3941,10 @@ function drawPersonBase(p, wi, nameColor) {
     const carry = wi && !pose && !fish && !(p.swing > 0) && !p.cast;   // 不拿在手上（詠唱中高舉法杖）
     const backView = d8Of(p).startsWith('up');                // 背面（往上、斜上）：背著的武器疊在身體上面，其餘方向被身體擋住
     // 掛著的武器畫在左右翻轉之外：固定在同一側，人物轉向時不會跟著換邊
-    const drawCarry = onBack => wi.carry === 'waist' ? drawWeaponWaist(wi) : drawWeaponBack(wi, onBack);
-    if (carry && !backView) drawCarry(false);
+    carrySideNow = ['left', 'right'].includes(face4(p));   // 朝左右走：掛著的武器畫側面版（sideSprite）
+    const drawCarry = onBack => wi.carry === 'hips' ? drawWeaponHips(wi) : wi.carry === 'waist' ? drawWeaponWaist(wi) : drawWeaponBack(wi, onBack);
+    const frontCarry = wi && (wi.carry === 'waist' || wi.carry === 'hips');   // 掛在腰間的（2026-11-27 使用者要求：劍／短刀掛在腰間看得到）：所有方向都畫在身體前面；背著的才分背面／其他
+    if (carry && !backView && !frontCarry) drawCarry(false);
     const pfx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);   // 技能效果（自己看本地狀態，別人看 state 同步的 fx）
     if (pfx?.length) drawPersonFx(p, pfx, backView, 'back');
     const swingV = wi && !pose && !fish && p.swing > 0 ? face4(p) : null;   // 小圖武器（wi；LPC 武器畫在人物圖層裡、wi 是 null）往上／往下揮
@@ -3964,7 +3966,7 @@ function drawPersonBase(p, wi, nameColor) {
     } else
     ctx.drawImage(img, (-F.w / 2 - pad) * cs, (-F.h - padTop + (F.footDy || 0)) * cs, img.width * cs, img.height * cs);
     ctx.restore();
-    if (carry && backView) drawCarry(true);
+    if (carry && (backView || frontCarry)) drawCarry(true);
     if (pfx?.length) drawPersonFx(p, pfx, backView, 'front');
     if (swingV === 'down') drawWeaponSwing(wi, p.swing, 1, 'down');   // 往下揮：武器在身前
     if (p.dir < 0) ctx.scale(-1, 1);                          // 揮擊、拋竿朝面向那側（要翻轉）
@@ -12598,18 +12600,28 @@ const WEAPON_BACK_BOTTOM = 27, WEAPON_HILT_LIFT = 0;
 // 預設值＝以前寫死的常數（背上 -11,-26／背面 -5,-26／腰 -8,-18／手 3,-26）
 let charAnch = { back: [-11, -26], backView: [-5, -26], waist: [-8, -18], hand: [3, -26] };
 // onBack＝背面視角（畫在身體之上）：用 backView 掛點（往背的中間靠，看起來是斜背在背上）
-function drawWeaponBack(wi, onBack) {
-  const [ax, ay] = onBack ? charAnch.backView : charAnch.back, s = wi.wscale || 2, wb = WEAPON_BACK_BOTTOM * s / 2;
+let carrySideNow = false;
+const carryImgOf = w0 => (carrySideNow && w0.sideImg) || w0.carryImg || w0;   // 掛著時用的圖：側面走用側面版，其餘用掛著版（劍鞘）或手上那張
+function drawWeaponBack(w0, onBack) {
+  const wi = carryImgOf(w0), [ax, ay] = onBack ? charAnch.backView : charAnch.back, s = wi.wscale || 2, wb = WEAPON_BACK_BOTTOM * s / 2;
   ctx.save(); ctx.translate(ax, ay); ctx.rotate(-.55);
   if (wi.hiltUp) { ctx.scale(1, -1); ctx.drawImage(wi, -wi.width * s / 2, WEAPON_HILT_LIFT * s / 2 - wb, wi.width * s, wi.height * s); }
   else ctx.drawImage(wi, -wi.width * s / 2, wb - wi.height * s, wi.width * s, wi.height * s);
   ctx.restore();
 }
 // 掛在腰間（avatar.json 的 carry: "waist"）：握把在腰的掛點，武器頭朝下、往身後斜（劍柄朝上，像插在腰帶上）
-function drawWeaponWaist(wi) {
-  const [ax, ay] = charAnch.waist, s = wi.wscale || 2;
+function drawWeaponWaist(w0) {
+  const wi = carryImgOf(w0), [ax, ay] = charAnch.waist, s = wi.wscale || 2;
   ctx.save(); ctx.translate(ax, ay); ctx.rotate(Math.PI + .45);
   ctx.drawImage(wi, -wi.width * s / 2, -(wi.height - 3) * s, wi.width * s, wi.height * s); ctx.restore();   // 轉軸＝離圖底 3 格的握把
+}
+// 左右腰各一把（avatar.json 的 carry: "hips"，忍者的短刀）：左腰在 waist 掛點往外 3 格、右腰對稱，刀尖朝下往身後斜（左右各斜一邊）
+function drawWeaponHips(w0) {
+  const wi = carryImgOf(w0), s = wi.wscale || 2, wy = charAnch.waist[1], hx = Math.abs(charAnch.waist[0]) + 4;
+  for (const side of [-1, 1]) {
+    ctx.save(); ctx.translate(side * hx, wy); ctx.rotate(Math.PI + side * .5);
+    ctx.drawImage(wi, -wi.width * s / 2, -(wi.height - 3) * s, wi.width * s, wi.height * s); ctx.restore();
+  }
 }
 // 揮擊：握住劍柄（以握把為轉軸）、刀刃朝外，由後上方往前下方揮，畫在身體之後（身前）
 // 劍柄朝上背著的（hiltUp）或掛腰間的：前 35% 手從掛著的位置（背上劍柄＝back 掛點往左上 2,3；腰間＝waist 掛點）移到手的掛點，看起來是拔出來再揮。
@@ -12620,8 +12632,8 @@ const SWING_ARC = { side: [-.9, 2.8], down: [.2, 2.9], up: [-1.5, 3] };
 function drawWeaponSwing(wi, swing, dir = 1, v = null) {
   const q = 1 - swing / ATK_T;
   let [px, py] = charAnch.hand;
-  if (wi.hiltUp || wi.carry === 'waist') {
-    const from = wi.carry === 'waist' ? charAnch.waist : [charAnch.back[0] - 2, charAnch.back[1] - 3];
+  if (wi.hiltUp || wi.carry === 'waist' || wi.carry === 'hips') {
+    const from = wi.carry === 'waist' || wi.carry === 'hips' ? charAnch.waist : [charAnch.back[0] - 2, charAnch.back[1] - 3];
     const k = Math.min(1, q / SWING_HILT_DRAW), fx = from[0] * dir;
     px = fx + (px - fx) * k; py = from[1] + (py - from[1]) * k;
   }
@@ -14705,7 +14717,9 @@ async function boot() {
     ...S.avatar.weapons.filter(w => w.sprite).map(async w => {
       const im = await optImg(`assets/avatar/${w.sprite}`);
       if (im && w.back === 'hilt') im.hiltUp = true;   // 背在背上時劍柄朝上（drawWeaponBack 看這個旗標）
-      if (im) im.carry = w.carry === 'waist' ? 'waist' : 'back';   // 不拿在手上時掛哪裡
+      if (im) im.carry = w.carry === 'waist' ? 'waist' : w.carry === 'hips' ? 'hips' : 'back';   // 不拿在手上時掛哪裡（back 背上、waist 左腰、hips 左右腰各一把）
+      if (im && w.carrySprite) { const ci = await optImg(`assets/avatar/${w.carrySprite}`); if (ci) ci.wscale = w.scale || (S.avatar.frames.scale || 2); im.carryImg = ci; }
+      if (im && w.sideSprite) { const si = await optImg(`assets/avatar/${w.sideSprite}`); if (si) { si.wscale = w.scale || (S.avatar.frames.scale || 2); im.sideImg = si; } }   // 側面版（掛著、朝左右走時畫這張）   // 掛著時畫另一張圖（例如劍鞘裡的劍）；沒有就用手上那張
       if (im) im.wscale = w.scale || (S.avatar.frames.scale || 2);   // 畫幾倍：新 64px 模組預設與人物同倍率（1），舊 placeholder 標 scale: 2
       S.weaponImgs[w.id] = im;
     }),

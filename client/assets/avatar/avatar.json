@@ -8145,9 +8145,9 @@
    "name": "長劍",
    "type": "sword",
    "sprite": "weapon_sword.png",
-   "carry": "back",
-   "back": "hilt",
-   "scale": 2,
+   "carry": "waist",
+   "carrySprite": "weapon_sword_sheath.png",
+   "sideSprite": "weapon_sword_sheath_side.png",
    "lpc": {
     "bg": "char_weapon_arming_bg.png",
     "fg": "char_weapon_arming_fg.png",
@@ -8170,8 +8170,8 @@
    "name": "戰斧",
    "type": "axe",
    "sprite": "weapon_waraxe.png",
+   "sideSprite": "weapon_waraxe_side.png",
    "carry": "back",
-   "scale": 2,
    "lpc": {
     "bg": "char_weapon_waraxe_bg.png",
     "fg": "char_weapon_waraxe_fg.png",
@@ -8189,7 +8189,7 @@
    "name": "法杖",
    "type": "staff",
    "sprite": "weapon_staff.png",
-   "scale": 2,
+   "sideSprite": "weapon_staff_side.png",
    "ranged": {
     "range": 400,
     "cast": 1.0,
@@ -8230,6 +8230,7 @@
    "name": "豎琴弓",
    "type": "bow",
    "sprite": "weapon_harpbow.png",
+   "sideSprite": "weapon_harpbow_side.png",
    "carry": "back",
    "ranged": {
     "range": 320,
@@ -8254,6 +8255,7 @@
    "name": "長槍",
    "type": "lance",
    "sprite": "weapon_lance.png",
+   "sideSprite": "weapon_lance_side.png",
    "carry": "back",
    "lpc": {
     "over": {
@@ -8275,7 +8277,8 @@
    "name": "短劍",
    "type": "daggers",
    "sprite": "weapon_daggers.png",
-   "carry": "waist",
+   "sideSprite": "weapon_daggers_side.png",
+   "carry": "hips",
    "lpc": {
     "bg": "char_weapon_dagger_bg.png",
     "fg": "char_weapon_dagger_fg.png"
@@ -8286,6 +8289,7 @@
    "name": "咒杖",
    "type": "scepter",
    "sprite": "weapon_scepter.png",
+   "sideSprite": "weapon_scepter_side.png",
    "ranged": {
     "range": 400,
     "cast": 0.8,
@@ -8555,9 +8559,9 @@
     ]
    },
    "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
-   "carry": "back",
-   "back": "hilt",
-   "scale": 2,
+   "carry": "waist",
+   "carrySprite": "weapon_sword_sheath_sky.png",
+   "sideSprite": "weapon_sword_sheath_side_sky.png",
    "sprite": "weapon_sword_sky.png",
    "lpc": {
     "bg": "char_weapon_arming_bg_sky.png",
@@ -8588,9 +8592,9 @@
     ]
    },
    "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
-   "carry": "back",
-   "back": "hilt",
-   "scale": 2,
+   "carry": "waist",
+   "carrySprite": "weapon_sword_sheath_gold.png",
+   "sideSprite": "weapon_sword_sheath_side_gold.png",
    "sprite": "weapon_sword_gold.png",
    "lpc": {
     "bg": "char_weapon_arming_bg_gold.png",
@@ -8621,9 +8625,9 @@
     ]
    },
    "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
-   "carry": "back",
-   "back": "hilt",
-   "scale": 2,
+   "carry": "waist",
+   "carrySprite": "weapon_sword_sheath_pink.png",
+   "sideSprite": "weapon_sword_sheath_side_pink.png",
    "sprite": "weapon_sword_pink.png",
    "lpc": {
     "bg": "char_weapon_arming_bg_pink.png",
@@ -8655,7 +8659,7 @@
    },
    "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
    "carry": "back",
-   "scale": 2,
+   "sideSprite": "weapon_waraxe_side_sky.png",
    "sprite": "weapon_waraxe_sky.png",
    "lpc": {
     "bg": "char_weapon_waraxe_bg_sky.png",
@@ -8682,7 +8686,7 @@
    },
    "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
    "carry": "back",
-   "scale": 2,
+   "sideSprite": "weapon_waraxe_side_gold.png",
    "sprite": "weapon_waraxe_gold.png",
    "lpc": {
     "bg": "char_weapon_waraxe_bg_gold.png",
@@ -8709,7 +8713,7 @@
    },
    "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
    "carry": "back",
-   "scale": 2,
+   "sideSprite": "weapon_waraxe_side_pink.png",
    "sprite": "weapon_waraxe_pink.png",
    "lpc": {
     "bg": "char_weapon_waraxe_bg_pink.png",
@@ -8735,7 +8739,7 @@
     ]
    },
    "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
-   "scale": 2,
+   "sideSprite": "weapon_staff_side_sky.png",
    "sprite": "weapon_staff_sky.png",
    "lpc": {
     "bg": "char_weapon_loop_bg_sky.png",
@@ -8761,7 +8765,7 @@
     ]
    },
    "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
-   "scale": 2,
+   "sideSprite": "weapon_staff_side_gold.png",
    "sprite": "weapon_staff_gold.png",
    "lpc": {
     "bg": "char_weapon_loop_bg_gold.png",
@@ -8787,7 +8791,7 @@
     ]
    },
    "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
-   "scale": 2,
+   "sideSprite": "weapon_staff_side_pink.png",
    "sprite": "weapon_staff_pink.png",
    "lpc": {
     "bg": "char_weapon_loop_bg_pink.png",
@@ -8861,7 +8865,8 @@
     ]
    },
    "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
-   "carry": "waist",
+   "carry": "hips",
+   "sideSprite": "weapon_daggers_side_sky.png",
    "sprite": "weapon_daggers_sky.png",
    "lpc": {
     "bg": "char_weapon_dagger_bg_sky.png",
@@ -8880,7 +8885,8 @@
     ]
    },
    "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
-   "carry": "waist",
+   "carry": "hips",
+   "sideSprite": "weapon_daggers_side_gold.png",
    "sprite": "weapon_daggers_gold.png",
    "lpc": {
     "bg": "char_weapon_dagger_bg_gold.png",
@@ -8899,7 +8905,8 @@
     ]
    },
    "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
-   "carry": "waist",
+   "carry": "hips",
+   "sideSprite": "weapon_daggers_side_pink.png",
    "sprite": "weapon_daggers_pink.png",
    "lpc": {
     "bg": "char_weapon_dagger_bg_pink.png",
@@ -8919,6 +8926,7 @@
    },
    "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
    "carry": "back",
+   "sideSprite": "weapon_lance_side_sky.png",
    "sprite": "weapon_lance_sky.png",
    "lpc": {
     "over": {
@@ -8948,6 +8956,7 @@
    },
    "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
    "carry": "back",
+   "sideSprite": "weapon_lance_side_gold.png",
    "sprite": "weapon_lance_gold.png",
    "lpc": {
     "over": {
@@ -8977,6 +8986,7 @@
    },
    "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
    "carry": "back",
+   "sideSprite": "weapon_lance_side_pink.png",
    "sprite": "weapon_lance_pink.png",
    "lpc": {
     "over": {
@@ -9006,6 +9016,7 @@
    },
    "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
    "carry": "back",
+   "sideSprite": "weapon_harpbow_side_sky.png",
    "sprite": "weapon_harpbow_sky.png",
    "lpc": {
     "bg": "char_weapon_recurve_bg_sky.png",
@@ -9032,6 +9043,7 @@
    },
    "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
    "carry": "back",
+   "sideSprite": "weapon_harpbow_side_gold.png",
    "sprite": "weapon_harpbow_gold.png",
    "lpc": {
     "bg": "char_weapon_recurve_bg_gold.png",
@@ -9058,6 +9070,7 @@
    },
    "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
    "carry": "back",
+   "sideSprite": "weapon_harpbow_side_pink.png",
    "sprite": "weapon_harpbow_pink.png",
    "lpc": {
     "bg": "char_weapon_recurve_bg_pink.png",
@@ -9083,6 +9096,7 @@
     ]
    },
    "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
+   "sideSprite": "weapon_scepter_side_sky.png",
    "sprite": "weapon_scepter_sky.png",
    "lpc": {
     "bg": "char_weapon_s_bg_sky.png",
@@ -9108,6 +9122,7 @@
     ]
    },
    "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
+   "sideSprite": "weapon_scepter_side_gold.png",
    "sprite": "weapon_scepter_gold.png",
    "lpc": {
     "bg": "char_weapon_s_bg_gold.png",
@@ -9133,6 +9148,7 @@
     ]
    },
    "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
+   "sideSprite": "weapon_scepter_side_pink.png",
    "sprite": "weapon_scepter_pink.png",
    "lpc": {
     "bg": "char_weapon_s_bg_pink.png",
