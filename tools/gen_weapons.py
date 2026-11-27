@@ -366,16 +366,19 @@ def _shaft(cv, cx, y0, y1, ramp_, w=3):
 
 
 def sword_sheath_side():
-    """劍鞘裡的劍（側面）：鞘與劍柄都是薄的——劍鞘 3 格寬、護手只剩 3 格厚。"""
+    """劍鞘裡的劍（側面）：劍鞘 5 格寬（深褐皮革、金色鞘口／束環／鞘尖），護手只剩 5 格寬的厚度；圖高與轉軸同正面（11×38）。
+    使用者參考圖（2026-11-27）：劍橫斜掛在腰側，劍柄朝前上、鞘尖朝後下，約離水平 37 度。"""
     cv = W(11, 38)
     cx = 5
-    for y in range(1, 24):
-        cv.rect(cx - 1, y, cx + 1, y, LEATHER[1])
-        cv.set(cx - 1, y, LEATHER[3]); cv.set(cx + 1, y, LEATHER[0])
-    cv.rect(cx - 1, 1, cx + 1, 2, GOLD[3]); cv.set(cx - 1, 1, GOLD[4])
-    cv.rect(cx - 1, 11, cx + 1, 12, GOLD[2]); cv.set(cx - 1, 11, GOLD[4])
-    cv.rect(cx - 1, 21, cx + 1, 23, GOLD[3]); cv.rect(cx - 1, 21, cx - 1, 23, GOLD[4])
-    cv.rect(cx - 1, 24, cx + 1, 25, GOLD[3]); cv.set(cx - 1, 24, GOLD[4]); cv.set(cx + 1, 25, GOLD[1])      # 護手（側看只剩厚度）
+    for y in range(2, 24):
+        for dx, c in ((-2, LEATHER[3]), (-1, LEATHER[2]), (0, LEATHER[1]), (1, LEATHER[1]), (2, LEATHER[0])):
+            cv.set(cx + dx, y, c)
+    for dx, c in ((-1, LEATHER[2]), (0, LEATHER[1]), (1, LEATHER[0])):                       # 鞘尖收窄
+        cv.set(cx + dx, 1, c)
+    for y0 in (1, 9, 16):                                                                   # 金色束環（鞘尖、中段兩道）
+        cv.rect(cx - 2, y0, cx + 2, y0 + 1, GOLD[3]); cv.rect(cx - 2, y0, cx - 2, y0 + 1, GOLD[4]); cv.rect(cx + 2, y0, cx + 2, y0 + 1, GOLD[1])
+    cv.rect(cx - 2, 21, cx + 2, 23, GOLD[3]); cv.rect(cx - 2, 21, cx - 2, 23, GOLD[4]); cv.rect(cx + 2, 21, cx + 2, 23, GOLD[1])   # 鞘口
+    cv.rect(cx - 2, 24, cx + 2, 25, GOLD[3]); cv.set(cx - 2, 24, GOLD[4]); cv.set(cx + 2, 25, GOLD[1])      # 護手（側看只剩厚度）
     for i in range(6):
         c = LEATHER[2] if i % 2 == 0 else LEATHER[0]
         cv.rect(cx - 1, 27 + i, cx + 1, 27 + i, c)

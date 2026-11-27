@@ -12618,8 +12618,12 @@ function drawWeaponBack(w0, onBack) {
 // 掛在腰間（avatar.json 的 carry: "waist"）：握把在腰的掛點，武器頭朝下、往身後斜（劍柄朝上，像插在腰帶上）
 function drawWeaponWaist(w0) {
   const wi = carryImgOf(w0), [ax, ay] = charAnch.waist, s = wi.wscale || 2;
-  ctx.save(); if (carrySideNow && carryFaceLeft) ctx.scale(-1, 1);   // 側面：劍柄朝前、劍尖朝後（朝左時鏡射）
-  ctx.translate(ax, ay); ctx.rotate(Math.PI + .45);
+  // 劍鞘在人物的「左手邊」（使用者 2026-11-27）：側面看——朝左時在這一側（鏡射），劍柄朝前（離中心 11 格）、鞘尖朝後下，約離水平 37 度；
+  // 正面看劍柄在畫面右邊（人物的左手），背面看在畫面左邊
+  ctx.save();
+  if (!w0.sideImg) { ctx.translate(ax, ay); ctx.rotate(Math.PI + .45); }   // 賢具等沒有側面版的：維持原本（固定畫面左側、不分方向）
+  else if (carrySideNow) { if (carryFaceLeft) ctx.scale(-1, 1); ctx.translate(11 * (S.avatar.frames.scale || 1), ay - 3 * (S.avatar.frames.scale || 1)); ctx.rotate(Math.PI + .91); }
+  else { if (!carryBackNow) ctx.scale(-1, 1); ctx.translate(ax - 4 * (S.avatar.frames.scale || 1), ay); ctx.rotate(Math.PI + .45); }
   ctx.drawImage(wi, -wi.width * s / 2, -(wi.height - 3) * s, wi.width * s, wi.height * s); ctx.restore();   // 轉軸＝離圖底 3 格的握把
 }
 // 左右腰各一把（avatar.json 的 carry: "hips"，忍者的短刀）：左腰在 waist 掛點往外 3 格、右腰對稱，刀尖朝下往身後斜（左右各斜一邊）
