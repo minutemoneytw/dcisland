@@ -127,10 +127,24 @@ def sword():
     return cv
 
 
-def sword_sheath():
+def sword_hilt(rear=False):
+    """騎士的劍，正面／背面只看得到劍柄（2026-11-27 使用者要求）：同樣 11×38 的畫布，只畫鞘口以下的護手與握柄；rear＝從背後看（左右對調）。"""
+    cv = sword_sheath(hilt_only=True)
+    if rear:
+        for y in range(cv.h):
+            cv.buf[y] = cv.buf[y][::-1]
+    return cv
+
+
+def sword_sheath(hilt_only=False):
     """劍鞘裡的劍（騎士，掛在腰間時畫這張）：同樣 11×38，上面是皮革劍鞘＋金色鞘口與鞘尖，只露出護手與握柄。"""
     cv = W(11, 38)
     cx = 5
+    if hilt_only:
+        cv.rect(cx - 2, 21, cx + 2, 23, GOLD[3]); cv.rect(cx - 2, 21, cx - 2, 23, GOLD[4])
+        _hilt(cv, cx, 24)
+        cv.outline()
+        return cv
     for y in range(1, 24):
         cv.rect(cx - 1, y, cx + 1, y, LEATHER[1])
         cv.set(cx - 1, y, LEATHER[3]); cv.set(cx + 1, y, LEATHER[0])
@@ -250,6 +264,34 @@ def dagger():
         cv.set(cx - 1, 14 + i, LEATHER[3] if i % 2 == 0 else LEATHER[1])
     cv.rect(cx - 1, 19, cx + 1, 19, GOLD[2]); cv.set(cx - 1, 19, GOLD[4])
     cv.rect(cx - 1, 20, cx + 1, 20, GOLD[1])
+    cv.outline()
+    return cv
+
+
+def dagger_hilt():
+    """短刀，正面只看得到刀柄（刀身被身體擋住）：7×22 畫布，只畫護手以下。"""
+    cv = W(7, 22)
+    cx = 3
+    cv.rect(cx - 2, 13, cx + 2, 13, GOLD[3]); cv.set(cx - 2, 13, GOLD[4]); cv.set(cx + 2, 13, GOLD[1])
+    for i in range(5):
+        c = LEATHER[2] if i % 2 == 0 else LEATHER[0]
+        cv.rect(cx - 1, 14 + i, cx + 1, 14 + i, c)
+        cv.set(cx - 1, 14 + i, LEATHER[3] if i % 2 == 0 else LEATHER[1])
+    cv.rect(cx - 1, 19, cx + 1, 19, GOLD[2]); cv.set(cx - 1, 19, GOLD[4])
+    cv.rect(cx - 1, 20, cx + 1, 20, GOLD[1])
+    cv.outline()
+    return cv
+
+
+def dagger_tip():
+    """短刀，背面只看得到刀尖（刀柄朝前、刀尖朝後）：7×22 畫布，只在握把轉軸（第 19 排）附近畫一小段尖頭，轉 180 度後朝下。"""
+    cv = W(7, 22)
+    cx = 3
+    for y in range(14, 20):
+        hw = 0 if y < 16 else 1
+        for x in range(cx - hw, cx + hw + 1):
+            cv.set(x, y, STEEL[3])
+        cv.set(cx - hw, y, STEEL[5]); cv.set(cx + hw, y, STEEL[1]) if hw else None
     cv.outline()
     return cv
 
@@ -448,7 +490,7 @@ def harpbow_side():
     return cv
 
 
-ALL = dict(sword_sheath_side=sword_sheath_side, waraxe_side=waraxe_side, staff_side=staff_side, scepter_side=scepter_side, dagger_side=dagger_side,
+ALL = dict(sword_hilt=sword_hilt, sword_hilt_rear=lambda: sword_hilt(True), dagger_hilt=dagger_hilt, dagger_tip=dagger_tip, sword_sheath_side=sword_sheath_side, waraxe_side=waraxe_side, staff_side=staff_side, scepter_side=scepter_side, dagger_side=dagger_side,
            lance_side=lance_side, harpbow_side=harpbow_side,
            sword=sword, sword_sheath=sword_sheath, waraxe=waraxe, staff=staff, scepter=scepter, dagger=dagger, lance=lance, harpbow=harpbow)
 

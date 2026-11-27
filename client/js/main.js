@@ -3942,10 +3942,14 @@ function drawPersonBase(p, wi, nameColor) {
     const backView = d8Of(p).startsWith('up');                // 背面（往上、斜上）：背著的武器疊在身體上面，其餘方向被身體擋住
     // 掛著的武器畫在左右翻轉之外：固定在同一側，人物轉向時不會跟著換邊
     carryFaceLeft = face4(p) === 'left';   // 背著的武器在背後那側：朝左走時背在右邊（左右鏡射）
-    carrySideNow = ['left', 'right'].includes(face4(p));   // 朝左右走：掛著的武器畫側面版（sideSprite）
-    const drawCarry = onBack => wi.carry === 'hips' ? drawWeaponHips(wi) : wi.carry === 'waist' ? drawWeaponWaist(wi) : drawWeaponBack(wi, onBack);
+    carrySideNow = !backView && ['left', 'right'].includes(face4(p));   // 朝左右走：掛著的武器畫側面版（sideSprite）；背對時畫背面版（rearSprite）
+    carryBackNow = backView;
+    const drawCarry = (onBack, layer) => wi.carry === 'hips' ? drawWeaponHips(wi, layer) : wi.carry === 'waist' ? drawWeaponWaist(wi) : drawWeaponBack(wi, onBack);
     const frontCarry = wi && (wi.carry === 'waist' || wi.carry === 'hips');   // 掛在腰間的（2026-11-27 使用者要求：劍／短刀掛在腰間看得到）：所有方向都畫在身體前面；背著的才分背面／其他
+    // 腰間的劍固定掛在畫面左邊：朝右走時它在身體另一側（最下層）、朝左走時在身體這一側（最上層）；忍者的短刀側面時一把在最下層、一把在最上層
+    const waistUnder = frontCarry && carrySideNow && wi.carry === 'waist' && !carryFaceLeft, hipsSide = frontCarry && carrySideNow && wi.carry === 'hips';
     if (carry && !backView && !frontCarry) drawCarry(false);
+    if (carry && (waistUnder || hipsSide)) drawCarry(false, 'under');
     const pfx = p.npc ? null : (p === S.players[0] ? myFx() : p.fx);   // 技能效果（自己看本地狀態，別人看 state 同步的 fx）
     if (pfx?.length) drawPersonFx(p, pfx, backView, 'back');
     const swingV = wi && !pose && !fish && p.swing > 0 ? face4(p) : null;   // 小圖武器（wi；LPC 武器畫在人物圖層裡、wi 是 null）往上／往下揮
@@ -3967,7 +3971,7 @@ function drawPersonBase(p, wi, nameColor) {
     } else
     ctx.drawImage(img, (-F.w / 2 - pad) * cs, (-F.h - padTop + (F.footDy || 0)) * cs, img.width * cs, img.height * cs);
     ctx.restore();
-    if (carry && (backView || frontCarry)) drawCarry(true);
+    if (carry && (backView || frontCarry) && !waistUnder) drawCarry(true, 'over');
     if (pfx?.length) drawPersonFx(p, pfx, backView, 'front');
     if (swingV === 'down') drawWeaponSwing(wi, p.swing, 1, 'down');   // 往下揮：武器在身前
     if (p.dir < 0) ctx.scale(-1, 1);                          // 揮擊、拋竿朝面向那側（要翻轉）
@@ -12601,12 +12605,12 @@ const WEAPON_BACK_BOTTOM = 27, WEAPON_HILT_LIFT = 0;
 // 預設值＝以前寫死的常數（背上 -11,-26／背面 -5,-26／腰 -8,-18／手 3,-26）
 let charAnch = { back: [-11, -26], backView: [-5, -26], waist: [-8, -18], hand: [3, -26] };
 // onBack＝背面視角（畫在身體之上）：用 backView 掛點（往背的中間靠，看起來是斜背在背上）
-let carrySideNow = false, carryFaceLeft = false;
-const carryImgOf = w0 => (carrySideNow && w0.sideImg) || w0.carryImg || w0;   // 掛著時用的圖：側面走用側面版，其餘用掛著版（劍鞘）或手上那張
+let carrySideNow = false, carryFaceLeft = false, carryBackNow = false;
+const carryImgOf = w0 => (carrySideNow && w0.sideImg) || (carryBackNow && w0.rearImg) || w0.carryImg || w0;   // 掛著時用的圖（2026-11-27）：側面走用側面版（sideSprite）、背對用背面版（rearSprite，沒有就用正面）、其餘用正面版（carrySprite；劍／短刀只剩劍柄／刀柄）或手上那張
 function drawWeaponBack(w0, onBack) {
   const wi = carryImgOf(w0), [ax, ay] = onBack ? charAnch.backView : charAnch.back, s = wi.wscale || 2, wb = WEAPON_BACK_BOTTOM * s / 2;
   ctx.save(); if (carryFaceLeft && !onBack) ctx.scale(-1, 1);   // 朝左（側面）：鏡射到右邊＝背後那側
-  ctx.translate(ax, ay); ctx.rotate(-.55);
+  ctx.translate(ax, ay + 2 * (S.avatar.frames.scale || 1)); ctx.rotate(-.55);   // 背著的武器比掛點再往下 2 格（使用者要求）
   if (wi.hiltUp) { ctx.scale(1, -1); ctx.drawImage(wi, -wi.width * s / 2, WEAPON_HILT_LIFT * s / 2 - wb, wi.width * s, wi.height * s); }
   else ctx.drawImage(wi, -wi.width * s / 2, wb - wi.height * s, wi.width * s, wi.height * s);
   ctx.restore();
@@ -12614,12 +12618,20 @@ function drawWeaponBack(w0, onBack) {
 // 掛在腰間（avatar.json 的 carry: "waist"）：握把在腰的掛點，武器頭朝下、往身後斜（劍柄朝上，像插在腰帶上）
 function drawWeaponWaist(w0) {
   const wi = carryImgOf(w0), [ax, ay] = charAnch.waist, s = wi.wscale || 2;
-  ctx.save(); ctx.translate(ax, ay); ctx.rotate(Math.PI + .45);
+  ctx.save(); if (carrySideNow && carryFaceLeft) ctx.scale(-1, 1);   // 側面：劍柄朝前、劍尖朝後（朝左時鏡射）
+  ctx.translate(ax, ay); ctx.rotate(Math.PI + .45);
   ctx.drawImage(wi, -wi.width * s / 2, -(wi.height - 3) * s, wi.width * s, wi.height * s); ctx.restore();   // 轉軸＝離圖底 3 格的握把
 }
 // 左右腰各一把（avatar.json 的 carry: "hips"，忍者的短刀）：左腰在 waist 掛點往外 3 格、右腰對稱，刀尖朝下往身後斜（左右各斜一邊）
-function drawWeaponHips(w0) {
+// 正面只看到刀柄、背面只看到刀尖（兩把同一個方向）；側面兩把疊在同一處：刀柄朝前上、刀尖朝後下，一把在身體最下層（layer 'under'）、一把在最上層（'over'）
+function drawWeaponHips(w0, layer) {
   const wi = carryImgOf(w0), s = wi.wscale || 2, wy = charAnch.waist[1], hx = Math.abs(charAnch.waist[0]) + 4;
+  if (carrySideNow) {
+    ctx.save(); if (carryFaceLeft) ctx.scale(-1, 1);
+    ctx.translate(charAnch.waist[0] + (layer === 'under' ? -2 : 1), wy + (layer === 'under' ? 1 : 0)); ctx.rotate(Math.PI + .45);
+    ctx.drawImage(wi, -wi.width * s / 2, -(wi.height - 3) * s, wi.width * s, wi.height * s); ctx.restore();
+    return;
+  }
   for (const side of [-1, 1]) {
     ctx.save(); ctx.translate(side * hx, wy); ctx.rotate(Math.PI + side * .5);
     ctx.drawImage(wi, -wi.width * s / 2, -(wi.height - 3) * s, wi.width * s, wi.height * s); ctx.restore();
@@ -14721,6 +14733,7 @@ async function boot() {
       if (im && w.back === 'hilt') im.hiltUp = true;   // 背在背上時劍柄朝上（drawWeaponBack 看這個旗標）
       if (im) im.carry = w.carry === 'waist' ? 'waist' : w.carry === 'hips' ? 'hips' : 'back';   // 不拿在手上時掛哪裡（back 背上、waist 左腰、hips 左右腰各一把）
       if (im && w.carrySprite) { const ci = await optImg(`assets/avatar/${w.carrySprite}`); if (ci) ci.wscale = w.scale || (S.avatar.frames.scale || 2); im.carryImg = ci; }
+      if (im && w.rearSprite) { const ri = await optImg(`assets/avatar/${w.rearSprite}`); if (ri) { ri.wscale = w.scale || (S.avatar.frames.scale || 2); im.rearImg = ri; } }   // 背面版（背對時畫這張：劍／短刀只剩劍柄／刀尖）
       if (im && w.sideSprite) { const si = await optImg(`assets/avatar/${w.sideSprite}`); if (si) { si.wscale = w.scale || (S.avatar.frames.scale || 2); im.sideImg = si; } }   // 側面版（掛著、朝左右走時畫這張）   // 掛著時畫另一張圖（例如劍鞘裡的劍）；沒有就用手上那張
       if (im) im.wscale = w.scale || (S.avatar.frames.scale || 2);   // 畫幾倍：新 64px 模組預設與人物同倍率（1），舊 placeholder 標 scale: 2
       S.weaponImgs[w.id] = im;

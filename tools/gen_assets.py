@@ -1182,7 +1182,7 @@ def with_glow(weapons):
             for k in ("carry", "back", "scale"):
                 if k in base:
                     g[k] = base[k]
-            for ck in ("carrySprite", "sideSprite"):   # 掛著時畫的圖（劍鞘裡的劍）、側面版也要有發光版
+            for ck in ("carrySprite", "sideSprite", "rearSprite"):   # 掛著時畫的圖（劍鞘裡的劍）、側面版也要有發光版
                 if base.get(ck):
                     glow_image(base[ck], base[ck].replace(".png", f"_{suf}.png"), color, halo, (10 ** 6, 10 ** 6))
                     g[ck] = base[ck].replace(".png", f"_{suf}.png")
@@ -4673,7 +4673,10 @@ def main():
     save(command_icon_still(), "command_still.png", "ui")  # 靜止＝站立小紅人（main.js 的 CMD_ICONS 載入）
     print("== 武器 ==")
     save(gen_weapons.sword(), "weapon_sword.png", "avatar")   # 2026-11-27 職業武器換成 gen_weapons 的精緻版（1 倍像素；賢具、釣竿沒動）
-    save(gen_weapons.sword_sheath(), "weapon_sword_sheath.png", "avatar")   # 騎士的劍掛在腰間時畫劍鞘裡的劍
+    save(gen_weapons.sword_hilt(), "weapon_sword_hilt.png", "avatar")   # 騎士的劍掛在腰間：正面／背面只看得到劍柄，側面才看得到整把劍鞘（weapon_sword_sheath_side）
+    save(gen_weapons.sword_hilt(True), "weapon_sword_hilt_rear.png", "avatar")
+    save(gen_weapons.dagger_hilt(), "weapon_daggers_hilt.png", "avatar")   # 忍者的短刀：正面只看得到刀柄、背面只看得到刀尖
+    save(gen_weapons.dagger_tip(), "weapon_daggers_tip.png", "avatar")
     save(gen_weapons.waraxe(), "weapon_waraxe.png", "avatar")
     save(gen_weapons.dagger(), "weapon_daggers.png", "avatar")
     save(gen_weapons.scepter(), "weapon_scepter.png", "avatar")
@@ -4850,7 +4853,7 @@ def main():
             #        之後的 64px 武器模組照人物規格畫、不寫 scale 就是 1 倍
             # lpc＝LPC 武器圖層（畫在人物圖裡、跟手完全對齊；有這欄就不畫舊的小圖）：bg／fg＝一般格（走路、待機時拿在手上；bg 在身體後面、fg 在最上面），
             # over＝某個攻擊動作的超大格 sheet（size＝每格邊長，人物畫在格子正中央）。2026-11-09 騎士先換：LPC Arming Sword（steel）
-            dict(id="sword", name="長劍", type="sword", sprite="weapon_sword.png", carry="waist", carrySprite="weapon_sword_sheath.png", sideSprite="weapon_sword_sheath_side.png",   # 2026-11-27 使用者要求：騎士的劍平常掛在腰間（掛著畫劍鞘裡的劍）；圖照人物 1 倍像素畫，不再標 scale 2
+            dict(id="sword", name="長劍", type="sword", sprite="weapon_sword.png", carry="waist", carrySprite="weapon_sword_hilt.png", sideSprite="weapon_sword_sheath_side.png", rearSprite="weapon_sword_hilt_rear.png",   # 2026-11-27 使用者要求：騎士的劍平常掛在腰間（掛著畫劍鞘裡的劍）；圖照人物 1 倍像素畫，不再標 scale 2
                  
                  lpc=dict(bg="char_weapon_arming_bg.png", fg="char_weapon_arming_fg.png",
                           over=dict(slash=dict(size=128, bg="char_weapon_arming_slash_bg.png", fg="char_weapon_arming_slash_fg.png"),
@@ -4870,7 +4873,7 @@ def main():
             dict(id="lance", name="長槍", type="lance", sprite="weapon_lance.png", sideSprite="weapon_lance_side.png", carry="back",
                  lpc=dict(over=dict(walk=dict(size=128, bg="char_weapon_dragonspear_walk_bg.png", fg="char_weapon_dragonspear_walk_fg.png"),   # LPC 龍槍：走路 128、突刺 192
                                     thrust=dict(size=192, bg="char_weapon_dragonspear_thrust_bg.png", fg="char_weapon_dragonspear_thrust_fg.png")))),
-            dict(id="daggers", name="短劍", type="daggers", sprite="weapon_daggers.png", sideSprite="weapon_daggers_side.png", carry="hips",   # hips＝左右腰各掛一把（2026-11-27 使用者要求）   # 2026-11-09 換 LPC 短劍（dagger，單手；LPC 沒有雙持），名稱由「雙劍」改「短劍」
+            dict(id="daggers", name="短劍", type="daggers", sprite="weapon_daggers.png", carrySprite="weapon_daggers_hilt.png", sideSprite="weapon_daggers_side.png", rearSprite="weapon_daggers_tip.png", carry="hips",   # hips＝左右腰各掛一把（2026-11-27 使用者要求）   # 2026-11-09 換 LPC 短劍（dagger，單手；LPC 沒有雙持），名稱由「雙劍」改「短劍」
                  lpc=dict(bg="char_weapon_dagger_bg.png", fg="char_weapon_dagger_fg.png")),
             dict(id="scepter", name="咒杖", type="scepter", sprite="weapon_scepter.png", sideSprite="weapon_scepter_side.png", ranged=dict(range=400, cast=0.8, dmg=6, gap=0, slide=0.4, lvMul=3, splash=70),
                  lpc=dict(bg="char_weapon_s_bg.png", fg="char_weapon_s_fg.png",   # LPC S 形杖（s）；只有突刺

@@ -8146,8 +8146,9 @@
    "type": "sword",
    "sprite": "weapon_sword.png",
    "carry": "waist",
-   "carrySprite": "weapon_sword_sheath.png",
+   "carrySprite": "weapon_sword_hilt.png",
    "sideSprite": "weapon_sword_sheath_side.png",
+   "rearSprite": "weapon_sword_hilt_rear.png",
    "lpc": {
     "bg": "char_weapon_arming_bg.png",
     "fg": "char_weapon_arming_fg.png",
@@ -8277,7 +8278,9 @@
    "name": "短劍",
    "type": "daggers",
    "sprite": "weapon_daggers.png",
+   "carrySprite": "weapon_daggers_hilt.png",
    "sideSprite": "weapon_daggers_side.png",
+   "rearSprite": "weapon_daggers_tip.png",
    "carry": "hips",
    "lpc": {
     "bg": "char_weapon_dagger_bg.png",
@@ -8560,8 +8563,9 @@
    },
    "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
    "carry": "waist",
-   "carrySprite": "weapon_sword_sheath_sky.png",
+   "carrySprite": "weapon_sword_hilt_sky.png",
    "sideSprite": "weapon_sword_sheath_side_sky.png",
+   "rearSprite": "weapon_sword_hilt_rear_sky.png",
    "sprite": "weapon_sword_sky.png",
    "lpc": {
     "bg": "char_weapon_arming_bg_sky.png",
@@ -8593,8 +8597,9 @@
    },
    "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
    "carry": "waist",
-   "carrySprite": "weapon_sword_sheath_gold.png",
+   "carrySprite": "weapon_sword_hilt_gold.png",
    "sideSprite": "weapon_sword_sheath_side_gold.png",
+   "rearSprite": "weapon_sword_hilt_rear_gold.png",
    "sprite": "weapon_sword_gold.png",
    "lpc": {
     "bg": "char_weapon_arming_bg_gold.png",
@@ -8626,8 +8631,9 @@
    },
    "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
    "carry": "waist",
-   "carrySprite": "weapon_sword_sheath_pink.png",
+   "carrySprite": "weapon_sword_hilt_pink.png",
    "sideSprite": "weapon_sword_sheath_side_pink.png",
+   "rearSprite": "weapon_sword_hilt_rear_pink.png",
    "sprite": "weapon_sword_pink.png",
    "lpc": {
     "bg": "char_weapon_arming_bg_pink.png",
@@ -8866,7 +8872,9 @@
    },
    "hint": "取得稱號《究極》（參與擊倒熔岩島的蓋老師）",
    "carry": "hips",
+   "carrySprite": "weapon_daggers_hilt_sky.png",
    "sideSprite": "weapon_daggers_side_sky.png",
+   "rearSprite": "weapon_daggers_tip_sky.png",
    "sprite": "weapon_daggers_sky.png",
    "lpc": {
     "bg": "char_weapon_dagger_bg_sky.png",
@@ -8886,7 +8894,9 @@
    },
    "hint": "取得稱號《傳奇》（參與擊倒草島的黃金肥龍）",
    "carry": "hips",
+   "carrySprite": "weapon_daggers_hilt_gold.png",
    "sideSprite": "weapon_daggers_side_gold.png",
+   "rearSprite": "weapon_daggers_tip_gold.png",
    "sprite": "weapon_daggers_gold.png",
    "lpc": {
     "bg": "char_weapon_dagger_bg_gold.png",
@@ -8906,7 +8916,9 @@
    },
    "hint": "取得稱號《完美》（參與擊倒機械島的壓力山大）",
    "carry": "hips",
+   "carrySprite": "weapon_daggers_hilt_pink.png",
    "sideSprite": "weapon_daggers_side_pink.png",
+   "rearSprite": "weapon_daggers_tip_pink.png",
    "sprite": "weapon_daggers_pink.png",
    "lpc": {
     "bg": "char_weapon_dagger_bg_pink.png",
