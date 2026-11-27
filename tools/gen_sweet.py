@@ -9,7 +9,7 @@
   帽子（hat 層）：棕色小圓帽（中間一圈粉色帶），歪戴在頭頂右後方，不遮頭髮。
 輸出格式同 gen_ninja（sweet_sheets() 回 top／bottom／shoes／hat／hairbg 五層：帽子在背面與朝右時畫在 hairbg 層〔頭髮下面〕，其餘在 hat 層）。顏色集中在最上面。
 """
-import os, sys, math
+import os, sys, math, zlib, struct
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from chibi_pilot import Img
 import gen_school as gs
@@ -249,6 +249,64 @@ def hat_pixels(kind, cx, top):
     return out
 
 
+# ---------- 使用者畫的上衣 ----------
+TOP_PNG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'sweet_top.png')
+TOP_OX, TOP_OY = 20, 28    # 使用者的圖是 576×256 上衣 sheet 裁掉空白邊後的樣子（左邊裁 20、上面裁 28）：格 (欄 c, 列 r) 的左上角在 (c×64, r×64)
+
+
+def _read_png_rgba(path):
+    d = open(path, 'rb').read()
+    i, idat = 8, b''
+    while i < len(d):
+        n, t = struct.unpack('>I4s', d[i:i + 8])
+        c = d[i + 8:i + 8 + n]
+        if t == b'IHDR':
+            w, h, bd, ct, _, _, il = struct.unpack('>IIBBBBB', c)
+        elif t == b'IDAT':
+            idat += c
+        i += 12 + n
+    assert bd == 8 and ct == 6 and il == 0, 'sweet_top.png 要 8 位元 RGBA、非交錯'
+    raw, bpp, stride, pos, prev, rows = zlib.decompress(idat), 4, w * 4, 0, bytearray(w * 4), []
+    for y in range(h):
+        f = raw[pos]
+        line = bytearray(raw[pos + 1:pos + 1 + stride])
+        pos += 1 + stride
+        for x in range(stride):
+            a = line[x - bpp] if x >= bpp else 0
+            b = prev[x]
+            c = prev[x - bpp] if x >= bpp else 0
+            if f == 1:
+                line[x] = (line[x] + a) & 255
+            elif f == 2:
+                line[x] = (line[x] + b) & 255
+            elif f == 3:
+                line[x] = (line[x] + ((a + b) >> 1)) & 255
+            elif f == 4:
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                line[x] = (line[x] + (a if pa <= pb and pa <= pc else (b if pb <= pc else c))) & 255
+        rows.append(line)
+        prev = line
+    return w, h, [[tuple(r[x * 4:x * 4 + 3]) if r[x * 4 + 3] > 127 else None for x in range(w)] for r in rows]
+
+
+def user_top():
+    """使用者手畫的罩衫洋裝上衣（tools/data/sweet_top.png，2026-11-28）→ top 層 sheet（走路列：背面／左／正面／右各 9 欄，右面向也是自己畫的，不鏡像）。沒有檔案回 None。"""
+    if not os.path.exists(TOP_PNG):
+        return None
+    w, h, px = _read_png_rgba(TOP_PNG)
+    img = Img(gs.SHEET_W, gs.SHEET_H)
+    for iy in range(h):
+        for ix in range(w):
+            c = px[iy][ix]
+            if c is None:
+                continue
+            col, x = divmod(ix + TOP_OX, 64)
+            r, y = divmod(iy + TOP_OY, 64)
+            if col < 9 and r < 4:
+                img.px[(8 + r) * gs.CELL + y][col * gs.CELL + x] = c
+    return img
+
+
 # ---------- 組成 sheet ----------
 def sweet_sheets():
     """回傳 {'top','bottom','shoes','hat': Img}（832×1856，只填走路列；右＝左的鏡像）。"""
@@ -279,4 +337,7 @@ def sweet_sheets():
                         continue
                     for col in cols:
                         out[tgt].px[row * gs.CELL + y][col * gs.CELL + px] = c
+    ut = user_top()
+    if ut is not None:                                            # 上衣用使用者畫的（其他三層、帽子還是程式畫）
+        out['top'] = ut
     return out
