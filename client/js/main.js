@@ -8632,8 +8632,8 @@ function onNetTpb(m) { const P = S.pb; if (P && P.role === 'spec') pbApplySnap(P
 // 獎池可以「兌換」成角色經驗值（1 經驗值＝100 籌碼，真兌換：XP 不回饋籌碼）——登入者由伺服器記帳，
 // 訪客的 XP 在本機（S.profile.xp），這裡直接加＋演出；離座時的虧損由伺服器換成入座抽到的島主的經驗值。
 const MARY_W = 320, MARY_H = 480;   // 機台畫面（CSS px；畫布內部再 ×2，放大不糊）
-const MARY_SHOW_MS = 5400;   // 勇者挑戰＋拉霸演出的總時長（先對打 MARY_FIGHT_S 秒，之後才轉拉霸、亮結果）
-const MARY_FIGHT_S = 2;      // 勇者對島主先打滿這幾秒（人要留在畫面上），之後才亮拉霸結果與開獎紀錄
+const MARY_SHOW_MS = 7400;   // 勇者挑戰＋拉霸演出的總時長（先對打 4 秒，之後才轉拉霸、亮結果；拉霸那段仍是原本的 3.4 秒）
+const MARY_FIGHT_S = 4;      // 勇者對島主先打滿這幾秒（人留在畫面上，進場配一段號角），之後才亮拉霸結果與開獎紀錄
 const MARY_DBL_S = 2;        // 猜大小的轉燈：左右兩個 ONCE MORE 輪流閃 2 秒才開牌（2026-11-22 使用者定：燈效停止後才扣錢／發籌碼）
 const MARY_DBL_TAIL = 1.2;   // 開牌後亮邊再脈動 1.2 秒（之後定格亮著，直到下一次開獎／領出）
 const MARY_AMTS = [10, 50, 100, 500, 1000, 5000];   // 每注金額鈕
@@ -8744,7 +8744,7 @@ function maryPaint(cvIn) {   // 畫整台小瑪莉（靜態重建與開獎動畫
   const sp2 = S.mary?.showPlay, st2 = sp2 ? (performance.now() - sp2.t0) / 1000 : 0;
   g.save(); g.beginPath(); g.rect(ix + 2, iy + 2, iw - 4, ih - 4); g.clip();       // 島主與勇者只畫在藍色區裡
   maryMob(g, owner, ix + iw / 2, iy + 46 + (ih - 46) * .58, 70, Math.floor(S.t * 6) % 6);   // 島主（幀會動；入座開局時隨機跳一位）——上方讓位給拉霸
-  if (sp2 && st2 < MARY_FIGHT_S) {   // 勇者挑戰島主：打滿 2 秒才亮結果（從左邊滑進來揮砍；打倒時島主金光閃爍）
+  if (sp2 && st2 < MARY_FIGHT_S) {   // 勇者挑戰島主：打滿 4 秒才亮結果（從左邊滑進來揮砍；打倒時島主金光閃爍）
     const hx = ix + 28 + Math.min(1, st2 / .5) * 18, foot = iy + ih - 8;
     const heroImg = maryHeroSprite();
     g.imageSmoothingEnabled = false;
@@ -8770,7 +8770,7 @@ function maryPaint(cvIn) {   // 畫整台小瑪莉（靜態重建與開獎動畫
     g.fillStyle = '#140a08'; g.fillRect(rx, ry, rw, rh);
     g.strokeStyle = '#3a2018'; g.lineWidth = 1; g.strokeRect(rx + .5, ry + .5, rw - 1, rh - 1);
     let sym;
-    if (sp2 && sp2.heroWin && st2 >= MARY_FIGHT_S) sym = st2 >= MARY_FIGHT_S + 1.2 + i * .4 ? sp2.reels[i] : cols[(Math.floor(S.t * 15) + i * 3) % 8];   // 對打 2 秒後才轉拉霸：轉動中快速跳格，依序停格（cols＝伺服器送來的 8 種圖案）
+    if (sp2 && sp2.heroWin && st2 >= MARY_FIGHT_S) sym = st2 >= MARY_FIGHT_S + 1.2 + i * .4 ? sp2.reels[i] : cols[(Math.floor(S.t * 15) + i * 3) % 8];   // 對打 4 秒後才轉拉霸：轉動中快速跳格，依序停格（cols＝伺服器送來的 8 種圖案）
     else sym = (sp2 ? sp2.reels : ma.show?.reels)?.[i] || ['chicken', 'bunny', 'frog'][i];   // 戰敗／平常：暗暗顯示上一次的結果（戰敗的 reels 是 null）
     if (!sp2) g.globalAlpha = .5;
     maryMob(g, sym, rx + rw / 2, ry + rh / 2, rh - 6);
@@ -8878,12 +8878,31 @@ function maryPaint(cvIn) {   // 畫整台小瑪莉（靜態重建與開獎動畫
   g.textAlign = 'left';
 }
 function marySfxCtx() { return S.profile?.sfx === false || !sfxCtx || sfxCtx.state !== 'running' ? null : sfxCtx; }   // 跟提示音同一個 AudioContext、同一個開關
-function marySfxRun() {   // 跑燈：過一格一聲短促的機械答答（方波往下掉），不是送燈的鈴聲
+function marySfxRun() {   // 跑燈：過一格一聲短促的機械答答。方波往下掉，再疊一個更高、更短的三角波，音高每格略跳，聽起來比單音更活；仍比送燈的鈴短
   const c = marySfxCtx(); if (!c) return;
-  const t = c.currentTime, o = c.createOscillator(), g = c.createGain();
-  o.type = 'square'; o.frequency.setValueAtTime(1680, t); o.frequency.exponentialRampToValueAtTime(620, t + .016);
-  g.gain.setValueAtTime(.04, t); g.gain.exponentialRampToValueAtTime(.0008, t + .022);
+  const t = c.currentTime, f = 1280 + ((Math.random() * 5) | 0) * 140;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = 'square'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(520, t + .018);
+  g.gain.setValueAtTime(.045, t); g.gain.exponentialRampToValueAtTime(.0008, t + .026);
   o.connect(g).connect(c.destination); o.start(t); o.stop(t + .03);
+  const o2 = c.createOscillator(), g2 = c.createGain();
+  o2.type = 'triangle'; o2.frequency.value = f * 1.5;
+  g2.gain.setValueAtTime(.03, t); g2.gain.exponentialRampToValueAtTime(.0008, t + .01);
+  o2.connect(g2).connect(c.destination); o2.start(t); o2.stop(t + .014);
+}
+function marySfxHero() {   // 勇者進場：一小段上行號角（鋸齒波旋律加低音），約 2 秒。不是跑燈答答、送燈鈴、猜大小木魚或拉桿
+  const c = marySfxCtx(); if (!c) return;
+  const t = c.currentTime;
+  for (const [f, at, len] of [[349, 0, .34], [440, .3, .34], [523, .6, .4], [698, .98, .9]]) {
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = 'sawtooth'; o.frequency.value = f;
+    g.gain.setValueAtTime(.0008, t + at); g.gain.linearRampToValueAtTime(.04, t + at + .04); g.gain.exponentialRampToValueAtTime(.0008, t + at + len);
+    o.connect(g).connect(c.destination); o.start(t + at); o.stop(t + at + len + .02);
+  }
+  const b = c.createOscillator(), bg = c.createGain();
+  b.type = 'sine'; b.frequency.value = 175;
+  bg.gain.setValueAtTime(.05, t); bg.gain.exponentialRampToValueAtTime(.0008, t + 1.9);
+  b.connect(bg).connect(c.destination); b.start(t); b.stop(t + 1.95);
 }
 function marySfxLight() {   // 送燈：較亮的一聲鈴（三角波），跟跑燈的答答分開
   const c = marySfxCtx(); if (!c) return;
@@ -8982,7 +9001,7 @@ function maryFrame() {
       if (sp.more) marySfxLight();   // 停在 ONCE MORE：送燈鈴聲
       else sfxTones(sp.win ? [[660, 0, .09], [880, .09, .09], [1180, .18, .2]] : [[220, 0, .28]]);   // 開出獎＝三連升音；沒中＝低音
       const ma2 = S.tableView?.ma;
-      if (M.showPending && ma2) { M.showPlay = { ...M.showPending, t0: performance.now() }; M.showPending = null; M.lastFrame = performance.now(); maryArmWatchdog(MARY_SHOW_MS + 8000); }   // 勇者／拉霸演出接著播
+      if (M.showPending && ma2) { M.showPlay = { ...M.showPending, t0: performance.now() }; M.showPending = null; M.lastFrame = performance.now(); marySfxHero(); maryArmWatchdog(MARY_SHOW_MS + 8000); }   // 勇者進場：號角接著播，拉霸等對打結束
       else if (ma2) M.potShown = ma2.pot || 0;   // 動畫停格：WIN 才跟上這一注的結果
       if (M.chainHold && ma2 && !(ma2.lights > 0)) { M.chainHold = false; M.chainEnd = ma2.seq; }   // 燈全部跑完：解除凍結、記下要顯示「送燈結束」的 seq
       maryLightsNext();   // 送燈：動畫跑完自動免費多開下一個燈
@@ -8990,7 +9009,7 @@ function maryFrame() {
   }
   maryPaint();
   const wait = maryLogPending(M);
-  if (M.logWait && !wait) marySyncLog();   // 跑燈停了、或對打滿 2 秒：這時才把「開出／沒押中／猜大」寫進紀錄
+  if (M.logWait && !wait) marySyncLog();   // 跑燈停了、或對打滿 4 秒：這時才把「開出／沒押中／猜大」寫進紀錄
   M.logWait = wait;
   const dblRun = !!(S.mary?.dbl && performance.now() - S.mary.dbl.t0 < (MARY_DBL_S + MARY_DBL_TAIL) * 1000);
   if (S.mary?.spin || S.mary?.showPlay || dblRun) S.maryRaf = requestAnimationFrame(maryFrame); else S.maryRaf = 0;   // 演出播放中也要連續重畫
@@ -9003,7 +9022,7 @@ function marySkip() {   // 「停止」：直接把跑馬燈跳到伺服器開�
   if (sp.more) marySfxLight(); else sfxTones(sp.win ? [[660, 0, .09], [880, .09, .09], [1180, .18, .2]] : [[220, 0, .28]]);
   if (S.maryRaf) { cancelAnimationFrame(S.maryRaf); S.maryRaf = 0; }
   const ma2 = S.tableView?.ma;
-  if (M.showPending && ma2) { M.showPlay = { ...M.showPending, t0: performance.now() }; M.showPending = null; M.lastFrame = performance.now(); maryArmWatchdog(MARY_SHOW_MS + 8000); }
+  if (M.showPending && ma2) { M.showPlay = { ...M.showPending, t0: performance.now() }; M.showPending = null; M.lastFrame = performance.now(); marySfxHero(); maryArmWatchdog(MARY_SHOW_MS + 8000); }
   else if (ma2) M.potShown = ma2.pot || 0;
   if (M.chainHold && ma2 && !(ma2.lights > 0)) { M.chainHold = false; M.chainEnd = ma2.seq; }   // 燈全部跑完：解除凍結
   maryPaint();
