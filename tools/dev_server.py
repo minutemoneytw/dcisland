@@ -6925,7 +6925,10 @@ def tbl_view(t, cid):
 def tbl_info(t):
     mn, mx = GAME_LIMITS[t["game"]]
     return {"game": t["game"], "n": len(t["seats"]), "s": len(t["specs"]), "max": mx, "play": t["phase"] == "playing",
-            "seated": [s["cid"] for s in t["seats"]], **(ar_info(t) if t["game"] in CAB_GAMES else {})}   # 入座中的連線編號：客戶端在他們的名牌後面加「入座中／遊戲中」
+            "seated": [s["cid"] for s in t["seats"]],
+            **({"board": list(BOARDS.get(t["game"], []))} if t["game"] in BOARD_GAMES else {}),
+            **({"board2": BOARDS.get("planetvs", [])[:BOARD_N]} if t["game"] == "planet" else {}),   # 排行榜（前三名）：選「入座／觀戰」的畫面也要顯示（還沒加入、收不到牌桌畫面）
+            **(ar_info(t) if t["game"] in CAB_GAMES else {})}   # 入座中的連線編號：客戶端在他們的名牌後面加「入座中／遊戲中」
 
 class Room:
     """一座島＝一個房間（鍵：guild:channel）。"""
@@ -8156,7 +8159,9 @@ class Room:
         info = {}
         for tid, game in TABLE_DEFS.get(terrain, {}).items():
             t = self.tables.get(tid)
-            info[tid] = tbl_info(t) if t else {"game": game, "n": 0, "s": 0, "max": GAME_LIMITS[game][1], "play": False}
+            info[tid] = tbl_info(t) if t else {"game": game, "n": 0, "s": 0, "max": GAME_LIMITS[game][1], "play": False,
+                                               **({"board": list(BOARDS.get(game, []))} if game in BOARD_GAMES else {}),
+                                               **({"board2": BOARDS.get("planetvs", [])[:BOARD_N]} if game == "planet" else {})}   # 還沒人用過的桌也帶排行榜
         return {"t": "tblinfo", "info": info}
 
     # ---- 大螢幕（和平島左上角的圍觀休息區；2026-11-14，使用者要求）：全島共用一個頻道，轉播某一桌的畫面（用觀戰者的視角，手牌全翻開）----

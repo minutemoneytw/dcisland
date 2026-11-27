@@ -5300,6 +5300,11 @@ function buildTable() {
     if (S.tableCab >= 0) box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　${S.tableCab + 1} 號機（空機台）${inf?.n ? `，其他機台 ${inf.n} 人` : ''}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));   // 俄羅斯方塊：4 台共用一張桌，說是哪一台
     else box.appendChild(mk('div', 'table-status', `${gd ? gd.name : '遊戲桌'}　目前 ${inf ? `${inf.n}/${inf.max} 人入座` : '還沒有人入座'}${inf?.s ? `，${inf.s} 人觀戰` : ''}`));
     if (gd?.story) box.appendChild(mk('div', 'it-story', gd.story));   // 有故事背景的遊戲（秘藥情報戰）：先看故事
+    if (inf?.board) {   // 排行榜（2026-11-27 使用者要求）：單人遊戲入座即開始，看不到排行榜，所以選入座／觀戰時就先顯示（資料來自 tblinfo 的 board／board2）
+      const g = tb?.game, fmt = g === 'typing' ? (sc => `${sc} 個單字`) : g === 'zhtyping' ? (sc => `${sc} 個詞`) : (g === 'maze' || g === 'arcade') ? (sc => `${sc} 分（單人）`) : (sc => `${sc} 分`);
+      boardBlock(box, inf, mk, fmt);
+      if (inf.board2) boardBlock(box, inf, mk, sc => `${sc} 勝`, 'board2', '⚔ 對戰排行榜（勝場數前三名）');
+    }
     box.appendChild(mk('div', 'table-tag', '要加入遊戲，還是先在旁邊看？（觀戰不用等滿人，之後想玩可以再按「入座」）'));
     const bs = mk('div', 'table-btns');
     for (const [label, role] of [['入座', 'seat'], ['觀戰', 'spec']]) {

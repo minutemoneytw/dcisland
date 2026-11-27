@@ -4505,7 +4505,7 @@ function tblView(t, cid, jp = MARY_JP_SEED) {
   return v;
 }
 // seated＝入座中的連線編號：客戶端在他們的名牌後面加「入座中／遊戲中」
-const tblInfo = t => ({ game: t.game, n: t.seats.length, s: t.specs.length, max: GAME_LIMITS[t.game][1], play: t.phase === "playing", seated: t.seats.map(s => s.cid), ...(CAB_GAMES[t.game] ? arInfo(t) : {}) });
+const tblInfo = t => ({ game: t.game, n: t.seats.length, s: t.specs.length, max: GAME_LIMITS[t.game][1], play: t.phase === "playing", seated: t.seats.map(s => s.cid), ...(t.board ? { board: t.board } : {}), ...(t.board2 ? { board2: t.board2 } : {}), ...(CAB_GAMES[t.game] ? arInfo(t) : {}) });   // board／board2：排行榜（前三名），選「入座／觀戰」的畫面也要顯示（還沒加入、收不到牌桌畫面）
 
 // ============ 一座島 ============
 // 用 WebSocket Hibernation：沒人講話時 DO 可以休眠，不計費也省資源
