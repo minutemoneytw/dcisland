@@ -3941,6 +3941,7 @@ function drawPersonBase(p, wi, nameColor) {
     const carry = wi && !pose && !fish && !(p.swing > 0) && !p.cast;   // 不拿在手上（詠唱中高舉法杖）
     const backView = d8Of(p).startsWith('up');                // 背面（往上、斜上）：背著的武器疊在身體上面，其餘方向被身體擋住
     // 掛著的武器畫在左右翻轉之外：固定在同一側，人物轉向時不會跟著換邊
+    carryFaceLeft = face4(p) === 'left';   // 背著的武器在背後那側：朝左走時背在右邊（左右鏡射）
     carrySideNow = ['left', 'right'].includes(face4(p));   // 朝左右走：掛著的武器畫側面版（sideSprite）
     const drawCarry = onBack => wi.carry === 'hips' ? drawWeaponHips(wi) : wi.carry === 'waist' ? drawWeaponWaist(wi) : drawWeaponBack(wi, onBack);
     const frontCarry = wi && (wi.carry === 'waist' || wi.carry === 'hips');   // 掛在腰間的（2026-11-27 使用者要求：劍／短刀掛在腰間看得到）：所有方向都畫在身體前面；背著的才分背面／其他
@@ -12600,11 +12601,12 @@ const WEAPON_BACK_BOTTOM = 27, WEAPON_HILT_LIFT = 0;
 // 預設值＝以前寫死的常數（背上 -11,-26／背面 -5,-26／腰 -8,-18／手 3,-26）
 let charAnch = { back: [-11, -26], backView: [-5, -26], waist: [-8, -18], hand: [3, -26] };
 // onBack＝背面視角（畫在身體之上）：用 backView 掛點（往背的中間靠，看起來是斜背在背上）
-let carrySideNow = false;
+let carrySideNow = false, carryFaceLeft = false;
 const carryImgOf = w0 => (carrySideNow && w0.sideImg) || w0.carryImg || w0;   // 掛著時用的圖：側面走用側面版，其餘用掛著版（劍鞘）或手上那張
 function drawWeaponBack(w0, onBack) {
   const wi = carryImgOf(w0), [ax, ay] = onBack ? charAnch.backView : charAnch.back, s = wi.wscale || 2, wb = WEAPON_BACK_BOTTOM * s / 2;
-  ctx.save(); ctx.translate(ax, ay); ctx.rotate(-.55);
+  ctx.save(); if (carryFaceLeft && !onBack) ctx.scale(-1, 1);   // 朝左（側面）：鏡射到右邊＝背後那側
+  ctx.translate(ax, ay); ctx.rotate(-.55);
   if (wi.hiltUp) { ctx.scale(1, -1); ctx.drawImage(wi, -wi.width * s / 2, WEAPON_HILT_LIFT * s / 2 - wb, wi.width * s, wi.height * s); }
   else ctx.drawImage(wi, -wi.width * s / 2, wb - wi.height * s, wi.width * s, wi.height * s);
   ctx.restore();
