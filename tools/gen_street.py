@@ -4,7 +4,7 @@
 
 做法同甜心套裝 gen_sweet.py（沒有手畫的圖，全部程式畫）：幾何沿用男式西裝（gen_male.DATA），逐字母換配色再疊特徵：
   上衣（top 層）：米色寬鬆夾克（手套的位置改成寬袖口）、深色連帽領（脖子一圈往下垂）、正面中間露出深色內搭、斜背帶（右肩到左腰，金屬扣）、側面／背面一個小側背包；
-  褲子（bottom 層）：喇叭褲——男式褲子上面不變、往下每排撐開到左右各 4 格，深灰色＋米色側條＋口袋方框；
+  褲子（bottom 層）：喇叭褲——男式褲子上面不變、往下每排撐開到左右各 4 格（側面站姿 2 格、側面走路 1 格：腿是斜的，橫向撐開會多出很多格），深灰色＋米色側條＋口袋方框；
   鞋子（shoes 層）：男式鞋子換米色，厚底（底一排最亮）；
   帽子（hat 層）：深灰色毛帽（直紋）＋米色綁帶與扣環，帽沿往下蓋住額頭上緣，耳邊吊米色名牌。
 輸出格式同 gen_sweet（street_sheets() 回 top／bottom／shoes／hat 四層）。顏色集中在最上面。
@@ -133,7 +133,7 @@ def street_top(kind, x0, y0, rows, right=False):
     # 正面袖子與身體之間的輪廓線（比外框淡一點的深色，讓袖子輪廓明顯）
     if kind == 'front':
         a_, b_ = hem
-        for y in range(5, h - 1):
+        for y in range(7, h - 1):                                           # 第 6、7 排（y＝5、6）不畫：那兩排中間跟袖子之間不要輪廓線
             for x in (a_ - 1, b_ + 1):
                 if (x, y) in g.px and g.px[(x, y)] in BEIGE:
                     g.px[(x, y)] = (92, 74, 66)
@@ -173,9 +173,9 @@ def street_top(kind, x0, y0, rows, right=False):
 
 
 # ---------- 褲子 ----------
-def street_bottom(kind, x0, y0, rows):
+def street_bottom(kind, x0, y0, rows, step=0):
     g = Grid(x0, y0, rows, 'bottom', DARK, (1, 2, 3, 3, 4, 4, 5))
-    px = _dilate(g.px, 4, g.h)                                  # 喇叭褲：上面維持男式褲子的寬度，往下每排慢慢撐開到左右各 4 格
+    px = _dilate(g.px, 4 if kind != 'left' else (2 if step == 0 else 1), g.h)                                  # 喇叭褲：上面維持男式褲子的寬度，往下每排慢慢撐開到左右各 4 格
     # 米色側條：每排每一段的最外側往內第 2 格
     out = dict(px)
     for y in range(g.h):
@@ -281,7 +281,7 @@ def street_sheets():
             cells = {}
             for nm, fn in fns.items():
                 x0, y0, rows = DATA[(kind, step)][nm]
-                kw = {'right': d == 'right'} if nm == 'top' else {}
+                kw = {'right': d == 'right'} if nm == 'top' else ({'step': step} if nm == 'bottom' else {})
                 cells[nm] = {(x + 16, y): c for (x, y), c in fn(kind, x0, y0, rows, **kw).items() if c is not None}
             cx, top = _head_box(kind, step)
             cells['hat'] = hat_pixels(kind, cx, top, right=(d == 'right'))
