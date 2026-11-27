@@ -5267,7 +5267,7 @@ function onNetTable(m) {   // 伺服器給我的牌桌畫面（v＝null：我已
 function tableXpLine(n) { (S.tableLocalLog ||= []).unshift(`你獲得 ${n} XP`); if (S.tableOpen && S.tableView) buildTable(); }
 const tableLogLines = v => [...(S.tableLocalLog || []), ...[...v.log].reverse()];
 function onNetTblInfo(info) { S.tblInfo = info || {}; }
-function onNetTblErr(m) { if (m?.id && m.id !== S.tableId) return; toast(m?.text || '操作無效', 2200); }   // 小瑪莉等機台的操作被拒（籌碼不足／沒押注…）：只提示本人
+function onNetTblErr(m) { if (m?.id && m.id !== S.tableId) return; if (S.mary) S.mary.betLock = false; toast(m?.text || '操作無效', 2200); }   // 小瑪莉等機台的操作被拒（籌碼不足／沒押注…）：只提示本人；開獎沒被接受就把改注鎖放開
 // 名牌後面的牌桌狀態：入座中的人顯示「入座中」（還沒開局）或「遊戲中」（牌局進行中），讓同島的人知道他們在玩（只看這座地形的桌子）
 function tableTag(p) {
   if (p.npc) return null;
@@ -8972,8 +8972,15 @@ function maryLightsNext(delay = 700) {   // 送燈：這次開獎的動畫結束
     // 舊版「記下 seq 就永遠不重送」會讓丟包後整條鏈永久卡死＝機台全鎖。
     if (S.mary.lightsSeq === ma2.seq && performance.now() - (S.mary.lightsSentAt || 0) < 2500) return;
     S.mary.lightsSeq = ma2.seq; S.mary.lightsSentAt = performance.now();
-    S.net?.tbl?.({ a: 'mspin', bets: S.maryBets, light: 1 });
+    S.net?.tbl?.({ a: 'mspin', bets: maryLightBets(ma2, S.maryBets), light: 1 });   // 送伺服器這注，不送可能已被改掉的本機押注
   }, delay);
+}
+function maryLightBets(ma, local) {   // 送燈重送的押注。本機 S.maryBets 可能在開獎回來前被加注或清空；用那份會被伺服器拒（燈數與 seq 都不動），2.5 秒後再送同一包＝鏈永遠走不完、機台全鎖
+  const b = ma?.bets;
+  return Array.isArray(b) ? b : local;
+}
+function maryBetsLocked(M, ma) {   // 這注已經送出、跑馬燈還在轉、或送燈還沒完：本機不能改押注
+  return !!(M?.betLock || M?.spin || (ma?.lights > 0));
 }
 function maryChainTick(on) {   // 送燈鏈巡檢（2026-11-23）：每 2 秒叫一次 maryLightsNext(0)——丟包時靠它重送；燈跑完自動停。
   const M = S.mary; if (!M) return;   // 不用看門狗強制解鎖（那會讓燈沒跑完就亮總獎）；chainHold 只在燈真的跑完時解除。
@@ -9000,7 +9007,7 @@ function maryShowNote(sp, nm) {   // 勇者挑戰＋拉霸演出的字幕（照�
 function maryAddBet(i) {   // 這一欄（圖案）加一注
   const v = S.tableView, ma = v?.ma; if (!v || v.game !== 'mary' || !ma || v.role !== 'seat' || v.phase !== 'playing') return;
   if (ma.pot > 0 || S.mary?.spin) return;
-  if (ma.lights > 0) { toast('送燈中，押注不能改', 1600); return; }   // 送燈：押注維持（伺服器也會擋改注）
+  if (maryBetsLocked(S.mary, ma)) { toast(ma.lights > 0 ? '送燈中，押注不能改' : '開獎中，押注不能改', 1600); return; }   // 送燈，或「開始」已送出、結果還沒回來：押注維持（伺服器也會擋送燈改注）
   const n = (ma.cols || []).length || 8, bets = (S.maryBets ||= new Array(n).fill(0));
   const amt = S.maryBetAmt, maxBet = ma.maxBet || 10000;
   if (!amt) { toast('先點下面的金額鈕再押注', 1500); return; }   // 按「清空」會連金額一起清掉：要先重選金額
@@ -9043,6 +9050,7 @@ function maryClick(px, py, trusted = true) {   // 機台畫布的點擊：控制
       const bets = S.maryBets; if (!bets || !bets.some(x => x > 0)) { toast('先押注再開始', 1600); return; }
       const total = bets.reduce((a, b) => a + b, 0);
       if (total > Math.floor(ma.chips || 0)) { toast('籌碼不足', 1800); return; }   // 照上一次的押注重開：餘額不夠先擋（伺服器也會原子扣款擋一次）
+      if (S.mary) S.mary.betLock = true;   // 結果回來前不能改注／清空，不然送燈會拿改過的押注去重送、被拒後整條鏈鎖死
       S.net?.tbl?.({ a: 'mspin', bets }); buildTable();   // 押注保留：再按「開始」就照這份押注直接再開
     } else if (b.id === 'collect') { if (ma.pot > 0) S.net?.tbl?.({ a: 'mcol' }); }
     else if (b.id === 'big') { if (ma.pot > 0 && trusted) S.net?.tbl?.({ a: 'mdbl', big: 1 }); }   // 比大小只接受真人點擊：合成事件（isTrusted false）一律忽略，杜絕幽靈輸入（2026-11-19 使用者回饋）
@@ -9052,7 +9060,7 @@ function maryClick(px, py, trusted = true) {   // 機台畫布的點擊：控制
   if (ma.pot > 0 || spin) return;   // 獎金還躺在獎池時不能再押（要先領出或比倍）
   for (const b of MARY_AMT_BTNS) {
     if (!hit(b)) continue;
-    if (b.a < 0) { if (ma.lights > 0) { toast('送燈中，押注不能改', 1600); return; } S.maryBets = null; S.maryBetAmt = null; if (S.mary) S.mary.res = -1; } else S.maryBetAmt = b.a;   // 清空連選好的金額也清掉（不然金額鈕還亮著會誤會沒清乾淨，2026-11-22 使用者回饋）
+    if (b.a < 0) { if (maryBetsLocked(S.mary, ma)) { toast(ma.lights > 0 ? '送燈中，押注不能改' : '開獎中，押注不能改', 1600); return; } S.maryBets = null; S.maryBetAmt = null; if (S.mary) S.mary.res = -1; } else S.maryBetAmt = b.a;   // 清空連選好的金額也清掉（不然金額鈕還亮著會誤會沒清乾淨，2026-11-22 使用者回饋）
     buildTable(); return;
   }
   const ci = maryColAt(px);
@@ -9354,7 +9362,8 @@ function buildMary(box, v, mk, gd) {
     else if (ma.seq !== S.mary.seq) {   // 伺服器開獎／比倍／領出／兌換了：跑馬燈轉到新的位置（押注保留，再按「開始」照上一次的押注直接再開）
       const spun = ma.last >= 0 && ma.dcard < 0 && ma.rseq === ma.seq;   // 開獎（rseq＝最後一次開獎的 seq，開到同一格也算）才算結果：領出／兌換／比倍也會 ++seq 但不會更新 rseq
       const gambled = !spun && ma.dcard >= 0;   // 比倍：伺服器只在猜大小時把 dcard 設成開出的牌（開獎／領出／兌換都清成 -1）
-      S.mary.seq = ma.seq; S.mary.last = ma.last;
+      S.mary.seq = ma.seq; S.mary.last = ma.last; S.mary.betLock = false;   // 這次開獎的回應到了：改注鎖解開（送燈中仍由 lights 擋住）
+      if (spun && ma.lights > 0 && Array.isArray(ma.bets)) S.maryBets = ma.bets.slice();   // 送燈的押注以伺服器這注為準（回來前若改過本機押注，這裡拉回來）
       if (spun) S.mary.res = ma.seq;
       if (spun) marySpinTo(ma.last, ma.pot > 0, ma.ring[ma.last] === 'more');   // 只有真的開獎才跑跑馬燈（領出／兌換／比倍不再自動多跑一次：2026-11-19 使用者回饋）
       if (spun && ma.lights > 0) maryChainTick(true);   // 還有燈＝鏈進行中：巡檢每 2 秒確認鏈有在跑，丟包會重送（2026-11-23）
