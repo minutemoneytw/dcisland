@@ -13916,16 +13916,18 @@ function glamFits(slot, it, job = S.me.job) {
   if (!it?.glam || (it.jobs && !it.jobs.includes(job))) return false;
   return slot !== 'weapon' || it.type === jobWeaponDef(job)?.type;
 }
-// 預設外觀（2026-11-23 使用者定）：新人類系列現在整套衣服是「外觀」（2026-11-25 預設改男式西裝外套／西裝褲／皮鞋；女式西裝仍可在外觀選），每個職業預設都選這三件；
-// 按外觀一覽的「不使用外觀」＝記在 glamOff，才會回到職業裝備（裝備目前沒有自己的圖，畫面還是那套衣服）
+// 預設外觀（2026-11-23 使用者定）：新人類系列現在整套衣服是「外觀」（2026-11-25 預設改男式西裝外套／西裝褲／皮鞋；女式西裝仍可在外觀選），
+// 職業裝備沒有自己的圖時，每個職業預設顯示這三件。**2026-11-27 簡化**：預設只在「顯示時」判斷（見 shownItem），不再寫進存檔——存檔的 glam 只放使用者真的選過的外觀，
+// glamOff＝使用者按了「不使用外觀」（才會回到職業裝備）。（之前把預設寫進存檔，跟使用者自己選的長得一模一樣，後來要清掉舊的只能用「等於預設就刪」去猜，結果把使用者選的男式西裝也刪了。）
 const DEFAULT_GLAM = { top: 'suit_jacket_m', bottom: 'suit_pants_m', shoe: 'leather_shoes_m' };
 function wardrobe(job = S.me.job) {
   const w = (S.me.wardrobe && typeof S.me.wardrobe === 'object') ? S.me.wardrobe : (S.me.wardrobe = {});
   const e = w[job] && typeof w[job] === 'object' ? w[job] : (w[job] = {});
   e.glam ||= {}; e.color ||= {}; e.glamOff ||= {};
-  // 舊存檔清理：「外觀＝預設那三件」而且職業裝備有自己的圖（keepGear）＝舊版自動套上去的，拿掉。**但使用者自己在外觀選單點選過的不能拿掉**（glamPick 記下來；2026-11-27 使用者回報「換不了男式西裝外套／西裝褲／皮鞋」——這三件剛好就是預設，每次 wardrobe() 都被當成舊存檔的自動預設刪掉）
-  for (const [slot, gid] of Object.entries(DEFAULT_GLAM)) if (e.glam[slot] === gid && !e.glamPick?.[slot] && lookItem(slotList(slot), JOBS[job]?.gear?.[slot])?.keepGear) delete e.glam[slot];   // 舊存檔：這個職業的裝備後來才標 keepGear，之前被自動套上的預設外觀（西裝）要拿掉，不然新裝備看不到
-  for (const [slot, gid] of Object.entries(DEFAULT_GLAM)) if (!(slot in e.glam) && !e.glamOff[slot] && lookItem(slotList(slot), gid) && !lookItem(slotList(slot), JOBS[job]?.gear?.[slot])?.keepGear) e.glam[slot] = gid;   // keepGear＝這件職業裝備有自己的新風格圖（忍者套裝），不套預設外觀
+  if (!e.glamV) {   // 舊存檔只清一次：舊版把預設外觀自動寫進存檔；職業裝備後來有了自己的圖（keepGear），那些自動寫入的要拿掉，不然永遠蓋住新裝備
+    e.glamV = 2;
+    for (const [slot, gid] of Object.entries(DEFAULT_GLAM)) if (e.glam[slot] === gid && lookItem(slotList(slot), JOBS[job]?.gear?.[slot])?.keepGear) delete e.glam[slot];
+  }
   if (e.glam.weapon === 'goldsword') e.glam.weapon = 'sword_gold';   // 舊的「金劍」外觀（2026-11-09 拿掉）→ 長劍的金黃發光版（解鎖條件同樣是打倒黃金肥龍）
   return e;
 }
@@ -13934,8 +13936,10 @@ function shownItem(slot, job = S.me.job) {
   const g = wardrobe(job).glam[slot], it = g && lookItem(slotList(slot), g);
   if (it && glamFits(slot, it, job) && glamUnlocked(it)) return it;
   if (slot === 'weapon') return jobWeaponDef(job);
-  const list = slotList(slot) || [], gid = JOBS[job]?.gear?.[slot];
-  return lookItem(list, gid);   // 服裝男女共用一個 id（女角在 charSprite 改用 sheetF）
+  const list = slotList(slot) || [], gear = lookItem(list, JOBS[job]?.gear?.[slot]);   // 服裝男女共用一個 id（女角在 charSprite 改用 sheetF）
+  if (gear?.keepGear) return gear;   // 沒選外觀、職業裝備有自己的圖：顯示裝備
+  const def = DEFAULT_GLAM[slot] && !wardrobe(job).glamOff[slot] ? lookItem(list, DEFAULT_GLAM[slot]) : null;   // 裝備沒有自己的圖：顯示預設外觀（除非使用者按了「不使用外觀」）
+  return def && glamFits(slot, def, job) && glamUnlocked(def) ? def : gear;
 }
 // 自己的顯示造型（畫自己、送給同島的人都用這個；外觀與裝備在這裡就決定好，別人只看結果）
 function myLook() {
@@ -14073,11 +14077,11 @@ function buildGlams() {
   const box = $('glamList'); box.innerHTML = '';
   const row = (id, name, desc, ok) => {
     const o = document.createElement('div');
-    o.className = 'title-row' + (ok ? '' : ' locked') + ((id ? cur?.id === id && cur?.id !== gearIt?.id : !wr.glam[slot] || cur?.id === gearIt?.id) ? ' sel' : '');
+    o.className = 'title-row' + (ok ? '' : ' locked') + ((id ? cur?.id === id && cur?.id !== gearIt?.id : cur?.id === gearIt?.id) ? ' sel' : '');
     const nm = document.createElement('div'); nm.className = 'title-name'; nm.textContent = name;
     const ds = document.createElement('div'); ds.className = 'title-desc'; ds.textContent = desc;
     o.append(nm, ds);
-    if (ok) o.onclick = () => { if (id) { wr.glam[slot] = id; delete wr.glamOff[slot]; (wr.glamPick ||= {})[slot] = true; } else { delete wr.glam[slot]; wr.glamOff[slot] = true; if (wr.glamPick) delete wr.glamPick[slot]; } saveAvatar(); buildAvatarPanel(); buildGlams(); };
+    if (ok) o.onclick = () => { if (id) { wr.glam[slot] = id; delete wr.glamOff[slot]; } else { delete wr.glam[slot]; wr.glamOff[slot] = true; } saveAvatar(); buildAvatarPanel(); buildGlams(); };
     box.appendChild(o);
   };
   row(null, '不使用外觀', `顯示職業裝備：${gearIt ? gearIt.name : '（無）'}`, true);
