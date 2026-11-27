@@ -4210,7 +4210,7 @@ function talkTo(n) {
   n.say = { text: line, until: S.t + db.duration };
   n.idle = db.duration + .5; n.moving = false; n.target = null;      // 停下來說話，面向玩家
   if (Math.abs(me.x - n.x) > 6) n.dir = Math.sign(me.x - n.x);
-  n.d8 = n.dir < 0 ? 'left' : 'right';   // 轉向玩家
+  n.d8 = dir8Of(me.x - n.x, me.y - n.y);   // 轉向玩家（2026-11-27 使用者回報：原本只分左右，玩家在上方／下方也只看左右；改成 8 方向，人在上面就轉背面、在下面就轉正面）
   if (n.guide) {                              // 嚮導：先說一句話，讓台詞看得到，約 1.5 秒後再跳出簡易操作說明
     clearTimeout(S.helpTimer);
     S.helpTimer = setTimeout(() => { if (S.players.includes(n) && !S.helpOpen && !S.confirmOpen) openHelp(); }, 1500);
