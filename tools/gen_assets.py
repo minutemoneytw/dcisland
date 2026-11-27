@@ -624,6 +624,7 @@ import gen_sit   # 側面坐姿格（腿層 sheet 的第 9 欄，tools/gen_sit.p
 import gen_knight   # 騎士套裝（tools/gen_knight.py：頭盔／鎧甲／腿甲／靴，幾何沿用男式西裝）
 import gen_british   # 英倫風格外觀（tools/gen_british.py：報童帽／格紋披肩外套／長褲／皮靴，幾何沿用男式西裝）
 import gen_bard   # 吟遊詩人套裝（tools/gen_bard.py：帽子／斗篷／長褲／靴子，幾何沿用男式西裝）
+import gen_sweet   # 甜美風格外觀套裝（tools/gen_sweet.py：小圓帽／罩衫洋裝／層疊裙＋長襪／蝴蝶結靴）
 import gen_warrior   # 戰士套裝（tools/gen_warrior.py：角盔／鎧甲／腿甲／靴子，同龍騎士的做法）
 import gen_dragoon   # 龍騎士套裝（tools/gen_dragoon.py：長角頭盔／鎧甲／腿甲／靴子，同騎士的做法）
 import gen_sage   # 賢者套裝（tools/gen_sage.py：貝雷帽／長外套／長褲／靴子，同白魔法師的做法）
@@ -693,6 +694,10 @@ SCHOOL_DRAGOON_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_DRAGOO
 SCHOOL_WARRIOR = gen_school.collar_bob(gen_warrior.warrior_sheets(), SCHOOL_SHEETS['body'])   # 側面走路：下巴以上的上衣跟著頭下沉 1 格（gen_school.collar_bob）
 SCHOOL_WARRIOR_DWARF = gen_school.shrink_sheets(SCHOOL_WARRIOR)
 SCHOOL_WARRIOR_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_WARRIOR})
+# 甜美風格套裝（2026-11-28，使用者給例圖；「外觀」glam，每個職業都能選；圖層 <種族>_p_top／bottom／shoes／hat）
+SCHOOL_SWEET = gen_sweet.sweet_sheets()
+SCHOOL_SWEET_DWARF = gen_school.shrink_sheets(SCHOOL_SWEET)
+SCHOOL_SWEET_GIANT = gen_school.giant_sheets({**SCHOOL_SHEETS, **SCHOOL_SWEET})
 # 吟遊詩人套裝（2026-11-26，使用者給例圖；吟遊詩人職業的「裝備」：keepGear，jobs.json 的 gear；圖層 <種族>_d_top／bottom／shoes／hat）
 SCHOOL_BARD = gen_school.collar_bob(gen_bard.bard_sheets(), SCHOOL_SHEETS['body'])   # 側面走路：下巴以上的上衣跟著頭下沉 1 格（gen_school.collar_bob）
 SCHOOL_BARD_DWARF = gen_school.shrink_sheets(SCHOOL_BARD)
@@ -776,6 +781,20 @@ WARRIOR_ITEMS = dict(
     top=dict(id="warrior_armor", name="戰士鎧甲", keepGear=True, dye=WARRIOR_DYE["top"]),
     bottom=dict(id="warrior_legs", name="戰士腿甲", keepGear=True, dye=WARRIOR_DYE["bottom"]),
     shoe=dict(id="warrior_boots", name="戰士靴", keepGear=True, dye=WARRIOR_DYE["shoe"]))
+SWEET_DYE = dict(top=_hexes([gen_sweet.PINK[i] for i in (4, 0, 1, 2, 3, 5, 6)]),    # 換罩衫的粉色階（棕色背心裙、蝴蝶結不換）
+                 bottom=_hexes([gen_sweet.BROWN[i] for i in (3, 0, 1, 2, 4, 5, 6)]),   # 換裙子的棕色階（粉色荷葉邊不換）
+                 shoe=_hexes([gen_sweet.BROWN[i] for i in (3, 0, 1, 2, 4, 5, 6)]),
+                 hat=_hexes([gen_sweet.BROWN[i] for i in (3, 0, 1, 2, 4, 5, 6)]))
+SWEET_ITEMS = dict(
+    hat=dict(id="sweet_hat", name="甜心小圓帽", sheet=None, glam=True, dye=SWEET_DYE["hat"]),
+    top=dict(id="sweet_dress", name="甜心罩衫洋裝", glam=True, dye=SWEET_DYE["top"]),
+    bottom=dict(id="sweet_skirt", name="甜心層疊裙", glam=True, dye=SWEET_DYE["bottom"]),
+    shoe=dict(id="sweet_boots", name="甜心蝴蝶結靴", glam=True, dye=SWEET_DYE["shoe"]))
+def school_sweet_dye():
+    return [dict(slot="top", style="sweet_dress", layers=["top"], colors=SWEET_DYE["top"]),
+            dict(slot="bottom", style="sweet_skirt", layers=["bottom"], colors=SWEET_DYE["bottom"]),
+            dict(slot="shoe", style="sweet_boots", layers=["shoes"], colors=SWEET_DYE["shoe"]),
+            dict(slot="hat", style="sweet_hat", layers=["hat"], colors=SWEET_DYE["hat"])]
 def school_warrior_dye():
     return [dict(slot="top", style="warrior_armor", layers=["top"], colors=WARRIOR_DYE["top"]),
             dict(slot="bottom", style="warrior_legs", layers=["bottom"], colors=WARRIOR_DYE["bottom"]),
@@ -858,6 +877,7 @@ def school_outfit_styles(prefix):
              dict(id="sage_coat", name="賢者長外套", sheets={"top": f"{prefix}_s_top.png"}),
              dict(id="dragoon_armor", name="龍騎士鎧甲", sheets={"top": f"{prefix}_g_top.png"}),
              dict(id="warrior_armor", name="戰士鎧甲", sheets={"top": f"{prefix}_r_top.png"}),
+             dict(id="sweet_dress", name="甜心罩衫洋裝", sheets={"top": f"{prefix}_p_top.png"}),
              dict(id="bard_garb", name="吟遊詩人斗篷", sheets={"top": f"{prefix}_d_top.png"}),
              dict(id="knight_armor", name="騎士鎧甲", sheets={"top": f"{prefix}_k_top.png"}),
              dict(id="uk_coat", name="英倫格紋披肩外套", sheets={"top": f"{prefix}_u_top.png"})],
@@ -869,6 +889,7 @@ def school_outfit_styles(prefix):
                 dict(id="sage_pants", name="賢者長褲", sheets={"bottom": f"{prefix}_s_bottom.png"}),
                 dict(id="dragoon_legs", name="龍騎士腿甲", sheets={"bottom": f"{prefix}_g_bottom.png"}),
                 dict(id="warrior_legs", name="戰士腿甲", sheets={"bottom": f"{prefix}_r_bottom.png"}),
+                dict(id="sweet_skirt", name="甜心層疊裙", sheets={"bottom": f"{prefix}_p_bottom.png"}),
                 dict(id="bard_pants", name="吟遊詩人長褲", sheets={"bottom": f"{prefix}_d_bottom.png"}),
                 dict(id="knight_legs", name="騎士腿甲", sheets={"bottom": f"{prefix}_k_bottom.png"}),
                 dict(id="uk_trousers", name="英倫格紋長褲", sheets={"bottom": f"{prefix}_u_bottom.png"})],
@@ -880,6 +901,7 @@ def school_outfit_styles(prefix):
               dict(id="sage_boots", name="賢者靴", sheets={"shoes": f"{prefix}_s_shoes.png"}),
               dict(id="dragoon_boots", name="龍騎士靴", sheets={"shoes": f"{prefix}_g_shoes.png"}),
               dict(id="warrior_boots", name="戰士靴", sheets={"shoes": f"{prefix}_r_shoes.png"}),
+              dict(id="sweet_boots", name="甜心蝴蝶結靴", sheets={"shoes": f"{prefix}_p_shoes.png"}),
               dict(id="bard_boots", name="吟遊詩人靴", sheets={"shoes": f"{prefix}_d_shoes.png"}),
               dict(id="knight_boots", name="騎士靴", sheets={"shoes": f"{prefix}_k_shoes.png"}),
               ],
@@ -891,7 +913,8 @@ def school_outfit_styles(prefix):
              dict(id="uk_cap", name="英倫報童帽", hairFromHat=True, hairCutDy=0, sheets={"hat": f"{prefix}_u_hat.png"}),
              dict(id="knight_helm", name="騎士頭盔", hideHair=True, sheets={"hat": f"{prefix}_k_hat.png"}),
              dict(id="dragoon_helm", name="龍騎士角盔", hideHair=True, sheets={"hat": f"{prefix}_g_hat.png"}),
-             dict(id="warrior_helm", name="戰士角盔", hideHair=True, sheets={"hat": f"{prefix}_r_hat.png"})])
+             dict(id="warrior_helm", name="戰士角盔", hideHair=True, sheets={"hat": f"{prefix}_r_hat.png"}),
+             dict(id="sweet_hat", name="甜心小圓帽", sheets={"hat": f"{prefix}_p_hat.png"})])
 def school_dye_elf():
     """妖精的換色規則：膚色那條連耳朵（hat 層，皮膚色＋棕色外圈）一起換。"""
     out = []
@@ -919,28 +942,28 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
     dict(id="human2", name="人類", scale=1.0, nameH=66, own=dict(
         sheets={n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
         styles=dict(hair=school_hair_styles("human2"), **school_outfit_styles("human2")),
-        dye=gen_school.dye_rules(SCHOOL_SHEETS) + school_male_dye() + school_ninja_dye() + school_blm_dye() + school_wm_dye() + school_sage_dye() + school_dragoon_dye() + school_warrior_dye() + school_bard_dye() + school_uk_dye() + school_knight_dye(),
+        dye=gen_school.dye_rules(SCHOOL_SHEETS) + school_male_dye() + school_ninja_dye() + school_blm_dye() + school_wm_dye() + school_sage_dye() + school_dragoon_dye() + school_warrior_dye() + school_sweet_dye() + school_bard_dye() + school_uk_dye() + school_knight_dye(),
         # 武器掛點（64×64 格子座標；本體在格子 x 18～45、y 2～62）：暫時估的，之後逐把校正
         anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 46], hand=dict(down=[42, 44], up=[42, 44], side=[31, 44])))),
     # 新妖精（2026-11-22，使用者定案：以新人類加上妖精耳朵）：圖層共用 human2_*，另加 elf2_hat 一層尖耳（正面、側面；背面的髮型蓋住耳朵）
     dict(id="elf2", name="妖精", scale=1.0, nameH=66, own=dict(
         sheets={**{n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, "hat": "elf2_hat.png"}, outline=None,
         styles=dict(hair=school_hair_styles("human2"), **school_outfit_styles("human2")),
-        dye=school_dye_elf() + school_male_dye() + school_ninja_dye() + school_blm_dye() + school_wm_dye() + school_sage_dye() + school_dragoon_dye() + school_warrior_dye() + school_bard_dye() + school_uk_dye() + school_knight_dye(),
+        dye=school_dye_elf() + school_male_dye() + school_ninja_dye() + school_blm_dye() + school_wm_dye() + school_sage_dye() + school_dragoon_dye() + school_warrior_dye() + school_sweet_dye() + school_bard_dye() + school_uk_dye() + school_knight_dye(),
         anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 46], hand=dict(down=[42, 44], up=[42, 44], side=[31, 44])))),
     # 新貓族（2026-11-23）：同一個人加貓耳（參考 LPC 貓耳；四個方向都有，背面沒有內側粉紅）。圖層共用 human2_*，另加 cat2_hat；
     # 耳朵、尾巴的外圈和毛用頭髮的顏色，所以髮色換色規則也套到 hat、hairbg 層（內側粉紅不在顏色表裡，不變）；尾巴在 hairbg 層
     dict(id="cat2", name="貓族", scale=1.0, nameH=66, own=dict(
         sheets={**{n: f"human2_{n}.png" for n in SCHOOL_LAYERS}, "hat": "cat2_hat.png", "hairbg": "cat2_hairbg.png"}, outline=None,
         styles=dict(hair=school_hair_styles("human2"), **school_outfit_styles("human2")),
-        dye=[dict(r, layers=["hair", "hat", "hairbg"]) if r["slot"] == "hair" else r for r in gen_school.dye_rules(SCHOOL_SHEETS)] + school_male_dye() + school_ninja_dye() + school_blm_dye() + school_wm_dye() + school_sage_dye() + school_dragoon_dye() + school_warrior_dye() + school_bard_dye() + school_uk_dye() + school_knight_dye(),
+        dye=[dict(r, layers=["hair", "hat", "hairbg"]) if r["slot"] == "hair" else r for r in gen_school.dye_rules(SCHOOL_SHEETS)] + school_male_dye() + school_ninja_dye() + school_blm_dye() + school_wm_dye() + school_sage_dye() + school_dragoon_dye() + school_warrior_dye() + school_sweet_dye() + school_bard_dye() + school_uk_dye() + school_knight_dye(),
         anchors=dict(back=[27, 36], backView=[37, 36], waist=[28, 46], hand=dict(down=[42, 44], up=[42, 44], side=[31, 44])))),
     # 新矮人（2026-11-23，使用者要求：偏小孩體型）：新人類拿掉軀幹 4 排、小腿 4 排（gen_school.DWARF_DROP），頭不變，身高 52 排；圖層 dwarf2_<圖層>.png。
     # 武器掛點＝新人類的位置往下移（拿掉的排數在掛點下面的那幾排，4 排），暫時估的
     dict(id="dwarf2", name="矮人", scale=1.0, nameH=58, own=dict(
         sheets={n: f"dwarf2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
         styles=dict(hair=school_hair_styles("dwarf2"), **school_outfit_styles("dwarf2")),
-        dye=gen_school.dye_rules(SCHOOL_SHEETS) + school_male_dye() + school_ninja_dye() + school_blm_dye() + school_wm_dye() + school_sage_dye() + school_dragoon_dye() + school_warrior_dye() + school_bard_dye() + school_uk_dye() + school_knight_dye(),
+        dye=gen_school.dye_rules(SCHOOL_SHEETS) + school_male_dye() + school_ninja_dye() + school_blm_dye() + school_wm_dye() + school_sage_dye() + school_dragoon_dye() + school_warrior_dye() + school_sweet_dye() + school_bard_dye() + school_uk_dye() + school_knight_dye(),
         anchors=dict(back=[27, 41], backView=[37, 41], waist=[28, 49], hand=dict(down=[42, 47], up=[42, 47], side=[31, 47])))),   # 2026-11-24 階段 D：人類的掛點（背 36／腰 46／手 44）依新的 DWARF_DROP 往下移（掛點下面被拿掉的排數：5／3／3）
     # 新巨人（2026-11-23，使用者要求：比新人類壯又高）：新人類每格軀幹 +4 排、小腿 +4 排（身高 68 排＝比新人類高的量跟矮人比新人類矮的量一樣）、脖子以下加寬（gen_school.giant_sheets），頭不變；
     # 格子 96×96（own.cell），邏輯上的 64×64 格放在格子的 (ox, oy)＝(16, 32)（腳底在格子第 94 列＝邏輯格第 62 列，引擎照邏輯格對腳底，影子不用改）。
@@ -949,7 +972,7 @@ LPC_RACES = [                    # 種族：耳朵圖層＝sheet（來自 LPC ea
         cell=gen_school.GIANT_CELL, ox=gen_school.GIANT_OX, oy=gen_school.GIANT_OY,
         sheets={n: f"giant2_{n}.png" for n in SCHOOL_LAYERS}, outline=None,
         styles=dict(hair=school_hair_styles("giant2"), **school_outfit_styles("giant2")),
-        dye=gen_school.dye_rules(SCHOOL_SHEETS) + school_male_dye() + school_ninja_dye() + school_blm_dye() + school_wm_dye() + school_sage_dye() + school_dragoon_dye() + school_warrior_dye() + school_bard_dye() + school_uk_dye() + school_knight_dye(),
+        dye=gen_school.dye_rules(SCHOOL_SHEETS) + school_male_dye() + school_ninja_dye() + school_blm_dye() + school_wm_dye() + school_sage_dye() + school_dragoon_dye() + school_warrior_dye() + school_sweet_dye() + school_bard_dye() + school_uk_dye() + school_knight_dye(),
         anchors=dict(back=[27, 30], backView=[37, 30], waist=[28, 42], hand=dict(down=[42, 40], up=[42, 40], side=[31, 40])))),   # 2026-11-24 階段 D：依新的 GIANT_TORSO／GIANT_LEGS 往上移（掛點下面多出的排數：6／4／4）
 ]
 
@@ -4726,6 +4749,7 @@ def main():
     gen_sit.add_sit_cells(SCHOOL_SAGE, 64, 21, names=("bottom", "shoes"), geom=g_h)
     gen_sit.add_sit_cells(SCHOOL_DRAGOON, 64, 21, names=("bottom", "shoes"), geom=g_h)
     gen_sit.add_sit_cells(SCHOOL_WARRIOR, 64, 21, names=("bottom", "shoes"), geom=g_h)
+    gen_sit.add_sit_cells(SCHOOL_SWEET, 64, 21, names=("bottom", "shoes"), geom=g_h)
     gen_sit.add_sit_cells(SCHOOL_BARD, 64, 21, names=("bottom", "shoes"), geom=g_h)
     gen_sit.add_sit_cells(SCHOOL_UK, 64, 21, names=("bottom",), geom=g_h)
     gen_sit.add_sit_cells(SCHOOL_KNIGHT, 64, 21, names=("bottom", "shoes"), geom=g_h)
@@ -4737,6 +4761,7 @@ def main():
     gen_sit.add_sit_cells(SCHOOL_SAGE_DWARF, 64, 18, names=("bottom", "shoes"), geom=g_d)
     gen_sit.add_sit_cells(SCHOOL_DRAGOON_DWARF, 64, 18, names=("bottom", "shoes"), geom=g_d)
     gen_sit.add_sit_cells(SCHOOL_WARRIOR_DWARF, 64, 18, names=("bottom", "shoes"), geom=g_d)
+    gen_sit.add_sit_cells(SCHOOL_SWEET_DWARF, 64, 18, names=("bottom", "shoes"), geom=g_d)
     gen_sit.add_sit_cells(SCHOOL_BARD_DWARF, 64, 18, names=("bottom", "shoes"), geom=g_d)
     gen_sit.add_sit_cells(SCHOOL_UK_DWARF, 64, 18, names=("bottom",), geom=g_d)
     gen_sit.add_sit_cells(SCHOOL_KNIGHT_DWARF, 64, 18, names=("bottom", "shoes"), geom=g_d)
@@ -4748,6 +4773,7 @@ def main():
     gen_sit.add_sit_cells(SCHOOL_SAGE_GIANT, 96, 25, names=("bottom", "shoes"), geom=g_g)
     gen_sit.add_sit_cells(SCHOOL_DRAGOON_GIANT, 96, 25, names=("bottom", "shoes"), geom=g_g)
     gen_sit.add_sit_cells(SCHOOL_WARRIOR_GIANT, 96, 25, names=("bottom", "shoes"), geom=g_g)
+    gen_sit.add_sit_cells(SCHOOL_SWEET_GIANT, 96, 25, names=("bottom", "shoes"), geom=g_g)
     gen_sit.add_sit_cells(SCHOOL_BARD_GIANT, 96, 25, names=("bottom", "shoes"), geom=g_g)
     gen_sit.add_sit_cells(SCHOOL_UK_GIANT, 96, 25, names=("bottom",), geom=g_g)
     gen_sit.add_sit_cells(SCHOOL_KNIGHT_GIANT, 96, 25, names=("bottom", "shoes"), geom=g_g)
@@ -4793,6 +4819,9 @@ def main():
     for pre, war in (("human2", SCHOOL_WARRIOR), ("dwarf2", SCHOOL_WARRIOR_DWARF), ("giant2", SCHOOL_WARRIOR_GIANT)):
         for ln in ("top", "bottom", "shoes", "hat"):
             save_chibi_layer(war[ln], f"{pre}_r_{ln}.png", sub)              # 戰士套裝（含頭盔）
+    for pre, swt in (("human2", SCHOOL_SWEET), ("dwarf2", SCHOOL_SWEET_DWARF), ("giant2", SCHOOL_SWEET_GIANT)):
+        for ln in ("top", "bottom", "shoes", "hat"):
+            save_chibi_layer(swt[ln], f"{pre}_p_{ln}.png", sub)              # 甜美風格套裝（含小圓帽）
     for pre, brd in (("human2", SCHOOL_BARD), ("dwarf2", SCHOOL_BARD_DWARF), ("giant2", SCHOOL_BARD_GIANT)):
         for ln in ("top", "bottom", "shoes", "hat"):
             save_chibi_layer(brd[ln], f"{pre}_d_{ln}.png", sub)              # 吟遊詩人套裝（含帽子）
@@ -4837,7 +4866,7 @@ def main():
         # 基本服裝（LPC 原檔；gender＝之後選性別用）
         # 服裝：男女共用一個 id（sheet＝男、sheetF＝女，client 依角色性別挑；外觀清單一件只出現一次）；
         # dye＝可染色的顏色（lpc_dye_of 自動從圖上取，第一個是主色）；glam＝可當外觀（沒寫 unlock＝一開始就能用）
-        tops=[MALE_ITEMS["top"], NINJA_ITEMS["top"], BLM_ITEMS["top"], WM_ITEMS["top"], SAGE_ITEMS["top"], DRAGOON_ITEMS["top"], WARRIOR_ITEMS["top"], BARD_ITEMS["top"], KNIGHT_ITEMS["top"], UK_ITEMS["top"],
+        tops=[MALE_ITEMS["top"], NINJA_ITEMS["top"], BLM_ITEMS["top"], WM_ITEMS["top"], SAGE_ITEMS["top"], DRAGOON_ITEMS["top"], WARRIOR_ITEMS["top"], SWEET_ITEMS["top"], BARD_ITEMS["top"], KNIGHT_ITEMS["top"], UK_ITEMS["top"],
               lpc_garment("plate", "騎士板甲", "char_top_plate_m.png", "char_top_plate_f.png"),
               lpc_garment("whm_robe", "白魔道袍", "char_top_whm_m.png", "char_top_whm_f.png"),
               lpc_garment("blm_robe", "黑魔道袍", "char_top_blm_m.png", "char_top_blm_f.png"),
@@ -4846,19 +4875,19 @@ def main():
               lpc_garment("sge_robe", "賢者長袍", "char_top_sge_m.png", "char_top_sge_f.png"),
               lpc_garment("war_mail", "戰士鎖子甲", "char_top_war_m.png", "char_top_war_f.png"),
               lpc_garment("nin_top", "忍者上衣", "char_top_nin_m.png", "char_top_nin_f.png")],
-        bottoms=[SCHOOL_SUIT["bottom"], MALE_ITEMS["bottom"], NINJA_ITEMS["bottom"], BLM_ITEMS["bottom"], WM_ITEMS["bottom"], SAGE_ITEMS["bottom"], DRAGOON_ITEMS["bottom"], WARRIOR_ITEMS["bottom"], BARD_ITEMS["bottom"], KNIGHT_ITEMS["bottom"], UK_ITEMS["bottom"],
+        bottoms=[SCHOOL_SUIT["bottom"], MALE_ITEMS["bottom"], NINJA_ITEMS["bottom"], BLM_ITEMS["bottom"], WM_ITEMS["bottom"], SAGE_ITEMS["bottom"], DRAGOON_ITEMS["bottom"], WARRIOR_ITEMS["bottom"], SWEET_ITEMS["bottom"], BARD_ITEMS["bottom"], KNIGHT_ITEMS["bottom"], UK_ITEMS["bottom"],
                  lpc_garment("plate_legs", "騎士腿甲", "char_bottom_plate_m.png", "char_bottom_plate_f.png"),
                  lpc_garment("brd_pants", "燈籠褲", "char_bottom_brd_m.png", "char_bottom_brd_f.png"),
                  lpc_garment("drg_legs", "龍騎士腿甲", "char_bottom_drg_m.png", "char_bottom_drg_f.png"),
                  lpc_garment("war_pants", "戰士長褲", "char_bottom_war_m.png", "char_bottom_war_f.png"),
                  lpc_garment("nin_pants", "忍者長褲", "char_bottom_nin_m.png", "char_bottom_nin_f.png")],
-        shoes=[SCHOOL_SUIT["shoe"], MALE_ITEMS["shoe"], NINJA_ITEMS["shoe"], BLM_ITEMS["shoe"], WM_ITEMS["shoe"], SAGE_ITEMS["shoe"], DRAGOON_ITEMS["shoe"], WARRIOR_ITEMS["shoe"], BARD_ITEMS["shoe"], KNIGHT_ITEMS["shoe"],
+        shoes=[SCHOOL_SUIT["shoe"], MALE_ITEMS["shoe"], NINJA_ITEMS["shoe"], BLM_ITEMS["shoe"], WM_ITEMS["shoe"], SAGE_ITEMS["shoe"], DRAGOON_ITEMS["shoe"], WARRIOR_ITEMS["shoe"], SWEET_ITEMS["shoe"], BARD_ITEMS["shoe"], KNIGHT_ITEMS["shoe"],
                lpc_garment("plate_boots", "騎士板甲靴", "char_shoes_plate_m.png", "char_shoes_plate_f.png"),
                lpc_garment("brd_boots", "翻邊皮靴", "char_shoes_brd_m.png", "char_shoes_brd_f.png"),
                lpc_garment("drg_boots", "龍騎士鐵靴", "char_shoes_drg_m.png", "char_shoes_drg_f.png"),
                lpc_garment("war_boots", "戰士長靴", "char_shoes_war_m.png", "char_shoes_war_f.png"),
                lpc_garment("nin_tabi", "分趾襪", "char_shoes_nin_m.png", "char_shoes_nin_f.png")],
-        hats=[dict(id="nohat", name="不戴帽子", sheet=None, glam=True), BLM_ITEMS["hat"], WM_ITEMS["hat"], SAGE_ITEMS["hat"], DRAGOON_ITEMS["hat"], WARRIOR_ITEMS["hat"], BARD_ITEMS["hat"], KNIGHT_ITEMS["hat"], UK_ITEMS["hat"],
+        hats=[dict(id="nohat", name="不戴帽子", sheet=None, glam=True), BLM_ITEMS["hat"], WM_ITEMS["hat"], SAGE_ITEMS["hat"], DRAGOON_ITEMS["hat"], WARRIOR_ITEMS["hat"], SWEET_ITEMS["hat"], BARD_ITEMS["hat"], KNIGHT_ITEMS["hat"], UK_ITEMS["hat"],
               dict(id="armet", name="騎士頭盔", sheet="char_hat_armet.png", hideHair=True, dye=lpc_dye_of("char_hat_armet.png")),   # hideHair＝全罩式，不畫頭髮
               dict(id="hood", name="白魔兜帽", sheet="char_hat_hood.png", hideHair=True, dye=lpc_dye_of("char_hat_hood.png")),
               dict(id="wizard", name="尖頂帽", sheet="char_hat_wizard.png", dye=lpc_dye_of("char_hat_wizard.png")),

@@ -2470,6 +2470,13 @@
        }
       },
       {
+       "id": "sweet_dress",
+       "name": "甜心罩衫洋裝",
+       "sheets": {
+        "top": "human2_p_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -2547,6 +2554,13 @@
        }
       },
       {
+       "id": "sweet_skirt",
+       "name": "甜心層疊裙",
+       "sheets": {
+        "bottom": "human2_p_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -2621,6 +2635,13 @@
        "name": "戰士靴",
        "sheets": {
         "shoes": "human2_r_shoes.png"
+       }
+      },
+      {
+       "id": "sweet_boots",
+       "name": "甜心蝴蝶結靴",
+       "sheets": {
+        "shoes": "human2_p_shoes.png"
        }
       },
       {
@@ -2710,6 +2731,13 @@
        "hideHair": true,
        "sheets": {
         "hat": "human2_r_hat.png"
+       }
+      },
+      {
+       "id": "sweet_hat",
+       "name": "甜心小圓帽",
+       "sheets": {
+        "hat": "human2_p_hat.png"
        }
       }
      ]
@@ -3192,6 +3220,70 @@
      },
      {
       "slot": "top",
+      "style": "sweet_dress",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#f3d5d5",
+       "#daa4ac",
+       "#e0b0b6",
+       "#e6bdc1",
+       "#ecc9cb",
+       "#f9e2e0",
+       "#ffeeea"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sweet_skirt",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sweet_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sweet_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -3516,6 +3608,13 @@
        }
       },
       {
+       "id": "sweet_dress",
+       "name": "甜心罩衫洋裝",
+       "sheets": {
+        "top": "human2_p_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -3593,6 +3692,13 @@
        }
       },
       {
+       "id": "sweet_skirt",
+       "name": "甜心層疊裙",
+       "sheets": {
+        "bottom": "human2_p_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -3667,6 +3773,13 @@
        "name": "戰士靴",
        "sheets": {
         "shoes": "human2_r_shoes.png"
+       }
+      },
+      {
+       "id": "sweet_boots",
+       "name": "甜心蝴蝶結靴",
+       "sheets": {
+        "shoes": "human2_p_shoes.png"
        }
       },
       {
@@ -3756,6 +3869,13 @@
        "hideHair": true,
        "sheets": {
         "hat": "human2_r_hat.png"
+       }
+      },
+      {
+       "id": "sweet_hat",
+       "name": "甜心小圓帽",
+       "sheets": {
+        "hat": "human2_p_hat.png"
        }
       }
      ]
@@ -4240,6 +4360,70 @@
      },
      {
       "slot": "top",
+      "style": "sweet_dress",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#f3d5d5",
+       "#daa4ac",
+       "#e0b0b6",
+       "#e6bdc1",
+       "#ecc9cb",
+       "#f9e2e0",
+       "#ffeeea"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sweet_skirt",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sweet_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sweet_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -4565,6 +4749,13 @@
        }
       },
       {
+       "id": "sweet_dress",
+       "name": "甜心罩衫洋裝",
+       "sheets": {
+        "top": "human2_p_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -4642,6 +4833,13 @@
        }
       },
       {
+       "id": "sweet_skirt",
+       "name": "甜心層疊裙",
+       "sheets": {
+        "bottom": "human2_p_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -4716,6 +4914,13 @@
        "name": "戰士靴",
        "sheets": {
         "shoes": "human2_r_shoes.png"
+       }
+      },
+      {
+       "id": "sweet_boots",
+       "name": "甜心蝴蝶結靴",
+       "sheets": {
+        "shoes": "human2_p_shoes.png"
        }
       },
       {
@@ -4805,6 +5010,13 @@
        "hideHair": true,
        "sheets": {
         "hat": "human2_r_hat.png"
+       }
+      },
+      {
+       "id": "sweet_hat",
+       "name": "甜心小圓帽",
+       "sheets": {
+        "hat": "human2_p_hat.png"
        }
       }
      ]
@@ -5289,6 +5501,70 @@
      },
      {
       "slot": "top",
+      "style": "sweet_dress",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#f3d5d5",
+       "#daa4ac",
+       "#e0b0b6",
+       "#e6bdc1",
+       "#ecc9cb",
+       "#f9e2e0",
+       "#ffeeea"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sweet_skirt",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sweet_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sweet_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -5612,6 +5888,13 @@
        }
       },
       {
+       "id": "sweet_dress",
+       "name": "甜心罩衫洋裝",
+       "sheets": {
+        "top": "dwarf2_p_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -5689,6 +5972,13 @@
        }
       },
       {
+       "id": "sweet_skirt",
+       "name": "甜心層疊裙",
+       "sheets": {
+        "bottom": "dwarf2_p_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -5763,6 +6053,13 @@
        "name": "戰士靴",
        "sheets": {
         "shoes": "dwarf2_r_shoes.png"
+       }
+      },
+      {
+       "id": "sweet_boots",
+       "name": "甜心蝴蝶結靴",
+       "sheets": {
+        "shoes": "dwarf2_p_shoes.png"
        }
       },
       {
@@ -5852,6 +6149,13 @@
        "hideHair": true,
        "sheets": {
         "hat": "dwarf2_r_hat.png"
+       }
+      },
+      {
+       "id": "sweet_hat",
+       "name": "甜心小圓帽",
+       "sheets": {
+        "hat": "dwarf2_p_hat.png"
        }
       }
      ]
@@ -6330,6 +6634,70 @@
        "#aea8aa",
        "#cec8ca",
        "#221e22"
+      ]
+     },
+     {
+      "slot": "top",
+      "style": "sweet_dress",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#f3d5d5",
+       "#daa4ac",
+       "#e0b0b6",
+       "#e6bdc1",
+       "#ecc9cb",
+       "#f9e2e0",
+       "#ffeeea"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sweet_skirt",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sweet_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sweet_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
       ]
      },
      {
@@ -6660,6 +7028,13 @@
        }
       },
       {
+       "id": "sweet_dress",
+       "name": "甜心罩衫洋裝",
+       "sheets": {
+        "top": "giant2_p_top.png"
+       }
+      },
+      {
        "id": "bard_garb",
        "name": "吟遊詩人斗篷",
        "sheets": {
@@ -6737,6 +7112,13 @@
        }
       },
       {
+       "id": "sweet_skirt",
+       "name": "甜心層疊裙",
+       "sheets": {
+        "bottom": "giant2_p_bottom.png"
+       }
+      },
+      {
        "id": "bard_pants",
        "name": "吟遊詩人長褲",
        "sheets": {
@@ -6811,6 +7193,13 @@
        "name": "戰士靴",
        "sheets": {
         "shoes": "giant2_r_shoes.png"
+       }
+      },
+      {
+       "id": "sweet_boots",
+       "name": "甜心蝴蝶結靴",
+       "sheets": {
+        "shoes": "giant2_p_shoes.png"
        }
       },
       {
@@ -6900,6 +7289,13 @@
        "hideHair": true,
        "sheets": {
         "hat": "giant2_r_hat.png"
+       }
+      },
+      {
+       "id": "sweet_hat",
+       "name": "甜心小圓帽",
+       "sheets": {
+        "hat": "giant2_p_hat.png"
        }
       }
      ]
@@ -7382,6 +7778,70 @@
      },
      {
       "slot": "top",
+      "style": "sweet_dress",
+      "layers": [
+       "top"
+      ],
+      "colors": [
+       "#f3d5d5",
+       "#daa4ac",
+       "#e0b0b6",
+       "#e6bdc1",
+       "#ecc9cb",
+       "#f9e2e0",
+       "#ffeeea"
+      ]
+     },
+     {
+      "slot": "bottom",
+      "style": "sweet_skirt",
+      "layers": [
+       "bottom"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "shoe",
+      "style": "sweet_boots",
+      "layers": [
+       "shoes"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "hat",
+      "style": "sweet_hat",
+      "layers": [
+       "hat"
+      ],
+      "colors": [
+       "#533b3f",
+       "#2e1e24",
+       "#3a282d",
+       "#473136",
+       "#5f4548",
+       "#6c4e51",
+       "#78585a"
+      ]
+     },
+     {
+      "slot": "top",
       "style": "bard_garb",
       "layers": [
        "top"
@@ -7687,6 +8147,20 @@
    ]
   },
   {
+   "id": "sweet_dress",
+   "name": "甜心罩衫洋裝",
+   "glam": true,
+   "dye": [
+    "#f3d5d5",
+    "#daa4ac",
+    "#e0b0b6",
+    "#e6bdc1",
+    "#ecc9cb",
+    "#f9e2e0",
+    "#ffeeea"
+   ]
+  },
+  {
    "id": "bard_garb",
    "name": "吟遊詩人斗篷",
    "keepGear": true,
@@ -7961,6 +8435,20 @@
    ]
   },
   {
+   "id": "sweet_skirt",
+   "name": "甜心層疊裙",
+   "glam": true,
+   "dye": [
+    "#533b3f",
+    "#2e1e24",
+    "#3a282d",
+    "#473136",
+    "#5f4548",
+    "#6c4e51",
+    "#78585a"
+   ]
+  },
+  {
    "id": "bard_pants",
    "name": "吟遊詩人長褲",
    "keepGear": true,
@@ -8165,6 +8653,20 @@
    ]
   },
   {
+   "id": "sweet_boots",
+   "name": "甜心蝴蝶結靴",
+   "glam": true,
+   "dye": [
+    "#533b3f",
+    "#2e1e24",
+    "#3a282d",
+    "#473136",
+    "#5f4548",
+    "#6c4e51",
+    "#78585a"
+   ]
+  },
+  {
    "id": "bard_boots",
    "name": "吟遊詩人靴",
    "keepGear": true,
@@ -8320,6 +8822,21 @@
     "#aea8aa",
     "#cec8ca",
     "#221e22"
+   ]
+  },
+  {
+   "id": "sweet_hat",
+   "name": "甜心小圓帽",
+   "sheet": null,
+   "glam": true,
+   "dye": [
+    "#533b3f",
+    "#2e1e24",
+    "#3a282d",
+    "#473136",
+    "#5f4548",
+    "#6c4e51",
+    "#78585a"
    ]
   },
   {
