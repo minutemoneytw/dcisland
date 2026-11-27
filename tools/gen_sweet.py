@@ -9,7 +9,7 @@
   帽子（hat 層）：棕色小圓帽（中間一圈粉色帶），歪戴在頭頂右後方，不遮頭髮。
 輸出格式同 gen_ninja（sweet_sheets() 回 top／bottom／shoes／hat 四層）。顏色集中在最上面。
 """
-import os, sys
+import os, sys, math
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from chibi_pilot import Img
 import gen_school as gs
@@ -31,15 +31,17 @@ PINK_IDX = (1, 2, 3, 3, 4, 5, 5)                        # 男式外套 a～g →
 
 class Grid:
     """相對於 (x0, y0) 的點陣；可往上、往左右、往下延伸（負座標／超出）。"""
-    def __init__(self, x0, y0, rows, kind, ramp_=None, idx=None):
+    def __init__(self, x0, y0, rows, kind, ramp_=None, idx=None, drop_skin=False, cx_hint=None):
         self.x0, self.y0, self.kind = x0, y0, kind
         self.src, self.px = {}, {}
         for y, line in enumerate(rows):
             for x, ch in enumerate(line):
                 if ch == '.':
                     continue
-                self.src[(x, y)] = ch
                 i = MCH.index(ch)
+                if drop_skin and (ch in SKIN or (i >= 7 and cx_hint is not None and abs(x - cx_hint) > 5)):
+                    continue                  # 正面走路格：男式資料的手臂是影像抽出來的零碎像素（會破圖），改用素體自己的手
+                self.src[(x, y)] = ch
                 if ch in SKIN:
                     self.px[(x, y)] = SKINC[ch]
                 elif i <= 6 and ramp_:
@@ -99,8 +101,10 @@ def _heart(g, x, y):
     g.put(x, y + 1, BOW['d'])
 
 
-def sweet_top(kind, x0, y0, rows):
-    g = Grid(x0, y0, rows, 'top', PINK, PINK_IDX)
+def sweet_top(kind, x0, y0, rows, step=0):
+    drop = kind == 'front' and step != 0
+    hx = [x for x, ch in enumerate(rows[-1]) if ch != '.']
+    g = Grid(x0, y0, rows, 'top', PINK, PINK_IDX, drop, (min(hx) + max(hx)) // 2)
     hem = g.row_ext(g.h - 1)
     cx = (hem[0] + hem[1]) // 2
     h = g.h
@@ -163,7 +167,7 @@ def sweet_top(kind, x0, y0, rows):
 
 
 # ---------- 裙子（含長襪） ----------
-def sweet_bottom(kind, x0, y0, rows):
+def sweet_bottom(kind, x0, y0, rows, step=0):
     g = Grid(x0, y0, rows, 'bottom', BROWN, (1, 2, 3, 3, 4, 4, 5))
     h = g.h
     e0 = g.row_ext(0)
@@ -189,7 +193,7 @@ def sweet_bottom(kind, x0, y0, rows):
 
 
 # ---------- 鞋子 ----------
-def sweet_shoes(kind, x0, y0, rows):
+def sweet_shoes(kind, x0, y0, rows, step=0):
     g = Grid(x0, y0, rows, 'shoes', BROWN, (1, 2, 3, 3, 4, 4, 5))
     for (x, y), ch in list(g.src.items()):
         if y == 0:
@@ -214,19 +218,31 @@ def _head_box(kind, step):
 
 
 def hat_pixels(kind, cx, top):
-    """棕色小圓帽（中間一圈粉色帶），歪戴在頭頂：正面／背面偏右、側面偏後。6 排高。"""
-    hc = {'front': cx + 4, 'back': cx + 4, 'left': cx + 2}[kind]
-    prof = (3.5, 5.5, 6.5, 6.5, 6.0, 5.0)
-    y0 = top - 4
+    """棕色小圓帽（中間偏下一圈粉色帶），斜戴在頭頂：正面／背面偏右、右邊低；側面偏後、前面低。橢圓 17×9，轉 16°。"""
+    hc = {'front': cx + 3.0, 'back': cx + 3.0, 'left': cx + 1.5}[kind]
+    ang = {'front': 0.28, 'back': 0.28, 'left': -0.28}[kind]
+    rx, ry = 8.3, 4.4
+    yc = top - 1.0
+    ca, sa = math.cos(ang), math.sin(ang)
     sil, out = set(), {}
-    cols = (BROWN[5], BROWN[3], BROWN[3], PINK[5], PINK[3], BROWN[1])
-    for i, w in enumerate(prof):
-        for x in range(round(hc - w), round(hc + w) + 1):
-            sil.add((x, y0 + i))
-            c = cols[i]
-            if i == 3 and (x + 1) % 4 == 0:
-                c = PINK[6]
-            out[(x, y0 + i)] = c
+    for y in range(int(yc - 9), int(yc + 10)):
+        for x in range(int(hc - 11), int(hc + 12)):
+            dx, dy = x - hc, y - yc
+            u, v = dx * ca + dy * sa, -dx * sa + dy * ca
+            if (u / rx) ** 2 + (v / ry) ** 2 > 1.0:
+                continue
+            sil.add((x, y))
+            if v < -ry * 0.55:
+                c = BROWN[5]
+            elif v < 0.0:
+                c = BROWN[3]
+            elif v < ry * 0.2:
+                c = BROWN[3]
+            elif v < ry * 0.62:
+                c = PINK[6] if (round(u) % 4 == 0) else PINK[5]
+            else:
+                c = BROWN[1]
+            out[(x, y)] = c
     for (x, y) in list(sil):
         if any((x + dx, y + dy) not in sil for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             out[(x, y)] = OUT
@@ -244,7 +260,15 @@ def sweet_sheets():
             cells = {}
             for nm, fn in fns.items():
                 x0, y0, rows = DATA[(kind, step)][nm]
-                cells[nm] = {(x + 16, y): c for (x, y), c in fn(kind, x0, y0, rows).items() if c is not None}
+                cells[nm] = {(x + 16, y): c for (x, y), c in fn(kind, x0, y0, rows, step).items() if c is not None}
+            if step == 0 and kind in ('front', 'back'):                  # 待機的正面／背面左右對稱（取左半邊鏡射到右半邊；格子中線在 x＝31.5）
+                for nm in ('top', 'bottom', 'shoes'):
+                    cell = cells[nm]
+                    for (x, y), c in list(cell.items()):
+                        if x <= 31:
+                            cell[(63 - x, y)] = c
+                    for (x, y) in [p for p in cell if p[0] >= 32 and (63 - p[0], p[1]) not in cell]:
+                        del cell[(x, y)]
             cx, top = _head_box(kind, step)
             cells['hat'] = hat_pixels(kind, cx, top)
             for nm, cell in cells.items():
