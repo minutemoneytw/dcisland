@@ -12609,7 +12609,7 @@ let carrySideNow = false, carryFaceLeft = false, carryBackNow = false;
 const carryImgOf = w0 => (carrySideNow && w0.sideImg) || (carryBackNow && w0.rearImg) || w0.carryImg || w0;   // 掛著時用的圖（2026-11-27）：側面走用側面版（sideSprite）、背對用背面版（rearSprite，沒有就用正面）、其餘用正面版（carrySprite；劍／短刀只剩劍柄／刀柄）或手上那張
 function drawWeaponBack(w0, onBack) {
   const wi = carryImgOf(w0), [ax, ay] = onBack ? charAnch.backView : charAnch.back, s = wi.wscale || 2, wb = WEAPON_BACK_BOTTOM * s / 2;
-  ctx.save(); if (carryFaceLeft && !onBack) ctx.scale(-1, 1);   // 朝左（側面）：鏡射到右邊＝背後那側
+  ctx.save(); if (onBack || carryFaceLeft) ctx.scale(-1, 1);   // 朝左（側面）：鏡射到右邊＝背後那側；背對時整個水平翻轉（使用者要求）
   ctx.translate(ax, ay + 2 * (S.avatar.frames.scale || 1)); ctx.rotate(-.55);   // 背著的武器比掛點再往下 2 格（使用者要求）
   if (wi.hiltUp) { ctx.scale(1, -1); ctx.drawImage(wi, -wi.width * s / 2, WEAPON_HILT_LIFT * s / 2 - wb, wi.width * s, wi.height * s); }
   else ctx.drawImage(wi, -wi.width * s / 2, wb - wi.height * s, wi.width * s, wi.height * s);
