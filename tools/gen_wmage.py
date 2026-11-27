@@ -305,7 +305,40 @@ def hat_pixels(kind, cx, top):
     return out
 
 
+def _read_rgba(path):
+    """讀 8 位元 RGBA PNG → Img（透明＝None）。tools/hand/ 裡的圖都存成 RGBA。"""
+    import struct, zlib
+    b = open(path, 'rb').read()
+    pos, idat = 8, b''
+    while pos < len(b):
+        ln, = struct.unpack('>I', b[pos:pos + 4]); tag = b[pos + 4:pos + 8]; data = b[pos + 8:pos + 8 + ln]; pos += 12 + ln
+        if tag == b'IHDR':
+            w, h, bd, ct = struct.unpack('>IIBB', data[:10])
+        elif tag == b'IDAT':
+            idat += data
+    assert bd == 8 and ct == 6, '手畫圖要存成 8 位元 RGBA PNG（tools/hand/README.md）'
+    raw = zlib.decompress(idat); stride = w * 4; prev = bytearray(stride); i = 0
+    im = Img(w, h)
+    for y in range(h):
+        f = raw[i]; line = bytearray(raw[i + 1:i + 1 + stride]); i += 1 + stride
+        for x in range(stride):
+            a = line[x - 4] if x >= 4 else 0; up = prev[x]; c = prev[x - 4] if x >= 4 else 0
+            if f == 1: line[x] = (line[x] + a) & 255
+            elif f == 2: line[x] = (line[x] + up) & 255
+            elif f == 3: line[x] = (line[x] + ((a + up) >> 1)) & 255
+            elif f == 4:
+                p = a + up - c; pa, pb, pc = abs(p - a), abs(p - up), abs(p - c)
+                line[x] = (line[x] + (a if pa <= pb and pa <= pc else (up if pb <= pc else c))) & 255
+        prev = line
+        for x in range(w):
+            r, g, bb, al = line[x * 4:x * 4 + 4]
+            im.px[y][x] = None if al == 0 else ((r, g, bb) if al == 255 else (r, g, bb, al))
+    return im
+
+
 # ---------- 組成 sheet ----------
+HAND_TOP = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'hand', 'wmage_top_human.png')   # 使用者給的長袍圖（走路列 9 欄×4 方向，在整張 sheet 的 (20, 538) 起），疊在舊版上存成整張 RGBA；改圖直接改這個檔再重跑 gen_assets.py
+
 def wm_sheets():
     """回傳 {'top','bottom','shoes','hat': Img}（832×1856，只填走路列；右＝左的鏡像）。"""
     fns = {'top': wm_top, 'bottom': wm_bottom, 'shoes': wm_shoes}
@@ -326,4 +359,6 @@ def wm_sheets():
                         continue
                     for col in cols:
                         out[nm].px[row * gs.CELL + y][col * gs.CELL + px] = c
+    if os.path.exists(HAND_TOP):      # 使用者手畫的人類白魔法師長袍（2026-11-27）：整張換成他畫的（矮人、巨人由它縮放而來），不再用上面的規則畫
+        out['top'] = _read_rgba(HAND_TOP)
     return out
