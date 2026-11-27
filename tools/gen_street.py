@@ -137,8 +137,36 @@ def street_top(kind, x0, y0, rows, right=False):
             for x in (a_ - 1, b_ + 1):
                 if (x, y) in g.px and g.px[(x, y)] in BEIGE:
                     g.px[(x, y)] = (92, 74, 66)
+    # 不要筒狀：肩膀與袖子中段往外撐 1 格（寬鬆蓬袖）、下襬往下越來越寬（A 字，最多 2 格）、下襬一圈深色束帶、正面拉鍊與口袋
+    if kind in ('front', 'back'):
+        for y in range(5, h - 4):
+            xs = [x for (x, yy) in g.px if yy == y]
+            if xs:
+                lo, hi = min(xs), max(xs)
+                g.px[(lo - 1, y)] = g.px[(lo, y)]; g.px[(hi + 1, y)] = g.px[(hi, y)]
+    for i, y in enumerate(range(h - 4, h)):
+        xs = [x for (x, yy) in g.px if yy == y and (g.src.get((x, y)) or '.') not in SKIN]
+        if xs and kind != 'left':
+            lo, hi = min(xs), max(xs)
+            for d in range(1, 1 + (i + 1) // 2 + (1 if i == 3 else 0)):
+                g.px[(lo - d, y)] = g.px[(lo, y)]; g.px[(hi + d, y)] = g.px[(hi, y)]
+        elif xs:
+            lo, hi = min(xs), max(xs)
+            for d in range(1, 1 + (i + 1) // 2 + 1):
+                g.px[(lo - d, y)] = g.px[(lo, y)]
+            for d in range(1, 2 + i):
+                g.px[(hi + d, y)] = g.px[(hi, y)]
+    for x in range(cx - 8, cx + 8):                                          # 下襬束帶
+        if (x, h - 2) in g.px:
+            g.px[(x, h - 2)] = DARK[3]
+    if kind == 'front':
+        for y in range(5, h - 2):                                            # 拉鍊
+            g.px[(cx - 1, y)] = DARK[2]
+        for sgn in (-1, 1):                                                  # 口袋斜線
+            for i in range(3):
+                g.px[(cx + sgn * (5 - i) - (1 if sgn < 0 else 0), h - 7 + i)] = DARK[2]
     # 夾克下襬：深色束邊
-    for x in range(cx - 7, cx + 7):
+    for x in range(cx - 10, cx + 10):
         if (x, h - 1) in g.px:
             g.px[(x, h - 1)] = BEIGE[1]
     return _outline(g.out(), (BEIGE, DARK), OUT)
@@ -206,7 +234,7 @@ def _head_box(kind, step):
     return (min(xs) + max(xs) + 1) / 2.0, y0
 
 
-def hat_pixels(kind, cx, top):
+def hat_pixels(kind, cx, top, right=False):
     """深灰色毛帽：圓頂（top-4 起）往下蓋到額頭上緣（top+6），直紋；下緣一條米色綁帶（3 排，有扣環），耳邊垂米色名牌（5 排）。"""
     hc = cx + (1.5 if kind == 'left' else 0.0)
     prof = (9.0, 11.5, 13.0, 13.5, 13.5, 13.5, 13.5, 13.5, 13.5, 13.0, 13.0)   # 左右各比原本寬 3 格
@@ -230,6 +258,8 @@ def hat_pixels(kind, cx, top):
     for (x, y) in list(sil):
         if any((x + dx, y + dy) not in sil for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             out[(x, y)] = OUT
+    if right:                                                              # 名牌在人物的左側：朝右時看到的是右側，沒有名牌
+        return out
     tx = {'front': round(hc) + 12, 'back': round(hc) - 13, 'left': round(hc) - 1}[kind]   # 耳邊的名牌
     for yy in range(top + 8, top + 13):
         for xx in (tx, tx + 1):
@@ -254,7 +284,7 @@ def street_sheets():
                 kw = {'right': d == 'right'} if nm == 'top' else {}
                 cells[nm] = {(x + 16, y): c for (x, y), c in fn(kind, x0, y0, rows, **kw).items() if c is not None}
             cx, top = _head_box(kind, step)
-            cells['hat'] = hat_pixels(kind, cx, top)
+            cells['hat'] = hat_pixels(kind, cx, top, right=(d == 'right'))
             for nm, cell in cells.items():
                 for (x, y), c in cell.items():
                     px = 63 - x if d == 'right' else x

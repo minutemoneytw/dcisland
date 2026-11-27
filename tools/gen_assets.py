@@ -936,7 +936,7 @@ def school_outfit_styles(prefix):
              dict(id="knight_helm", name="騎士頭盔", hideHair=True, sheets={"hat": f"{prefix}_k_hat.png"}),
              dict(id="dragoon_helm", name="龍騎士角盔", hideHair=True, sheets={"hat": f"{prefix}_g_hat.png"}),
              dict(id="warrior_helm", name="戰士角盔", hideHair=True, sheets={"hat": f"{prefix}_r_hat.png"}),
-             dict(id="street_beanie", name="街頭毛帽", hairFromHat=True, hairCutDy=-7, sheets={"hat": f"{prefix}_t_hat.png"}),   # 帽子圖最低的是耳邊名牌（帽沿下 7 排），切線扣回毛帽下緣
+             dict(id="street_beanie", name="街頭毛帽", hairFromHat=True, hairCutDy=-7, hairCutDyByRow={"11": 0}, sheets={"hat": f"{prefix}_t_hat.png"}),   # 帽子圖最低的是耳邊名牌（帽沿下 7 排），切線扣回毛帽下緣
              dict(id="sweet_hat", name="甜心小圓帽", sheets={"hat": f"{prefix}_p_hat.png", "hairbg": f"{prefix}_p_hairbg.png"})])
 def school_dye_elf():
     """妖精的換色規則：膚色那條連耳朵（hat 層，皮膚色＋棕色外圈）一起換。"""

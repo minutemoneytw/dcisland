@@ -2759,6 +2759,9 @@
        "name": "街頭毛帽",
        "hairFromHat": true,
        "hairCutDy": -7,
+       "hairCutDyByRow": {
+        "11": 0
+       },
        "sheets": {
         "hat": "human2_t_hat.png"
        }
@@ -3993,6 +3996,9 @@
        "name": "街頭毛帽",
        "hairFromHat": true,
        "hairCutDy": -7,
+       "hairCutDyByRow": {
+        "11": 0
+       },
        "sheets": {
         "hat": "human2_t_hat.png"
        }
@@ -5230,6 +5236,9 @@
        "name": "街頭毛帽",
        "hairFromHat": true,
        "hairCutDy": -7,
+       "hairCutDyByRow": {
+        "11": 0
+       },
        "sheets": {
         "hat": "human2_t_hat.png"
        }
@@ -6465,6 +6474,9 @@
        "name": "街頭毛帽",
        "hairFromHat": true,
        "hairCutDy": -7,
+       "hairCutDyByRow": {
+        "11": 0
+       },
        "sheets": {
         "hat": "dwarf2_t_hat.png"
        }
@@ -7701,6 +7713,9 @@
        "name": "街頭毛帽",
        "hairFromHat": true,
        "hairCutDy": -7,
+       "hairCutDyByRow": {
+        "11": 0
+       },
        "sheets": {
         "hat": "giant2_t_hat.png"
        }
