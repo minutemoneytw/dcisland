@@ -5695,7 +5695,7 @@ MA_PAY = {"chicken": 2, "bunny": 2, "frog": 5, "slime_grass": 10, "goblin_grass"
 MA_WEIGHT = {"chicken": 150, "bunny": 150, "frog": 60, "slime_grass": 30, "goblin_grass": 15, "zombie_night": 12, "dragon_volcano": 6, "gold_dragon": 3, "more": 30}   # 開獎權重（Σ456；各圖案 賠率×權重 都＝300，回收率均一約 66%、把 ONCE MORE 的免費重轉算進去約 70%，之後依試玩調）
 # 2026-11-19 使用者定：勇者挑戰島主→拉霸（三格拉霸）→累積獎池；與開到黃金肥龍的「全中獎」。數值都可調
 MA_HERO_CHANCE = 0.1      # 每次付費開獎：勇者現身挑戰島主的機率（中；送燈的免費開獎不出勇者）
-MA_HERO_WIN = 0.4         # 勇者出現時打倒島主的機率（中偏低）——打倒才啟動拉霸
+MA_HERO_WIN = 0.1         # 勇者出現時打倒島主的機率（中偏低）——打倒才啟動拉霸
 MA_SLOT_MUL = 10          # 拉霸三同 m 的獎金＝總注 × 賠率[m] × 10
 MA_SLOT_ODDS = {"chicken": 90, "bunny": 150, "frog": 250, "slime_grass": 400, "goblin_grass": 700, "zombie_night": 1200, "dragon_volcano": 2000, "gold_dragon": 4000}   # 拉霸三同的出現機率（1/N，照賠率偏低到低）；三個黃金肥龍＝獨得累積獎池全額
 MA_JP_RATE = 0.1          # 每次付費開獎的總注有 10% 累積進獎池（送燈的免費開獎不累積）
