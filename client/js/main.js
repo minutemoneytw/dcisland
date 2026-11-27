@@ -2998,6 +2998,13 @@ function chibiSprite(race, look, fi, sleep) {   // sleep：睡姿用——body �
         g.drawImage(ear, idleSx, sy + cut, cw, ch - cut, 0, cut, cw, ch - cut);
       }
     }
+    if (n === 'hairbg' && hts?.sheets?.hairbg) {   // 帽子有一部分畫在頭髮後面（甜心小圓帽的背面／右側）：種族自己的 hairbg（貓尾巴）先畫，帽子再畫上去
+      let tail = S.charImgs[own.sheets.hairbg];
+      if (tail && idleSx + cw <= tail.width && sy + ch <= tail.height) {
+        for (const r of rules) if (r.hex && r.layers.includes('hairbg')) tail = dyeSheet(tail, r.colors, r.hex);
+        g.drawImage(tail, idleSx, sy, cw, ch, 0, 0, cw, ch);
+      }
+    }
     let img = S.charImgs[hts?.sheets?.[n] || hs?.sheets?.[n] || ts?.sheets?.[n] || bs?.sheets?.[n] || ss?.sheets?.[n] || fs?.sheets?.[n] || own.sheets[ln]];
     const lsx = (n === 'body' || n === 'bottom' || n === 'shoes') ? sx : idleSx;
     if (!img || lsx + cw > img.width || sy + ch > img.height) continue;

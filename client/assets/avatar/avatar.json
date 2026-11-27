@@ -2737,7 +2737,8 @@
        "id": "sweet_hat",
        "name": "甜心小圓帽",
        "sheets": {
-        "hat": "human2_p_hat.png"
+        "hat": "human2_p_hat.png",
+        "hairbg": "human2_p_hairbg.png"
        }
       }
      ]
@@ -3270,7 +3271,8 @@
       "slot": "hat",
       "style": "sweet_hat",
       "layers": [
-       "hat"
+       "hat",
+       "hairbg"
       ],
       "colors": [
        "#533b3f",
@@ -3875,7 +3877,8 @@
        "id": "sweet_hat",
        "name": "甜心小圓帽",
        "sheets": {
-        "hat": "human2_p_hat.png"
+        "hat": "human2_p_hat.png",
+        "hairbg": "human2_p_hairbg.png"
        }
       }
      ]
@@ -4410,7 +4413,8 @@
       "slot": "hat",
       "style": "sweet_hat",
       "layers": [
-       "hat"
+       "hat",
+       "hairbg"
       ],
       "colors": [
        "#533b3f",
@@ -5016,7 +5020,8 @@
        "id": "sweet_hat",
        "name": "甜心小圓帽",
        "sheets": {
-        "hat": "human2_p_hat.png"
+        "hat": "human2_p_hat.png",
+        "hairbg": "human2_p_hairbg.png"
        }
       }
      ]
@@ -5551,7 +5556,8 @@
       "slot": "hat",
       "style": "sweet_hat",
       "layers": [
-       "hat"
+       "hat",
+       "hairbg"
       ],
       "colors": [
        "#533b3f",
@@ -6155,7 +6161,8 @@
        "id": "sweet_hat",
        "name": "甜心小圓帽",
        "sheets": {
-        "hat": "dwarf2_p_hat.png"
+        "hat": "dwarf2_p_hat.png",
+        "hairbg": "dwarf2_p_hairbg.png"
        }
       }
      ]
@@ -6688,7 +6695,8 @@
       "slot": "hat",
       "style": "sweet_hat",
       "layers": [
-       "hat"
+       "hat",
+       "hairbg"
       ],
       "colors": [
        "#533b3f",
@@ -7295,7 +7303,8 @@
        "id": "sweet_hat",
        "name": "甜心小圓帽",
        "sheets": {
-        "hat": "giant2_p_hat.png"
+        "hat": "giant2_p_hat.png",
+        "hairbg": "giant2_p_hairbg.png"
        }
       }
      ]
@@ -7828,7 +7837,8 @@
       "slot": "hat",
       "style": "sweet_hat",
       "layers": [
-       "hat"
+       "hat",
+       "hairbg"
       ],
       "colors": [
        "#533b3f",

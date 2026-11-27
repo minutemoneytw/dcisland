@@ -794,7 +794,7 @@ def school_sweet_dye():
     return [dict(slot="top", style="sweet_dress", layers=["top"], colors=SWEET_DYE["top"]),
             dict(slot="bottom", style="sweet_skirt", layers=["bottom"], colors=SWEET_DYE["bottom"]),
             dict(slot="shoe", style="sweet_boots", layers=["shoes"], colors=SWEET_DYE["shoe"]),
-            dict(slot="hat", style="sweet_hat", layers=["hat"], colors=SWEET_DYE["hat"])]
+            dict(slot="hat", style="sweet_hat", layers=["hat", "hairbg"], colors=SWEET_DYE["hat"])]
 def school_warrior_dye():
     return [dict(slot="top", style="warrior_armor", layers=["top"], colors=WARRIOR_DYE["top"]),
             dict(slot="bottom", style="warrior_legs", layers=["bottom"], colors=WARRIOR_DYE["bottom"]),
@@ -914,7 +914,7 @@ def school_outfit_styles(prefix):
              dict(id="knight_helm", name="騎士頭盔", hideHair=True, sheets={"hat": f"{prefix}_k_hat.png"}),
              dict(id="dragoon_helm", name="龍騎士角盔", hideHair=True, sheets={"hat": f"{prefix}_g_hat.png"}),
              dict(id="warrior_helm", name="戰士角盔", hideHair=True, sheets={"hat": f"{prefix}_r_hat.png"}),
-             dict(id="sweet_hat", name="甜心小圓帽", sheets={"hat": f"{prefix}_p_hat.png"})])
+             dict(id="sweet_hat", name="甜心小圓帽", sheets={"hat": f"{prefix}_p_hat.png", "hairbg": f"{prefix}_p_hairbg.png"})])
 def school_dye_elf():
     """妖精的換色規則：膚色那條連耳朵（hat 層，皮膚色＋棕色外圈）一起換。"""
     out = []
@@ -4820,7 +4820,7 @@ def main():
         for ln in ("top", "bottom", "shoes", "hat"):
             save_chibi_layer(war[ln], f"{pre}_r_{ln}.png", sub)              # 戰士套裝（含頭盔）
     for pre, swt in (("human2", SCHOOL_SWEET), ("dwarf2", SCHOOL_SWEET_DWARF), ("giant2", SCHOOL_SWEET_GIANT)):
-        for ln in ("top", "bottom", "shoes", "hat"):
+        for ln in ("top", "bottom", "shoes", "hat", "hairbg"):
             save_chibi_layer(swt[ln], f"{pre}_p_{ln}.png", sub)              # 甜美風格套裝（含小圓帽）
     for pre, brd in (("human2", SCHOOL_BARD), ("dwarf2", SCHOOL_BARD_DWARF), ("giant2", SCHOOL_BARD_GIANT)):
         for ln in ("top", "bottom", "shoes", "hat"):

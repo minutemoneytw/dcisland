@@ -7,7 +7,7 @@
   裙子（bottom 層）：棕色裙＋兩圈粉色荷葉邊（扇形下緣），小腿是棕色長襪（上緣粉色荷葉邊）；
   鞋子（shoes 層）：棕色圓頭靴，靴口粉色荷葉邊，腳踝側邊蝴蝶結；
   帽子（hat 層）：棕色小圓帽（中間一圈粉色帶），歪戴在頭頂右後方，不遮頭髮。
-輸出格式同 gen_ninja（sweet_sheets() 回 top／bottom／shoes／hat 四層）。顏色集中在最上面。
+輸出格式同 gen_ninja（sweet_sheets() 回 top／bottom／shoes／hat／hairbg 五層：帽子在背面與朝右時畫在 hairbg 層〔頭髮下面〕，其餘在 hat 層）。顏色集中在最上面。
 """
 import os, sys, math
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -219,10 +219,10 @@ def _head_box(kind, step):
 
 def hat_pixels(kind, cx, top):
     """棕色小圓帽（中間偏下一圈粉色帶），斜戴在頭頂：正面／背面偏右、右邊低；側面偏後、前面低。橢圓 17×9，轉 16°。"""
-    hc = {'front': cx + 3.0, 'back': cx + 3.0, 'left': cx + 1.5}[kind]
-    ang = {'front': 0.28, 'back': 0.28, 'left': -0.28}[kind]
+    hc = {'front': cx + 3.0, 'back': cx - 3.0, 'left': cx + 1.5 - 5.0}[kind]   # 背面＝正面鏡像（人物的右邊在畫面左邊）；側面往面向的那邊再挪 5 格
+    ang = {'front': 0.28, 'back': -0.28, 'left': -0.28}[kind]
     rx, ry = 8.3, 4.4
-    yc = top - 1.0
+    yc = top - 4.0                                                   # 每個方向都往上 3 格
     ca, sa = math.cos(ang), math.sin(ang)
     sil, out = set(), {}
     for y in range(int(yc - 9), int(yc + 10)):
@@ -253,7 +253,7 @@ def hat_pixels(kind, cx, top):
 def sweet_sheets():
     """回傳 {'top','bottom','shoes','hat': Img}（832×1856，只填走路列；右＝左的鏡像）。"""
     fns = {'top': sweet_top, 'bottom': sweet_bottom, 'shoes': sweet_shoes}
-    out = {n: Img(gs.SHEET_W, gs.SHEET_H) for n in list(fns) + ['hat']}
+    out = {n: Img(gs.SHEET_W, gs.SHEET_H) for n in list(fns) + ['hat', 'hairbg']}   # 帽子：正面／朝左在 hat 層（蓋在頭髮上）、背面／朝右在 hairbg 層（在頭髮下面）
     for d, row in gs.WALK_ROW.items():
         kind = ROW['left' if d == 'right' else d]
         for step, cols in WALK_COLS.items():
@@ -272,10 +272,11 @@ def sweet_sheets():
             cx, top = _head_box(kind, step)
             cells['hat'] = hat_pixels(kind, cx, top)
             for nm, cell in cells.items():
+                tgt = 'hairbg' if (nm == 'hat' and d in ('up', 'right')) else nm
                 for (x, y), c in cell.items():
                     px = 63 - x if d == 'right' else x
                     if not (0 <= px < 64 and 0 <= y < 64):
                         continue
                     for col in cols:
-                        out[nm].px[row * gs.CELL + y][col * gs.CELL + px] = c
+                        out[tgt].px[row * gs.CELL + y][col * gs.CELL + px] = c
     return out
