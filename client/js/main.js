@@ -8872,11 +8872,51 @@ function maryPaint(cvIn) {   // 畫整台小瑪莉（靜態重建與開獎動畫
   g.fillText(v.phase === 'playing' ? (seat ? '一種圖案一注' : '觀戰中') : '入座後按「準備」開始', 298, 436);
   g.textAlign = 'left';
 }
+function marySfxCtx() { return S.profile?.sfx === false || !sfxCtx || sfxCtx.state !== 'running' ? null : sfxCtx; }   // 跟提示音同一個 AudioContext、同一個開關
+function marySfxRun() {   // 跑燈：過一格一聲短促的機械答答（方波往下掉），不是送燈的鈴聲
+  const c = marySfxCtx(); if (!c) return;
+  const t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+  o.type = 'square'; o.frequency.setValueAtTime(1680, t); o.frequency.exponentialRampToValueAtTime(620, t + .016);
+  g.gain.setValueAtTime(.04, t); g.gain.exponentialRampToValueAtTime(.0008, t + .022);
+  o.connect(g).connect(c.destination); o.start(t); o.stop(t + .03);
+}
+function marySfxLight() {   // 送燈：較亮的一聲鈴（三角波），跟跑燈的答答分開
+  const c = marySfxCtx(); if (!c) return;
+  const t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+  o.type = 'triangle'; o.frequency.value = 1568;
+  g.gain.setValueAtTime(.0008, t); g.gain.linearRampToValueAtTime(.08, t + .006); g.gain.exponentialRampToValueAtTime(.0008, t + .07);
+  o.connect(g).connect(c.destination); o.start(t); o.stop(t + .08);
+}
+function marySfxGuess(big) {   // 猜大小：木魚。高＝大、低＝小
+  const c = marySfxCtx(); if (!c) return;
+  const t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+  o.type = 'square'; o.frequency.value = big ? 740 : 392;
+  g.gain.setValueAtTime(.035, t); g.gain.exponentialRampToValueAtTime(.0008, t + .055);
+  o.connect(g).connect(c.destination); o.start(t); o.stop(t + .06);
+}
+let maryBarBuf = null;
+function marySfxBar() {   // 中間拉桿：按下「開始」的機械拉桿（噪音往下滑，再補一聲低沉的撞擊）
+  const c = marySfxCtx(); if (!c) return;
+  const t = c.currentTime;
+  if (!maryBarBuf) {
+    maryBarBuf = c.createBuffer(1, Math.floor(c.sampleRate * .16), c.sampleRate);
+    const d = maryBarBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  }
+  const n = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+  n.buffer = maryBarBuf; f.type = 'bandpass'; f.frequency.setValueAtTime(1600, t); f.frequency.exponentialRampToValueAtTime(160, t + .14); f.Q.value = .8;
+  g.gain.setValueAtTime(.22, t); g.gain.exponentialRampToValueAtTime(.0008, t + .16);
+  n.connect(f).connect(g).connect(c.destination); n.start(t); n.stop(t + .16);
+  const o = c.createOscillator(), g2 = c.createGain();
+  o.type = 'sine'; o.frequency.setValueAtTime(160, t); o.frequency.exponentialRampToValueAtTime(64, t + .1);
+  g2.gain.setValueAtTime(.1, t); g2.gain.exponentialRampToValueAtTime(.0008, t + .12);
+  o.connect(g2).connect(c.destination); o.start(t); o.stop(t + .13);
+}
 function marySpinTo(to, win, more) {   // 開獎：跑馬燈從目前位置多繞兩圈、減速停格（ease-out cubic；減速全程 4.8 秒——2026-11-18 使用者要求改成原本 2.4 秒的兩倍）
   const M = S.mary; if (!M) return;
   sfxWake();
-  const from = M.pos, laps = 2 * 28 + ((to - from) % 28 + 28) % 28;
-  M.spin = { from, to: from + laps, t0: performance.now(), dur: 4800, end: to, win, more: !!more };
+  const from = M.pos, laps = 2 * 28 + ((to - from) % 28 + 28) % 28, light = !!M.chainHold;   // 這轉開始前就在送燈鏈裡：過格改響鈴聲（開出 ONCE MORE 的那轉本身還是跑燈）
+  M.spin = { from, to: from + laps, t0: performance.now(), dur: 4800, end: to, win, more: !!more, light };
   M.lastFrame = performance.now();   // 動畫起點：避免上一段動畫的舊 lastFrame 把這段往後推
   maryArmWatchdog(M.spin.dur + 6000);
   if (!S.maryRaf) S.maryRaf = requestAnimationFrame(maryFrame);
@@ -8917,7 +8957,7 @@ function maryFrame() {
     const t = (performance.now() - M.dbl.t0) / 1000;
     if (t < MARY_DBL_S) {
       const side = Math.floor(t / .2) % 2;   // 左右輪流閃的答答聲
-      if (M.dbl.side !== side) { M.dbl.side = side; sfxTones([[side ? 640 : 520, 0, .03]]); }
+      if (M.dbl.side !== side) { M.dbl.side = side; marySfxGuess(side === 0); }   // 左邊（大）高、右邊（小）低
     } else if (!M.dbl.done) maryDblReveal();
   }
   if (M.showPlay && performance.now() - M.showPlay.t0 > MARY_SHOW_MS) {   // 勇者／拉霸演出結束：WIN 亮出總獎、解除鎖定
@@ -8931,10 +8971,11 @@ function maryFrame() {
     const prev = Math.floor(M.pos) % 28;
     M.pos = sp.from + (sp.to - sp.from) * e;
     const cur = Math.floor(M.pos) % 28;
-    if (cur !== prev) sfxTones([[500 + (cur % 5) * 70, 0, .03]]);   // 過格的答答聲（每一格一聲，減速時自然變慢）
+    if (cur !== prev) { if (sp.light) marySfxLight(); else marySfxRun(); }   // 送燈鏈裡過格響鈴，平常跑燈答答
     if (t >= 1) {
       M.spin = null; M.pos = sp.end;
-      sfxTones(sp.more ? [[520, 0, .08], [780, .08, .08], [1040, .16, .14]] : sp.win ? [[660, 0, .09], [880, .09, .09], [1180, .18, .2]] : [[220, 0, .28]]);   // ONCE MORE＝輕快三連音；開出獎＝三連升音；沒中＝低音
+      if (sp.more) marySfxLight();   // 停在 ONCE MORE：送燈鈴聲
+      else sfxTones(sp.win ? [[660, 0, .09], [880, .09, .09], [1180, .18, .2]] : [[220, 0, .28]]);   // 開出獎＝三連升音；沒中＝低音
       const ma2 = S.tableView?.ma;
       if (M.showPending && ma2) { M.showPlay = { ...M.showPending, t0: performance.now() }; M.showPending = null; M.lastFrame = performance.now(); maryArmWatchdog(MARY_SHOW_MS + 8000); }   // 勇者／拉霸演出接著播
       else if (ma2) M.potShown = ma2.pot || 0;   // 動畫停格：WIN 才跟上這一注的結果
@@ -8951,7 +8992,7 @@ function marySkip() {   // 「停止」：直接把跑馬燈跳到伺服器開�
   const M = S.mary; if (!M?.spin) return;
   const sp = M.spin;
   M.pos = sp.end; M.spin = null;
-  sfxTones(sp.more ? [[520, 0, .08], [780, .08, .08], [1040, .16, .14]] : sp.win ? [[660, 0, .09], [880, .09, .09], [1180, .18, .2]] : [[220, 0, .28]]);
+  if (sp.more) marySfxLight(); else sfxTones(sp.win ? [[660, 0, .09], [880, .09, .09], [1180, .18, .2]] : [[220, 0, .28]]);
   if (S.maryRaf) { cancelAnimationFrame(S.maryRaf); S.maryRaf = 0; }
   const ma2 = S.tableView?.ma;
   if (M.showPending && ma2) { M.showPlay = { ...M.showPending, t0: performance.now() }; M.showPending = null; M.lastFrame = performance.now(); maryArmWatchdog(MARY_SHOW_MS + 8000); }
@@ -9051,10 +9092,11 @@ function maryClick(px, py, trusted = true) {   // 機台畫布的點擊：控制
       const total = bets.reduce((a, b) => a + b, 0);
       if (total > Math.floor(ma.chips || 0)) { toast('籌碼不足', 1800); return; }   // 照上一次的押注重開：餘額不夠先擋（伺服器也會原子扣款擋一次）
       if (S.mary) S.mary.betLock = true;   // 結果回來前不能改注／清空，不然送燈會拿改過的押注去重送、被拒後整條鏈鎖死
+      sfxWake(); marySfxBar();   // 中間拉桿：只有玩家按「開始」才響（送燈的免費開獎不拉）
       S.net?.tbl?.({ a: 'mspin', bets }); buildTable();   // 押注保留：再按「開始」就照這份押注直接再開
     } else if (b.id === 'collect') { if (ma.pot > 0) S.net?.tbl?.({ a: 'mcol' }); }
-    else if (b.id === 'big') { if (ma.pot > 0 && trusted) S.net?.tbl?.({ a: 'mdbl', big: 1 }); }   // 比大小只接受真人點擊：合成事件（isTrusted false）一律忽略，杜絕幽靈輸入（2026-11-19 使用者回饋）
-    else if (b.id === 'small') { if (ma.pot > 0 && trusted) S.net?.tbl?.({ a: 'mdbl', big: 0 }); }
+    else if (b.id === 'big') { if (ma.pot > 0 && trusted) { sfxWake(); marySfxGuess(true); S.net?.tbl?.({ a: 'mdbl', big: 1 }); } }   // 比大小只接受真人點擊：合成事件（isTrusted false）一律忽略，杜絕幽靈輸入（2026-11-19 使用者回饋）
+    else if (b.id === 'small') { if (ma.pot > 0 && trusted) { sfxWake(); marySfxGuess(false); S.net?.tbl?.({ a: 'mdbl', big: 0 }); } }
     return;
   }
   if (ma.pot > 0 || spin) return;   // 獎金還躺在獎池時不能再押（要先領出或比倍）
