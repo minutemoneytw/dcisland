@@ -4,7 +4,7 @@
 
 做法同甜心套裝 gen_sweet.py（沒有手畫的圖，全部程式畫）：幾何沿用男式西裝（gen_male.DATA），逐字母換配色再疊特徵：
   上衣（top 層）：米色寬鬆夾克（手套的位置改成寬袖口）、深色連帽領（脖子一圈往下垂）、正面中間露出深色內搭、斜背帶（右肩到左腰，金屬扣）、側面／背面一個小側背包；
-  褲子（bottom 層）：男式褲子往左右各膨脹 2 格（寬鬆），深灰色＋米色側條＋口袋方框；
+  褲子（bottom 層）：喇叭褲——男式褲子上面不變、往下每排撐開到左右各 4 格，深灰色＋米色側條＋口袋方框；
   鞋子（shoes 層）：男式鞋子換米色，厚底（底一排最亮）；
   帽子（hat 層）：深灰色毛帽（直紋）＋米色綁帶與扣環，帽沿往下蓋住額頭上緣，耳邊吊米色名牌。
 輸出格式同 gen_sweet（street_sheets() 回 top／bottom／shoes／hat 四層）。顏色集中在最上面。
@@ -69,18 +69,19 @@ def _outline(px, ramps, color):
     return out
 
 
-def _dilate(px, n):
-    """水平往左右各膨脹 n 格（只補空格，顏色用原本那格的）。"""
+def _dilate(px, n, h=None):
+    """水平往左右各膨脹 n 格（只補空格，顏色用原本那格的）。h 有給時是喇叭褲：第 y 排膨脹 n×y÷(h-1) 格（上窄下寬）。"""
     out = dict(px)
     for (x, y), c in px.items():
-        for d in range(1, n + 1):
+        k = n if h is None else (n * y) // max(1, h - 1)
+        for d in range(1, k + 1):
             out.setdefault((x - d, y), c)
             out.setdefault((x + d, y), c)
     return out
 
 
 # ---------- 上衣 ----------
-def street_top(kind, x0, y0, rows):
+def street_top(kind, x0, y0, rows, right=False):
     g = Grid(x0, y0, rows, 'top', BEIGE, BEIGE_IDX, skin_to=BEIGE[2])           # 手的位置改成寬袖口（米色）
     hem = g.row_ext(g.h - 1)
     cx = (hem[0] + hem[1]) // 2
@@ -119,7 +120,7 @@ def street_top(kind, x0, y0, rows):
     elif kind == 'back':
         for i in range(0, 12):
             g.px[(cx + 3 - i, 4 + i)] = DARK[2]; g.px[(cx + 4 - i, 4 + i)] = DARK[3]
-    else:
+    elif not right:                                                          # 朝右時背帶在身體另一側，看不到
         for i in range(0, 10):
             g.px[(cx - 2 + i // 2, 4 + i)] = DARK[2]
     # 側背小包：側面／背面在腰側
@@ -129,6 +130,13 @@ def street_top(kind, x0, y0, rows):
         for xx in range(4):
             g.px[(bx + xx, by + yy)] = DARK[3] if yy else BEIGE[2]
     g.px[(bx + 1, by + 1)] = METAL
+    # 正面袖子與身體之間的輪廓線（比外框淡一點的深色，讓袖子輪廓明顯）
+    if kind == 'front':
+        a_, b_ = hem
+        for y in range(5, h - 1):
+            for x in (a_ - 1, b_ + 1):
+                if (x, y) in g.px and g.px[(x, y)] in BEIGE:
+                    g.px[(x, y)] = (92, 74, 66)
     # 夾克下襬：深色束邊
     for x in range(cx - 7, cx + 7):
         if (x, h - 1) in g.px:
@@ -139,7 +147,7 @@ def street_top(kind, x0, y0, rows):
 # ---------- 褲子 ----------
 def street_bottom(kind, x0, y0, rows):
     g = Grid(x0, y0, rows, 'bottom', DARK, (1, 2, 3, 3, 4, 4, 5))
-    px = _dilate(g.px, 2)
+    px = _dilate(g.px, 4, g.h)                                  # 喇叭褲：上面維持男式褲子的寬度，往下每排慢慢撐開到左右各 4 格
     # 米色側條：每排每一段的最外側往內第 2 格
     out = dict(px)
     for y in range(g.h):
@@ -201,7 +209,7 @@ def _head_box(kind, step):
 def hat_pixels(kind, cx, top):
     """深灰色毛帽：圓頂（top-4 起）往下蓋到額頭上緣（top+6），直紋；下緣一條米色綁帶（3 排，有扣環），耳邊垂米色名牌（5 排）。"""
     hc = cx + (1.5 if kind == 'left' else 0.0)
-    prof = (6.0, 8.5, 10.0, 10.5, 10.5, 10.5, 10.5, 10.5, 10.5, 10.0, 10.0)
+    prof = (9.0, 11.5, 13.0, 13.5, 13.5, 13.5, 13.5, 13.5, 13.5, 13.0, 13.0)   # 左右各比原本寬 3 格
     y0 = top - 4
     sil, out = set(), {}
     for i, w in enumerate(prof):
@@ -222,7 +230,7 @@ def hat_pixels(kind, cx, top):
     for (x, y) in list(sil):
         if any((x + dx, y + dy) not in sil for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
             out[(x, y)] = OUT
-    tx = {'front': round(hc) + 9, 'back': round(hc) - 10, 'left': round(hc) - 1}[kind]   # 耳邊的名牌
+    tx = {'front': round(hc) + 12, 'back': round(hc) - 13, 'left': round(hc) - 1}[kind]   # 耳邊的名牌
     for yy in range(top + 8, top + 13):
         for xx in (tx, tx + 1):
             out[(xx, yy)] = BEIGE[5] if xx == tx else BEIGE[4]
@@ -243,7 +251,8 @@ def street_sheets():
             cells = {}
             for nm, fn in fns.items():
                 x0, y0, rows = DATA[(kind, step)][nm]
-                cells[nm] = {(x + 16, y): c for (x, y), c in fn(kind, x0, y0, rows).items() if c is not None}
+                kw = {'right': d == 'right'} if nm == 'top' else {}
+                cells[nm] = {(x + 16, y): c for (x, y), c in fn(kind, x0, y0, rows, **kw).items() if c is not None}
             cx, top = _head_box(kind, step)
             cells['hat'] = hat_pixels(kind, cx, top)
             for nm, cell in cells.items():
